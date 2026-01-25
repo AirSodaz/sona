@@ -36,7 +36,7 @@ interface SegmentItemProps {
     hasNext: boolean;
 }
 
-const SegmentItem: React.FC<SegmentItemProps> = ({
+const SegmentItem = React.memo<SegmentItemProps>(({
     segment,
     isActive,
     isEditing,
@@ -156,7 +156,7 @@ const SegmentItem: React.FC<SegmentItemProps> = ({
             </div>
         </div>
     );
-};
+});
 
 interface TranscriptEditorProps {
     onSeek?: (time: number) => void;
@@ -173,6 +173,12 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
+
+    // Keep a ref to segments to make callbacks stable
+    const segmentsRef = useRef(segments);
+    useEffect(() => {
+        segmentsRef.current = segments;
+    }, [segments]);
 
     // Auto-scroll to active segment during playback
     useEffect(() => {
@@ -206,11 +212,12 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     }, [deleteSegment]);
 
     const handleMergeWithNext = useCallback((id: string) => {
-        const index = segments.findIndex((s) => s.id === id);
-        if (index !== -1 && index < segments.length - 1) {
-            mergeSegments(id, segments[index + 1].id);
+        const currentSegments = segmentsRef.current;
+        const index = currentSegments.findIndex((s) => s.id === id);
+        if (index !== -1 && index < currentSegments.length - 1) {
+            mergeSegments(id, currentSegments[index + 1].id);
         }
-    }, [segments, mergeSegments]);
+    }, [mergeSegments]);
 
     if (segments.length === 0) {
         return (
