@@ -161,7 +161,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
             />
 
             <div className="audio-controls">
-                <button className="btn btn-icon" onClick={handlePlayPause}>
+                <button
+                    className="btn btn-icon"
+                    onClick={handlePlayPause}
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    data-tooltip={isPlaying ? 'Pause' : 'Play'}
+                >
                     {isPlaying ? <PauseIcon /> : <PlayIcon />}
                 </button>
             </div>
@@ -176,6 +181,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     step={0.1}
                     value={currentTime}
                     onChange={handleSliderChange}
+                    aria-label="Seek"
                 />
                 <span className="audio-time">{formatDisplayTime(duration)}</span>
             </div>
@@ -191,6 +197,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     step={0.01}
                     value={volume}
                     onChange={handleVolumeChange}
+                    aria-label="Volume"
                 />
             </div>
         </div>
