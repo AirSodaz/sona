@@ -1,0 +1,21 @@
+{
+    "name": "sona-sidecar",
+    "version": "1.0.0",
+    "description": "Sherpa-onnx speech recognition sidecar for Sona",
+    "main": "sherpa-recognizer.js",
+    "type": "module",
+    "scripts": {
+        "start": "node sherpa-recognizer.js",
+        "stream": "node sherpa-recognizer.js --mode stream",
+        "batch": "node sherpa-recognizer.js --mode batch --file"
+    },
+    "dependencies": {
+        "ffmpeg-static": "^5.2.0",
+        "nzh": "^1.0.14",
+        "sherpa-onnx-node": "^1.10.0",
+        "wavefile": "^11.0.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

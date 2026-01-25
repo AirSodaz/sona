@@ -1,0 +1,960 @@
+/* Import Google Fonts - Must be first */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ===========================
+   Sona Design System - Warm Minimalism (Notion Style)
+   =========================== */
+
+:root {
+  /* Color Palette - Light Theme (Default) */
+  /* Warm White / Paper Backgrounds */
+  --color-bg-primary: #fbfbfa;
+  /* Notion Page Background */
+  --color-bg-secondary: #f3f3f2;
+  /* Sidebar / Headers */
+  --color-bg-tertiary: #e5e5e5;
+  /* Inputs / Active States */
+  --color-bg-elevated: #ffffff;
+  /* Cards / Dropdowns */
+  --color-bg-hover: #ebebeb;
+
+  /* Accent Colors - Neutral / Earthy */
+  --color-accent-primary: #2f2f2f;
+  /* Soft Black */
+  --color-accent-secondary: #e6e6e6;
+  /* Soft Gray for secondary elements */
+  --color-accent-gradient: linear-gradient(135deg, #2f2f2f 0%, #575757 100%);
+  --color-accent-glow: rgba(0, 0, 0, 0.05);
+
+  /* Text Colors - High Contrast but Warm */
+  --color-text-primary: #37352f;
+  /* Notion Black */
+  --color-text-secondary: #787774;
+  /* Notion Gray */
+  --color-text-muted: #9b9a97;
+  --color-text-disabled: #d3d1cb;
+
+  /* Status Colors (Softened) */
+  --color-success: #4ea067;
+  /* Muted Green */
+  --color-warning: #dfab01;
+  /* Muted Yellow */
+  --color-error: #e03e3e;
+  /* Muted Red */
+  --color-info: #0b6e99;
+  /* Muted Blue */
+
+  /* Recording Colors */
+  --color-recording: #e03e3e;
+  --color-recording-glow: rgba(224, 62, 62, 0.2);
+
+  /* Border & Dividers */
+  --color-border: rgba(55, 53, 47, 0.09);
+  --color-border-hover: rgba(55, 53, 47, 0.16);
+
+  /* Shadows - Very Subtle */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.06);
+  --shadow-glow: 0 0 10px rgba(0, 0, 0, 0.05);
+
+  /* Spacing - Relaxed */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border Radius - Softer */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-serif: 'Merriweather', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+
+  /* Transitions */
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 250ms ease-out;
+  --transition-slow: 350ms ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Warm Carbon Theme */
+    --color-bg-primary: #191919;
+    --color-bg-secondary: #202020;
+    --color-bg-tertiary: #2c2c2c;
+    --color-bg-elevated: #2f2f2f;
+    --color-bg-hover: #373737;
+
+    --color-text-primary: #d4d4d4;
+    --color-text-secondary: #9b9a97;
+    --color-text-muted: #707070;
+    --color-text-disabled: #4a4a4a;
+
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.14);
+
+    --color-accent-primary: #e0e0e0;
+    --color-accent-secondary: #474747;
+    --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
+    --color-accent-glow: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* ===========================
+   Reset & Base Styles
+   =========================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  /* Slightly larger base size */
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===========================
+   App Layout
+   =========================== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-primary);
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  /* True centering */
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  height: 56px;
+  /* Slightly taller for better proportions */
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  justify-self: start;
+  opacity: 0.9;
+  transition: opacity var(--transition-normal);
+}
+
+.header-actions {
+  display: flex;
+  justify-self: end;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.app-logo:hover {
+  opacity: 1;
+}
+
+.app-logo h1 {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  /* Removed gradient text for cleaner look */
+  background: none;
+  -webkit-text-fill-color: initial;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===========================
+   Tab Navigation
+   =========================== */
+
+/* ===========================
+   Tab Navigation - Segmented Control (Notion/iOS Style)
+   =========================== */
+
+.tab-navigation {
+  display: flex;
+  background: var(--color-bg-tertiary);
+  /* Container background */
+  padding: 4px;
+  /* Padding for the "pills" */
+  border-radius: var(--radius-md);
+  gap: 4px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 120px;
+  /* Consistent width */
+}
+
+.tab-button:hover {
+  color: var(--color-text-secondary);
+}
+
+.tab-button.active {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  /* White pill */
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.tab-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2px;
+}
+
+/* ===========================
+   Panel Layout
+   =========================== */
+
+.panel-container {
+  display: flex;
+  flex: 1;
+  gap: 1px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-left {
+  flex: 0 0 350px;
+  /* Fixed width sidebar, like Notion */
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+}
+
+.panel-right {
+  flex: 1;
+  min-width: 500px;
+  background: var(--color-bg-primary);
+  /* Paper background */
+}
+
+/* Hide default panel headers for a cleaner look, or style them minimally */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: transparent;
+  /* Seamless headers */
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.panel-header h2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panel-content {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+  /* Remove padding here, handle in children */
+}
+
+/* ===========================
+   Buttons
+   =========================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: var(--color-accent-gradient);
+  color: white;
+}
+
+.btn-primary:hover {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+}
+
+.btn-danger {
+  background: var(--color-error);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn-icon {
+  padding: var(--spacing-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.btn-icon:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ===========================
+   Record Button (Special)
+   =========================== */
+
+.record-button {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-button::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  background: var(--color-recording);
+  border-radius: 50%;
+  transition: all var(--transition-normal);
+}
+
+.record-button:hover {
+  border-color: var(--color-recording);
+  transform: scale(1.05);
+}
+
+.record-button.recording {
+  border-color: var(--color-recording);
+  animation: pulse 1.5s infinite;
+}
+
+.record-button.recording::before {
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-recording-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 0 15px transparent;
+  }
+}
+
+/* ===========================
+   Transcript Editor
+   =========================== */
+
+/* ===========================
+   Transcript Editor - Document Style
+   =========================== */
+
+.transcript-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+}
+
+.transcript-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-xl) var(--spacing-md);
+}
+
+.transcript-segment {
+  display: grid;
+  grid-template-columns: 60px 1fr 40px;
+  /* Gutter | Content | Actions */
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+  cursor: text;
+  align-items: baseline;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.transcript-segment:hover {
+  background: transparent;
+  /* No bubble effect */
+}
+
+.transcript-segment.active {
+  background: transparent;
+  /* Active line indicator handled by timestamp or gutter */
+}
+
+.transcript-segment.editing {
+  background: transparent;
+}
+
+/* Timestamp in the gutter - visible on hover or active */
+.segment-timestamp {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: right;
+  opacity: 0;
+  /* Hidden by default */
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+  cursor: pointer;
+}
+
+.transcript-segment:hover .segment-timestamp,
+.transcript-segment.active .segment-timestamp {
+  opacity: 1;
+}
+
+.transcript-segment.active .segment-timestamp {
+  color: var(--color-accent-primary);
+  font-weight: 500;
+}
+
+.segment-content {
+  min-width: 0;
+}
+
+.segment-text {
+  color: var(--color-text-primary);
+  font-family: var(--font-serif);
+  /* Serif for reading */
+  font-size: 1.125rem;
+  /* Larger text */
+  line-height: 1.8;
+  /* Relaxed reading height */
+  word-wrap: break-word;
+}
+
+.segment-text.partial {
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  /* Keep partial text sans for differentiation */
+  font-style: italic;
+  font-size: 1rem;
+}
+
+.segment-input {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  line-height: 1.8;
+  resize: none;
+  min-height: 1.8em;
+  /* Ensure at least one line height */
+  overflow: hidden;
+}
+
+.segment-input:focus {
+  outline: none;
+  box-shadow: none;
+  background: var(--color-bg-tertiary);
+  /* Subtle highlight when editing */
+  border-radius: var(--radius-sm);
+}
+
+.segment-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  justify-content: flex-end;
+}
+
+.transcript-segment:hover .segment-actions {
+  opacity: 1;
+}
+
+/* ===========================
+   Drop Zone
+   =========================== */
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  height: 100%;
+  min-height: 300px;
+  border: 2px dashed var(--color-border-hover);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-secondary);
+  transition: all var(--transition-normal);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--color-accent-primary);
+  background: var(--color-bg-hover);
+}
+
+.drop-zone.drag-over {
+  transform: scale(1.005);
+  box-shadow: var(--shadow-lg);
+}
+
+.drop-zone-icon {
+  color: var(--color-text-muted);
+  transition: all var(--transition-normal);
+  filter: drop-shadow(var(--shadow-sm));
+}
+
+.drop-zone:hover .drop-zone-icon {
+  color: var(--color-text-secondary);
+  transform: translateY(-4px);
+}
+
+.drop-zone-text {
+  text-align: center;
+  max-width: 320px;
+}
+
+.drop-zone-text h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+  letter-spacing: -0.01em;
+}
+
+.drop-zone-text p {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.supported-formats {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: var(--spacing-md);
+  opacity: 0.8;
+  transition: opacity var(--transition-normal);
+}
+
+.drop-zone:hover .supported-formats {
+  opacity: 1;
+}
+
+/* ===========================
+   Progress Bar
+   =========================== */
+
+.progress-container {
+  width: 100%;
+  padding: var(--spacing-lg);
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent-gradient);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--spacing-sm);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ===========================
+   Audio Player
+   =========================== */
+
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+}
+
+.audio-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.audio-timeline {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.audio-time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  min-width: 50px;
+}
+
+.audio-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.audio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.audio-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* ===========================
+   Export Menu
+   =========================== */
+
+.export-menu {
+  position: relative;
+}
+
+.export-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--spacing-xs);
+  min-width: 180px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.export-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.export-dropdown-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.export-dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+/* ===========================
+   Settings Panel
+   =========================== */
+
+.settings-panel {
+  padding: var(--spacing-lg);
+}
+
+.settings-group {
+  margin-bottom: var(--spacing-xl);
+}
+
+.settings-group h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.settings-label {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.settings-input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  transition: all var(--transition-fast);
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+.settings-input.valid {
+  border-color: var(--color-success);
+}
+
+.settings-input.invalid {
+  border-color: var(--color-error);
+}
+
+.settings-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ===========================
+   Visualizer
+   =========================== */
+
+/* ===========================
+   Visualizer
+   =========================== */
+
+.visualizer-container {
+  height: 120px;
+  background: var(--color-bg-secondary);
+  /* Match sidebar/header */
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visualizer-bars {
+  display: flex;
+  align-items: center;
+  /* Center vertically */
+  gap: 4px;
+  height: 60%;
+  /* Smaller height for elegance */
+  padding: 0 var(--spacing-md);
+}
+
+.visualizer-bar {
+  width: 6px;
+  background: var(--color-text-primary);
+  /* Use main text color or accent */
+  border-radius: var(--radius-full);
+  transition: height 100ms ease-out;
+  opacity: 0.8;
+}
+
+/* ===========================
+   Empty State
+   =========================== */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-md);
+  color: var(--color-text-muted);
+}
+
+.empty-state svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+/* ===========================
+   Scrollbar Styles
+   =========================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bg-hover);
+}
+
+/* ===========================
+   Tooltips
+   =========================== */
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-4px);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}

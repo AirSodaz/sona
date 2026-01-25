@@ -1,0 +1,285 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { useTranscriptStore } from '../stores/transcriptStore';
+import { transcriptionService } from '../services/transcriptionService';
+import { splitByPunctuation } from '../utils/segmentUtils';
+
+// Icons
+const UploadIcon = () => (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+        <path d="M12 12v9" />
+        <path d="m16 16-4-4-4 4" />
+    </svg>
+);
+
+
+
+const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
+
+const getMimeType = (filePath: string): string => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'wav': return 'audio/wav';
+        case 'mp3': return 'audio/mpeg';
+        case 'm4a': return 'audio/mp4';
+        case 'ogg': return 'audio/ogg';
+        case 'webm': return 'audio/webm';
+        case 'mp4': return 'video/mp4';
+        default: return 'application/octet-stream';
+    }
+};
+
+interface BatchImportProps {
+    className?: string;
+}
+
+export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
+    // const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [enableTimeline, setEnableTimeline] = useState(false);
+
+    const processingStatus = useTranscriptStore((state) => state.processingStatus);
+    const processingProgress = useTranscriptStore((state) => state.processingProgress);
+    const setProcessingStatus = useTranscriptStore((state) => state.setProcessingStatus);
+    const setProcessingProgress = useTranscriptStore((state) => state.setProcessingProgress);
+    const config = useTranscriptStore((state) => state.config);
+
+
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        // Fallback or visual handling only, actual logic handled by Tauri event
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    }, []);
+
+    // Tauri File Drop Event Listener
+    useEffect(() => {
+        const unlistenDrop = listen('tauri://file-drop', (event) => {
+            const files = event.payload as string[];
+            if (files && files.length > 0) {
+                const filePath = files[0];
+                // Create a mock File object for validation or validate manually
+                const ext = filePath.split('.').pop()?.toLowerCase();
+                const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+
+                if (isSupported) {
+                    processFile(filePath);
+                } else {
+                    alert('Unsupported file format. Please use: ' + ACCEPTED_EXTENSIONS.join(', '));
+                }
+            }
+            setIsDragOver(false);
+        });
+
+        const unlistenHover = listen('tauri://file-drop-hover', () => {
+            setIsDragOver(true);
+        });
+
+        const unlistenCancelled = listen('tauri://file-drop-cancelled', () => {
+            setIsDragOver(false);
+        });
+
+        // Cleanup
+        return () => {
+            unlistenDrop.then(f => f());
+            unlistenHover.then(f => f());
+            unlistenCancelled.then(f => f());
+        };
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDragOver) setIsDragOver(true);
+    }, [isDragOver]);
+
+    const handleDragEnter = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Only disable drag over if we're actually leaving the drop zone, 
+        // not just entering a child element
+        if (e.currentTarget.contains(e.relatedTarget as Node)) {
+            return;
+        }
+        setIsDragOver(false);
+    }, []);
+
+    const handleClick = async () => {
+        try {
+            const selected = await open({
+                multiple: false,
+                filters: [{
+                    name: 'Audio/Video',
+                    extensions: ['wav', 'mp3', 'm4a', 'ogg', 'webm', 'mp4']
+                }]
+            });
+
+            if (selected && typeof selected === 'string') {
+                await processFile(selected);
+            }
+        } catch (err) {
+            console.error('Failed to open dialog:', err);
+        }
+    };
+
+
+
+    // ... (existing code)
+
+    const processFile = async (filePath: string) => {
+        if (!config.modelPath) {
+            alert('Please configure a model in Settings first.');
+            return;
+        }
+
+        setProcessingStatus('loading');
+        setProcessingProgress(0);
+
+        try {
+            // Read file content for playback to avoid asset protocol issues
+            const fileContent = await readFile(filePath);
+            const mimeType = getMimeType(filePath);
+            const blob = new Blob([fileContent], { type: mimeType });
+            const assetUrl = URL.createObjectURL(blob);
+
+            useTranscriptStore.getState().setAudioUrl(assetUrl);
+
+            transcriptionService.setModelPath(config.modelPath);
+            transcriptionService.setEnableITN(!!config.enableITN);
+            const segments = await transcriptionService.transcribeFile(filePath);
+
+            useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);
+            setProcessingStatus('complete');
+            setProcessingProgress(100);
+        } catch (error) {
+            console.error('Transcription failed:', error);
+            setProcessingStatus('error');
+            alert('Transcription failed: ' + error);
+        }
+    };
+
+    // No longer used
+    // const handleInputChange = ...
+
+    if (processingStatus === 'loading' || processingStatus === 'processing') {
+        return (
+            <div className={`progress-container ${className}`}>
+                <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
+                    <h3>Processing Audio</h3>
+                    <p>Please wait while we transcribe your file...</p>
+                </div>
+                <div className="progress-bar">
+                    <div
+                        className="progress-fill"
+                        style={{ width: `${processingProgress}%` }}
+                    />
+                </div>
+                <div className="progress-text">
+                    <span>Transcribing...</span>
+                    <span>{Math.round(processingProgress)}%</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`batch-import-container ${className}`} style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+            <div
+                className={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onClick={handleClick}
+                style={{
+                    flex: '0 0 auto',
+                    height: 'auto',
+                    minHeight: '200px',
+                    padding: '32px 16px',
+                    gap: '16px'
+                }}
+            >
+                {/* <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_FORMATS.join(',')}
+                    onChange={handleInputChange}
+                    style={{ display: 'none' }}
+                /> */}
+
+                <div className="drop-zone-icon">
+                    <UploadIcon />
+                </div>
+
+                <div className="drop-zone-text">
+                    <h3>Select or Drop File</h3>
+                    <p>Drag and drop your audio or video file here, or click to browse from your computer.</p>
+                </div>
+
+                <button className="btn btn-primary" style={{ marginTop: '8px', pointerEvents: 'none' }}>
+                    Select File
+                </button>
+
+                <p className="supported-formats" style={{ marginTop: '8px' }}>
+                    Supports: {ACCEPTED_EXTENSIONS.join(', ')}
+                </p>
+            </div>
+
+            <div className="options-container">
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    gap: '16px',
+                    padding: '0 8px'
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontWeight: 500 }}>Timeline Mode</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Split transcript by punctuation</span>
+                    </div>
+                    <button
+                        onClick={() => setEnableTimeline(!enableTimeline)}
+                        style={{
+                            width: 44,
+                            height: 24,
+                            borderRadius: 12,
+                            background: enableTimeline ? 'var(--color-text-primary)' : 'var(--color-border)',
+                            position: 'relative',
+                            transition: 'background 0.2s',
+                            border: 'none',
+                            cursor: 'pointer',
+                            flexShrink: 0
+                        }}
+                        title="Toggle Timeline Mode"
+                    >
+                        <div style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'var(--color-bg-primary)',
+                            position: 'absolute',
+                            top: 2,
+                            left: enableTimeline ? 22 : 2,
+                            transition: 'left 0.2s',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        }} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default BatchImport;
