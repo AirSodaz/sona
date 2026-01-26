@@ -92,15 +92,21 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             source.connect(analyserRef.current);
 
             // Processor for transcription streaming (16kHz requirement)
-            // Note: ScriptProcessor is deprecated but widely supported and easier for this use case than AudioWorklet
-            const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            // Use AudioWorklet for better performance (off-main-thread processing)
+            try {
+                await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
+            } catch (err) {
+                console.error('Failed to load audio worklet module:', err);
+                throw new Error('Audio worklet failed to load');
+            }
 
-            processor.onaudioprocess = (e) => {
+            const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
+
+            processor.port.onmessage = (e) => {
                 if (!isRecordingRef.current || isPausedRef.current) return;
 
-                const inputData = e.inputBuffer.getChannelData(0);
-                // Already at 16kHz due to context sampleRate
-                transcriptionService.sendAudio(inputData);
+                // e.data is Int16Array transferred from the worklet
+                transcriptionService.sendAudioInt16(e.data);
             };
 
             source.connect(processor);
