@@ -116,7 +116,7 @@ class TranscriptionService {
 
     /**
      * Send audio data to the sidecar
-     * Expects 16kHz mono Float32 or Int16 samples
+     * Expects 16kHz mono Float32 samples
      */
     async sendAudio(samples: Float32Array) {
         if (!this.child || !this.isRunning) return;
@@ -132,6 +132,23 @@ class TranscriptionService {
             // Command.write accepts string or Uint8Array
             // We need to send bytes. Uint8Array view of Int16Array
             const bytes = new Uint8Array(buffer.buffer);
+            await this.child.write(bytes);
+        } catch (error) {
+            console.error('Failed to write audio to sidecar:', error);
+        }
+    }
+
+    /**
+     * Send pre-converted Int16 audio data to the sidecar
+     */
+    async sendAudioInt16(samples: Int16Array) {
+        if (!this.child || !this.isRunning) return;
+
+        try {
+            // Command.write accepts string or Uint8Array
+            // We need to send bytes. Uint8Array view of Int16Array
+            // Use byteOffset and byteLength to handle cases where Int16Array is a view
+            const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
             await this.child.write(bytes);
         } catch (error) {
             console.error('Failed to write audio to sidecar:', error);
