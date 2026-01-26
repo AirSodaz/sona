@@ -63,19 +63,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
 
         const updateDuration = () => {
             const d = audio.duration;
-            console.log('[AudioPlayer] Duration update:', d, 'readyState:', audio.readyState);
             if (d && Number.isFinite(d)) {
                 setDuration(d);
             }
         };
 
         const handleLoadedMetadata = () => {
-            console.log('[AudioPlayer] loadedmetadata fired');
             updateDuration();
         };
 
         const handleDurationChange = () => {
-            console.log('[AudioPlayer] durationchange fired');
             updateDuration();
         };
 
@@ -95,7 +92,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
 
         // Check if metadata is already loaded (HAVE_METADATA = 1)
         if (audio.readyState >= 1) {
-            console.log('[AudioPlayer] Initial readyState >= 1');
             updateDuration();
         }
 

@@ -73,7 +73,6 @@ class TranscriptionService {
             });
 
             command.stdout.on('data', (line) => {
-                console.log('[TranscriptionService] stdout:', line);
                 this.handleOutput(line);
             });
 
@@ -127,7 +126,6 @@ class TranscriptionService {
             // Command.write accepts string or Uint8Array
             // We need to send bytes. Uint8Array view of Int16Array
             const bytes = new Uint8Array(buffer.buffer);
-            console.log('[TranscriptionService] Writing', bytes.length, 'bytes to sidecar');
             await this.child.write(bytes);
         } catch (error) {
             console.error('Failed to write audio to sidecar:', error);
