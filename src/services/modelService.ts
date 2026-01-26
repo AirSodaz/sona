@@ -8,7 +8,7 @@ export interface ModelInfo {
     name: string;
     description: string;
     url: string;
-    type: 'streaming' | 'non-streaming';
+    type: 'streaming' | 'offline';
     language: string;
     size: string; // Display size
     isArchive?: boolean;
@@ -62,7 +62,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Chinese - Paraformer (CPU)',
         description: 'Accurate offline model from FunASR',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2',
-        type: 'non-streaming',
+        type: 'offline',
         language: 'zh',
         size: '~220 MB',
         engine: 'onnx'
@@ -79,10 +79,10 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
-        name: 'Multilingual - SenseVoice',
+        name: 'Multilingual - SenseVoice (CPU)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
-        type: 'non-streaming',
+        type: 'offline',
         language: 'zh,en,ja,ko,yue',
         size: '~900 MB',
         engine: 'onnx'
@@ -92,7 +92,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Multilingual - SenseVoice (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
-        type: 'non-streaming',
+        type: 'offline',
         language: 'zh,en,ja,ko,yue',
         size: '~200 MB',
         engine: 'onnx'
@@ -102,7 +102,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Multilingual - Whisper Tiny (Int8)',
         description: 'OpenAI Whisper Tiny model (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
-        type: 'non-streaming',
+        type: 'offline',
         language: 'multilingual',
         size: '~150 MB',
         filename: 'sherpa-onnx-whisper-tiny', // Use existing folder name from tarball
@@ -241,6 +241,10 @@ class ModelService {
         await remove(tempFilePath);
 
         onProgress?.(100, 'Done');
+
+        if (model.filename) {
+            return await join(modelsDir, model.filename);
+        }
         return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
     }
 

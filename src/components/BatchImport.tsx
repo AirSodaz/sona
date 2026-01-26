@@ -127,7 +127,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     // ... (existing code)
 
     const processFile = async (filePath: string) => {
-        if (!config.modelPath) {
+        if (!config.offlineModelPath) {
             alert(t('batch.no_model_error'));
             return;
         }
@@ -140,7 +140,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
-            transcriptionService.setModelPath(config.modelPath);
+            transcriptionService.setModelPath(config.offlineModelPath);
             transcriptionService.setEnableITN(!!config.enableITN);
             const segments = await transcriptionService.transcribeFile(filePath);
 

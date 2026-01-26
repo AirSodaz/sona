@@ -74,6 +74,10 @@
         "save_button": "Save Settings",
         "download_starting": "Starting download...",
         "download_complete": "Download complete!",
-        "download_failed": "Download failed: {{error}}"
+        "download_failed": "Download failed: {{error}}",
+        "offline_models": "Offline Models",
+        "streaming_models": "Streaming Models",
+        "offline_path_label": "Offline Model Path",
+        "streaming_path_label": "Streaming Model Path"
     }
 }

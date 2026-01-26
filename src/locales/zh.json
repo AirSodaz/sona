@@ -74,6 +74,10 @@
         "save_button": "保存设置",
         "download_starting": "开始下载...",
         "download_complete": "下载完成！",
-        "download_failed": "下载失败: {{error}}"
+        "download_failed": "下载失败: {{error}}",
+        "offline_models": "离线模型",
+        "streaming_models": "流式模型",
+        "offline_path_label": "离线模型路径",
+        "streaming_path_label": "流式模型路径"
     }
 }

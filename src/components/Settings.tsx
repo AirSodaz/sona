@@ -80,18 +80,19 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
-    const [modelPath, setModelPath] = useState(config.modelPath);
+    const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
+    const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
     const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
     const [theme, setTheme] = useState(config.theme || 'auto');
-    const [pathStatus, setPathStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+
 
     // Download state
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
-    const [statusText, setStatusText] = useState('');
+
 
     const checkInstalledModels = async () => {
         const installed = new Set<string>();
@@ -104,37 +105,23 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     };
 
     useEffect(() => {
-        setModelPath(config.modelPath);
+        setStreamingModelPath(config.streamingModelPath);
+        setOfflineModelPath(config.offlineModelPath);
         setEnableITN(config.enableITN ?? true);
         setAppLanguage(config.appLanguage || 'auto');
         setTheme(config.theme || 'auto');
-        if (config.modelPath) {
-            validatePath(config.modelPath);
-        }
-    }, [config.modelPath, config.enableITN, config.appLanguage, config.theme]);
+        // Validate both (optional visual feedback, maybe just validate active input)
+    }, [config.streamingModelPath, config.offlineModelPath, config.enableITN, config.appLanguage, config.theme]);
 
     useEffect(() => {
         checkInstalledModels();
     }, []);
 
-    const validatePath = async (path: string) => {
-        if (!path.trim()) {
-            setPathStatus('idle');
-            return;
-        }
-        // Simple check
-        setPathStatus(path.trim().length > 0 ? 'valid' : 'invalid');
-    };
 
-    const handlePathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const path = e.target.value;
-        setModelPath(path);
-        validatePath(path);
-    };
 
     const handleSave = () => {
-        setConfig({ modelPath, enableITN, appLanguage, theme });
-        localStorage.setItem('sona-config', JSON.stringify({ modelPath, enableITN, appLanguage, theme }));
+        setConfig({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme });
+        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme }));
 
         // Apply language immediately
         if (appLanguage === 'auto') {
@@ -146,19 +133,22 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleBrowse = async () => {
+    const handleBrowse = async (type: 'streaming' | 'offline') => {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: t('settings.path_label')
+                title: type === 'streaming' ? t('settings.streaming_path_label') : t('settings.offline_path_label')
             });
 
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    setModelPath(path);
-                    validatePath(path);
+                    if (type === 'streaming') {
+                        setStreamingModelPath(path);
+                    } else {
+                        setOfflineModelPath(path);
+                    }
                 }
             }
         } catch (err) {
@@ -181,17 +171,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
         setDownloadingId(model.id);
         setProgress(0);
-        setStatusText(t('settings.download_starting'));
 
         try {
-            const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
+            const downloadedPath = await modelService.downloadModel(model.id, (pct) => {
                 setProgress(pct);
-                setStatusText(status);
             });
 
-            setModelPath(downloadedPath);
-            validatePath(downloadedPath);
-            setStatusText(t('settings.download_complete'));
+            setModelPathByType(model.type, downloadedPath);
+
             await checkInstalledModels();
 
             // Auto-switch to local tab to show result
@@ -202,7 +189,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
         } catch (error: any) {
             console.error('Download failed:', error);
-            setStatusText(t('settings.download_failed', { error: error.message }));
             setTimeout(() => setDownloadingId(null), 3000);
         }
     };
@@ -210,10 +196,17 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const handleLoad = async (model: ModelInfo) => {
         try {
             const path = await modelService.getModelPath(model.id);
-            setModelPath(path);
-            validatePath(path);
+            setModelPathByType(model.type, path);
         } catch (error: any) {
             console.error('Load failed:', error);
+        }
+    };
+
+    const setModelPathByType = (type: 'streaming' | 'offline', path: string) => {
+        if (type === 'streaming') {
+            setStreamingModelPath(path);
+        } else {
+            setOfflineModelPath(path);
         }
     };
 
@@ -234,9 +227,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
-            if (modelPath === deletedPath) {
-                setModelPath('');
-                setPathStatus('idle');
+            if (streamingModelPath === deletedPath) {
+                setStreamingModelPath('');
+            }
+            if (offlineModelPath === deletedPath) {
+                setOfflineModelPath('');
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
@@ -255,9 +250,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                if (parsed.modelPath) {
+                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath) {
+                    // Migration: if old modelPath exists and new ones don't, mapping it to streaming (or just ignoring)
+                    // Let's assume clear separation needed, but if old config exists, we can try to reuse it for streaming
+                    const legacyPath = parsed.modelPath || '';
+
                     setConfig({
-                        modelPath: parsed.modelPath,
+                        streamingModelPath: parsed.streamingModelPath || legacyPath,
+                        offlineModelPath: parsed.offlineModelPath || '',
                         enableITN: parsed.enableITN ?? true,
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto'
@@ -363,11 +363,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                         {activeTab === 'models' && (
                             <div className="model-list">
-                                <div className="model-list-hint">
-                                    {t('settings.download_desc')}
-                                </div>
-
-                                {PRESET_MODELS.map(model => (
+                                <div className="settings-section-subtitle" style={{ marginBottom: 10, fontWeight: 'bold' }}>{t('settings.streaming_models')}</div>
+                                {PRESET_MODELS.filter(m => m.type === 'streaming').map(model => (
                                     <div key={model.id} className="model-card">
                                         <div className="model-card-header">
                                             <div>
@@ -375,7 +372,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 <div className="model-description">{model.description}</div>
                                                 <div className="model-tags">
                                                     <span className="model-tag">{model.language.toUpperCase()}</span>
-                                                    <span className="model-tag">{model.type}</span>
                                                     <span className="model-tag">{model.engine.toUpperCase()}</span>
                                                     <span className="model-tag">{model.size}</span>
                                                 </div>
@@ -383,24 +379,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             {installedModels.has(model.id) ? (
                                                 <div className="model-actions">
                                                     <button
-                                                        className="btn btn-primary"
+                                                        className={`btn ${streamingModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
                                                         onClick={() => handleLoad(model)}
-                                                        aria-label={t('settings.load')}
-                                                        data-tooltip={t('settings.load')}
+                                                        disabled={streamingModelPath.includes(model.filename || model.id)}
                                                     >
-                                                        <PlayIcon />
+                                                        {streamingModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
                                                     </button>
                                                     <button
                                                         className="btn btn-secondary"
                                                         onClick={() => handleDelete(model)}
                                                         disabled={!!deletingId || !!downloadingId}
-                                                        title="Delete model"
                                                     >
-                                                        {deletingId === model.id ? (
-                                                            <div className="spinner" />
-                                                        ) : (
-                                                            <TrashIcon />
-                                                        )}
+                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
                                                     </button>
                                                 </div>
                                             ) : (
@@ -414,19 +404,58 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 </button>
                                             )}
                                         </div>
-
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-info-mini">
-                                                    <span>{statusText}</span>
-                                                    <span>{progress}%</span>
+                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.offline_models')}</div>
+                                {PRESET_MODELS.filter(m => m.type === 'offline').map(model => (
+                                    <div key={model.id} className="model-card">
+                                        <div className="model-card-header">
+                                            <div>
+                                                <div className="model-name">{model.name}</div>
+                                                <div className="model-description">{model.description}</div>
+                                                <div className="model-tags">
+                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.size}</span>
                                                 </div>
-                                                <div className="progress-bar-mini">
-                                                    <div
-                                                        className="progress-fill"
-                                                        style={{ width: `${progress}%` }}
-                                                    />
+                                            </div>
+                                            {installedModels.has(model.id) ? (
+                                                <div className="model-actions">
+                                                    <button
+                                                        className={`btn ${offlineModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
+                                                        onClick={() => handleLoad(model)}
+                                                        disabled={offlineModelPath.includes(model.filename || model.id)}
+                                                    >
+                                                        {offlineModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => handleDelete(model)}
+                                                        disabled={!!deletingId || !!downloadingId}
+                                                    >
+                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
+                                                    </button>
                                                 </div>
+                                            ) : (
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={() => handleDownload(model)}
+                                                    disabled={!!downloadingId}
+                                                    style={{ width: 120 }}
+                                                >
+                                                    {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {downloadingId === model.id && (
+                                            <div className="progress-container-mini">
+                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
                                             </div>
                                         )}
                                     </div>
@@ -437,40 +466,46 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         {activeTab === 'local' && (
                             <div className="settings-group">
                                 <div className="settings-item">
-                                    <label className="settings-label">{t('settings.path_label')}</label>
+                                    <label className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
                                             type="text"
-                                            title={modelPath}
-                                            className={`settings-input ${pathStatus === 'valid' ? 'valid' : pathStatus === 'invalid' ? 'invalid' : ''}`}
-                                            value={modelPath}
-                                            onChange={handlePathChange}
+                                            title={streamingModelPath}
+                                            className="settings-input"
+                                            value={streamingModelPath}
+                                            onChange={(e) => setStreamingModelPath(e.target.value)}
                                             placeholder={t('settings.path_placeholder')}
                                             style={{ flex: 1 }}
                                         />
                                         <button
                                             className="btn btn-secondary"
-                                            onClick={handleBrowse}
+                                            onClick={() => handleBrowse('streaming')}
                                             aria-label={t('settings.browse')}
-                                            data-tooltip={t('settings.browse')}
                                         >
                                             <FolderIcon />
                                         </button>
                                     </div>
-                                    <div className="settings-hint">
-                                        {pathStatus === 'valid' && (
-                                            <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <CheckIcon /> {t('settings.valid_path')}
-                                            </span>
-                                        )}
-                                        {pathStatus === 'invalid' && (
-                                            <span style={{ color: 'var(--color-error)' }}>
-                                                {t('settings.invalid_path')}
-                                            </span>
-                                        )}
-                                        {pathStatus === 'idle' && (
-                                            t('settings.path_hint')
-                                        )}
+                                </div>
+
+                                <div className="settings-item" style={{ marginTop: 16 }}>
+                                    <label className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <input
+                                            type="text"
+                                            title={offlineModelPath}
+                                            className="settings-input"
+                                            value={offlineModelPath}
+                                            onChange={(e) => setOfflineModelPath(e.target.value)}
+                                            placeholder={t('settings.path_placeholder')}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => handleBrowse('offline')}
+                                            aria-label={t('settings.browse')}
+                                        >
+                                            <FolderIcon />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -500,6 +535,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
                             </div>
                         )}
+
                     </div>
 
                     {/* Footer */}
@@ -513,7 +549,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     );
 };
 

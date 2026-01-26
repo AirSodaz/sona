@@ -135,8 +135,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
             // Start transcription service
             const config = useTranscriptStore.getState().config;
-            console.log('[LiveRecord] Starting transcription with model path:', config.modelPath);
-            transcriptionService.setModelPath(config.modelPath);
+            console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
+            transcriptionService.setModelPath(config.streamingModelPath);
             transcriptionService.setEnableITN(!!config.enableITN);
 
             await transcriptionService.start(
