@@ -93,4 +93,23 @@ if (ffmpegSrc && existsSync(ffmpegSrc)) {
     process.exit(1);
 }
 
+// 4. Copy sherpa-ncnn assets
+console.log('Copying sherpa-ncnn assets...');
+const ncnnDir = join(__dirname, 'node_modules', 'sherpa-ncnn');
+if (existsSync(ncnnDir)) {
+    const files = readdirSync(ncnnDir);
+    for (const file of files) {
+        if (file.endsWith('.wasm') || (file.endsWith('.js') && file !== 'index.js')) {
+             // We copy helper JS files (like the wasm loader) to be safe,
+             // though if bundled, they might be inlined.
+             // But usually WASM loaders are sensitive to path.
+             // We'll verify if 'sherpa-ncnn.js' or others are needed alongside.
+            copyFileSync(join(ncnnDir, file), join(distDir, file));
+            console.log(`Copied ${file} to dist/`);
+        }
+    }
+} else {
+    console.warn('Could not find sherpa-ncnn module to copy assets from.');
+}
+
 console.log('Build complete.');

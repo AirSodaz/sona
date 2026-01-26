@@ -13,44 +13,69 @@ export interface ModelInfo {
     size: string; // Display size
     isArchive?: boolean;
     filename?: string;
+    engine: 'onnx' | 'ncnn';
 }
 
 export const PRESET_MODELS: ModelInfo[] = [
     {
+        id: 'sherpa-ncnn-streaming-zipformer-en-2023-02-21',
+        name: 'English - Zipformer (GPU/NCNN)',
+        description: 'Fast streaming model for GPU (NCNN)',
+        url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-zipformer-en-2023-02-21.tar.bz2',
+        type: 'streaming',
+        language: 'en',
+        size: '~40 MB',
+        engine: 'ncnn'
+    },
+    {
+        id: 'sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13',
+        name: 'Chinese/English - Zipformer (GPU/NCNN)',
+        description: 'Bilingual streaming model for GPU (NCNN)',
+        url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13.tar.bz2',
+        type: 'streaming',
+        language: 'zh-en',
+        size: '~150 MB',
+        engine: 'ncnn'
+    },
+    {
         id: 'sherpa-onnx-streaming-zipformer-en-2023-02-21',
-        name: 'English - Zipformer (Streaming)',
+        name: 'English - Zipformer (CPU/ONNX)',
         description: 'Fast and accurate English streaming model',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2',
         type: 'streaming',
         language: 'en',
-        size: '~90 MB'
+        size: '~90 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
-        name: 'Chinese/English - Zipformer (Streaming)',
+        name: 'Chinese/English - Zipformer (CPU/ONNX)',
         description: 'Bilingual streaming model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
         type: 'streaming',
         language: 'zh-en',
-        size: '~100 MB'
+        size: '~100 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-paraformer-zh-2023-09-14',
-        name: 'Chinese - Paraformer (Non-Streaming)',
+        name: 'Chinese - Paraformer (CPU/ONNX)',
         description: 'Accurate offline model from FunASR',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2',
         type: 'non-streaming',
         language: 'zh',
-        size: '~220 MB'
+        size: '~220 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer (Streaming)',
+        name: 'Chinese/English - Paraformer (CPU/ONNX)',
         description: 'Streaming Paraformer model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
         language: 'zh-en',
-        size: '~140 MB'
+        size: '~140 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
@@ -59,7 +84,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
         type: 'non-streaming',
         language: 'zh,en,ja,ko,yue',
-        size: '~900 MB'
+        size: '~900 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
@@ -68,7 +94,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
         type: 'non-streaming',
         language: 'zh,en,ja,ko,yue',
-        size: '~200 MB'
+        size: '~200 MB',
+        engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-whisper-tiny-int8',
@@ -78,7 +105,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'non-streaming',
         language: 'multilingual',
         size: '~150 MB',
-        filename: 'sherpa-onnx-whisper-tiny' // Use existing folder name from tarball
+        filename: 'sherpa-onnx-whisper-tiny', // Use existing folder name from tarball
+        engine: 'onnx'
     }
 ];
 
@@ -95,6 +123,27 @@ class ModelService {
         return modelsDir;
     }
 
+    async checkHardware(modelId: string): Promise<{ compatible: boolean, reason?: string }> {
+        const model = PRESET_MODELS.find(m => m.id === modelId);
+        if (!model) return { compatible: false, reason: 'Model not found' };
+
+        if (model.engine === 'ncnn') {
+            try {
+                const hasGpu = await invoke<boolean>('check_gpu_availability');
+                if (!hasGpu) {
+                    return {
+                        compatible: false,
+                        reason: 'No compatible GPU detected (Apple Silicon or NVIDIA). This model requires a GPU.'
+                    };
+                }
+            } catch (e) {
+                console.error('Hardware check failed:', e);
+                // Safe default: assume incompatible if check fails
+                return { compatible: false, reason: 'Hardware check failed.' };
+            }
+        }
+        return { compatible: true };
+    }
 
     async downloadModel(modelId: string, onProgress?: ProgressCallback): Promise<string> {
         const model = PRESET_MODELS.find(m => m.id === modelId);

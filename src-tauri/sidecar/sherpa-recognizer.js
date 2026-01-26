@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Sona - Sherpa-onnx Speech Recognition Sidecar
+ * Sona - Sherpa-onnx/ncnn Speech Recognition Sidecar
  * 
  * Supports two operational modes:
  * - Mode A (Stream): Reads PCM audio from stdin, outputs JSON lines
  * - Mode B (Batch): Processes audio file, outputs full segment array
  * 
- * Usage:
- *   node sherpa-recognizer.js --mode stream --model-path /path/to/model
- *   node sherpa-recognizer.js --mode batch --file /path/to/audio.mp3 --model-path /path/to/model
+ * Supports two engines:
+ * - sherpa-onnx-node: For CPU inference (ONNX models)
+ * - sherpa-ncnn: For GPU inference (NCNN models with Vulkan/CoreML support)
  */
 
 import { spawn, execSync } from 'child_process';
@@ -70,15 +70,13 @@ function parseArgs() {
     return options;
 }
 
-// Get ffmpeg path (from local bundle, ffmpeg-static, or system)
+// Get ffmpeg path
 async function getFFmpegPath() {
-    // 1. Check same directory (bundled)
     const localOne = join(__scriptDir, 'ffmpeg.exe');
     if (existsSync(localOne)) return localOne;
     const localTwo = join(__scriptDir, 'ffmpeg');
     if (existsSync(localTwo)) return localTwo;
 
-    // 2. Check cwd
     const cwdOne = join(process.cwd(), 'ffmpeg.exe');
     if (existsSync(cwdOne)) return cwdOne;
 
@@ -86,7 +84,6 @@ async function getFFmpegPath() {
         const ffmpegStatic = await import('ffmpeg-static');
         return ffmpegStatic.default;
     } catch {
-        // Fall back to system ffmpeg
         return 'ffmpeg';
     }
 }
@@ -95,75 +92,96 @@ async function getFFmpegPath() {
 async function convertToWav(inputPath, ffmpegPath) {
     return new Promise((resolve, reject) => {
         const chunks = [];
-
         const ffmpeg = spawn(ffmpegPath, [
             '-i', inputPath,
-            '-f', 's16le',        // 16-bit signed little-endian PCM
-            '-acodec', 'pcm_s16le',
-            '-ar', '16000',       // 16kHz sample rate
-            '-ac', '1',           // Mono
-            '-'                   // Output to stdout
+            '-f', 's16le', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-'
         ]);
 
-        ffmpeg.stdout.on('data', (chunk) => {
-            chunks.push(chunk);
-        });
-
-        ffmpeg.stderr.on('data', (data) => {
-            // FFmpeg outputs info to stderr, ignore it
-        });
-
+        ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
+        ffmpeg.stderr.on('data', () => {});
         ffmpeg.on('close', (code) => {
-            if (code === 0) {
-                resolve(Buffer.concat(chunks));
-            } else {
-                reject(new Error(`FFmpeg exited with code ${code}`));
-            }
+            if (code === 0) resolve(Buffer.concat(chunks));
+            else reject(new Error(`FFmpeg exited with code ${code}`));
         });
-
         ffmpeg.on('error', reject);
     });
 }
 
-// Create sherpa-onnx recognizer (Online or Offline)
-async function createRecognizer(modelPath, enableITN, provider, numThreads) {
+// Create NCNN Recognizer (GPU/Vulkan/CoreML)
+async function createNcnnRecognizer(modelConfig, enableITN, numThreads) {
+    console.error(`Initializing NcnnRecognizer (Threads: ${numThreads})...`);
+    try {
+        const sherpaNcnn = await import('sherpa-ncnn');
+
+        // Configuration for sherpa-ncnn
+        const config = {
+            featConfig: {
+                samplingRate: 16000,
+                featureDim: 80,
+            },
+            modelConfig: {
+                ...modelConfig,
+                useVulkanCompute: 1, // Enable GPU
+                numThreads: numThreads,
+            },
+            decoderConfig: {
+                decodingMethod: 'greedy_search',
+                numActivePaths: 4,
+            },
+            enableEndpoint: 1,
+            rule1MinTrailingSilence: 2.4,
+            rule2MinTrailingSilence: 2.4,
+            rule3MinUtternceLength: 300, // Large number to mimic sherpa-onnx defaults? Or 0?
+        };
+
+        const recognizer = sherpaNcnn.createRecognizer(config);
+
+        // Wrap to match interface
+        return {
+            recognizer: {
+                createStream: () => recognizer.createStream(),
+                isReady: (stream) => recognizer.isReady(stream),
+                decode: (stream) => recognizer.decode(stream),
+                isEndpoint: (stream) => recognizer.isEndpoint(stream),
+                reset: (stream) => recognizer.reset(stream),
+                getResult: (stream) => {
+                    const text = recognizer.getResult(stream);
+                    return { text: text }; // Wrap string in object
+                }
+            },
+            type: 'online-ncnn',
+            supportsInternalITN: false
+        };
+    } catch (e) {
+        throw new Error(`Failed to initialize sherpa-ncnn: ${e.message}`);
+    }
+}
+
+// Create ONNX Recognizer (CPU)
+async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
+    console.error(`Initializing OnnxRecognizer (CPU, Threads: ${numThreads})...`);
     try {
         const sherpaModule = await import('sherpa-onnx-node');
         const sherpa = sherpaModule.default || sherpaModule;
 
-        const modelConfig = findModelConfig(modelPath, enableITN, provider, numThreads);
-        if (!modelConfig) {
-            throw new Error(`Could not find valid model configuration in: ${modelPath}`);
-        }
-
-        // Check if it's an offline config (SenseVoice, Whisper, etc.)
+        // Offline models (SenseVoice, Whisper)
         if (modelConfig.senseVoice || modelConfig.whisper) {
-            console.error(`Initializing OfflineRecognizer (Provider: ${provider}, Threads: ${numThreads})...`);
             const config = {
-                featConfig: {
-                    sampleRate: 16000,
-                    featureDim: 80,
-                },
+                featConfig: { sampleRate: 16000, featureDim: 80 },
                 modelConfig: modelConfig,
-                // Offline recognizer options
                 decodingMethod: 'greedy_search',
                 maxActivePaths: 4,
             };
-
             return {
                 recognizer: new sherpa.OfflineRecognizer(config),
                 type: 'offline',
-                supportsInternalITN: true // SenseVoice/Whisper usually support internal ITN if configured
+                supportsInternalITN: true
             };
         }
 
-        // Default to Online
-        console.error(`Initializing OnlineRecognizer (Provider: ${provider}, Threads: ${numThreads})...`);
+        // Online models
         const config = {
-            featConfig: {
-                sampleRate: 16000,
-                featureDim: 80,
-            },
+            featConfig: { sampleRate: 16000, featureDim: 80 },
             modelConfig: modelConfig,
             decodingMethod: 'greedy_search',
             maxActivePaths: 4,
@@ -175,38 +193,60 @@ async function createRecognizer(modelPath, enableITN, provider, numThreads) {
             },
         };
 
-        // Check if ITN is enabled but handled internally (e.g. by SenseVoice)
-        // or if we should use our JS fallback.
         const supportsInternalITN = !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
-
-        if (enableITN && !supportsInternalITN) {
-            console.error('ITN Enabled (using JS post-processing).');
-        } else if (enableITN && supportsInternalITN) {
-            console.error('ITN Enabled (using internal model capability).');
-        }
 
         return {
             recognizer: new sherpa.OnlineRecognizer(config),
             type: 'online',
-            supportsInternalITN: false // Online models here don't have internal ITN configured yet
+            supportsInternalITN: false
         };
-
-    } catch (error) {
-        console.error(JSON.stringify({ error: `Failed to create recognizer: ${error.message}` }));
-        process.exit(1);
+    } catch (e) {
+        throw new Error(`Failed to initialize sherpa-onnx: ${e.message}`);
     }
 }
 
-// Find model configuration based on model directory contents
-function findModelConfig(modelPath, enableITN, provider, numThreads) {
-    if (!existsSync(modelPath)) {
-        return null;
-    }
+// Find model configuration and detect type
+function findModelConfig(modelPath, enableITN, numThreads) {
+    if (!existsSync(modelPath)) return null;
 
     try {
         const files = readdirSync(modelPath);
+        const tokens = files.find(f => f === 'tokens.txt');
 
-        // Helper to find file by prefix
+        if (!tokens) return null; // All models need tokens.txt
+
+        // 1. Check for NCNN files (.bin + .param)
+        // Expected: encoder_jit_trace-pnnx.ncnn.bin/param, decoder..., joiner...
+        const hasNcnn = files.some(f => f.endsWith('.ncnn.bin'));
+
+        if (hasNcnn) {
+            // NCNN Logic
+            const findNcnnFile = (pattern) => {
+                const f = files.find(file => file.includes(pattern) && (file.endsWith('.bin') || file.endsWith('.param')));
+                return f ? join(modelPath, f) : null;
+            };
+
+            const encoderBin = findNcnnFile('encoder_jit_trace-pnnx.ncnn.bin');
+            const encoderParam = findNcnnFile('encoder_jit_trace-pnnx.ncnn.param');
+            const decoderBin = findNcnnFile('decoder_jit_trace-pnnx.ncnn.bin');
+            const decoderParam = findNcnnFile('decoder_jit_trace-pnnx.ncnn.param');
+            const joinerBin = findNcnnFile('joiner_jit_trace-pnnx.ncnn.bin');
+            const joinerParam = findNcnnFile('joiner_jit_trace-pnnx.ncnn.param');
+
+            if (encoderBin && encoderParam && decoderBin && decoderParam && joinerBin && joinerParam) {
+                return {
+                    type: 'ncnn',
+                    config: {
+                        encoderBin, encoderParam,
+                        decoderBin, decoderParam,
+                        joinerBin, joinerParam,
+                        tokens: join(modelPath, tokens)
+                    }
+                };
+            }
+        }
+
+        // 2. Check for ONNX files
         const findBestMatch = (prefix) => {
             const candidates = files.filter(f => f.includes(prefix) && f.endsWith('.onnx'));
             if (candidates.length === 0) return null;
@@ -215,59 +255,46 @@ function findModelConfig(modelPath, enableITN, provider, numThreads) {
             return join(modelPath, candidates[0]);
         };
 
-        // 1. Check for Online Models (Transducer, Paraformer-Streaming)
-        // They typically have encoder / decoder
         const encoder = findBestMatch('encoder');
         const decoder = findBestMatch('decoder');
         const joiner = findBestMatch('joiner');
-        const tokens = files.find(f => f === 'tokens.txt');
 
-
-
-        if (tokens && encoder && decoder) {
+        if (encoder && decoder) {
             const baseConfig = {
                 tokens: join(modelPath, tokens),
                 numThreads: numThreads,
-                provider: provider,
+                provider: 'cpu', // ONNX is CPU only now per requirement
                 debug: false,
             };
 
             if (joiner) {
-                // Transducer (Online)
                 return {
-                    ...baseConfig,
-                    transducer: { encoder, decoder, joiner }
+                    type: 'onnx',
+                    config: { ...baseConfig, transducer: { encoder, decoder, joiner } }
                 };
             } else {
-                // Paraformer (Online check - Paraformer can be offline too but usually has same structure? 
-                // Actually Paraformer-Online and Offline have different structures usually, 
-                // but let's assume if it has encoder/decoder it's Online-compatible or we treat as Online for now)
-                // Note: Offline Paraformer usually has 'model.onnx' in older versions or same structure.
-                // But specifically for detecting SenseVoice vs others.
-
-                // Let's stick to existing logic for Online Paraformer
                 return {
-                    ...baseConfig,
-                    paraformer: { encoder, decoder }
+                    type: 'onnx',
+                    config: { ...baseConfig, paraformer: { encoder, decoder } }
                 };
             }
         }
 
-        // 2. Check for Offline Models (SenseVoice, Whisper, etc.)
-
-        // SenseVoice: model.onnx + tokens.txt
+        // SenseVoice / Whisper (Offline ONNX)
         const model = findBestMatch('model');
-        if (tokens && model && !encoder) {
-            // SenseVoice detection
+        if (model && !encoder) {
             return {
-                tokens: join(modelPath, tokens),
-                numThreads: numThreads,
-                provider: provider,
-                debug: false,
-                senseVoice: {
-                    model: model,
-                    language: '', // auto-detect
-                    useInverseTextNormalization: enableITN ? 1 : 0,
+                type: 'onnx',
+                config: {
+                    tokens: join(modelPath, tokens),
+                    numThreads: numThreads,
+                    provider: 'cpu',
+                    debug: false,
+                    senseVoice: {
+                        model: model,
+                        language: '',
+                        useInverseTextNormalization: enableITN ? 1 : 0,
+                    }
                 }
             };
         }
@@ -279,68 +306,49 @@ function findModelConfig(modelPath, enableITN, provider, numThreads) {
     return null;
 }
 
-
-
-
-// Helper to fix ALL CAPS text from some models
+// Text post-processing
 function postProcessText(text) {
     if (!text) return "";
-
-    // If text contains letters and is all uppercase
-    // We assume mixed content (e.g. "HELLO WORLD") is what we want to fix
-    // But we shouldn't touch Chinese or mixed Chinese/English if the English part is fine.
-    // However, if the English part is ALL CAPS, we should fix it.
-
-    // Simple heuristic: if the string equals its uppercase version (and has letters), it is ALL CAPS.
     if (/[a-zA-Z]/.test(text) && text === text.toUpperCase()) {
         const lower = text.toLowerCase();
-        // Capitalize first letter
         return lower.charAt(0).toUpperCase() + lower.slice(1);
     }
     return text;
 }
 
-// Apply Inverse Text Normalization (Chinese numbers to digits)
 const nzhcn = Nzh.cn;
 function applyITN(text) {
     if (!text) return "";
-
-    // Match Chinese number patterns and convert them
-    // Pattern matches sequences of Chinese number characters
     const chineseNumPattern = /[零一二三四五六七八九十百千万亿点两]+/g;
-
     return text.replace(chineseNumPattern, (match) => {
         try {
-            // Try to decode the Chinese number
             const decoded = nzhcn.decodeS(match);
-            // If successful and different from input, use the decoded version
-            if (decoded && decoded !== match) {
-                return decoded;
-            }
-        } catch (e) {
-            // If decoding fails, keep original
-        }
+            if (decoded && decoded !== match) return decoded;
+        } catch (e) {}
         return match;
     });
 }
 
-// Process audio stream (Mode A)
+// Process Stream
 async function processStream(recognizer, sampleRate, enableITN) {
     const stream = recognizer.createStream();
     let totalSamples = 0;
     let segmentStartTime = 0;
     let currentSegmentId = randomUUID();
 
-    // Read 16-bit PCM from stdin
     process.stdin.on('data', (chunk) => {
-        // Convert Buffer to Float32Array
         const samples = new Float32Array(chunk.length / 2);
         for (let i = 0; i < samples.length; i++) {
             const int16 = chunk.readInt16LE(i * 2);
             samples[i] = int16 / 32768.0;
         }
 
-        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
+        if (recognizer.isNcnn) {
+            stream.acceptWaveform(sampleRate, samples);
+        } else {
+            stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
+        }
+
         totalSamples += samples.length;
 
         while (recognizer.isReady(stream)) {
@@ -360,15 +368,11 @@ async function processStream(recognizer, sampleRate, enableITN) {
                 end: currentTime,
                 isFinal: false,
             };
-
-
             console.log(JSON.stringify(output));
         }
 
-        // Check for endpoint (sentence end)
         if (recognizer.isEndpoint(stream)) {
             const finalResult = recognizer.getResult(stream);
-
             if (finalResult.text.trim()) {
                 let text = postProcessText(finalResult.text.trim());
                 if (enableITN) text = applyITN(text);
@@ -379,10 +383,8 @@ async function processStream(recognizer, sampleRate, enableITN) {
                     end: currentTime,
                     isFinal: true,
                 };
-
                 console.log(JSON.stringify(output));
             }
-
             recognizer.reset(stream);
             segmentStartTime = currentTime;
             currentSegmentId = randomUUID();
@@ -390,42 +392,31 @@ async function processStream(recognizer, sampleRate, enableITN) {
     });
 
     process.stdin.on('end', () => {
-        // Process any remaining audio
         const finalResult = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
-
         if (finalResult.text.trim()) {
             let text = postProcessText(finalResult.text.trim());
             if (enableITN) text = applyITN(text);
-            const output = {
+            console.log(JSON.stringify({
                 id: currentSegmentId,
                 text: text,
                 start: segmentStartTime,
                 end: currentTime,
                 isFinal: true,
-            };
-
-
-            console.log(JSON.stringify(output));
+            }));
         }
-
         console.log(JSON.stringify({ done: true }));
         process.exit(0);
     });
 }
 
-// Process audio file (Mode B)
+// Process Batch
 async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
-    if (!existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-    }
+    if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
-        // Convert to PCM
         console.error('Converting audio file...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
-
-        // Convert to Float32Array
         const samples = new Float32Array(pcmData.length / 2);
         for (let i = 0; i < samples.length; i++) {
             const int16 = pcmData.readInt16LE(i * 2);
@@ -433,32 +424,26 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
         }
 
         console.error(`Processing ${samples.length} samples...`);
-
-        // Process with recognizer
         const stream = recognizer.createStream();
         const segments = [];
         let segmentStartTime = 0;
-
-        // Process in chunks
-        const chunkSize = sampleRate * 0.5; // 500ms chunks
+        const chunkSize = sampleRate * 0.5;
 
         for (let i = 0; i < samples.length; i += chunkSize) {
             const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
-            stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
 
-            while (recognizer.isReady(stream)) {
-                recognizer.decode(stream);
+            // UNIFIED call needed here
+            if (recognizer.isNcnn) {
+                stream.acceptWaveform(sampleRate, chunk);
+            } else {
+                stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
             }
 
-            // Report progress
-            const progress = Math.round((i / samples.length) * 100);
-            console.error(`Progress: ${progress}%`);
+            while (recognizer.isReady(stream)) recognizer.decode(stream);
 
-            // Check for endpoint
             if (recognizer.isEndpoint(stream)) {
                 const result = recognizer.getResult(stream);
                 const currentTime = i / sampleRate;
-
                 if (result.text.trim()) {
                     let text = postProcessText(result.text.trim());
                     if (enableITN) text = applyITN(text);
@@ -470,16 +455,18 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
                         isFinal: true,
                     });
                 }
-
                 recognizer.reset(stream);
                 segmentStartTime = currentTime;
             }
+
+            if (i % (sampleRate * 5) === 0) {
+                const progress = Math.round((i / samples.length) * 100);
+                console.error(`Progress: ${progress}%`);
+            }
         }
 
-        // Get final result
         const finalResult = recognizer.getResult(stream);
         const totalDuration = samples.length / sampleRate;
-
         if (finalResult.text.trim()) {
             let text = postProcessText(finalResult.text.trim());
             if (enableITN) text = applyITN(text);
@@ -491,8 +478,6 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
                 isFinal: true,
             });
         }
-
-        // Output segments as JSON array
         console.log(JSON.stringify(segments, null, 2));
 
     } catch (error) {
@@ -500,110 +485,42 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
     }
 }
 
-// Process audio file (Offline Mode)
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
-    if (!existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-    }
+     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
         console.error('Converting audio file (Offline)...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
-
         const samples = new Float32Array(pcmData.length / 2);
         for (let i = 0; i < samples.length; i++) {
-            const int16 = pcmData.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
+            samples[i] = pcmData.readInt16LE(i * 2) / 32768.0;
         }
 
         console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
-
         const stream = recognizer.createStream();
         stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
 
         recognizer.decode(stream);
-
         const result = recognizer.getResult(stream);
         const segments = [];
-
-        // Offline recognizer might return full text.
-        // Some offline models have timestamps in result.timestamps, result.tokens etc.
-        // But basics: result.text
 
         if (result.text && result.text.trim()) {
             let text = postProcessText(result.text.trim());
             if (enableITN) text = applyITN(text);
-
-            // Extract tokens and timestamps if available
-            // standard sherpa-onnx-node offline recognizer result has .tokens and .timestamps
-            const tokens = result.tokens || [];
-            const timestamps = result.timestamps || [];
-
             segments.push({
                 id: randomUUID(),
                 text: text,
                 start: 0,
                 end: samples.length / sampleRate,
                 isFinal: true,
-                tokens: tokens,
-                timestamps: timestamps
+                tokens: result.tokens || [],
+                timestamps: result.timestamps || []
             });
         }
-
         console.log(JSON.stringify(segments, null, 2));
-
     } catch (error) {
         throw error;
     }
-}
-
-// Detect optimal provider (GPU acceleration)
-async function detectProvider() {
-    // 1. Check for manual override from env
-    if (process.env.SONA_PROVIDER) {
-        return process.env.SONA_PROVIDER;
-    }
-
-    // 2. macOS: Default to CoreML (Apple Neural Engine/GPU)
-    if (process.platform === 'darwin') {
-        // CoreML is generally available on modern macOS
-        // We could refine this check, but 'coreml' is the flag for Apple acceleration
-        return 'coreml';
-    }
-
-    // 3. Windows/Linux: Check for NVIDIA GPU (CUDA)
-    try {
-        // simple check: see if nvidia-smi exists and runs
-        await new Promise((resolve, reject) => {
-            const cmd = process.platform === 'win32' ? 'where nvidia-smi' : 'which nvidia-smi';
-            const child = spawn(cmd, [], { shell: true, stdio: 'ignore' });
-            child.on('close', (code) => {
-                if (code === 0) resolve();
-                else reject();
-            });
-            child.on('error', reject);
-        });
-
-        // If we get here, nvidia-smi was found. 
-        // We could run it to check status, but presence usually implies drivers installed.
-        // Let's verify it actually runs successfully.
-        await new Promise((resolve, reject) => {
-            const child = spawn('nvidia-smi', [], { shell: true, stdio: 'ignore' });
-            child.on('close', (code) => {
-                if (code === 0) resolve();
-                else reject();
-            });
-            child.on('error', reject);
-        });
-
-        console.error('[Sidecar] NVIDIA GPU detected. Using CUDA provider.');
-        return 'cuda';
-
-    } catch (e) {
-        // Fallback to CPU
-    }
-
-    return 'cpu';
 }
 
 // Get number of physical cores
@@ -620,7 +537,6 @@ function getPhysicalCores() {
             if (!isNaN(cores) && cores > 0) return cores;
         } else if (platform === 'win32') {
             const output = execSync("wmic cpu get NumberOfCores").toString().trim();
-            // Output format is usually "NumberOfCores\n 4  " or similar
             const lines = output.split('\n');
             let total = 0;
             for (const line of lines) {
@@ -630,7 +546,6 @@ function getPhysicalCores() {
             if (total > 0) return total;
         }
     } catch (e) {
-        // Fallback to logical/2 is better than nothing if command fails
     }
 
     return Math.ceil(os.cpus().length / 2);
@@ -728,111 +643,83 @@ async function ensureLibraryPath() {
     return true;
 }
 
-// Main entry point
-async function main() {
-    // Check for Library Path fix
-    if (await ensureLibraryPath()) return;
 
+// Refactored main
+async function main() {
+    if (await ensureLibraryPath()) return;
     const options = parseArgs();
 
     if (!options.modelPath) {
-        console.error(JSON.stringify({
-            error: 'Model path is required. Use --model-path /path/to/model'
-        }));
+        console.error(JSON.stringify({ error: 'Model path is required.' }));
         process.exit(1);
     }
 
     const ffmpegPath = await getFFmpegPath();
-
-    // Auto-detect provider if not specified
-    let currentProvider = options.provider || await detectProvider();
-
-    // Calculate threads
     const numThreads = calculateNumThreads(options.numThreads);
-    console.error(`[Sidecar] Using ${numThreads} threads.`);
 
-    // For demo/testing without actual sherpa-onnx
-    // Only enabled if explicitly allowed via flag or env var
+    // Mock Mode
     const useMock = (options.allowMock && !existsSync(options.modelPath)) || process.env.SONA_MOCK === '1';
-
     if (useMock) {
-        console.error('Running in mock mode (sherpa-onnx model not found)');
-
+        console.error('Running in mock mode');
         if (options.mode === 'batch' && options.file) {
-            // Mock batch processing
-            const mockSegments = [
-                { id: randomUUID(), start: 0, end: 3.5, text: 'This is a mock transcript segment.', isFinal: true },
-                { id: randomUUID(), start: 3.5, end: 7.2, text: 'Actual transcription will work when sherpa-onnx model is configured.', isFinal: true },
-                { id: randomUUID(), start: 7.2, end: 10.0, text: 'Please set the model path in settings.', isFinal: true },
-            ];
-            console.log(JSON.stringify(mockSegments, null, 2));
+             console.log(JSON.stringify([
+                { id: randomUUID(), start: 0, end: 1, text: 'Mock transcript.', isFinal: true }
+             ], null, 2));
         } else {
-            // Mock stream processing
-            console.log(JSON.stringify({
-                id: randomUUID(),
-                text: 'Mock streaming mode active',
-                start: 0,
-                end: 1,
-                isFinal: true
-            }));
+             console.log(JSON.stringify({
+                id: randomUUID(), text: 'Mock streaming', start: 0, end: 1, isFinal: true
+             }));
         }
-
         process.exit(0);
     }
 
-    const maxRetries = 1;
-    let attempt = 0;
+    try {
+        const found = findModelConfig(options.modelPath, options.enableITN, numThreads);
+        if (!found) throw new Error('Could not find valid model configuration (NCNN or ONNX)');
 
-    while (true) {
-        if (attempt > 0) {
-            console.error(`[Sidecar] Retry attempt ${attempt} with provider: ${currentProvider}`);
-        } else if (currentProvider !== 'cpu') {
-            console.error(`[Sidecar] Using device provider: ${currentProvider}`);
+        let recognizerObj;
+
+        if (found.type === 'ncnn') {
+            recognizerObj = await createNcnnRecognizer(found.config, options.enableITN, numThreads);
+            // Flag to helper know it is NCNN for stream API diffs
+            recognizerObj.recognizer.isNcnn = true;
         } else {
-            console.error('[Sidecar] Using default CPU provider');
+            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads);
         }
 
-        try {
-            const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, currentProvider, numThreads);
+        const { recognizer, type, supportsInternalITN } = recognizerObj;
+        const useJSITN = options.enableITN && !supportsInternalITN;
 
-            // Use JS ITN only if enabled AND model doesn't support it internally
-            const useJSITN = options.enableITN && !supportsInternalITN;
+        // Unified Stream Processor Wrapper
+        // We wrap acceptWaveform here to handle API diff
+        const unifiedRecognizer = {
+            ...recognizer,
+            createStream: () => {
+                const s = recognizer.createStream();
+                return s;
+            },
+            isNcnn: !!recognizer.isNcnn
+        };
 
-            if (options.mode === 'batch') {
-                if (!options.file) {
-                    console.error(JSON.stringify({ error: 'File path required for batch mode' }));
-                    process.exit(1);
-                }
-                if (type === 'offline') {
-                    // Offline models (SenseVoice) handle ITN internally if configured, so we pass false for JS ITN
-                    await processBatchOffline(recognizer, options.file, ffmpegPath, options.sampleRate, false);
-                } else {
-                    await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, useJSITN);
-                }
+        if (options.mode === 'batch') {
+            if (!options.file) throw new Error('File path required for batch mode');
+            if (type === 'offline') {
+                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, false);
             } else {
-                if (type === 'offline') {
-                    console.error(JSON.stringify({ error: 'Streaming mode not supported for this offline model (SenseVoice).' }));
-                    process.exit(1);
-                }
-                await processStream(recognizer, options.sampleRate, useJSITN);
+                await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, useJSITN);
+            }
+        } else {
+            if (type === 'offline') {
+                console.error(JSON.stringify({ error: 'Streaming mode not supported for offline model.' }));
+                process.exit(1);
             }
 
-            // Success
-            break;
-
-        } catch (error) {
-            // Check if we can retry with CPU
-            if (currentProvider === 'coreml' && attempt < maxRetries) {
-                console.error(`[Sidecar] Error with CoreML provider: ${error.message}`);
-                console.error('[Sidecar] Switching to CPU and retrying...');
-                currentProvider = 'cpu';
-                attempt++;
-                continue;
-            }
-
-            console.error(JSON.stringify({ error: error.message || String(error) }));
-            process.exit(1);
+             await processStream(unifiedRecognizer, options.sampleRate, useJSITN);
         }
+
+    } catch (error) {
+        console.error(JSON.stringify({ error: error.message || String(error) }));
+        process.exit(1);
     }
 }
 
