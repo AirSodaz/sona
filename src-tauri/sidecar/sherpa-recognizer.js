@@ -479,8 +479,134 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
     }
 }
 
+// Process audio file (Offline Mode)
+async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
+    if (!existsSync(filePath)) {
+        console.error(JSON.stringify({ error: `File not found: ${filePath}` }));
+        process.exit(1);
+    }
+
+    try {
+        console.error('Converting audio file (Offline)...');
+        const pcmData = await convertToWav(filePath, ffmpegPath);
+
+        const samples = new Float32Array(pcmData.length / 2);
+        for (let i = 0; i < samples.length; i++) {
+            const int16 = pcmData.readInt16LE(i * 2);
+            samples[i] = int16 / 32768.0;
+        }
+
+        console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
+
+        const stream = recognizer.createStream();
+        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
+
+        recognizer.decode(stream);
+
+        const result = recognizer.getResult(stream);
+        const segments = [];
+
+        // Offline recognizer might return full text.
+        // Some offline models have timestamps in result.timestamps, result.tokens etc.
+        // But basics: result.text
+
+        if (result.text && result.text.trim()) {
+            let text = postProcessText(result.text.trim());
+            if (enableITN) text = applyITN(text);
+
+            // Extract tokens and timestamps if available
+            // standard sherpa-onnx-node offline recognizer result has .tokens and .timestamps
+            const tokens = result.tokens || [];
+            const timestamps = result.timestamps || [];
+
+            segments.push({
+                id: randomUUID(),
+                text: text,
+                start: 0,
+                end: samples.length / sampleRate,
+                isFinal: true,
+                tokens: tokens,
+                timestamps: timestamps
+            });
+        }
+
+        console.log(JSON.stringify(segments, null, 2));
+
+    } catch (error) {
+        console.error(JSON.stringify({ error: error.message }));
+        process.exit(1);
+    }
+}
+
+// Ensure DYLD_LIBRARY_PATH is set on macOS
+async function ensureDyldPath() {
+    if (process.platform !== 'darwin') return false;
+    if (process.env.SONA_DYLD_FIXED) return false;
+
+    const arch = process.arch;
+    const packageName = `sherpa-onnx-darwin-${arch}`;
+
+    // Look for node_modules in likely locations
+    const candidates = [
+        join(__dirname, '../../node_modules'),
+        join(__dirname, 'node_modules'),
+        join(__dirname, '../node_modules'),
+    ];
+
+    let targetPath = null;
+    for (const base of candidates) {
+        const p = join(base, packageName);
+        if (existsSync(p)) {
+            targetPath = p;
+            break;
+        }
+    }
+
+    if (!targetPath) {
+        return false;
+    }
+
+    const currentDyld = process.env.DYLD_LIBRARY_PATH || '';
+    if (currentDyld.includes(targetPath)) {
+        return false; // Already set
+    }
+
+    const newDyld = currentDyld
+        ? `${targetPath}:${currentDyld}`
+        : targetPath;
+
+    console.error(`[Sidecar] Setting DYLD_LIBRARY_PATH to ${targetPath} and respawning...`);
+
+    const newEnv = {
+        ...process.env,
+        DYLD_LIBRARY_PATH: newDyld,
+        SONA_DYLD_FIXED: '1'
+    };
+
+    const child = spawn(process.execPath, process.argv.slice(1), {
+        env: newEnv,
+        stdio: 'inherit'
+    });
+
+    child.on('close', (code) => {
+        process.exit(code);
+    });
+
+    // Forward signals
+    ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach(signal => {
+        process.on(signal, () => {
+            if (!child.killed) child.kill(signal);
+        });
+    });
+
+    return true;
+}
+
 // Main entry point
 async function main() {
+    // Check for macOS DYLD fix
+    if (await ensureDyldPath()) return;
+
     const options = parseArgs();
 
     if (!options.modelPath) {
@@ -545,65 +671,6 @@ async function main() {
             }
             await processStream(recognizer, options.sampleRate, useJSITN);
         }
-    } catch (error) {
-        console.error(JSON.stringify({ error: error.message }));
-        process.exit(1);
-    }
-}
-
-// Process audio file (Offline Mode)
-async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
-    if (!existsSync(filePath)) {
-        console.error(JSON.stringify({ error: `File not found: ${filePath}` }));
-        process.exit(1);
-    }
-
-    try {
-        console.error('Converting audio file (Offline)...');
-        const pcmData = await convertToWav(filePath, ffmpegPath);
-
-        const samples = new Float32Array(pcmData.length / 2);
-        for (let i = 0; i < samples.length; i++) {
-            const int16 = pcmData.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
-        }
-
-        console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
-
-        const stream = recognizer.createStream();
-        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
-
-        recognizer.decode(stream);
-
-        const result = recognizer.getResult(stream);
-        const segments = [];
-
-        // Offline recognizer might return full text. 
-        // Some offline models have timestamps in result.timestamps, result.tokens etc.
-        // But basics: result.text
-
-        if (result.text && result.text.trim()) {
-            let text = postProcessText(result.text.trim());
-            if (enableITN) text = applyITN(text);
-
-            // Extract tokens and timestamps if available
-            // standard sherpa-onnx-node offline recognizer result has .tokens and .timestamps
-            const tokens = result.tokens || [];
-            const timestamps = result.timestamps || [];
-
-            segments.push({
-                id: randomUUID(),
-                text: text,
-                start: 0,
-                end: samples.length / sampleRate,
-                isFinal: true,
-                tokens: tokens,
-                timestamps: timestamps
-            });
-        }
-
-        console.log(JSON.stringify(segments, null, 2));
-
     } catch (error) {
         console.error(JSON.stringify({ error: error.message }));
         process.exit(1);
