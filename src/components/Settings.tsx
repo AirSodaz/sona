@@ -280,7 +280,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     padding: '24px 24px 0 24px'
                 }}>
                     <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>{t('settings.title')}</h2>
-                    <button className="btn btn-icon" onClick={onClose}>
+                    <button
+                        className="btn btn-icon"
+                        onClick={onClose}
+                        aria-label="Close"
+                        data-tooltip="Close"
+                    >
                         <XIcon />
                     </button>
                 </div>
@@ -468,7 +473,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             color: 'var(--color-text-primary)'
                                         }}
                                     />
-                                    <button className="btn btn-secondary" onClick={handleBrowse}>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={handleBrowse}
+                                        aria-label={t('settings.browse')}
+                                        data-tooltip={t('settings.browse')}
+                                    >
                                         <FolderIcon />
                                     </button>
                                 </div>
@@ -500,6 +510,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                                     <button
                                         onClick={() => setEnableITN(!enableITN)}
+                                        role="switch"
+                                        aria-checked={enableITN}
+                                        aria-label={t('settings.itn_title')}
                                         style={{
                                             width: 44,
                                             height: 24,
@@ -510,7 +523,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             border: 'none',
                                             cursor: 'pointer'
                                         }}
-                                        title="Enable ITN"
+                                        title={t('settings.itn_title')}
                                     >
                                         <div style={{
                                             width: 20,
