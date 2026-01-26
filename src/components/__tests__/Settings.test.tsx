@@ -14,7 +14,8 @@ const mockSetConfig = vi.fn();
 vi.mock('../../stores/transcriptStore', () => ({
     useTranscriptStore: (selector: any) => selector({
         config: {
-            modelPath: '/test/path',
+            streamingModelPath: '/test/streaming',
+            offlineModelPath: '/test/offline',
             enableITN: true,
             appLanguage: 'auto'
         },
@@ -24,7 +25,7 @@ vi.mock('../../stores/transcriptStore', () => ({
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'small', size: '100MB', description: 'Test', engine: 'onnx' }
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'streaming', size: '100MB', description: 'Test', engine: 'onnx' }
     ],
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false),
@@ -60,7 +61,17 @@ describe('Settings', () => {
         expect(screen.getByText('settings.local_path')).toBeDefined();
 
         // Check initial active tab content
-        expect(screen.getByText('settings.language')).toBeDefined();
+        expect(screen.getByLabelText('settings.language')).toBeDefined();
+        expect(screen.getByLabelText('settings.theme')).toBeDefined();
+    });
+
+    it('renders accessible model list buttons', () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+        fireEvent.click(screen.getByText('settings.model_hub'));
+
+        // Check for accessible buttons
+        // The mock returns keys for translations, so we expect "common.download Test Model"
+        expect(screen.getByLabelText('common.download Test Model')).toBeDefined();
     });
 
     it('switches tabs correctly', () => {
@@ -73,7 +84,7 @@ describe('Settings', () => {
 
         // Switch to Local Path
         fireEvent.click(screen.getByText('settings.local_path'));
-        expect(screen.getByDisplayValue('/test/path')).toBeDefined();
+        expect(screen.getByDisplayValue('/test/streaming')).toBeDefined();
     });
 
     it('closes when close button is clicked', () => {
@@ -93,7 +104,8 @@ describe('Settings', () => {
         fireEvent.click(screen.getByText('settings.save_button'));
 
         expect(mockSetConfig).toHaveBeenCalledWith({
-            modelPath: '/test/path',
+            streamingModelPath: '/test/streaming',
+            offlineModelPath: '/test/offline',
             enableITN: true,
             appLanguage: 'auto',
             theme: 'auto'

@@ -325,9 +325,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         {activeTab === 'general' && (
                             <div className="settings-group">
                                 <div className="settings-item">
-                                    <label className="settings-label">{t('settings.language')}</label>
+                                    <label htmlFor="settings-language" className="settings-label">{t('settings.language')}</label>
                                     <div style={{ maxWidth: 300 }}>
                                         <select
+                                            id="settings-language"
                                             className="settings-input"
                                             value={appLanguage}
                                             onChange={(e) => setAppLanguage(e.target.value as 'auto' | 'en' | 'zh')}
@@ -344,9 +345,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                                    <label className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
+                                    <label htmlFor="settings-theme" className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
                                     <div style={{ maxWidth: 300 }}>
                                         <select
+                                            id="settings-theme"
                                             className="settings-input"
                                             value={theme}
                                             onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}
@@ -382,6 +384,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                         className={`btn ${streamingModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
                                                         onClick={() => handleLoad(model)}
                                                         disabled={streamingModelPath.includes(model.filename || model.id)}
+                                                        aria-label={`${t('settings.load')} ${model.name}`}
                                                     >
                                                         {streamingModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
                                                     </button>
@@ -389,6 +392,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                         className="btn btn-secondary"
                                                         onClick={() => handleDelete(model)}
                                                         disabled={!!deletingId || !!downloadingId}
+                                                        aria-label={`${t('common.delete')} ${model.name}`}
                                                     >
                                                         {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
                                                     </button>
@@ -399,6 +403,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                     onClick={() => handleDownload(model)}
                                                     disabled={!!downloadingId}
                                                     style={{ width: 120 }}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
                                                 >
                                                     {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
                                                 </button>
@@ -431,6 +436,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                         className={`btn ${offlineModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
                                                         onClick={() => handleLoad(model)}
                                                         disabled={offlineModelPath.includes(model.filename || model.id)}
+                                                        aria-label={`${t('settings.load')} ${model.name}`}
                                                     >
                                                         {offlineModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
                                                     </button>
@@ -438,6 +444,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                         className="btn btn-secondary"
                                                         onClick={() => handleDelete(model)}
                                                         disabled={!!deletingId || !!downloadingId}
+                                                        aria-label={`${t('common.delete')} ${model.name}`}
                                                     >
                                                         {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
                                                     </button>
@@ -448,6 +455,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                     onClick={() => handleDownload(model)}
                                                     disabled={!!downloadingId}
                                                     style={{ width: 120 }}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
                                                 >
                                                     {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
                                                 </button>

@@ -9,3 +9,11 @@
 ## 2026-01-26 - Keyboard Accessible Drop Zones
 **Learning:** Large drop zones implemented as `div`s often lack keyboard accessibility.
 **Action:** When making a `div` clickable, always add `role="button"`, `tabIndex={0}`, `onKeyDown` (Enter/Space), and an `aria-label`.
+
+## 2025-05-21 - Form Label Association
+**Learning:** Custom styled inputs often lack programmatic label association (htmlFor/id), relying only on visual proximity.
+**Action:** Always verify `htmlFor` matches `id` even on custom-styled form controls.
+
+## 2025-05-21 - Dynamic Aria Labels
+**Learning:** Lists of similar items (like models) need unique accessible names (e.g., "Delete [Model Name]" vs just "Delete").
+**Action:** Use dynamic values in `aria-label` for repeated actions in lists.
