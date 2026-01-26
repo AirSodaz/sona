@@ -102,7 +102,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
             audio.removeEventListener('ended', handleEnded);
             audio.removeEventListener('error', handleError);
         };
-    }, [setCurrentTime, setIsPlaying]);
+    }, [setCurrentTime, setIsPlaying, audioUrl]);
+
+    // Reset duration when audioUrl changes
+    useEffect(() => {
+        setDuration(0);
+    }, [audioUrl]);
 
     // Expose seek function via store
     const seekTo = useCallback((time: number) => {
