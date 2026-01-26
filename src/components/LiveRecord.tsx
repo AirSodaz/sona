@@ -100,7 +100,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
                 const inputData = e.inputBuffer.getChannelData(0);
                 // Already at 16kHz due to context sampleRate
-                console.log('[LiveRecord] Sending audio samples:', inputData.length);
                 transcriptionService.sendAudio(inputData);
             };
 
