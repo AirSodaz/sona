@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
@@ -22,7 +22,13 @@ await esbuild.build({
     outfile: join(distDir, 'index.mjs'),
     format: 'esm',
     banner: {
-        js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`
+        js: `import { createRequire } from 'module';
+import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __pathDirname } from 'path';
+const require = createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __pathDirname(__filename);
+`
     },
     external: [
         'sherpa-onnx.node'
@@ -44,13 +50,19 @@ let archName = arch;
 // x64 is x64, arm64 is arm64
 
 const packageName = `sherpa-onnx-${platformName}-${archName}`;
-const nodeFileSrc = join(__dirname, 'node_modules', packageName, 'sherpa-onnx.node');
+const bindingDir = join(__dirname, 'node_modules', packageName);
+const nodeFileSrc = join(bindingDir, 'sherpa-onnx.node');
 
 console.log(`Looking for binding at: ${nodeFileSrc}`);
 
 if (existsSync(nodeFileSrc)) {
-    copyFileSync(nodeFileSrc, join(distDir, 'sherpa-onnx.node'));
-    console.log(`Copied ${packageName}/sherpa-onnx.node to dist/`);
+    const files = readdirSync(bindingDir);
+    for (const file of files) {
+        if (file.endsWith('.node') || file.endsWith('.dll') || file.endsWith('.dylib') || file.endsWith('.so')) {
+            copyFileSync(join(bindingDir, file), join(distDir, file));
+            console.log(`Copied ${file} to dist/`);
+        }
+    }
 } else {
     console.error(`Could not find sherpa-onnx.node at ${nodeFileSrc}`);
     // List available modules to debug

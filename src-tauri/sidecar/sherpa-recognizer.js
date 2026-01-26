@@ -21,8 +21,8 @@ import { randomUUID } from 'crypto';
 import Nzh from 'nzh';
 
 // For ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __scriptFile = fileURLToPath(import.meta.url);
+const __scriptDir = dirname(__scriptFile);
 
 // Parse command line arguments
 function parseArgs() {
@@ -73,9 +73,9 @@ function parseArgs() {
 // Get ffmpeg path (from local bundle, ffmpeg-static, or system)
 async function getFFmpegPath() {
     // 1. Check same directory (bundled)
-    const localOne = join(__dirname, 'ffmpeg.exe');
+    const localOne = join(__scriptDir, 'ffmpeg.exe');
     if (existsSync(localOne)) return localOne;
-    const localTwo = join(__dirname, 'ffmpeg');
+    const localTwo = join(__scriptDir, 'ffmpeg');
     if (existsSync(localTwo)) return localTwo;
 
     // 2. Check cwd
@@ -653,27 +653,38 @@ function calculateNumThreads(providedValue) {
     return Math.max(1, numThreads);
 }
 
-// Ensure DYLD_LIBRARY_PATH is set on macOS
-async function ensureDyldPath() {
-    if (process.platform !== 'darwin') return false;
-    if (process.env.SONA_DYLD_FIXED) return false;
+// Ensure Library Path is set (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
+async function ensureLibraryPath() {
+    if (process.platform !== 'darwin' && process.platform !== 'linux') return false;
+    if (process.env.SONA_LIB_FIXED) return false;
 
+    const envVar = process.platform === 'darwin' ? 'DYLD_LIBRARY_PATH' : 'LD_LIBRARY_PATH';
+    const libName = process.platform === 'darwin' ? 'libsherpa-onnx-c-api.dylib' : 'libsherpa-onnx-c-api.so';
     const arch = process.arch;
-    const packageName = `sherpa-onnx-darwin-${arch}`;
-
-    // Look for node_modules in likely locations
-    const candidates = [
-        join(__dirname, '../../node_modules'),
-        join(__dirname, 'node_modules'),
-        join(__dirname, '../node_modules'),
-    ];
+    const packageName = `sherpa-onnx-${process.platform}-${arch}`;
 
     let targetPath = null;
-    for (const base of candidates) {
-        const p = join(base, packageName);
-        if (existsSync(p)) {
-            targetPath = p;
-            break;
+
+    // 1. Check for flattened libraries in script directory (bundled/production)
+    const flattenedLib = join(__scriptDir, libName);
+    if (existsSync(flattenedLib)) {
+        targetPath = __scriptDir;
+    }
+
+    // 2. Look for node_modules in likely locations (dev/source)
+    if (!targetPath) {
+        const candidates = [
+            join(__scriptDir, '../../node_modules'),
+            join(__scriptDir, 'node_modules'),
+            join(__scriptDir, '../node_modules'),
+        ];
+
+        for (const base of candidates) {
+            const p = join(base, packageName);
+            if (existsSync(p)) {
+                targetPath = p;
+                break;
+            }
         }
     }
 
@@ -681,21 +692,21 @@ async function ensureDyldPath() {
         return false;
     }
 
-    const currentDyld = process.env.DYLD_LIBRARY_PATH || '';
-    if (currentDyld.includes(targetPath)) {
+    const currentPath = process.env[envVar] || '';
+    if (currentPath.includes(targetPath)) {
         return false; // Already set
     }
 
-    const newDyld = currentDyld
-        ? `${targetPath}:${currentDyld}`
+    const newPath = currentPath
+        ? `${targetPath}:${currentPath}`
         : targetPath;
 
-    console.error(`[Sidecar] Setting DYLD_LIBRARY_PATH to ${targetPath} and respawning...`);
+    console.error(`[Sidecar] Setting ${envVar} to ${targetPath} and respawning...`);
 
     const newEnv = {
         ...process.env,
-        DYLD_LIBRARY_PATH: newDyld,
-        SONA_DYLD_FIXED: '1'
+        [envVar]: newPath,
+        SONA_LIB_FIXED: '1'
     };
 
     const child = spawn(process.execPath, process.argv.slice(1), {
@@ -719,8 +730,8 @@ async function ensureDyldPath() {
 
 // Main entry point
 async function main() {
-    // Check for macOS DYLD fix
-    if (await ensureDyldPath()) return;
+    // Check for Library Path fix
+    if (await ensureLibraryPath()) return;
 
     const options = parseArgs();
 

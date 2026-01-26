@@ -45,9 +45,7 @@
       "binaries/node"
     ],
     "resources": [
-      "sidecar/dist/index.mjs",
-      "sidecar/dist/sherpa-onnx.node",
-      "sidecar/dist/ffmpeg*"
+      "sidecar/dist/*"
     ]
   }
 }
