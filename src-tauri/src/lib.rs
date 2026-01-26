@@ -56,6 +56,38 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
     .map_err(|e| e.to_string())?
 }
 
+pub async fn process_download<S, W, F>(
+    mut stream: S,
+    mut writer: W,
+    total_size: u64,
+    mut on_progress: F,
+) -> Result<(), String>
+where
+    S: futures_util::Stream<Item = Result<bytes::Bytes, String>> + Unpin,
+    W: std::io::Write,
+    F: FnMut(u64, u64),
+{
+    use futures_util::StreamExt;
+    use std::time::Instant;
+
+    let mut downloaded: u64 = 0;
+    let mut last_emit = Instant::now();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item?;
+        writer.write_all(&chunk).map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+
+        if total_size > 0 {
+            if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
+                on_progress(downloaded, total_size);
+                last_emit = Instant::now();
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn download_file<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -63,29 +95,19 @@ async fn download_file<R: tauri::Runtime>(
     output_path: String,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
-    use std::io::Write;
     use tauri::Emitter;
 
     let client = reqwest::Client::new();
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     let total_size = res.content_length().unwrap_or(0);
-    let mut file = std::fs::File::create(&output_path).map_err(|e| e.to_string())?;
-    let mut stream = res.bytes_stream();
+    let file = std::fs::File::create(&output_path).map_err(|e| e.to_string())?;
+    let stream = res.bytes_stream().map(|item| item.map_err(|e| e.to_string()));
 
-    let mut downloaded: u64 = 0;
-
-    while let Some(item) = stream.next().await {
-        let chunk = item.map_err(|e| e.to_string())?;
-        file.write_all(&chunk).map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
-
-        if total_size > 0 {
-            let _ = app.emit("download-progress", (downloaded, total_size));
-        }
-    }
-
-    Ok(())
+    process_download(stream, file, total_size, move |downloaded, total| {
+        let _ = app.emit("download-progress", (downloaded, total));
+    })
+    .await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
