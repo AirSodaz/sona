@@ -48,7 +48,7 @@ class TranscriptionService {
         console.log('Starting sidecar with model:', this.modelPath);
 
         try {
-            const scriptPath = await resolveResource('sidecar/sherpa-recognizer.js');
+            const scriptPath = await resolveResource('sidecar/dist/index.mjs');
 
             const args = [
                 scriptPath,
@@ -177,7 +177,7 @@ class TranscriptionService {
         return new Promise(async (resolve, reject) => {
             try {
                 // Spawn sidecar in batch mode
-                const scriptPath = await resolveResource('sidecar/sherpa-recognizer.js');
+                const scriptPath = await resolveResource('sidecar/dist/index.mjs');
                 const args = [
                     scriptPath,
                     '--mode', 'batch',

@@ -25,7 +25,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },
@@ -43,7 +45,9 @@
       "binaries/node"
     ],
     "resources": [
-      "sidecar/**"
+      "sidecar/dist/index.mjs",
+      "sidecar/dist/sherpa-onnx.node",
+      "sidecar/dist/ffmpeg.exe"
     ]
   }
 }

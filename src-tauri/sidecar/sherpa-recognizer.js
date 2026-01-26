@@ -65,8 +65,18 @@ function parseArgs() {
     return options;
 }
 
-// Get ffmpeg path (from ffmpeg-static or system)
+// Get ffmpeg path (from local bundle, ffmpeg-static, or system)
 async function getFFmpegPath() {
+    // 1. Check same directory (bundled)
+    const localOne = join(__dirname, 'ffmpeg.exe');
+    if (existsSync(localOne)) return localOne;
+    const localTwo = join(__dirname, 'ffmpeg');
+    if (existsSync(localTwo)) return localTwo;
+
+    // 2. Check cwd
+    const cwdOne = join(process.cwd(), 'ffmpeg.exe');
+    if (existsSync(cwdOne)) return cwdOne;
+
     try {
         const ffmpegStatic = await import('ffmpeg-static');
         return ffmpegStatic.default;
