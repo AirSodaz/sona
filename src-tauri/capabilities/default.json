@@ -22,8 +22,8 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "node",
-          "cmd": "node",
+          "name": "binaries/node",
+          "sidecar": true,
           "args": true
         }
       ]
@@ -32,8 +32,8 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "node",
-          "cmd": "node",
+          "name": "binaries/node",
+          "sidecar": true,
           "args": true
         }
       ]
