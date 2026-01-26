@@ -48,13 +48,21 @@
         },
         {
           "url": "https://objects.githubusercontent.com/**"
+        },
+        {
+          "url": "https://mirror.ghproxy.com/**"
+        },
+        {
+          "url": "https://ghproxy.net/**"
         }
       ]
     },
     {
       "identifier": "fs:scope",
       "allow": [
-        "$APPDATA/models/**"
+        "$APPDATA/models/**",
+        "$APPLOCALDATA/models/**",
+        "$APPLOCALDATA/models"
       ]
     }
   ]

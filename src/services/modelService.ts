@@ -153,27 +153,57 @@ class ModelService {
         const targetFilename = model.filename || `${modelId}.tar.bz2`;
         const tempFilePath = await join(modelsDir, targetFilename);
 
-        onProgress?.(0, 'Downloading...');
+        // Mirrors to try in order
+        const mirrors = [
+            '', // Direct
+            'https://mirror.ghproxy.com/',
+            'https://ghproxy.net/'
+        ];
 
-        // Listen for progress events
+        let downloadSuccess = false;
+        let lastError: any = null;
+
+        // wrapper to manage listener
         let unlisten: (() => void) | undefined;
         if (onProgress) {
             unlisten = await listen<[number, number]>('download-progress', (event) => {
                 const [downloaded, total] = event.payload;
-                const percentage = Math.round((downloaded / total) * 50); // First 50% is download
-                onProgress(percentage, `Downloading... ${Math.round(downloaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`);
+                if (total > 0) {
+                    const percentage = Math.round((downloaded / total) * 50); // First 50% is download
+                    onProgress(percentage, `Downloading... ${Math.round(downloaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`);
+                }
             });
         }
 
         try {
-            await invoke('download_file', {
-                url: model.url,
-                outputPath: tempFilePath
-            });
-        } catch (error) {
-            throw new Error(`Download failed: ${error}`);
+            for (const mirror of mirrors) {
+                try {
+                    const url = mirror ? `${mirror}${model.url}` : model.url;
+                    
+                    if (onProgress) {
+                        onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
+                    }
+
+                    console.log(`Attempting download from: ${url}`);
+                    await invoke('download_file', {
+                        url: url,
+                        outputPath: tempFilePath
+                    });
+
+                    downloadSuccess = true;
+                    break; // Success!
+                } catch (error) {
+                    console.warn(`Download failed via ${mirror || 'direct'}:`, error);
+                    lastError = error;
+                    // Continue to next mirror
+                }
+            }
         } finally {
             if (unlisten) unlisten();
+        }
+
+        if (!downloadSuccess) {
+            throw new Error(`Download failed after all attempts. Last error: ${lastError}`);
         }
 
         if (model.isArchive === false) {

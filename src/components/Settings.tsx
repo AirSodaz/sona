@@ -365,9 +365,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                     <button
                                                         className="btn btn-primary"
                                                         onClick={() => handleLoad(model)}
-                                                        style={{ width: 80 }}
+                                                        aria-label={t('settings.load')}
+                                                        data-tooltip={t('settings.load')}
                                                     >
-                                                        <PlayIcon /> {t('settings.load')}
+                                                        <PlayIcon />
                                                     </button>
                                                     <button
                                                         className="btn btn-secondary"

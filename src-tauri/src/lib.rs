@@ -93,8 +93,16 @@ async fn download_file<R: tauri::Runtime>(
     use futures_util::StreamExt;
     use tauri::Emitter;
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .user_agent("Sona/1.0")
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("Download failed with status: {}", res.status()));
+    }
 
     let total_size = res.content_length().unwrap_or(0);
     let file = tokio::fs::File::create(&output_path)

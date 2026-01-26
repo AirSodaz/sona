@@ -98,7 +98,7 @@ async function convertToWav(inputPath, ffmpegPath) {
         ]);
 
         ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
-        ffmpeg.stderr.on('data', () => {});
+        ffmpeg.stderr.on('data', () => { });
         ffmpeg.on('close', (code) => {
             if (code === 0) resolve(Buffer.concat(chunks));
             else reject(new Error(`FFmpeg exited with code ${code}`));
@@ -324,7 +324,7 @@ function applyITN(text) {
         try {
             const decoded = nzhcn.decodeS(match);
             if (decoded && decoded !== match) return decoded;
-        } catch (e) {}
+        } catch (e) { }
         return match;
     });
 }
@@ -486,7 +486,7 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
 }
 
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
-     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+    if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
         console.error('Converting audio file (Offline)...');
@@ -662,13 +662,13 @@ async function main() {
     if (useMock) {
         console.error('Running in mock mode');
         if (options.mode === 'batch' && options.file) {
-             console.log(JSON.stringify([
+            console.log(JSON.stringify([
                 { id: randomUUID(), start: 0, end: 1, text: 'Mock transcript.', isFinal: true }
-             ], null, 2));
+            ], null, 2));
         } else {
-             console.log(JSON.stringify({
+            console.log(JSON.stringify({
                 id: randomUUID(), text: 'Mock streaming', start: 0, end: 1, isFinal: true
-             }));
+            }));
         }
         process.exit(0);
     }
@@ -691,15 +691,10 @@ async function main() {
         const useJSITN = options.enableITN && !supportsInternalITN;
 
         // Unified Stream Processor Wrapper
-        // We wrap acceptWaveform here to handle API diff
-        const unifiedRecognizer = {
-            ...recognizer,
-            createStream: () => {
-                const s = recognizer.createStream();
-                return s;
-            },
-            isNcnn: !!recognizer.isNcnn
-        };
+        // Avoid spreading (...recognizer) on class instances as it strips prototype methods
+        const unifiedRecognizer = recognizer;
+        // Ensure isNcnn flag is present (already set for NCNN path, undefined for ONNX)
+        unifiedRecognizer.isNcnn = !!recognizer.isNcnn;
 
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
@@ -714,7 +709,7 @@ async function main() {
                 process.exit(1);
             }
 
-             await processStream(unifiedRecognizer, options.sampleRate, useJSITN);
+            await processStream(unifiedRecognizer, options.sampleRate, useJSITN);
         }
 
     } catch (error) {
