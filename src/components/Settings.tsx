@@ -143,6 +143,16 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const handleDownload = async (model: ModelInfo) => {
         if (downloadingId) return;
 
+        // Check hardware compatibility
+        const { compatible, reason } = await modelService.checkHardware(model.id);
+        if (!compatible) {
+            const confirmed = await ask(
+                `${reason}\n\nDo you want to download it anyway?`,
+                { title: 'Hardware Warning', kind: 'warning' }
+            );
+            if (!confirmed) return;
+        }
+
         setDownloadingId(model.id);
         setProgress(0);
         setStatusText(t('settings.download_starting'));
