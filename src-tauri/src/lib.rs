@@ -64,10 +64,11 @@ pub async fn process_download<S, W, F>(
 ) -> Result<(), String>
 where
     S: futures_util::Stream<Item = Result<bytes::Bytes, String>> + Unpin,
-    W: std::io::Write,
+    W: tokio::io::AsyncWrite + Unpin,
     F: FnMut(u64, u64),
 {
     use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
     use std::time::Instant;
 
     let mut downloaded: u64 = 0;
@@ -75,7 +76,7 @@ where
 
     while let Some(item) = stream.next().await {
         let chunk = item?;
-        writer.write_all(&chunk).map_err(|e| e.to_string())?;
+        writer.write_all(&chunk).await.map_err(|e| e.to_string())?;
         downloaded += chunk.len() as u64;
 
         if total_size > 0 {
@@ -101,7 +102,9 @@ async fn download_file<R: tauri::Runtime>(
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     let total_size = res.content_length().unwrap_or(0);
-    let file = std::fs::File::create(&output_path).map_err(|e| e.to_string())?;
+    let file = tokio::fs::File::create(&output_path)
+        .await
+        .map_err(|e| e.to_string())?;
     let stream = res.bytes_stream().map(|item| item.map_err(|e| e.to_string()));
 
     process_download(stream, file, total_size, move |downloaded, total| {
