@@ -97,6 +97,13 @@ const SegmentItem = React.memo<SegmentItemProps>(({
 
     const handleTextClick = () => {
         if (!isEditing) {
+            onSeek(segment.start);
+        }
+    };
+
+    const handleTextDoubleClick = (e: React.MouseEvent) => {
+        if (!isEditing) {
+            e.stopPropagation();
             onEdit(segment.id);
         }
     };
@@ -135,7 +142,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                 {formatDisplayTime(segment.start)}
             </span>
 
-            <div className="segment-content" onClick={handleTextClick}>
+            <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
                 {isEditing ? (
                     <textarea
                         ref={inputRef}
