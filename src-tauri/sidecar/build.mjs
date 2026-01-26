@@ -3,6 +3,7 @@ import { copyFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { execSync } from 'child_process';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,28 @@ if (existsSync(nodeFileSrc)) {
             copyFileSync(join(bindingDir, file), join(distDir, file));
             console.log(`Copied ${file} to dist/`);
         }
+    }
+
+    if (platform === 'linux') {
+        const runPatchelf = (file) => {
+            try {
+                execSync(`patchelf --set-rpath '$ORIGIN' "${file}"`);
+                console.log(`Patched RPATH for ${file}`);
+            } catch (e) {
+                console.warn(`Failed to patch RPATH for ${file}. If this is a local build, it might be fine. In CI, install patchelf.`);
+            }
+        };
+
+        const distFiles = readdirSync(distDir);
+        for (const file of distFiles) {
+            if (file.endsWith('.node') || file.endsWith('.so') || (file.endsWith('.so') && file.includes('.so.'))) {
+                runPatchelf(join(distDir, file));
+            }
+        }
+
+        // ffmpeg is static, so we can't patch RPATH.
+        // linuxdeploy might complain, but it should be non-fatal if dependencies are found for other files.
+        console.log('Skipping RPATH patch for ffmpeg (static binary).');
     }
 } else {
     console.error(`Could not find sherpa-onnx.node at ${nodeFileSrc}`);
