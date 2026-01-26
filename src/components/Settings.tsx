@@ -270,89 +270,24 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
     const renderTabButton = (id: 'general' | 'models' | 'local', label: string, Icon: React.FC) => (
         <button
-            className={`tab-btn ${activeTab === id ? 'active' : ''}`}
+            className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
             onClick={() => setActiveTab(id)}
-            style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                width: '100%',
-                padding: '8px 12px',
-                border: 'none',
-                background: activeTab === id ? 'var(--color-bg-elevated)' : 'transparent',
-                color: activeTab === id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 0.2s',
-                boxShadow: activeTab === id ? 'var(--shadow-sm)' : 'none'
-            }}
         >
-            <div style={{
-                color: activeTab === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                display: 'flex'
-            }}>
-                <Icon />
-            </div>
+            <Icon />
             {label}
         </button>
     );
 
     return (
-        <div
-            style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0, 0, 0, 0.4)',
-                backdropFilter: 'blur(2px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1000,
-            }}
-            onClick={onClose}
-        >
-            <div
-                style={{
-                    background: 'var(--color-bg-primary)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: 0,
-                    width: 800,
-                    height: 550,
-                    maxWidth: '90vw',
-                    maxHeight: '85vh',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    boxShadow: 'var(--shadow-xl)',
-                    overflow: 'hidden',
-                    border: '1px solid var(--color-border)'
-                }}
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="settings-overlay" onClick={onClose}>
+            <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
                 {/* Sidebar */}
-                <div style={{
-                    width: 220,
-                    background: 'var(--color-bg-secondary)',
-                    borderRight: '1px solid var(--color-border)',
-                    padding: 16,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 24
-                }}>
-                    <div style={{ padding: '8px 12px' }}>
-                        <h2 style={{
-                            fontSize: '1rem',
-                            fontWeight: 600,
-                            color: 'var(--color-text-primary)',
-                            letterSpacing: '-0.01em'
-                        }}>
-                            {t('settings.title')}
-                        </h2>
+                <div className="settings-sidebar">
+                    <div className="settings-sidebar-header">
+                        <h2>{t('settings.title')}</h2>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="settings-tabs-container">
                         {renderTabButton('general', t('settings.general'), GeneralIcon)}
                         {renderTabButton('models', t('settings.model_hub'), ModelIcon)}
                         {renderTabButton('local', t('settings.local_path'), LocalIcon)}
@@ -360,70 +295,47 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Main Content */}
-                <div style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minWidth: 0
-                }}>
+                <div className="settings-content">
                     {/* Header with close button */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        padding: '16px 24px 0',
-                    }}>
+                    <div className="settings-close-btn-container">
                         <button
                             className="btn btn-icon"
                             onClick={onClose}
                             aria-label="Close"
                             data-tooltip="Close"
-                            style={{ margin: -8 }}
                         >
                             <XIcon />
                         </button>
                     </div>
 
                     {/* Scrollable Content Area */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 24px 32px' }}>
-
-                        <div style={{ marginBottom: 24 }}>
-                            <h3 style={{
-                                fontSize: '1.25rem',
-                                fontWeight: 600,
-                                marginBottom: 8,
-                                color: 'var(--color-text-primary)'
-                            }}>
+                    <div className="settings-content-scroll">
+                        <div className="settings-section-header">
+                            <h3 className="settings-section-title">
                                 {activeTab === 'general' && t('settings.general')}
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
                             </h3>
-                            <div style={{ height: 1, background: 'var(--color-border)', width: '100%' }} />
+                            <div className="settings-divider" />
                         </div>
 
                         {activeTab === 'general' && (
                             <div className="settings-group">
                                 <div className="settings-item">
-                                    <label className="settings-label" style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{t('settings.language')}</label>
+                                    <label className="settings-label">{t('settings.language')}</label>
                                     <div style={{ maxWidth: 300 }}>
                                         <select
                                             className="settings-input"
                                             value={appLanguage}
                                             onChange={(e) => setAppLanguage(e.target.value as 'auto' | 'en' | 'zh')}
-                                            style={{
-                                                width: '100%',
-                                                padding: '8px 12px',
-                                                borderRadius: 6,
-                                                border: '1px solid var(--color-border)',
-                                                background: 'var(--color-bg-primary)',
-                                                color: 'var(--color-text-primary)'
-                                            }}
+                                            style={{ width: '100%' }}
                                         >
                                             <option value="auto">{t('common.auto')}</option>
                                             <option value="en">English</option>
                                             <option value="zh">中文</option>
                                         </select>
                                     </div>
-                                    <div className="settings-hint" style={{ marginTop: 8 }}>
+                                    <div className="settings-hint">
                                         {t('settings.language_hint', { defaultValue: 'Select the interface language.' })}
                                     </div>
                                 </div>
@@ -431,43 +343,29 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         )}
 
                         {activeTab === 'models' && (
-                            <div className="model-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                <div style={{
-                                    padding: 12,
-                                    background: 'var(--color-bg-secondary)',
-                                    borderRadius: 8,
-                                    fontSize: '0.875rem',
-                                    color: 'var(--color-text-muted)'
-                                }}>
+                            <div className="model-list">
+                                <div className="model-list-hint">
                                     {t('settings.download_desc')}
                                 </div>
 
                                 {PRESET_MODELS.map(model => (
-                                    <div key={model.id} style={{
-                                        border: '1px solid var(--color-border)',
-                                        borderRadius: 8,
-                                        padding: 16,
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 12,
-                                        background: 'var(--color-bg-elevated)'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                    <div key={model.id} className="model-card">
+                                        <div className="model-card-header">
                                             <div>
-                                                <div style={{ fontWeight: 600, fontSize: '1rem' }}>{model.name}</div>
-                                                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{model.description}</div>
-                                                <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                                    <span style={{ background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-border)' }}>{model.language.toUpperCase()}</span>
-                                                    <span style={{ background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-border)' }}>{model.type}</span>
-                                                    <span style={{ background: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--color-border)' }}>{model.size}</span>
+                                                <div className="model-name">{model.name}</div>
+                                                <div className="model-description">{model.description}</div>
+                                                <div className="model-tags">
+                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.type}</span>
+                                                    <span className="model-tag">{model.size}</span>
                                                 </div>
                                             </div>
                                             {installedModels.has(model.id) ? (
-                                                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                                <div className="model-actions">
                                                     <button
                                                         className="btn btn-primary"
                                                         onClick={() => handleLoad(model)}
-                                                        style={{ width: 80, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                                                        style={{ width: 80 }}
                                                     >
                                                         <PlayIcon /> {t('settings.load')}
                                                     </button>
@@ -475,11 +373,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                         className="btn btn-secondary"
                                                         onClick={() => handleDelete(model)}
                                                         disabled={!!deletingId || !!downloadingId}
-                                                        style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', color: 'var(--color-error, #e53e3e)', whiteSpace: 'nowrap' }}
                                                         title="Delete model"
                                                     >
                                                         {deletingId === model.id ? (
-                                                            <div className="spinner" style={{ width: 14, height: 14, border: '2px solid currentColor', borderRightColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            <div className="spinner" />
                                                         ) : (
                                                             <TrashIcon />
                                                         )}
@@ -490,22 +387,24 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                     className="btn btn-secondary"
                                                     onClick={() => handleDownload(model)}
                                                     disabled={!!downloadingId}
-                                                    style={{ width: 120, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                                                    style={{ width: 120 }}
                                                 >
-
                                                     {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
                                                 </button>
                                             )}
                                         </div>
 
                                         {downloadingId === model.id && (
-                                            <div style={{ marginTop: 8 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: 4 }}>
+                                            <div className="progress-container-mini">
+                                                <div className="progress-info-mini">
                                                     <span>{statusText}</span>
                                                     <span>{progress}%</span>
                                                 </div>
-                                                <div style={{ height: 4, background: 'var(--color-border)', borderRadius: 2, overflow: 'hidden' }}>
-                                                    <div style={{ height: '100%', width: `${progress}%`, background: 'var(--color-text-primary)', transition: 'width 0.2s' }} />
+                                                <div className="progress-bar-mini">
+                                                    <div
+                                                        className="progress-fill"
+                                                        style={{ width: `${progress}%` }}
+                                                    />
                                                 </div>
                                             </div>
                                         )}
@@ -517,7 +416,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         {activeTab === 'local' && (
                             <div className="settings-group">
                                 <div className="settings-item">
-                                    <label className="settings-label" style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{t('settings.path_label')}</label>
+                                    <label className="settings-label">{t('settings.path_label')}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
                                             type="text"
@@ -526,14 +425,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             value={modelPath}
                                             onChange={handlePathChange}
                                             placeholder={t('settings.path_placeholder')}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px 12px',
-                                                borderRadius: 6,
-                                                border: '1px solid var(--color-border)',
-                                                background: 'var(--color-bg-primary)',
-                                                color: 'var(--color-text-primary)'
-                                            }}
+                                            style={{ flex: 1 }}
                                         />
                                         <button
                                             className="btn btn-secondary"
@@ -544,7 +436,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             <FolderIcon />
                                         </button>
                                     </div>
-                                    <div className="settings-hint" style={{ marginTop: 8, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                                    <div className="settings-hint">
                                         {pathStatus === 'valid' && (
                                             <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
                                                 <CheckIcon /> {t('settings.valid_path')}
@@ -571,36 +463,17 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
 
                                         <button
+                                            className="toggle-switch"
                                             onClick={() => setEnableITN(!enableITN)}
                                             role="switch"
                                             aria-checked={enableITN}
                                             aria-label={t('settings.itn_title')}
-                                            style={{
-                                                width: 44,
-                                                height: 24,
-                                                borderRadius: 12,
-                                                background: enableITN ? 'var(--color-text-primary)' : 'var(--color-border)',
-                                                position: 'relative',
-                                                transition: 'background 0.2s',
-                                                border: 'none',
-                                                cursor: 'pointer'
-                                            }}
                                             title={t('settings.itn_title')}
                                         >
-                                            <div style={{
-                                                width: 20,
-                                                height: 20,
-                                                borderRadius: '50%',
-                                                background: 'var(--color-bg-primary)',
-                                                position: 'absolute',
-                                                top: 2,
-                                                left: enableITN ? 22 : 2,
-                                                transition: 'left 0.2s',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                            }} />
+                                            <div className="toggle-switch-handle" />
                                         </button>
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 8 }}>
+                                    <div className="settings-hint">
                                         {t('settings.itn_note')}
                                     </div>
                                 </div>
@@ -609,14 +482,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
 
                     {/* Footer */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: 12,
-                        padding: '16px 24px',
-                        borderTop: '1px solid var(--color-border)',
-                        background: 'var(--color-bg-primary)'
-                    }}>
+                    <div className="settings-footer">
                         <button className="btn btn-secondary" onClick={onClose}>
                             {t('common.cancel')}
                         </button>

@@ -191,8 +191,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                 <VolumeIcon />
                 <input
                     type="range"
-                    className="audio-slider"
-                    style={{ width: 80 }}
+                    className="audio-slider audio-slider-volume"
                     min={0}
                     max={1}
                     step={0.01}

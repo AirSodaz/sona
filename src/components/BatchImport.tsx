@@ -179,21 +179,14 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     }
 
     return (
-        <div className={`batch-import-container ${className}`} style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+        <div className={`batch-import-container ${className}`}>
             <div
-                className={`drop-zone ${isDragOver ? 'drag-over' : ''}`}
+                className={`drop-zone drop-zone-wrapper ${isDragOver ? 'drag-over' : ''}`}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onClick={handleClick}
-                style={{
-                    flex: '0 0 auto',
-                    height: 'auto',
-                    minHeight: '200px',
-                    padding: '32px 16px',
-                    gap: '16px'
-                }}
             >
                 {/* <input
                     ref={fileInputRef}
@@ -222,44 +215,19 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
             </div>
 
             <div className="options-container">
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    gap: '16px',
-                    padding: '0 8px'
-                }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 500 }}>{t('batch.timeline_mode')}</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{t('batch.timeline_hint')}</span>
+                <div className="options-row">
+                    <div className="options-label">
+                        <span>{t('batch.timeline_mode')}</span>
+                        <span className="options-hint">{t('batch.timeline_hint')}</span>
                     </div>
                     <button
+                        className="toggle-switch"
                         onClick={() => setEnableTimeline(!enableTimeline)}
-                        style={{
-                            width: 44,
-                            height: 24,
-                            borderRadius: 12,
-                            background: enableTimeline ? 'var(--color-text-primary)' : 'var(--color-border)',
-                            position: 'relative',
-                            transition: 'background 0.2s',
-                            border: 'none',
-                            cursor: 'pointer',
-                            flexShrink: 0
-                        }}
+                        role="switch"
+                        aria-checked={enableTimeline}
                         title="Toggle Timeline Mode"
                     >
-                        <div style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: '50%',
-                            background: 'var(--color-bg-primary)',
-                            position: 'absolute',
-                            top: 2,
-                            left: enableTimeline ? 22 : 2,
-                            transition: 'left 0.2s',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                        }} />
+                        <div className="toggle-switch-handle" />
                     </button>
                 </div>
             </div>
