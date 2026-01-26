@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { splitByPunctuation } from '../utils/segmentUtils';
@@ -18,19 +18,6 @@ const UploadIcon = () => (
 
 
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
-
-const getMimeType = (filePath: string): string => {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    switch (ext) {
-        case 'wav': return 'audio/wav';
-        case 'mp3': return 'audio/mpeg';
-        case 'm4a': return 'audio/mp4';
-        case 'ogg': return 'audio/ogg';
-        case 'webm': return 'audio/webm';
-        case 'mp4': return 'video/mp4';
-        default: return 'application/octet-stream';
-    }
-};
 
 interface BatchImportProps {
     className?: string;
@@ -147,11 +134,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         setProcessingProgress(0);
 
         try {
-            // Read file content for playback to avoid asset protocol issues
-            const fileContent = await readFile(filePath);
-            const mimeType = getMimeType(filePath);
-            const blob = new Blob([fileContent], { type: mimeType });
-            const assetUrl = URL.createObjectURL(blob);
+            const assetUrl = convertFileSrc(filePath);
 
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
