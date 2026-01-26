@@ -193,7 +193,7 @@ function findModelConfig(modelPath, enableITN, provider) {
 
         // Helper to find file by prefix
         const findBestMatch = (prefix) => {
-            const candidates = files.filter(f => f.startsWith(prefix) && f.endsWith('.onnx'));
+            const candidates = files.filter(f => f.includes(prefix) && f.endsWith('.onnx'));
             if (candidates.length === 0) return null;
             const int8 = candidates.find(f => f.includes('int8'));
             if (int8) return join(modelPath, int8);

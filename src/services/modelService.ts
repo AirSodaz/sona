@@ -19,11 +19,11 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-zipformer-en-2023-02-21',
         name: 'English - Zipformer (Streaming)',
-        description: 'Fast and accurate English streaming model from k2-fsa',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-02-21.tar.bz2',
+        description: 'Fast and accurate English streaming model',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2',
         type: 'streaming',
         language: 'en',
-        size: '~182 MB'
+        size: '~90 MB'
     },
     {
         id: 'sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
@@ -32,16 +32,16 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
         type: 'streaming',
         language: 'zh-en',
-        size: '~214 MB'
+        size: '~100 MB'
     },
     {
         id: 'sherpa-onnx-paraformer-zh-2023-09-14',
         name: 'Chinese - Paraformer (Non-Streaming)',
         description: 'Accurate offline model from FunASR',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2023-09-14.tar.bz2',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2',
         type: 'non-streaming',
         language: 'zh',
-        size: '~482 MB'
+        size: '~220 MB'
     },
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
@@ -50,9 +50,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
         language: 'zh-en',
-        size: '~280 MB'
+        size: '~140 MB'
     },
-
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
         name: 'Multilingual - SenseVoice',
@@ -60,16 +59,26 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
         type: 'non-streaming',
         language: 'zh,en,ja,ko,yue',
-        size: '~400 MB'
+        size: '~900 MB'
     },
     {
-        id: 'sherpa-onnx-whisper-tiny',
-        name: 'Multilingual - Whisper Tiny',
-        description: 'OpenAI Whisper Tiny model',
+        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+        name: 'Multilingual - SenseVoice (Int8)',
+        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (Int8 quantized)',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
+        type: 'non-streaming',
+        language: 'zh,en,ja,ko,yue',
+        size: '~200 MB'
+    },
+    {
+        id: 'sherpa-onnx-whisper-tiny-int8',
+        name: 'Multilingual - Whisper Tiny (Int8)',
+        description: 'OpenAI Whisper Tiny model (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
         type: 'non-streaming',
         language: 'multilingual',
-        size: '~150 MB'
+        size: '~150 MB',
+        filename: 'sherpa-onnx-whisper-tiny' // Use existing folder name from tarball
     }
 ];
 
