@@ -158,3 +158,34 @@ function findTimestampForChar(segment: TranscriptSegment, charIndex: number): nu
     // If we're past the end, return the last timestamp or undefined
     return undefined;
 }
+
+/**
+ * Efficiently finds the segment containing the given time using binary search.
+ * Assumes segments are sorted by start time.
+ * Returns undefined if no segment covers the time.
+ */
+export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {
+    let left = 0;
+    let right = segments.length - 1;
+    let idx = -1;
+
+    // Binary search for the rightmost segment that starts at or before the time
+    while (left <= right) {
+        const mid = (left + right) >>> 1;
+        if (segments[mid].start <= time) {
+            idx = mid;
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    if (idx !== -1) {
+        const seg = segments[idx];
+        if (time <= seg.end) {
+            return seg;
+        }
+    }
+
+    return undefined;
+}

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
+import { findSegmentForTime } from '../utils/segmentUtils';
 
 interface TranscriptState {
     // Segment data (source of truth)
@@ -171,9 +172,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     setCurrentTime: (time) => {
         const state = get();
         // Find active segment based on current time
-        const activeSegment = state.segments.find(
-            (seg) => time >= seg.start && time <= seg.end
-        );
+        const activeSegment = findSegmentForTime(state.segments, time);
         set({
             currentTime: time,
             activeSegmentId: activeSegment?.id || null,
