@@ -77,6 +77,14 @@ const SegmentItem = React.memo<SegmentItemProps>(({
         onSeek(segment.start);
     };
 
+    const handleTimestampKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            onSeek(segment.start);
+        }
+    };
+
     const handleTextClick = () => {
         if (!isEditing) {
             onEdit(segment.id);
@@ -108,6 +116,10 @@ const SegmentItem = React.memo<SegmentItemProps>(({
             <span
                 className="segment-timestamp"
                 onClick={handleTimestampClick}
+                onKeyDown={handleTimestampKeyDown}
+                role="button"
+                tabIndex={0}
+                aria-label={`Seek to ${formatDisplayTime(segment.start)}`}
                 data-tooltip="Click to seek"
             >
                 {formatDisplayTime(segment.start)}
@@ -139,6 +151,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                             onMergeWithNext(segment.id);
                         }}
                         data-tooltip="Merge with next"
+                        aria-label="Merge with next segment"
                     >
                         <MergeIcon />
                     </button>
@@ -150,6 +163,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                         onDelete(segment.id);
                     }}
                     data-tooltip="Delete segment"
+                    aria-label="Delete segment"
                 >
                     <TrashIcon />
                 </button>
