@@ -117,6 +117,23 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         checkInstalledModels();
     }, []);
 
+    // Handle Escape key to close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen, onClose]);
+
     const validatePath = async (path: string) => {
         if (!path.trim()) {
             setPathStatus('idle');
