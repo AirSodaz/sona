@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
@@ -24,6 +24,17 @@ const MergeIcon = () => (
         <path d="M3 18h.01" />
     </svg>
 );
+
+interface TranscriptContext {
+    activeSegmentId: string | null;
+    editingSegmentId: string | null;
+    totalSegments: number;
+    onSeek: (time: number) => void;
+    onEdit: (id: string) => void;
+    onSave: (id: string, text: string) => void;
+    onDelete: (id: string) => void;
+    onMergeWithNext: (id: string) => void;
+}
 
 interface SegmentItemProps {
     segment: TranscriptSegment;
@@ -233,6 +244,32 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
         }
     }, [mergeSegments]);
 
+    const contextValue = useMemo<TranscriptContext>(() => ({
+        activeSegmentId,
+        editingSegmentId,
+        totalSegments: segments.length,
+        onSeek: handleSeek,
+        onEdit: handleEdit,
+        onSave: handleSave,
+        onDelete: handleDelete,
+        onMergeWithNext: handleMergeWithNext,
+    }), [activeSegmentId, editingSegmentId, segments.length, handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
+
+    const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
+        <SegmentItem
+            key={segment.id}
+            segment={segment}
+            isActive={segment.id === context.activeSegmentId}
+            isEditing={segment.id === context.editingSegmentId}
+            onSeek={context.onSeek}
+            onEdit={context.onEdit}
+            onSave={context.onSave}
+            onDelete={context.onDelete}
+            onMergeWithNext={context.onMergeWithNext}
+            hasNext={index < context.totalSegments - 1}
+        />
+    ), []);
+
     if (segments.length === 0) {
         return (
             <div className="empty-state">
@@ -246,24 +283,12 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
 
     return (
         <div className="transcript-editor">
-            <Virtuoso
+            <Virtuoso<TranscriptSegment, TranscriptContext>
                 ref={virtuosoRef}
                 className="transcript-list"
                 data={segments}
-                itemContent={(index, segment) => (
-                    <SegmentItem
-                        key={segment.id}
-                        segment={segment}
-                        isActive={segment.id === activeSegmentId}
-                        isEditing={segment.id === editingSegmentId}
-                        onSeek={handleSeek}
-                        onEdit={handleEdit}
-                        onSave={handleSave}
-                        onDelete={handleDelete}
-                        onMergeWithNext={handleMergeWithNext}
-                        hasNext={index < segments.length - 1}
-                    />
-                )}
+                context={contextValue}
+                itemContent={itemContent}
             />
         </div>
     );
