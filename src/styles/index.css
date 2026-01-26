@@ -494,8 +494,15 @@ body {
 }
 
 .transcript-segment:hover .segment-timestamp,
-.transcript-segment.active .segment-timestamp {
+.transcript-segment.active .segment-timestamp,
+.segment-timestamp:focus-visible {
   opacity: 1;
+}
+
+.segment-timestamp:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .transcript-segment.active .segment-timestamp {
