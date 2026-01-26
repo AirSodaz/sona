@@ -64,7 +64,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         const dataArray = new Uint8Array(bufferLength);
 
         const draw = () => {
-            animationRef.current = requestAnimationFrame(draw);
+            animationRef.current = window.requestAnimationFrame(draw);
 
             // If paused, keep existing frame (freeze)
             if (isPausedRef.current) {
@@ -211,8 +211,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
 
-        if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
+        if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
+            window.cancelAnimationFrame(animationRef.current);
         }
 
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -232,39 +232,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         isPausedRef.current = false;
     };
 
-    // Recording timer
-    useEffect(() => {
-        let interval: number | undefined;
-
-        if (isRecording && !isPaused) {
-            // Don't reset time here if it's just a resume, but logic above handles resets on start
-            // If we paused, isRecording is still true.
-            // If we start new, setRecordingTime(0) is called? No, it was inside this effect.
-            // We need to be careful not to reset time on resume.
-            // The previous logic was: if (isRecording) { setRecordingTime(0); ... }
-            // This would reset time every time isRecording changed to true.
-            // But now we have isPaused changing.
-        }
-
-        // Refactored Timer Logic
-        if (isRecording) {
-            if (recordingTime === 0 && !isPaused) {
-                // Initial start
-            }
-
-            interval = window.setInterval(() => {
-                if (!isPausedRef.current) {
-                    setRecordingTime(t => t + 1);
-                }
-            }, 1000);
-        } else {
-            setRecordingTime(0);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isRecording, isPaused]); // Re-run when pause state changes? No, better to use ref inside interval or just careful dependency
 
     // Better Timer Effect
     useEffect(() => {
@@ -288,8 +255,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
+            if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
+                window.cancelAnimationFrame(animationRef.current);
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close();
