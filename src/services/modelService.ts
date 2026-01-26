@@ -19,7 +19,7 @@ export interface ModelInfo {
 export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-ncnn-streaming-zipformer-en-2023-02-21',
-        name: 'English - Zipformer (GPU/NCNN)',
+        name: 'English - Zipformer (GPU)',
         description: 'Fast streaming model for GPU (NCNN)',
         url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-zipformer-en-2023-02-21.tar.bz2',
         type: 'streaming',
@@ -29,17 +29,17 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13',
-        name: 'Chinese/English - Zipformer (GPU/NCNN)',
+        name: 'Chinese/English - Zipformer (GPU)',
         description: 'Bilingual streaming model for GPU (NCNN)',
         url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13.tar.bz2',
         type: 'streaming',
-        language: 'zh-en',
+        language: 'zh,en',
         size: '~150 MB',
         engine: 'ncnn'
     },
     {
         id: 'sherpa-onnx-streaming-zipformer-en-2023-02-21',
-        name: 'English - Zipformer (CPU/ONNX)',
+        name: 'English - Zipformer (CPU)',
         description: 'Fast and accurate English streaming model',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2',
         type: 'streaming',
@@ -49,17 +49,17 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
-        name: 'Chinese/English - Zipformer (CPU/ONNX)',
+        name: 'Chinese/English - Zipformer (CPU)',
         description: 'Bilingual streaming model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
         type: 'streaming',
-        language: 'zh-en',
+        language: 'zh,en',
         size: '~100 MB',
         engine: 'onnx'
     },
     {
         id: 'sherpa-onnx-paraformer-zh-2023-09-14',
-        name: 'Chinese - Paraformer (CPU/ONNX)',
+        name: 'Chinese - Paraformer (CPU)',
         description: 'Accurate offline model from FunASR',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2024-03-09.tar.bz2',
         type: 'non-streaming',
@@ -69,11 +69,11 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer (CPU/ONNX)',
+        name: 'Chinese/English - Paraformer (CPU)',
         description: 'Streaming Paraformer model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
-        language: 'zh-en',
+        language: 'zh,en',
         size: '~140 MB',
         engine: 'onnx'
     },
@@ -179,7 +179,7 @@ class ModelService {
             for (const mirror of mirrors) {
                 try {
                     const url = mirror ? `${mirror}${model.url}` : model.url;
-                    
+
                     if (onProgress) {
                         onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
                     }

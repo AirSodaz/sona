@@ -60,7 +60,7 @@
         "local_path": "本地路径",
         "download_desc": "下载预训练模型以开始转录。这些模型专为实时语音识别进行了优化。",
         "load": "加载",
-        "path_label": "Sherpa-onnx 模型路径",
+        "path_label": "Sherpa 模型路径",
         "path_placeholder": "C:\\path\\to\\sherpa-onnx-models",
         "browse": "浏览",
         "valid_path": "路径有效",

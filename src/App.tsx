@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
@@ -36,6 +36,34 @@ function App() {
   const handleSeek = (time: number) => {
     seekAudio(time);
   };
+
+  // Apply theme
+  const config = useTranscriptStore((state) => state.config);
+
+  useEffect(() => {
+    const applyTheme = () => {
+      const theme = config.theme || 'auto';
+      const root = document.documentElement;
+
+      if (theme === 'dark') {
+        root.setAttribute('data-theme', 'dark');
+      } else if (theme === 'light') {
+        root.setAttribute('data-theme', 'light');
+      } else {
+        // Auto
+        root.removeAttribute('data-theme');
+        // We rely on media query for auto, OR we can explicit set it to match system
+        // The plan said: Let JS set the attribute based on preference OR just use media query.
+        // If index.css uses [data-theme="dark"] AND media query, we might not need to do anything for auto if we remove attribute.
+        // BUT, if we want to force light in auto mode when system is light, removing attribute is fine IF defaults are light.
+        // Let's verify index.css strategy.
+        // If we remove attribute, it falls back to :root (light) and @media (dark).
+        // So for Auto, removing attribute is correct.
+      }
+    };
+
+    applyTheme();
+  }, [config.theme]);
 
   return (
     <div className="app">

@@ -60,7 +60,7 @@
         "local_path": "Local Path",
         "download_desc": "Download a pre-trained model to start transcribing. These models are optimized for real-time speech recognition.",
         "load": "Load",
-        "path_label": "Sherpa-onnx Model Path",
+        "path_label": "Sherpa Model Path",
         "path_placeholder": "C:\\path\\to\\sherpa-onnx-models",
         "browse": "Browse",
         "valid_path": "Path is valid",

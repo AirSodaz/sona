@@ -49,11 +49,13 @@ interface TranscriptState {
     setConfig: (config: Partial<AppConfig>) => void;
 }
 
+
 const DEFAULT_CONFIG: AppConfig = {
     modelPath: '',
     language: 'en',
     appLanguage: 'auto',
     enableITN: false,
+    theme: 'auto',
 };
 
 export const useTranscriptStore = create<TranscriptState>((set, get) => ({

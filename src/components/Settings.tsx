@@ -83,6 +83,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [modelPath, setModelPath] = useState(config.modelPath);
     const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
+    const [theme, setTheme] = useState(config.theme || 'auto');
     const [pathStatus, setPathStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
 
     // Download state
@@ -106,10 +107,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setModelPath(config.modelPath);
         setEnableITN(config.enableITN ?? true);
         setAppLanguage(config.appLanguage || 'auto');
+        setTheme(config.theme || 'auto');
         if (config.modelPath) {
             validatePath(config.modelPath);
         }
-    }, [config.modelPath, config.enableITN, config.appLanguage]);
+    }, [config.modelPath, config.enableITN, config.appLanguage, config.theme]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -131,8 +133,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     };
 
     const handleSave = () => {
-        setConfig({ modelPath, enableITN, appLanguage });
-        localStorage.setItem('sona-config', JSON.stringify({ modelPath, enableITN, appLanguage }));
+        setConfig({ modelPath, enableITN, appLanguage, theme });
+        localStorage.setItem('sona-config', JSON.stringify({ modelPath, enableITN, appLanguage, theme }));
 
         // Apply language immediately
         if (appLanguage === 'auto') {
@@ -257,7 +259,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     setConfig({
                         modelPath: parsed.modelPath,
                         enableITN: parsed.enableITN ?? true,
-                        appLanguage: parsed.appLanguage || 'auto'
+                        appLanguage: parsed.appLanguage || 'auto',
+                        theme: parsed.theme || 'auto'
                     });
                 }
             } catch (e) {
@@ -336,7 +339,23 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </select>
                                     </div>
                                     <div className="settings-hint">
-                                        {t('settings.language_hint', { defaultValue: 'Select the interface language.' })}
+                                        {t('settings.language_hint', { defaultValue: '' })}
+                                    </div>
+                                </div>
+
+                                <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                                    <label className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
+                                    <div style={{ maxWidth: 300 }}>
+                                        <select
+                                            className="settings-input"
+                                            value={theme}
+                                            onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}
+                                            style={{ width: '100%' }}
+                                        >
+                                            <option value="auto">{t('common.auto')}</option>
+                                            <option value="light">{t('settings.theme_light', { defaultValue: 'Light' })}</option>
+                                            <option value="dark">{t('settings.theme_dark', { defaultValue: 'Dark' })}</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -357,6 +376,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 <div className="model-tags">
                                                     <span className="model-tag">{model.language.toUpperCase()}</span>
                                                     <span className="model-tag">{model.type}</span>
+                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
                                                     <span className="model-tag">{model.size}</span>
                                                 </div>
                                             </div>
@@ -493,7 +513,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

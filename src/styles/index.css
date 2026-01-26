@@ -85,8 +85,32 @@
   --transition-slow: 350ms ease-out;
 }
 
+/* Dark Theme - Manual Override */
+:root[data-theme="dark"] {
+    /* Warm Carbon Theme */
+    --color-bg-primary: #191919;
+    --color-bg-secondary: #202020;
+    --color-bg-tertiary: #2c2c2c;
+    --color-bg-elevated: #2f2f2f;
+    --color-bg-hover: #373737;
+
+    --color-text-primary: #d4d4d4;
+    --color-text-secondary: #9b9a97;
+    --color-text-muted: #707070;
+    --color-text-disabled: #4a4a4a;
+
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.14);
+
+    --color-accent-primary: #e0e0e0;
+    --color-accent-secondary: #474747;
+    --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
+    --color-accent-glow: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark Theme - System Preference (unless forced light) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Warm Carbon Theme */
     --color-bg-primary: #191919;
     --color-bg-secondary: #202020;

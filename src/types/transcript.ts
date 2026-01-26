@@ -42,4 +42,6 @@ export interface AppConfig {
   appLanguage: 'auto' | 'en' | 'zh';
   /** Enable Inverse Text Normalization (e.g. number conversion) */
   enableITN?: boolean;
+  /** Application theme preference */
+  theme?: 'auto' | 'light' | 'dark';
 }
