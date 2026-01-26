@@ -53,12 +53,18 @@ class TranscriptionService {
 
             // NOTE: In production, this needs to be handled differently (e.g. sidecar binary or resource)
             // For this dev environment implementation, we use 'node' command
-            const command = Command.create('node', [
+            const args = [
                 scriptPath,
                 '--mode', 'stream',
                 '--model-path', this.modelPath,
                 '--enable-itn', this.enableITN.toString()
-            ]);
+            ];
+
+            if (import.meta.env.DEV) {
+                args.push('--allow-mock', 'true');
+            }
+
+            const command = Command.create('node', args);
 
             command.on('close', (data) => {
                 console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
@@ -146,13 +152,19 @@ class TranscriptionService {
             try {
                 // Spawn sidecar in batch mode
                 const scriptPath = 'sidecar/sherpa-recognizer.js';
-                const command = Command.create('node', [
+                const args = [
                     scriptPath,
                     '--mode', 'batch',
                     '--file', filePath,
                     '--model-path', this.modelPath,
                     '--enable-itn', this.enableITN.toString()
-                ]);
+                ];
+
+                if (import.meta.env.DEV) {
+                    args.push('--allow-mock', 'true');
+                }
+
+                const command = Command.create('node', args);
 
                 let stdoutBuffer = '';
                 let stderrBuffer = '';

@@ -33,6 +33,7 @@ function parseArgs() {
         sampleRate: 16000,
         enableITN: true,
         provider: null, // auto-detect if null
+        allowMock: false,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -54,6 +55,9 @@ function parseArgs() {
                 break;
             case '--provider':
                 options.provider = args[++i];
+                break;
+            case '--allow-mock':
+                options.allowMock = args[++i] === 'true';
                 break;
         }
     }
@@ -680,8 +684,8 @@ async function main() {
     }
 
     // For demo/testing without actual sherpa-onnx
-    // TODO: Remove this mock mode in production
-    const useMock = !existsSync(options.modelPath) || process.env.SONA_MOCK === '1';
+    // Only enabled if explicitly allowed via flag or env var
+    const useMock = (options.allowMock && !existsSync(options.modelPath)) || process.env.SONA_MOCK === '1';
 
     if (useMock) {
         console.error('Running in mock mode (sherpa-onnx model not found)');
