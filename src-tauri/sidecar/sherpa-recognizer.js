@@ -11,7 +11,8 @@
  *   node sherpa-recognizer.js --mode batch --file /path/to/audio.mp3 --model-path /path/to/model
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
+import os from 'os';
 import { createReadStream, existsSync, statSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -34,6 +35,7 @@ function parseArgs() {
         enableITN: true,
         provider: null, // auto-detect if null
         allowMock: false,
+        numThreads: null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -58,6 +60,9 @@ function parseArgs() {
                 break;
             case '--allow-mock':
                 options.allowMock = args[++i] === 'true';
+                break;
+            case '--num-threads':
+                options.numThreads = parseInt(args[++i], 10);
                 break;
         }
     }
@@ -121,19 +126,19 @@ async function convertToWav(inputPath, ffmpegPath) {
 }
 
 // Create sherpa-onnx recognizer (Online or Offline)
-async function createRecognizer(modelPath, enableITN, provider) {
+async function createRecognizer(modelPath, enableITN, provider, numThreads) {
     try {
         const sherpaModule = await import('sherpa-onnx-node');
         const sherpa = sherpaModule.default || sherpaModule;
 
-        const modelConfig = findModelConfig(modelPath, enableITN, provider);
+        const modelConfig = findModelConfig(modelPath, enableITN, provider, numThreads);
         if (!modelConfig) {
             throw new Error(`Could not find valid model configuration in: ${modelPath}`);
         }
 
         // Check if it's an offline config (SenseVoice, Whisper, etc.)
         if (modelConfig.senseVoice || modelConfig.whisper) {
-            console.error(`Initializing OfflineRecognizer (Provider: ${provider})...`);
+            console.error(`Initializing OfflineRecognizer (Provider: ${provider}, Threads: ${numThreads})...`);
             const config = {
                 featConfig: {
                     sampleRate: 16000,
@@ -153,7 +158,7 @@ async function createRecognizer(modelPath, enableITN, provider) {
         }
 
         // Default to Online
-        console.error(`Initializing OnlineRecognizer (Provider: ${provider})...`);
+        console.error(`Initializing OnlineRecognizer (Provider: ${provider}, Threads: ${numThreads})...`);
         const config = {
             featConfig: {
                 sampleRate: 16000,
@@ -193,7 +198,7 @@ async function createRecognizer(modelPath, enableITN, provider) {
 }
 
 // Find model configuration based on model directory contents
-function findModelConfig(modelPath, enableITN, provider) {
+function findModelConfig(modelPath, enableITN, provider, numThreads) {
     if (!existsSync(modelPath)) {
         return null;
     }
@@ -222,7 +227,7 @@ function findModelConfig(modelPath, enableITN, provider) {
         if (tokens && encoder && decoder) {
             const baseConfig = {
                 tokens: join(modelPath, tokens),
-                numThreads: 2,
+                numThreads: numThreads,
                 provider: provider,
                 debug: false,
             };
@@ -256,7 +261,7 @@ function findModelConfig(modelPath, enableITN, provider) {
             // SenseVoice detection
             return {
                 tokens: join(modelPath, tokens),
-                numThreads: 2,
+                numThreads: numThreads,
                 provider: provider,
                 debug: false,
                 senseVoice: {
@@ -601,6 +606,53 @@ async function detectProvider() {
     return 'cpu';
 }
 
+// Get number of physical cores
+function getPhysicalCores() {
+    const platform = process.platform;
+    try {
+        if (platform === 'linux') {
+            const output = execSync("lscpu -p | grep -E -v '^#' | sort -u -t, -k 2,4 | wc -l").toString().trim();
+            const cores = parseInt(output, 10);
+            if (!isNaN(cores) && cores > 0) return cores;
+        } else if (platform === 'darwin') {
+            const output = execSync("sysctl -n hw.physicalcpu").toString().trim();
+            const cores = parseInt(output, 10);
+            if (!isNaN(cores) && cores > 0) return cores;
+        } else if (platform === 'win32') {
+            const output = execSync("wmic cpu get NumberOfCores").toString().trim();
+            // Output format is usually "NumberOfCores\n 4  " or similar
+            const lines = output.split('\n');
+            let total = 0;
+            for (const line of lines) {
+                const val = parseInt(line.trim(), 10);
+                if (!isNaN(val)) total += val;
+            }
+            if (total > 0) return total;
+        }
+    } catch (e) {
+        // Fallback to logical/2 is better than nothing if command fails
+    }
+
+    return Math.ceil(os.cpus().length / 2);
+}
+
+// Calculate optimal thread count based on physical cores
+function calculateNumThreads(providedValue) {
+    if (providedValue) return providedValue;
+
+    const physicalCores = getPhysicalCores();
+    console.error(`[Sidecar] Physical cores detected: ${physicalCores}`);
+
+    let numThreads;
+    if (physicalCores <= 4) {
+        numThreads = physicalCores - 1;
+    } else {
+        numThreads = physicalCores - 2;
+    }
+
+    return Math.max(1, numThreads);
+}
+
 // Ensure DYLD_LIBRARY_PATH is set on macOS
 async function ensureDyldPath() {
     if (process.platform !== 'darwin') return false;
@@ -684,6 +736,10 @@ async function main() {
     // Auto-detect provider if not specified
     let currentProvider = options.provider || await detectProvider();
 
+    // Calculate threads
+    const numThreads = calculateNumThreads(options.numThreads);
+    console.error(`[Sidecar] Using ${numThreads} threads.`);
+
     // For demo/testing without actual sherpa-onnx
     // Only enabled if explicitly allowed via flag or env var
     const useMock = (options.allowMock && !existsSync(options.modelPath)) || process.env.SONA_MOCK === '1';
@@ -726,7 +782,7 @@ async function main() {
         }
 
         try {
-            const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, currentProvider);
+            const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, currentProvider, numThreads);
 
             // Use JS ITN only if enabled AND model doesn't support it internally
             const useJSITN = options.enableITN && !supportsInternalITN;
