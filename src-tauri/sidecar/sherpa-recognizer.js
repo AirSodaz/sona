@@ -32,6 +32,7 @@ function parseArgs() {
         modelPath: null,
         sampleRate: 16000,
         enableITN: true,
+        provider: null, // auto-detect if null
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -50,6 +51,9 @@ function parseArgs() {
                 break;
             case '--enable-itn':
                 options.enableITN = args[++i] === 'true';
+                break;
+            case '--provider':
+                options.provider = args[++i];
                 break;
         }
     }
@@ -103,19 +107,19 @@ async function convertToWav(inputPath, ffmpegPath) {
 }
 
 // Create sherpa-onnx recognizer (Online or Offline)
-async function createRecognizer(modelPath, enableITN) {
+async function createRecognizer(modelPath, enableITN, provider) {
     try {
         const sherpaModule = await import('sherpa-onnx-node');
         const sherpa = sherpaModule.default || sherpaModule;
 
-        const modelConfig = findModelConfig(modelPath, enableITN);
+        const modelConfig = findModelConfig(modelPath, enableITN, provider);
         if (!modelConfig) {
             throw new Error(`Could not find valid model configuration in: ${modelPath}`);
         }
 
         // Check if it's an offline config (SenseVoice, Whisper, etc.)
         if (modelConfig.senseVoice || modelConfig.whisper) {
-            console.error('Initializing OfflineRecognizer...');
+            console.error(`Initializing OfflineRecognizer (Provider: ${provider})...`);
             const config = {
                 featConfig: {
                     sampleRate: 16000,
@@ -135,7 +139,7 @@ async function createRecognizer(modelPath, enableITN) {
         }
 
         // Default to Online
-        console.error('Initializing OnlineRecognizer...');
+        console.error(`Initializing OnlineRecognizer (Provider: ${provider})...`);
         const config = {
             featConfig: {
                 sampleRate: 16000,
@@ -175,7 +179,7 @@ async function createRecognizer(modelPath, enableITN) {
 }
 
 // Find model configuration based on model directory contents
-function findModelConfig(modelPath, enableITN) {
+function findModelConfig(modelPath, enableITN, provider) {
     if (!existsSync(modelPath)) {
         return null;
     }
@@ -205,7 +209,7 @@ function findModelConfig(modelPath, enableITN) {
             const baseConfig = {
                 tokens: join(modelPath, tokens),
                 numThreads: 2,
-                provider: 'cpu',
+                provider: provider,
                 debug: false,
             };
 
@@ -239,7 +243,7 @@ function findModelConfig(modelPath, enableITN) {
             return {
                 tokens: join(modelPath, tokens),
                 numThreads: 2,
-                provider: 'cpu',
+                provider: provider,
                 debug: false,
                 senseVoice: {
                     model: model,
@@ -538,6 +542,55 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
     }
 }
 
+// Detect optimal provider (GPU acceleration)
+async function detectProvider() {
+    // 1. Check for manual override from env
+    if (process.env.SONA_PROVIDER) {
+        return process.env.SONA_PROVIDER;
+    }
+
+    // 2. macOS: Default to CoreML (Apple Neural Engine/GPU)
+    if (process.platform === 'darwin') {
+        // CoreML is generally available on modern macOS
+        // We could refine this check, but 'coreml' is the flag for Apple acceleration
+        return 'coreml';
+    }
+
+    // 3. Windows/Linux: Check for NVIDIA GPU (CUDA)
+    try {
+        // simple check: see if nvidia-smi exists and runs
+        await new Promise((resolve, reject) => {
+            const cmd = process.platform === 'win32' ? 'where nvidia-smi' : 'which nvidia-smi';
+            const child = spawn(cmd, [], { shell: true, stdio: 'ignore' });
+            child.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject();
+            });
+            child.on('error', reject);
+        });
+
+        // If we get here, nvidia-smi was found. 
+        // We could run it to check status, but presence usually implies drivers installed.
+        // Let's verify it actually runs successfully.
+        await new Promise((resolve, reject) => {
+            const child = spawn('nvidia-smi', [], { shell: true, stdio: 'ignore' });
+            child.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject();
+            });
+            child.on('error', reject);
+        });
+
+        console.error('[Sidecar] NVIDIA GPU detected. Using CUDA provider.');
+        return 'cuda';
+
+    } catch (e) {
+        // Fallback to CPU
+    }
+
+    return 'cpu';
+}
+
 // Ensure DYLD_LIBRARY_PATH is set on macOS
 async function ensureDyldPath() {
     if (process.platform !== 'darwin') return false;
@@ -618,6 +671,14 @@ async function main() {
 
     const ffmpegPath = await getFFmpegPath();
 
+    // Auto-detect provider if not specified
+    const provider = options.provider || await detectProvider();
+    if (provider !== 'cpu') {
+        console.error(`[Sidecar] Using device provider: ${provider}`);
+    } else {
+        console.error('[Sidecar] Using default CPU provider');
+    }
+
     // For demo/testing without actual sherpa-onnx
     // TODO: Remove this mock mode in production
     const useMock = !existsSync(options.modelPath) || process.env.SONA_MOCK === '1';
@@ -648,7 +709,7 @@ async function main() {
     }
 
     try {
-        const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN);
+        const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, provider);
 
         // Use JS ITN only if enabled AND model doesn't support it internally
         const useJSITN = options.enableITN && !supportsInternalITN;

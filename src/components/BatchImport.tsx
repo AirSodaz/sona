@@ -39,7 +39,7 @@ interface BatchImportProps {
 export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     // const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragOver, setIsDragOver] = useState(false);
-    const [enableTimeline, setEnableTimeline] = useState(false);
+    const [enableTimeline, setEnableTimeline] = useState(true);
 
     const processingStatus = useTranscriptStore((state) => state.processingStatus);
     const processingProgress = useTranscriptStore((state) => state.processingProgress);

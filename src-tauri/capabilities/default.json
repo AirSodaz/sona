@@ -39,6 +39,7 @@
       ]
     },
     "shell:allow-stdin-write",
+    "shell:allow-kill",
     {
       "identifier": "http:default",
       "allow": [

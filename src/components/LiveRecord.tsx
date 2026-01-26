@@ -182,8 +182,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             cancelAnimationFrame(animationRef.current);
         }
 
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(e => console.error('Error closing AudioContext:', e));
         }
 
         // Clear visualizer
