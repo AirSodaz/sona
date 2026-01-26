@@ -44,4 +44,4 @@ jobs:
       - name: Build Tauri App
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
-        run: npm run tauri build
+        run: npm run tauri build -- --verbose
