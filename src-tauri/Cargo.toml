@@ -31,4 +31,5 @@ tar = "0.4"
 bzip2 = "0.4"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls"] }
 futures-util = "0.3"
+bytes = "1"
 
