@@ -141,14 +141,23 @@ async function setupNode() {
 async function installSidecarDeps() {
   console.log('Installing sidecar dependencies...');
   try {
-    execSync('npm install --production', {
+    execSync('npm install', {
       cwd: sidecarDir,
       stdio: 'inherit',
       env: { ...process.env } // Ensure path and other env vars are passed
     });
     console.log('Sidecar dependencies installed.');
+
+    console.log('Building sidecar...');
+    execSync('npm run build', {
+      cwd: sidecarDir,
+      stdio: 'inherit',
+      env: { ...process.env }
+    });
+    console.log('Sidecar built.');
+
   } catch (e) {
-    console.error('Failed to install sidecar dependencies:', e);
+    console.error('Failed to install/build sidecar dependencies:', e);
     process.exit(1);
   }
 }

@@ -7,9 +7,11 @@
     "scripts": {
         "start": "node sherpa-recognizer.js",
         "stream": "node sherpa-recognizer.js --mode stream",
-        "batch": "node sherpa-recognizer.js --mode batch --file"
+        "batch": "node sherpa-recognizer.js --mode batch --file",
+        "build": "node build.mjs"
     },
     "dependencies": {
+        "esbuild": "^0.27.2",
         "ffmpeg-static": "^5.2.0",
         "nzh": "^1.0.14",
         "sherpa-onnx-node": "^1.12.23",

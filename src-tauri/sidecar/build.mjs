@@ -25,36 +25,60 @@ await esbuild.build({
         js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`
     },
     external: [
-        // We will copy .node file next to the bundle, so we can let it try to require it.
-        // But esbuild will try to bundle the require call.
-        // actually sherpa-onnx-node requires using a variable path, so esbuild might emit a warning or ignore it.
-        // Ideally we want sherpa-onnx-node code included, but the finding logic preserved.
         'sherpa-onnx.node'
     ],
-    loader: { '.node': 'file' } // or copy it manually
+    loader: { '.node': 'file' }
 });
 
 // 2. Copy sherpa-onnx.node
 console.log('Copying native bindings...');
-// We found it at node_modules/sherpa-onnx-win-x64/sherpa-onnx.node
-// But let's find it dynamically or hardcode for now based on previous find result
-const nodeFileSrc = join(__dirname, 'node_modules/sherpa-onnx-win-x64/sherpa-onnx.node');
+
+const platform = process.platform;
+const arch = process.arch;
+
+let platformName = platform;
+if (platform === 'win32') platformName = 'win';
+// linux is linux, darwin is darwin
+
+let archName = arch;
+// x64 is x64, arm64 is arm64
+
+const packageName = `sherpa-onnx-${platformName}-${archName}`;
+const nodeFileSrc = join(__dirname, 'node_modules', packageName, 'sherpa-onnx.node');
+
+console.log(`Looking for binding at: ${nodeFileSrc}`);
+
 if (existsSync(nodeFileSrc)) {
     copyFileSync(nodeFileSrc, join(distDir, 'sherpa-onnx.node'));
+    console.log(`Copied ${packageName}/sherpa-onnx.node to dist/`);
 } else {
-    console.error('Could not find sherpa-onnx.node');
+    console.error(`Could not find sherpa-onnx.node at ${nodeFileSrc}`);
+    // List available modules to debug
+    try {
+        const fs = require('fs');
+        const modulesDir = join(__dirname, 'node_modules');
+        const dirs = fs.readdirSync(modulesDir).filter(d => d.startsWith('sherpa-onnx-'));
+        console.log('Available sherpa-onnx modules:', dirs);
+    } catch (e) {}
     process.exit(1);
 }
 
-// 3. Copy ffmpeg.exe
+// 3. Copy ffmpeg
 console.log('Copying ffmpeg...');
-const ffmpegSrc = join(__dirname, 'node_modules/ffmpeg-static/ffmpeg.exe');
-// Note: ffmpeg-static might have it in a different path, waiting for find_by_name result to confirm.
-if (existsSync(ffmpegSrc)) {
-    copyFileSync(ffmpegSrc, join(distDir, 'ffmpeg.exe'));
+let ffmpegSrc;
+try {
+    ffmpegSrc = require('ffmpeg-static');
+} catch (e) {
+    console.error('Failed to resolve ffmpeg-static:', e);
+}
+
+if (ffmpegSrc && existsSync(ffmpegSrc)) {
+    const destName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+    copyFileSync(ffmpegSrc, join(distDir, destName));
+    console.log(`Copied ffmpeg to dist/${destName}`);
 } else {
-    // fallback check based on find result later
-    console.log('Checking fallback ffmpeg path...');
+    console.error('Could not find ffmpeg binary');
+    process.exit(1);
 }
 
 console.log('Build complete.');
