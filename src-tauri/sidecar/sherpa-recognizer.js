@@ -402,8 +402,7 @@ async function processStream(recognizer, sampleRate, enableITN) {
 // Process audio file (Mode B)
 async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
     if (!existsSync(filePath)) {
-        console.error(JSON.stringify({ error: `File not found: ${filePath}` }));
-        process.exit(1);
+        throw new Error(`File not found: ${filePath}`);
     }
 
     try {
@@ -482,16 +481,14 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
         console.log(JSON.stringify(segments, null, 2));
 
     } catch (error) {
-        console.error(JSON.stringify({ error: error.message }));
-        process.exit(1);
+        throw error;
     }
 }
 
 // Process audio file (Offline Mode)
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
     if (!existsSync(filePath)) {
-        console.error(JSON.stringify({ error: `File not found: ${filePath}` }));
-        process.exit(1);
+        throw new Error(`File not found: ${filePath}`);
     }
 
     try {
@@ -541,8 +538,7 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
         console.log(JSON.stringify(segments, null, 2));
 
     } catch (error) {
-        console.error(JSON.stringify({ error: error.message }));
-        process.exit(1);
+        throw error;
     }
 }
 
@@ -676,12 +672,7 @@ async function main() {
     const ffmpegPath = await getFFmpegPath();
 
     // Auto-detect provider if not specified
-    const provider = options.provider || await detectProvider();
-    if (provider !== 'cpu') {
-        console.error(`[Sidecar] Using device provider: ${provider}`);
-    } else {
-        console.error('[Sidecar] Using default CPU provider');
-    }
+    let currentProvider = options.provider || await detectProvider();
 
     // For demo/testing without actual sherpa-onnx
     // Only enabled if explicitly allowed via flag or env var
@@ -712,33 +703,59 @@ async function main() {
         process.exit(0);
     }
 
-    try {
-        const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, provider);
+    const maxRetries = 1;
+    let attempt = 0;
 
-        // Use JS ITN only if enabled AND model doesn't support it internally
-        const useJSITN = options.enableITN && !supportsInternalITN;
-
-        if (options.mode === 'batch') {
-            if (!options.file) {
-                console.error(JSON.stringify({ error: 'File path required for batch mode' }));
-                process.exit(1);
-            }
-            if (type === 'offline') {
-                // Offline models (SenseVoice) handle ITN internally if configured, so we pass false for JS ITN
-                await processBatchOffline(recognizer, options.file, ffmpegPath, options.sampleRate, false);
-            } else {
-                await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, useJSITN);
-            }
+    while (true) {
+        if (attempt > 0) {
+            console.error(`[Sidecar] Retry attempt ${attempt} with provider: ${currentProvider}`);
+        } else if (currentProvider !== 'cpu') {
+            console.error(`[Sidecar] Using device provider: ${currentProvider}`);
         } else {
-            if (type === 'offline') {
-                console.error(JSON.stringify({ error: 'Streaming mode not supported for this offline model (SenseVoice).' }));
-                process.exit(1);
-            }
-            await processStream(recognizer, options.sampleRate, useJSITN);
+            console.error('[Sidecar] Using default CPU provider');
         }
-    } catch (error) {
-        console.error(JSON.stringify({ error: error.message }));
-        process.exit(1);
+
+        try {
+            const { recognizer, type, supportsInternalITN } = await createRecognizer(options.modelPath, options.enableITN, currentProvider);
+
+            // Use JS ITN only if enabled AND model doesn't support it internally
+            const useJSITN = options.enableITN && !supportsInternalITN;
+
+            if (options.mode === 'batch') {
+                if (!options.file) {
+                    console.error(JSON.stringify({ error: 'File path required for batch mode' }));
+                    process.exit(1);
+                }
+                if (type === 'offline') {
+                    // Offline models (SenseVoice) handle ITN internally if configured, so we pass false for JS ITN
+                    await processBatchOffline(recognizer, options.file, ffmpegPath, options.sampleRate, false);
+                } else {
+                    await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, useJSITN);
+                }
+            } else {
+                if (type === 'offline') {
+                    console.error(JSON.stringify({ error: 'Streaming mode not supported for this offline model (SenseVoice).' }));
+                    process.exit(1);
+                }
+                await processStream(recognizer, options.sampleRate, useJSITN);
+            }
+
+            // Success
+            break;
+
+        } catch (error) {
+            // Check if we can retry with CPU
+            if (currentProvider === 'coreml' && attempt < maxRetries) {
+                console.error(`[Sidecar] Error with CoreML provider: ${error.message}`);
+                console.error('[Sidecar] Switching to CPU and retrying...');
+                currentProvider = 'cpu';
+                attempt++;
+                continue;
+            }
+
+            console.error(JSON.stringify({ error: error.message || String(error) }));
+            process.exit(1);
+        }
     }
 }
 

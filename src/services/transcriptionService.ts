@@ -159,11 +159,23 @@ class TranscriptionService {
      * Transcribe an audio file in batch mode
      */
     async transcribeFile(filePath: string): Promise<TranscriptSegment[]> {
+        try {
+            return await this._transcribeFileInternal(filePath);
+        } catch (error: any) {
+            if (error.message === 'COREML_FAILURE') {
+                console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
+                return await this._transcribeFileInternal(filePath, 'cpu');
+            }
+            throw error;
+        }
+    }
+
+    private async _transcribeFileInternal(filePath: string, provider?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
 
-        console.log('[TranscriptionService] Starting batch transcription for:', filePath);
+        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'})`);
 
         return new Promise(async (resolve, reject) => {
             try {
@@ -177,6 +189,10 @@ class TranscriptionService {
                     '--enable-itn', this.enableITN.toString()
                 ];
 
+                if (provider) {
+                    args.push('--provider', provider);
+                }
+
                 if (import.meta.env.DEV) {
                     args.push('--allow-mock', 'true');
                 }
@@ -189,6 +205,16 @@ class TranscriptionService {
                 command.on('close', (data) => {
                     console.log(`[Batch] Sidecar finished with code ${data.code}`);
                     if (data.code === 0) {
+                        // Check for silent CoreML failure
+                        // CoreML errors are printed to stderr but sometimes the process exits with 0
+                        if (!provider &&
+                            stderrBuffer.includes('Error executing model') &&
+                            stderrBuffer.includes('CoreMLExecutionProvider')) {
+
+                            reject(new Error('COREML_FAILURE'));
+                            return;
+                        }
+
                         try {
                             // Find the JSON array in the output
                             // The script might output logs before the JSON
