@@ -752,9 +752,15 @@ input[type="radio"]:focus {
 }
 
 .drop-zone:hover,
-.drop-zone.drag-over {
+.drop-zone.drag-over,
+.drop-zone:focus-visible {
   border-color: var(--color-accent-primary);
   background: var(--color-bg-hover);
+  outline: none;
+}
+
+.drop-zone:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
 }
 
 .drop-zone.drag-over {

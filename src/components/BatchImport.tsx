@@ -104,6 +104,13 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         setIsDragOver(false);
     }, []);
 
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+        }
+    };
+
     const handleClick = async () => {
         try {
             const selected = await open({
@@ -187,6 +194,10 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onClick={handleClick}
+                onKeyDown={handleKeyDown}
+                role="button"
+                tabIndex={0}
+                aria-label={t('batch.drop_desc')}
             >
                 {/* <input
                     ref={fileInputRef}
