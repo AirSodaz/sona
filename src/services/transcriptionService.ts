@@ -1,5 +1,6 @@
 
 import { Command, Child } from '@tauri-apps/plugin-shell';
+import { resolveResource } from '@tauri-apps/api/path';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
 
@@ -47,12 +48,8 @@ class TranscriptionService {
         console.log('Starting sidecar with model:', this.modelPath);
 
         try {
-            // Spawn the node process
-            // Working directory in Tauri dev is src-tauri, so use relative path from there
-            const scriptPath = 'sidecar/sherpa-recognizer.js';
+            const scriptPath = await resolveResource('sidecar/sherpa-recognizer.js');
 
-            // NOTE: In production, this needs to be handled differently (e.g. sidecar binary or resource)
-            // For this dev environment implementation, we use 'node' command
             const args = [
                 scriptPath,
                 '--mode', 'stream',
@@ -64,7 +61,7 @@ class TranscriptionService {
                 args.push('--allow-mock', 'true');
             }
 
-            const command = Command.create('node', args);
+            const command = Command.sidecar('binaries/node', args);
 
             command.on('close', (data) => {
                 console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
@@ -168,7 +165,7 @@ class TranscriptionService {
         return new Promise(async (resolve, reject) => {
             try {
                 // Spawn sidecar in batch mode
-                const scriptPath = 'sidecar/sherpa-recognizer.js';
+                const scriptPath = await resolveResource('sidecar/sherpa-recognizer.js');
                 const args = [
                     scriptPath,
                     '--mode', 'batch',
@@ -181,7 +178,7 @@ class TranscriptionService {
                     args.push('--allow-mock', 'true');
                 }
 
-                const command = Command.create('node', args);
+                const command = Command.sidecar('binaries/node', args);
 
                 let stdoutBuffer = '';
                 let stderrBuffer = '';
