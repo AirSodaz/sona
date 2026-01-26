@@ -24,7 +24,7 @@ vi.mock('../../stores/transcriptStore', () => ({
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'small', size: '100MB', description: 'Test' }
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'small', size: '100MB', description: 'Test', engine: 'onnx' }
     ],
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false),
@@ -95,7 +95,8 @@ describe('Settings', () => {
         expect(mockSetConfig).toHaveBeenCalledWith({
             modelPath: '/test/path',
             enableITN: true,
-            appLanguage: 'auto'
+            appLanguage: 'auto',
+            theme: 'auto'
         });
         expect(onClose).toHaveBeenCalled();
     });

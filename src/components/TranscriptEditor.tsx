@@ -26,8 +26,6 @@ const MergeIcon = () => (
 );
 
 interface TranscriptContext {
-    activeSegmentId: string | null;
-    editingSegmentId: string | null;
     totalSegments: number;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
@@ -38,8 +36,6 @@ interface TranscriptContext {
 
 interface SegmentItemProps {
     segment: TranscriptSegment;
-    isActive: boolean;
-    isEditing: boolean;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
     onSave: (id: string, text: string) => void;
@@ -50,8 +46,6 @@ interface SegmentItemProps {
 
 const SegmentItem = React.memo<SegmentItemProps>(({
     segment,
-    isActive,
-    isEditing,
     onSeek,
     onEdit,
     onSave,
@@ -60,6 +54,8 @@ const SegmentItem = React.memo<SegmentItemProps>(({
     hasNext,
 }) => {
     const { t } = useTranslation();
+    const isActive = useTranscriptStore(useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
+    const isEditing = useTranscriptStore(useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
     const [editText, setEditText] = React.useState(segment.text);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -199,7 +195,6 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
 
     const segments = useTranscriptStore((state) => state.segments);
     const activeSegmentId = useTranscriptStore((state) => state.activeSegmentId);
-    const editingSegmentId = useTranscriptStore((state) => state.editingSegmentId);
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const updateSegment = useTranscriptStore((state) => state.updateSegment);
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
@@ -252,22 +247,18 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     }, [mergeSegments]);
 
     const contextValue = useMemo<TranscriptContext>(() => ({
-        activeSegmentId,
-        editingSegmentId,
         totalSegments: segments.length,
         onSeek: handleSeek,
         onEdit: handleEdit,
         onSave: handleSave,
         onDelete: handleDelete,
         onMergeWithNext: handleMergeWithNext,
-    }), [activeSegmentId, editingSegmentId, segments.length, handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
+    }), [segments.length, handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
 
     const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
         <SegmentItem
             key={segment.id}
             segment={segment}
-            isActive={segment.id === context.activeSegmentId}
-            isEditing={segment.id === context.editingSegmentId}
             onSeek={context.onSeek}
             onEdit={context.onEdit}
             onSave={context.onSave}
