@@ -8,6 +8,24 @@ interface LiveRecordProps {
     className?: string;
 }
 
+const getSupportedMimeType = () => {
+    const types = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg',
+        ''
+    ];
+
+    for (const type of types) {
+        if (type === '' || MediaRecorder.isTypeSupported(type)) {
+            return type;
+        }
+    }
+    return '';
+};
+
 export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -20,6 +38,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const [recordingTime, setRecordingTime] = useState(0);
     const isRecordingRef = useRef(false); // Use ref to track recording state for closure
     const isPausedRef = useRef(false);
+    const mimeTypeRef = useRef<string>('');
 
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
@@ -131,7 +150,12 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             );
 
             // Set up media recorder for full file save
-            mediaRecorderRef.current = new MediaRecorder(stream);
+            const mimeType = getSupportedMimeType();
+            mimeTypeRef.current = mimeType;
+            console.log('[LiveRecord] Using mimeType:', mimeType);
+
+            const options = mimeType ? { mimeType } : undefined;
+            mediaRecorderRef.current = new MediaRecorder(stream, options);
             const chunks: Blob[] = [];
 
             mediaRecorderRef.current.ondataavailable = (e) => {
@@ -139,7 +163,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const blob = new Blob(chunks, { type });
                 const url = URL.createObjectURL(blob);
                 useTranscriptStore.getState().setAudioUrl(url);
                 transcriptionService.stop();
