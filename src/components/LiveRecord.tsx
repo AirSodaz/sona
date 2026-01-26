@@ -265,51 +265,38 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     }, []);
 
     return (
-        <div className={`live-record ${className}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: 32 }}>
-            <div className="visualizer-container" style={{ width: '100%', height: 120, borderRadius: 12 }}>
+        <div className={`live-record-container ${className}`}>
+            <div className="visualizer-wrapper">
                 <canvas
                     ref={canvasRef}
                     width={600}
                     height={120}
-                    style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                    className="visualizer-canvas"
                 />
             </div>
 
-            <div style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '1.5rem',
-                color: 'var(--color-recording)',
-                visibility: isRecording ? 'visible' : 'hidden'
-            }}>
+            <div
+                className="recording-timer"
+                style={{
+                    visibility: isRecording ? 'visible' : 'hidden'
+                }}
+            >
                 {formatTime(recordingTime)}
             </div>
 
-            <div className="controls" style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+            <div className="record-controls">
                 {!isRecording ? (
                     <button
                         className="control-button start"
                         onClick={startRecording}
-                        style={{
-                            width: 64, height: 64, borderRadius: '50%',
-                            backgroundColor: '#ef4444', border: 'none', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                            transition: 'all 0.2s ease'
-                        }}
                     >
-                        <div style={{ width: 24, height: 24, backgroundColor: 'white', borderRadius: '50%' }} />
+                        <div className="control-button-inner" />
                     </button>
                 ) : (
                     <>
                         <button
                             className="control-button pause"
                             onClick={isPaused ? resumeRecording : pauseRecording}
-                            style={{
-                                width: 56, height: 56, borderRadius: '50%',
-                                backgroundColor: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: 'var(--color-text)', transition: 'all 0.2s ease'
-                            }}
                             title={isPaused ? t('live.resume') : t('live.pause')}
                         >
                             {isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}
@@ -318,13 +305,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <button
                             className="control-button stop"
                             onClick={stopRecording}
-                            style={{
-                                width: 64, height: 64, borderRadius: '50%',
-                                backgroundColor: '#ef4444', border: 'none', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                                transition: 'all 0.2s ease'
-                            }}
                             title={t('live.stop')}
                         >
                             <Square size={28} fill="white" color="white" />
@@ -333,7 +313,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 )}
             </div>
 
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+            <p className="recording-status-text">
                 {isRecording
                     ? (isPaused ? t('live.recording_paused') : t('live.recording_active'))
                     : t('live.start_hint')
