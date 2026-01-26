@@ -1,4 +1,4 @@
-import { join } from '@tauri-apps/api/path';
+import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -77,11 +77,12 @@ export type ProgressCallback = (percentage: number, status: string) => void;
 
 class ModelService {
     async getModelsDir(): Promise<string> {
-        const cwd = await invoke<string>('get_cwd');
-        const modelsDir = await join(cwd, 'models');
+        const appDataDir = await appLocalDataDir();
+        const modelsDir = await join(appDataDir, 'models');
         if (!(await exists(modelsDir))) {
             await mkdir(modelsDir, { recursive: true });
         }
+        console.log('[ModelService] Models directory:', modelsDir);
         return modelsDir;
     }
 

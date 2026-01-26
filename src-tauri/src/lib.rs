@@ -5,13 +5,6 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn get_cwd() -> String {
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| ".".to_string())
-}
-
-#[tauri::command]
 async fn extract_tar_bz2<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     archive_path: String,
@@ -68,8 +61,8 @@ where
     F: FnMut(u64, u64),
 {
     use futures_util::StreamExt;
-    use tokio::io::AsyncWriteExt;
     use std::time::Instant;
+    use tokio::io::AsyncWriteExt;
 
     let mut downloaded: u64 = 0;
     let mut last_emit = Instant::now();
@@ -105,7 +98,9 @@ async fn download_file<R: tauri::Runtime>(
     let file = tokio::fs::File::create(&output_path)
         .await
         .map_err(|e| e.to_string())?;
-    let stream = res.bytes_stream().map(|item| item.map_err(|e| e.to_string()));
+    let stream = res
+        .bytes_stream()
+        .map(|item| item.map_err(|e| e.to_string()));
 
     process_download(stream, file, total_size, move |downloaded, total| {
         let _ = app.emit("download-progress", (downloaded, total));
@@ -123,7 +118,6 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             greet,
-            get_cwd,
             extract_tar_bz2,
             download_file
         ])
