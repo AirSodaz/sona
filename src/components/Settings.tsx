@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { PRESET_MODELS, modelService, ModelInfo } from '../services/modelService';
 import { open, ask, message } from '@tauri-apps/plugin-dialog';
@@ -52,10 +53,12 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'local' | 'models'>('models');
+    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
     const [modelPath, setModelPath] = useState(config.modelPath);
     const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
+    const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
     const [pathStatus, setPathStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
 
     // Download state
@@ -78,10 +81,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     useEffect(() => {
         setModelPath(config.modelPath);
         setEnableITN(config.enableITN ?? true);
+        setAppLanguage(config.appLanguage || 'auto');
         if (config.modelPath) {
             validatePath(config.modelPath);
         }
-    }, [config.modelPath, config.enableITN]);
+    }, [config.modelPath, config.enableITN, config.appLanguage]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -103,8 +107,16 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     };
 
     const handleSave = () => {
-        setConfig({ modelPath, enableITN });
-        localStorage.setItem('sona-config', JSON.stringify({ modelPath, enableITN }));
+        setConfig({ modelPath, enableITN, appLanguage });
+        localStorage.setItem('sona-config', JSON.stringify({ modelPath, enableITN, appLanguage }));
+
+        // Apply language immediately
+        if (appLanguage === 'auto') {
+            i18n.changeLanguage(navigator.language);
+        } else {
+            i18n.changeLanguage(appLanguage);
+        }
+
         onClose();
     };
 
@@ -113,7 +125,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: 'Select Sherpa-onnx Model Directory'
+                title: t('settings.path_label')
             });
 
             if (selected) {
@@ -133,7 +145,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
         setDownloadingId(model.id);
         setProgress(0);
-        setStatusText('Starting download...');
+        setStatusText(t('settings.download_starting'));
 
         try {
             const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
@@ -143,7 +155,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
             setModelPath(downloadedPath);
             validatePath(downloadedPath);
-            setStatusText('Download complete!');
+            setStatusText(t('settings.download_complete'));
             await checkInstalledModels();
 
             // Auto-switch to local tab to show result
@@ -154,7 +166,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
         } catch (error: any) {
             console.error('Download failed:', error);
-            setStatusText(`Error: ${error.message}`);
+            setStatusText(t('settings.download_failed', { error: error.message }));
             setTimeout(() => setDownloadingId(null), 3000);
         }
     };
@@ -173,8 +185,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         if (deletingId) return;
 
         // Confirm deletion
-        const confirmed = await ask(`Are you sure you want to delete ${model.name}?`, {
-            title: 'Delete Model',
+        const confirmed = await ask(t('settings.delete_confirm_message', { name: model.name }), {
+            title: t('settings.delete_confirm_title'),
             kind: 'warning'
         });
 
@@ -210,7 +222,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 if (parsed.modelPath) {
                     setConfig({
                         modelPath: parsed.modelPath,
-                        enableITN: parsed.enableITN ?? true
+                        enableITN: parsed.enableITN ?? true,
+                        appLanguage: parsed.appLanguage || 'auto'
                     });
                 }
             } catch (e) {
@@ -256,14 +269,29 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     alignItems: 'center',
                     padding: '24px 24px 0 24px'
                 }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Settings</h2>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>{t('settings.title')}</h2>
                     <button className="btn btn-icon" onClick={onClose}>
                         <XIcon />
                     </button>
                 </div>
 
-                {/* Tabs */}
                 <div style={{ display: 'flex', gap: 24, padding: '24px 24px 0 24px', borderBottom: '1px solid var(--color-border)' }}>
+                    <button
+                        className={`tab-btn ${activeTab === 'general' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('general')}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            boxShadow: 'none',
+                            borderRadius: 0,
+                            padding: '0 0 12px 0',
+                            borderBottom: activeTab === 'general' ? '2px solid var(--color-text-primary)' : 'none',
+                            color: activeTab === 'general' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                            fontWeight: 500
+                        }}
+                    >
+                        {t('settings.general')}
+                    </button>
                     <button
                         className={`tab-btn ${activeTab === 'models' ? 'active' : ''}`}
                         onClick={() => setActiveTab('models')}
@@ -278,7 +306,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             fontWeight: 500
                         }}
                     >
-                        Model Hub
+                        {t('settings.model_hub')}
                     </button>
                     <button
                         className={`tab-btn ${activeTab === 'local' ? 'active' : ''}`}
@@ -294,12 +322,37 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             fontWeight: 500
                         }}
                     >
-                        Local Path
+                        {t('settings.local_path')}
                     </button>
                 </div>
 
                 {/* Content */}
                 <div style={{ padding: 24, overflowY: 'auto' }}>
+
+                    {activeTab === 'general' && (
+                        <div className="settings-group">
+                            <div className="settings-item">
+                                <label className="settings-label" style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{t('settings.language')}</label>
+                                <select
+                                    className="settings-input"
+                                    value={appLanguage}
+                                    onChange={(e) => setAppLanguage(e.target.value as 'auto' | 'en' | 'zh')}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        borderRadius: 6,
+                                        border: '1px solid var(--color-border)',
+                                        background: 'var(--color-bg-primary)',
+                                        color: 'var(--color-text-primary)'
+                                    }}
+                                >
+                                    <option value="auto">{t('common.auto')}</option>
+                                    <option value="en">English</option>
+                                    <option value="zh">中文</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
 
                     {activeTab === 'models' && (
                         <div className="model-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -310,7 +363,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 fontSize: '0.875rem',
                                 color: 'var(--color-text-muted)'
                             }}>
-                                Download a pre-trained model to start transcribing. These models are optimized for real-time speech recognition.
+                                {t('settings.download_desc')}
                             </div>
 
                             {PRESET_MODELS.map(model => (
@@ -333,19 +386,19 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             </div>
                                         </div>
                                         {installedModels.has(model.id) ? (
-                                            <div style={{ display: 'flex', gap: 8 }}>
+                                            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                                                 <button
                                                     className="btn btn-primary"
                                                     onClick={() => handleLoad(model)}
-                                                    style={{ minWidth: 80, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}
+                                                    style={{ width: 80, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
                                                 >
-                                                    <PlayIcon /> Load
+                                                    <PlayIcon /> {t('settings.load')}
                                                 </button>
                                                 <button
                                                     className="btn btn-secondary"
                                                     onClick={() => handleDelete(model)}
                                                     disabled={!!deletingId || !!downloadingId}
-                                                    style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', color: 'var(--color-error, #e53e3e)' }}
+                                                    style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', color: 'var(--color-error, #e53e3e)', whiteSpace: 'nowrap' }}
                                                     title="Delete model"
                                                 >
                                                     {deletingId === model.id ? (
@@ -360,9 +413,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 className="btn btn-secondary"
                                                 onClick={() => handleDownload(model)}
                                                 disabled={!!downloadingId}
-                                                style={{ minWidth: 100, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}
+                                                style={{ width: 120, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}
                                             >
-                                                {downloadingId === model.id ? 'Loading...' : <><DownloadIcon /> Download</>}
+
+                                                {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
                                             </button>
                                         )}
                                     </div>
@@ -386,7 +440,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     {activeTab === 'local' && (
                         <div className="settings-group">
                             <div className="settings-item">
-                                <label className="settings-label" style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>Sherpa-onnx Model Path</label>
+                                <label className="settings-label" style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>{t('settings.path_label')}</label>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <input
                                         type="text"
@@ -394,7 +448,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         className={`settings-input ${pathStatus === 'valid' ? 'valid' : pathStatus === 'invalid' ? 'invalid' : ''}`}
                                         value={modelPath}
                                         onChange={handlePathChange}
-                                        placeholder="C:\path\to\sherpa-onnx-models"
+                                        placeholder={t('settings.path_placeholder')}
                                         style={{
                                             flex: 1,
                                             padding: '8px 12px',
@@ -411,16 +465,16 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 <div className="settings-hint" style={{ marginTop: 8, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
                                     {pathStatus === 'valid' && (
                                         <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <CheckIcon /> Path is valid
+                                            <CheckIcon /> {t('settings.valid_path')}
                                         </span>
                                     )}
                                     {pathStatus === 'invalid' && (
                                         <span style={{ color: 'var(--color-error)' }}>
-                                            Path not found or invalid
+                                            {t('settings.invalid_path')}
                                         </span>
                                     )}
                                     {pathStatus === 'idle' && (
-                                        'Select the folder containing encoder.onnx, decoder.onnx, etc.'
+                                        t('settings.path_hint')
                                     )}
                                 </div>
                             </div>
@@ -428,9 +482,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
-                                        <div style={{ fontWeight: 500, marginBottom: 4 }}>Inverse Text Normalization (ITN)</div>
+                                        <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
                                         <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                                            Automatically convert Chinese numbers to digits (e.g. "一百二十三" → "123").
+                                            {t('settings.itn_desc')}
                                         </div>
                                     </div>
 
@@ -462,7 +516,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </button>
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 8 }}>
-                                    Note: SenseVoice models use internal ITN; others use JS-based conversion.
+                                    {t('settings.itn_note')}
                                 </div>
                             </div>
                         </div>
@@ -471,10 +525,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, padding: 24, borderTop: '1px solid var(--color-border)' }}>
                     <button className="btn btn-secondary" onClick={onClose}>
-                        Cancel
+                        {t('common.cancel')}
                     </button>
                     <button className="btn btn-primary" onClick={handleSave}>
-                        Save Settings
+                        {t('settings.save_button')}
                     </button>
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
@@ -47,6 +48,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
     onMergeWithNext,
     hasNext,
 }) => {
+    const { t } = useTranslation();
     const [editText, setEditText] = React.useState(segment.text);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -61,10 +63,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
-            // Don't select all textual content by default, just focus at end or start is usually better UX 
-            // but keeping select() if that was intended behavior, or better:
             inputRef.current.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length);
-            // inputRef.current.select(); // Original behavior
         }
     }, [isEditing]);
 
@@ -120,7 +119,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                 role="button"
                 tabIndex={0}
                 aria-label={`Seek to ${formatDisplayTime(segment.start)}`}
-                data-tooltip="Click to seek"
+                data-tooltip={t('editor.seek_tooltip')}
             >
                 {formatDisplayTime(segment.start)}
             </span>
@@ -150,7 +149,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                             e.stopPropagation();
                             onMergeWithNext(segment.id);
                         }}
-                        data-tooltip="Merge with next"
+                        data-tooltip={t('editor.merge_tooltip')}
                         aria-label="Merge with next segment"
                     >
                         <MergeIcon />
@@ -162,7 +161,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                         e.stopPropagation();
                         onDelete(segment.id);
                     }}
-                    data-tooltip="Delete segment"
+                    data-tooltip={t('editor.delete_tooltip')}
                     aria-label="Delete segment"
                 >
                     <TrashIcon />
@@ -177,6 +176,7 @@ interface TranscriptEditorProps {
 }
 
 export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) => {
+    const { t } = useTranslation();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
 
     const segments = useTranscriptStore((state) => state.segments);
@@ -239,7 +239,7 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
                 </svg>
-                <p>No transcript segments yet.<br />Start recording or import a file.</p>
+                <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
             </div>
         );
     }

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { Pause, Play, Square } from 'lucide-react';
@@ -22,6 +23,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
+    const { t } = useTranslation();
 
     // Format recording time
     const formatTime = (seconds: number) => {
@@ -155,7 +157,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         } catch (error) {
             console.error('Failed to start recording:', error);
-            alert('Failed to access microphone. Please check permissions.');
+            alert(t('live.mic_error'));
         }
     };
 
@@ -316,7 +318,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 color: 'var(--color-text)', transition: 'all 0.2s ease'
                             }}
-                            title={isPaused ? "Resume" : "Pause"}
+                            title={isPaused ? t('live.resume') : t('live.pause')}
                         >
                             {isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}
                         </button>
@@ -331,7 +333,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                                 boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
                                 transition: 'all 0.2s ease'
                             }}
-                            title="Stop"
+                            title={t('live.stop')}
                         >
                             <Square size={28} fill="white" color="white" />
                         </button>
@@ -341,8 +343,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
                 {isRecording
-                    ? (isPaused ? 'Recording Paused' : 'Recording... Click buttons to control')
-                    : 'Click red button to start recording'
+                    ? (isPaused ? t('live.recording_paused') : t('live.recording_active'))
+                    : t('live.start_hint')
                 }
             </p>
         </div>

@@ -52,6 +52,7 @@ interface TranscriptState {
 const DEFAULT_CONFIG: AppConfig = {
     modelPath: '',
     language: 'en',
+    appLanguage: 'auto',
     enableITN: false,
 };
 

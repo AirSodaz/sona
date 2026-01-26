@@ -38,6 +38,8 @@ export interface AppConfig {
   /** Selected language for transcription */
   /** Selected language for transcription */
   language: string;
+  /** Application UI language preference */
+  appLanguage: 'auto' | 'en' | 'zh';
   /** Enable Inverse Text Normalization (e.g. number conversion) */
   enableITN?: boolean;
 }

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -33,6 +34,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     const setProcessingStatus = useTranscriptStore((state) => state.setProcessingStatus);
     const setProcessingProgress = useTranscriptStore((state) => state.setProcessingProgress);
     const config = useTranscriptStore((state) => state.config);
+    const { t } = useTranslation();
 
 
 
@@ -56,7 +58,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 if (isSupported) {
                     processFile(filePath);
                 } else {
-                    alert('Unsupported file format. Please use: ' + ACCEPTED_EXTENSIONS.join(', '));
+                    alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }));
                 }
             }
             setIsDragOver(false);
@@ -126,7 +128,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
     const processFile = async (filePath: string) => {
         if (!config.modelPath) {
-            alert('Please configure a model in Settings first.');
+            alert(t('batch.no_model_error'));
             return;
         }
 
@@ -148,7 +150,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         } catch (error) {
             console.error('Transcription failed:', error);
             setProcessingStatus('error');
-            alert('Transcription failed: ' + error);
+            alert(t('batch.transcription_failed', { error }));
         }
     };
 
@@ -159,8 +161,8 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         return (
             <div className={`progress-container ${className}`}>
                 <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
-                    <h3>Processing Audio</h3>
-                    <p>Please wait while we transcribe your file...</p>
+                    <h3>{t('batch.processing_title')}</h3>
+                    <p>{t('batch.processing_desc')}</p>
                 </div>
                 <div className="progress-bar">
                     <div
@@ -169,7 +171,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                     />
                 </div>
                 <div className="progress-text">
-                    <span>Transcribing...</span>
+                    <span>{t('batch.transcribing')}</span>
                     <span>{Math.round(processingProgress)}%</span>
                 </div>
             </div>
@@ -206,16 +208,16 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 </div>
 
                 <div className="drop-zone-text">
-                    <h3>Select or Drop File</h3>
-                    <p>Drag and drop your audio or video file here, or click to browse from your computer.</p>
+                    <h3>{t('batch.drop_title')}</h3>
+                    <p>{t('batch.drop_desc')}</p>
                 </div>
 
                 <button className="btn btn-primary" style={{ marginTop: '8px', pointerEvents: 'none' }}>
-                    Select File
+                    {t('batch.select_file')}
                 </button>
 
                 <p className="supported-formats" style={{ marginTop: '8px' }}>
-                    Supports: {ACCEPTED_EXTENSIONS.join(', ')}
+                    {t('batch.supports', { formats: ACCEPTED_EXTENSIONS.join(', ') })}
                 </p>
             </div>
 
@@ -229,8 +231,8 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                     padding: '0 8px'
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 500 }}>Timeline Mode</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Split transcript by punctuation</span>
+                        <span style={{ fontWeight: 500 }}>{t('batch.timeline_mode')}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{t('batch.timeline_hint')}</span>
                     </div>
                     <button
                         onClick={() => setEnableTimeline(!enableTimeline)}

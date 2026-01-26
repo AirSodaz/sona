@@ -1,0 +1,79 @@
+{
+    "common": {
+        "cancel": "Cancel",
+        "save": "Save",
+        "delete": "Delete",
+        "download": "Download",
+        "loading": "Loading...",
+        "error": "Error",
+        "warning": "Warning",
+        "auto": "Automatic"
+    },
+    "header": {
+        "settings": "Settings"
+    },
+    "panel": {
+        "live_record": "Live Recording",
+        "batch_import": "Batch Import",
+        "transcript": "Transcript"
+    },
+    "live": {
+        "resume": "Resume",
+        "pause": "Pause",
+        "stop": "Stop",
+        "recording_paused": "Recording Paused",
+        "recording_active": "Recording... Click buttons to control",
+        "start_hint": "Click red button to start recording",
+        "mic_error": "Failed to access microphone. Please check permissions."
+    },
+    "batch": {
+        "processing_title": "Processing Audio",
+        "processing_desc": "Please wait while we transcribe your file...",
+        "transcribing": "Transcribing...",
+        "drop_title": "Select or Drop File",
+        "drop_desc": "Drag and drop your audio or video file here, or click to browse from your computer.",
+        "select_file": "Select File",
+        "supports": "Supports: {{formats}}",
+        "timeline_mode": "Timeline Mode",
+        "timeline_hint": "Split transcript by punctuation",
+        "unsupported_format": "Unsupported file format. Please use: {{formats}}",
+        "no_model_error": "Please configure a model in Settings first.",
+        "transcription_failed": "Transcription failed: {{error}}"
+    },
+    "editor": {
+        "empty_state": "No transcript segments yet.<br />Start recording or import a file.",
+        "seek_tooltip": "Click to seek",
+        "merge_tooltip": "Merge with next",
+        "delete_tooltip": "Delete segment"
+    },
+    "export": {
+        "button": "Export",
+        "exporting": "Exporting...",
+        "no_segments": "No segments to export",
+        "failed": "Failed to export transcript"
+    },
+    "settings": {
+        "title": "Settings",
+        "general": "General",
+        "language": "Language",
+        "model_hub": "Model Hub",
+        "local_path": "Local Path",
+        "download_desc": "Download a pre-trained model to start transcribing. These models are optimized for real-time speech recognition.",
+        "load": "Load",
+        "path_label": "Sherpa-onnx Model Path",
+        "path_placeholder": "C:\\path\\to\\sherpa-onnx-models",
+        "browse": "Browse",
+        "valid_path": "Path is valid",
+        "invalid_path": "Path not found or invalid",
+        "path_hint": "Select the folder containing encoder.onnx, decoder.onnx, etc.",
+        "itn_title": "Inverse Text Normalization (ITN)",
+        "itn_desc": "Automatically convert Chinese numbers to digits (e.g. \"一百二十三\" → \"123\").",
+        "itn_note": "Note: SenseVoice models use internal ITN; others use JS-based conversion.",
+        "delete_confirm_title": "Delete Model",
+        "delete_confirm_message": "Are you sure you want to delete {{name}}?",
+        "save_button": "Save Settings",
+        "download_starting": "Starting download...",
+        "download_complete": "Download complete!",
+        "download_failed": "Download failed: {{error}}"
+    }
+}

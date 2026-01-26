@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptEditor } from './components/TranscriptEditor';
@@ -30,6 +31,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
+  const { t } = useTranslation();
 
   const handleSeek = (time: number) => {
     seekAudio(time);
@@ -51,8 +53,8 @@ function App() {
           <button
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}
-            data-tooltip="Settings"
-            aria-label="Settings"
+            data-tooltip={t('header.settings')}
+            aria-label={t('header.settings')}
           >
             <SettingsIcon />
           </button>
@@ -65,7 +67,7 @@ function App() {
           {/* Left Panel - Input */}
           <div className="panel panel-left">
             <div className="panel-header">
-              <h2>{mode === 'live' ? 'Live Recording' : 'Batch Import'}</h2>
+              <h2>{mode === 'live' ? t('panel.live_record') : t('panel.batch_import')}</h2>
             </div>
             <div className="panel-content">
               {mode === 'live' ? <LiveRecord /> : <BatchImport />}
@@ -75,7 +77,7 @@ function App() {
           {/* Right Panel - Editor */}
           <div className="panel panel-right">
             <div className="panel-header">
-              <h2>Transcript</h2>
+              <h2>{t('panel.transcript')}</h2>
             </div>
             <div className="panel-content">
               <TranscriptEditor onSeek={handleSeek} />

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { saveTranscript } from '../utils/fileExport';
 import { ExportFormat } from '../utils/exportFormats';
@@ -40,6 +41,7 @@ interface ExportButtonProps {
 }
 
 export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -60,7 +62,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) =>
 
     const handleExport = async (format: ExportFormat) => {
         if (segments.length === 0) {
-            alert('No segments to export');
+            alert(t('export.no_segments'));
             return;
         }
 
@@ -75,7 +77,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) =>
             });
         } catch (error) {
             console.error('Export failed:', error);
-            alert('Failed to export transcript');
+            alert(t('export.failed'));
         } finally {
             setIsExporting(false);
         }
@@ -96,7 +98,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) =>
                 disabled={isExporting || segments.length === 0}
             >
                 <DownloadIcon />
-                <span>{isExporting ? 'Exporting...' : 'Export'}</span>
+                <span>{isExporting ? t('export.exporting') : t('export.button')}</span>
                 <ChevronDownIcon />
             </button>
 
