@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const NODE_VERSION = 'v20.18.0';
+const NODE_VERSION = 'v22.22.0';
 
 // Map Node.js platform/arch to Rust target triple
 const TARGETS = {
@@ -57,7 +57,7 @@ async function downloadFile(url, dest) {
         resolve();
       });
     }).on('error', (err) => {
-      fs.unlink(dest, () => {});
+      fs.unlink(dest, () => { });
       reject(err);
     });
   });
