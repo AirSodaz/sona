@@ -140,22 +140,30 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 function findTimestampForChar(segment: TranscriptSegment, charIndex: number): number | undefined {
     if (!segment.tokens || !segment.timestamps) return undefined;
 
-    // Calculate effective index (ignoring whitespace) to handle drift between text and tokens
-    // (e.g. text has spaces that are not present or accounted for in token lengths)
+    // Calculate effective index (ignoring whitespace AND punctuation) to handle drift between text and tokens.
+    // This is crucial because text typically has punctuation added by a separate model, while tokens (ASR output) do not.
+    // If we count punctuation in text index but not in token length, we drift forward and match later tokens incorrectly.
     const textUpToChar = segment.text.slice(0, charIndex);
-    const effectiveIndex = textUpToChar.replace(/\s/g, '').length;
+    // Use Unicode property escape to strip all punctuation and separator characters
+    const effectiveIndex = textUpToChar.replace(/[\s\p{P}]+/gu, '').length;
 
     let currentLen = 0;
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
 
+        // We also strip punctuation from the token itself, just in case the model DOES output punctuation
+        // (so we compare apples to apples: content characters only).
+        const tokenLen = token.replace(/[\s\p{P}]+/gu, '').length;
+
+        // Skip tokens that become empty after stripping (e.g. if token is just ".")
+        if (tokenLen === 0) continue;
+
         // Check if the token covers the effective index
-        // We assume tokens correspond to the non-whitespace content of the text.
-        if (effectiveIndex >= currentLen && effectiveIndex < currentLen + token.length) {
+        if (effectiveIndex >= currentLen && effectiveIndex < currentLen + tokenLen) {
             return segment.timestamps[i];
         }
 
-        currentLen += token.length;
+        currentLen += tokenLen;
     }
 
     // If we're past the end, return the last timestamp or undefined
