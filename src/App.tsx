@@ -82,6 +82,7 @@ function App() {
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}
             data-tooltip={t('header.settings')}
+            data-tooltip-pos="bottom-left"
             aria-label={t('header.settings')}
           >
             <SettingsIcon />

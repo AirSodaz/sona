@@ -306,6 +306,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                             onClick={onClose}
                             aria-label={t('common.close')}
                             data-tooltip={t('common.close')}
+                            data-tooltip-pos="bottom-left"
                         >
                             <XIcon />
                         </button>
