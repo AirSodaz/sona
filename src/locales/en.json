@@ -8,6 +8,8 @@
         "error": "Error",
         "warning": "Warning",
         "auto": "Automatic",
+        "installed": "Installed",
+        "not_installed": "Not Installed",
         "close": "Close"
     },
     "header": {
@@ -77,7 +79,7 @@
         "theme_light": "Light",
         "theme_dark": "Dark",
         "model_hub": "Model Hub",
-        "local_path": "Local Path",
+        "local_path": "Model Settings",
         "download_desc": "Download a pre-trained model to start transcribing. These models are optimized for real-time speech recognition.",
         "load": "Load",
         "path_label": "Sherpa Model Path",
@@ -99,7 +101,10 @@
         "streaming_models": "Streaming Models",
         "offline_path_label": "Offline Model Path",
         "streaming_path_label": "Streaming Model Path",
+        "punctuation_path_label": "Punctuation Model Path",
         "font": "Font",
-        "font_system": "System Default"
+        "font_system": "System Default",
+        "punctuation_models": "Punctuation Models",
+        "itn_model_status": "ITN Model Status"
     }
 }

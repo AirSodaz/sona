@@ -573,7 +573,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 ))}
 
-                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>Punctuation Models</div>
+                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.punctuation_models')}</div>
                                 {PRESET_MODELS.filter(m => m.type === 'punctuation').map(model => (
                                     <div key={model.id} className="model-card">
                                         <div className="model-card-header">
@@ -680,7 +680,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">Punctuation Model Path</label>
+                                    <label className="settings-label">{t('settings.punctuation_path_label')}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
                                             type="text"
