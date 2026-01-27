@@ -21,3 +21,7 @@
 ## 2025-03-05 - [Tauri Sidecar Stream Buffering]
 **Learning:** Data from Tauri's `Command` stdout/stderr events is chunked and not guaranteed to be line-aligned. Parsing chunks as JSON directly (`JSON.parse(chunk)`) fails randomly when chunks are split, causing data loss and performance penalties from exception handling.
 **Action:** Always implement a line buffer when processing text streams from sidecars. Accumulate chunks, split by newline, and only process complete lines.
+
+## 2025-03-09 - [Zustand Subscribe vs Selectors]
+**Learning:** Using `useStore(state => state.value)` triggers a component re-render whenever the selected value changes. For high-frequency updates that only trigger side effects (like auto-scrolling on playback), this causes unnecessary re-renders of heavy components (like virtualized lists).
+**Action:** Use `useStore.subscribe` inside a `useEffect` to handle side effects of frequent state changes without triggering component re-renders.
