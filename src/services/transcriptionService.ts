@@ -3,6 +3,7 @@ import { Command, Child } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
+import { StreamLineBuffer } from '../utils/streamBuffer';
 
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 export type ErrorCallback = (error: string) => void;
@@ -87,8 +88,16 @@ class TranscriptionService {
 
             const command = Command.sidecar('binaries/node', args);
 
+            // Buffer for stdout stream
+            const stdoutBuffer = new StreamLineBuffer();
+
             command.on('close', (data) => {
                 console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
+
+                // Process any remaining data
+                const remaining = stdoutBuffer.flush();
+                remaining.forEach(line => this.handleOutput(line));
+
                 this.isRunning = false;
                 this.child = null;
             });
@@ -99,12 +108,15 @@ class TranscriptionService {
                 this.isRunning = false;
             });
 
-            command.stdout.on('data', (line) => {
-                this.handleOutput(line);
+            command.stdout.on('data', (chunk) => {
+                if (typeof chunk === 'string') {
+                    const lines = stdoutBuffer.process(chunk);
+                    lines.forEach(line => this.handleOutput(line));
+                }
             });
 
-            command.stderr.on('data', (line) => {
-                console.log(`[TranscriptionService] stderr: ${line}`);
+            command.stderr.on('data', (chunk) => {
+                console.log(`[TranscriptionService] stderr: ${chunk}`);
             });
 
             this.child = await command.spawn();
@@ -230,6 +242,7 @@ class TranscriptionService {
 
                 let stdoutBuffer = '';
                 let stderrBuffer = '';
+                const stderrStreamBuffer = new StreamLineBuffer();
 
                 command.on('close', (data) => {
                     console.log(`[Batch] Sidecar finished with code ${data.code}`);
@@ -282,22 +295,30 @@ class TranscriptionService {
                     reject(new Error(`Process error: ${error}`));
                 });
 
-                command.stdout.on('data', (line) => {
-                    stdoutBuffer += line + '\n';
+                command.stdout.on('data', (chunk) => {
+                    if (typeof chunk === 'string') {
+                        stdoutBuffer += chunk;
+                    }
                 });
 
-                command.stderr.on('data', (line) => {
-                    stderrBuffer += line + '\n';
-                    // Parse progress from stderr
-                    try {
-                        const data = JSON.parse(line);
-                        if (data.type === 'progress' && typeof data.percentage === 'number') {
-                            if (onProgress) onProgress(data.percentage);
-                        }
-                    } catch (e) {
-                        // Not JSON or not progress
+                command.stderr.on('data', (chunk) => {
+                    if (typeof chunk === 'string') {
+                        stderrBuffer += chunk;
+
+                        const lines = stderrStreamBuffer.process(chunk);
+                        lines.forEach(line => {
+                            // Parse progress from stderr lines
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.type === 'progress' && typeof data.percentage === 'number') {
+                                    if (onProgress) onProgress(data.percentage);
+                                }
+                            } catch (e) {
+                                // Not JSON or not progress
+                            }
+                            console.log(`[Batch] stderr: ${line}`);
+                        });
                     }
-                    console.log(`[Batch] stderr: ${line}`);
                 });
 
                 await command.spawn();
