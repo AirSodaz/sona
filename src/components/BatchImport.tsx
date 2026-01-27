@@ -182,7 +182,9 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 transcriptionService.setPunctuationModelPath('');
             }
 
-            const segments = await transcriptionService.transcribeFile(filePath);
+            const segments = await transcriptionService.transcribeFile(filePath, (progress) => {
+                setProcessingProgress(progress);
+            });
 
             useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);
             setProcessingStatus('complete');

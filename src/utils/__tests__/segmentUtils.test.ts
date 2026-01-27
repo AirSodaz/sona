@@ -96,17 +96,6 @@ describe('splitByPunctuation', () => {
         // If we count punctuation in text index but not in token length,
         // the index drifts forward and misses the correct token.
 
-        const segment: TranscriptSegment = {
-            id: 'repro-1',
-            text: 'Hello!!!!!! World.',
-            start: 0,
-            end: 2.0,
-            isFinal: true,
-            // Tokens DO NOT include punctuation
-            tokens: ['Hello', 'World'],
-            timestamps: [0.0, 1.0]
-        };
-
         // Expected split:
         // 1. "Hello!!!!!!" (approx end?)
         // 2. "World." (Start time MUST be 1.0, matching "World" token)

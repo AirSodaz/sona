@@ -646,9 +646,23 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
 
         console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
         const stream = recognizer.createStream();
-        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
 
-        recognizer.decode(stream);
+        // Chunking Strategy
+        const chunkDuration = 0.5; // seconds
+        const chunkSize = Math.floor(sampleRate * chunkDuration);
+
+        for (let i = 0; i < samples.length; i += chunkSize) {
+            const end = Math.min(i + chunkSize, samples.length);
+            const chunk = samples.slice(i, end); // Create a new Float32Array view/copy
+
+            stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
+            recognizer.decode(stream);
+
+            // Progress Report
+            const progress = Math.min(100, Math.round((end / samples.length) * 100));
+            console.error(JSON.stringify({ type: 'progress', percentage: progress }));
+        }
+
         const result = recognizer.getResult(stream);
         const segments = [];
 

@@ -179,19 +179,19 @@ class TranscriptionService {
     /**
      * Transcribe an audio file in batch mode
      */
-    async transcribeFile(filePath: string): Promise<TranscriptSegment[]> {
+    async transcribeFile(filePath: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
         try {
-            return await this._transcribeFileInternal(filePath);
+            return await this._transcribeFileInternal(filePath, undefined, onProgress);
         } catch (error: any) {
             if (error.message === 'COREML_FAILURE') {
                 console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
-                return await this._transcribeFileInternal(filePath, 'cpu');
+                return await this._transcribeFileInternal(filePath, 'cpu', onProgress);
             }
             throw error;
         }
     }
 
-    private async _transcribeFileInternal(filePath: string, provider?: string): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
@@ -288,7 +288,15 @@ class TranscriptionService {
 
                 command.stderr.on('data', (line) => {
                     stderrBuffer += line + '\n';
-                    // We could parse progress from stderr here if we wanted
+                    // Parse progress from stderr
+                    try {
+                        const data = JSON.parse(line);
+                        if (data.type === 'progress' && typeof data.percentage === 'number') {
+                            if (onProgress) onProgress(data.percentage);
+                        }
+                    } catch (e) {
+                        // Not JSON or not progress
+                    }
                     console.log(`[Batch] stderr: ${line}`);
                 });
 
