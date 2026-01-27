@@ -59,9 +59,11 @@
     "editor": {
         "empty_state": "暂无转录内容。<br />开始录音或导入文件。",
         "seek_tooltip": "点击跳转",
+        "edit_tooltip": "编辑段落",
         "merge_tooltip": "合并下一段",
         "delete_tooltip": "删除段落",
         "seek_label": "跳转至 {{time}}",
+        "edit_label": "编辑 {{time}} 处的段落",
         "merge_label": "合并 {{time}} 处的段落与下一段",
         "delete_label": "删除 {{time}} 处的段落"
     },
