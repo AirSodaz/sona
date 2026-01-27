@@ -27,12 +27,18 @@ vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
         { id: 'test-model', name: 'Test Model', language: 'en', type: 'streaming', size: '100MB', description: 'Test', engine: 'onnx' }
     ],
+    ITN_MODELS: [
+        { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst' }
+    ],
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false),
+        isITNModelInstalled: vi.fn().mockResolvedValue(false),
         checkHardware: vi.fn().mockResolvedValue({ compatible: true }),
         downloadModel: vi.fn(),
         getModelPath: vi.fn(),
         deleteModel: vi.fn(),
+        getITNModelPath: vi.fn(),
+        downloadITNModel: vi.fn(),
     }
 }));
 
@@ -91,7 +97,7 @@ describe('Settings', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
 
         // Find close button (X icon usually has aria-label="Close")
-        const closeBtn = screen.getByLabelText('Close');
+        const closeBtn = screen.getByLabelText('common.close');
         fireEvent.click(closeBtn);
 
         expect(onClose).toHaveBeenCalled();
@@ -106,9 +112,13 @@ describe('Settings', () => {
         expect(mockSetConfig).toHaveBeenCalledWith({
             streamingModelPath: '/test/streaming',
             offlineModelPath: '/test/offline',
+            punctuationModelPath: '',
             enableITN: true,
+            enabledITNModels: ['itn-zh-number'],
+            itnRulesOrder: ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
             appLanguage: 'auto',
-            theme: 'auto'
+            theme: 'auto',
+            font: 'system'
         });
         expect(onClose).toHaveBeenCalled();
     });
