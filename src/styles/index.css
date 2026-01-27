@@ -726,7 +726,8 @@ input[type="radio"]:focus {
   justify-content: flex-end;
 }
 
-.transcript-segment:hover .segment-actions {
+.transcript-segment:hover .segment-actions,
+.segment-actions:focus-within {
   opacity: 1;
 }
 

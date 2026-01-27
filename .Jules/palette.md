@@ -29,3 +29,7 @@
 ## 2025-10-27 - Accessible Modals
 **Learning:** Custom modals built with `div`s often lack the `dialog` role, making them confusing for screen reader users who don't know they are in a modal.
 **Action:** Always add `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` (pointing to the modal title) to the modal container.
+
+## 2026-01-29 - Container Visibility on Focus
+**Learning:** When a container is hidden by default (opacity 0) and shown on hover, child focusable elements remain invisible when tabbed into.
+**Action:** Use `.container:focus-within { opacity: 1; }` to reveal the container when any child receives focus.
