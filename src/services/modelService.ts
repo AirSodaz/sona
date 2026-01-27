@@ -349,6 +349,37 @@ class ModelService {
         return await join(modelsDir, model.filename);
     }
 
+    /**
+     * Efficiently resolve paths for all enabled ITN models in parallel.
+     * Respects the provided order.
+     */
+    async getEnabledITNModelPaths(enabledModels: Set<string>, order: string[]): Promise<string[]> {
+        const modelsDir = await this.getModelsDir();
+
+        // 1. Models in the specified order
+        const orderedModels = order.filter(id => enabledModels.has(id));
+
+        // 2. Any other enabled models not in the order (fallback)
+        const remainingModels = Array.from(enabledModels).filter(id => !order.includes(id));
+
+        const allModelsToCheck = [...orderedModels, ...remainingModels];
+
+        // Parallelize file system checks
+        const results = await Promise.all(allModelsToCheck.map(async (id) => {
+            const model = ITN_MODELS.find(m => m.id === id);
+            if (!model) return null;
+
+            // Construct path manually to avoid re-calling getModelsDir
+            const path = await join(modelsDir, model.filename);
+            if (await exists(path)) {
+                return path;
+            }
+            return null;
+        }));
+
+        return results.filter((p): p is string => p !== null);
+    }
+
     async isITNModelInstalled(modelId: string): Promise<boolean> {
         const path = await this.getITNModelPath(modelId);
         return await exists(path);

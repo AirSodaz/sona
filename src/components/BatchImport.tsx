@@ -156,22 +156,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             if (enabledITNModels.size > 0) {
                 try {
-                    const paths: string[] = [];
-                    for (const modelId of itnRulesOrder) {
-                        if (enabledITNModels.has(modelId)) {
-                            if (await modelService.isITNModelInstalled(modelId)) {
-                                paths.push(await modelService.getITNModelPath(modelId));
-                            }
-                        }
-                    }
-                    // Handle enabled but not in order (fallback)
-                    for (const modelId of enabledITNModels) {
-                        if (!itnRulesOrder.includes(modelId)) {
-                            if (await modelService.isITNModelInstalled(modelId)) {
-                                paths.push(await modelService.getITNModelPath(modelId));
-                            }
-                        }
-                    }
+                    const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
                     transcriptionService.setITNModelPaths(paths);
                 } catch (e) { }
             }
