@@ -20,6 +20,7 @@ vi.mock('../../services/modelService', () => ({
     modelService: {
         isITNModelInstalled: vi.fn().mockResolvedValue(false),
         getITNModelPath: vi.fn().mockResolvedValue('/path/to/itn'),
+        getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/path/to/itn']),
     }
 }));
 

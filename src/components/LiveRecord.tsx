@@ -290,24 +290,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         if (enabledITNModels.size > 0) {
             try {
-                const paths: string[] = [];
-                // Use Set for fast lookup, iterate over ORDER
-                for (const modelId of itnRulesOrder) {
-                    if (enabledITNModels.has(modelId)) {
-                        if (await modelService.isITNModelInstalled(modelId)) {
-                            paths.push(await modelService.getITNModelPath(modelId));
-                        }
-                    }
-                }
-                // Also check if any enabled models are NOT in the order (unlikely but safe)
-                for (const modelId of enabledITNModels) {
-                    if (!itnRulesOrder.includes(modelId)) {
-                        if (await modelService.isITNModelInstalled(modelId)) {
-                            paths.push(await modelService.getITNModelPath(modelId));
-                        }
-                    }
-                }
-
+                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
                 transcriptionService.setITNModelPaths(paths);
             } catch (e) {
                 console.warn('[LiveRecord] Failed to setup ITN paths:', e);
