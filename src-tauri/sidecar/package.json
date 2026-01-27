@@ -11,8 +11,10 @@
         "build": "node build.mjs"
     },
     "dependencies": {
+        "7zip-bin": "^5.2.0",
         "esbuild": "^0.27.2",
         "ffmpeg-static": "^5.2.0",
+        "node-7z": "^3.0.0",
         "nzh": "^1.0.14",
         "sherpa-ncnn": "^2.1.12",
         "sherpa-onnx-node": "^1.12.23",

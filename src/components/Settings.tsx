@@ -94,6 +94,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
+    const [statusMessage, setStatusMessage] = useState('');
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
 
 
@@ -180,8 +181,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setProgress(0);
 
         try {
-            const downloadedPath = await modelService.downloadModel(model.id, (pct) => {
+            const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
                 setProgress(pct);
+                setStatusMessage(status);
             });
 
             setModelPathByType(model.type, downloadedPath);
@@ -441,7 +443,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                <div className="progress-info-mini">
+                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                    <span>{progress}%</span>
+                                                </div>
+                                                <div className="progress-bar-mini">
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -493,7 +501,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                <div className="progress-info-mini">
+                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                    <span>{progress}%</span>
+                                                </div>
+                                                <div className="progress-bar-mini">
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                </div>
                                             </div>
                                         )}
                                     </div>

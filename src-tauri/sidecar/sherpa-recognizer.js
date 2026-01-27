@@ -23,6 +23,7 @@ import Nzh from 'nzh';
 // For ES modules
 const __scriptFile = fileURLToPath(import.meta.url);
 const __scriptDir = dirname(__scriptFile);
+const Seven = require('node-7z');
 
 // Parse command line arguments
 function parseArgs() {
@@ -35,7 +36,9 @@ function parseArgs() {
         enableITN: true,
         provider: null, // auto-detect if null
         allowMock: false,
+        allowMock: false,
         numThreads: null,
+        targetDir: null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -63,6 +66,9 @@ function parseArgs() {
                 break;
             case '--num-threads':
                 options.numThreads = parseInt(args[++i], 10);
+                break;
+            case '--target-dir':
+                options.targetDir = args[++i];
                 break;
         }
     }
@@ -485,6 +491,92 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
     }
 }
 
+async function processExtraction(archivePath, targetDir) {
+    const sevenZipPath = join(__scriptDir, process.platform === 'win32' ? '7za.exe' : '7za');
+
+    if (!existsSync(sevenZipPath)) {
+        throw new Error(`7zip binary not found at ${sevenZipPath}`);
+    }
+
+    if (!existsSync(archivePath)) {
+        throw new Error(`Archive not found: ${archivePath}`);
+    }
+
+    // Ensure target dir exists
+    if (!existsSync(targetDir)) {
+        // We can create it or let 7zip do it, but careful with paths
+        // mkdirSync(targetDir, { recursive: true });
+    }
+
+    return new Promise((resolve, reject) => {
+        const stream = Seven.extractFull(archivePath, targetDir, {
+            $bin: sevenZipPath,
+            $progress: true,
+            // recursive: true // extractFull is recursive
+        });
+
+        stream.on('progress', (progress) => {
+            console.log(JSON.stringify({
+                percentage: progress.percent,
+                status: progress.file || 'Extracting...',
+                type: 'progress'
+            }));
+        });
+
+        stream.on('end', async () => {
+            // Check if we extracted a .tar file (common with .tar.bz2)
+            const files = readdirSync(targetDir);
+            const tarFile = files.find(f => f.endsWith('.tar'));
+
+            if (tarFile) {
+                const tarPath = join(targetDir, tarFile);
+                console.error(`[Sidecar] Found .tar file after extraction: ${tarFile}. Extracting again...`);
+
+                // Extract the tar
+                try {
+                    await new Promise((resolveTar, rejectTar) => {
+                        const streamTar = Seven.extractFull(tarPath, targetDir, {
+                            $bin: sevenZipPath,
+                            $progress: true
+                        });
+
+                        streamTar.on('progress', (p) => {
+                            console.log(JSON.stringify({
+                                percentage: p.percent,
+                                status: `Extracting tar: ${p.file || ''}`,
+                                type: 'progress'
+                            }));
+                        });
+
+                        streamTar.on('end', () => resolveTar());
+                        streamTar.on('error', (err) => rejectTar(err));
+                    });
+
+                    // Delete the intermediate .tar
+                    try {
+                        const fs = require('fs');
+                        fs.unlinkSync(tarPath);
+                    } catch (e) { }
+
+                    console.log(JSON.stringify({ done: true }));
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            } else {
+                console.log(JSON.stringify({ done: true }));
+                resolve();
+            }
+        });
+
+        stream.on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
+
+
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
@@ -648,6 +740,21 @@ async function ensureLibraryPath() {
 async function main() {
     if (await ensureLibraryPath()) return;
     const options = parseArgs();
+
+    if (options.mode === 'extract') {
+        if (!options.file || !options.targetDir) {
+            console.error(JSON.stringify({ error: 'File and Target Directory required for extraction' }));
+            process.exit(1);
+        }
+        try {
+            await processExtraction(options.file, options.targetDir);
+            process.exit(0);
+        } catch (e) {
+            console.error(JSON.stringify({ error: e.message || String(e) }));
+            process.exit(1);
+        }
+    }
+
 
     if (!options.modelPath) {
         console.error(JSON.stringify({ error: 'Model path is required.' }));

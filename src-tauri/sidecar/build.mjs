@@ -94,7 +94,7 @@ if (existsSync(nodeFileSrc)) {
         const modulesDir = join(__dirname, 'node_modules');
         const dirs = fs.readdirSync(modulesDir).filter(d => d.startsWith('sherpa-onnx-'));
         console.log('Available sherpa-onnx modules:', dirs);
-    } catch (e) {}
+    } catch (e) { }
     process.exit(1);
 }
 
@@ -123,10 +123,10 @@ if (existsSync(ncnnDir)) {
     const files = readdirSync(ncnnDir);
     for (const file of files) {
         if (file.endsWith('.wasm') || (file.endsWith('.js') && file !== 'index.js')) {
-             // We copy helper JS files (like the wasm loader) to be safe,
-             // though if bundled, they might be inlined.
-             // But usually WASM loaders are sensitive to path.
-             // We'll verify if 'sherpa-ncnn.js' or others are needed alongside.
+            // We copy helper JS files (like the wasm loader) to be safe,
+            // though if bundled, they might be inlined.
+            // But usually WASM loaders are sensitive to path.
+            // We'll verify if 'sherpa-ncnn.js' or others are needed alongside.
             copyFileSync(join(ncnnDir, file), join(distDir, file));
             console.log(`Copied ${file} to dist/`);
         }
@@ -135,4 +135,23 @@ if (existsSync(ncnnDir)) {
     console.warn('Could not find sherpa-ncnn module to copy assets from.');
 }
 
+
+// 5. Copy 7zip
+console.log('Copying 7zip...');
+let sevenZipSrc;
+try {
+    sevenZipSrc = require('7zip-bin').path7za;
+} catch (e) {
+    console.error('Failed to resolve 7zip-bin:', e);
+}
+
+if (sevenZipSrc && existsSync(sevenZipSrc)) {
+    const destName = platform === 'win32' ? '7za.exe' : '7za';
+    copyFileSync(sevenZipSrc, join(distDir, destName));
+    console.log(`Copied 7zip to dist/${destName}`);
+} else {
+    console.warn('Could not find 7zip binary');
+}
+
 console.log('Build complete.');
+
