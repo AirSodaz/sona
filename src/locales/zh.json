@@ -32,7 +32,8 @@
         "source_microphone": "麦克风",
         "source_desktop": "桌面音频",
         "source_file": "音频文件模拟",
-        "source_select": "选择输入源"
+        "source_select": "选择输入源",
+        "visualizer_label": "音频可视化"
     },
     "batch": {
         "processing_title": "处理音频中",
