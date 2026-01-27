@@ -34,12 +34,16 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
         let currentText = "";
         let currentSegmentStart = currentStart;
+        let lastTokenIndex = 0; // Optimization: hint for the next search
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
             // Calculate effective length of this part to update the running index
             // We use the same regex as in buildTokenMap to ensure consistency
-            const partEffectiveLen = part.replace(/[\s\p{P}]+/gu, '').length;
+            // Optimization: Avoid allocation if no punctuation/space
+            const partEffectiveLen = /[\s\p{P}]/u.test(part)
+                ? part.replace(/[\s\p{P}]+/gu, '').length
+                : part.length;
 
             if (splitRegex.test(part)) {
                 // It's punctuation
@@ -48,10 +52,11 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 let segmentEnd: number;
 
                 if (hasTimestamps && tokenMap) {
-                    const lastTokenTimestamp = findTimestampFromMap(tokenMap, effectiveCharIndex);
+                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
 
-                    if (lastTokenTimestamp !== undefined) {
-                        segmentEnd = lastTokenTimestamp + 0.2;
+                    if (found) {
+                        segmentEnd = found.timestamp + 0.2;
+                        lastTokenIndex = found.index;
                     } else {
                         // Fallback
                         segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
@@ -77,10 +82,11 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                     if (hasTimestamps && tokenMap) {
                         // Find timestamp for charIndex (which is now start of next part)
                         // Effective index is updated.
-                        const nextTokenTimestamp = findTimestampFromMap(tokenMap, effectiveCharIndex);
-                        if (nextTokenTimestamp !== undefined) {
-                            currentSegmentStart = nextTokenTimestamp;
-                            currentStart = nextTokenTimestamp;
+                        const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
+                        if (found) {
+                            currentSegmentStart = found.timestamp;
+                            currentStart = found.timestamp;
+                            lastTokenIndex = found.index;
                         } else {
                             currentSegmentStart = currentStart;
                         }
@@ -94,9 +100,10 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 // It's content
 
                 if (currentText === "" && hasTimestamps && tokenMap) {
-                    const preciseStart = findTimestampFromMap(tokenMap, effectiveCharIndex);
-                    if (preciseStart !== undefined) {
-                        currentSegmentStart = preciseStart;
+                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
+                    if (found) {
+                        currentSegmentStart = found.timestamp;
+                        lastTokenIndex = found.index;
                     }
                 }
 
@@ -137,10 +144,16 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     const timestamps: number[] = [];
 
     let currentLen = 0;
+    const punctRegex = /[\s\p{P}]/u;
+    const punctReplaceRegex = /[\s\p{P}]+/gu;
+
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
         // Strip punctuation and whitespace
-        const tokenLen = token.replace(/[\s\p{P}]+/gu, '').length;
+        // Optimization: Check for punctuation first to avoid unnecessary allocation
+        const tokenLen = punctRegex.test(token)
+            ? token.replace(punctReplaceRegex, '').length
+            : token.length;
 
         if (tokenLen > 0) {
             startIndices.push(currentLen);
@@ -153,13 +166,32 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     return { startIndices, endIndices, timestamps };
 }
 
-function findTimestampFromMap(map: TokenMap, effectiveIndex: number): number | undefined {
+function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: number = 0): { timestamp: number, index: number } | undefined {
+    // Check hint first for O(1) access
+    if (hintIndex < map.startIndices.length) {
+        if (map.startIndices[hintIndex] <= effectiveIndex && effectiveIndex < map.endIndices[hintIndex]) {
+            return { timestamp: map.timestamps[hintIndex], index: hintIndex };
+        }
+        // Check next token (common case for sequential access)
+        const next = hintIndex + 1;
+        if (next < map.startIndices.length) {
+            if (map.startIndices[next] <= effectiveIndex && effectiveIndex < map.endIndices[next]) {
+                return { timestamp: map.timestamps[next], index: next };
+            }
+        }
+    }
+
     // Binary search to find the token that covers effectiveIndex
     // We are looking for idx where startIndices[idx] <= effectiveIndex < endIndices[idx]
 
-    let left = 0;
+    let left = hintIndex;
     let right = map.startIndices.length - 1;
     let idx = -1;
+
+    // If hint was past the target (shouldn't happen with sequential access), reset left
+    if (left > right || (left < map.startIndices.length && map.startIndices[left] > effectiveIndex)) {
+        left = 0;
+    }
 
     // Find rightmost start <= effectiveIndex
     while (left <= right) {
@@ -175,7 +207,7 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number): number | u
     if (idx !== -1) {
         // Check if effectiveIndex is strictly within this token (or at start)
         if (effectiveIndex < map.endIndices[idx]) {
-            return map.timestamps[idx];
+            return { timestamp: map.timestamps[idx], index: idx };
         }
     }
     return undefined;

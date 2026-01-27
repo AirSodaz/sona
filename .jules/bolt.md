@@ -13,3 +13,7 @@
 ## 2025-05-24 - [Canvas Gradient Allocation]
 **Learning:** Creating `CanvasGradient` objects in a `requestAnimationFrame` loop (e.g. for audio visualization) generates massive garbage collection pressure (~60k allocations/sec for 1024 bars).
 **Action:** Cache gradients based on discrete values (e.g., 0-255 for audio data) and canvas dimensions. Invalidate the cache only when dimensions change.
+
+## 2025-02-27 - [Regex Replace vs Test]
+**Learning:** `String.prototype.replace(regex, '')` allocates a new string even if no replacement occurs (depending on the engine, but observed overhead exists). For operations run in tight loops (e.g. 10k+ times), checking `regex.test()` first can save significant time (~50% speedup) if the match frequency is low.
+**Action:** When cleaning strings in a loop where the target pattern is rare, guard `replace` with `test` to avoid unnecessary allocations.
