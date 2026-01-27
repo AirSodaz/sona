@@ -70,7 +70,6 @@ class TranscriptionService {
                 scriptPath,
                 '--mode', 'stream',
                 '--model-path', this.modelPath,
-                '--model-path', this.modelPath,
                 '--enable-itn', this.enableITN.toString()
             ];
 
@@ -207,7 +206,6 @@ class TranscriptionService {
                     scriptPath,
                     '--mode', 'batch',
                     '--file', filePath,
-                    '--model-path', this.modelPath,
                     '--model-path', this.modelPath,
                     '--enable-itn', this.enableITN.toString()
                 ];

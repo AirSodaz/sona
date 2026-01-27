@@ -36,9 +36,7 @@ function parseArgs() {
         enableITN: true,
         provider: null, // auto-detect if null
         allowMock: false,
-        allowMock: false,
         numThreads: null,
-        targetDir: null,
         targetDir: null,
         itnModel: null,
         punctuationModel: null,
