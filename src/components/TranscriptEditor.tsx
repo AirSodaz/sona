@@ -164,7 +164,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                             onMergeWithNext(segment.id);
                         }}
                         data-tooltip={t('editor.merge_tooltip')}
-                        aria-label={t('editor.merge_label')}
+                        aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
                     >
                         <MergeIcon />
                     </button>
@@ -176,7 +176,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                         onDelete(segment.id);
                     }}
                     data-tooltip={t('editor.delete_tooltip')}
-                    aria-label={t('editor.delete_label')}
+                    aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
                 >
                     <TrashIcon />
                 </button>

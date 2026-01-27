@@ -62,8 +62,8 @@
         "merge_tooltip": "合并下一段",
         "delete_tooltip": "删除段落",
         "seek_label": "跳转至 {{time}}",
-        "merge_label": "合并下一段",
-        "delete_label": "删除段落"
+        "merge_label": "合并 {{time}} 处的段落与下一段",
+        "delete_label": "删除 {{time}} 处的段落"
     },
     "export": {
         "button": "导出",
