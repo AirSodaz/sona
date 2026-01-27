@@ -140,15 +140,18 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 function findTimestampForChar(segment: TranscriptSegment, charIndex: number): number | undefined {
     if (!segment.tokens || !segment.timestamps) return undefined;
 
+    // Calculate effective index (ignoring whitespace) to handle drift between text and tokens
+    // (e.g. text has spaces that are not present or accounted for in token lengths)
+    const textUpToChar = segment.text.slice(0, charIndex);
+    const effectiveIndex = textUpToChar.replace(/\s/g, '').length;
+
     let currentLen = 0;
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
-        // If currentLen matches the charIndex, this token likely starts at the charIndex
-        // (This assumes tokens map to text without extra spaces not accounted for, 
-        // which might be tricky depending on tokenizer, but usually works for simple cases)
-        // Sherpa-onnx tokens usually reconstruct to the text.
 
-        if (currentLen >= charIndex) {
+        // Check if the token covers the effective index
+        // We assume tokens correspond to the non-whitespace content of the text.
+        if (effectiveIndex >= currentLen && effectiveIndex < currentLen + token.length) {
             return segment.timestamps[i];
         }
 
