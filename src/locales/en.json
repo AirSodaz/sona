@@ -25,7 +25,8 @@
         "recording_paused": "Recording Paused",
         "recording_active": "Recording... Click buttons to control",
         "start_hint": "Click red button to start recording",
-        "mic_error": "Failed to access microphone. Please check permissions."
+        "mic_error": "Failed to access microphone. Please check permissions.",
+        "start_recording": "Start Recording"
     },
     "batch": {
         "processing_title": "Processing Audio",

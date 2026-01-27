@@ -289,6 +289,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                     <button
                         className="control-button start"
                         onClick={startRecording}
+                        data-tooltip={t('live.start_recording')}
+                        data-tooltip-pos="bottom"
                     >
                         <div className="control-button-inner" />
                     </button>
@@ -297,7 +299,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <button
                             className="control-button pause"
                             onClick={isPaused ? resumeRecording : pauseRecording}
-                            title={isPaused ? t('live.resume') : t('live.pause')}
+                            data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
+                            data-tooltip-pos="bottom"
                         >
                             {isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}
                         </button>
@@ -305,7 +308,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <button
                             className="control-button stop"
                             onClick={stopRecording}
-                            title={t('live.stop')}
+                            data-tooltip={t('live.stop')}
+                            data-tooltip-pos="bottom"
                         >
                             <Square size={28} fill="white" color="white" />
                         </button>

@@ -200,6 +200,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     value={volume}
                     onChange={handleVolumeChange}
                     aria-label={t('player.volume')}
+                    data-tooltip={`${Math.round(volume * 100)}`}
+                    data-tooltip-pos="top"
                 />
             </div>
         </div>

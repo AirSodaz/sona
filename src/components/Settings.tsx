@@ -533,7 +533,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             role="switch"
                                             aria-checked={enableITN}
                                             aria-label={t('settings.itn_title')}
-                                            title={t('settings.itn_title')}
+                                            data-tooltip={t('settings.itn_title')}
+                                            data-tooltip-pos="left"
                                         >
                                             <div className="toggle-switch-handle" />
                                         </button>
