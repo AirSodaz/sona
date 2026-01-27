@@ -225,11 +225,30 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     // Update ref in render body to ensure it's available for itemContent in the same render cycle
     segmentsRef.current = segments;
 
+    const lastActiveIndexRef = useRef<number>(-1);
+
     // Auto-scroll to active segment during playback
     useEffect(() => {
         if (isPlaying && activeSegmentId && virtuosoRef.current) {
-            const activeIndex = segments.findIndex((s) => s.id === activeSegmentId);
+            let activeIndex = -1;
+
+            // Optimization: Check near the last known index first (O(1) for sequential playback)
+            const lastIndex = lastActiveIndexRef.current;
+            if (lastIndex >= 0 && lastIndex < segments.length) {
+                if (segments[lastIndex].id === activeSegmentId) {
+                    activeIndex = lastIndex;
+                } else if (lastIndex + 1 < segments.length && segments[lastIndex + 1].id === activeSegmentId) {
+                    activeIndex = lastIndex + 1;
+                }
+            }
+
+            // Fallback to full search if not found (O(N))
+            if (activeIndex === -1) {
+                activeIndex = segments.findIndex((s) => s.id === activeSegmentId);
+            }
+
             if (activeIndex !== -1) {
+                lastActiveIndexRef.current = activeIndex;
                 virtuosoRef.current.scrollToIndex({
                     index: activeIndex,
                     align: 'center',
