@@ -17,18 +17,29 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
         const hasTimestamps = segment.tokens && segment.timestamps &&
             segment.tokens.length === segment.timestamps.length;
 
+        let tokenMap: TokenMap | null = null;
+        if (hasTimestamps) {
+            // Optimization: Build a token map for O(1) effective index lookups
+            // This replaces the previous O(N) linear scan per character, reducing complexity from O(N^2) to O(N log N)
+            tokenMap = buildTokenMap(segment);
+        }
+
         let currentStart = segment.start;
         const totalDuration = segment.end - segment.start;
         const totalLength = text.length;
 
         // let tokenIndex = 0; // Unused
         let charIndex = 0; // Current character index in the original text
+        let effectiveCharIndex = 0; // Current effective character index (ignoring punctuation/spaces)
 
         let currentText = "";
         let currentSegmentStart = currentStart;
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
+            // Calculate effective length of this part to update the running index
+            // We use the same regex as in buildTokenMap to ensure consistency
+            const partEffectiveLen = part.replace(/[\s\p{P}]+/gu, '').length;
 
             if (splitRegex.test(part)) {
                 // It's punctuation
@@ -36,27 +47,13 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
                 let segmentEnd: number;
 
-                if (hasTimestamps) {
-                    // Find the timestamp of the LAST character of this segment (which is the punctuation usually)
-                    // or the character just before it if we want to be safe
-                    // We use index - 1 because charIndex points to start of `part` (the punctuation),
-                    // so charIndex + part.length - 1 is the index of the last char of the punctuation.
-
-                    // However, punctuation often doesn't have its own timestamp if it's attached to the previous word.
-                    // But here we are finding the token containing that char.
-
-                    const lastCharIndex = charIndex + part.length - 1;
-                    const lastTokenTimestamp = findTimestampForChar(segment, lastCharIndex);
+                if (hasTimestamps && tokenMap) {
+                    const lastTokenTimestamp = findTimestampFromMap(tokenMap, effectiveCharIndex);
 
                     if (lastTokenTimestamp !== undefined) {
-                        // We don't have token duration, so we estimate.
-                        // 0.2s is a reasonable minimum duration for a final syllable/punctuation.
-                        // But we must check against the NEXT segment start to ensure we don't overlap if speech is fast.
                         segmentEnd = lastTokenTimestamp + 0.2;
-                        // Note: We'll clamp this later if needed, but for now we leave it independent 
-                        // so gaps can exist.
                     } else {
-                        // Fallback if we can't find the token
+                        // Fallback
                         segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
                     }
                 } else {
@@ -72,21 +69,19 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 });
 
                 charIndex += part.length;
+                effectiveCharIndex += partEffectiveLen;
                 currentStart = segmentEnd;
 
                 // If this isn't the last part, prepare for next segment
                 if (i < parts.length - 1) {
-                    // Update currentSegmentStart for the next iteration
-                    if (hasTimestamps) {
-                        // Find the timestamp for the character right after this punctuation
-                        // This is the CRITICAL fix: Start time should be the start of the next character
-                        // We look for the token that corresponds to the text at charIndex
-                        const nextTokenTimestamp = findTimestampForChar(segment, charIndex);
+                    if (hasTimestamps && tokenMap) {
+                        // Find timestamp for charIndex (which is now start of next part)
+                        // Effective index is updated.
+                        const nextTokenTimestamp = findTimestampFromMap(tokenMap, effectiveCharIndex);
                         if (nextTokenTimestamp !== undefined) {
                             currentSegmentStart = nextTokenTimestamp;
                             currentStart = nextTokenTimestamp;
                         } else {
-                            // Fallback if timestamp not found
                             currentSegmentStart = currentStart;
                         }
                     } else {
@@ -98,11 +93,8 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
             } else {
                 // It's content
 
-                // If this is the START of a new segment (currentText is empty), 
-                // and we haven't set a precise start time yet (or we just finished a previous one), 
-                // ensure we capture the start time correctly.
-                if (currentText === "" && hasTimestamps) {
-                    const preciseStart = findTimestampForChar(segment, charIndex);
+                if (currentText === "" && hasTimestamps && tokenMap) {
+                    const preciseStart = findTimestampFromMap(tokenMap, effectiveCharIndex);
                     if (preciseStart !== undefined) {
                         currentSegmentStart = preciseStart;
                     }
@@ -110,16 +102,13 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
                 currentText += part;
                 charIndex += part.length;
+                effectiveCharIndex += partEffectiveLen;
             }
         }
 
         // Leftover text
         if (currentText.trim()) {
             const segmentEnd = segment.end;
-
-            // If we have a pending start time from the loop, use it
-            // Otherwise currentSegmentStart should be correct from previous iteration
-
             newSegments.push({
                 id: uuidv4(),
                 text: currentText.trim(),
@@ -133,40 +122,62 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
     return newSegments;
 }
 
-/**
- * Helper to approximate the timestamp for a character index using token data.
- * Returns the timestamp of the token that best contains the character at `charIndex`.
- */
-function findTimestampForChar(segment: TranscriptSegment, charIndex: number): number | undefined {
-    if (!segment.tokens || !segment.timestamps) return undefined;
+// Pre-calculated map for faster lookups
+interface TokenMap {
+    startIndices: number[]; // Start effective index of each token
+    endIndices: number[];   // End effective index of each token
+    timestamps: number[];   // Timestamp of each token
+}
 
-    // Calculate effective index (ignoring whitespace AND punctuation) to handle drift between text and tokens.
-    // This is crucial because text typically has punctuation added by a separate model, while tokens (ASR output) do not.
-    // If we count punctuation in text index but not in token length, we drift forward and match later tokens incorrectly.
-    const textUpToChar = segment.text.slice(0, charIndex);
-    // Use Unicode property escape to strip all punctuation and separator characters
-    const effectiveIndex = textUpToChar.replace(/[\s\p{P}]+/gu, '').length;
+function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
+    if (!segment.tokens || !segment.timestamps) return null;
+
+    const startIndices: number[] = [];
+    const endIndices: number[] = [];
+    const timestamps: number[] = [];
 
     let currentLen = 0;
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
-
-        // We also strip punctuation from the token itself, just in case the model DOES output punctuation
-        // (so we compare apples to apples: content characters only).
+        // Strip punctuation and whitespace
         const tokenLen = token.replace(/[\s\p{P}]+/gu, '').length;
 
-        // Skip tokens that become empty after stripping (e.g. if token is just ".")
-        if (tokenLen === 0) continue;
-
-        // Check if the token covers the effective index
-        if (effectiveIndex >= currentLen && effectiveIndex < currentLen + tokenLen) {
-            return segment.timestamps[i];
+        if (tokenLen > 0) {
+            startIndices.push(currentLen);
+            currentLen += tokenLen;
+            endIndices.push(currentLen);
+            timestamps.push(segment.timestamps[i]);
         }
-
-        currentLen += tokenLen;
     }
 
-    // If we're past the end, return the last timestamp or undefined
+    return { startIndices, endIndices, timestamps };
+}
+
+function findTimestampFromMap(map: TokenMap, effectiveIndex: number): number | undefined {
+    // Binary search to find the token that covers effectiveIndex
+    // We are looking for idx where startIndices[idx] <= effectiveIndex < endIndices[idx]
+
+    let left = 0;
+    let right = map.startIndices.length - 1;
+    let idx = -1;
+
+    // Find rightmost start <= effectiveIndex
+    while (left <= right) {
+        const mid = (left + right) >>> 1;
+        if (map.startIndices[mid] <= effectiveIndex) {
+            idx = mid;
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    if (idx !== -1) {
+        // Check if effectiveIndex is strictly within this token (or at start)
+        if (effectiveIndex < map.endIndices[idx]) {
+            return map.timestamps[idx];
+        }
+    }
     return undefined;
 }
 
