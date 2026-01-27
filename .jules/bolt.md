@@ -9,3 +9,7 @@
 ## 2026-01-27 - [Virtuoso Context & Ref Timing]
 **Learning:** When passing callbacks in `react-virtuoso`'s `context` that rely on current render data (like list length), updating a `ref` in `useEffect` is too late—`itemContent` runs synchronously during render.
 **Action:** Update the `ref` synchronously in the render body (before the return statement) to ensure virtualization callbacks see the data from the current render cycle.
+
+## 2025-05-24 - [Canvas Gradient Allocation]
+**Learning:** Creating `CanvasGradient` objects in a `requestAnimationFrame` loop (e.g. for audio visualization) generates massive garbage collection pressure (~60k allocations/sec for 1024 bars).
+**Action:** Cache gradients based on discrete values (e.g., 0-255 for audio data) and canvas dimensions. Invalidate the cache only when dimensions change.
