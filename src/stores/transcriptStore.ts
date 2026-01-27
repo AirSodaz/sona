@@ -55,7 +55,8 @@ const DEFAULT_CONFIG: AppConfig = {
     offlineModelPath: '',
     language: 'en',
     appLanguage: 'auto',
-    enableITN: false,
+    enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
+    enableITN: true, // Keep for legacy check
     punctuationModelPath: '',
     theme: 'auto',
     font: 'system',

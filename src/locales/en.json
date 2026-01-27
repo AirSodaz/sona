@@ -90,7 +90,7 @@
         "path_hint": "Select the folder containing encoder.onnx, decoder.onnx, etc.",
         "itn_title": "Inverse Text Normalization (ITN)",
         "itn_desc": "Automatically convert Chinese numbers to digits (e.g. \"一百二十三\" → \"123\").",
-        "itn_note": "Note: SenseVoice models use internal ITN; others use JS-based conversion.",
+        "itn_note": "Note: Load external FST (Finite State Transducer) rule files to implement ITN.",
         "delete_confirm_title": "Delete Model",
         "delete_confirm_message": "Are you sure you want to delete {{name}}?",
         "save_button": "Save Settings",

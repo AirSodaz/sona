@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { PRESET_MODELS, modelService, ModelInfo } from '../services/modelService';
+import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
 import { open, ask, message } from '@tauri-apps/plugin-dialog';
 
 // Icons
@@ -83,7 +83,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
-    const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
+    const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
     const [theme, setTheme] = useState(config.theme || 'auto');
@@ -97,7 +97,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState('');
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
-    const [isITNInstalled, setIsITNInstalled] = useState(false);
+    const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
     const [abortController, setAbortController] = useState<AbortController | null>(null);
 
     const checkInstalledModels = async () => {
@@ -109,20 +109,26 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
         setInstalledModels(installed);
 
-        setIsITNInstalled(await modelService.isITNModelInstalled());
+        const installedITN = new Set<string>();
+        for (const model of ITN_MODELS) {
+            if (await modelService.isITNModelInstalled(model.id)) {
+                installedITN.add(model.id);
+            }
+        }
+        setInstalledITNModels(installedITN);
     };
 
     useEffect(() => {
         setStreamingModelPath(config.streamingModelPath);
         setOfflineModelPath(config.offlineModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
-        setEnableITN(config.enableITN ?? true);
+        setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enabledITNModels, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -131,8 +137,27 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
 
     const handleSave = () => {
-        setConfig({ streamingModelPath, offlineModelPath, punctuationModelPath, enableITN, appLanguage, theme, font });
-        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, punctuationModelPath, enableITN, appLanguage, theme, font }));
+        const enabledList = Array.from(enabledITNModels);
+        setConfig({
+            streamingModelPath,
+            offlineModelPath,
+            punctuationModelPath,
+            enabledITNModels: enabledList,
+            enableITN: enabledList.length > 0, // Legacy support
+            appLanguage,
+            theme,
+            font
+        });
+        localStorage.setItem('sona-config', JSON.stringify({
+            streamingModelPath,
+            offlineModelPath,
+            punctuationModelPath,
+            enabledITNModels: enabledList,
+            enableITN: enabledList.length > 0,
+            appLanguage,
+            theme,
+            font
+        }));
 
 
         // Apply language immediately
@@ -225,23 +250,23 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const handleDownloadITN = async () => {
+    const handleDownloadITN = async (modelId: string) => {
         if (downloadingId) return;
 
         const controller = new AbortController();
         setAbortController(controller);
-        setDownloadingId('itn-model');
+        setDownloadingId(modelId);
         setProgress(0);
 
         try {
-            await modelService.downloadITNModel((pct, status) => {
+            await modelService.downloadITNModel(modelId, (pct, status) => {
                 setProgress(pct);
                 setStatusMessage(status);
             }, controller.signal);
 
             await checkInstalledModels();
             // Automatically enable ITN after download
-            setEnableITN(true);
+            setEnabledITNModels(prev => new Set(prev).add(modelId));
             setDownloadingId(null);
 
         } catch (error: any) {
@@ -327,7 +352,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         streamingModelPath: parsed.streamingModelPath || legacyPath,
                         offlineModelPath: parsed.offlineModelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
-                        enableITN: parsed.enableITN ?? true,
+                        enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
+                        // enableITN handled by store defaults or above logic
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto',
                         font: parsed.font || 'system'
@@ -702,65 +728,70 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
-                                            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                                                {t('settings.itn_desc')}
-                                            </div>
+                                    <div style={{ marginBottom: 12 }}>
+                                        <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
+                                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                                            {t('settings.itn_desc')}
                                         </div>
-
-                                        <button
-                                            className="toggle-switch"
-                                            onClick={() => isITNInstalled && setEnableITN(!enableITN)}
-                                            role="switch"
-                                            aria-checked={enableITN}
-                                            aria-label={t('settings.itn_title')}
-                                            disabled={!isITNInstalled}
-                                            data-tooltip={!isITNInstalled ? t('settings.itn_disabled_hint', { defaultValue: 'Please download ITN model first' }) : t('settings.itn_title')}
-                                            data-tooltip-pos="left"
-                                            style={{ opacity: !isITNInstalled ? 0.5 : 1, cursor: !isITNInstalled ? 'not-allowed' : 'pointer' }}
-                                        >
-                                            <div className="toggle-switch-handle" />
-                                        </button>
                                     </div>
-                                    <div className="settings-hint">
+
+                                    <div className="settings-list">
+                                        {ITN_MODELS.map(model => {
+                                            const isInstalled = installedITNModels.has(model.id);
+                                            const isEnabled = enabledITNModels.has(model.id);
+
+                                            return (
+                                                <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                                    <div>
+                                                        <div style={{ fontWeight: 500 }}>{model.name}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.description}</div>
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                        {!isInstalled ? (
+                                                            <>
+                                                                {downloadingId === model.id ? (
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                        <span style={{ fontSize: '0.8rem' }}>{Math.round(progress)}%</span>
+                                                                        <button className="btn btn-sm btn-icon" onClick={handleCancelDownload} title="Cancel">
+                                                                            <XIcon />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        className="btn btn-sm btn-secondary"
+                                                                        onClick={() => handleDownloadITN(model.id)}
+                                                                        disabled={!!downloadingId}
+                                                                    >
+                                                                        <DownloadIcon />
+                                                                        Download
+                                                                    </button>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <button
+                                                                className="toggle-switch"
+                                                                onClick={() => {
+                                                                    const next = new Set(enabledITNModels);
+                                                                    if (next.has(model.id)) next.delete(model.id);
+                                                                    else next.add(model.id);
+                                                                    setEnabledITNModels(next);
+                                                                }}
+                                                                role="switch"
+                                                                aria-checked={isEnabled}
+                                                                style={{ opacity: 1, cursor: 'pointer' }}
+                                                            >
+                                                                <div className="toggle-switch-handle" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="settings-hint" style={{ marginTop: 8 }}>
                                         {t('settings.itn_note')}
                                     </div>
-
-                                    {/* ITN Model Download/Status */}
-                                    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, fontSize: '0.9rem' }}>
-                                        <span style={{ color: 'var(--color-text-muted)' }}>{t('settings.itn_model_status')}:</span>
-                                        {isITNInstalled ? (
-                                            <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <CheckIcon /> {t('common.installed')}
-                                            </span>
-                                        ) : (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ color: 'var(--color-warning)' }}>{t('common.not_installed')}</span>
-                                                <button
-                                                    className="btn btn-sm btn-secondary"
-                                                    onClick={downloadingId === 'itn-model' ? handleCancelDownload : handleDownloadITN}
-                                                    disabled={!!downloadingId && downloadingId !== 'itn-model'}
-                                                    style={{ display: 'flex', gap: 4, padding: '2px 8px', height: 28 }}
-                                                >
-                                                    {downloadingId === 'itn-model' ? <XIcon /> : <DownloadIcon />}
-                                                    {downloadingId === 'itn-model' ? t('common.cancel') : t('common.download')}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {downloadingId === 'itn-model' && (
-                                        <div className="progress-container-mini" style={{ marginTop: 8 }}>
-                                            <div className="progress-info-mini">
-                                                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                <span>{progress}%</span>
-                                            </div>
-                                            <div className="progress-bar-mini">
-                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}

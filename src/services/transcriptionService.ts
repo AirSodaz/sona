@@ -11,7 +11,7 @@ class TranscriptionService {
     private child: Child | null = null;
     private isRunning: boolean = false;
     private modelPath: string = '';
-    private itnModelPath: string = '';
+    private itnModelPaths: string[] = [];
     private punctuationModelPath: string = '';
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
@@ -28,10 +28,10 @@ class TranscriptionService {
     }
 
     /**
-     * Set the ITN model path
+     * Set the ITN model paths
      */
-    setITNModelPath(path: string) {
-        this.itnModelPath = path;
+    setITNModelPaths(paths: string[]) {
+        this.itnModelPaths = paths;
     }
 
     /**
@@ -74,8 +74,8 @@ class TranscriptionService {
                 '--enable-itn', this.enableITN.toString()
             ];
 
-            if (this.itnModelPath) {
-                args.push('--itn-model', this.itnModelPath);
+            if (this.itnModelPaths.length > 0) {
+                args.push('--itn-model', this.itnModelPaths.join(','));
             }
 
             if (this.punctuationModelPath) {
@@ -212,8 +212,8 @@ class TranscriptionService {
                     '--enable-itn', this.enableITN.toString()
                 ];
 
-                if (this.itnModelPath) {
-                    args.push('--itn-model', this.itnModelPath);
+                if (this.itnModelPaths.length > 0) {
+                    args.push('--itn-model', this.itnModelPaths.join(','));
                 }
 
                 if (this.punctuationModelPath) {

@@ -263,17 +263,21 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
 
         // ITN Configuration
-        transcriptionService.setEnableITN(!!config.enableITN);
-        if (config.enableITN) {
+        // ITN Configuration
+        const itnModels = config.enabledITNModels || [];
+        transcriptionService.setEnableITN(itnModels.length > 0);
+
+        if (itnModels.length > 0) {
             try {
-                const itnPath = await modelService.getITNModelPath();
-                if (await modelService.isITNModelInstalled()) {
-                    transcriptionService.setITNModelPath(itnPath);
-                } else {
-                    console.warn('[LiveRecord] ITN enabled but model file not found.');
+                const paths: string[] = [];
+                for (const modelId of itnModels) {
+                    if (await modelService.isITNModelInstalled(modelId)) {
+                        paths.push(await modelService.getITNModelPath(modelId));
+                    }
                 }
+                transcriptionService.setITNModelPaths(paths);
             } catch (e) {
-                console.warn('[LiveRecord] Failed to setup ITN path:', e);
+                console.warn('[LiveRecord] Failed to setup ITN paths:', e);
             }
         }
 

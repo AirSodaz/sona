@@ -188,9 +188,13 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
                 maxActivePaths: 4,
             };
 
-            if (itnModel && existsSync(itnModel)) {
-                console.error(`[Sidecar] Using ITN model (Offline): ${itnModel}`);
-                config.ruleFsts = itnModel;
+            if (itnModel) {
+                const paths = itnModel.split(',');
+                const validPaths = paths.filter(p => existsSync(p.trim()));
+                if (validPaths.length > 0) {
+                    console.error(`[Sidecar] Using ITN models (Offline): ${validPaths.join(',')}`);
+                    config.ruleFsts = validPaths.join(',');
+                }
             }
 
             return {
@@ -214,9 +218,13 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             },
         };
 
-        if (itnModel && existsSync(itnModel)) {
-            console.error(`[Sidecar] Using ITN model: ${itnModel}`);
-            config.ruleFsts = itnModel;
+        if (itnModel) {
+            const paths = itnModel.split(',');
+            const validPaths = paths.filter(p => existsSync(p.trim()));
+            if (validPaths.length > 0) {
+                console.error(`[Sidecar] Using ITN models: ${validPaths.join(',')}`);
+                config.ruleFsts = validPaths.join(',');
+            }
         }
 
         const supportsInternalITN = !!config.ruleFsts || !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);

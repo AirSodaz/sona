@@ -22,7 +22,7 @@ export interface ModelInfo {
 export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer (CPU)',
+        name: 'Chinese/English - Paraformer',
         description: 'Streaming Paraformer model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
@@ -53,7 +53,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17',
         name: 'Multilingual - SenseVoice FunaR Nano (Int8)',
-        description: 'SenseVoice FunaR Nano model',
+        description: 'SenseVoice FunaR Nano model (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
@@ -63,7 +63,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
         name: 'Multilingual - Funasr Nano (Int8)',
-        description: 'Funasr Nano model',
+        description: 'Funasr Nano model (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
@@ -73,7 +73,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
         name: 'Punctuation - CT Transformer (Int8)',
-        description: 'Chinese/English Punctuation Model (Int8). Adds punctuation to raw text.',
+        description: 'Chinese/English Punctuation Model (Int8 quantized). Adds punctuation to raw text.',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2',
         type: 'punctuation',
         language: 'zh,en',
@@ -92,14 +92,32 @@ export const PRESET_MODELS: ModelInfo[] = [
     }
 ];
 
-export const ITN_MODEL_INFO = {
-    id: 'itn-zh-number',
-    name: 'Chinese Number ITN',
-    description: 'Inverse Text Normalization for Chinese Numbers',
-    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
-    filename: 'itn_zh_number.fst',
-    size: '< 1 MB'
-};
+export const ITN_MODELS = [
+    {
+        id: 'itn-zh-number',
+        name: 'Chinese Number ITN',
+        description: 'Inverse Text Normalization for Chinese Numbers',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
+        filename: 'itn_zh_number.fst',
+        size: '< 1 MB'
+    },
+    {
+        id: 'itn-new-heteronym',
+        name: 'New Heteronym ITN',
+        description: 'New Heteronym ITN rules',
+        url: 'https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/main/data/new_heteronym.fst',
+        filename: 'new_heteronym.fst',
+        size: '< 1 MB'
+    },
+    {
+        id: 'itn-phone',
+        name: 'Phone ITN',
+        description: 'Phone ITN rules',
+        url: 'https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/main/data/phone.fst',
+        filename: 'phone.fst',
+        size: '< 1 MB'
+    }
+];
 
 export type ProgressCallback = (percentage: number, status: string) => void;
 
@@ -324,19 +342,24 @@ class ModelService {
         }
     }
 
-    async getITNModelPath(): Promise<string> {
+    async getITNModelPath(modelId: string): Promise<string> {
+        const model = ITN_MODELS.find(m => m.id === modelId);
+        if (!model) return '';
         const modelsDir = await this.getModelsDir();
-        return await join(modelsDir, ITN_MODEL_INFO.filename);
+        return await join(modelsDir, model.filename);
     }
 
-    async isITNModelInstalled(): Promise<boolean> {
-        const path = await this.getITNModelPath();
+    async isITNModelInstalled(modelId: string): Promise<boolean> {
+        const path = await this.getITNModelPath(modelId);
         return await exists(path);
     }
 
-    async downloadITNModel(onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
+    async downloadITNModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
+        const model = ITN_MODELS.find(m => m.id === modelId);
+        if (!model) throw new Error('ITN Model not found');
+
         const modelsDir = await this.getModelsDir();
-        const targetPath = await join(modelsDir, ITN_MODEL_INFO.filename);
+        const targetPath = await join(modelsDir, model.filename);
 
         if (await exists(targetPath)) return targetPath;
 
@@ -409,7 +432,7 @@ class ModelService {
                 if (signal?.aborted) throw new Error('Download cancelled');
 
                 try {
-                    const url = mirror ? `${mirror}${ITN_MODEL_INFO.url}` : ITN_MODEL_INFO.url;
+                    const url = mirror ? `${mirror}${model.url}` : model.url;
 
                     if (onProgress) {
                         onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');

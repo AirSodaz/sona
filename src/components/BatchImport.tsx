@@ -149,14 +149,18 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
             transcriptionService.setModelPath(config.offlineModelPath);
-            transcriptionService.setEnableITN(!!config.enableITN);
+            const itnModels = config.enabledITNModels || [];
+            transcriptionService.setEnableITN(itnModels.length > 0);
 
-            if (config.enableITN) {
+            if (itnModels.length > 0) {
                 try {
-                    const itnPath = await modelService.getITNModelPath();
-                    if (await modelService.isITNModelInstalled()) {
-                        transcriptionService.setITNModelPath(itnPath);
+                    const paths: string[] = [];
+                    for (const modelId of itnModels) {
+                        if (await modelService.isITNModelInstalled(modelId)) {
+                            paths.push(await modelService.getITNModelPath(modelId));
+                        }
                     }
+                    transcriptionService.setITNModelPaths(paths);
                 } catch (e) { }
             }
 

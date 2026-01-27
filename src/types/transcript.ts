@@ -42,7 +42,9 @@ export interface AppConfig {
   language: string;
   /** Application UI language preference */
   appLanguage: 'auto' | 'en' | 'zh';
-  /** Enable Inverse Text Normalization (e.g. number conversion) */
+  /** IDs of enabled ITN models */
+  enabledITNModels?: string[];
+  /** DEPRECATED: Enable Inverse Text Normalization */
   enableITN?: boolean;
   /** Path to punctuation model */
   punctuationModelPath?: string;
