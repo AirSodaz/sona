@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Settings } from '../Settings';
+import { modelService } from '../../services/modelService';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -121,5 +122,17 @@ describe('Settings', () => {
             font: 'system'
         });
         expect(onClose).toHaveBeenCalled();
+    });
+
+    it('renders accessible ITN toggle switches', async () => {
+        vi.mocked(modelService.isITNModelInstalled).mockResolvedValue(true);
+        render(<Settings isOpen={true} onClose={onClose} />);
+        fireEvent.click(screen.getByText('settings.local_path'));
+
+        // Should find the switch because we mocked isITNModelInstalled to true
+        // and useTranslation mock returns the key
+        const toggle = await screen.findByRole('switch');
+        expect(toggle).toBeDefined();
+        expect(toggle.getAttribute('aria-label')).toBe('settings.toggle_model');
     });
 });

@@ -107,6 +107,7 @@
         "font": "Font",
         "font_system": "System Default",
         "punctuation_models": "Punctuation Models",
-        "itn_model_status": "ITN Model Status"
+        "itn_model_status": "ITN Model Status",
+        "toggle_model": "Toggle {{name}}"
     }
 }
