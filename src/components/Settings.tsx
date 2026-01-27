@@ -610,11 +610,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-info-mini">
+                                                <div className="progress-info-mini" aria-live="polite">
                                                     <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                    <span>{progress}%</span>
+                                                    <span>{Math.round(progress)}%</span>
                                                 </div>
-                                                <div className="progress-bar-mini">
+                                                <div
+                                                    className="progress-bar-mini"
+                                                    role="progressbar"
+                                                    aria-valuenow={Math.round(progress)}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                >
                                                     <div className="progress-fill" style={{ width: `${progress}%` }} />
                                                 </div>
                                             </div>
@@ -668,11 +675,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-info-mini">
+                                                <div className="progress-info-mini" aria-live="polite">
                                                     <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                    <span>{progress}%</span>
+                                                    <span>{Math.round(progress)}%</span>
                                                 </div>
-                                                <div className="progress-bar-mini">
+                                                <div
+                                                    className="progress-bar-mini"
+                                                    role="progressbar"
+                                                    aria-valuenow={Math.round(progress)}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                >
                                                     <div className="progress-fill" style={{ width: `${progress}%` }} />
                                                 </div>
                                             </div>
@@ -726,11 +740,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         </div>
                                         {downloadingId === model.id && (
                                             <div className="progress-container-mini">
-                                                <div className="progress-info-mini">
+                                                <div className="progress-info-mini" aria-live="polite">
                                                     <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                    <span>{progress}%</span>
+                                                    <span>{Math.round(progress)}%</span>
                                                 </div>
-                                                <div className="progress-bar-mini">
+                                                <div
+                                                    className="progress-bar-mini"
+                                                    role="progressbar"
+                                                    aria-valuenow={Math.round(progress)}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                >
                                                     <div className="progress-fill" style={{ width: `${progress}%` }} />
                                                 </div>
                                             </div>
