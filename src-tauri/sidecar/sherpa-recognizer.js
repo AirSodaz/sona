@@ -647,8 +647,11 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
         console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
         const stream = recognizer.createStream();
 
+        // Emit initial progress
+        console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
+
         // Chunking Strategy
-        const chunkDuration = 0.5; // seconds
+        const chunkDuration = 30; // seconds
         const chunkSize = Math.floor(sampleRate * chunkDuration);
 
         for (let i = 0; i < samples.length; i += chunkSize) {
