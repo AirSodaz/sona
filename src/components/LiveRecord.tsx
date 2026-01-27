@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { transcriptionService } from '../services/transcriptionService';
-import { Pause, Play, Square } from 'lucide-react';
+import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 
 interface LiveRecordProps {
     className?: string;
@@ -39,6 +39,9 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const isRecordingRef = useRef(false); // Use ref to track recording state for closure
     const isPausedRef = useRef(false);
     const mimeTypeRef = useRef<string>('');
+    const [inputSource, setInputSource] = useState<'microphone' | 'desktop' | 'file'>('microphone');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
@@ -99,86 +102,53 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     // Start recording
     const startRecording = async () => {
+        if (inputSource === 'file') {
+            fileInputRef.current?.click();
+            return;
+        }
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            let stream: MediaStream;
 
-            // Set up audio context and analyser
-            // Set up audio context and analyser with specific sample rate
-            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-            const source = audioContextRef.current.createMediaStreamSource(stream);
+            if (inputSource === 'desktop') {
+                try {
+                    // Capture system audio
+                    stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            width: 1,
+                            height: 1,
+                            frameRate: 1,
+                        },
+                        audio: {
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false,
+                        }
+                    });
 
-            // Analyser for visualizer
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            analyserRef.current.fftSize = 256;
-            source.connect(analyserRef.current);
+                    // We only need the audio track
+                    const audioTracks = stream.getAudioTracks();
+                    if (audioTracks.length === 0) {
+                        throw new Error('No audio track found in display media');
+                    }
 
-            // Processor for transcription streaming (16kHz requirement)
-            // Use AudioWorklet for better performance (off-main-thread processing)
-            try {
-                await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
-            } catch (err) {
-                console.error('Failed to load audio worklet module:', err);
-                throw new Error('Audio worklet failed to load');
+                    // Stop video tracks immediately as we don't need them
+                    stream.getVideoTracks().forEach(track => track.stop());
+
+                    // Create a new stream with only the audio track
+                    stream = new MediaStream([audioTracks[0]]);
+
+                } catch (err) {
+                    console.error('Error getting display media:', err);
+                    // Fallback or re-throw? Re-throw mostly.
+                    throw err;
+                }
+            } else {
+                // Default microphone
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
 
-            const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-
-            processor.port.onmessage = (e) => {
-                if (!isRecordingRef.current || isPausedRef.current) return;
-
-                // e.data is Int16Array transferred from the worklet
-                transcriptionService.sendAudioInt16(e.data);
-            };
-
-            source.connect(processor);
-            processor.connect(audioContextRef.current.destination);
-
-            // Start transcription service
-            const config = useTranscriptStore.getState().config;
-            console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
-            transcriptionService.setModelPath(config.streamingModelPath);
-            transcriptionService.setEnableITN(!!config.enableITN);
-
-            await transcriptionService.start(
-                (segment) => {
-                    console.log('[LiveRecord] Received segment:', segment);
-                    upsertSegment(segment);
-                },
-                (error) => {
-                    console.error('Transcription error:', error);
-                }
-            );
-
-            // Set up media recorder for full file save
-            const mimeType = getSupportedMimeType();
-            mimeTypeRef.current = mimeType;
-            console.log('[LiveRecord] Using mimeType:', mimeType);
-
-            const options = mimeType ? { mimeType } : undefined;
-            mediaRecorderRef.current = new MediaRecorder(stream, options);
-            const chunks: Blob[] = [];
-
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                chunks.push(e.data);
-            };
-
-            mediaRecorderRef.current.onstop = () => {
-                const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
-                const blob = new Blob(chunks, { type });
-                const url = URL.createObjectURL(blob);
-                useTranscriptStore.getState().setAudioUrl(url);
-                transcriptionService.stop();
-            };
-
-            mediaRecorderRef.current.start();
-            setIsRecording(true);
-            setIsPaused(false);
-            isRecordingRef.current = true;
-            isPausedRef.current = false;
-            clearSegments();
-
-            // Start visualizer
-            drawVisualizer();
+            await startRecordingWithStream(stream);
 
         } catch (error) {
             console.error('Failed to start recording:', error);
@@ -186,10 +156,158 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         }
     };
 
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            // Create audio element for playback
+            const url = URL.createObjectURL(file);
+            const audio = new Audio(url);
+            audioRef.current = audio;
+
+            // Wait for metadata to load to get duration etc if needed, but here we just need to play
+            await audio.play(); // User interaction likely covered by the file input change event
+
+            // Create AudioContext
+            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+            const source = audioContextRef.current.createMediaElementSource(audio);
+
+            // Connect to speakers so user can hear it
+            source.connect(audioContextRef.current.destination);
+
+            // Connect to a destination node to get a stream for processing/recording
+            const destination = audioContextRef.current.createMediaStreamDestination();
+            source.connect(destination);
+
+            const stream = destination.stream;
+
+            // Auto-stop when audio ends
+            audio.onended = () => {
+                stopRecording();
+            };
+
+            await startRecordingWithStream(stream, true);
+
+        } catch (error) {
+            console.error('Failed to start file simulation:', error);
+            alert(t('live.mic_error')); // Reuse error or add new one? Using generic for now
+        } finally {
+            // Reset input
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }
+
+
+    const startRecordingWithStream = async (stream: MediaStream, isFileSimulation = false) => {
+        // Set up audio context and analyser if not already created (File mode creates it earlier)
+        if (!audioContextRef.current) {
+            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+        }
+
+        // If reusing context (file mode), we might need to be careful. 
+        // Actually in file mode we create context above. In mic/desktop we create here.
+
+        // Source
+        let source: MediaStreamAudioSourceNode;
+        // Validating if source can be created from stream in existing context
+        // If context was created for file, it already has the source connected to destination/stream.
+        // But we need 'source' variable for Analyser connection below.
+
+        if (isFileSimulation) {
+            // For file simulation, the stream comes from destination, which is already a node.
+            // We need to connect the stream to analyser.
+            source = audioContextRef.current.createMediaStreamSource(stream);
+        } else {
+            source = audioContextRef.current.createMediaStreamSource(stream);
+        }
+
+
+        // Analyser for visualizer
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        source.connect(analyserRef.current);
+
+        // Processor for transcription streaming (16kHz requirement)
+        // Use AudioWorklet for better performance (off-main-thread processing)
+        try {
+            await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
+        } catch (err) {
+            console.error('Failed to load audio worklet module:', err);
+            throw new Error('Audio worklet failed to load');
+        }
+
+        const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
+
+        processor.port.onmessage = (e) => {
+            if (!isRecordingRef.current || isPausedRef.current) return;
+
+            // e.data is Int16Array transferred from the worklet
+            transcriptionService.sendAudioInt16(e.data);
+        };
+
+        source.connect(processor);
+
+        // Only connect processor to destination if NOT file simulation (to avoid double audio or feedback loop if we were doing pass-through)
+        // Actually processor output is usually silence/empty, it's a tap.
+        // But in original code: processor.connect(audioContextRef.current.destination);
+        // This is required for AudioWorklet to run in some browsers/contexts (needs to be connected to destination).
+        // Since we don't output audio from processor (we just send data to socket), this is fine.
+        processor.connect(audioContextRef.current.destination);
+
+        // Start transcription service
+        const config = useTranscriptStore.getState().config;
+        console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
+        transcriptionService.setModelPath(config.streamingModelPath);
+        transcriptionService.setEnableITN(!!config.enableITN);
+
+        await transcriptionService.start(
+            (segment) => {
+                console.log('[LiveRecord] Received segment:', segment);
+                upsertSegment(segment);
+            },
+            (error) => {
+                console.error('Transcription error:', error);
+            }
+        );
+
+        // Set up media recorder for full file save
+        const mimeType = getSupportedMimeType();
+        mimeTypeRef.current = mimeType;
+        console.log('[LiveRecord] Using mimeType:', mimeType);
+
+        const options = mimeType ? { mimeType } : undefined;
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+        const chunks: Blob[] = [];
+
+        mediaRecorderRef.current.ondataavailable = (e) => {
+            chunks.push(e.data);
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+            const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
+            const blob = new Blob(chunks, { type });
+            const url = URL.createObjectURL(blob);
+            useTranscriptStore.getState().setAudioUrl(url);
+            transcriptionService.stop();
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+        setIsPaused(false);
+        isRecordingRef.current = true;
+        isPausedRef.current = false;
+        clearSegments();
+
+        // Start visualizer
+        drawVisualizer();
+    };
+
     // Pause recording
     const pauseRecording = () => {
         if (mediaRecorderRef.current && isRecording && !isPaused) {
             mediaRecorderRef.current.pause();
+            if (audioRef.current) audioRef.current.pause();
             setIsPaused(true);
             isPausedRef.current = true;
         }
@@ -199,6 +317,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const resumeRecording = () => {
         if (mediaRecorderRef.current && isRecording && isPaused) {
             mediaRecorderRef.current.resume();
+            if (audioRef.current) audioRef.current.play();
             setIsPaused(false);
             isPausedRef.current = false;
         }
@@ -206,6 +325,11 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     // Stop recording
     const stopRecording = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -261,11 +385,22 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             if (audioContextRef.current) {
                 audioContextRef.current.close();
             }
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
         };
     }, []);
 
     return (
         <div className={`live-record-container ${className}`}>
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="audio/*,video/*"
+                onChange={handleFileSelect}
+            />
             <div className="visualizer-wrapper">
                 <canvas
                     ref={canvasRef}
@@ -316,6 +451,32 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                     </>
                 )}
             </div>
+
+            {!isRecording && (
+                <div className="input-source-selector" style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                    <div className="select-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {inputSource === 'microphone' ? <Mic size={18} /> : (inputSource === 'desktop' ? <Monitor size={18} /> : <FileAudio size={18} />)}
+                        <select
+                            value={inputSource}
+                            onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
+                            style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid #ccc',
+                                background: 'transparent',
+                                color: 'inherit',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer',
+                                outline: 'none'
+                            }}
+                        >
+                            <option value="microphone" style={{ color: '#000' }}>{t('live.source_microphone')}</option>
+                            <option value="desktop" style={{ color: '#000' }}>{t('live.source_desktop')}</option>
+                            <option value="file" style={{ color: '#000' }}>{t('live.source_file')}</option>
+                        </select>
+                    </div>
+                </div>
+            )}
 
             <p className="recording-status-text">
                 {isRecording

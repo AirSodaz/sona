@@ -26,7 +26,11 @@
         "recording_active": "录音中... 点击按钮进行控制",
         "start_hint": "点击红色按钮开始录音",
         "mic_error": "无法访问麦克风，请检查权限。",
-        "start_recording": "开始录音"
+        "start_recording": "开始录音",
+        "source_microphone": "麦克风",
+        "source_desktop": "桌面音频",
+        "source_file": "音频文件模拟",
+        "source_select": "选择输入源"
     },
     "batch": {
         "processing_title": "处理音频中",
