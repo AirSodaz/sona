@@ -44,6 +44,8 @@ export interface AppConfig {
   appLanguage: 'auto' | 'en' | 'zh';
   /** IDs of enabled ITN models */
   enabledITNModels?: string[];
+  /** Order of ITN models (IDs) for sorting */
+  itnRulesOrder?: string[];
   /** DEPRECATED: Enable Inverse Text Normalization */
   enableITN?: boolean;
   /** Path to punctuation model */

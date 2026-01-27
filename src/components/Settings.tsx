@@ -3,6 +3,23 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
 import { open, ask, message } from '@tauri-apps/plugin-dialog';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Icons
 const FolderIcon = () => (
@@ -69,6 +86,47 @@ const LocalIcon = () => (
     </svg>
 );
 
+const DragHandleIcon = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="9" cy="5" r="1" />
+        <circle cx="9" cy="19" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="15" cy="5" r="1" />
+        <circle cx="15" cy="19" r="1" />
+    </svg>
+);
+
+function SortableItem(props: any) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id: props.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        touchAction: 'none', // Prevent scrolling on touch while dragging
+        ...props.style
+    };
+
+    return (
+        <div ref={setNodeRef} style={style}>
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                <div {...attributes} {...listeners} style={{ display: 'flex', alignItems: 'center', paddingRight: 8, cursor: 'grab' }}>
+                    <DragHandleIcon />
+                </div>
+                <div style={{ flex: 1 }}>
+                    {props.children}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
@@ -84,6 +142,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
+    const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
     const [theme, setTheme] = useState(config.theme || 'auto');
@@ -99,6 +158,24 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
     const [abortController, setAbortController] = useState<AbortController | null>(null);
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            setItnRulesOrder((items) => {
+                const oldIndex = items.indexOf(String(active.id));
+                const newIndex = items.indexOf(String(over.id));
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
 
     const checkInstalledModels = async () => {
         const installed = new Set<string>();
@@ -123,12 +200,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setOfflineModelPath(config.offlineModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
         setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
+        setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enabledITNModels, config.appLanguage, config.theme, config.font]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -143,6 +221,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             offlineModelPath,
             punctuationModelPath,
             enabledITNModels: enabledList,
+            itnRulesOrder,
             enableITN: enabledList.length > 0, // Legacy support
             appLanguage,
             theme,
@@ -153,6 +232,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             offlineModelPath,
             punctuationModelPath,
             enabledITNModels: enabledList,
+            itnRulesOrder,
             enableITN: enabledList.length > 0,
             appLanguage,
             theme,
@@ -353,6 +433,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         offlineModelPath: parsed.offlineModelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
                         enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
+                        itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
                         // enableITN handled by store defaults or above logic
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto',
@@ -736,58 +817,73 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
 
                                     <div className="settings-list">
-                                        {ITN_MODELS.map(model => {
-                                            const isInstalled = installedITNModels.has(model.id);
-                                            const isEnabled = enabledITNModels.has(model.id);
+                                        <DndContext
+                                            sensors={sensors}
+                                            collisionDetection={closestCenter}
+                                            onDragEnd={handleDragEnd}
+                                        >
+                                            <SortableContext
+                                                items={itnRulesOrder}
+                                                strategy={verticalListSortingStrategy}
+                                            >
+                                                {itnRulesOrder.map(modelId => {
+                                                    const model = ITN_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '' };
+                                                    const isInstalled = installedITNModels.has(model.id);
+                                                    const isEnabled = enabledITNModels.has(model.id);
 
-                                            return (
-                                                <div key={model.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border-subtle)' }}>
-                                                    <div>
-                                                        <div style={{ fontWeight: 500 }}>{model.name}</div>
-                                                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.description}</div>
-                                                    </div>
+                                                    return (
+                                                        <SortableItem key={model.id} id={model.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', width: '100%' }}>
+                                                                <div>
+                                                                    <div style={{ fontWeight: 500 }}>{model.name}</div>
+                                                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.description}</div>
+                                                                </div>
 
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                        {!isInstalled ? (
-                                                            <>
-                                                                {downloadingId === model.id ? (
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                                        <span style={{ fontSize: '0.8rem' }}>{Math.round(progress)}%</span>
-                                                                        <button className="btn btn-sm btn-icon" onClick={handleCancelDownload} title="Cancel">
-                                                                            <XIcon />
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                                    {!isInstalled ? (
+                                                                        <>
+                                                                            {downloadingId === model.id ? (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                                    <span style={{ fontSize: '0.8rem' }}>{Math.round(progress)}%</span>
+                                                                                    <button className="btn btn-sm btn-icon" onClick={handleCancelDownload} title="Cancel">
+                                                                                        <XIcon />
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <button
+                                                                                    className="btn btn-sm btn-secondary"
+                                                                                    onClick={() => handleDownloadITN(model.id)}
+                                                                                    disabled={!!downloadingId}
+                                                                                >
+                                                                                    <DownloadIcon />
+                                                                                    Download
+                                                                                </button>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <button
+                                                                            className="toggle-switch"
+                                                                            onClick={() => {
+                                                                                const next = new Set(enabledITNModels);
+                                                                                if (next.has(model.id)) next.delete(model.id);
+                                                                                else next.add(model.id);
+                                                                                setEnabledITNModels(next);
+                                                                            }}
+                                                                            role="switch"
+                                                                            aria-checked={isEnabled}
+                                                                            style={{ opacity: 1, cursor: 'pointer' }}
+                                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                                        >
+                                                                            <div className="toggle-switch-handle" />
                                                                         </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        className="btn btn-sm btn-secondary"
-                                                                        onClick={() => handleDownloadITN(model.id)}
-                                                                        disabled={!!downloadingId}
-                                                                    >
-                                                                        <DownloadIcon />
-                                                                        Download
-                                                                    </button>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <button
-                                                                className="toggle-switch"
-                                                                onClick={() => {
-                                                                    const next = new Set(enabledITNModels);
-                                                                    if (next.has(model.id)) next.delete(model.id);
-                                                                    else next.add(model.id);
-                                                                    setEnabledITNModels(next);
-                                                                }}
-                                                                role="switch"
-                                                                aria-checked={isEnabled}
-                                                                style={{ opacity: 1, cursor: 'pointer' }}
-                                                            >
-                                                                <div className="toggle-switch-handle" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </SortableItem>
+                                                    );
+                                                })}
+                                            </SortableContext>
+                                        </DndContext>
                                     </div>
                                     <div className="settings-hint" style={{ marginTop: 8 }}>
                                         {t('settings.itn_note')}

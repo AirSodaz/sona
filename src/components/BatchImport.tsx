@@ -149,15 +149,27 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
             transcriptionService.setModelPath(config.offlineModelPath);
-            const itnModels = config.enabledITNModels || [];
-            transcriptionService.setEnableITN(itnModels.length > 0);
+            const enabledITNModels = new Set(config.enabledITNModels || []);
+            const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'];
 
-            if (itnModels.length > 0) {
+            transcriptionService.setEnableITN(enabledITNModels.size > 0);
+
+            if (enabledITNModels.size > 0) {
                 try {
                     const paths: string[] = [];
-                    for (const modelId of itnModels) {
-                        if (await modelService.isITNModelInstalled(modelId)) {
-                            paths.push(await modelService.getITNModelPath(modelId));
+                    for (const modelId of itnRulesOrder) {
+                        if (enabledITNModels.has(modelId)) {
+                            if (await modelService.isITNModelInstalled(modelId)) {
+                                paths.push(await modelService.getITNModelPath(modelId));
+                            }
+                        }
+                    }
+                    // Handle enabled but not in order (fallback)
+                    for (const modelId of enabledITNModels) {
+                        if (!itnRulesOrder.includes(modelId)) {
+                            if (await modelService.isITNModelInstalled(modelId)) {
+                                paths.push(await modelService.getITNModelPath(modelId));
+                            }
                         }
                     }
                     transcriptionService.setITNModelPaths(paths);

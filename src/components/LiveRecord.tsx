@@ -264,17 +264,34 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         // ITN Configuration
         // ITN Configuration
-        const itnModels = config.enabledITNModels || [];
-        transcriptionService.setEnableITN(itnModels.length > 0);
+        // ITN Configuration
+        const enabledITNModels = new Set(config.enabledITNModels || []);
+        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'];
+        // Legacy support or fallback: if order doesn't cover all enabled models, append them?
+        // Actually, let's assume order covers all models or at least we check enabled.
 
-        if (itnModels.length > 0) {
+        transcriptionService.setEnableITN(enabledITNModels.size > 0);
+
+        if (enabledITNModels.size > 0) {
             try {
                 const paths: string[] = [];
-                for (const modelId of itnModels) {
-                    if (await modelService.isITNModelInstalled(modelId)) {
-                        paths.push(await modelService.getITNModelPath(modelId));
+                // Use Set for fast lookup, iterate over ORDER
+                for (const modelId of itnRulesOrder) {
+                    if (enabledITNModels.has(modelId)) {
+                        if (await modelService.isITNModelInstalled(modelId)) {
+                            paths.push(await modelService.getITNModelPath(modelId));
+                        }
                     }
                 }
+                // Also check if any enabled models are NOT in the order (unlikely but safe)
+                for (const modelId of enabledITNModels) {
+                    if (!itnRulesOrder.includes(modelId)) {
+                        if (await modelService.isITNModelInstalled(modelId)) {
+                            paths.push(await modelService.getITNModelPath(modelId));
+                        }
+                    }
+                }
+
                 transcriptionService.setITNModelPaths(paths);
             } catch (e) {
                 console.warn('[LiveRecord] Failed to setup ITN paths:', e);
