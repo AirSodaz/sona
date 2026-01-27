@@ -67,12 +67,22 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
 
+        // Cache for gradients: 256 possible byte values
+        const gradients = new Array<CanvasGradient | undefined>(256);
+        let cachedHeight = canvas.height;
+
         const draw = () => {
             animationRef.current = window.requestAnimationFrame(draw);
 
             // If paused, keep existing frame (freeze)
             if (isPausedRef.current) {
                 return;
+            }
+
+            // Invalidate cache if height changes (e.g. resize)
+            if (canvas.height !== cachedHeight) {
+                gradients.fill(undefined);
+                cachedHeight = canvas.height;
             }
 
             analyser.getByteFrequencyData(dataArray);
@@ -83,14 +93,20 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                const barHeight = (dataArray[i] / 255) * canvas.height * 0.8;
+                const value = dataArray[i];
+                const barHeight = (value / 255) * canvas.height * 0.8;
 
-                // Create gradient - Warm Black/Gray for Notion look
-                const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
-                gradient.addColorStop(0, '#37352f'); // Notion Black
-                gradient.addColorStop(1, '#787774'); // Notion Gray
+                // Optimization: Cache gradients based on value (0-255)
+                // This prevents creating ~7680 CanvasGradient objects per second
+                if (!gradients[value]) {
+                    // Create gradient - Warm Black/Gray for Notion look
+                    const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+                    gradient.addColorStop(0, '#37352f'); // Notion Black
+                    gradient.addColorStop(1, '#787774'); // Notion Gray
+                    gradients[value] = gradient;
+                }
 
-                ctx.fillStyle = gradient;
+                ctx.fillStyle = gradients[value]!;
                 // Rounded tops would require more complex drawing (arc), simple rect is fine for now
                 ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
 
