@@ -62,8 +62,8 @@
         "merge_tooltip": "Merge with next",
         "delete_tooltip": "Delete segment",
         "seek_label": "Seek to {{time}}",
-        "merge_label": "Merge with next segment",
-        "delete_label": "Delete segment"
+        "merge_label": "Merge segment at {{time}} with next",
+        "delete_label": "Delete segment at {{time}}"
     },
     "export": {
         "button": "Export",
