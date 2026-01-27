@@ -56,6 +56,7 @@ const DEFAULT_CONFIG: AppConfig = {
     language: 'en',
     appLanguage: 'auto',
     enableITN: false,
+    punctuationModelPath: '',
     theme: 'auto',
     font: 'system',
 };

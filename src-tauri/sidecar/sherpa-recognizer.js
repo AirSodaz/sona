@@ -18,7 +18,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Readable, Transform } from 'stream';
 import { randomUUID } from 'crypto';
-import Nzh from 'nzh';
+
 
 // For ES modules
 const __scriptFile = fileURLToPath(import.meta.url);
@@ -39,6 +39,9 @@ function parseArgs() {
         allowMock: false,
         numThreads: null,
         targetDir: null,
+        targetDir: null,
+        itnModel: null,
+        punctuationModel: null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -69,6 +72,12 @@ function parseArgs() {
                 break;
             case '--target-dir':
                 options.targetDir = args[++i];
+                break;
+            case '--itn-model':
+                options.itnModel = args[++i];
+                break;
+            case '--punctuation-model':
+                options.punctuationModel = args[++i];
                 break;
         }
     }
@@ -164,7 +173,7 @@ async function createNcnnRecognizer(modelConfig, enableITN, numThreads) {
 }
 
 // Create ONNX Recognizer (CPU)
-async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
+async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel) {
     console.error(`Initializing OnnxRecognizer (CPU, Threads: ${numThreads})...`);
     try {
         const sherpaModule = await import('sherpa-onnx-node');
@@ -178,6 +187,12 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
                 decodingMethod: 'greedy_search',
                 maxActivePaths: 4,
             };
+
+            if (itnModel && existsSync(itnModel)) {
+                console.error(`[Sidecar] Using ITN model (Offline): ${itnModel}`);
+                config.ruleFsts = itnModel;
+            }
+
             return {
                 recognizer: new sherpa.OfflineRecognizer(config),
                 type: 'offline',
@@ -199,7 +214,12 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
             },
         };
 
-        const supportsInternalITN = !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
+        if (itnModel && existsSync(itnModel)) {
+            console.error(`[Sidecar] Using ITN model: ${itnModel}`);
+            config.ruleFsts = itnModel;
+        }
+
+        const supportsInternalITN = !!config.ruleFsts || !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
 
         return {
             recognizer: new sherpa.OnlineRecognizer(config),
@@ -312,6 +332,38 @@ function findModelConfig(modelPath, enableITN, numThreads) {
     return null;
 }
 
+// Create Punctuation Model
+async function createPunctuation(modelPath) {
+    if (!modelPath || !existsSync(modelPath)) return null;
+    console.error(`[Sidecar] Initializing Punctuation Model: ${modelPath}`);
+    try {
+        const sherpaModule = await import('sherpa-onnx-node');
+        const sherpa = sherpaModule.default || sherpaModule;
+
+        const files = readdirSync(modelPath);
+        const modelFile = files.find(f => f.endsWith('.onnx'));
+
+        if (!modelFile) {
+            console.error('[Sidecar] No .onnx file found in punctuation model directory');
+            return null;
+        }
+
+        const config = {
+            model: {
+                ctTransformer: join(modelPath, modelFile),
+                numThreads: 1,
+                debug: false,
+                provider: 'cpu'
+            }
+        };
+
+        return new sherpa.OfflinePunctuation(config);
+    } catch (e) {
+        console.error(`[Sidecar] Failed to initialize punctuation: ${e.message}`);
+        return null;
+    }
+}
+
 // Text post-processing
 function postProcessText(text) {
     if (!text) return "";
@@ -322,21 +374,10 @@ function postProcessText(text) {
     return text;
 }
 
-const nzhcn = Nzh.cn;
-function applyITN(text) {
-    if (!text) return "";
-    const chineseNumPattern = /[零一二三四五六七八九十百千万亿点两]+/g;
-    return text.replace(chineseNumPattern, (match) => {
-        try {
-            const decoded = nzhcn.decodeS(match);
-            if (decoded && decoded !== match) return decoded;
-        } catch (e) { }
-        return match;
-    });
-}
+
 
 // Process Stream
-async function processStream(recognizer, sampleRate, enableITN) {
+async function processStream(recognizer, sampleRate, punctuation) {
     const stream = recognizer.createStream();
     let totalSamples = 0;
     let segmentStartTime = 0;
@@ -366,7 +407,6 @@ async function processStream(recognizer, sampleRate, enableITN) {
 
         if (result.text.trim()) {
             let text = postProcessText(result.text.trim());
-            if (enableITN) text = applyITN(text);
             const output = {
                 id: currentSegmentId,
                 text: text,
@@ -381,7 +421,7 @@ async function processStream(recognizer, sampleRate, enableITN) {
             const finalResult = recognizer.getResult(stream);
             if (finalResult.text.trim()) {
                 let text = postProcessText(finalResult.text.trim());
-                if (enableITN) text = applyITN(text);
+                if (punctuation) text = punctuation.addPunct(text);
                 const output = {
                     id: currentSegmentId,
                     text: text,
@@ -402,7 +442,7 @@ async function processStream(recognizer, sampleRate, enableITN) {
         const currentTime = totalSamples / sampleRate;
         if (finalResult.text.trim()) {
             let text = postProcessText(finalResult.text.trim());
-            if (enableITN) text = applyITN(text);
+            if (punctuation) text = punctuation.addPunct(text);
             console.log(JSON.stringify({
                 id: currentSegmentId,
                 text: text,
@@ -417,7 +457,7 @@ async function processStream(recognizer, sampleRate, enableITN) {
 }
 
 // Process Batch
-async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
+async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
@@ -452,7 +492,7 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
                 const currentTime = i / sampleRate;
                 if (result.text.trim()) {
                     let text = postProcessText(result.text.trim());
-                    if (enableITN) text = applyITN(text);
+                    if (punctuation) text = punctuation.addPunct(text);
                     segments.push({
                         id: randomUUID(),
                         text: text,
@@ -475,7 +515,7 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, enable
         const totalDuration = samples.length / sampleRate;
         if (finalResult.text.trim()) {
             let text = postProcessText(finalResult.text.trim());
-            if (enableITN) text = applyITN(text);
+            if (punctuation) text = punctuation.addPunct(text);
             segments.push({
                 id: randomUUID(),
                 text: text,
@@ -587,7 +627,7 @@ async function processExtraction(archivePath, targetDir) {
 
 
 
-async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, enableITN) {
+async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
@@ -608,7 +648,7 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
 
         if (result.text && result.text.trim()) {
             let text = postProcessText(result.text.trim());
-            if (enableITN) text = applyITN(text);
+            if (punctuation) text = punctuation.addPunct(text);
             segments.push({
                 id: randomUUID(),
                 text: text,
@@ -801,11 +841,10 @@ async function main() {
             // Flag to helper know it is NCNN for stream API diffs
             recognizerObj.recognizer.isNcnn = true;
         } else {
-            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads);
+            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads, options.itnModel);
         }
 
         const { recognizer, type, supportsInternalITN } = recognizerObj;
-        const useJSITN = options.enableITN && !supportsInternalITN;
 
         // Unified Stream Processor Wrapper
         // Avoid spreading (...recognizer) on class instances as it strips prototype methods
@@ -813,12 +852,14 @@ async function main() {
         // Ensure isNcnn flag is present (already set for NCNN path, undefined for ONNX)
         unifiedRecognizer.isNcnn = !!recognizer.isNcnn;
 
+        const punctuation = await createPunctuation(options.punctuationModel);
+
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
             if (type === 'offline') {
-                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, false);
+                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             } else {
-                await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, useJSITN);
+                await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             }
         } else {
             if (type === 'offline') {
@@ -826,7 +867,7 @@ async function main() {
                 process.exit(1);
             }
 
-            await processStream(unifiedRecognizer, options.sampleRate, useJSITN);
+            await processStream(unifiedRecognizer, options.sampleRate, punctuation);
         }
 
     } catch (error) {

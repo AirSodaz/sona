@@ -44,6 +44,8 @@ export interface AppConfig {
   appLanguage: 'auto' | 'en' | 'zh';
   /** Enable Inverse Text Normalization (e.g. number conversion) */
   enableITN?: boolean;
+  /** Path to punctuation model */
+  punctuationModelPath?: string;
   /** Application theme preference */
   theme?: 'auto' | 'light' | 'dark';
   /** Font preference */

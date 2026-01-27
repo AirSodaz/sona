@@ -82,6 +82,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
     const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
+    const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
     const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
@@ -96,6 +97,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState('');
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
+    const [isITNInstalled, setIsITNInstalled] = useState(false);
     const [abortController, setAbortController] = useState<AbortController | null>(null);
 
     const checkInstalledModels = async () => {
@@ -106,18 +108,21 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             }
         }
         setInstalledModels(installed);
+
+        setIsITNInstalled(await modelService.isITNModelInstalled());
     };
 
     useEffect(() => {
         setStreamingModelPath(config.streamingModelPath);
         setOfflineModelPath(config.offlineModelPath);
+        setPunctuationModelPath(config.punctuationModelPath || '');
         setEnableITN(config.enableITN ?? true);
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -126,9 +131,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
 
     const handleSave = () => {
-
-        setConfig({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme, font });
-        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme, font }));
+        setConfig({ streamingModelPath, offlineModelPath, punctuationModelPath, enableITN, appLanguage, theme, font });
+        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, punctuationModelPath, enableITN, appLanguage, theme, font }));
 
 
         // Apply language immediately
@@ -141,12 +145,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleBrowse = async (type: 'streaming' | 'offline') => {
+    const handleBrowse = async (type: 'streaming' | 'offline' | 'punctuation') => {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: type === 'streaming' ? t('settings.streaming_path_label') : t('settings.offline_path_label')
+                title: type === 'streaming' ? t('settings.streaming_path_label') :
+                    type === 'offline' ? t('settings.offline_path_label') : 'Select Punctuation Model Path'
             });
 
             if (selected) {
@@ -154,8 +159,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 if (path) {
                     if (type === 'streaming') {
                         setStreamingModelPath(path);
-                    } else {
+                    } else if (type === 'offline') {
                         setOfflineModelPath(path);
+                    } else {
+                        setPunctuationModelPath(path);
                     }
                 }
             }
@@ -218,6 +225,37 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleDownloadITN = async () => {
+        if (downloadingId) return;
+
+        const controller = new AbortController();
+        setAbortController(controller);
+        setDownloadingId('itn-model');
+        setProgress(0);
+
+        try {
+            await modelService.downloadITNModel((pct, status) => {
+                setProgress(pct);
+                setStatusMessage(status);
+            }, controller.signal);
+
+            await checkInstalledModels();
+            // Automatically enable ITN after download
+            setEnableITN(true);
+            setDownloadingId(null);
+
+        } catch (error: any) {
+            if (error.message === 'Download cancelled') {
+                console.log('Download cancelled by user');
+            } else {
+                console.error('Download failed:', error);
+            }
+            // Reset state
+            setDownloadingId(null);
+            setAbortController(null);
+        }
+    };
+
     const handleLoad = async (model: ModelInfo) => {
         try {
             const path = await modelService.getModelPath(model.id);
@@ -227,11 +265,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const setModelPathByType = (type: 'streaming' | 'offline', path: string) => {
+    const setModelPathByType = (type: 'streaming' | 'offline' | 'punctuation', path: string) => {
         if (type === 'streaming') {
             setStreamingModelPath(path);
-        } else {
+        } else if (type === 'offline') {
             setOfflineModelPath(path);
+        } else {
+            setPunctuationModelPath(path);
         }
     };
 
@@ -258,6 +298,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             if (offlineModelPath === deletedPath) {
                 setOfflineModelPath('');
             }
+            if (punctuationModelPath === deletedPath) {
+                setPunctuationModelPath('');
+            }
         } catch (error: any) {
             console.error('Delete failed:', error);
             await message(`Failed to delete model: ${error.message}`, {
@@ -283,6 +326,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     setConfig({
                         streamingModelPath: parsed.streamingModelPath || legacyPath,
                         offlineModelPath: parsed.offlineModelPath || '',
+                        punctuationModelPath: parsed.punctuationModelPath || '',
                         enableITN: parsed.enableITN ?? true,
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto',
@@ -528,6 +572,64 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         )}
                                     </div>
                                 ))}
+
+                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>Punctuation Models</div>
+                                {PRESET_MODELS.filter(m => m.type === 'punctuation').map(model => (
+                                    <div key={model.id} className="model-card">
+                                        <div className="model-card-header">
+                                            <div>
+                                                <div className="model-name">{model.name}</div>
+                                                <div className="model-description">{model.description}</div>
+                                                <div className="model-tags">
+                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.size}</span>
+                                                </div>
+                                            </div>
+                                            {installedModels.has(model.id) ? (
+                                                <div className="model-actions">
+                                                    <button
+                                                        className={`btn ${punctuationModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
+                                                        onClick={() => handleLoad(model)}
+                                                        disabled={punctuationModelPath.includes(model.filename || model.id)}
+                                                        aria-label={`${t('settings.load')} ${model.name}`}
+                                                    >
+                                                        {punctuationModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => handleDelete(model)}
+                                                        disabled={!!deletingId || !!downloadingId}
+                                                        aria-label={`${t('common.delete')} ${model.name}`}
+                                                    >
+                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
+                                                    disabled={!!downloadingId && downloadingId !== model.id}
+                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
+                                                >
+                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {downloadingId === model.id && (
+                                            <div className="progress-container-mini">
+                                                <div className="progress-info-mini">
+                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                    <span>{progress}%</span>
+                                                </div>
+                                                <div className="progress-bar-mini">
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
@@ -577,6 +679,28 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
 
+                                <div className="settings-item" style={{ marginTop: 16 }}>
+                                    <label className="settings-label">Punctuation Model Path</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <input
+                                            type="text"
+                                            title={punctuationModelPath}
+                                            className="settings-input"
+                                            value={punctuationModelPath}
+                                            onChange={(e) => setPunctuationModelPath(e.target.value)}
+                                            placeholder={t('settings.path_placeholder')}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => handleBrowse('punctuation')}
+                                            aria-label={t('settings.browse')}
+                                        >
+                                            <FolderIcon />
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
@@ -588,12 +712,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
                                         <button
                                             className="toggle-switch"
-                                            onClick={() => setEnableITN(!enableITN)}
+                                            onClick={() => isITNInstalled && setEnableITN(!enableITN)}
                                             role="switch"
                                             aria-checked={enableITN}
                                             aria-label={t('settings.itn_title')}
-                                            data-tooltip={t('settings.itn_title')}
+                                            disabled={!isITNInstalled}
+                                            data-tooltip={!isITNInstalled ? t('settings.itn_disabled_hint', { defaultValue: 'Please download ITN model first' }) : t('settings.itn_title')}
                                             data-tooltip-pos="left"
+                                            style={{ opacity: !isITNInstalled ? 0.5 : 1, cursor: !isITNInstalled ? 'not-allowed' : 'pointer' }}
                                         >
                                             <div className="toggle-switch-handle" />
                                         </button>
@@ -601,6 +727,40 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     <div className="settings-hint">
                                         {t('settings.itn_note')}
                                     </div>
+
+                                    {/* ITN Model Download/Status */}
+                                    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, fontSize: '0.9rem' }}>
+                                        <span style={{ color: 'var(--color-text-muted)' }}>{t('settings.itn_model_status')}:</span>
+                                        {isITNInstalled ? (
+                                            <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <CheckIcon /> {t('common.installed')}
+                                            </span>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ color: 'var(--color-warning)' }}>{t('common.not_installed')}</span>
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    onClick={downloadingId === 'itn-model' ? handleCancelDownload : handleDownloadITN}
+                                                    disabled={!!downloadingId && downloadingId !== 'itn-model'}
+                                                    style={{ display: 'flex', gap: 4, padding: '2px 8px', height: 28 }}
+                                                >
+                                                    {downloadingId === 'itn-model' ? <XIcon /> : <DownloadIcon />}
+                                                    {downloadingId === 'itn-model' ? t('common.cancel') : t('common.download')}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {downloadingId === 'itn-model' && (
+                                        <div className="progress-container-mini" style={{ marginTop: 8 }}>
+                                            <div className="progress-info-mini">
+                                                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                <span>{progress}%</span>
+                                            </div>
+                                            <div className="progress-bar-mini">
+                                                <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -618,7 +778,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

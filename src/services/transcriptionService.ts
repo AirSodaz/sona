@@ -11,6 +11,8 @@ class TranscriptionService {
     private child: Child | null = null;
     private isRunning: boolean = false;
     private modelPath: string = '';
+    private itnModelPath: string = '';
+    private punctuationModelPath: string = '';
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
     private onError: ErrorCallback | null = null;
@@ -23,6 +25,20 @@ class TranscriptionService {
     setModelPath(path: string) {
         console.log('[TranscriptionService] Setting model path:', path);
         this.modelPath = path;
+    }
+
+    /**
+     * Set the ITN model path
+     */
+    setITNModelPath(path: string) {
+        this.itnModelPath = path;
+    }
+
+    /**
+     * Set the punctuation model path
+     */
+    setPunctuationModelPath(path: string) {
+        this.punctuationModelPath = path;
     }
 
     /**
@@ -54,8 +70,17 @@ class TranscriptionService {
                 scriptPath,
                 '--mode', 'stream',
                 '--model-path', this.modelPath,
+                '--model-path', this.modelPath,
                 '--enable-itn', this.enableITN.toString()
             ];
+
+            if (this.itnModelPath) {
+                args.push('--itn-model', this.itnModelPath);
+            }
+
+            if (this.punctuationModelPath) {
+                args.push('--punctuation-model', this.punctuationModelPath);
+            }
 
             if (import.meta.env.DEV) {
                 args.push('--allow-mock', 'true');
@@ -183,8 +208,17 @@ class TranscriptionService {
                     '--mode', 'batch',
                     '--file', filePath,
                     '--model-path', this.modelPath,
+                    '--model-path', this.modelPath,
                     '--enable-itn', this.enableITN.toString()
                 ];
+
+                if (this.itnModelPath) {
+                    args.push('--itn-model', this.itnModelPath);
+                }
+
+                if (this.punctuationModelPath) {
+                    args.push('--punctuation-model', this.punctuationModelPath);
+                }
 
                 if (provider) {
                     args.push('--provider', provider);

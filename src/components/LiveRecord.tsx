@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { transcriptionService } from '../services/transcriptionService';
+import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 
 interface LiveRecordProps {
@@ -259,7 +260,28 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         const config = useTranscriptStore.getState().config;
         console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
         transcriptionService.setModelPath(config.streamingModelPath);
+
+
+        // ITN Configuration
         transcriptionService.setEnableITN(!!config.enableITN);
+        if (config.enableITN) {
+            try {
+                const itnPath = await modelService.getITNModelPath();
+                if (await modelService.isITNModelInstalled()) {
+                    transcriptionService.setITNModelPath(itnPath);
+                } else {
+                    console.warn('[LiveRecord] ITN enabled but model file not found.');
+                }
+            } catch (e) {
+                console.warn('[LiveRecord] Failed to setup ITN path:', e);
+            }
+        }
+
+        if (config.punctuationModelPath) {
+            transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
+        } else {
+            transcriptionService.setPunctuationModelPath('');
+        }
 
         await transcriptionService.start(
             (segment) => {

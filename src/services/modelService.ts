@@ -11,7 +11,7 @@ export interface ModelInfo {
     name: string;
     description: string;
     url: string;
-    type: 'streaming' | 'offline';
+    type: 'streaming' | 'offline' | 'punctuation';
     language: string;
     size: string; // Display size
     isArchive?: boolean;
@@ -21,76 +21,85 @@ export interface ModelInfo {
 
 export const PRESET_MODELS: ModelInfo[] = [
     {
-        id: 'sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13',
-        name: 'Chinese/English - Zipformer (GPU)',
-        description: 'Bilingual streaming model for GPU (NCNN)',
-        url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-zipformer-bilingual-zh-en-2023-02-13.tar.bz2',
-        type: 'streaming',
-        language: 'zh,en',
-        size: '~150 MB',
-        engine: 'ncnn'
-    },
-    {
-        id: 'sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
-        name: 'Chinese/English - Zipformer (CPU)',
-        description: 'Bilingual streaming model for Chinese and English',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
-        type: 'streaming',
-        language: 'zh,en',
-        size: '~100 MB',
-        engine: 'onnx'
-    },
-    {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
         name: 'Chinese/English - Paraformer (CPU)',
         description: 'Streaming Paraformer model for Chinese and English',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
         language: 'zh,en',
-        size: '~900 MB',
+        size: '~999 MB',
         engine: 'onnx'
     },
     {
-        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
-        name: 'Multilingual - SenseVoice (CPU)',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
-        type: 'offline',
-        language: 'zh,en,ja,ko,yue',
-        size: '~900 MB',
-        engine: 'onnx'
-    },
-    {
-        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
         name: 'Multilingual - SenseVoice (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (Int8 quantized)',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
-        size: '~200 MB',
+        size: '~158 MB',
         engine: 'onnx'
     },
     {
-        id: 'sherpa-ncnn-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer (NCNN)',
-        description: 'Streaming Paraformer model for GPU (NCNN)',
-        url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-streaming-paraformer-bilingual-zh-en.tar.bz2',
-        type: 'streaming',
-        language: 'zh,en',
-        size: '~150 MB',
-        engine: 'ncnn'
-    },
-    {
-        id: 'sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-2024-07-17',
-        name: 'Multilingual - SenseVoice (NCNN)',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (NCNN)',
-        url: 'https://github.com/k2-fsa/sherpa-ncnn/releases/download/models/sherpa-ncnn-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
+        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09',
+        name: 'Multilingual - SenseVoice',
+        description: 'Supports Chinese, English, Japanese, Korean, Cantonese',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
-        size: '~500 MB',
-        engine: 'ncnn'
+        size: '~845 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17',
+        name: 'Multilingual - SenseVoice FunaR Nano (Int8)',
+        description: 'SenseVoice FunaR Nano model',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2',
+        type: 'offline',
+        language: 'zh,en,ja,ko,yue',
+        size: '~179 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
+        name: 'Multilingual - Funasr Nano (Int8)',
+        description: 'Funasr Nano model',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
+        type: 'offline',
+        language: 'zh,en,ja,ko,yue',
+        size: '~716 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
+        name: 'Punctuation - CT Transformer (Int8)',
+        description: 'Chinese/English Punctuation Model (Int8). Adds punctuation to raw text.',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2',
+        type: 'punctuation',
+        language: 'zh,en',
+        size: '~62 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12',
+        name: 'Punctuation - CT Transformer',
+        description: 'Chinese/English Punctuation Model. Adds punctuation to raw text.',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12.tar.bz2',
+        type: 'punctuation',
+        language: 'zh,en',
+        size: '~266 MB',
+        engine: 'onnx'
     }
 ];
+
+export const ITN_MODEL_INFO = {
+    id: 'itn-zh-number',
+    name: 'Chinese Number ITN',
+    description: 'Inverse Text Normalization for Chinese Numbers',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
+    filename: 'itn_zh_number.fst',
+    size: '< 1 MB'
+};
 
 export type ProgressCallback = (percentage: number, status: string) => void;
 
@@ -283,6 +292,14 @@ class ModelService {
         if (model.filename) {
             return await join(modelsDir, model.filename);
         }
+        if (model.type === 'punctuation') {
+            // Punctuation models extract to a folder, usually named after the archive
+            // We need to point to the directory itself or a specific file?
+            // sherpa-onnx expects the directory containing model.onnx (or similar) or the model file itself depending on usage.
+            // For OfflinePunctuation, it looks for model.onnx within the passed config path typically, or we construct config object.
+            // Let's just return the directory path for now, consistent with others.
+            return await join(modelsDir, modelId);
+        }
         return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
     }
 
@@ -304,6 +321,125 @@ class ModelService {
         const modelPath = await this.getModelPath(modelId);
         if (await exists(modelPath)) {
             await remove(modelPath, { recursive: true });
+        }
+    }
+
+    async getITNModelPath(): Promise<string> {
+        const modelsDir = await this.getModelsDir();
+        return await join(modelsDir, ITN_MODEL_INFO.filename);
+    }
+
+    async isITNModelInstalled(): Promise<boolean> {
+        const path = await this.getITNModelPath();
+        return await exists(path);
+    }
+
+    async downloadITNModel(onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
+        const modelsDir = await this.getModelsDir();
+        const targetPath = await join(modelsDir, ITN_MODEL_INFO.filename);
+
+        if (await exists(targetPath)) return targetPath;
+
+        // Mirrors to try in order
+        const mirrors = [
+            '', // Direct
+            'https://mirror.ghproxy.com/',
+            'https://ghproxy.net/'
+        ];
+
+        const downloadId = Math.random().toString(36).substring(7);
+
+        if (signal) {
+            signal.addEventListener('abort', async () => {
+                try {
+                    await invoke('cancel_download', { id: downloadId });
+                } catch (e) {
+                    console.error('Failed to cancel download:', e);
+                }
+            });
+        }
+
+        let unlisten: (() => void) | undefined;
+        let lastDownloaded = 0;
+        let lastTime = Date.now();
+
+        if (onProgress) {
+            unlisten = await listen<any>('download-progress', (event) => {
+                const payload = event.payload;
+                let downloaded = 0;
+                let total = 0;
+
+                if (Array.isArray(payload)) {
+                    [downloaded, total] = payload;
+                } else if (typeof payload === 'object' && payload !== null) {
+                    downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
+                    total = (payload as any)[1] || (payload as any).total || 0;
+                }
+
+                const now = Date.now();
+                const timeDiff = now - lastTime;
+
+                if (timeDiff > 500 || total === downloaded) {
+                    const bytesDiff = downloaded - lastDownloaded;
+                    const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
+                    let speedStr = '';
+
+                    if (speedBytesPerSec > 1024 * 1024) {
+                        speedStr = `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`;
+                    } else {
+                        speedStr = `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+                    }
+
+                    lastDownloaded = downloaded;
+                    lastTime = now;
+
+                    if (total > 0) {
+                        const percentage = Math.round((downloaded / total) * 100);
+                        onProgress(percentage, `Downloading ITN Model... (${speedStr})`);
+                    }
+                }
+            });
+        }
+
+        try {
+            let downloadSuccess = false;
+            let lastError: any = null;
+
+            for (const mirror of mirrors) {
+                if (signal?.aborted) throw new Error('Download cancelled');
+
+                try {
+                    const url = mirror ? `${mirror}${ITN_MODEL_INFO.url}` : ITN_MODEL_INFO.url;
+
+                    if (onProgress) {
+                        onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
+                    }
+
+                    console.log(`Attempting download ITN from: ${url} with ID: ${downloadId}`);
+                    await invoke('download_file', {
+                        url: url,
+                        outputPath: targetPath,
+                        id: downloadId
+                    });
+
+                    downloadSuccess = true;
+                    break;
+                } catch (error: any) {
+                    if (signal?.aborted || error.toString().includes('cancelled')) {
+                        throw new Error('Download cancelled');
+                    }
+                    console.warn(`Download ITN failed via ${mirror || 'direct'}:`, error);
+                    lastError = error;
+                }
+            }
+
+            if (!downloadSuccess) {
+                throw new Error(`Download ITN failed: ${lastError}`);
+            }
+
+            return targetPath;
+        } finally {
+            if (unlisten) unlisten();
         }
     }
 

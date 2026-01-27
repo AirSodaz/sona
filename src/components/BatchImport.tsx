@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { transcriptionService } from '../services/transcriptionService';
+import { modelService } from '../services/modelService';
 import { splitByPunctuation } from '../utils/segmentUtils';
 
 // Icons
@@ -149,6 +150,22 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             transcriptionService.setModelPath(config.offlineModelPath);
             transcriptionService.setEnableITN(!!config.enableITN);
+
+            if (config.enableITN) {
+                try {
+                    const itnPath = await modelService.getITNModelPath();
+                    if (await modelService.isITNModelInstalled()) {
+                        transcriptionService.setITNModelPath(itnPath);
+                    }
+                } catch (e) { }
+            }
+
+            if (config.punctuationModelPath) {
+                transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
+            } else {
+                transcriptionService.setPunctuationModelPath('');
+            }
+
             const segments = await transcriptionService.transcribeFile(filePath);
 
             useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);
