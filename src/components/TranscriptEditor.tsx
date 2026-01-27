@@ -4,6 +4,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
 import { formatDisplayTime } from '../utils/exportFormats';
+import { ask } from '@tauri-apps/plugin-dialog';
 
 // Icons
 const EditIcon = () => (
@@ -251,17 +252,31 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
         setEditingSegmentId(null);
     }, [updateSegment, setEditingSegmentId]);
 
-    const handleDelete = useCallback((id: string) => {
-        deleteSegment(id);
-    }, [deleteSegment]);
+    const handleDelete = useCallback(async (id: string) => {
+        const confirmed = await ask(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {
+            title: t('editor.delete_confirm_title', { defaultValue: 'Confirm Delete' }),
+            kind: 'warning'
+        });
 
-    const handleMergeWithNext = useCallback((id: string) => {
-        const currentSegments = segmentsRef.current;
-        const index = currentSegments.findIndex((s) => s.id === id);
-        if (index !== -1 && index < currentSegments.length - 1) {
-            mergeSegments(id, currentSegments[index + 1].id);
+        if (confirmed) {
+            deleteSegment(id);
         }
-    }, [mergeSegments]);
+    }, [deleteSegment, t]);
+
+    const handleMergeWithNext = useCallback(async (id: string) => {
+        const confirmed = await ask(t('editor.merge_confirm_message', { defaultValue: 'Merge this segment with the next one?' }), {
+            title: t('editor.merge_confirm_title', { defaultValue: 'Confirm Merge' }),
+            kind: 'info'
+        });
+
+        if (confirmed) {
+            const currentSegments = segmentsRef.current;
+            const index = currentSegments.findIndex((s) => s.id === id);
+            if (index !== -1 && index < currentSegments.length - 1) {
+                mergeSegments(id, currentSegments[index + 1].id);
+            }
+        }
+    }, [mergeSegments, t]);
 
     const contextValue = useMemo<TranscriptContext>(() => ({
         isLast: (index: number) => index === segmentsRef.current.length - 1,

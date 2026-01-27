@@ -616,7 +616,7 @@ input[type="radio"]:focus {
 
 .transcript-segment {
   display: grid;
-  grid-template-columns: 60px 1fr 40px;
+  grid-template-columns: 60px 1fr auto;
   /* Gutter | Content | Actions */
   gap: var(--spacing-md);
   padding: var(--spacing-xs) var(--spacing-md);
