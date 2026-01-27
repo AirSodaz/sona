@@ -89,4 +89,56 @@ describe('splitByPunctuation', () => {
         expect(result[1].text.trim()).toBe('F G H I J');
         expect(result[1].start).toBe(5.0);
     });
+
+    it('correctly identifies start time when text has heavy punctuation but tokens do not', () => {
+        // This reproduces the issue where text has punctuation (added by post-processing)
+        // but tokens (from ASR) do not.
+        // If we count punctuation in text index but not in token length,
+        // the index drifts forward and misses the correct token.
+
+        const segment: TranscriptSegment = {
+            id: 'repro-1',
+            text: 'Hello!!!!!! World.',
+            start: 0,
+            end: 2.0,
+            isFinal: true,
+            // Tokens DO NOT include punctuation
+            tokens: ['Hello', 'World'],
+            timestamps: [0.0, 1.0]
+        };
+
+        // Expected split:
+        // 1. "Hello!!!!!!" (approx end?)
+        // 2. "World." (Start time MUST be 1.0, matching "World" token)
+
+        // Current buggy behavior:
+        // "Hello!!!!!!" -> 11 chars.
+        // "Hello" token -> 5 chars.
+        // Index 11 is past "Hello" (0-5) and "World" (5-10).
+        // So it likely returns undefined or next token if it existed.
+        // If there was a third token "Peace" at 2.0:
+        // Index 11 matches "Peace" (10-15).
+        // So "World" would start at 2.0 (Later than actual).
+
+        // Let's add a third token to demonstrate the "later than actual" shift clearly
+        const segmentShift: TranscriptSegment = {
+            id: 'repro-2',
+            text: 'Hello!!!!!! World. Peace.',
+            start: 0,
+            end: 3.0,
+            isFinal: true,
+            tokens: ['Hello', 'World', 'Peace'],
+            timestamps: [0.0, 1.0, 2.0]
+        };
+
+        const result = splitByPunctuation([segmentShift]);
+
+        // We expect "World" to be the second segment
+        const worldSegment = result.find(s => s.text.includes('World'));
+
+        expect(worldSegment).toBeDefined();
+        // With the bug, this might be 2.0 or interpolated.
+        // We want it to be exactly 1.0 (start of "World" token).
+        expect(worldSegment!.start).toBe(1.0);
+    });
 });
