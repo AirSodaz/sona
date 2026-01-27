@@ -26,7 +26,7 @@ const MergeIcon = () => (
 );
 
 interface TranscriptContext {
-    totalSegments: number;
+    isLast: (index: number) => boolean;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
     onSave: (id: string, text: string) => void;
@@ -203,9 +203,8 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
 
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
-    useEffect(() => {
-        segmentsRef.current = segments;
-    }, [segments]);
+    // Update ref in render body to ensure it's available for itemContent in the same render cycle
+    segmentsRef.current = segments;
 
     // Auto-scroll to active segment during playback
     useEffect(() => {
@@ -247,13 +246,13 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     }, [mergeSegments]);
 
     const contextValue = useMemo<TranscriptContext>(() => ({
-        totalSegments: segments.length,
+        isLast: (index: number) => index === segmentsRef.current.length - 1,
         onSeek: handleSeek,
         onEdit: handleEdit,
         onSave: handleSave,
         onDelete: handleDelete,
         onMergeWithNext: handleMergeWithNext,
-    }), [segments.length, handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
+    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
 
     const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
         <SegmentItem
@@ -264,7 +263,7 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
             onSave={context.onSave}
             onDelete={context.onDelete}
             onMergeWithNext={context.onMergeWithNext}
-            hasNext={index < context.totalSegments - 1}
+            hasNext={!context.isLast(index)}
         />
     ), []);
 
