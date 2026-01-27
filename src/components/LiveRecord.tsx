@@ -457,6 +457,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                     width={600}
                     height={120}
                     className="visualizer-canvas"
+                    role="img"
+                    aria-label={t('live.visualizer_label')}
                 />
             </div>
 
@@ -523,7 +525,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 </div>
             )}
 
-            <p className="recording-status-text">
+            <p className="recording-status-text" aria-live="polite">
                 {isRecording
                     ? (isPaused ? t('live.recording_paused') : t('live.recording_active'))
                     : t('live.start_hint')

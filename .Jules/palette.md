@@ -41,3 +41,11 @@
 ## 2026-01-27 - Inline Styles vs. Global CSS
 **Learning:** This repo does not use Tailwind or utility classes; it relies on a large `src/styles/index.css` with semantic classes and CSS variables.
 **Action:** Do not introduce new utility classes; instead, define semantic classes in `src/styles/index.css` to replace inline styles, leveraging existing variables (e.g., `--color-border`).
+
+## 2026-05-22 - Dynamic Status Updates
+**Learning:** Text that updates to reflect system state (like "Recording Paused") is often missed by screen readers if not focused.
+**Action:** Add `aria-live="polite"` to containers displaying status messages so updates are announced automatically.
+
+## 2026-05-22 - Accessible Canvas Visualization
+**Learning:** Canvas elements used for visual feedback (like audio waves) are invisible to screen readers.
+**Action:** Add `role="img"` and a descriptive `aria-label` to `<canvas>` elements to indicate their purpose.

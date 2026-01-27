@@ -32,7 +32,8 @@
         "source_microphone": "Microphone",
         "source_desktop": "Desktop Audio",
         "source_file": "Audio File Simulation",
-        "source_select": "Select Input Source"
+        "source_select": "Select Input Source",
+        "visualizer_label": "Audio Visualizer"
     },
     "batch": {
         "processing_title": "Processing Audio",
