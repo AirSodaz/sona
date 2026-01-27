@@ -10,6 +10,16 @@ vi.mock('../../services/transcriptionService', () => ({
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
+        setITNModelPaths: vi.fn(),
+        setPunctuationModelPath: vi.fn(),
+    }
+}));
+
+// Mock model service
+vi.mock('../../services/modelService', () => ({
+    modelService: {
+        isITNModelInstalled: vi.fn().mockResolvedValue(false),
+        getITNModelPath: vi.fn().mockResolvedValue('/path/to/itn'),
     }
 }));
 
@@ -25,6 +35,9 @@ vi.mock('lucide-react', () => ({
     Pause: () => 'Pause',
     Play: () => 'Play',
     Square: () => 'Square',
+    Mic: () => 'Mic',
+    Monitor: () => 'Monitor',
+    FileAudio: () => 'FileAudio',
 }));
 
 describe('LiveRecord', () => {
@@ -117,7 +130,7 @@ describe('LiveRecord', () => {
         render(<LiveRecord />);
 
         // Find the start button (it's the only button initially)
-        const startBtn = screen.getAllByRole('button')[0];
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
 
         await act(async () => {
             fireEvent.click(startBtn);

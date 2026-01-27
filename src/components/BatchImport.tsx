@@ -269,6 +269,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                         onClick={() => setEnableTimeline(!enableTimeline)}
                         role="switch"
                         aria-checked={enableTimeline}
+                        aria-label={t('batch.timeline_mode')}
                         data-tooltip={t('batch.timeline_mode_tooltip')}
                         data-tooltip-pos="left"
                     >

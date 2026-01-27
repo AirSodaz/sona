@@ -467,6 +467,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                     <button
                         className="control-button start"
                         onClick={startRecording}
+                        aria-label={t('live.start_recording')}
                         data-tooltip={t('live.start_recording')}
                         data-tooltip-pos="bottom"
                     >
@@ -477,6 +478,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <button
                             className="control-button pause"
                             onClick={isPaused ? resumeRecording : pauseRecording}
+                            aria-label={isPaused ? t('live.resume') : t('live.pause')}
                             data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
                             data-tooltip-pos="bottom"
                         >
@@ -486,6 +488,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <button
                             className="control-button stop"
                             onClick={stopRecording}
+                            aria-label={t('live.stop')}
                             data-tooltip={t('live.stop')}
                             data-tooltip-pos="bottom"
                         >
@@ -502,6 +505,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                         <select
                             value={inputSource}
                             onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
+                            aria-label={t('live.source_select')}
                             style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
