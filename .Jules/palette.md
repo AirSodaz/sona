@@ -17,3 +17,7 @@
 ## 2025-05-21 - Dynamic Aria Labels
 **Learning:** Lists of similar items (like models) need unique accessible names (e.g., "Delete [Model Name]" vs just "Delete").
 **Action:** Use dynamic values in `aria-label` for repeated actions in lists.
+
+## 2025-10-26 - Custom Progress Bars
+**Learning:** Custom progress indicators built with `div`s are invisible to screen readers without explicit semantics.
+**Action:** Always add `role="progressbar"`, `aria-valuenow`, `aria-valuemin`, and `aria-valuemax` to the container, and optionally `aria-live="polite"` to the text wrapper.

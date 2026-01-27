@@ -206,13 +206,20 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                     <h3>{t('batch.processing_title')}</h3>
                     <p>{t('batch.processing_desc')}</p>
                 </div>
-                <div className="progress-bar">
+                <div
+                    className="progress-bar"
+                    role="progressbar"
+                    aria-valuenow={Math.round(processingProgress)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={t('batch.processing_title')}
+                >
                     <div
                         className="progress-fill"
                         style={{ width: `${processingProgress}%` }}
                     />
                 </div>
-                <div className="progress-text">
+                <div className="progress-text" aria-live="polite">
                     <span>{t('batch.transcribing')}</span>
                     <span>{Math.round(processingProgress)}%</span>
                 </div>
