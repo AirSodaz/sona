@@ -33,3 +33,7 @@
 ## 2026-01-29 - Container Visibility on Focus
 **Learning:** When a container is hidden by default (opacity 0) and shown on hover, child focusable elements remain invisible when tabbed into.
 **Action:** Use `.container:focus-within { opacity: 1; }` to reveal the container when any child receives focus.
+
+## 2026-01-30 - Keyboard Accessible Tooltips
+**Learning:** CSS-only tooltips using `:hover` are invisible to keyboard users who navigate via Tab.
+**Action:** Always include `:focus-visible` alongside `:hover` selectors for tooltip visibility (e.g., `[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after`).
