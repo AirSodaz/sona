@@ -72,12 +72,12 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         let cachedHeight = canvas.height;
 
         const draw = () => {
-            animationRef.current = window.requestAnimationFrame(draw);
-
-            // If paused, keep existing frame (freeze)
+            // Optimization: Stop the loop if paused
             if (isPausedRef.current) {
                 return;
             }
+
+            animationRef.current = window.requestAnimationFrame(draw);
 
             // Invalidate cache if height changes (e.g. resize)
             if (canvas.height !== cachedHeight) {
@@ -362,6 +362,14 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             if (audioRef.current) audioRef.current.play();
             setIsPaused(false);
             isPausedRef.current = false;
+
+            // Prevent double loops if resume happens quickly
+            if (animationRef.current) {
+                window.cancelAnimationFrame(animationRef.current);
+            }
+
+            // Restart visualizer loop
+            drawVisualizer();
         }
     };
 
