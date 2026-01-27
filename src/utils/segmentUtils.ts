@@ -4,13 +4,18 @@ import { TranscriptSegment } from '../types/transcript';
 /**
  * Split segments by punctuation, using token timestamps if available for better accuracy.
  */
+// Regular expressions for text processing
+// Hoisted to module scope to avoid reallocation in loops
+const SPLIT_REGEX = /([.?!。？！]+)/;
+const PUNCTUATION_REGEX = /[\s\p{P}]/u;
+const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
+
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
     const newSegments: TranscriptSegment[] = [];
-    const splitRegex = /([.?!。？！]+)/;
 
     segments.forEach(segment => {
         const text = segment.text;
-        const parts = text.split(splitRegex);
+        const parts = text.split(SPLIT_REGEX);
 
         // If we have token timestamps, we can be very precise
         // Otherwise we fall back to character length interpolation
@@ -41,11 +46,11 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
             // Calculate effective length of this part to update the running index
             // We use the same regex as in buildTokenMap to ensure consistency
             // Optimization: Avoid allocation if no punctuation/space
-            const partEffectiveLen = /[\s\p{P}]/u.test(part)
-                ? part.replace(/[\s\p{P}]+/gu, '').length
+            const partEffectiveLen = PUNCTUATION_REGEX.test(part)
+                ? part.replace(PUNCTUATION_REPLACE_REGEX, '').length
                 : part.length;
 
-            if (splitRegex.test(part)) {
+            if (SPLIT_REGEX.test(part)) {
                 // It's punctuation
                 currentText += part;
 
@@ -144,15 +149,13 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     const timestamps: number[] = [];
 
     let currentLen = 0;
-    const punctRegex = /[\s\p{P}]/u;
-    const punctReplaceRegex = /[\s\p{P}]+/gu;
 
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
         // Strip punctuation and whitespace
         // Optimization: Check for punctuation first to avoid unnecessary allocation
-        const tokenLen = punctRegex.test(token)
-            ? token.replace(punctReplaceRegex, '').length
+        const tokenLen = PUNCTUATION_REGEX.test(token)
+            ? token.replace(PUNCTUATION_REPLACE_REGEX, '').length
             : token.length;
 
         if (tokenLen > 0) {
