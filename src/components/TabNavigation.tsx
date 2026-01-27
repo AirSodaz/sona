@@ -1,5 +1,5 @@
-import React from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
 
 // Icons as inline SVG components for simplicity
@@ -22,6 +22,7 @@ interface TabNavigationProps {
 }
 
 export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) => {
+    const { t } = useTranslation();
     const mode = useTranscriptStore((state) => state.mode);
     const setMode = useTranscriptStore((state) => state.setMode);
 
@@ -38,7 +39,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) 
                 role="tab"
             >
                 <MicIcon />
-                <span>Live Record</span>
+                <span>{t('panel.live_record')}</span>
             </button>
             <button
                 className={`tab-button ${mode === 'batch' ? 'active' : ''}`}
@@ -47,7 +48,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) 
                 role="tab"
             >
                 <FolderIcon />
-                <span>Batch Import</span>
+                <span>{t('panel.batch_import')}</span>
             </button>
         </div>
     );

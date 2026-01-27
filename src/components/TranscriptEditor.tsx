@@ -132,7 +132,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                 onKeyDown={handleTimestampKeyDown}
                 role="button"
                 tabIndex={0}
-                aria-label={`Seek to ${formatDisplayTime(segment.start)}`}
+                aria-label={t('editor.seek_label', { time: formatDisplayTime(segment.start) })}
                 data-tooltip={t('editor.seek_tooltip')}
             >
                 {formatDisplayTime(segment.start)}
@@ -164,7 +164,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                             onMergeWithNext(segment.id);
                         }}
                         data-tooltip={t('editor.merge_tooltip')}
-                        aria-label="Merge with next segment"
+                        aria-label={t('editor.merge_label')}
                     >
                         <MergeIcon />
                     </button>
@@ -176,7 +176,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
                         onDelete(segment.id);
                     }}
                     data-tooltip={t('editor.delete_tooltip')}
-                    aria-label="Delete segment"
+                    aria-label={t('editor.delete_label')}
                 >
                     <TrashIcon />
                 </button>

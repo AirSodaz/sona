@@ -7,7 +7,8 @@
         "loading": "Loading...",
         "error": "Error",
         "warning": "Warning",
-        "auto": "Automatic"
+        "auto": "Automatic",
+        "close": "Close"
     },
     "header": {
         "settings": "Settings"
@@ -36,15 +37,26 @@
         "supports": "Supports: {{formats}}",
         "timeline_mode": "Timeline Mode",
         "timeline_hint": "Split transcript by punctuation",
+        "timeline_mode_tooltip": "Toggle Timeline Mode",
         "unsupported_format": "Unsupported file format. Please use: {{formats}}",
         "no_model_error": "Please configure a model in Settings first.",
         "transcription_failed": "Transcription failed: {{error}}"
+    },
+    "player": {
+        "play": "Play",
+        "pause": "Pause",
+        "seek": "Seek",
+        "volume": "Volume",
+        "error": "Audio playback failed: {{error}}. Code: {{code}}"
     },
     "editor": {
         "empty_state": "No transcript segments yet.<br />Start recording or import a file.",
         "seek_tooltip": "Click to seek",
         "merge_tooltip": "Merge with next",
-        "delete_tooltip": "Delete segment"
+        "delete_tooltip": "Delete segment",
+        "seek_label": "Seek to {{time}}",
+        "merge_label": "Merge with next segment",
+        "delete_label": "Delete segment"
     },
     "export": {
         "button": "Export",
@@ -56,6 +68,9 @@
         "title": "Settings",
         "general": "General",
         "language": "Language",
+        "theme": "Theme",
+        "theme_light": "Light",
+        "theme_dark": "Dark",
         "model_hub": "Model Hub",
         "local_path": "Local Path",
         "download_desc": "Download a pre-trained model to start transcribing. These models are optimized for real-time speech recognition.",

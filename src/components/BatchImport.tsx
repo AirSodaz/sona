@@ -236,7 +236,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                         onClick={() => setEnableTimeline(!enableTimeline)}
                         role="switch"
                         aria-checked={enableTimeline}
-                        title="Toggle Timeline Mode"
+                        title={t('batch.timeline_mode_tooltip')}
                     >
                         <div className="toggle-switch-handle" />
                     </button>

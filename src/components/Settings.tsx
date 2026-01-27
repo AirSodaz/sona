@@ -304,8 +304,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         <button
                             className="btn btn-icon"
                             onClick={onClose}
-                            aria-label="Close"
-                            data-tooltip="Close"
+                            aria-label={t('common.close')}
+                            data-tooltip={t('common.close')}
                         >
                             <XIcon />
                         </button>

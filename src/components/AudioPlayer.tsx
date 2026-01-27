@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { formatDisplayTime } from '../utils/exportFormats';
 
@@ -29,6 +30,7 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
+    const { t } = useTranslation();
     const audioRef = useRef<HTMLAudioElement>(null);
 
     const audioUrl = useTranscriptStore((state) => state.audioUrl);
@@ -157,7 +159,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                 onError={(e) => {
                     const error = e.currentTarget.error;
                     console.error('Audio playback error:', error);
-                    alert(`Audio playback failed: ${error?.message || 'Unknown error'}. Code: ${error?.code}`);
+                    alert(t('player.error', { error: error?.message || 'Unknown error', code: error?.code }));
                 }}
             />
 
@@ -165,8 +167,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                 <button
                     className="btn btn-icon"
                     onClick={handlePlayPause}
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
-                    data-tooltip={isPlaying ? 'Pause' : 'Play'}
+                    aria-label={isPlaying ? t('player.pause') : t('player.play')}
+                    data-tooltip={isPlaying ? t('player.pause') : t('player.play')}
                 >
                     {isPlaying ? <PauseIcon /> : <PlayIcon />}
                 </button>
@@ -182,7 +184,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     step={0.1}
                     value={currentTime}
                     onChange={handleSliderChange}
-                    aria-label="Seek"
+                    aria-label={t('player.seek')}
                 />
                 <span className="audio-time">{formatDisplayTime(duration)}</span>
             </div>
@@ -197,7 +199,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     step={0.01}
                     value={volume}
                     onChange={handleVolumeChange}
-                    aria-label="Volume"
+                    aria-label={t('player.volume')}
                 />
             </div>
         </div>
