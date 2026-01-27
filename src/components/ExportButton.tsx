@@ -93,9 +93,13 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) =>
     return (
         <div className={`export-menu ${className}`} ref={dropdownRef}>
             <button
+                id="export-menu-button"
                 className="btn btn-secondary"
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={isExporting || segments.length === 0}
+                aria-haspopup="true"
+                aria-expanded={isOpen}
+                aria-controls="export-menu-dropdown"
             >
                 <DownloadIcon />
                 <span>{isExporting ? t('export.exporting') : t('export.button')}</span>
@@ -103,12 +107,18 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) =>
             </button>
 
             {isOpen && (
-                <div className="export-dropdown">
+                <div
+                    id="export-menu-dropdown"
+                    className="export-dropdown"
+                    role="menu"
+                    aria-labelledby="export-menu-button"
+                >
                     {exportOptions.map((option) => (
                         <button
                             key={option.format}
                             className="export-dropdown-item"
                             onClick={() => handleExport(option.format)}
+                            role="menuitem"
                         >
                             {option.icon}
                             <span>{option.label}</span>

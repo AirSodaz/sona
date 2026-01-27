@@ -21,3 +21,7 @@
 ## 2025-10-26 - Custom Progress Bars
 **Learning:** Custom progress indicators built with `div`s are invisible to screen readers without explicit semantics.
 **Action:** Always add `role="progressbar"`, `aria-valuenow`, `aria-valuemin`, and `aria-valuemax` to the container, and optionally `aria-live="polite"` to the text wrapper.
+
+## 2025-10-27 - Custom Dropdown Menus
+**Learning:** Custom dropdowns built with `div`s and `button`s (like Export menu) completely lack semantics for screen readers.
+**Action:** Implement the ARIA Menu pattern: `aria-haspopup`/`aria-expanded` on trigger, `role="menu"` on container, and `role="menuitem"` on items.
