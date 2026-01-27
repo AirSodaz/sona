@@ -498,27 +498,18 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             </div>
 
             {!isRecording && (
-                <div className="input-source-selector" style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                    <div className="select-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="input-source-selector">
+                    <div className="source-select-wrapper">
                         {inputSource === 'microphone' ? <Mic size={18} /> : (inputSource === 'desktop' ? <Monitor size={18} /> : <FileAudio size={18} />)}
                         <select
                             value={inputSource}
                             onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
                             aria-label={t('live.source_select')}
-                            style={{
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                border: '1px solid #ccc',
-                                background: 'transparent',
-                                color: 'inherit',
-                                fontSize: '0.9rem',
-                                cursor: 'pointer',
-                                outline: 'none'
-                            }}
+                            className="source-select"
                         >
-                            <option value="microphone" style={{ color: '#000' }}>{t('live.source_microphone')}</option>
-                            <option value="desktop" style={{ color: '#000' }}>{t('live.source_desktop')}</option>
-                            <option value="file" style={{ color: '#000' }}>{t('live.source_file')}</option>
+                            <option value="microphone">{t('live.source_microphone')}</option>
+                            <option value="desktop">{t('live.source_desktop')}</option>
+                            <option value="file">{t('live.source_file')}</option>
                         </select>
                     </div>
                 </div>
