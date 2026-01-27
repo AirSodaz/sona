@@ -892,6 +892,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                                             }}
                                                                             role="switch"
                                                                             aria-checked={isEnabled}
+                                                                            aria-label={t('settings.toggle_model', { name: model.name })}
                                                                             style={{ opacity: 1, cursor: 'pointer' }}
                                                                             onPointerDown={(e) => e.stopPropagation()}
                                                                         >
