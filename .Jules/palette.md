@@ -25,3 +25,7 @@
 ## 2025-10-27 - Custom Dropdown Menus
 **Learning:** Custom dropdowns built with `div`s and `button`s (like Export menu) completely lack semantics for screen readers.
 **Action:** Implement the ARIA Menu pattern: `aria-haspopup`/`aria-expanded` on trigger, `role="menu"` on container, and `role="menuitem"` on items.
+
+## 2025-10-27 - Accessible Modals
+**Learning:** Custom modals built with `div`s often lack the `dialog` role, making them confusing for screen reader users who don't know they are in a modal.
+**Action:** Always add `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` (pointing to the modal title) to the modal container.
