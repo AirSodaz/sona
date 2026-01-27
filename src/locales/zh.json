@@ -94,6 +94,8 @@
         "offline_models": "离线模型",
         "streaming_models": "流式模型",
         "offline_path_label": "离线模型路径",
-        "streaming_path_label": "流式模型路径"
+        "streaming_path_label": "流式模型路径",
+        "font": "字体",
+        "font_system": "系统默认"
     }
 }

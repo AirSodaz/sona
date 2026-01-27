@@ -46,4 +46,6 @@ export interface AppConfig {
   enableITN?: boolean;
   /** Application theme preference */
   theme?: 'auto' | 'light' | 'dark';
+  /** Font preference */
+  font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
 }

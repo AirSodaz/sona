@@ -65,6 +65,26 @@ function App() {
     applyTheme();
   }, [config.theme]);
 
+  // Apply font
+  useEffect(() => {
+    const font = config.font || 'system';
+    const root = document.documentElement;
+
+    if (font === 'system') {
+      root.style.removeProperty('--font-sans');
+    } else if (font === 'serif') {
+      root.style.setProperty('--font-sans', 'Merriweather, serif');
+    } else if (font === 'sans') {
+      root.style.setProperty('--font-sans', 'Inter, sans-serif');
+    } else if (font === 'mono') {
+      root.style.setProperty('--font-sans', 'JetBrains Mono, monospace');
+    } else if (font === 'arial') {
+      root.style.setProperty('--font-sans', 'Arial, sans-serif');
+    } else if (font === 'georgia') {
+      root.style.setProperty('--font-sans', 'Georgia, serif');
+    }
+  }, [config.font]);
+
   return (
     <div className="app">
       {/* Header */}

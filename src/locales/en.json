@@ -94,6 +94,8 @@
         "offline_models": "Offline Models",
         "streaming_models": "Streaming Models",
         "offline_path_label": "Offline Model Path",
-        "streaming_path_label": "Streaming Model Path"
+        "streaming_path_label": "Streaming Model Path",
+        "font": "Font",
+        "font_system": "System Default"
     }
 }

@@ -84,7 +84,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
     const [enableITN, setEnableITN] = useState(config.enableITN ?? true);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
+
     const [theme, setTheme] = useState(config.theme || 'auto');
+    const [font, setFont] = useState(config.font || 'system');
+
 
 
     // Download state
@@ -109,9 +112,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setOfflineModelPath(config.offlineModelPath);
         setEnableITN(config.enableITN ?? true);
         setAppLanguage(config.appLanguage || 'auto');
+
         setTheme(config.theme || 'auto');
+        setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.enableITN, config.appLanguage, config.theme]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -120,8 +125,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
 
     const handleSave = () => {
-        setConfig({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme });
-        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme }));
+
+        setConfig({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme, font });
+        localStorage.setItem('sona-config', JSON.stringify({ streamingModelPath, offlineModelPath, enableITN, appLanguage, theme, font }));
+
 
         // Apply language immediately
         if (appLanguage === 'auto') {
@@ -260,7 +267,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         offlineModelPath: parsed.offlineModelPath || '',
                         enableITN: parsed.enableITN ?? true,
                         appLanguage: parsed.appLanguage || 'auto',
-                        theme: parsed.theme || 'auto'
+                        theme: parsed.theme || 'auto',
+                        font: parsed.font || 'system'
+
                     });
                 }
             } catch (e) {
@@ -358,6 +367,26 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             <option value="auto">{t('common.auto')}</option>
                                             <option value="light">{t('settings.theme_light', { defaultValue: 'Light' })}</option>
                                             <option value="dark">{t('settings.theme_dark', { defaultValue: 'Dark' })}</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                                    <label htmlFor="settings-font" className="settings-label">{t('settings.font', { defaultValue: 'Font' })}</label>
+                                    <div style={{ maxWidth: 300 }}>
+                                        <select
+                                            id="settings-font"
+                                            className="settings-input"
+                                            value={font as string}
+                                            onChange={(e) => setFont(e.target.value as any)}
+                                            style={{ width: '100%', fontFamily: font === 'mono' ? 'monospace' : font === 'serif' ? 'serif' : 'inherit' }}
+                                        >
+                                            <option value="system">{t('settings.font_system', { defaultValue: 'System Default' })}</option>
+                                            <option value="serif">Serif (Merriweather)</option>
+                                            <option value="sans">Sans Serif (Inter)</option>
+                                            <option value="mono">Monospace (JetBrains Mono)</option>
+                                            <option value="arial">Arial</option>
+                                            <option value="georgia">Georgia</option>
                                         </select>
                                     </div>
                                 </div>

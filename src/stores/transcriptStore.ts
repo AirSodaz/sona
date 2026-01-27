@@ -57,6 +57,7 @@ const DEFAULT_CONFIG: AppConfig = {
     appLanguage: 'auto',
     enableITN: false,
     theme: 'auto',
+    font: 'system',
 };
 
 export const useTranscriptStore = create<TranscriptState>((set, get) => ({
