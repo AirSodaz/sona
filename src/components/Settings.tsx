@@ -96,7 +96,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState('');
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
-
+    const [abortController, setAbortController] = useState<AbortController | null>(null);
 
     const checkInstalledModels = async () => {
         const installed = new Set<string>();
@@ -164,6 +164,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleCancelDownload = () => {
+        if (abortController) {
+            abortController.abort();
+            setAbortController(null);
+            setStatusMessage('Cancelling...');
+        }
+    };
+
     const handleDownload = async (model: ModelInfo) => {
         if (downloadingId) return;
 
@@ -177,6 +185,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             if (!confirmed) return;
         }
 
+        const controller = new AbortController();
+        setAbortController(controller);
         setDownloadingId(model.id);
         setProgress(0);
 
@@ -184,7 +194,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
                 setProgress(pct);
                 setStatusMessage(status);
-            });
+            }, controller.signal);
 
             setModelPathByType(model.type, downloadedPath);
 
@@ -197,8 +207,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             }, 1000);
 
         } catch (error: any) {
-            console.error('Download failed:', error);
-            setTimeout(() => setDownloadingId(null), 3000);
+            if (error.message === 'Download cancelled') {
+                console.log('Download cancelled by user');
+            } else {
+                console.error('Download failed:', error);
+            }
+            // Reset state
+            setDownloadingId(null);
+            setAbortController(null);
         }
     };
 
@@ -432,12 +448,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             ) : (
                                                 <button
                                                     className="btn btn-secondary"
-                                                    onClick={() => handleDownload(model)}
-                                                    disabled={!!downloadingId}
-                                                    style={{ width: 120 }}
-                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
+                                                    disabled={!!downloadingId && downloadingId !== model.id}
+                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
                                                 >
-                                                    {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
+                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
                                                 </button>
                                             )}
                                         </div>
@@ -490,12 +506,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                             ) : (
                                                 <button
                                                     className="btn btn-secondary"
-                                                    onClick={() => handleDownload(model)}
-                                                    disabled={!!downloadingId}
-                                                    style={{ width: 120 }}
-                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
+                                                    disabled={!!downloadingId && downloadingId !== model.id}
+                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
                                                 >
-                                                    {downloadingId === model.id ? t('common.loading') : <><DownloadIcon /> {t('common.download')}</>}
+                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
                                                 </button>
                                             )}
                                         </div>

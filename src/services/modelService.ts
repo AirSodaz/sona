@@ -47,7 +47,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
         type: 'streaming',
         language: 'zh,en',
-        size: '~140 MB',
+        size: '~900 MB',
         engine: 'onnx'
     },
     {
@@ -127,7 +127,7 @@ class ModelService {
         return { compatible: true };
     }
 
-    async downloadModel(modelId: string, onProgress?: ProgressCallback): Promise<string> {
+    async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         if (!model) throw new Error('Model not found');
 
@@ -150,9 +150,22 @@ class ModelService {
         let lastDownloaded = 0;
         let lastTime = Date.now();
 
+        // Generate a unique ID for this download request
+        const downloadId = Math.random().toString(36).substring(7);
+
+        if (signal) {
+            signal.addEventListener('abort', async () => {
+                try {
+                    await invoke('cancel_download', { id: downloadId });
+                } catch (e) {
+                    console.error('Failed to cancel download:', e);
+                }
+            });
+        }
+
         if (onProgress) {
             unlisten = await listen<any>('download-progress', (event) => { // Changed type to any to inspect raw payload
-                console.log('[ModelService] Download progress event:', event);
+
                 const payload = event.payload;
                 // Handle both [downloaded, total] tuple and potential object wrapper
                 let downloaded = 0;
@@ -161,17 +174,9 @@ class ModelService {
                 if (Array.isArray(payload)) {
                     [downloaded, total] = payload;
                 } else if (typeof payload === 'object' && payload !== null) {
-                    // Check if it's an object with keys like { downloaded: number, total: number } or just handle it if structure is different
-                    // For now assuming existing contract should be tuple, but logging will reveal truth.
-                    // It is possible bindings return it differently.
-                    // The original code expected [number, number]
-                    // Let's stick to original logic but with logging first, but wait, 
-                    // if I change type to any I can inspect safely.
                     downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
                     total = (payload as any)[1] || (payload as any).total || 0;
                 }
-
-                console.log('[ModelService] Parsed progress:', { downloaded, total });
 
                 // Calculate speed
                 const now = Date.now();
@@ -203,6 +208,8 @@ class ModelService {
 
         try {
             for (const mirror of mirrors) {
+                if (signal?.aborted) throw new Error('Download cancelled');
+
                 try {
                     const url = mirror ? `${mirror}${model.url}` : model.url;
 
@@ -210,15 +217,19 @@ class ModelService {
                         onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
                     }
 
-                    console.log(`Attempting download from: ${url}`);
+                    console.log(`Attempting download from: ${url} with ID: ${downloadId}`);
                     await invoke('download_file', {
                         url: url,
-                        outputPath: tempFilePath
+                        outputPath: tempFilePath,
+                        id: downloadId
                     });
 
                     downloadSuccess = true;
                     break; // Success!
-                } catch (error) {
+                } catch (error: any) {
+                    if (signal?.aborted || error.toString().includes('cancelled')) {
+                        throw new Error('Download cancelled');
+                    }
                     console.warn(`Download failed via ${mirror || 'direct'}:`, error);
                     lastError = error;
                     // Continue to next mirror
@@ -237,6 +248,8 @@ class ModelService {
             return tempFilePath;
         }
 
+        if (signal?.aborted) throw new Error('Download cancelled');
+
         onProgress?.(50, 'Saving to disk (instant)...');
         // No manual saving needed, Rust did it directly
 
@@ -254,29 +267,13 @@ class ModelService {
 
         try {
             console.log('Starting extraction...');
-            try {
-                // Try sidecar extraction first
-                await this.extractWithSidecar(tempFilePath, modelsDir, onProgress);
-            } catch (error) {
-                console.warn('Sidecar extraction failed, falling back to built-in:', error);
-
-                onProgress?.(60, '7zip failed, using fallback...');
-
-                try {
-                    // Fallback to built-in
-                    await invoke('extract_tar_bz2', {
-                        archivePath: tempFilePath,
-                        targetDir: modelsDir
-                    });
-                } catch (fallbackError) {
-                    throw new Error(`Extraction failed (both methods): ${fallbackError}`);
-                }
-            }
+            // Try sidecar extraction
+            await this.extractWithSidecar(tempFilePath, modelsDir, onProgress, signal);
+        } catch (error) {
+            throw new Error(`Extraction failed: ${error}`);
         } finally {
             if (extractUnlisten) extractUnlisten();
         }
-
-
 
         // Clean up archive
         await remove(tempFilePath);
@@ -310,7 +307,7 @@ class ModelService {
         }
     }
 
-    private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback): Promise<void> {
+    private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
         console.log('[ModelService] Attempting extraction via sidecar (7zip)...');
 
         const scriptPath = await resolveResource('sidecar/dist/index.mjs');
@@ -322,11 +319,16 @@ class ModelService {
         ];
 
         const command = Command.sidecar('binaries/node', args);
+        let child: any = null;
 
         return new Promise(async (resolve, reject) => {
             let stderr = '';
 
             command.on('close', (data) => {
+                if (signal?.aborted) {
+                    reject(new Error('Extraction cancelled'));
+                    return;
+                }
                 if (data.code === 0) {
                     resolve();
                 } else {
@@ -357,7 +359,22 @@ class ModelService {
                 console.log('[Extract Sidecar stderr]', line);
             });
 
-            await command.spawn();
+            child = await command.spawn();
+
+            if (signal) {
+                signal.addEventListener('abort', async () => {
+                    if (child) {
+                        try {
+                            // Use kill if available on Child, or invoke kill command?
+                            // Tauri v2 Command.spawn() returns a Child object which has kill().
+                            await child.kill();
+                        } catch (e) {
+                            console.error('Failed to kill extraction process:', e);
+                        }
+                    }
+                    reject(new Error('Extraction cancelled'));
+                });
+            }
         });
     }
 }

@@ -1,5 +1,23 @@
 mod hardware;
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tokio::sync::Notify;
+
+struct DownloadState {
+    downloads: Mutex<HashMap<String, Arc<Notify>>>,
+}
+
+#[tauri::command]
+fn cancel_download(state: tauri::State<DownloadState>, id: String) -> Result<(), String> {
+    if let Ok(downloads) = state.downloads.lock() {
+        if let Some(notify) = downloads.get(&id) {
+            notify.notify_one();
+        }
+    }
+    Ok(())
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -87,11 +105,18 @@ where
 #[tauri::command]
 async fn download_file<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
+    state: tauri::State<'_, DownloadState>,
     url: String,
     output_path: String,
+    id: String,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
     use tauri::Emitter;
+
+    let notify = Arc::new(Notify::new());
+    if let Ok(mut downloads) = state.downloads.lock() {
+        downloads.insert(id.clone(), notify.clone());
+    }
 
     let client = reqwest::Client::builder()
         .user_agent("Sona/1.0")
@@ -101,26 +126,76 @@ async fn download_file<R: tauri::Runtime>(
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     if !res.status().is_success() {
+        // cleanup
+        if let Ok(mut downloads) = state.downloads.lock() {
+            downloads.remove(&id);
+        }
         return Err(format!("Download failed with status: {}", res.status()));
     }
 
     let total_size = res.content_length().unwrap_or(0);
-    let file = tokio::fs::File::create(&output_path)
+    let mut file = tokio::fs::File::create(&output_path)
         .await
         .map_err(|e| e.to_string())?;
-    let stream = res
+    let mut stream = res
         .bytes_stream()
         .map(|item| item.map_err(|e| e.to_string()));
 
-    process_download(stream, file, total_size, move |downloaded, total| {
-        let _ = app.emit("download-progress", (downloaded, total));
-    })
-    .await
+    let mut downloaded: u64 = 0;
+    let mut last_emit = std::time::Instant::now(); // Use std::time::Instant directly
+
+    let result = loop {
+        tokio::select! {
+             _ = notify.notified() => {
+                 break Err("Download cancelled".to_string());
+             }
+             item = stream.next() => {
+                 match item {
+                     Some(chunk_res) => {
+                         let chunk = match chunk_res {
+                             Ok(c) => c,
+                             Err(e) => break Err(e),
+                         };
+                         use tokio::io::AsyncWriteExt;
+                         if let Err(e) = file.write_all(&chunk).await {
+                             break Err(e.to_string());
+                         }
+                         downloaded += chunk.len() as u64;
+
+                         if total_size > 0 {
+                             if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
+                                 let _ = app.emit("download-progress", (downloaded, total_size));
+                                 last_emit = std::time::Instant::now();
+                             }
+                         }
+                     }
+                     None => {
+                        break Ok(());
+                     }
+                 }
+             }
+        }
+    };
+
+    // Cleanup
+    if let Ok(mut downloads) = state.downloads.lock() {
+        downloads.remove(&id);
+    }
+
+    // If cancelled, delete the partial file
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&output_path).await;
+    }
+
+    result
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(DownloadState {
+            downloads: std::sync::Mutex::new(std::collections::HashMap::new()),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -130,6 +205,7 @@ pub fn run() {
             greet,
             extract_tar_bz2,
             download_file,
+            cancel_download,
             hardware::check_gpu_availability
         ])
         .run(tauri::generate_context!())

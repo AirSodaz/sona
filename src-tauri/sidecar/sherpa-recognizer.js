@@ -508,6 +508,8 @@ async function processExtraction(archivePath, targetDir) {
         // mkdirSync(targetDir, { recursive: true });
     }
 
+    const isTarBz2 = archivePath.toLowerCase().endsWith('.tar.bz2');
+
     return new Promise((resolve, reject) => {
         const stream = Seven.extractFull(archivePath, targetDir, {
             $bin: sevenZipPath,
@@ -516,8 +518,13 @@ async function processExtraction(archivePath, targetDir) {
         });
 
         stream.on('progress', (progress) => {
+            let percentage = progress.percent;
+            // If it's a tar.bz2, this is just step 1 (bz2 -> tar), so scale 0-50%
+            if (isTarBz2) {
+                percentage = Math.round(percentage / 2);
+            }
             console.log(JSON.stringify({
-                percentage: progress.percent,
+                percentage: percentage,
                 status: progress.file || 'Extracting...',
                 type: 'progress'
             }));
@@ -541,8 +548,10 @@ async function processExtraction(archivePath, targetDir) {
                         });
 
                         streamTar.on('progress', (p) => {
+                            // Step 2: tar -> files, scale 50-100%
+                            const percentage = 50 + Math.round(p.percent / 2);
                             console.log(JSON.stringify({
-                                percentage: p.percent,
+                                percentage: percentage,
                                 status: `Extracting tar: ${p.file || ''}`,
                                 type: 'progress'
                             }));
@@ -574,6 +583,7 @@ async function processExtraction(archivePath, targetDir) {
         });
     });
 }
+
 
 
 
