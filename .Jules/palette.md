@@ -37,3 +37,7 @@
 ## 2026-01-30 - Keyboard Accessible Tooltips
 **Learning:** CSS-only tooltips using `:hover` are invisible to keyboard users who navigate via Tab.
 **Action:** Always include `:focus-visible` alongside `:hover` selectors for tooltip visibility (e.g., `[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after`).
+
+## 2026-01-27 - Inline Styles vs. Global CSS
+**Learning:** This repo does not use Tailwind or utility classes; it relies on a large `src/styles/index.css` with semantic classes and CSS variables.
+**Action:** Do not introduce new utility classes; instead, define semantic classes in `src/styles/index.css` to replace inline styles, leveraging existing variables (e.g., `--color-border`).
