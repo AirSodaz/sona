@@ -17,3 +17,7 @@
 ## 2025-02-27 - [Regex Replace vs Test]
 **Learning:** `String.prototype.replace(regex, '')` allocates a new string even if no replacement occurs (depending on the engine, but observed overhead exists). For operations run in tight loops (e.g. 10k+ times), checking `regex.test()` first can save significant time (~50% speedup) if the match frequency is low.
 **Action:** When cleaning strings in a loop where the target pattern is rare, guard `replace` with `test` to avoid unnecessary allocations.
+
+## 2025-03-05 - [Tauri Sidecar Stream Buffering]
+**Learning:** Data from Tauri's `Command` stdout/stderr events is chunked and not guaranteed to be line-aligned. Parsing chunks as JSON directly (`JSON.parse(chunk)`) fails randomly when chunks are split, causing data loss and performance penalties from exception handling.
+**Action:** Always implement a line buffer when processing text streams from sidecars. Accumulate chunks, split by newline, and only process complete lines.
