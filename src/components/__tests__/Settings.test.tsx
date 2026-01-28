@@ -170,4 +170,10 @@ describe('Settings', () => {
         expect(newPanel.id).toBe('settings-panel-models');
         expect(newPanel.getAttribute('aria-labelledby')).toBe(modelTab.id);
     });
+
+    it('closes on Escape key press', () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(onClose).toHaveBeenCalled();
+    });
 });
