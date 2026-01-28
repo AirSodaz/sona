@@ -11,31 +11,21 @@ export interface ModelInfo {
     name: string;
     description: string;
     url: string;
-    type: 'streaming' | 'offline' | 'punctuation';
+    type: 'recognition' | 'punctuation' | 'vad';
     language: string;
     size: string; // Display size
     isArchive?: boolean;
     filename?: string;
-    engine: 'onnx' | 'ncnn';
+    engine?: 'onnx';
 }
 
 export const PRESET_MODELS: ModelInfo[] = [
-    {
-        id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer',
-        description: 'Streaming Paraformer model for Chinese and English',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
-        type: 'streaming',
-        language: 'zh,en',
-        size: '~999 MB',
-        engine: 'onnx'
-    },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
         name: 'Multilingual - SenseVoice (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (Int8 quantized)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2',
-        type: 'offline',
+        type: 'recognition',
         language: 'zh,en,ja,ko,yue',
         size: '~158 MB',
         engine: 'onnx'
@@ -45,29 +35,9 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Multilingual - SenseVoice',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09.tar.bz2',
-        type: 'offline',
+        type: 'recognition',
         language: 'zh,en,ja,ko,yue',
         size: '~845 MB',
-        engine: 'onnx'
-    },
-    {
-        id: 'sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17',
-        name: 'Multilingual - SenseVoice FunaR Nano (Int8)',
-        description: 'SenseVoice FunaR Nano model (Int8 quantized)',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-funasr-nano-int8-2025-12-17.tar.bz2',
-        type: 'offline',
-        language: 'zh,en,ja,ko,yue',
-        size: '~179 MB',
-        engine: 'onnx'
-    },
-    {
-        id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
-        name: 'Multilingual - Funasr Nano (Int8)',
-        description: 'Funasr Nano model (Int8 quantized)',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
-        type: 'offline',
-        language: 'zh,en,ja,ko,yue',
-        size: '~716 MB',
         engine: 'onnx'
     },
     {
@@ -89,35 +59,22 @@ export const PRESET_MODELS: ModelInfo[] = [
         language: 'zh,en',
         size: '~266 MB',
         engine: 'onnx'
+    },
+    {
+        id: 'silero_vad',
+        name: 'VAD - Silero',
+        description: 'Voice Activity Detection model. Required for SenseVoice pseudo-streaming.',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx',
+        type: 'vad',
+        language: 'universal',
+        size: '< 1 MB',
+        engine: 'onnx',
+        filename: 'silero_vad.onnx',
+        isArchive: false
     }
 ];
 
-export const ITN_MODELS = [
-    {
-        id: 'itn-zh-number',
-        name: 'Chinese Number ITN',
-        description: 'Inverse Text Normalization for Chinese Numbers',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
-        filename: 'itn_zh_number.fst',
-        size: '< 1 MB'
-    },
-    {
-        id: 'itn-new-heteronym',
-        name: 'New Heteronym ITN',
-        description: 'New Heteronym ITN rules',
-        url: 'https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/main/data/new_heteronym.fst',
-        filename: 'new_heteronym.fst',
-        size: '< 1 MB'
-    },
-    {
-        id: 'itn-phone',
-        name: 'Phone ITN',
-        description: 'Phone ITN rules',
-        url: 'https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/resolve/main/data/phone.fst',
-        filename: 'phone.fst',
-        size: '< 1 MB'
-    }
-];
+
 
 export type ProgressCallback = (percentage: number, status: string) => void;
 
@@ -135,22 +92,7 @@ class ModelService {
     async checkHardware(modelId: string): Promise<{ compatible: boolean, reason?: string }> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         if (!model) return { compatible: false, reason: 'Model not found' };
-
-        if (model.engine === 'ncnn') {
-            try {
-                const hasGpu = await invoke<boolean>('check_gpu_availability');
-                if (!hasGpu) {
-                    return {
-                        compatible: false,
-                        reason: 'No compatible GPU detected (Apple Silicon or NVIDIA). This model requires a GPU.'
-                    };
-                }
-            } catch (e) {
-                console.error('Hardware check failed:', e);
-                // Safe default: assume incompatible if check fails
-                return { compatible: false, reason: 'Hardware check failed.' };
-            }
-        }
+        // ONNX models are CPU compatible, no special check needed currently.
         return { compatible: true };
     }
 
@@ -342,160 +284,7 @@ class ModelService {
         }
     }
 
-    async getITNModelPath(modelId: string): Promise<string> {
-        const model = ITN_MODELS.find(m => m.id === modelId);
-        if (!model) return '';
-        const modelsDir = await this.getModelsDir();
-        return await join(modelsDir, model.filename);
-    }
 
-    /**
-     * Efficiently resolve paths for all enabled ITN models in parallel.
-     * Respects the provided order.
-     */
-    async getEnabledITNModelPaths(enabledModels: Set<string>, order: string[]): Promise<string[]> {
-        const modelsDir = await this.getModelsDir();
-
-        // 1. Models in the specified order
-        const orderedModels = order.filter(id => enabledModels.has(id));
-
-        // 2. Any other enabled models not in the order (fallback)
-        const remainingModels = Array.from(enabledModels).filter(id => !order.includes(id));
-
-        const allModelsToCheck = [...orderedModels, ...remainingModels];
-
-        // Parallelize file system checks
-        const results = await Promise.all(allModelsToCheck.map(async (id) => {
-            const model = ITN_MODELS.find(m => m.id === id);
-            if (!model) return null;
-
-            // Construct path manually to avoid re-calling getModelsDir
-            const path = await join(modelsDir, model.filename);
-            if (await exists(path)) {
-                return path;
-            }
-            return null;
-        }));
-
-        return results.filter((p): p is string => p !== null);
-    }
-
-    async isITNModelInstalled(modelId: string): Promise<boolean> {
-        const path = await this.getITNModelPath(modelId);
-        return await exists(path);
-    }
-
-    async downloadITNModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const model = ITN_MODELS.find(m => m.id === modelId);
-        if (!model) throw new Error('ITN Model not found');
-
-        const modelsDir = await this.getModelsDir();
-        const targetPath = await join(modelsDir, model.filename);
-
-        if (await exists(targetPath)) return targetPath;
-
-        // Mirrors to try in order
-        const mirrors = [
-            '', // Direct
-            'https://mirror.ghproxy.com/',
-            'https://ghproxy.net/'
-        ];
-
-        const downloadId = Math.random().toString(36).substring(7);
-
-        if (signal) {
-            signal.addEventListener('abort', async () => {
-                try {
-                    await invoke('cancel_download', { id: downloadId });
-                } catch (e) {
-                    console.error('Failed to cancel download:', e);
-                }
-            });
-        }
-
-        let unlisten: (() => void) | undefined;
-        let lastDownloaded = 0;
-        let lastTime = Date.now();
-
-        if (onProgress) {
-            unlisten = await listen<any>('download-progress', (event) => {
-                const payload = event.payload;
-                let downloaded = 0;
-                let total = 0;
-
-                if (Array.isArray(payload)) {
-                    [downloaded, total] = payload;
-                } else if (typeof payload === 'object' && payload !== null) {
-                    downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
-                    total = (payload as any)[1] || (payload as any).total || 0;
-                }
-
-                const now = Date.now();
-                const timeDiff = now - lastTime;
-
-                if (timeDiff > 500 || total === downloaded) {
-                    const bytesDiff = downloaded - lastDownloaded;
-                    const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-                    let speedStr = '';
-
-                    if (speedBytesPerSec > 1024 * 1024) {
-                        speedStr = `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`;
-                    } else {
-                        speedStr = `${Math.round(speedBytesPerSec / 1024)} KB/s`;
-                    }
-
-                    lastDownloaded = downloaded;
-                    lastTime = now;
-
-                    if (total > 0) {
-                        const percentage = Math.round((downloaded / total) * 100);
-                        onProgress(percentage, `Downloading ITN Model... (${speedStr})`);
-                    }
-                }
-            });
-        }
-
-        try {
-            let downloadSuccess = false;
-            let lastError: any = null;
-
-            for (const mirror of mirrors) {
-                if (signal?.aborted) throw new Error('Download cancelled');
-
-                try {
-                    const url = mirror ? `${mirror}${model.url}` : model.url;
-
-                    if (onProgress) {
-                        onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
-                    }
-
-                    console.log(`Attempting download ITN from: ${url} with ID: ${downloadId}`);
-                    await invoke('download_file', {
-                        url: url,
-                        outputPath: targetPath,
-                        id: downloadId
-                    });
-
-                    downloadSuccess = true;
-                    break;
-                } catch (error: any) {
-                    if (signal?.aborted || error.toString().includes('cancelled')) {
-                        throw new Error('Download cancelled');
-                    }
-                    console.warn(`Download ITN failed via ${mirror || 'direct'}:`, error);
-                    lastError = error;
-                }
-            }
-
-            if (!downloadSuccess) {
-                throw new Error(`Download ITN failed: ${lastError}`);
-            }
-
-            return targetPath;
-        } finally {
-            if (unlisten) unlisten();
-        }
-    }
 
     private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
         console.log('[ModelService] Attempting extraction via sidecar (7zip)...');

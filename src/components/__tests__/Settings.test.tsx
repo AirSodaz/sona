@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Settings } from '../Settings';
-import { modelService } from '../../services/modelService';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -15,8 +14,8 @@ const mockSetConfig = vi.fn();
 vi.mock('../../stores/transcriptStore', () => ({
     useTranscriptStore: (selector: any) => selector({
         config: {
-            streamingModelPath: '/test/streaming',
-            offlineModelPath: '/test/offline',
+            recognitionModelPath: '/test/recognition',
+            punctuationModelPath: '/test/punctuation',
             enableITN: true,
             appLanguage: 'auto'
         },
@@ -26,20 +25,14 @@ vi.mock('../../stores/transcriptStore', () => ({
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'streaming', size: '100MB', description: 'Test', engine: 'onnx' }
-    ],
-    ITN_MODELS: [
-        { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst' }
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'recognition', size: '100MB', description: 'Test', engine: 'onnx' }
     ],
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false),
-        isITNModelInstalled: vi.fn().mockResolvedValue(false),
         checkHardware: vi.fn().mockResolvedValue({ compatible: true }),
         downloadModel: vi.fn(),
         getModelPath: vi.fn(),
         deleteModel: vi.fn(),
-        getITNModelPath: vi.fn(),
-        downloadITNModel: vi.fn(),
     }
 }));
 
@@ -91,7 +84,7 @@ describe('Settings', () => {
 
         // Switch to Local Path
         fireEvent.click(screen.getByText('settings.local_path'));
-        expect(screen.getByDisplayValue('/test/streaming')).toBeDefined();
+        expect(screen.getByDisplayValue('/test/recognition')).toBeDefined();
     });
 
     it('closes when close button is clicked', () => {
@@ -111,12 +104,10 @@ describe('Settings', () => {
         fireEvent.click(screen.getByText('settings.save_button'));
 
         expect(mockSetConfig).toHaveBeenCalledWith({
-            streamingModelPath: '/test/streaming',
-            offlineModelPath: '/test/offline',
-            punctuationModelPath: '',
+            recognitionModelPath: '/test/recognition',
+            punctuationModelPath: '/test/punctuation',
+            vadModelPath: '',
             enableITN: true,
-            enabledITNModels: ['itn-zh-number'],
-            itnRulesOrder: ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
             appLanguage: 'auto',
             theme: 'auto',
             font: 'system'
@@ -124,16 +115,14 @@ describe('Settings', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('renders accessible ITN toggle switches', async () => {
-        vi.mocked(modelService.isITNModelInstalled).mockResolvedValue(true);
+    it('renders ITN toggle switch', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
         fireEvent.click(screen.getByText('settings.local_path'));
 
-        // Should find the switch because we mocked isITNModelInstalled to true
-        // and useTranslation mock returns the key
+        // Should find the switch for enable ITN
         const toggle = await screen.findByRole('switch');
         expect(toggle).toBeDefined();
-        expect(toggle.getAttribute('aria-label')).toBe('settings.toggle_model');
+        expect(toggle.getAttribute('aria-checked')).toBe('true');
     });
 
     it('implements ARIA tabs pattern', () => {

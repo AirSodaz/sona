@@ -12,11 +12,19 @@ class TranscriptionService {
     private child: Child | null = null;
     private isRunning: boolean = false;
     private modelPath: string = '';
-    private itnModelPaths: string[] = [];
+
     private punctuationModelPath: string = '';
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
+    private onReady: (() => void) | null = null;
+
     private onError: ErrorCallback | null = null;
+    private vadModelPath: string = '';
+
+    // Session Management for Isolation
+    private totalSamplesSent: number = 0;
+    private sessionStartTime: number = 0;
+    private readonly SAMPLE_RATE = 16000;
 
     constructor() { }
 
@@ -28,18 +36,20 @@ class TranscriptionService {
         this.modelPath = path;
     }
 
-    /**
-     * Set the ITN model paths
-     */
-    setITNModelPaths(paths: string[]) {
-        this.itnModelPaths = paths;
-    }
+
 
     /**
      * Set the punctuation model path
      */
     setPunctuationModelPath(path: string) {
         this.punctuationModelPath = path;
+    }
+
+    /**
+     * Set the VAD model path
+     */
+    setVadModelPath(path: string) {
+        this.vadModelPath = path;
     }
 
     /**
@@ -50,10 +60,27 @@ class TranscriptionService {
     }
 
     /**
+     * Start a new transcription session
+     * Sets the time barrier for valid segments
+     */
+    startSession() {
+        // Calculate current "time" based on samples sent
+        // Any segment ending before this time belongs to a previous session
+        this.sessionStartTime = this.totalSamplesSent / this.SAMPLE_RATE;
+        console.log('[TranscriptionService] Starting new session at time:', this.sessionStartTime);
+    }
+
+    /**
      * Start the transcription sidecar
      */
-    async start(onSegment: TranscriptionCallback, onError: ErrorCallback) {
-        if (this.isRunning) return;
+    async start(onSegment: TranscriptionCallback, onError: ErrorCallback, onReady?: () => void) {
+        if (this.isRunning) {
+            // Update callbacks
+            this.onSegment = onSegment;
+            this.onError = onError;
+            if (onReady) this.onReady = onReady;
+            return;
+        }
         if (!this.modelPath) {
             onError('Model path not configured');
             return;
@@ -61,6 +88,9 @@ class TranscriptionService {
 
         this.onSegment = onSegment;
         this.onError = onError;
+        this.onReady = onReady || null;
+        this.totalSamplesSent = 0;
+        this.sessionStartTime = 0;
 
         console.log('Starting sidecar with model:', this.modelPath);
 
@@ -74,12 +104,14 @@ class TranscriptionService {
                 '--enable-itn', this.enableITN.toString()
             ];
 
-            if (this.itnModelPaths.length > 0) {
-                args.push('--itn-model', this.itnModelPaths.join(','));
-            }
+
 
             if (this.punctuationModelPath) {
                 args.push('--punctuation-model', this.punctuationModelPath);
+            }
+
+            if (this.vadModelPath) {
+                args.push('--vad-model', this.vadModelPath);
             }
 
             if (import.meta.env.DEV) {
@@ -170,6 +202,7 @@ class TranscriptionService {
             // We need to send bytes. Uint8Array view of Int16Array
             const bytes = new Uint8Array(buffer.buffer);
             await this.child.write(bytes);
+            this.totalSamplesSent += samples.length;
         } catch (error) {
             console.error('Failed to write audio to sidecar:', error);
         }
@@ -187,9 +220,23 @@ class TranscriptionService {
             // Use byteOffset and byteLength to handle cases where Int16Array is a view
             const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
             await this.child.write(bytes);
+            this.totalSamplesSent += samples.length;
         } catch (error) {
             console.error('Failed to write audio to sidecar:', error);
         }
+    }
+
+    /**
+     * Force the end of a segment by sending silence
+     * This helps the VAD detect silence and finalize the current segment
+     */
+    async forceEndSegment() {
+        if (!this.child || !this.isRunning) return;
+
+        console.log('[TranscriptionService] Forcing end of segment with silence');
+        // Send 1 second of silence
+        const silence = new Float32Array(16000).fill(0);
+        await this.sendAudio(silence);
     }
 
     /**
@@ -226,9 +273,7 @@ class TranscriptionService {
                     '--enable-itn', this.enableITN.toString()
                 ];
 
-                if (this.itnModelPaths.length > 0) {
-                    args.push('--itn-model', this.itnModelPaths.join(','));
-                }
+
 
                 if (this.punctuationModelPath) {
                     args.push('--punctuation-model', this.punctuationModelPath);
@@ -344,7 +389,17 @@ class TranscriptionService {
             const data = JSON.parse(line);
 
             // Check for segments
-            if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
+            if (data.type === 'ready') {
+                console.log('[TranscriptionService] Sidecar ready');
+                if (this.onReady) this.onReady();
+            } else if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
+                // Filter out stale segments from previous sessions
+                // Use a small tolerance (0.1s) to allow for minor alignment differences
+                if (this.sessionStartTime > 0 && data.end <= this.sessionStartTime + 0.1) {
+                    console.warn(`[TranscriptionService] Dropping stale segment (End: ${data.end}, SessionStart: ${this.sessionStartTime}): ${data.text}`);
+                    return;
+                }
+
                 const segment: TranscriptSegment = {
                     id: data.id || uuidv4(),
                     text: data.text,

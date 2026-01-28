@@ -2,25 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
+import { PRESET_MODELS, modelService, ModelInfo } from '../services/modelService';
 import { open } from '@tauri-apps/plugin-dialog';
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent
-} from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
-    useSortable
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+
 
 // Icons
 const FolderIcon = () => (
@@ -87,46 +71,7 @@ const LocalIcon = () => (
     </svg>
 );
 
-const DragHandleIcon = () => (
-    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: 'grab', color: 'var(--color-text-muted)' }}>
-        <circle cx="9" cy="12" r="1" />
-        <circle cx="9" cy="5" r="1" />
-        <circle cx="9" cy="19" r="1" />
-        <circle cx="15" cy="12" r="1" />
-        <circle cx="15" cy="5" r="1" />
-        <circle cx="15" cy="19" r="1" />
-    </svg>
-);
 
-function SortableItem(props: any) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-    } = useSortable({ id: props.id });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        touchAction: 'none', // Prevent scrolling on touch while dragging
-        ...props.style
-    };
-
-    return (
-        <div ref={setNodeRef} style={style}>
-            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                <div {...attributes} {...listeners} style={{ display: 'flex', alignItems: 'center', paddingRight: 8, cursor: 'grab' }}>
-                    <DragHandleIcon />
-                </div>
-                <div style={{ flex: 1 }}>
-                    {props.children}
-                </div>
-            </div>
-        </div>
-    );
-}
 
 interface SettingsProps {
     isOpen: boolean;
@@ -140,11 +85,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
-    const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
-    const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
+    const [recognitionModelPath, setRecognitionModelPath] = useState(config.recognitionModelPath);
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
-    const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-    const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
+    const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
+    const [enableITN, setEnableITN] = useState(!!config.enableITN);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
     const [theme, setTheme] = useState(config.theme || 'auto');
@@ -158,26 +102,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [progress, setProgress] = useState(0);
     const [statusMessage, setStatusMessage] = useState('');
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
-    const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
     const [abortController, setAbortController] = useState<AbortController | null>(null);
-    const sensors = useSensors(
-        useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
 
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
 
-        if (over && active.id !== over.id) {
-            setItnRulesOrder((items) => {
-                const oldIndex = items.indexOf(String(active.id));
-                const newIndex = items.indexOf(String(over.id));
-                return arrayMove(items, oldIndex, newIndex);
-            });
-        }
-    };
 
     const checkInstalledModels = async () => {
         const installed = new Set<string>();
@@ -187,28 +114,19 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             }
         }
         setInstalledModels(installed);
-
-        const installedITN = new Set<string>();
-        for (const model of ITN_MODELS) {
-            if (await modelService.isITNModelInstalled(model.id)) {
-                installedITN.add(model.id);
-            }
-        }
-        setInstalledITNModels(installedITN);
     };
 
     useEffect(() => {
-        setStreamingModelPath(config.streamingModelPath);
-        setOfflineModelPath(config.offlineModelPath);
+        setRecognitionModelPath(config.recognitionModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
-        setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-        setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
+        setVadModelPath(config.vadModelPath || '');
+        setEnableITN(!!config.enableITN);
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
+    }, [config.recognitionModelPath, config.punctuationModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -217,25 +135,20 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
 
     const handleSave = () => {
-        const enabledList = Array.from(enabledITNModels);
         setConfig({
-            streamingModelPath,
-            offlineModelPath,
+            recognitionModelPath,
             punctuationModelPath,
-            enabledITNModels: enabledList,
-            itnRulesOrder,
-            enableITN: enabledList.length > 0, // Legacy support
+            vadModelPath,
+            enableITN,
             appLanguage,
             theme,
             font
         });
         localStorage.setItem('sona-config', JSON.stringify({
-            streamingModelPath,
-            offlineModelPath,
+            recognitionModelPath,
             punctuationModelPath,
-            enabledITNModels: enabledList,
-            itnRulesOrder,
-            enableITN: enabledList.length > 0,
+            vadModelPath,
+            enableITN,
             appLanguage,
             theme,
             font
@@ -252,24 +165,24 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleBrowse = async (type: 'streaming' | 'offline' | 'punctuation') => {
+    const handleBrowse = async (type: 'recognition' | 'punctuation' | 'vad') => {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: type === 'streaming' ? t('settings.streaming_path_label') :
-                    type === 'offline' ? t('settings.offline_path_label') : 'Select Punctuation Model Path'
+                title: type === 'recognition' ? t('settings.recognition_path_label') :
+                    type === 'punctuation' ? t('settings.punctuation_path_label') : t('settings.vad_path_label')
             });
 
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'streaming') {
-                        setStreamingModelPath(path);
-                    } else if (type === 'offline') {
-                        setOfflineModelPath(path);
-                    } else {
+                    if (type === 'recognition') {
+                        setRecognitionModelPath(path);
+                    } else if (type === 'punctuation') {
                         setPunctuationModelPath(path);
+                    } else {
+                        setVadModelPath(path);
                     }
                 }
             }
@@ -332,36 +245,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const handleDownloadITN = async (modelId: string) => {
-        if (downloadingId) return;
 
-        const controller = new AbortController();
-        setAbortController(controller);
-        setDownloadingId(modelId);
-        setProgress(0);
-
-        try {
-            await modelService.downloadITNModel(modelId, (pct, status) => {
-                setProgress(pct);
-                setStatusMessage(status);
-            }, controller.signal);
-
-            await checkInstalledModels();
-            // Automatically enable ITN after download
-            setEnabledITNModels(prev => new Set(prev).add(modelId));
-            setDownloadingId(null);
-
-        } catch (error: any) {
-            if (error.message === 'Download cancelled') {
-                console.log('Download cancelled by user');
-            } else {
-                console.error('Download failed:', error);
-            }
-            // Reset state
-            setDownloadingId(null);
-            setAbortController(null);
-        }
-    };
 
     const handleLoad = async (model: ModelInfo) => {
         try {
@@ -372,13 +256,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const setModelPathByType = (type: 'streaming' | 'offline' | 'punctuation', path: string) => {
-        if (type === 'streaming') {
-            setStreamingModelPath(path);
-        } else if (type === 'offline') {
-            setOfflineModelPath(path);
-        } else {
+    const setModelPathByType = (type: 'recognition' | 'punctuation' | 'vad', path: string) => {
+        if (type === 'recognition') {
+            setRecognitionModelPath(path);
+        } else if (type === 'punctuation') {
             setPunctuationModelPath(path);
+        } else if (type === 'vad') {
+            setVadModelPath(path);
         }
     };
 
@@ -399,14 +283,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
-            if (streamingModelPath === deletedPath) {
-                setStreamingModelPath('');
-            }
-            if (offlineModelPath === deletedPath) {
-                setOfflineModelPath('');
+            if (recognitionModelPath === deletedPath) {
+                setRecognitionModelPath('');
             }
             if (punctuationModelPath === deletedPath) {
                 setPunctuationModelPath('');
+            }
+            if (vadModelPath === deletedPath) {
+                setVadModelPath('');
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
@@ -560,8 +444,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 aria-labelledby="settings-tab-models"
                                 tabIndex={0}
                             >
-                                <div className="settings-section-subtitle" style={{ marginBottom: 10, fontWeight: 'bold' }}>{t('settings.streaming_models')}</div>
-                                {PRESET_MODELS.filter(m => m.type === 'streaming').map(model => (
+                                <div className="settings-section-subtitle" style={{ marginTop: 10, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.recognition_models')}</div>
+                                {PRESET_MODELS.filter(m => m.type === 'recognition').map(model => (
                                     <div key={model.id} className="model-card">
                                         <div className="model-card-header">
                                             <div>
@@ -569,84 +453,19 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 <div className="model-description">{model.description}</div>
                                                 <div className="model-tags">
                                                     <span className="model-tag">{model.language.toUpperCase()}</span>
-                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
+                                                    {model.engine && <span className="model-tag">{model.engine.toUpperCase()}</span>}
                                                     <span className="model-tag">{model.size}</span>
                                                 </div>
                                             </div>
                                             {installedModels.has(model.id) ? (
                                                 <div className="model-actions">
                                                     <button
-                                                        className={`btn ${streamingModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
+                                                        className={`btn ${recognitionModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
                                                         onClick={() => handleLoad(model)}
-                                                        disabled={streamingModelPath.includes(model.filename || model.id)}
+                                                        disabled={recognitionModelPath.includes(model.filename || model.id)}
                                                         aria-label={`${t('settings.load')} ${model.name}`}
                                                     >
-                                                        {streamingModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
-                                                    </button>
-                                                    <button
-                                                        className="btn btn-secondary"
-                                                        onClick={() => handleDelete(model)}
-                                                        disabled={!!deletingId || !!downloadingId}
-                                                        aria-label={`${t('common.delete')} ${model.name}`}
-                                                    >
-                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
-                                                    disabled={!!downloadingId && downloadingId !== model.id}
-                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
-                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
-                                                >
-                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
-                                                </button>
-                                            )}
-                                        </div>
-                                        {downloadingId === model.id && (
-                                            <div className="progress-container-mini">
-                                                <div className="progress-info-mini" aria-live="polite">
-                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                    <span>{Math.round(progress)}%</span>
-                                                </div>
-                                                <div
-                                                    className="progress-bar-mini"
-                                                    role="progressbar"
-                                                    aria-valuenow={Math.round(progress)}
-                                                    aria-valuemin={0}
-                                                    aria-valuemax={100}
-                                                    aria-label={`${t('common.download')} ${model.name}`}
-                                                >
-                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-
-                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.offline_models')}</div>
-                                {PRESET_MODELS.filter(m => m.type === 'offline').map(model => (
-                                    <div key={model.id} className="model-card">
-                                        <div className="model-card-header">
-                                            <div>
-                                                <div className="model-name">{model.name}</div>
-                                                <div className="model-description">{model.description}</div>
-                                                <div className="model-tags">
-                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
-                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
-                                                    <span className="model-tag">{model.size}</span>
-                                                </div>
-                                            </div>
-                                            {installedModels.has(model.id) ? (
-                                                <div className="model-actions">
-                                                    <button
-                                                        className={`btn ${offlineModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
-                                                        onClick={() => handleLoad(model)}
-                                                        disabled={offlineModelPath.includes(model.filename || model.id)}
-                                                        aria-label={`${t('settings.load')} ${model.name}`}
-                                                    >
-                                                        {offlineModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
+                                                        {recognitionModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
                                                     </button>
                                                     <button
                                                         className="btn btn-secondary"
@@ -699,7 +518,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 <div className="model-description">{model.description}</div>
                                                 <div className="model-tags">
                                                     <span className="model-tag">{model.language.toUpperCase()}</span>
-                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
+                                                    {model.engine && <span className="model-tag">{model.engine.toUpperCase()}</span>}
                                                     <span className="model-tag">{model.size}</span>
                                                 </div>
                                             </div>
@@ -754,6 +573,71 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         )}
                                     </div>
                                 ))}
+
+                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.vad_models')}</div>
+                                {PRESET_MODELS.filter(m => m.type === 'vad').map(model => (
+                                    <div key={model.id} className="model-card">
+                                        <div className="model-card-header">
+                                            <div>
+                                                <div className="model-name">{model.name}</div>
+                                                <div className="model-description">{model.description}</div>
+                                                <div className="model-tags">
+                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
+                                                    {model.engine && <span className="model-tag">{model.engine.toUpperCase()}</span>}
+                                                    <span className="model-tag">{model.size}</span>
+                                                </div>
+                                            </div>
+                                            {installedModels.has(model.id) ? (
+                                                <div className="model-actions">
+                                                    <button
+                                                        className={`btn ${vadModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
+                                                        onClick={() => handleLoad(model)}
+                                                        disabled={vadModelPath.includes(model.filename || model.id)}
+                                                        aria-label={`${t('settings.load')} ${model.name}`}
+                                                    >
+                                                        {vadModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => handleDelete(model)}
+                                                        disabled={!!deletingId || !!downloadingId}
+                                                        aria-label={`${t('common.delete')} ${model.name}`}
+                                                    >
+                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
+                                                    disabled={!!downloadingId && downloadingId !== model.id}
+                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
+                                                >
+                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {downloadingId === model.id && (
+                                            <div className="progress-container-mini">
+                                                <div className="progress-info-mini" aria-live="polite">
+                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                    <span>{Math.round(progress)}%</span>
+                                                </div>
+                                                <div
+                                                    className="progress-bar-mini"
+                                                    role="progressbar"
+                                                    aria-valuenow={Math.round(progress)}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                >
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
@@ -766,42 +650,20 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 tabIndex={0}
                             >
                                 <div className="settings-item">
-                                    <label className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
+                                    <label className="settings-label">{t('settings.recognition_path_label', { defaultValue: 'Recognition Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
                                             type="text"
-                                            title={streamingModelPath}
+                                            title={recognitionModelPath}
                                             className="settings-input"
-                                            value={streamingModelPath}
-                                            onChange={(e) => setStreamingModelPath(e.target.value)}
+                                            value={recognitionModelPath}
+                                            onChange={(e) => setRecognitionModelPath(e.target.value)}
                                             placeholder={t('settings.path_placeholder')}
                                             style={{ flex: 1 }}
                                         />
                                         <button
                                             className="btn btn-secondary"
-                                            onClick={() => handleBrowse('streaming')}
-                                            aria-label={t('settings.browse')}
-                                        >
-                                            <FolderIcon />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <input
-                                            type="text"
-                                            title={offlineModelPath}
-                                            className="settings-input"
-                                            value={offlineModelPath}
-                                            onChange={(e) => setOfflineModelPath(e.target.value)}
-                                            placeholder={t('settings.path_placeholder')}
-                                            style={{ flex: 1 }}
-                                        />
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={() => handleBrowse('offline')}
+                                            onClick={() => handleBrowse('recognition')}
                                             aria-label={t('settings.browse')}
                                         >
                                             <FolderIcon />
@@ -831,6 +693,28 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
 
+                                <div className="settings-item" style={{ marginTop: 16 }}>
+                                    <label className="settings-label">{t('settings.vad_path_label')}</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <input
+                                            type="text"
+                                            title={vadModelPath}
+                                            className="settings-input"
+                                            value={vadModelPath}
+                                            onChange={(e) => setVadModelPath(e.target.value)}
+                                            placeholder={t('settings.path_placeholder')}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => handleBrowse('vad')}
+                                            aria-label={t('settings.browse')}
+                                        >
+                                            <FolderIcon />
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
                                     <div style={{ marginBottom: 12 }}>
                                         <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
@@ -840,74 +724,18 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
 
                                     <div className="settings-list">
-                                        <DndContext
-                                            sensors={sensors}
-                                            collisionDetection={closestCenter}
-                                            onDragEnd={handleDragEnd}
-                                        >
-                                            <SortableContext
-                                                items={itnRulesOrder}
-                                                strategy={verticalListSortingStrategy}
+                                        <div className="settings-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ fontWeight: 500 }}>Enable Inverse Text Normalization (ITN)</div>
+                                            <button
+                                                className="toggle-switch"
+                                                onClick={() => setEnableITN(!enableITN)}
+                                                role="switch"
+                                                aria-checked={enableITN}
+                                                style={{ opacity: 1, cursor: 'pointer', flexShrink: 0 }}
                                             >
-                                                {itnRulesOrder.map(modelId => {
-                                                    const model = ITN_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '' };
-                                                    const isInstalled = installedITNModels.has(model.id);
-                                                    const isEnabled = enabledITNModels.has(model.id);
-
-                                                    return (
-                                                        <SortableItem key={model.id} id={model.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', width: '100%' }}>
-                                                                <div>
-                                                                    <div style={{ fontWeight: 500 }}>{model.name}</div>
-                                                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.description}</div>
-                                                                </div>
-
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                                    {!isInstalled ? (
-                                                                        <>
-                                                                            {downloadingId === model.id ? (
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                                                    <span style={{ fontSize: '0.8rem' }}>{Math.round(progress)}%</span>
-                                                                                    <button className="btn btn-sm btn-icon" onClick={handleCancelDownload} title="Cancel">
-                                                                                        <XIcon />
-                                                                                    </button>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <button
-                                                                                    className="btn btn-sm btn-secondary"
-                                                                                    onClick={() => handleDownloadITN(model.id)}
-                                                                                    disabled={!!downloadingId}
-                                                                                >
-                                                                                    <DownloadIcon />
-                                                                                    Download
-                                                                                </button>
-                                                                            )}
-                                                                        </>
-                                                                    ) : (
-                                                                        <button
-                                                                            className="toggle-switch"
-                                                                            onClick={() => {
-                                                                                const next = new Set(enabledITNModels);
-                                                                                if (next.has(model.id)) next.delete(model.id);
-                                                                                else next.add(model.id);
-                                                                                setEnabledITNModels(next);
-                                                                            }}
-                                                                            role="switch"
-                                                                            aria-checked={isEnabled}
-                                                                            aria-label={t('settings.toggle_model', { name: model.name })}
-                                                                            style={{ opacity: 1, cursor: 'pointer' }}
-                                                                            onPointerDown={(e) => e.stopPropagation()}
-                                                                        >
-                                                                            <div className="toggle-switch-handle" />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </SortableItem>
-                                                    );
-                                                })}
-                                            </SortableContext>
-                                        </DndContext>
+                                                <div className="toggle-switch-handle" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="settings-hint" style={{ marginTop: 8 }}>
                                         {t('settings.itn_note')}

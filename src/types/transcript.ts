@@ -33,23 +33,17 @@ export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 
  * Configuration for the application
  */
 export interface AppConfig {
-  /** Path to streaming model (e.g. sherpa-onnx streaming zipformer) */
-  streamingModelPath: string;
-  /** Path to offline model (e.g. sherpa-onnx offline paraformer/sensevoice) */
-  offlineModelPath: string;
-  /** Selected language for transcription */
-  /** Selected language for transcription */
+  /** Path to recognition model (e.g. sherpa-onnx offline paraformer/sensevoice used for both streaming and batch) */
+  recognitionModelPath: string;
   language: string;
   /** Application UI language preference */
   appLanguage: 'auto' | 'en' | 'zh';
-  /** IDs of enabled ITN models */
-  enabledITNModels?: string[];
-  /** Order of ITN models (IDs) for sorting */
-  itnRulesOrder?: string[];
-  /** DEPRECATED: Enable Inverse Text Normalization */
+  /** Enable Inverse Text Normalization (SenseVoice) */
   enableITN?: boolean;
   /** Path to punctuation model */
   punctuationModelPath?: string;
+  /** Path to VAD model */
+  vadModelPath?: string;
   /** Application theme preference */
   theme?: 'auto' | 'light' | 'dark';
   /** Font preference */

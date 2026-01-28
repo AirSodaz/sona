@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
-import { modelService } from '../services/modelService';
+
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 
 interface LiveRecordProps {
     className?: string;
+    onOpenSettings?: () => void;
 }
 
 const getSupportedMimeType = () => {
@@ -28,7 +29,30 @@ const getSupportedMimeType = () => {
     return '';
 };
 
-export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
+const ModelSetupWarning: React.FC<{ onSetup: () => void }> = ({ onSetup }) => {
+    const { t } = useTranslation();
+    return (
+        <div className="model-warning-overlay">
+            <div className="model-warning-icon-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <h3 className="model-warning-title">{t('settings.model_required_title')}</h3>
+            <p className="model-warning-desc">
+                {t('settings.model_required_desc')}
+            </p>
+            <button
+                onClick={onSetup}
+                className="btn-primary-large"
+            >
+                {t('settings.go_to_settings')}
+            </button>
+        </div>
+    );
+};
+
+export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSettings }) => {
     const { alert } = useDialogStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -43,9 +67,14 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const isPausedRef = useRef(false);
     const mimeTypeRef = useRef<string>('');
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop' | 'file'>('microphone');
+    const [isModelReady, setIsModelReady] = useState(false);
+    const [isModelLoading, setIsModelLoading] = useState(false);
+    const [missingConfig, setMissingConfig] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    const config = useTranscriptStore((state) => state.config);
+    // const setMode = useTranscriptStore((state) => state.setMode); // Removed as we use onOpenSettings prop now
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const { t } = useTranslation();
@@ -121,6 +150,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     // Start recording
     const startRecording = async () => {
+        if (!isModelReady) return;
+
         if (inputSource === 'file') {
             fileInputRef.current?.click();
             return;
@@ -219,6 +250,9 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
 
     const startRecordingWithStream = async (stream: MediaStream, isFileSimulation = false) => {
+        // Start new session to ensure isolation from previous recordings
+        transcriptionService.startSession();
+
         // Set up audio context and analyser if not already created (File mode creates it earlier)
         if (!audioContextRef.current) {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -274,46 +308,16 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         // Since we don't output audio from processor (we just send data to socket), this is fine.
         processor.connect(audioContextRef.current.destination);
 
-        // Start transcription service
-        const config = useTranscriptStore.getState().config;
-        console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
-        transcriptionService.setModelPath(config.streamingModelPath);
+        // We don't call start() here anymore, it's called on mount.
+        // But we need to ensure the service knows we are "recording" for the purposes of handling data?
+        // Actually, the service just processes what we send it.
+        // And we only send data when `isRecordingRef.current` is true (in the processor callback).
+        // So we just need to make sure the sidecar is running.
 
+        // However, if for some reason the sidecar stopped (error?), we might need to restart it.
+        // But start() is idempotent-ish now.
+        // Let's just ensure it's "ready" check passed.
 
-        // ITN Configuration
-        // ITN Configuration
-        // ITN Configuration
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'];
-        // Legacy support or fallback: if order doesn't cover all enabled models, append them?
-        // Actually, let's assume order covers all models or at least we check enabled.
-
-        transcriptionService.setEnableITN(enabledITNModels.size > 0);
-
-        if (enabledITNModels.size > 0) {
-            try {
-                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                transcriptionService.setITNModelPaths(paths);
-            } catch (e) {
-                console.warn('[LiveRecord] Failed to setup ITN paths:', e);
-            }
-        }
-
-        if (config.punctuationModelPath) {
-            transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
-        } else {
-            transcriptionService.setPunctuationModelPath('');
-        }
-
-        await transcriptionService.start(
-            (segment) => {
-                console.log('[LiveRecord] Received segment:', segment);
-                upsertSegment(segment);
-            },
-            (error) => {
-                console.error('Transcription error:', error);
-            }
-        );
 
         // Set up media recorder for full file save
         const mimeType = getSupportedMimeType();
@@ -328,12 +332,15 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             chunks.push(e.data);
         };
 
-        mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current.onstop = async () => {
             const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
             const blob = new Blob(chunks, { type });
             const url = URL.createObjectURL(blob);
             useTranscriptStore.getState().setAudioUrl(url);
-            transcriptionService.stop();
+
+            // DON'T stop the service, just force the current segment to end
+            // transformationService.stop(); 
+            await transcriptionService.forceEndSegment();
         };
 
         mediaRecorderRef.current.start();
@@ -406,6 +413,10 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         setIsPaused(false);
         isRecordingRef.current = false;
         isPausedRef.current = false;
+
+        // We DO NOT stop the transcription service here, 
+        // because we want to keep the model loaded for the next recording session.
+        // The service will be stopped when the component unmounts.
     };
 
 
@@ -428,8 +439,43 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         };
     }, [isRecording]); // Only dependency is isRecording, uses ref for pause check
 
-    // Cleanup on unmount
+    // Initialize Model on Mount
     useEffect(() => {
+        const initModel = async () => {
+            if (!config.recognitionModelPath || !config.vadModelPath) {
+                setMissingConfig(true);
+                return;
+            }
+
+            setMissingConfig(false);
+            setIsModelLoading(true);
+            setIsModelReady(false);
+
+            transcriptionService.setModelPath(config.recognitionModelPath);
+            transcriptionService.setEnableITN(!!config.enableITN);
+            transcriptionService.setVadModelPath(config.vadModelPath);
+            transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+
+            await transcriptionService.start(
+                (segment) => {
+                    upsertSegment(segment);
+                },
+                (error) => {
+                    console.error('Transcription error:', error);
+                    alert(t('live.error_transcription', { error }), { variant: 'error' });
+                    setIsModelLoading(false);
+                    // If error occurs, maybe we consider it not ready?
+                },
+                () => {
+                    console.log('[LiveRecord] Model Ready');
+                    setIsModelLoading(false);
+                    setIsModelReady(true);
+                }
+            );
+        };
+
+        initModel();
+
         return () => {
             if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
                 window.cancelAnimationFrame(animationRef.current);
@@ -441,11 +487,17 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 audioRef.current.pause();
                 audioRef.current = null;
             }
+            transcriptionService.stop();
         };
-    }, []);
+    }, [config.recognitionModelPath, config.vadModelPath, config.enableITN, config.punctuationModelPath]);
+    // Re-run if config changes (user goes to settings and comes back)
+
+    if (missingConfig) {
+        return <ModelSetupWarning onSetup={() => onOpenSettings && onOpenSettings()} />;
+    }
 
     return (
-        <div className={`live-record-container ${className}`}>
+        <div className={`live-record-container relative h-full w-full ${className}`}>
             <input
                 type="file"
                 ref={fileInputRef}
@@ -476,13 +528,18 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             <div className="record-controls">
                 {!isRecording ? (
                     <button
-                        className="control-button start"
+                        className={`control-button start ${!isModelReady ? 'opacity-50 cursor-not-allowed' : ''}`}
                         onClick={startRecording}
+                        disabled={!isModelReady}
                         aria-label={t('live.start_recording')}
-                        data-tooltip={t('live.start_recording')}
+                        data-tooltip={isModelLoading ? t('live.loading_model', 'Loading Model...') : t('live.start_recording')}
                         data-tooltip-pos="bottom"
                     >
-                        <div className="control-button-inner" />
+                        {isModelLoading ? (
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                        ) : (
+                            <div className="control-button-inner" />
+                        )}
                     </button>
                 ) : (
                     <>

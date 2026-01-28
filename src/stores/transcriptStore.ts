@@ -51,14 +51,12 @@ interface TranscriptState {
 
 
 const DEFAULT_CONFIG: AppConfig = {
-    streamingModelPath: '',
-    offlineModelPath: '',
+    recognitionModelPath: '',
     language: 'en',
     appLanguage: 'auto',
-    enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
-    itnRulesOrder: ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
-    enableITN: true, // Keep for legacy check
+    enableITN: true, // Internal SenseVoice ITN
     punctuationModelPath: '',
+    vadModelPath: '',
     theme: 'auto',
     font: 'system',
 };

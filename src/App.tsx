@@ -48,18 +48,16 @@ function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
+        if (parsed.recognitionModelPath || parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
           const setConfig = useTranscriptStore.getState().setConfig;
 
           // Legacy support for 'modelPath'
           const legacyPath = parsed.modelPath || '';
 
           setConfig({
-            streamingModelPath: parsed.streamingModelPath || legacyPath,
-            offlineModelPath: parsed.offlineModelPath || '',
+            recognitionModelPath: parsed.recognitionModelPath || parsed.offlineModelPath || parsed.streamingModelPath || legacyPath || '',
             punctuationModelPath: parsed.punctuationModelPath || '',
-            enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
-            itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
+            vadModelPath: parsed.vadModelPath || '',
             appLanguage: parsed.appLanguage || 'auto',
             theme: parsed.theme || 'auto',
             font: parsed.font || 'system'
@@ -149,7 +147,7 @@ function App() {
               <h2>{mode === 'live' ? t('panel.live_record') : t('panel.batch_import')}</h2>
             </div>
             <div className="panel-content">
-              {mode === 'live' ? <LiveRecord /> : <BatchImport />}
+              {mode === 'live' ? <LiveRecord onOpenSettings={() => setIsSettingsOpen(true)} /> : <BatchImport />}
             </div>
           </div>
 

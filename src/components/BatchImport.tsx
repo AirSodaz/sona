@@ -6,7 +6,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
-import { modelService } from '../services/modelService';
+
 import { splitByPunctuation } from '../utils/segmentUtils';
 
 // Icons
@@ -137,7 +137,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     // ... (existing code)
 
     const processFile = async (filePath: string) => {
-        if (!config.offlineModelPath) {
+        if (!config.recognitionModelPath) {
             alert(t('batch.no_model_error'), { variant: 'error' });
             return;
         }
@@ -150,18 +150,8 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
-            transcriptionService.setModelPath(config.offlineModelPath);
-            const enabledITNModels = new Set(config.enabledITNModels || []);
-            const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'];
-
-            transcriptionService.setEnableITN(enabledITNModels.size > 0);
-
-            if (enabledITNModels.size > 0) {
-                try {
-                    const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                    transcriptionService.setITNModelPaths(paths);
-                } catch (e) { }
-            }
+            transcriptionService.setModelPath(config.recognitionModelPath);
+            transcriptionService.setEnableITN(!!config.enableITN);
 
             if (config.punctuationModelPath) {
                 transcriptionService.setPunctuationModelPath(config.punctuationModelPath);

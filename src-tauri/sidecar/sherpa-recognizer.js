@@ -23,7 +23,9 @@ import { randomUUID } from 'crypto';
 // For ES modules
 const __scriptFile = fileURLToPath(import.meta.url);
 const __scriptDir = dirname(__scriptFile);
+
 const Seven = require('node-7z');
+
 
 // Parse command line arguments
 function parseArgs() {
@@ -40,6 +42,7 @@ function parseArgs() {
         targetDir: null,
         itnModel: null,
         punctuationModel: null,
+        vadModel: null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -76,6 +79,9 @@ function parseArgs() {
                 break;
             case '--punctuation-model':
                 options.punctuationModel = args[++i];
+                break;
+            case '--vad-model':
+                options.vadModel = args[++i];
                 break;
         }
     }
@@ -120,124 +126,32 @@ async function convertToWav(inputPath, ffmpegPath) {
     });
 }
 
-// Create NCNN Recognizer (GPU/Vulkan/CoreML)
-async function createNcnnRecognizer(modelConfig, enableITN, numThreads) {
-    console.error(`Initializing NcnnRecognizer (Threads: ${numThreads})...`);
-    try {
-        const sherpaNcnn = await import('sherpa-ncnn');
-
-        // Configuration for sherpa-ncnn
-        const config = {
-            featConfig: {
-                samplingRate: 16000,
-                featureDim: 80,
-            },
-            modelConfig: {
-                ...modelConfig,
-                useVulkanCompute: 1, // Enable GPU
-                numThreads: numThreads,
-            },
-            decoderConfig: {
-                decodingMethod: 'greedy_search',
-                numActivePaths: 4,
-            },
-            enableEndpoint: 1,
-            rule1MinTrailingSilence: 2.4,
-            rule2MinTrailingSilence: 2.4,
-            rule3MinUtternceLength: 300, // Large number to mimic sherpa-onnx defaults? Or 0?
-        };
-
-        const recognizer = sherpaNcnn.createRecognizer(config);
-
-        // Wrap to match interface
-        return {
-            recognizer: {
-                createStream: () => recognizer.createStream(),
-                isReady: (stream) => recognizer.isReady(stream),
-                decode: (stream) => recognizer.decode(stream),
-                isEndpoint: (stream) => recognizer.isEndpoint(stream),
-                reset: (stream) => recognizer.reset(stream),
-                getResult: (stream) => {
-                    const text = recognizer.getResult(stream);
-                    return { text: text }; // Wrap string in object
-                }
-            },
-            type: 'online-ncnn',
-            supportsInternalITN: false
-        };
-    } catch (e) {
-        throw new Error(`Failed to initialize sherpa-ncnn: ${e.message}`);
-    }
-}
-
-// Create ONNX Recognizer (CPU)
-async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel) {
+// Create ONNX Recognizer (CPU) - Offline Only
+async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
     console.error(`Initializing OnnxRecognizer (CPU, Threads: ${numThreads})...`);
     try {
         const sherpaModule = await import('sherpa-onnx-node');
         const sherpa = sherpaModule.default || sherpaModule;
 
         // Offline models (SenseVoice, Whisper)
-        if (modelConfig.senseVoice || modelConfig.whisper) {
-            const config = {
-                featConfig: { sampleRate: 16000, featureDim: 80 },
-                modelConfig: modelConfig,
-                decodingMethod: 'greedy_search',
-                maxActivePaths: 4,
-            };
-
-            if (itnModel) {
-                const paths = itnModel.split(',');
-                const validPaths = paths.filter(p => existsSync(p.trim()));
-                if (validPaths.length > 0) {
-                    console.error(`[Sidecar] Using ITN models (Offline): ${validPaths.join(',')}`);
-                    config.ruleFsts = validPaths.join(',');
-                }
-            }
-
-            return {
-                recognizer: new sherpa.OfflineRecognizer(config),
-                type: 'offline',
-                supportsInternalITN: true
-            };
-        }
-
-        // Online models
         const config = {
             featConfig: { sampleRate: 16000, featureDim: 80 },
             modelConfig: modelConfig,
             decodingMethod: 'greedy_search',
             maxActivePaths: 4,
-            enableEndpoint: true,
-            endpointConfig: {
-                rule1: { minTrailingSilence: 2.4, minUtteranceLength: 0 },
-                rule2: { minTrailingSilence: 2.4, minUtteranceLength: 0 },
-                rule3: { minTrailingSilence: 0, minUtteranceLength: 300 },
-            },
         };
 
-        if (itnModel) {
-            const paths = itnModel.split(',');
-            const validPaths = paths.filter(p => existsSync(p.trim()));
-            if (validPaths.length > 0) {
-                console.error(`[Sidecar] Using ITN models: ${validPaths.join(',')}`);
-                config.ruleFsts = validPaths.join(',');
-            }
-        }
-
-        const supportsInternalITN = !!config.ruleFsts || !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
-
         return {
-            recognizer: new sherpa.OnlineRecognizer(config),
-            type: 'online',
-            supportsInternalITN: false
+            recognizer: new sherpa.OfflineRecognizer(config),
+            type: 'offline',
+            supportsInternalITN: true
         };
     } catch (e) {
         throw new Error(`Failed to initialize sherpa-onnx: ${e.message}`);
     }
 }
 
-// Find model configuration and detect type
+// Find model configuration - Offline/ONNX Only
 function findModelConfig(modelPath, enableITN, numThreads) {
     if (!existsSync(modelPath)) return null;
 
@@ -247,38 +161,7 @@ function findModelConfig(modelPath, enableITN, numThreads) {
 
         if (!tokens) return null; // All models need tokens.txt
 
-        // 1. Check for NCNN files (.bin + .param)
-        // Expected: encoder_jit_trace-pnnx.ncnn.bin/param, decoder..., joiner...
-        const hasNcnn = files.some(f => f.endsWith('.ncnn.bin'));
-
-        if (hasNcnn) {
-            // NCNN Logic
-            const findNcnnFile = (pattern) => {
-                const f = files.find(file => file.includes(pattern) && (file.endsWith('.bin') || file.endsWith('.param')));
-                return f ? join(modelPath, f) : null;
-            };
-
-            const encoderBin = findNcnnFile('encoder_jit_trace-pnnx.ncnn.bin');
-            const encoderParam = findNcnnFile('encoder_jit_trace-pnnx.ncnn.param');
-            const decoderBin = findNcnnFile('decoder_jit_trace-pnnx.ncnn.bin');
-            const decoderParam = findNcnnFile('decoder_jit_trace-pnnx.ncnn.param');
-            const joinerBin = findNcnnFile('joiner_jit_trace-pnnx.ncnn.bin');
-            const joinerParam = findNcnnFile('joiner_jit_trace-pnnx.ncnn.param');
-
-            if (encoderBin && encoderParam && decoderBin && decoderParam && joinerBin && joinerParam) {
-                return {
-                    type: 'ncnn',
-                    config: {
-                        encoderBin, encoderParam,
-                        decoderBin, decoderParam,
-                        joinerBin, joinerParam,
-                        tokens: join(modelPath, tokens)
-                    }
-                };
-            }
-        }
-
-        // 2. Check for ONNX files
+        // Check for ONNX files
         const findBestMatch = (prefix) => {
             const candidates = files.filter(f => f.includes(prefix) && f.endsWith('.onnx'));
             if (candidates.length === 0) return null;
@@ -290,27 +173,6 @@ function findModelConfig(modelPath, enableITN, numThreads) {
         const encoder = findBestMatch('encoder');
         const decoder = findBestMatch('decoder');
         const joiner = findBestMatch('joiner');
-
-        if (encoder && decoder) {
-            const baseConfig = {
-                tokens: join(modelPath, tokens),
-                numThreads: numThreads,
-                provider: 'cpu', // ONNX is CPU only now per requirement
-                debug: false,
-            };
-
-            if (joiner) {
-                return {
-                    type: 'onnx',
-                    config: { ...baseConfig, transducer: { encoder, decoder, joiner } }
-                };
-            } else {
-                return {
-                    type: 'onnx',
-                    config: { ...baseConfig, paraformer: { encoder, decoder } }
-                };
-            }
-        }
 
         // SenseVoice / Whisper (Offline ONNX)
         const model = findBestMatch('model');
@@ -325,10 +187,32 @@ function findModelConfig(modelPath, enableITN, numThreads) {
                     senseVoice: {
                         model: model,
                         language: '',
-                        useInverseTextNormalization: enableITN ? 1 : 0,
+                        useItn: enableITN,
                     }
                 }
             };
+        }
+
+        // Check for other offline transducer/paraformer if needed, but primarily SenseVoice requested
+        if (encoder && decoder) {
+            const baseConfig = {
+                tokens: join(modelPath, tokens),
+                numThreads: numThreads,
+                provider: 'cpu',
+                debug: false,
+            };
+
+            if (joiner) {
+                return {
+                    type: 'onnx',
+                    config: { ...baseConfig, transducer: { encoder, decoder, joiner } }
+                };
+            } else {
+                return {
+                    type: 'onnx',
+                    config: { ...baseConfig, paraformer: { encoder, decoder } }
+                };
+            }
         }
 
     } catch (error) {
@@ -370,6 +254,52 @@ async function createPunctuation(modelPath) {
     }
 }
 
+// Create VAD
+async function createVad(modelPath) {
+    if (!modelPath || !existsSync(modelPath)) return null;
+    console.error(`[Sidecar] Initializing VAD Model: ${modelPath}`);
+    try {
+        // Try to require existing installed package
+        let vadModule;
+        try {
+            vadModule = require('sherpa-onnx-node/vad');
+        } catch (e) {
+            // Fallback for different install structures
+            const vadPath = join(__scriptDir, 'node_modules', 'sherpa-onnx-node', 'vad.js');
+            if (existsSync(vadPath)) {
+                vadModule = require(vadPath);
+            } else {
+                const vadPath2 = join(__scriptDir, '../../node_modules', 'sherpa-onnx-node', 'vad.js');
+                if (existsSync(vadPath2)) {
+                    vadModule = require(vadPath2);
+                }
+            }
+        }
+
+        if (!vadModule) throw new Error("Could not find sherpa-onnx-node/vad module");
+
+        const { Vad } = vadModule;
+
+        const config = {
+            sileroVad: {
+                model: modelPath,
+                threshold: 0.5,
+                minSilenceDuration: 0.5,
+                minSpeechDuration: 0.25,
+            },
+            sampleRate: 16000,
+            debug: false,
+            numThreads: 1,
+        };
+        const bufferSizeInSeconds = 30;
+        return new Vad(config, bufferSizeInSeconds);
+
+    } catch (e) {
+        console.error(`[Sidecar] Failed to initialize VAD: ${e.message}`);
+        return null;
+    }
+}
+
 // Text post-processing
 function postProcessText(text) {
     if (!text) return "";
@@ -381,82 +311,131 @@ function postProcessText(text) {
 }
 
 
+// Process Stream (Pseudo-Streaming ONLY)
+async function processStream(recognizer, sampleRate, punctuation, vad) {
+    if (!vad) {
+        console.error(JSON.stringify({ error: 'VAD is required for offline model pseudo-streaming.' }));
+        process.exit(1);
+    }
 
-// Process Stream
-async function processStream(recognizer, sampleRate, punctuation) {
-    const stream = recognizer.createStream();
+    // Pseudo-Streaming Logic (Offline Model + VAD)
+    // Signal readiness
+    console.log(JSON.stringify({ type: 'ready' }));
+    console.error('[Sidecar] Starting Pseudo-Streaming mode with VAD...');
+
+    let speechBuffer = []; // Array of Float32Arrays
     let totalSamples = 0;
     let segmentStartTime = 0;
     let currentSegmentId = randomUUID();
+    let isSpeaking = false;
+    let lastInferenceTime = Date.now();
 
     process.stdin.on('data', (chunk) => {
         const samples = new Float32Array(chunk.length / 2);
         for (let i = 0; i < samples.length; i++) {
-            const int16 = chunk.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
-        }
-
-        if (recognizer.isNcnn) {
-            stream.acceptWaveform(sampleRate, samples);
-        } else {
-            stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
+            samples[i] = chunk.readInt16LE(i * 2) / 32768.0;
         }
 
         totalSamples += samples.length;
-
-        while (recognizer.isReady(stream)) {
-            recognizer.decode(stream);
-        }
-
-        const result = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
 
-        if (result.text.trim()) {
-            let text = postProcessText(result.text.trim());
-            const output = {
-                id: currentSegmentId,
-                text: text,
-                start: segmentStartTime,
-                end: currentTime,
-                isFinal: false,
-            };
-            console.log(JSON.stringify(output));
-        }
+        // VAD Processing
+        vad.acceptWaveform(samples);
 
-        if (recognizer.isEndpoint(stream)) {
-            const finalResult = recognizer.getResult(stream);
-            if (finalResult.text.trim()) {
-                let text = postProcessText(finalResult.text.trim());
-                if (punctuation) text = punctuation.addPunct(text);
-                const output = {
-                    id: currentSegmentId,
-                    text: text,
-                    start: segmentStartTime,
-                    end: currentTime,
-                    isFinal: true,
-                };
-                console.log(JSON.stringify(output));
+        if (vad.isDetected()) {
+            if (!isSpeaking) {
+                // Speech Started
+                isSpeaking = true;
+                segmentStartTime = currentTime;
+                speechBuffer = [];
             }
-            recognizer.reset(stream);
-            segmentStartTime = currentTime;
-            currentSegmentId = randomUUID();
+
+            speechBuffer.push(samples);
+
+            // Scheduled Inference (every ~200ms)
+            const now = Date.now();
+            if (now - lastInferenceTime > 200) {
+                lastInferenceTime = now;
+
+                // Merge buffer
+                const totalLen = speechBuffer.reduce((acc, val) => acc + val.length, 0);
+                const fullAudio = new Float32Array(totalLen);
+                let offset = 0;
+                for (const buf of speechBuffer) {
+                    fullAudio.set(buf, offset);
+                    offset += buf.length;
+                }
+
+                // Create temp stream for full recognition of current segment
+                const stream = recognizer.createStream();
+                stream.acceptWaveform({ samples: fullAudio, sampleRate: sampleRate });
+                recognizer.decode(stream);
+                const result = recognizer.getResult(stream);
+
+                if (stream.free) {
+                    stream.free();
+                }
+
+                if (result.text.trim()) {
+                    let text = postProcessText(result.text.trim());
+                    const output = {
+                        id: currentSegmentId,
+                        text: text,
+                        start: segmentStartTime,
+                        end: currentTime,
+                        isFinal: false,
+                    };
+                    console.log(JSON.stringify(output));
+                }
+            }
+
+        } else {
+            // Silence detected
+            if (isSpeaking) {
+                // Speech Ended / Endpoint
+                isSpeaking = false;
+
+                // Final Inference
+                const totalLen = speechBuffer.reduce((acc, val) => acc + val.length, 0);
+                if (totalLen > 0) {
+                    const fullAudio = new Float32Array(totalLen);
+                    let offset = 0;
+                    for (const buf of speechBuffer) {
+                        fullAudio.set(buf, offset);
+                        offset += buf.length;
+                    }
+
+                    const stream = recognizer.createStream();
+                    stream.acceptWaveform({ samples: fullAudio, sampleRate: sampleRate });
+                    recognizer.decode(stream);
+                    const result = recognizer.getResult(stream);
+
+                    if (stream.free) {
+                        stream.free();
+                    }
+
+                    if (result.text.trim()) {
+                        let text = postProcessText(result.text.trim());
+                        if (punctuation) text = punctuation.addPunct(text);
+                        const output = {
+                            id: currentSegmentId,
+                            text: text,
+                            start: segmentStartTime,
+                            end: currentTime,
+                            isFinal: true,
+                        };
+                        console.log(JSON.stringify(output));
+                    }
+                }
+
+                speechBuffer = [];
+                currentSegmentId = randomUUID();
+                vad.reset();
+            }
         }
     });
 
     process.stdin.on('end', () => {
-        const finalResult = recognizer.getResult(stream);
-        const currentTime = totalSamples / sampleRate;
-        if (finalResult.text.trim()) {
-            let text = postProcessText(finalResult.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
-            console.log(JSON.stringify({
-                id: currentSegmentId,
-                text: text,
-                start: segmentStartTime,
-                end: currentTime,
-                isFinal: true,
-            }));
-        }
         console.log(JSON.stringify({ done: true }));
         process.exit(0);
     });
@@ -864,7 +843,7 @@ async function main() {
             // Flag to helper know it is NCNN for stream API diffs
             recognizerObj.recognizer.isNcnn = true;
         } else {
-            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads, options.itnModel);
+            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads);
         }
 
         const { recognizer, type, supportsInternalITN } = recognizerObj;
@@ -874,8 +853,11 @@ async function main() {
         const unifiedRecognizer = recognizer;
         // Ensure isNcnn flag is present (already set for NCNN path, undefined for ONNX)
         unifiedRecognizer.isNcnn = !!recognizer.isNcnn;
+        unifiedRecognizer.type = type;
+        unifiedRecognizer.supportsInternalITN = supportsInternalITN;
 
         const punctuation = await createPunctuation(options.punctuationModel);
+        const vad = await createVad(options.vadModel);
 
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
@@ -885,12 +867,12 @@ async function main() {
                 await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             }
         } else {
-            if (type === 'offline') {
-                console.error(JSON.stringify({ error: 'Streaming mode not supported for offline model.' }));
+            if (type === 'offline' && !vad) {
+                console.error(JSON.stringify({ error: 'Streaming mode not supported for offline model without VAD.' }));
                 process.exit(1);
             }
 
-            await processStream(unifiedRecognizer, options.sampleRate, punctuation);
+            await processStream(unifiedRecognizer, options.sampleRate, punctuation, vad);
         }
 
     } catch (error) {
