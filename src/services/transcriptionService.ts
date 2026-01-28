@@ -99,7 +99,6 @@ class TranscriptionService {
                 scriptPath,
                 '--mode', 'stream',
                 '--model-path', this.modelPath,
-                '--enable-itn', 'true'
             ];
 
             if (this.language) {
@@ -243,23 +242,15 @@ class TranscriptionService {
      * Transcribe an audio file in batch mode
      */
     async transcribeFile(filePath: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
-        try {
-            return await this._transcribeFileInternal(filePath, undefined, onProgress);
-        } catch (error: any) {
-            if (error.message === 'COREML_FAILURE') {
-                console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
-                return await this._transcribeFileInternal(filePath, 'cpu', onProgress);
-            }
-            throw error;
-        }
+        return await this._transcribeFileInternal(filePath, onProgress);
     }
 
-    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
 
-        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'})`);
+        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath}`);
 
         return new Promise(async (resolve, reject) => {
             try {
@@ -270,16 +261,7 @@ class TranscriptionService {
                     '--mode', 'batch',
                     '--file', filePath,
                     '--model-path', this.modelPath,
-                    '--enable-itn', 'true'
                 ];
-
-
-
-
-
-                if (provider) {
-                    args.push('--provider', provider);
-                }
 
                 if (import.meta.env.DEV) {
                     args.push('--allow-mock', 'true');
@@ -300,15 +282,6 @@ class TranscriptionService {
                     const stderrBuffer = stderrChunks.join('');
 
                     if (data.code === 0) {
-                        // Check for silent CoreML failure
-                        // CoreML errors are printed to stderr but sometimes the process exits with 0
-                        if (!provider &&
-                            stderrBuffer.includes('Error executing model') &&
-                            stderrBuffer.includes('CoreMLExecutionProvider')) {
-
-                            reject(new Error('COREML_FAILURE'));
-                            return;
-                        }
 
                         try {
                             // Find the JSON array in the output

@@ -35,12 +35,9 @@ function parseArgs() {
         file: null,
         modelPath: null,
         sampleRate: 16000,
-        enableITN: true,
-        provider: null, // auto-detect if null
         allowMock: false,
         numThreads: null,
         targetDir: null,
-        itnModel: null,
 
         vadModel: null,
         language: 'auto',
@@ -60,12 +57,6 @@ function parseArgs() {
             case '--sample-rate':
                 options.sampleRate = parseInt(args[++i], 10);
                 break;
-            case '--enable-itn':
-                options.enableITN = args[++i] === 'true';
-                break;
-            case '--provider':
-                options.provider = args[++i];
-                break;
             case '--allow-mock':
                 options.allowMock = args[++i] === 'true';
                 break;
@@ -74,9 +65,6 @@ function parseArgs() {
                 break;
             case '--target-dir':
                 options.targetDir = args[++i];
-                break;
-            case '--itn-model':
-                options.itnModel = args[++i];
                 break;
 
             case '--vad-model':
@@ -129,7 +117,7 @@ async function convertToWav(inputPath, ffmpegPath) {
 }
 
 // Create ONNX Recognizer (CPU) - Offline Only
-async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
+async function createOnnxRecognizer(modelConfig, numThreads) {
     console.error(`Initializing OnnxRecognizer (CPU, Threads: ${numThreads})...`);
     try {
         const sherpaModule = await import('sherpa-onnx-node');
@@ -154,7 +142,7 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
 }
 
 // Find model configuration - Offline/ONNX Only
-function findModelConfig(modelPath, enableITN, numThreads, language = 'auto') {
+function findModelConfig(modelPath, numThreads, language = 'auto') {
     if (!existsSync(modelPath)) return null;
 
     try {
@@ -172,22 +160,18 @@ function findModelConfig(modelPath, enableITN, numThreads, language = 'auto') {
             return join(modelPath, candidates[0]);
         };
 
-        const encoder = findBestMatch('encoder');
-        const decoder = findBestMatch('decoder');
-        const joiner = findBestMatch('joiner');
-
         // SenseVoice / Whisper (Offline ONNX)
         const model = findBestMatch('model');
-        if (model && !encoder) {
+        if (model) {
             const config = {
                 tokens: join(modelPath, tokens),
                 numThreads: numThreads,
-                provider: 'cpu', // ONNX is CPU based in this context for now
+                provider: 'cpu',
                 debug: false,
                 senseVoice: {
                     model: model,
                     language: language,
-                    useItn: enableITN,
+                    useItn: true,
                 }
             };
             console.error('[Sidecar] SenseVoice Config:', JSON.stringify(config.senseVoice));
@@ -695,7 +679,7 @@ async function main() {
 
     const ffmpegPath = await getFFmpegPath();
     const numThreads = calculateNumThreads(options.numThreads);
-    const modelConfig = findModelConfig(options.modelPath, options.enableITN, numThreads, options.language);
+    const modelConfig = findModelConfig(options.modelPath, numThreads, options.language);
 
     if (!modelConfig) {
         // Mock Mode
@@ -721,7 +705,7 @@ async function main() {
     try {
         let recognizerObj;
 
-        recognizerObj = await createOnnxRecognizer(modelConfig.config, options.enableITN, numThreads);
+        recognizerObj = await createOnnxRecognizer(modelConfig.config, numThreads);
 
         const { recognizer, type, supportsInternalITN } = recognizerObj;
 
