@@ -26,6 +26,46 @@ const VolumeIcon = () => (
     </svg>
 );
 
+// --- Sub-components for Optimization ---
+
+// TimeDisplay subscribes to currentTime to update only the text
+const TimeDisplay = React.memo(() => {
+    const currentTime = useTranscriptStore((state) => state.currentTime);
+    return <span className="audio-time">{formatDisplayTime(currentTime)}</span>;
+});
+
+// SeekSlider subscribes to currentTime to update the slider
+// It receives stable seekTo and duration
+interface SeekSliderProps {
+    duration: number;
+    onSeek: (time: number) => void;
+    seekLabel: string;
+}
+
+const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel }) => {
+    const currentTime = useTranscriptStore((state) => state.currentTime);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const time = parseFloat(e.target.value);
+        onSeek(time);
+    };
+
+    return (
+        <input
+            type="range"
+            className="audio-slider"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={currentTime}
+            onChange={handleChange}
+            aria-label={seekLabel}
+        />
+    );
+});
+
+// --- Main Component ---
+
 interface AudioPlayerProps {
     className?: string;
 }
@@ -36,7 +76,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     const audioRef = useRef<HTMLAudioElement>(null);
 
     const audioUrl = useTranscriptStore((state) => state.audioUrl);
-    const currentTime = useTranscriptStore((state) => state.currentTime);
+    // OPTIMIZATION: Do not subscribe to currentTime in the main component.
+    // const currentTime = useTranscriptStore((state) => state.currentTime);
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
@@ -62,6 +103,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
         if (!audio) return;
 
         const handleTimeUpdate = () => {
+            // This updates the store, triggering re-renders in subscribers (TimeDisplay, SeekSlider)
             setCurrentTime(audio.currentTime);
         };
 
@@ -134,11 +176,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
         setIsPlaying(!isPlaying);
     };
 
-    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const time = parseFloat(e.target.value);
-        seekTo(time);
-    };
-
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const vol = parseFloat(e.target.value);
         setVolume(vol);
@@ -177,16 +214,11 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
             </div>
 
             <div className="audio-timeline">
-                <span className="audio-time">{formatDisplayTime(currentTime)}</span>
-                <input
-                    type="range"
-                    className="audio-slider"
-                    min={0}
-                    max={duration || 0}
-                    step={0.1}
-                    value={currentTime}
-                    onChange={handleSliderChange}
-                    aria-label={t('player.seek')}
+                <TimeDisplay />
+                <SeekSlider
+                    duration={duration}
+                    onSeek={seekTo}
+                    seekLabel={t('player.seek')}
                 />
                 <span className="audio-time">{formatDisplayTime(duration)}</span>
             </div>
