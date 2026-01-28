@@ -9,6 +9,7 @@ interface TranscriptState {
 
     // UI state
     activeSegmentId: string | null;
+    activeSegmentIndex: number;
     editingSegmentId: string | null;
     mode: AppMode;
     processingStatus: ProcessingStatus;
@@ -65,6 +66,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Initial state
     segments: [],
     activeSegmentId: null,
+    activeSegmentIndex: -1,
     editingSegmentId: null,
     mode: 'live',
     processingStatus: 'idle',
@@ -81,6 +83,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         const newSegment: TranscriptSegment = { ...segment, id };
         set((state) => ({
             segments: [...state.segments, newSegment].sort((a, b) => a.start - b.start),
+            activeSegmentIndex: -1, // Invalidate index
         }));
         return id;
     },
@@ -95,7 +98,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
                 if (lastSegment.id === segment.id) {
                     const newSegments = [...state.segments];
                     newSegments[lastIndex] = segment;
-                    return { segments: newSegments };
+                    return { segments: newSegments, activeSegmentIndex: -1 };
                 }
             }
 
@@ -103,18 +106,20 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             if (index !== -1) {
                 const newSegments = [...state.segments];
                 newSegments[index] = segment;
-                return { segments: newSegments };
+                return { segments: newSegments, activeSegmentIndex: -1 };
             }
 
             // Optimization: Append at end if chronological (avoid sort)
             if (len === 0 || state.segments[len - 1].start <= segment.start) {
                 return {
-                    segments: [...state.segments, segment]
+                    segments: [...state.segments, segment],
+                    activeSegmentIndex: -1
                 };
             }
 
             return {
                 segments: [...state.segments, segment].sort((a, b) => a.start - b.start),
+                activeSegmentIndex: -1
             };
         });
     },
@@ -131,6 +136,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         set((state) => ({
             segments: state.segments.filter((seg) => seg.id !== id),
             activeSegmentId: state.activeSegmentId === id ? null : state.activeSegmentId,
+            activeSegmentIndex: -1,
             editingSegmentId: state.editingSegmentId === id ? null : state.editingSegmentId,
         }));
     },
@@ -157,19 +163,28 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             segments: state.segments
                 .filter((s) => s.id !== second.id)
                 .map((s) => (s.id === first.id ? mergedSegment : s)),
+            activeSegmentIndex: -1,
         }));
     },
 
     setSegments: (segments) => {
-        set({ segments: segments.sort((a, b) => a.start - b.start) });
+        set({
+            segments: segments.sort((a, b) => a.start - b.start),
+            activeSegmentIndex: -1
+        });
     },
 
     clearSegments: () => {
-        set({ segments: [], activeSegmentId: null, editingSegmentId: null });
+        set({ segments: [], activeSegmentId: null, activeSegmentIndex: -1, editingSegmentId: null });
     },
 
     // UI actions
-    setActiveSegmentId: (id) => set({ activeSegmentId: id }),
+    setActiveSegmentId: (id) => {
+        const state = get();
+        // Fallback to O(N) search if setting by ID
+        const index = id ? state.segments.findIndex(s => s.id === id) : -1;
+        set({ activeSegmentId: id, activeSegmentIndex: index });
+    },
     setEditingSegmentId: (id) => set({ editingSegmentId: id }),
     setMode: (mode) => set({ mode }),
     setProcessingStatus: (status) => set({ processingStatus: status }),
@@ -198,10 +213,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     setCurrentTime: (time) => {
         const state = get();
         // Find active segment based on current time
-        const activeSegment = findSegmentForTime(state.segments, time);
+        // Optimization: use previous index as hint for O(1) sequential access
+        const { segment, index } = findSegmentForTime(state.segments, time, state.activeSegmentIndex);
         set({
             currentTime: time,
-            activeSegmentId: activeSegment?.id || null,
+            activeSegmentId: segment?.id || null,
+            activeSegmentIndex: index,
         });
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),

@@ -224,13 +224,11 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     // Update ref in render body to ensure it's available for itemContent in the same render cycle
     segmentsRef.current = segments;
 
-    const lastActiveIndexRef = useRef<number>(-1);
-
     // Auto-scroll to active segment during playback
     // Using subscribe to avoid re-rendering the component on every segment change
     useEffect(() => {
         const unsub = useTranscriptStore.subscribe((state, prevState) => {
-            const { activeSegmentId, isPlaying, segments } = state;
+            const { activeSegmentId, activeSegmentIndex, isPlaying, segments } = state;
             const prevActiveId = prevState.activeSegmentId;
             const prevIsPlaying = prevState.isPlaying;
 
@@ -239,25 +237,16 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
                 (isPlaying && !prevIsPlaying && activeSegmentId);
 
             if (shouldScroll && isPlaying && virtuosoRef.current) {
-                let activeIndex = -1;
+                // Optimization: Use the index from store (O(1) derived from activeSegmentId)
+                let activeIndex = activeSegmentIndex;
 
-                // Optimization: Check near the last known index first (O(1) for sequential playback)
-                const lastIndex = lastActiveIndexRef.current;
-                if (lastIndex >= 0 && lastIndex < segments.length) {
-                    if (segments[lastIndex].id === activeSegmentId) {
-                        activeIndex = lastIndex;
-                    } else if (lastIndex + 1 < segments.length && segments[lastIndex + 1].id === activeSegmentId) {
-                        activeIndex = lastIndex + 1;
-                    }
-                }
-
-                // Fallback to full search if not found (O(N))
-                if (activeIndex === -1) {
+                // Fallback: If index is invalid/unknown but we have an ID, find it (O(N))
+                // This handles cases where index might be invalidated (-1) but ID is still set
+                if (activeIndex === -1 && activeSegmentId) {
                     activeIndex = segments.findIndex((s) => s.id === activeSegmentId);
                 }
 
                 if (activeIndex !== -1) {
-                    lastActiveIndexRef.current = activeIndex;
                     virtuosoRef.current.scrollToIndex({
                         index: activeIndex,
                         align: 'center',
