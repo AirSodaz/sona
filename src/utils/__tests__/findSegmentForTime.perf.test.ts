@@ -1,4 +1,4 @@
-import { describe, it, expect, bench } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { findSegmentForTime, findSegmentAndIndexForTime } from '../segmentUtils';
 import { TranscriptSegment } from '../../types/transcript';
 import { v4 as uuidv4 } from 'uuid';

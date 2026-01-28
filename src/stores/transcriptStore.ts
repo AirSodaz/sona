@@ -181,13 +181,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     // UI actions
-    setActiveSegmentId: (id) => set((state) => ({
+    setActiveSegmentId: (id) => set({
         activeSegmentId: id,
         // We could look up index here, but it's O(N).
         // Better to let next setCurrentTime fix it or lazily update.
         // For now, reset to -1 so findSegmentForTime falls back to binary search once
         activeSegmentIndex: -1
-    })),
+    }),
     setEditingSegmentId: (id) => set({ editingSegmentId: id }),
     setMode: (mode) => set({ mode }),
     setProcessingStatus: (status) => set({ processingStatus: status }),
