@@ -30,7 +30,7 @@
         "recording_paused": "Recording Paused",
         "recording_active": "Recording... Click buttons to control",
         "start_hint": "Click red button to start recording",
-        "mic_error": "Failed to access microphone. Please check permissions.",
+        "mic_error": "Failed to access microphone: {{error}}",
         "start_recording": "Start Recording",
         "source_microphone": "Microphone",
         "source_desktop": "Desktop Audio",

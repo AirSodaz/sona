@@ -202,7 +202,16 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
 
         } catch (error) {
             console.error('Failed to start recording:', error);
-            alert(t('live.mic_error'), { variant: 'error' });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+            if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+                alert(t('live.mic_error', { error: `Permission Denied (${errorMessage}). Please check system privacy settings.` }), { variant: 'error' });
+            } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+                alert(t('live.mic_error', { error: `Microphone not found (${errorMessage}).` }), { variant: 'error' });
+            } else {
+                alert(t('live.mic_error', { error: `${errorName}: ${errorMessage}` }), { variant: 'error' });
+            }
         }
     };
 
