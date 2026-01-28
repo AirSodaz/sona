@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useDialogStore } from '../stores/dialogStore';
 
 export const GlobalDialog: React.FC = () => {
