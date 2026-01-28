@@ -13,8 +13,9 @@ class TranscriptionService {
     private isRunning: boolean = false;
     private modelPath: string = '';
 
-    private punctuationModelPath: string = '';
+
     private enableITN: boolean = true;
+    private language: string = 'auto'; // Default to auto
     private onSegment: TranscriptionCallback | null = null;
     private onReady: (() => void) | null = null;
 
@@ -38,12 +39,7 @@ class TranscriptionService {
 
 
 
-    /**
-     * Set the punctuation model path
-     */
-    setPunctuationModelPath(path: string) {
-        this.punctuationModelPath = path;
-    }
+
 
     /**
      * Set the VAD model path
@@ -57,6 +53,13 @@ class TranscriptionService {
      */
     setEnableITN(enabled: boolean) {
         this.enableITN = enabled;
+    }
+
+    /**
+     * Set the language for transcription ('auto', 'zh', 'en', etc.)
+     */
+    setLanguage(language: string) {
+        this.language = language;
     }
 
     /**
@@ -104,11 +107,13 @@ class TranscriptionService {
                 '--enable-itn', this.enableITN.toString()
             ];
 
-
-
-            if (this.punctuationModelPath) {
-                args.push('--punctuation-model', this.punctuationModelPath);
+            if (this.language) {
+                args.push('--language', this.language);
             }
+
+
+
+
 
             if (this.vadModelPath) {
                 args.push('--vad-model', this.vadModelPath);
@@ -275,9 +280,7 @@ class TranscriptionService {
 
 
 
-                if (this.punctuationModelPath) {
-                    args.push('--punctuation-model', this.punctuationModelPath);
-                }
+
 
                 if (provider) {
                     args.push('--provider', provider);

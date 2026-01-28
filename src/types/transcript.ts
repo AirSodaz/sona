@@ -40,8 +40,7 @@ export interface AppConfig {
   appLanguage: 'auto' | 'en' | 'zh';
   /** Enable Inverse Text Normalization (SenseVoice) */
   enableITN?: boolean;
-  /** Path to punctuation model */
-  punctuationModelPath?: string;
+
   /** Path to VAD model */
   vadModelPath?: string;
   /** Application theme preference */

@@ -56,7 +56,7 @@ const DEFAULT_CONFIG: AppConfig = {
     language: 'en',
     appLanguage: 'auto',
     enableITN: true, // Internal SenseVoice ITN
-    punctuationModelPath: '',
+
     vadModelPath: '',
     theme: 'auto',
     font: 'system',

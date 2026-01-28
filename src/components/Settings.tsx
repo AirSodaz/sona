@@ -86,7 +86,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
     const [recognitionModelPath, setRecognitionModelPath] = useState(config.recognitionModelPath);
-    const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
     const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
     const [enableITN, setEnableITN] = useState(!!config.enableITN);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
@@ -118,7 +117,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
     useEffect(() => {
         setRecognitionModelPath(config.recognitionModelPath);
-        setPunctuationModelPath(config.punctuationModelPath || '');
+
         setVadModelPath(config.vadModelPath || '');
         setEnableITN(!!config.enableITN);
         setAppLanguage(config.appLanguage || 'auto');
@@ -126,7 +125,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.recognitionModelPath, config.punctuationModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
+    }, [config.recognitionModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -137,7 +136,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const handleSave = () => {
         setConfig({
             recognitionModelPath,
-            punctuationModelPath,
             vadModelPath,
             enableITN,
             appLanguage,
@@ -146,7 +144,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         });
         localStorage.setItem('sona-config', JSON.stringify({
             recognitionModelPath,
-            punctuationModelPath,
             vadModelPath,
             enableITN,
             appLanguage,
@@ -165,13 +162,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleBrowse = async (type: 'recognition' | 'punctuation' | 'vad') => {
+    const handleBrowse = async (type: 'recognition' | 'vad') => {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: type === 'recognition' ? t('settings.recognition_path_label') :
-                    type === 'punctuation' ? t('settings.punctuation_path_label') : t('settings.vad_path_label')
+                title: type === 'recognition' ? t('settings.recognition_path_label') : t('settings.vad_path_label')
             });
 
             if (selected) {
@@ -179,8 +175,6 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                 if (path) {
                     if (type === 'recognition') {
                         setRecognitionModelPath(path);
-                    } else if (type === 'punctuation') {
-                        setPunctuationModelPath(path);
                     } else {
                         setVadModelPath(path);
                     }
@@ -256,11 +250,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const setModelPathByType = (type: 'recognition' | 'punctuation' | 'vad', path: string) => {
+    const setModelPathByType = (type: 'recognition' | 'vad', path: string) => {
         if (type === 'recognition') {
             setRecognitionModelPath(path);
-        } else if (type === 'punctuation') {
-            setPunctuationModelPath(path);
         } else if (type === 'vad') {
             setVadModelPath(path);
         }
@@ -286,9 +278,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             if (recognitionModelPath === deletedPath) {
                 setRecognitionModelPath('');
             }
-            if (punctuationModelPath === deletedPath) {
-                setPunctuationModelPath('');
-            }
+
             if (vadModelPath === deletedPath) {
                 setVadModelPath('');
             }
@@ -509,70 +499,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 ))}
 
-                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.punctuation_models')}</div>
-                                {PRESET_MODELS.filter(m => m.type === 'punctuation').map(model => (
-                                    <div key={model.id} className="model-card">
-                                        <div className="model-card-header">
-                                            <div>
-                                                <div className="model-name">{model.name}</div>
-                                                <div className="model-description">{model.description}</div>
-                                                <div className="model-tags">
-                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
-                                                    {model.engine && <span className="model-tag">{model.engine.toUpperCase()}</span>}
-                                                    <span className="model-tag">{model.size}</span>
-                                                </div>
-                                            </div>
-                                            {installedModels.has(model.id) ? (
-                                                <div className="model-actions">
-                                                    <button
-                                                        className={`btn ${punctuationModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
-                                                        onClick={() => handleLoad(model)}
-                                                        disabled={punctuationModelPath.includes(model.filename || model.id)}
-                                                        aria-label={`${t('settings.load')} ${model.name}`}
-                                                    >
-                                                        {punctuationModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
-                                                    </button>
-                                                    <button
-                                                        className="btn btn-secondary"
-                                                        onClick={() => handleDelete(model)}
-                                                        disabled={!!deletingId || !!downloadingId}
-                                                        aria-label={`${t('common.delete')} ${model.name}`}
-                                                    >
-                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    className="btn btn-secondary"
-                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
-                                                    disabled={!!downloadingId && downloadingId !== model.id}
-                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
-                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
-                                                >
-                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
-                                                </button>
-                                            )}
-                                        </div>
-                                        {downloadingId === model.id && (
-                                            <div className="progress-container-mini">
-                                                <div className="progress-info-mini" aria-live="polite">
-                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
-                                                    <span>{Math.round(progress)}%</span>
-                                                </div>
-                                                <div
-                                                    className="progress-bar-mini"
-                                                    role="progressbar"
-                                                    aria-valuenow={Math.round(progress)}
-                                                    aria-valuemin={0}
-                                                    aria-valuemax={100}
-                                                    aria-label={`${t('common.download')} ${model.name}`}
-                                                >
-                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+
 
                                 <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.vad_models')}</div>
                                 {PRESET_MODELS.filter(m => m.type === 'vad').map(model => (
@@ -671,27 +598,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
 
-                                <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">{t('settings.punctuation_path_label')}</label>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <input
-                                            type="text"
-                                            title={punctuationModelPath}
-                                            className="settings-input"
-                                            value={punctuationModelPath}
-                                            onChange={(e) => setPunctuationModelPath(e.target.value)}
-                                            placeholder={t('settings.path_placeholder')}
-                                            style={{ flex: 1 }}
-                                        />
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={() => handleBrowse('punctuation')}
-                                            aria-label={t('settings.browse')}
-                                        >
-                                            <FolderIcon />
-                                        </button>
-                                    </div>
-                                </div>
+
 
                                 <div className="settings-item" style={{ marginTop: 16 }}>
                                     <label className="settings-label">{t('settings.vad_path_label')}</label>

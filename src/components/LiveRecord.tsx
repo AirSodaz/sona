@@ -479,7 +479,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
         transcriptionService.setModelPath(config.recognitionModelPath);
         transcriptionService.setEnableITN(!!config.enableITN);
         transcriptionService.setVadModelPath(config.vadModelPath);
-        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+        transcriptionService.setLanguage(config.language || 'auto');
+
 
         await transcriptionService.start(
             (segment) => {
@@ -496,7 +497,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
                 setIsModelReady(true);
             }
         );
-    }, [config.recognitionModelPath, config.vadModelPath, config.enableITN, config.punctuationModelPath, t, upsertSegment, alert]);
+    }, [config.recognitionModelPath, config.vadModelPath, config.enableITN, t, upsertSegment, alert]);
 
     // Initialize Model on Mount
     useEffect(() => {

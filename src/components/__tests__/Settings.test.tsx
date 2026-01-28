@@ -15,7 +15,7 @@ vi.mock('../../stores/transcriptStore', () => ({
     useTranscriptStore: (selector: any) => selector({
         config: {
             recognitionModelPath: '/test/recognition',
-            punctuationModelPath: '/test/punctuation',
+
             enableITN: true,
             appLanguage: 'auto'
         },
@@ -105,7 +105,7 @@ describe('Settings', () => {
 
         expect(mockSetConfig).toHaveBeenCalledWith({
             recognitionModelPath: '/test/recognition',
-            punctuationModelPath: '/test/punctuation',
+
             vadModelPath: '',
             enableITN: true,
             appLanguage: 'auto',

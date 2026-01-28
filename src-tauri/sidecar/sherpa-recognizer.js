@@ -41,8 +41,9 @@ function parseArgs() {
         numThreads: null,
         targetDir: null,
         itnModel: null,
-        punctuationModel: null,
+
         vadModel: null,
+        language: 'auto',
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -77,11 +78,12 @@ function parseArgs() {
             case '--itn-model':
                 options.itnModel = args[++i];
                 break;
-            case '--punctuation-model':
-                options.punctuationModel = args[++i];
-                break;
+
             case '--vad-model':
                 options.vadModel = args[++i];
+                break;
+            case '--language':
+                options.language = args[++i];
                 break;
         }
     }
@@ -152,7 +154,7 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads) {
 }
 
 // Find model configuration - Offline/ONNX Only
-function findModelConfig(modelPath, enableITN, numThreads) {
+function findModelConfig(modelPath, enableITN, numThreads, language = 'auto') {
     if (!existsSync(modelPath)) return null;
 
     try {
@@ -177,82 +179,33 @@ function findModelConfig(modelPath, enableITN, numThreads) {
         // SenseVoice / Whisper (Offline ONNX)
         const model = findBestMatch('model');
         if (model && !encoder) {
-            return {
-                type: 'onnx',
-                config: {
-                    tokens: join(modelPath, tokens),
-                    numThreads: numThreads,
-                    provider: 'cpu',
-                    debug: false,
-                    senseVoice: {
-                        model: model,
-                        language: '',
-                        useItn: enableITN,
-                    }
-                }
-            };
-        }
-
-        // Check for other offline transducer/paraformer if needed, but primarily SenseVoice requested
-        if (encoder && decoder) {
-            const baseConfig = {
+            const config = {
                 tokens: join(modelPath, tokens),
                 numThreads: numThreads,
-                provider: 'cpu',
+                provider: 'cpu', // ONNX is CPU based in this context for now
                 debug: false,
+                senseVoice: {
+                    model: model,
+                    language: language,
+                    useItn: enableITN,
+                }
             };
-
-            if (joiner) {
-                return {
-                    type: 'onnx',
-                    config: { ...baseConfig, transducer: { encoder, decoder, joiner } }
-                };
-            } else {
-                return {
-                    type: 'onnx',
-                    config: { ...baseConfig, paraformer: { encoder, decoder } }
-                };
-            }
+            console.error('[Sidecar] SenseVoice Config:', JSON.stringify(config.senseVoice));
+            return {
+                type: 'onnx',
+                config: config
+            };
         }
+
+        return null;
 
     } catch (error) {
         console.error(`Error scanning model directory: ${error.message}`);
     }
-
     return null;
 }
 
-// Create Punctuation Model
-async function createPunctuation(modelPath) {
-    if (!modelPath || !existsSync(modelPath)) return null;
-    console.error(`[Sidecar] Initializing Punctuation Model: ${modelPath}`);
-    try {
-        const sherpaModule = await import('sherpa-onnx-node');
-        const sherpa = sherpaModule.default || sherpaModule;
 
-        const files = readdirSync(modelPath);
-        const modelFile = files.find(f => f.endsWith('.onnx'));
-
-        if (!modelFile) {
-            console.error('[Sidecar] No .onnx file found in punctuation model directory');
-            return null;
-        }
-
-        const config = {
-            model: {
-                ctTransformer: join(modelPath, modelFile),
-                numThreads: 1,
-                debug: false,
-                provider: 'cpu'
-            }
-        };
-
-        return new sherpa.OfflinePunctuation(config);
-    } catch (e) {
-        console.error(`[Sidecar] Failed to initialize punctuation: ${e.message}`);
-        return null;
-    }
-}
 
 // Create VAD
 async function createVad(modelPath) {
@@ -312,7 +265,7 @@ function postProcessText(text) {
 
 
 // Process Stream (Pseudo-Streaming ONLY)
-async function processStream(recognizer, sampleRate, punctuation, vad) {
+async function processStream(recognizer, sampleRate, vad) {
     if (!vad) {
         console.error(JSON.stringify({ error: 'VAD is required for offline model pseudo-streaming.' }));
         process.exit(1);
@@ -416,7 +369,7 @@ async function processStream(recognizer, sampleRate, punctuation, vad) {
 
                     if (result.text.trim()) {
                         let text = postProcessText(result.text.trim());
-                        if (punctuation) text = punctuation.addPunct(text);
+                        // if (punctuation) text = punctuation.addPunct(text);
                         const output = {
                             id: currentSegmentId,
                             text: text,
@@ -441,80 +394,7 @@ async function processStream(recognizer, sampleRate, punctuation, vad) {
     });
 }
 
-// Process Batch
-async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
-    if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
-    try {
-        console.error('Converting audio file...');
-        const pcmData = await convertToWav(filePath, ffmpegPath);
-        const samples = new Float32Array(pcmData.length / 2);
-        for (let i = 0; i < samples.length; i++) {
-            const int16 = pcmData.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
-        }
-
-        console.error(`Processing ${samples.length} samples...`);
-        const stream = recognizer.createStream();
-        const segments = [];
-        let segmentStartTime = 0;
-        const chunkSize = sampleRate * 0.5;
-
-        for (let i = 0; i < samples.length; i += chunkSize) {
-            const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
-
-            // UNIFIED call needed here
-            if (recognizer.isNcnn) {
-                stream.acceptWaveform(sampleRate, chunk);
-            } else {
-                stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
-            }
-
-            while (recognizer.isReady(stream)) recognizer.decode(stream);
-
-            if (recognizer.isEndpoint(stream)) {
-                const result = recognizer.getResult(stream);
-                const currentTime = i / sampleRate;
-                if (result.text.trim()) {
-                    let text = postProcessText(result.text.trim());
-                    if (punctuation) text = punctuation.addPunct(text);
-                    segments.push({
-                        id: randomUUID(),
-                        text: text,
-                        start: segmentStartTime,
-                        end: currentTime,
-                        isFinal: true,
-                    });
-                }
-                recognizer.reset(stream);
-                segmentStartTime = currentTime;
-            }
-
-            if (i % (sampleRate * 5) === 0) {
-                const progress = Math.round((i / samples.length) * 100);
-                console.error(`Progress: ${progress}%`);
-            }
-        }
-
-        const finalResult = recognizer.getResult(stream);
-        const totalDuration = samples.length / sampleRate;
-        if (finalResult.text.trim()) {
-            let text = postProcessText(finalResult.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
-            segments.push({
-                id: randomUUID(),
-                text: text,
-                start: segmentStartTime,
-                end: totalDuration,
-                isFinal: true,
-            });
-        }
-        console.log(JSON.stringify(segments, null, 2));
-
-    } catch (error) {
-        throw error;
-    }
-}
 
 async function processExtraction(archivePath, targetDir) {
     const sevenZipPath = join(__scriptDir, process.platform === 'win32' ? '7za.exe' : '7za');
@@ -612,7 +492,7 @@ async function processExtraction(archivePath, targetDir) {
 
 
 
-async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
+async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
@@ -650,7 +530,7 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
 
         if (result.text && result.text.trim()) {
             let text = postProcessText(result.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
+            // if (punctuation) text = punctuation.addPunct(text);
             segments.push({
                 id: randomUUID(),
                 text: text,
@@ -815,64 +695,54 @@ async function main() {
 
     const ffmpegPath = await getFFmpegPath();
     const numThreads = calculateNumThreads(options.numThreads);
+    const modelConfig = findModelConfig(options.modelPath, options.enableITN, numThreads, options.language);
 
-    // Mock Mode
-    const useMock = (options.allowMock && !existsSync(options.modelPath)) || process.env.SONA_MOCK === '1';
-    if (useMock) {
-        console.error('Running in mock mode');
-        if (options.mode === 'batch' && options.file) {
-            console.log(JSON.stringify([
-                { id: randomUUID(), start: 0, end: 1, text: 'Mock transcript.', isFinal: true }
-            ], null, 2));
-        } else {
-            console.log(JSON.stringify({
-                id: randomUUID(), text: 'Mock streaming', start: 0, end: 1, isFinal: true
-            }));
+    if (!modelConfig) {
+        // Mock Mode
+        const useMock = (options.allowMock && !existsSync(options.modelPath)) || process.env.SONA_MOCK === '1';
+        if (useMock) {
+            console.error('Running in mock mode');
+            if (options.mode === 'batch' && options.file) {
+                console.log(JSON.stringify([
+                    { id: randomUUID(), start: 0, end: 1, text: 'Mock transcript.', isFinal: true }
+                ], null, 2));
+            } else {
+                console.log(JSON.stringify({
+                    id: randomUUID(), text: 'Mock streaming', start: 0, end: 1, isFinal: true
+                }));
+            }
+            process.exit(0);
         }
-        process.exit(0);
+
+        console.error(JSON.stringify({ error: 'Could not find valid model configuration (ONNX/NCNN)' }));
+        process.exit(1);
     }
 
     try {
-        const found = findModelConfig(options.modelPath, options.enableITN, numThreads);
-        if (!found) throw new Error('Could not find valid model configuration (NCNN or ONNX)');
-
         let recognizerObj;
 
-        if (found.type === 'ncnn') {
-            recognizerObj = await createNcnnRecognizer(found.config, options.enableITN, numThreads);
-            // Flag to helper know it is NCNN for stream API diffs
-            recognizerObj.recognizer.isNcnn = true;
-        } else {
-            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads);
-        }
+        recognizerObj = await createOnnxRecognizer(modelConfig.config, options.enableITN, numThreads);
 
         const { recognizer, type, supportsInternalITN } = recognizerObj;
 
         // Unified Stream Processor Wrapper
         // Avoid spreading (...recognizer) on class instances as it strips prototype methods
         const unifiedRecognizer = recognizer;
-        // Ensure isNcnn flag is present (already set for NCNN path, undefined for ONNX)
-        unifiedRecognizer.isNcnn = !!recognizer.isNcnn;
         unifiedRecognizer.type = type;
         unifiedRecognizer.supportsInternalITN = supportsInternalITN;
 
-        const punctuation = await createPunctuation(options.punctuationModel);
         const vad = await createVad(options.vadModel);
 
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
-            if (type === 'offline') {
-                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
-            } else {
-                await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
-            }
+            await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate);
         } else {
-            if (type === 'offline' && !vad) {
+            if (!vad) {
                 console.error(JSON.stringify({ error: 'Streaming mode not supported for offline model without VAD.' }));
                 process.exit(1);
             }
 
-            await processStream(unifiedRecognizer, options.sampleRate, punctuation, vad);
+            await processStream(unifiedRecognizer, options.sampleRate, vad);
         }
 
     } catch (error) {

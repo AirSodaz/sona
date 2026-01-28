@@ -152,12 +152,9 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             transcriptionService.setModelPath(config.recognitionModelPath);
             transcriptionService.setEnableITN(!!config.enableITN);
+            transcriptionService.setLanguage(config.language || 'auto');
 
-            if (config.punctuationModelPath) {
-                transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
-            } else {
-                transcriptionService.setPunctuationModelPath('');
-            }
+
 
             const segments = await transcriptionService.transcribeFile(filePath, (progress) => {
                 setProcessingProgress(progress);

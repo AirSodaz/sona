@@ -11,7 +11,7 @@ export interface ModelInfo {
     name: string;
     description: string;
     url: string;
-    type: 'recognition' | 'punctuation' | 'vad';
+    type: 'recognition' | 'vad';
     language: string;
     size: string; // Display size
     isArchive?: boolean;
@@ -40,26 +40,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         size: '~845 MB',
         engine: 'onnx'
     },
-    {
-        id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
-        name: 'Punctuation - CT Transformer (Int8)',
-        description: 'Chinese/English Punctuation Model (Int8 quantized). Adds punctuation to raw text.',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2',
-        type: 'punctuation',
-        language: 'zh,en',
-        size: '~62 MB',
-        engine: 'onnx'
-    },
-    {
-        id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12',
-        name: 'Punctuation - CT Transformer',
-        description: 'Chinese/English Punctuation Model. Adds punctuation to raw text.',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12.tar.bz2',
-        type: 'punctuation',
-        language: 'zh,en',
-        size: '~266 MB',
-        engine: 'onnx'
-    },
+
     {
         id: 'silero_vad',
         name: 'VAD - Silero',
@@ -252,14 +233,7 @@ class ModelService {
         if (model.filename) {
             return await join(modelsDir, model.filename);
         }
-        if (model.type === 'punctuation') {
-            // Punctuation models extract to a folder, usually named after the archive
-            // We need to point to the directory itself or a specific file?
-            // sherpa-onnx expects the directory containing model.onnx (or similar) or the model file itself depending on usage.
-            // For OfflinePunctuation, it looks for model.onnx within the passed config path typically, or we construct config object.
-            // Let's just return the directory path for now, consistent with others.
-            return await join(modelsDir, modelId);
-        }
+
         return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
     }
 
