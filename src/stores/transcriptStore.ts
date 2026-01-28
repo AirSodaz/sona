@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
-import { findSegmentForTime } from '../utils/segmentUtils';
+import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 
 interface TranscriptState {
     // Segment data (source of truth)
@@ -9,6 +9,7 @@ interface TranscriptState {
 
     // UI state
     activeSegmentId: string | null;
+    activeSegmentIndex: number; // Optimization for sequential playback
     editingSegmentId: string | null;
     mode: AppMode;
     processingStatus: ProcessingStatus;
@@ -67,6 +68,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Initial state
     segments: [],
     activeSegmentId: null,
+    activeSegmentIndex: -1,
     editingSegmentId: null,
     mode: 'live',
     processingStatus: 'idle',
@@ -163,15 +165,29 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     setSegments: (segments) => {
-        set({ segments: segments.sort((a, b) => a.start - b.start) });
+        set({
+            segments: segments.sort((a, b) => a.start - b.start),
+            activeSegmentIndex: -1 // Reset index on bulk update
+        });
     },
 
     clearSegments: () => {
-        set({ segments: [], activeSegmentId: null, editingSegmentId: null });
+        set({
+            segments: [],
+            activeSegmentId: null,
+            activeSegmentIndex: -1,
+            editingSegmentId: null
+        });
     },
 
     // UI actions
-    setActiveSegmentId: (id) => set({ activeSegmentId: id }),
+    setActiveSegmentId: (id) => set({
+        activeSegmentId: id,
+        // We could look up index here, but it's O(N).
+        // Better to let next setCurrentTime fix it or lazily update.
+        // For now, reset to -1 so findSegmentForTime falls back to binary search once
+        activeSegmentIndex: -1
+    }),
     setEditingSegmentId: (id) => set({ editingSegmentId: id }),
     setMode: (mode) => set({ mode }),
     setProcessingStatus: (status) => set({ processingStatus: status }),
@@ -199,12 +215,18 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     }),
     setCurrentTime: (time) => {
         const state = get();
-        // Find active segment based on current time
-        const activeSegment = findSegmentForTime(state.segments, time);
-        set({
-            currentTime: time,
-            activeSegmentId: activeSegment?.id || null,
-        });
+        // Find active segment based on current time, using previous index as hint
+        const { segment, index } = findSegmentAndIndexForTime(state.segments, time, state.activeSegmentIndex);
+
+        if (segment?.id !== state.activeSegmentId) {
+            set({
+                currentTime: time,
+                activeSegmentId: segment?.id || null,
+                activeSegmentIndex: index
+            });
+        } else {
+            set({ currentTime: time });
+        }
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
 
