@@ -31,7 +31,11 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) 
     };
 
     return (
-        <div className={`tab-navigation ${className}`}>
+        <div
+            className={`tab-navigation ${className}`}
+            role="tablist"
+            aria-label={t('panel.mode_selection')}
+        >
             <button
                 className={`tab-button ${mode === 'live' ? 'active' : ''}`}
                 onClick={() => handleTabChange('live')}
