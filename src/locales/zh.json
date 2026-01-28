@@ -20,7 +20,8 @@
     "panel": {
         "live_record": "实时录音",
         "batch_import": "批量导入",
-        "transcript": "转录文本"
+        "transcript": "转录文本",
+        "mode_selection": "模式选择"
     },
     "live": {
         "resume": "继续",

@@ -20,7 +20,8 @@
     "panel": {
         "live_record": "Live Recording",
         "batch_import": "Batch Import",
-        "transcript": "Transcript"
+        "transcript": "Transcript",
+        "mode_selection": "Mode Selection"
     },
     "live": {
         "resume": "Resume",
