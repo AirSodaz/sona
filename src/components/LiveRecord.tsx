@@ -263,7 +263,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
         transcriptionService.startSession();
 
         // Set up audio context and analyser if not already created (File mode creates it earlier)
-        if (!audioContextRef.current) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         }
 
@@ -409,6 +409,9 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
 
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close().catch(e => console.error('Error closing AudioContext:', e));
+            audioContextRef.current = null;
+        } else {
+            audioContextRef.current = null;
         }
 
         // Clear visualizer
