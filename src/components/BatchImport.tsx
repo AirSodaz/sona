@@ -152,7 +152,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             transcriptionService.setModelPath(config.offlineModelPath);
             const enabledITNModels = new Set(config.enabledITNModels || []);
-            const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'];
+            const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
 
             transcriptionService.setEnableITN(enabledITNModels.size > 0);
 

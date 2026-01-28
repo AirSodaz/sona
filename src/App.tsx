@@ -59,7 +59,7 @@ function App() {
             offlineModelPath: parsed.offlineModelPath || '',
             punctuationModelPath: parsed.punctuationModelPath || '',
             enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
-            itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
+            itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
             appLanguage: parsed.appLanguage || 'auto',
             theme: parsed.theme || 'auto',
             font: parsed.font || 'system'

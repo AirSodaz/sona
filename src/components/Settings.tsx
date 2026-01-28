@@ -144,7 +144,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-    const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
+    const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number']);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
     const [theme, setTheme] = useState(config.theme || 'auto');
@@ -202,7 +202,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setOfflineModelPath(config.offlineModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
         setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-        setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone']);
+        setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number']);
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');

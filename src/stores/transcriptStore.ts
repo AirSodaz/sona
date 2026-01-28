@@ -57,7 +57,7 @@ const DEFAULT_CONFIG: AppConfig = {
     language: 'en',
     appLanguage: 'auto',
     enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
-    itnRulesOrder: ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
+    itnRulesOrder: ['itn-zh-number'],
     enableITN: true, // Keep for legacy check
     punctuationModelPath: '',
     theme: 'auto',

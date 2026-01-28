@@ -116,7 +116,7 @@ describe('Settings', () => {
             punctuationModelPath: '',
             enableITN: true,
             enabledITNModels: ['itn-zh-number'],
-            itnRulesOrder: ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
+            itnRulesOrder: ['itn-zh-number'],
             appLanguage: 'auto',
             theme: 'auto',
             font: 'system'
