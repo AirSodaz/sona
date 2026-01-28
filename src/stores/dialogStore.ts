@@ -36,7 +36,6 @@ export const useDialogStore = create<DialogState>((set, get) => ({
                     message,
                     type: 'alert',
                     variant: 'info',
-                    confirmLabel: 'OK',
                     ...options,
                 },
                 resolveRef: () => resolve(),
@@ -52,8 +51,6 @@ export const useDialogStore = create<DialogState>((set, get) => ({
                     message,
                     type: 'confirm',
                     variant: 'warning', // Default to warning for confirmations usually
-                    confirmLabel: 'Confirm',
-                    cancelLabel: 'Cancel',
                     ...options,
                 },
                 resolveRef: resolve,

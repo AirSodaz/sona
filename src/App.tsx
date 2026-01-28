@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from './i18n';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptEditor } from './components/TranscriptEditor';
@@ -42,6 +43,42 @@ function App() {
   const config = useTranscriptStore((state) => state.config);
 
   useEffect(() => {
+    // Hydrate config from localStorage
+    const saved = localStorage.getItem('sona-config');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
+          const setConfig = useTranscriptStore.getState().setConfig;
+
+          // Legacy support for 'modelPath'
+          const legacyPath = parsed.modelPath || '';
+
+          setConfig({
+            streamingModelPath: parsed.streamingModelPath || legacyPath,
+            offlineModelPath: parsed.offlineModelPath || '',
+            punctuationModelPath: parsed.punctuationModelPath || '',
+            enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
+            itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
+            appLanguage: parsed.appLanguage || 'auto',
+            theme: parsed.theme || 'auto',
+            font: parsed.font || 'system'
+          });
+
+          // Apply language immediately
+          if (parsed.appLanguage && parsed.appLanguage !== 'auto') {
+            i18n.changeLanguage(parsed.appLanguage);
+          } else {
+            i18n.changeLanguage(navigator.language);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse saved config:', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     const applyTheme = () => {
       const theme = config.theme || 'auto';
       const root = document.documentElement;
@@ -51,15 +88,7 @@ function App() {
       } else if (theme === 'light') {
         root.setAttribute('data-theme', 'light');
       } else {
-        // Auto
         root.removeAttribute('data-theme');
-        // We rely on media query for auto, OR we can explicit set it to match system
-        // The plan said: Let JS set the attribute based on preference OR just use media query.
-        // If index.css uses [data-theme="dark"] AND media query, we might not need to do anything for auto if we remove attribute.
-        // BUT, if we want to force light in auto mode when system is light, removing attribute is fine IF defaults are light.
-        // Let's verify index.css strategy.
-        // If we remove attribute, it falls back to :root (light) and @media (dark).
-        // So for Auto, removing attribute is correct.
       }
     };
 

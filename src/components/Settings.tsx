@@ -419,35 +419,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    // Load config from localStorage on mount
-    useEffect(() => {
-        const saved = localStorage.getItem('sona-config');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath) {
-                    // Migration: if old modelPath exists and new ones don't, mapping it to streaming (or just ignoring)
-                    // Let's assume clear separation needed, but if old config exists, we can try to reuse it for streaming
-                    const legacyPath = parsed.modelPath || '';
 
-                    setConfig({
-                        streamingModelPath: parsed.streamingModelPath || legacyPath,
-                        offlineModelPath: parsed.offlineModelPath || '',
-                        punctuationModelPath: parsed.punctuationModelPath || '',
-                        enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
-                        itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number', 'itn-new-heteronym', 'itn-phone'],
-                        // enableITN handled by store defaults or above logic
-                        appLanguage: parsed.appLanguage || 'auto',
-                        theme: parsed.theme || 'auto',
-                        font: parsed.font || 'system'
-
-                    });
-                }
-            } catch (e) {
-                console.error('Failed to parse saved config:', e);
-            }
-        }
-    }, [setConfig]);
 
     if (!isOpen) return null;
 

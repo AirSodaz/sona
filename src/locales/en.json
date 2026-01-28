@@ -10,7 +10,9 @@
         "auto": "Automatic",
         "installed": "Installed",
         "not_installed": "Not Installed",
-        "close": "Close"
+        "close": "Close",
+        "confirm": "Confirm",
+        "ok": "OK"
     },
     "header": {
         "settings": "Settings"
@@ -66,7 +68,11 @@
         "seek_label": "Seek to {{time}}",
         "edit_label": "Edit segment at {{time}}",
         "merge_label": "Merge segment at {{time}} with next",
-        "delete_label": "Delete segment at {{time}}"
+        "delete_label": "Delete segment at {{time}}",
+        "delete_confirm_message": "Are you sure you want to delete this segment?",
+        "delete_confirm_title": "Confirm Delete",
+        "merge_confirm_message": "Merge this segment with the next one?",
+        "merge_confirm_title": "Confirm Merge"
     },
     "export": {
         "button": "Export",

@@ -10,7 +10,9 @@
         "auto": "自动",
         "installed": "已安装",
         "not_installed": "未安装",
-        "close": "关闭"
+        "close": "关闭",
+        "confirm": "确认",
+        "ok": "确定"
     },
     "header": {
         "settings": "设置"
@@ -66,7 +68,11 @@
         "seek_label": "跳转至 {{time}}",
         "edit_label": "编辑 {{time}} 处的段落",
         "merge_label": "合并 {{time}} 处的段落与下一段",
-        "delete_label": "删除 {{time}} 处的段落"
+        "delete_label": "删除 {{time}} 处的段落",
+        "delete_confirm_message": "您确定要删除此段落吗？",
+        "delete_confirm_title": "确认删除",
+        "merge_confirm_message": "确定要将此段落与下一段合并吗？",
+        "merge_confirm_title": "确认合并"
     },
     "export": {
         "button": "导出",
