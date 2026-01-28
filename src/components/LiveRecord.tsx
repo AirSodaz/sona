@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
@@ -28,6 +29,7 @@ const getSupportedMimeType = () => {
 };
 
 export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
+    const { alert } = useDialogStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationRef = useRef<number>(0);
@@ -169,7 +171,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         } catch (error) {
             console.error('Failed to start recording:', error);
-            alert(t('live.mic_error'));
+            alert(t('live.mic_error'), { variant: 'error' });
         }
     };
 
@@ -208,7 +210,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         } catch (error) {
             console.error('Failed to start file simulation:', error);
-            alert(t('live.mic_error')); // Reuse error or add new one? Using generic for now
+            alert(t('live.mic_error'), { variant: 'error' }); // Reuse error or add new one? Using generic for now
         } finally {
             // Reset input
             if (fileInputRef.current) fileInputRef.current.value = '';

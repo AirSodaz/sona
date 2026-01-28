@@ -2,9 +2,9 @@ import React, { useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
 import { formatDisplayTime } from '../utils/exportFormats';
-import { ask } from '@tauri-apps/plugin-dialog';
 
 // Icons
 const EditIcon = () => (
@@ -210,6 +210,7 @@ interface TranscriptEditorProps {
 
 export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) => {
     const { t } = useTranslation();
+    const { confirm } = useDialogStore();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
 
     const segments = useTranscriptStore((state) => state.segments);
@@ -282,20 +283,20 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     }, [updateSegment, setEditingSegmentId]);
 
     const handleDelete = useCallback(async (id: string) => {
-        const confirmed = await ask(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {
+        const confirmed = await confirm(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {
             title: t('editor.delete_confirm_title', { defaultValue: 'Confirm Delete' }),
-            kind: 'warning'
+            variant: 'warning'
         });
 
         if (confirmed) {
             deleteSegment(id);
         }
-    }, [deleteSegment, t]);
+    }, [deleteSegment, t, confirm]);
 
     const handleMergeWithNext = useCallback(async (id: string) => {
-        const confirmed = await ask(t('editor.merge_confirm_message', { defaultValue: 'Merge this segment with the next one?' }), {
+        const confirmed = await confirm(t('editor.merge_confirm_message', { defaultValue: 'Merge this segment with the next one?' }), {
             title: t('editor.merge_confirm_title', { defaultValue: 'Confirm Merge' }),
-            kind: 'info'
+            variant: 'info'
         });
 
         if (confirmed) {

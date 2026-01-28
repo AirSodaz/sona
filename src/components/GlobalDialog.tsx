@@ -1,0 +1,159 @@
+import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import { useDialogStore } from '../stores/dialogStore';
+
+export const GlobalDialog: React.FC = () => {
+    const { isOpen, options, close } = useDialogStore();
+    const { t } = useTranslation();
+    const confirmButtonRef = useRef<HTMLButtonElement>(null);
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+    const modalRef = useRef<HTMLDivElement>(null);
+
+    // Focus management
+    useEffect(() => {
+        if (isOpen) {
+            // Wait for render
+            requestAnimationFrame(() => {
+                if (options?.type === 'confirm') {
+                    // Focus cancel by default for safety in confirmations
+                    cancelButtonRef.current?.focus();
+                } else {
+                    confirmButtonRef.current?.focus();
+                }
+            });
+        }
+    }, [isOpen, options]);
+
+    // Keyboard support
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isOpen) return;
+
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                close(false);
+            }
+
+            // Tab trapping could be added here, but for now simple focus management is okay
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, close]);
+
+    if (!isOpen || !options) return null;
+
+    const {
+        title,
+        message,
+        type = 'alert',
+        variant = 'info',
+        confirmLabel,
+        cancelLabel,
+    } = options;
+
+    const getIcon = () => {
+        switch (variant) {
+            case 'error':
+                return <AlertCircle className="w-6 h-6 text-red-500" style={{ color: 'var(--color-error)' }} />;
+            case 'warning':
+                return <AlertTriangle className="w-6 h-6 text-amber-500" style={{ color: 'var(--color-warning)' }} />;
+            case 'success':
+                return <CheckCircle className="w-6 h-6 text-green-500" style={{ color: 'var(--color-success)' }} />;
+            case 'info':
+            default:
+                return <Info className="w-6 h-6 text-blue-500" style={{ color: 'var(--color-info)' }} />;
+        }
+    };
+
+    const getTitle = () => {
+        if (title) return title;
+        switch (variant) {
+            case 'error': return t('common.error', { defaultValue: 'Error' });
+            case 'warning': return t('common.warning', { defaultValue: 'Warning' });
+            case 'success': return t('common.success', { defaultValue: 'Success' });
+            default: return t('common.info', { defaultValue: 'Info' });
+        }
+    };
+
+    return (
+        <div className="settings-overlay" style={{ zIndex: 2000 }}>
+            <div
+                ref={modalRef}
+                className="dialog-modal"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                aria-describedby="dialog-desc"
+                style={{
+                    background: 'var(--color-bg-elevated)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: 'var(--shadow-xl)',
+                    width: '400px',
+                    maxWidth: '90vw',
+                    padding: 'var(--spacing-lg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--spacing-md)',
+                    border: '1px solid var(--color-border)',
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'start', gap: 'var(--spacing-md)' }}>
+                    <div style={{ flexShrink: 0, paddingTop: 4 }}>
+                        {getIcon()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <h3
+                            id="dialog-title"
+                            style={{
+                                fontSize: '1.125rem',
+                                fontWeight: 600,
+                                color: 'var(--color-text-primary)',
+                                marginBottom: 'var(--spacing-xs)',
+                            }}
+                        >
+                            {getTitle()}
+                        </h3>
+                        <p
+                            id="dialog-desc"
+                            style={{
+                                fontSize: '0.9rem',
+                                color: 'var(--color-text-secondary)',
+                                lineHeight: 1.5,
+                            }}
+                        >
+                            {message}
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 'var(--spacing-sm)',
+                        marginTop: 'var(--spacing-sm)',
+                    }}
+                >
+                    {type === 'confirm' && (
+                        <button
+                            ref={cancelButtonRef}
+                            className="btn btn-secondary"
+                            onClick={() => close(false)}
+                        >
+                            {cancelLabel || t('common.cancel', { defaultValue: 'Cancel' })}
+                        </button>
+                    )}
+                    <button
+                        ref={confirmButtonRef}
+                        className={`btn ${variant === 'error' ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={() => close(true)}
+                    >
+                        {confirmLabel || (type === 'confirm' ? t('common.confirm', { defaultValue: 'Confirm' }) : t('common.ok', { defaultValue: 'OK' }))}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
