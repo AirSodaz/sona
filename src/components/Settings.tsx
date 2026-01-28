@@ -87,7 +87,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
     const [recognitionModelPath, setRecognitionModelPath] = useState(config.recognitionModelPath);
     const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
-    const [enableITN, setEnableITN] = useState(!!config.enableITN);
+
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
 
     const [theme, setTheme] = useState(config.theme || 'auto');
@@ -119,13 +119,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setRecognitionModelPath(config.recognitionModelPath);
 
         setVadModelPath(config.vadModelPath || '');
-        setEnableITN(!!config.enableITN);
+
         setAppLanguage(config.appLanguage || 'auto');
 
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.recognitionModelPath, config.enableITN, config.appLanguage, config.theme, config.font]);
+    }, [config.recognitionModelPath, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -137,7 +137,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setConfig({
             recognitionModelPath,
             vadModelPath,
-            enableITN,
+
             appLanguage,
             theme,
             font
@@ -145,7 +145,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         localStorage.setItem('sona-config', JSON.stringify({
             recognitionModelPath,
             vadModelPath,
-            enableITN,
+
             appLanguage,
             theme,
             font
@@ -622,34 +622,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
 
-                                <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
-                                    <div style={{ marginBottom: 12 }}>
-                                        <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
-                                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                                            {t('settings.itn_desc')}
-                                        </div>
-                                    </div>
 
-                                    <div className="settings-list">
-                                        <div className="settings-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ fontWeight: 500 }}>Enable Inverse Text Normalization (ITN)</div>
-                                            <button
-                                                className="toggle-switch"
-                                                onClick={() => setEnableITN(!enableITN)}
-                                                role="switch"
-                                                aria-checked={enableITN}
-                                                aria-label={t('settings.itn_title')}
-                                                data-tooltip={t('settings.itn_title')}
-                                                style={{ opacity: 1, cursor: 'pointer', flexShrink: 0 }}
-                                            >
-                                                <div className="toggle-switch-handle" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="settings-hint" style={{ marginTop: 8 }}>
-                                        {t('settings.itn_note')}
-                                    </div>
-                                </div>
                             </div>
                         )}
 

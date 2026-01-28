@@ -38,8 +38,7 @@ export interface AppConfig {
   language: string;
   /** Application UI language preference */
   appLanguage: 'auto' | 'en' | 'zh';
-  /** Enable Inverse Text Normalization (SenseVoice) */
-  enableITN?: boolean;
+
 
   /** Path to VAD model */
   vadModelPath?: string;

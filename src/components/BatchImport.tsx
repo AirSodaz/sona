@@ -151,7 +151,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
             useTranscriptStore.getState().setAudioUrl(assetUrl);
 
             transcriptionService.setModelPath(config.recognitionModelPath);
-            transcriptionService.setEnableITN(!!config.enableITN);
+
             transcriptionService.setLanguage(config.language || 'auto');
 
 

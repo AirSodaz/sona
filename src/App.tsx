@@ -56,7 +56,7 @@ function App() {
 
           setConfig({
             recognitionModelPath: parsed.recognitionModelPath || parsed.offlineModelPath || parsed.streamingModelPath || legacyPath || '',
-            punctuationModelPath: parsed.punctuationModelPath || '',
+
             vadModelPath: parsed.vadModelPath || '',
             appLanguage: parsed.appLanguage || 'auto',
             theme: parsed.theme || 'auto',

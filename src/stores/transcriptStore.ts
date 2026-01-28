@@ -55,7 +55,7 @@ const DEFAULT_CONFIG: AppConfig = {
     recognitionModelPath: '',
     language: 'en',
     appLanguage: 'auto',
-    enableITN: true, // Internal SenseVoice ITN
+
 
     vadModelPath: '',
     theme: 'auto',

@@ -15,8 +15,6 @@ vi.mock('../../stores/transcriptStore', () => ({
     useTranscriptStore: (selector: any) => selector({
         config: {
             recognitionModelPath: '/test/recognition',
-
-            enableITN: true,
             appLanguage: 'auto'
         },
         setConfig: mockSetConfig
@@ -107,7 +105,7 @@ describe('Settings', () => {
             recognitionModelPath: '/test/recognition',
 
             vadModelPath: '',
-            enableITN: true,
+
             appLanguage: 'auto',
             theme: 'auto',
             font: 'system'
@@ -115,17 +113,7 @@ describe('Settings', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('renders ITN toggle switch', async () => {
-        render(<Settings isOpen={true} onClose={onClose} />);
-        fireEvent.click(screen.getByText('settings.local_path'));
 
-        // Should find the switch for enable ITN
-        const toggle = await screen.findByRole('switch');
-        expect(toggle).toBeDefined();
-        expect(toggle.getAttribute('aria-checked')).toBe('true');
-        expect(toggle.getAttribute('aria-label')).toBe('settings.itn_title');
-        expect(toggle.getAttribute('data-tooltip')).toBe('settings.itn_title');
-    });
 
     it('implements ARIA tabs pattern', () => {
         render(<Settings isOpen={true} onClose={onClose} />);

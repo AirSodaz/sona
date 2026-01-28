@@ -1,0 +1,3 @@
+src/components/__tests__/BatchImport.test.tsx(51,17): error TS2353: Object literal may only specify known properties, and 'punctuationModelPath' does not exist in type 'AppConfig'.
+src/components/__tests__/LiveRecord.perf.test.tsx(146,21): error TS2353: Object literal may only specify known properties, and 'enableITN' does not exist in type 'AppConfig'.
+src/components/__tests__/LiveRecord.test.tsx(139,21): error TS2353: Object literal may only specify known properties, and 'enableITN' does not exist in type 'AppConfig'.

@@ -11,10 +11,10 @@ vi.mock('../../services/transcriptionService', () => ({
         startSession: vi.fn(),
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
-        setEnableITN: vi.fn(),
+
         setITNModelPaths: vi.fn(),
         setVadModelPath: vi.fn(),
-        setPunctuationModelPath: vi.fn(),
+
     }
 }));
 
@@ -109,7 +109,6 @@ describe('LiveRecord', () => {
         if (!navigator.mediaDevices) {
             Object.defineProperty(navigator, 'mediaDevices', {
                 value: {},
-                writable: true,
             });
         }
         navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue({
@@ -136,10 +135,10 @@ describe('LiveRecord', () => {
                 config: {
                     recognitionModelPath: '/fake/model',
                     vadModelPath: '/fake/vad',
-                    enableITN: true,
+
                     language: 'en',
                     appLanguage: 'auto',
-                    punctuationModelPath: '',
+
                     theme: 'auto',
                     font: 'system'
                 }

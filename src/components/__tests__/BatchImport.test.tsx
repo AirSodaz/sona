@@ -9,7 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn().mockResolvedValue(() => {}),
+    listen: vi.fn().mockResolvedValue(() => { }),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -48,8 +48,8 @@ describe('BatchImport', () => {
             config: {
                 recognitionModelPath: '',
                 vadModelPath: '',
-                punctuationModelPath: '',
-                enableITN: false,
+
+
                 theme: 'auto',
                 font: 'system',
                 language: 'en',

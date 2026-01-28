@@ -14,7 +14,7 @@ class TranscriptionService {
     private modelPath: string = '';
 
 
-    private enableITN: boolean = true;
+
     private language: string = 'auto'; // Default to auto
     private onSegment: TranscriptionCallback | null = null;
     private onReady: (() => void) | null = null;
@@ -48,12 +48,7 @@ class TranscriptionService {
         this.vadModelPath = path;
     }
 
-    /**
-     * Set ITN enabled state
-     */
-    setEnableITN(enabled: boolean) {
-        this.enableITN = enabled;
-    }
+
 
     /**
      * Set the language for transcription ('auto', 'zh', 'en', etc.)
@@ -104,7 +99,7 @@ class TranscriptionService {
                 scriptPath,
                 '--mode', 'stream',
                 '--model-path', this.modelPath,
-                '--enable-itn', this.enableITN.toString()
+                '--enable-itn', 'true'
             ];
 
             if (this.language) {
@@ -275,7 +270,7 @@ class TranscriptionService {
                     '--mode', 'batch',
                     '--file', filePath,
                     '--model-path', this.modelPath,
-                    '--enable-itn', this.enableITN.toString()
+                    '--enable-itn', 'true'
                 ];
 
 
