@@ -102,7 +102,7 @@
         "itn_note": "Note: Load external FST (Finite State Transducer) rule files to implement ITN.",
         "delete_confirm_title": "Delete Model",
         "delete_confirm_message": "Are you sure you want to delete {{name}}?",
-        "save_button": "Save Settings",
+        "save_button": "Save",
         "download_starting": "Starting download...",
         "download_complete": "Download complete!",
         "download_failed": "Download failed: {{error}}",

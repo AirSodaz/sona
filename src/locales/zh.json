@@ -102,7 +102,7 @@
         "itn_note": "提示：加载外部的 FST (Finite State Transducer) 规则文件来实现 ITN",
         "delete_confirm_title": "删除模型",
         "delete_confirm_message": "您确定要删除 {{name}} 吗？",
-        "save_button": "保存设置",
+        "save_button": "保存",
         "download_starting": "开始下载...",
         "download_complete": "下载完成！",
         "download_failed": "下载失败: {{error}}",
