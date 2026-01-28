@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -160,30 +160,12 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
     const [abortController, setAbortController] = useState<AbortController | null>(null);
-    const modalRef = useRef<HTMLDivElement>(null);
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
-
-    useEffect(() => {
-        if (isOpen) {
-            // Focus the modal for screen readers
-            modalRef.current?.focus();
-
-            // Handle Escape key
-            const handleKeyDown = (e: KeyboardEvent) => {
-                if (e.key === 'Escape') {
-                    onClose();
-                }
-            };
-
-            window.addEventListener('keydown', handleKeyDown);
-            return () => window.removeEventListener('keydown', handleKeyDown);
-        }
-    }, [isOpen, onClose]);
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -486,14 +468,11 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     return (
         <div className="settings-overlay" onClick={onClose}>
             <div
-                ref={modalRef}
                 className="settings-modal"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="settings-title"
-                tabIndex={-1}
-                style={{ outline: 'none' }}
             >
                 {/* Sidebar */}
                 <div className="settings-sidebar">

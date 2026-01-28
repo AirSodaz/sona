@@ -49,7 +49,3 @@
 ## 2026-05-22 - Accessible Canvas Visualization
 **Learning:** Canvas elements used for visual feedback (like audio waves) are invisible to screen readers.
 **Action:** Add `role="img"` and a descriptive `aria-label` to `<canvas>` elements to indicate their purpose.
-
-## 2026-05-23 - Modal Keyboard Support
-**Learning:** Custom modals often miss "Escape to close" and initial focus management, forcing keyboard users to manually find the close button or getting stuck.
-**Action:** Always add a `keydown` listener for 'Escape' and focus the modal container (with `tabIndex={-1}`) or the first interactive element upon opening.
