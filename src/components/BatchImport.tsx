@@ -4,6 +4,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { splitByPunctuation } from '../utils/segmentUtils';
@@ -27,6 +28,7 @@ interface BatchImportProps {
 
 export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     // const fileInputRef = useRef<HTMLInputElement>(null);
+    const { alert } = useDialogStore();
     const [isDragOver, setIsDragOver] = useState(false);
     const [enableTimeline, setEnableTimeline] = useState(true);
 
@@ -59,7 +61,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 if (isSupported) {
                     processFile(filePath);
                 } else {
-                    alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }));
+                    alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }), { variant: 'error' });
                 }
             }
             setIsDragOver(false);
@@ -136,7 +138,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
     const processFile = async (filePath: string) => {
         if (!config.offlineModelPath) {
-            alert(t('batch.no_model_error'));
+            alert(t('batch.no_model_error'), { variant: 'error' });
             return;
         }
 
@@ -177,7 +179,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         } catch (error) {
             console.error('Transcription failed:', error);
             setProcessingStatus('error');
-            alert(t('batch.transcription_failed', { error }));
+            alert(t('batch.transcription_failed', { error }), { variant: 'error' });
         }
     };
 

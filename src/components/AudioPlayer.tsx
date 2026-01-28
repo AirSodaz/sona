@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { formatDisplayTime } from '../utils/exportFormats';
 
 // Icons
@@ -31,6 +32,7 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     const { t } = useTranslation();
+    const { alert } = useDialogStore();
     const audioRef = useRef<HTMLAudioElement>(null);
 
     const audioUrl = useTranscriptStore((state) => state.audioUrl);
@@ -159,7 +161,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                 onError={(e) => {
                     const error = e.currentTarget.error;
                     console.error('Audio playback error:', error);
-                    alert(t('player.error', { error: error?.message || 'Unknown error', code: error?.code }));
+                    alert(t('player.error', { error: error?.message || 'Unknown error', code: error?.code }), { variant: 'error' });
                 }}
             />
 

@@ -8,6 +8,7 @@ import { ExportButton } from './components/ExportButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { Settings } from './components/Settings';
+import { GlobalDialog } from './components/GlobalDialog';
 import { useTranscriptStore } from './stores/transcriptStore';
 
 // Icons
@@ -138,6 +139,7 @@ function App() {
 
       {/* Settings Modal */}
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <GlobalDialog />
     </div>
   );
 }

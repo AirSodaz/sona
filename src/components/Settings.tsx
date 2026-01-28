@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
-import { open, ask, message } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
     DndContext,
     closestCenter,
@@ -135,6 +136,7 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
@@ -290,9 +292,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         // Check hardware compatibility
         const { compatible, reason } = await modelService.checkHardware(model.id);
         if (!compatible) {
-            const confirmed = await ask(
+            const confirmed = await confirm(
                 `${reason}\n\nDo you want to download it anyway?`,
-                { title: 'Hardware Warning', kind: 'warning' }
+                { title: 'Hardware Warning', variant: 'warning' }
             );
             if (!confirmed) return;
         }
@@ -384,9 +386,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         if (deletingId) return;
 
         // Confirm deletion
-        const confirmed = await ask(t('settings.delete_confirm_message', { name: model.name }), {
+        const confirmed = await confirm(t('settings.delete_confirm_message', { name: model.name }), {
             title: t('settings.delete_confirm_title'),
-            kind: 'warning'
+            variant: 'warning'
         });
 
         if (!confirmed) return;
@@ -408,9 +410,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
-            await message(`Failed to delete model: ${error.message}`, {
+            await alert(`Failed to delete model: ${error.message}`, {
                 title: 'Error',
-                kind: 'error'
+                variant: 'error'
             });
         } finally {
             setDeletingId(null);
