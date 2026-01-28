@@ -455,6 +455,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         <button
             className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
             onClick={() => setActiveTab(id)}
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`settings-panel-${id}`}
+            id={`settings-tab-${id}`}
         >
             <Icon />
             {label}
@@ -476,7 +480,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         <h2 id="settings-title">{t('settings.title')}</h2>
                     </div>
 
-                    <div className="settings-tabs-container">
+                    <div className="settings-tabs-container" role="tablist" aria-orientation="vertical">
                         {renderTabButton('general', t('settings.general'), GeneralIcon)}
                         {renderTabButton('models', t('settings.model_hub'), ModelIcon)}
                         {renderTabButton('local', t('settings.local_path'), LocalIcon)}
@@ -510,7 +514,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         </div>
 
                         {activeTab === 'general' && (
-                            <div className="settings-group">
+                            <div
+                                className="settings-group"
+                                role="tabpanel"
+                                id="settings-panel-general"
+                                aria-labelledby="settings-tab-general"
+                                tabIndex={0}
+                            >
                                 <div className="settings-item">
                                     <label htmlFor="settings-language" className="settings-label">{t('settings.language')}</label>
                                     <div style={{ maxWidth: 300 }}>
@@ -571,7 +581,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         )}
 
                         {activeTab === 'models' && (
-                            <div className="model-list">
+                            <div
+                                className="model-list"
+                                role="tabpanel"
+                                id="settings-panel-models"
+                                aria-labelledby="settings-tab-models"
+                                tabIndex={0}
+                            >
                                 <div className="settings-section-subtitle" style={{ marginBottom: 10, fontWeight: 'bold' }}>{t('settings.streaming_models')}</div>
                                 {PRESET_MODELS.filter(m => m.type === 'streaming').map(model => (
                                     <div key={model.id} className="model-card">
@@ -770,7 +786,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         )}
 
                         {activeTab === 'local' && (
-                            <div className="settings-group">
+                            <div
+                                className="settings-group"
+                                role="tabpanel"
+                                id="settings-panel-local"
+                                aria-labelledby="settings-tab-local"
+                                tabIndex={0}
+                            >
                                 <div className="settings-item">
                                     <label className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
