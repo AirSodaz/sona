@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 
 // Mock transcription service
 vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
-        start: vi.fn(),
+        start: vi.fn((_seg, _err, onReady) => { if (onReady) onReady(); }),
         stop: vi.fn(),
+        startSession: vi.fn(),
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
         setITNModelPaths: vi.fn(),
+        setVadModelPath: vi.fn(),
         setPunctuationModelPath: vi.fn(),
     }
 }));
@@ -135,6 +138,21 @@ describe('LiveRecord Performance', () => {
     });
 
     it('should stop rAF loop when paused and restart when resumed', async () => {
+        act(() => {
+            useTranscriptStore.setState({
+                config: {
+                    recognitionModelPath: '/fake/model',
+                    vadModelPath: '/fake/vad',
+                    enableITN: true,
+                    language: 'en',
+                    appLanguage: 'auto',
+                    punctuationModelPath: '',
+                    theme: 'auto',
+                    font: 'system'
+                }
+            });
+        });
+
         render(<LiveRecord />);
 
         const startBtn = screen.getByRole('button', { name: /live.start_recording/i });

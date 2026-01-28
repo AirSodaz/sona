@@ -219,9 +219,27 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
 /**
  * Efficiently finds the segment containing the given time using binary search.
  * Assumes segments are sorted by start time.
- * Returns undefined if no segment covers the time.
+ * Returns the segment and its index. If not found, segment is undefined and index is -1.
  */
-export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {
+export function findSegmentForTime(segments: TranscriptSegment[], time: number, hintIndex: number = -1): { segment: TranscriptSegment | undefined, index: number } {
+    // Optimization: Check hint index first (O(1) access)
+    // This is useful for sequential playback where we likely need the same or next segment
+    if (hintIndex >= 0 && hintIndex < segments.length) {
+        // Check current hint
+        const seg = segments[hintIndex];
+        if (time >= seg.start && time <= seg.end) {
+            return { segment: seg, index: hintIndex };
+        }
+
+        // Check next segment (common case for forward playback)
+        if (hintIndex + 1 < segments.length) {
+            const nextSeg = segments[hintIndex + 1];
+            if (time >= nextSeg.start && time <= nextSeg.end) {
+                return { segment: nextSeg, index: hintIndex + 1 };
+            }
+        }
+    }
+
     let left = 0;
     let right = segments.length - 1;
     let idx = -1;
@@ -240,9 +258,9 @@ export function findSegmentForTime(segments: TranscriptSegment[], time: number):
     if (idx !== -1) {
         const seg = segments[idx];
         if (time <= seg.end) {
-            return seg;
+            return { segment: seg, index: idx };
         }
     }
 
-    return undefined;
+    return { segment: undefined, index: -1 };
 }
