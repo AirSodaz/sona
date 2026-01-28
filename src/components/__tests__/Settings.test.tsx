@@ -135,4 +135,39 @@ describe('Settings', () => {
         expect(toggle).toBeDefined();
         expect(toggle.getAttribute('aria-label')).toBe('settings.toggle_model');
     });
+
+    it('implements ARIA tabs pattern', () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        // Check for tablist
+        const tablist = screen.getByRole('tablist');
+        expect(tablist).toBeDefined();
+        expect(tablist.getAttribute('aria-orientation')).toBe('vertical');
+
+        // Check for tabs
+        const tabs = screen.getAllByRole('tab');
+        expect(tabs).toHaveLength(3);
+
+        // Check "General" tab (active by default)
+        const generalTab = tabs[0];
+        expect(generalTab.getAttribute('aria-selected')).toBe('true');
+        expect(generalTab.getAttribute('aria-controls')).toBe('settings-panel-general');
+
+        // Check panel
+        const panel = screen.getByRole('tabpanel');
+        expect(panel).toBeDefined();
+        expect(panel.id).toBe('settings-panel-general');
+        expect(panel.getAttribute('aria-labelledby')).toBe(generalTab.id);
+
+        // Switch to "Models"
+        const modelTab = tabs[1];
+        fireEvent.click(modelTab);
+
+        expect(modelTab.getAttribute('aria-selected')).toBe('true');
+        expect(generalTab.getAttribute('aria-selected')).toBe('false');
+
+        const newPanel = screen.getByRole('tabpanel');
+        expect(newPanel.id).toBe('settings-panel-models');
+        expect(newPanel.getAttribute('aria-labelledby')).toBe(modelTab.id);
+    });
 });
