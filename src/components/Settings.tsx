@@ -731,6 +731,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                                 onClick={() => setEnableITN(!enableITN)}
                                                 role="switch"
                                                 aria-checked={enableITN}
+                                                aria-label={t('settings.itn_title')}
+                                                data-tooltip={t('settings.itn_title')}
                                                 style={{ opacity: 1, cursor: 'pointer', flexShrink: 0 }}
                                             >
                                                 <div className="toggle-switch-handle" />

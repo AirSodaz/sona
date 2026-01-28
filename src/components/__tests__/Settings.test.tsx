@@ -123,6 +123,8 @@ describe('Settings', () => {
         const toggle = await screen.findByRole('switch');
         expect(toggle).toBeDefined();
         expect(toggle.getAttribute('aria-checked')).toBe('true');
+        expect(toggle.getAttribute('aria-label')).toBe('settings.itn_title');
+        expect(toggle.getAttribute('data-tooltip')).toBe('settings.itn_title');
     });
 
     it('implements ARIA tabs pattern', () => {
