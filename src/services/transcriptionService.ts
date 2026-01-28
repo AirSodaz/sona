@@ -156,9 +156,13 @@ class TranscriptionService {
 
         try {
             // Convert Float32 to Int16 for the sidecar
-            const buffer = new Int16Array(samples.length);
-            for (let i = 0; i < samples.length; i++) {
-                const s = Math.max(-1, Math.min(1, samples[i]));
+            // Optimization: Manual clamping to avoid function call overhead in tight loop
+            const len = samples.length;
+            const buffer = new Int16Array(len);
+            for (let i = 0; i < len; i++) {
+                let s = samples[i];
+                if (s > 1) s = 1;
+                else if (s < -1) s = -1;
                 buffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
             }
 
@@ -240,12 +244,18 @@ class TranscriptionService {
 
                 const command = Command.sidecar('binaries/node', args);
 
-                let stdoutBuffer = '';
-                let stderrBuffer = '';
+                // Optimization: Use array of chunks instead of string concatenation
+                // This prevents O(N^2) copying behavior for large outputs
+                const stdoutChunks: string[] = [];
+                const stderrChunks: string[] = [];
                 const stderrStreamBuffer = new StreamLineBuffer();
 
                 command.on('close', (data) => {
                     console.log(`[Batch] Sidecar finished with code ${data.code}`);
+
+                    const stdoutBuffer = stdoutChunks.join('');
+                    const stderrBuffer = stderrChunks.join('');
+
                     if (data.code === 0) {
                         // Check for silent CoreML failure
                         // CoreML errors are printed to stderr but sometimes the process exits with 0
@@ -297,13 +307,13 @@ class TranscriptionService {
 
                 command.stdout.on('data', (chunk) => {
                     if (typeof chunk === 'string') {
-                        stdoutBuffer += chunk;
+                        stdoutChunks.push(chunk);
                     }
                 });
 
                 command.stderr.on('data', (chunk) => {
                     if (typeof chunk === 'string') {
-                        stderrBuffer += chunk;
+                        stderrChunks.push(chunk);
 
                         const lines = stderrStreamBuffer.process(chunk);
                         lines.forEach(line => {
