@@ -250,7 +250,16 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
 
         } catch (error) {
             console.error('Failed to start file simulation:', error);
-            alert(t('live.mic_error'), { variant: 'error' }); // Reuse error or add new one? Using generic for now
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+            if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+                alert(t('live.mic_error', { error: `Permission Denied (${errorMessage}). Please check system privacy settings.` }), { variant: 'error' });
+            } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+                alert(t('live.mic_error', { error: `Microphone not found (${errorMessage}).` }), { variant: 'error' });
+            } else {
+                alert(t('live.mic_error', { error: `${errorName}: ${errorMessage}` }), { variant: 'error' });
+            }
         } finally {
             // Reset input
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -426,9 +435,14 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
         isRecordingRef.current = false;
         isPausedRef.current = false;
 
-        // We DO NOT stop the transcription service here, 
-        // because we want to keep the model loaded for the next recording session.
-        // The service will be stopped when the component unmounts.
+        // Stop the transcription service to clear VAD state and buffers
+        // Then restart it to be ready for the next session
+        console.log('[LiveRecord] Stopping service to reset state...');
+        transcriptionService.stop().then(() => {
+            console.log('[LiveRecord] Service stopped. Restarting...');
+            // Re-initialize to get a fresh sidecar process
+            initializeTranscriber();
+        });
     };
 
 
@@ -451,49 +465,50 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
         };
     }, [isRecording]); // Only dependency is isRecording, uses ref for pause check
 
+    // Initialize Model Function
+    const initializeTranscriber = useCallback(async () => {
+        if (!config.recognitionModelPath || !config.vadModelPath) {
+            setMissingConfig(true);
+            return;
+        }
+
+        setMissingConfig(false);
+        setIsModelLoading(true);
+        setIsModelReady(false);
+
+        transcriptionService.setModelPath(config.recognitionModelPath);
+        transcriptionService.setEnableITN(!!config.enableITN);
+        transcriptionService.setVadModelPath(config.vadModelPath);
+        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+
+        await transcriptionService.start(
+            (segment) => {
+                upsertSegment(segment);
+            },
+            (error) => {
+                console.error('Transcription error:', error);
+                alert(t('live.error_transcription', { error }), { variant: 'error' });
+                setIsModelLoading(false);
+            },
+            () => {
+                console.log('[LiveRecord] Model Ready');
+                setIsModelLoading(false);
+                setIsModelReady(true);
+            }
+        );
+    }, [config.recognitionModelPath, config.vadModelPath, config.enableITN, config.punctuationModelPath, t, upsertSegment, alert]);
+
     // Initialize Model on Mount
     useEffect(() => {
-        const initModel = async () => {
-            if (!config.recognitionModelPath || !config.vadModelPath) {
-                setMissingConfig(true);
-                return;
-            }
-
-            setMissingConfig(false);
-            setIsModelLoading(true);
-            setIsModelReady(false);
-
-            transcriptionService.setModelPath(config.recognitionModelPath);
-            transcriptionService.setEnableITN(!!config.enableITN);
-            transcriptionService.setVadModelPath(config.vadModelPath);
-            transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-
-            await transcriptionService.start(
-                (segment) => {
-                    upsertSegment(segment);
-                },
-                (error) => {
-                    console.error('Transcription error:', error);
-                    alert(t('live.error_transcription', { error }), { variant: 'error' });
-                    setIsModelLoading(false);
-                    // If error occurs, maybe we consider it not ready?
-                },
-                () => {
-                    console.log('[LiveRecord] Model Ready');
-                    setIsModelLoading(false);
-                    setIsModelReady(true);
-                }
-            );
-        };
-
-        initModel();
+        initializeTranscriber();
 
         return () => {
             if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
                 window.cancelAnimationFrame(animationRef.current);
             }
             if (audioContextRef.current) {
-                audioContextRef.current.close();
+                audioContextRef.current.close().catch(e => console.error('Error closing AudioContext:', e));
+                audioContextRef.current = null;
             }
             if (audioRef.current) {
                 audioRef.current.pause();
@@ -501,7 +516,9 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '', onOpenSe
             }
             transcriptionService.stop();
         };
-    }, [config.recognitionModelPath, config.vadModelPath, config.enableITN, config.punctuationModelPath]);
+    }, [initializeTranscriber]);
+    // Re-run if config changes (user goes to settings and comes back)
+
     // Re-run if config changes (user goes to settings and comes back)
 
     if (missingConfig) {
