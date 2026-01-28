@@ -89,12 +89,32 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     upsertSegment: (segment) => {
         set((state) => {
+            // Optimization: Check last segment first (common case for streaming updates)
+            const len = state.segments.length;
+            if (len > 0) {
+                const lastIndex = len - 1;
+                const lastSegment = state.segments[lastIndex];
+                if (lastSegment.id === segment.id) {
+                    const newSegments = [...state.segments];
+                    newSegments[lastIndex] = segment;
+                    return { segments: newSegments };
+                }
+            }
+
             const index = state.segments.findIndex((s) => s.id === segment.id);
             if (index !== -1) {
                 const newSegments = [...state.segments];
                 newSegments[index] = segment;
                 return { segments: newSegments };
             }
+
+            // Optimization: Append at end if chronological (avoid sort)
+            if (len === 0 || state.segments[len - 1].start <= segment.start) {
+                return {
+                    segments: [...state.segments, segment]
+                };
+            }
+
             return {
                 segments: [...state.segments, segment].sort((a, b) => a.start - b.start),
             };
