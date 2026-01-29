@@ -115,7 +115,9 @@
         "font": "字体",
         "font_system": "系统默认",
         "punctuation_models": "标点模型",
+        "vad_models": "VAD 模型",
         "itn_model_status": "ITN 模型状态",
+        "vad_path_label": "VAD 模型路径",
         "toggle_model": "切换 {{name}}"
     }
 }

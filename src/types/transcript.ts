@@ -54,4 +54,6 @@ export interface AppConfig {
   theme?: 'auto' | 'light' | 'dark';
   /** Font preference */
   font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
+  /** Path to VAD model */
+  vadModelPath?: string;
 }

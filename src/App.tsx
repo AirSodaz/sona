@@ -58,6 +58,7 @@ function App() {
             streamingModelPath: parsed.streamingModelPath || legacyPath,
             offlineModelPath: parsed.offlineModelPath || '',
             punctuationModelPath: parsed.punctuationModelPath || '',
+            vadModelPath: parsed.vadModelPath || '',
             enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
             itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
             appLanguage: parsed.appLanguage || 'auto',

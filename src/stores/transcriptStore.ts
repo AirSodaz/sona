@@ -60,6 +60,7 @@ const DEFAULT_CONFIG: AppConfig = {
     itnRulesOrder: ['itn-zh-number'],
     enableITN: true, // Keep for legacy check
     punctuationModelPath: '',
+    vadModelPath: '',
     theme: 'auto',
     font: 'system',
 };

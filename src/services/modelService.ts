@@ -11,7 +11,7 @@ export interface ModelInfo {
     name: string;
     description: string;
     url: string;
-    type: 'streaming' | 'offline' | 'punctuation';
+    type: 'streaming' | 'offline' | 'punctuation' | 'vad';
     language: string;
     size: string; // Display size
     isArchive?: boolean;
@@ -68,6 +68,18 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'punctuation',
         language: 'zh,en',
         size: '~266 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'silero-vad',
+        name: 'Silero - VAD',
+        description: 'Silero Voice Activity Detection model.',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx',
+        type: 'vad',
+        language: 'zh,en',
+        size: '629KB',
+        isArchive: false,
+        filename: 'silero_vad.onnx',
         engine: 'onnx'
     }
 ];
@@ -281,6 +293,10 @@ class ModelService {
             // For OfflinePunctuation, it looks for model.onnx within the passed config path typically, or we construct config object.
             // Let's just return the directory path for now, consistent with others.
             return await join(modelsDir, modelId);
+        }
+        if (model.type === 'vad') {
+            // VAD models are single files
+            return tempFilePath; // already joined with modelsDir and filename
         }
         return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
     }

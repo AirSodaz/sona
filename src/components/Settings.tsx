@@ -142,7 +142,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
     const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
     const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
+
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
+    const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
     const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number']);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
@@ -201,6 +203,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setStreamingModelPath(config.streamingModelPath);
         setOfflineModelPath(config.offlineModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
+        setVadModelPath(config.vadModelPath || '');
         setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
         setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number']);
         setAppLanguage(config.appLanguage || 'auto');
@@ -208,7 +211,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.vadModelPath, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -222,6 +225,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             streamingModelPath,
             offlineModelPath,
             punctuationModelPath,
+            vadModelPath,
             enabledITNModels: enabledList,
             itnRulesOrder,
             enableITN: enabledList.length > 0, // Legacy support
@@ -233,6 +237,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             streamingModelPath,
             offlineModelPath,
             punctuationModelPath,
+            vadModelPath,
             enabledITNModels: enabledList,
             itnRulesOrder,
             enableITN: enabledList.length > 0,
@@ -252,13 +257,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         onClose();
     };
 
-    const handleBrowse = async (type: 'streaming' | 'offline' | 'punctuation') => {
+    const handleBrowse = async (type: 'streaming' | 'offline' | 'punctuation' | 'vad') => {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
                 title: type === 'streaming' ? t('settings.streaming_path_label') :
-                    type === 'offline' ? t('settings.offline_path_label') : 'Select Punctuation Model Path'
+                    type === 'offline' ? t('settings.offline_path_label') :
+                        type === 'vad' ? t('settings.vad_path_label') : 'Select Punctuation Model Path'
             });
 
             if (selected) {
@@ -268,6 +274,8 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                         setStreamingModelPath(path);
                     } else if (type === 'offline') {
                         setOfflineModelPath(path);
+                    } else if (type === 'vad') {
+                        setVadModelPath(path);
                     } else {
                         setPunctuationModelPath(path);
                     }
@@ -372,11 +380,13 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         }
     };
 
-    const setModelPathByType = (type: 'streaming' | 'offline' | 'punctuation', path: string) => {
+    const setModelPathByType = (type: 'streaming' | 'offline' | 'punctuation' | 'vad', path: string) => {
         if (type === 'streaming') {
             setStreamingModelPath(path);
         } else if (type === 'offline') {
             setOfflineModelPath(path);
+        } else if (type === 'vad') {
+            setVadModelPath(path);
         } else {
             setPunctuationModelPath(path);
         }
@@ -407,6 +417,9 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             }
             if (punctuationModelPath === deletedPath) {
                 setPunctuationModelPath('');
+            }
+            if (vadModelPath === deletedPath) {
+                setVadModelPath('');
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
@@ -754,6 +767,72 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         )}
                                     </div>
                                 ))}
+
+
+                                <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>{t('settings.vad_models')}</div>
+                                {PRESET_MODELS.filter(m => m.type === 'vad').map(model => (
+                                    <div key={model.id} className="model-card">
+                                        <div className="model-card-header">
+                                            <div>
+                                                <div className="model-name">{model.name}</div>
+                                                <div className="model-description">{model.description}</div>
+                                                <div className="model-tags">
+                                                    <span className="model-tag">{model.language.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.engine.toUpperCase()}</span>
+                                                    <span className="model-tag">{model.size}</span>
+                                                </div>
+                                            </div>
+                                            {installedModels.has(model.id) ? (
+                                                <div className="model-actions">
+                                                    <button
+                                                        className={`btn ${vadModelPath.includes(model.filename || model.id) ? 'btn-success' : 'btn-primary'}`}
+                                                        onClick={() => handleLoad(model)}
+                                                        disabled={vadModelPath.includes(model.filename || model.id)}
+                                                        aria-label={`${t('settings.load')} ${model.name}`}
+                                                    >
+                                                        {vadModelPath.includes(model.filename || model.id) ? <CheckIcon /> : <PlayIcon />}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => handleDelete(model)}
+                                                        disabled={!!deletingId || !!downloadingId}
+                                                        aria-label={`${t('common.delete')} ${model.name}`}
+                                                    >
+                                                        {deletingId === model.id ? <div className="spinner" /> : <TrashIcon />}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={downloadingId === model.id ? handleCancelDownload : () => handleDownload(model)}
+                                                    disabled={!!downloadingId && downloadingId !== model.id}
+                                                    aria-label={downloadingId === model.id ? t('common.cancel') : `${t('common.download')} ${model.name}`}
+                                                    data-tooltip={downloadingId === model.id ? t('common.cancel') : t('common.download')}
+                                                >
+                                                    {downloadingId === model.id ? <XIcon /> : <DownloadIcon />}
+                                                </button>
+                                            )}
+                                        </div>
+                                        {downloadingId === model.id && (
+                                            <div className="progress-container-mini">
+                                                <div className="progress-info-mini" aria-live="polite">
+                                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{statusMessage || t('common.loading')}</span>
+                                                    <span>{Math.round(progress)}%</span>
+                                                </div>
+                                                <div
+                                                    className="progress-bar-mini"
+                                                    role="progressbar"
+                                                    aria-valuenow={Math.round(progress)}
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-label={`${t('common.download')} ${model.name}`}
+                                                >
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
@@ -824,6 +903,28 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         <button
                                             className="btn btn-secondary"
                                             onClick={() => handleBrowse('punctuation')}
+                                            aria-label={t('settings.browse')}
+                                        >
+                                            <FolderIcon />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="settings-item" style={{ marginTop: 16 }}>
+                                    <label className="settings-label">{t('settings.vad_path_label', { defaultValue: 'VAD Model Path' })}</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <input
+                                            type="text"
+                                            title={vadModelPath}
+                                            className="settings-input"
+                                            value={vadModelPath}
+                                            onChange={(e) => setVadModelPath(e.target.value)}
+                                            placeholder={t('settings.path_placeholder')}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => handleBrowse('vad')}
                                             aria-label={t('settings.browse')}
                                         >
                                             <FolderIcon />
