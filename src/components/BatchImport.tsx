@@ -22,10 +22,19 @@ const UploadIcon = () => (
 
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
 
+/** Props for BatchImport. */
 interface BatchImportProps {
+    /** Optional CSS class name. */
     className?: string;
 }
 
+/**
+ * Component for batch importing audio files.
+ * Handles drag-and-drop, file selection, and initiates transcription.
+ *
+ * @param props - Component props.
+ * @return The batch import UI.
+ */
 export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     // const fileInputRef = useRef<HTMLInputElement>(null);
     const { alert } = useDialogStore();

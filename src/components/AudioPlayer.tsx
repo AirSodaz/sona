@@ -28,20 +28,29 @@ const VolumeIcon = () => (
 
 // --- Sub-components for Optimization ---
 
-// TimeDisplay subscribes to currentTime to update only the text
+/**
+ * Displays the current audio time.
+ * Subscribes only to currentTime to prevent full AudioPlayer re-renders.
+ */
 const TimeDisplay = React.memo(() => {
     const currentTime = useTranscriptStore((state) => state.currentTime);
     return <span className="audio-time">{formatDisplayTime(currentTime)}</span>;
 });
 
-// SeekSlider subscribes to currentTime to update the slider
-// It receives stable seekTo and duration
+/** Props for the SeekSlider component. */
 interface SeekSliderProps {
+    /** The total duration of the audio in seconds. */
     duration: number;
+    /** Callback fired when the user seeks. */
     onSeek: (time: number) => void;
+    /** Accessible label for the slider. */
     seekLabel: string;
 }
 
+/**
+ * Slider for seeking through audio.
+ * Subscribes to currentTime updates.
+ */
 const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel }) => {
     const currentTime = useTranscriptStore((state) => state.currentTime);
 
@@ -66,10 +75,19 @@ const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel })
 
 // --- Main Component ---
 
+/** Props for AudioPlayer. */
 interface AudioPlayerProps {
+    /** Optional CSS class name. */
     className?: string;
 }
 
+/**
+ * Audio player component with play/pause, seek, and volume controls.
+ * Synchronizes with the global transcript store.
+ *
+ * @param props - Component props.
+ * @return The rendered audio player or null if no audio is loaded.
+ */
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     const { t } = useTranslation();
     const { alert } = useDialogStore();
@@ -242,7 +260,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     );
 };
 
-// Helper function for external seek access
+/**
+ * Helper function to programmatically seek the audio player from anywhere.
+ * Depends on AudioPlayer being mounted.
+ *
+ * @param time - Time to seek to in seconds.
+ */
 export const seekAudio = (time: number) => {
     const seekFn = (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
     if (seekFn) {

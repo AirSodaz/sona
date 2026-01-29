@@ -19,6 +19,7 @@ export interface ModelInfo {
     engine: 'onnx' | 'ncnn';
 }
 
+/** Pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
@@ -84,6 +85,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     }
 ];
 
+/** Pre-defined Inverse Text Normalization (ITN) models. */
 export const ITN_MODELS = [
     {
         id: 'itn-zh-number',
@@ -95,9 +97,19 @@ export const ITN_MODELS = [
     }
 ];
 
+/** Callback function for reporting progress. */
 export type ProgressCallback = (percentage: number, status: string) => void;
 
+/**
+ * Service for managing AI models (downloading, verifying, path resolution).
+ */
 class ModelService {
+    /**
+     * Gets the local directory where models are stored.
+     * Creates the directory if it does not exist.
+     *
+     * @return A promise that resolves to the absolute path of the models directory.
+     */
     async getModelsDir(): Promise<string> {
         const appDataDir = await appLocalDataDir();
         const modelsDir = await join(appDataDir, 'models');
@@ -108,6 +120,12 @@ class ModelService {
         return modelsDir;
     }
 
+    /**
+     * Checks if the user's hardware is compatible with a specific model.
+     *
+     * @param modelId - The ID of the model to check.
+     * @return A promise resolving to an object indicating compatibility and an optional reason for failure.
+     */
     async checkHardware(modelId: string): Promise<{ compatible: boolean, reason?: string }> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         if (!model) return { compatible: false, reason: 'Model not found' };
@@ -130,6 +148,16 @@ class ModelService {
         return { compatible: true };
     }
 
+    /**
+     * Downloads a model by its ID.
+     * Handles mirrors, progress reporting, and cancellation.
+     *
+     * @param modelId - The ID of the model to download.
+     * @param onProgress - Optional callback for progress updates.
+     * @param signal - Optional AbortSignal to cancel the download.
+     * @return A promise resolving to the local path of the downloaded model.
+     * @throws {Error} If the model is not found or download fails.
+     */
     async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         if (!model) throw new Error('Model not found');
@@ -301,6 +329,12 @@ class ModelService {
         return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
     }
 
+    /**
+     * Resolves the local file system path for a given model ID.
+     *
+     * @param modelId - The ID of the model.
+     * @return A promise resolving to the model's path.
+     */
     async getModelPath(modelId: string): Promise<string> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         const modelsDir = await this.getModelsDir();
@@ -310,11 +344,23 @@ class ModelService {
         return await join(modelsDir, modelId);
     }
 
+    /**
+     * Checks if a model is currently installed.
+     *
+     * @param modelId - The ID of the model.
+     * @return A promise resolving to true if installed, false otherwise.
+     */
     async isModelInstalled(modelId: string): Promise<boolean> {
         const modelPath = await this.getModelPath(modelId);
         return await exists(modelPath);
     }
 
+    /**
+     * Deletes an installed model.
+     *
+     * @param modelId - The ID of the model to delete.
+     * @return A promise resolving when deletion is complete.
+     */
     async deleteModel(modelId: string): Promise<void> {
         const modelPath = await this.getModelPath(modelId);
         if (await exists(modelPath)) {
@@ -322,6 +368,12 @@ class ModelService {
         }
     }
 
+    /**
+     * Gets the path for an Inverse Text Normalization (ITN) model.
+     *
+     * @param modelId - The ID of the ITN model.
+     * @return A promise resolving to the path, or empty string if not found.
+     */
     async getITNModelPath(modelId: string): Promise<string> {
         const model = ITN_MODELS.find(m => m.id === modelId);
         if (!model) return '';
@@ -332,6 +384,10 @@ class ModelService {
     /**
      * Efficiently resolve paths for all enabled ITN models in parallel.
      * Respects the provided order.
+     *
+     * @param enabledModels - A set of enabled model IDs.
+     * @param order - The preferred order of model IDs.
+     * @return A promise resolving to an array of valid file paths.
      */
     async getEnabledITNModelPaths(enabledModels: Set<string>, order: string[]): Promise<string[]> {
         const modelsDir = await this.getModelsDir();
@@ -360,11 +416,26 @@ class ModelService {
         return results.filter((p): p is string => p !== null);
     }
 
+    /**
+     * Checks if an ITN model is installed.
+     *
+     * @param modelId - The ID of the ITN model.
+     * @return A promise resolving to true if installed.
+     */
     async isITNModelInstalled(modelId: string): Promise<boolean> {
         const path = await this.getITNModelPath(modelId);
         return await exists(path);
     }
 
+    /**
+     * Downloads an ITN model.
+     *
+     * @param modelId - The ID of the ITN model.
+     * @param onProgress - Optional callback for progress updates.
+     * @param signal - Optional AbortSignal for cancellation.
+     * @return A promise resolving to the path of the downloaded model.
+     * @throws {Error} If download fails.
+     */
     async downloadITNModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
         const model = ITN_MODELS.find(m => m.id === modelId);
         if (!model) throw new Error('ITN Model not found');
@@ -477,6 +548,15 @@ class ModelService {
         }
     }
 
+    /**
+     * Extracts an archive using a sidecar process (e.g., node script utilizing system tools or libraries).
+     *
+     * @param archivePath - The path to the archive file.
+     * @param targetDir - The directory to extract into.
+     * @param onProgress - Optional callback for extraction progress.
+     * @param signal - Optional AbortSignal.
+     * @return A promise that resolves when extraction is complete.
+     */
     private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
         console.log('[ModelService] Attempting extraction via sidecar (7zip)...');
 

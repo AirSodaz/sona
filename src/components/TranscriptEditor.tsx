@@ -33,6 +33,7 @@ const MergeIcon = () => (
     </svg>
 );
 
+/** Context passed to virtualized list items. */
 interface TranscriptContext {
     isLast: (index: number) => boolean;
     onSeek: (time: number) => void;
@@ -42,6 +43,7 @@ interface TranscriptContext {
     onMergeWithNext: (id: string) => void;
 }
 
+/** Props for SegmentItem component. */
 interface SegmentItemProps {
     segment: TranscriptSegment;
     onSeek: (time: number) => void;
@@ -52,6 +54,10 @@ interface SegmentItemProps {
     hasNext: boolean;
 }
 
+/**
+ * Individual transcript segment item.
+ * Supports viewing, seeking, editing, deleting, and merging.
+ */
 const SegmentItem = React.memo<SegmentItemProps>(({
     segment,
     onSeek,
@@ -204,10 +210,19 @@ const SegmentItem = React.memo<SegmentItemProps>(({
     );
 });
 
+/** Props for TranscriptEditor. */
 interface TranscriptEditorProps {
+    /** Callback fired when a segment requests to seek to a timestamp. */
     onSeek?: (time: number) => void;
 }
 
+/**
+ * Editor component for displaying and managing transcript segments.
+ * Uses virtualization for performance with large transcripts.
+ *
+ * @param props - Component props.
+ * @return The transcript editor interface.
+ */
 export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) => {
     const { t } = useTranslation();
     const { confirm } = useDialogStore();

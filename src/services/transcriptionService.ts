@@ -5,9 +5,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
 import { StreamLineBuffer } from '../utils/streamBuffer';
 
+/** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
+/** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
 
+/**
+ * Service to manage the transcription process via a sidecar.
+ * Handles spawning, communication (stdin/stdout), and lifecycle of the external process.
+ */
 class TranscriptionService {
     private child: Child | null = null;
     private isRunning: boolean = false;
@@ -22,7 +28,9 @@ class TranscriptionService {
     constructor() { }
 
     /**
-     * Set the model path for sherpa-onnx
+     * Sets the path to the main ASR model.
+     *
+     * @param path - The absolute path to the model directory or file.
      */
     setModelPath(path: string) {
         console.log('[TranscriptionService] Setting model path:', path);
@@ -30,35 +38,46 @@ class TranscriptionService {
     }
 
     /**
-     * Set the ITN model paths
+     * Sets the paths to Inverse Text Normalization (ITN) models.
+     *
+     * @param paths - Array of absolute paths to ITN models.
      */
     setITNModelPaths(paths: string[]) {
         this.itnModelPaths = paths;
     }
 
     /**
-     * Set the punctuation model path
+     * Sets the path to the Punctuation model.
+     *
+     * @param path - The absolute path to the punctuation model.
      */
     setPunctuationModelPath(path: string) {
         this.punctuationModelPath = path;
     }
 
     /**
-     * Set the VAD model path
+     * Sets the path to the Voice Activity Detection (VAD) model.
+     *
+     * @param path - The absolute path to the VAD model.
      */
     setVadModelPath(path: string) {
         this.vadModelPath = path;
     }
 
     /**
-     * Set ITN enabled state
+     * Enables or disables Inverse Text Normalization.
+     *
+     * @param enabled - True to enable ITN, false to disable.
      */
     setEnableITN(enabled: boolean) {
         this.enableITN = enabled;
     }
 
     /**
-     * Start the transcription sidecar
+     * Starts the transcription sidecar process in streaming mode.
+     *
+     * @param onSegment - Callback invoked when a new transcript segment is available.
+     * @param onError - Callback invoked when an error occurs.
      */
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback) {
         if (this.isRunning) return;
@@ -139,7 +158,7 @@ class TranscriptionService {
     }
 
     /**
-     * Stop the transcription sidecar
+     * Stops the running transcription sidecar process.
      */
     async stop() {
         if (!this.child || !this.isRunning) return;
@@ -156,8 +175,10 @@ class TranscriptionService {
     }
 
     /**
-     * Send audio data to the sidecar
-     * Expects 16kHz mono Float32 samples
+     * Sends raw audio samples (Float32) to the sidecar.
+     * Optimization: Converts Float32 to Int16 with manual clamping.
+     *
+     * @param samples - Float32Array of audio samples (assumed 16kHz mono).
      */
     async sendAudio(samples: Float32Array) {
         if (!this.child || !this.isRunning) return;
@@ -184,7 +205,9 @@ class TranscriptionService {
     }
 
     /**
-     * Send pre-converted Int16 audio data to the sidecar
+     * Sends pre-converted Int16 audio samples to the sidecar.
+     *
+     * @param samples - Int16Array of audio samples.
      */
     async sendAudioInt16(samples: Int16Array) {
         if (!this.child || !this.isRunning) return;
@@ -201,10 +224,14 @@ class TranscriptionService {
     }
 
     /**
-     * Transcribe an audio file in batch mode
+     * Transcribes an audio file in batch mode.
+     * Retries with CPU if CoreML fails.
+     *
+     * @param filePath - The path to the audio file.
+     * @param onProgress - Optional callback for progress percentage (0-100).
+     * @param onSegment - Optional callback for each segment transcribed.
+     * @return A promise resolving to an array of all transcript segments.
      */
-
-
     async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
         try {
             return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment);
@@ -217,6 +244,15 @@ class TranscriptionService {
         }
     }
 
+    /**
+     * Internal implementation of batch transcription.
+     *
+     * @param filePath - Path to audio file.
+     * @param provider - Execution provider (e.g., 'cpu'), or undefined for auto.
+     * @param onProgress - Progress callback.
+     * @param onSegment - Segment callback.
+     * @return Promise resolving to segments.
+     */
     private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
@@ -400,6 +436,11 @@ class TranscriptionService {
         });
     }
 
+    /**
+     * Parses a single line of JSON output from the sidecar and updates state.
+     *
+     * @param line - The JSON string line.
+     */
     private handleOutput(line: string) {
         try {
             const data = JSON.parse(line);

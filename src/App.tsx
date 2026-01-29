@@ -29,6 +29,12 @@ const WaveformIcon = () => (
   </svg>
 );
 
+/**
+ * Main application component.
+ * Handles layout, initialization of config, theme, and language.
+ *
+ * @return The root application element.
+ */
 function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const mode = useTranscriptStore((state) => state.mode);

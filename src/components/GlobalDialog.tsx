@@ -3,6 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useDialogStore } from '../stores/dialogStore';
 
+/**
+ * Global modal dialog component.
+ * Renders alert or confirm dialogs based on the dialog store state.
+ * Handles focus management and keyboard interaction (Escape to close).
+ *
+ * @return The rendered dialog or null if closed.
+ */
 export const GlobalDialog: React.FC = () => {
     const { isOpen, options, close } = useDialogStore();
     const { t } = useTranslation();

@@ -3,50 +3,120 @@ import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 
+/** State interface for the transcript store. */
 interface TranscriptState {
     // Segment data (source of truth)
+    /** List of transcript segments. */
     segments: TranscriptSegment[];
 
     // UI state
+    /** ID of the currently active segment (during playback). */
     activeSegmentId: string | null;
-    activeSegmentIndex: number; // Optimization for sequential playback
+    /** Index of the active segment (optimization for sequential playback). */
+    activeSegmentIndex: number;
+    /** ID of the segment currently being edited. */
     editingSegmentId: string | null;
+    /** Current application mode. */
     mode: AppMode;
+    /** Status of batch processing. */
     processingStatus: ProcessingStatus;
-    processingProgress: number; // 0-100
+    /** Progress of processing (0-100). */
+    processingProgress: number;
 
     // Audio state
+    /** The loaded audio file object. */
     audioFile: File | null;
+    /** URL of the loaded audio. */
     audioUrl: string | null;
+    /** Current playback time in seconds. */
     currentTime: number;
+    /** Whether audio is currently playing. */
     isPlaying: boolean;
 
     // Config
+    /** Application configuration. */
     config: AppConfig;
 
     // Segment CRUD operations
+    /**
+     * Adds a new segment.
+     * @param segment - The segment data (excluding ID).
+     * @return The ID of the newly created segment.
+     */
     addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
+
+    /**
+     * Updates an existing segment or adds it if it doesn't exist.
+     * Optimized for streaming usage.
+     * @param segment - The segment to upsert.
+     */
     upsertSegment: (segment: TranscriptSegment) => void;
+
+    /**
+     * Updates specific fields of a segment.
+     * @param id - The ID of the segment to update.
+     * @param updates - Partial segment data.
+     */
     updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
+
+    /**
+     * Deletes a segment by ID.
+     * @param id - The ID of the segment to delete.
+     */
     deleteSegment: (id: string) => void;
+
+    /**
+     * Merges two segments into one.
+     * @param id1 - The ID of the first segment.
+     * @param id2 - The ID of the second segment.
+     */
     mergeSegments: (id1: string, id2: string) => void;
+
+    /**
+     * Replaces all segments with a new list.
+     * @param segments - The new list of segments.
+     */
     setSegments: (segments: TranscriptSegment[]) => void;
+
+    /** Clears all segments and resets segment-related state. */
     clearSegments: () => void;
 
     // UI actions
+    /** Sets the active segment ID. */
     setActiveSegmentId: (id: string | null) => void;
+    /** Sets the editing segment ID. */
     setEditingSegmentId: (id: string | null) => void;
+    /** Sets the application mode. */
     setMode: (mode: AppMode) => void;
+    /** Sets the processing status. */
     setProcessingStatus: (status: ProcessingStatus) => void;
+    /** Sets the processing progress. */
     setProcessingProgress: (progress: number) => void;
 
     // Audio actions
+    /**
+     * Sets the current audio file and generates a URL.
+     * @param file - The file object or null.
+     */
     setAudioFile: (file: File | null) => void;
+    /**
+     * Sets the audio URL directly.
+     * @param url - The audio URL or null.
+     */
     setAudioUrl: (url: string | null) => void;
+    /**
+     * Sets the current playback time and updates active segment.
+     * @param time - Current time in seconds.
+     */
     setCurrentTime: (time: number) => void;
+    /** Sets the playing state. */
     setIsPlaying: (isPlaying: boolean) => void;
 
     // Config actions
+    /**
+     * Updates the application configuration.
+     * @param config - Partial configuration updates.
+     */
     setConfig: (config: Partial<AppConfig>) => void;
 }
 
@@ -65,6 +135,9 @@ const DEFAULT_CONFIG: AppConfig = {
     font: 'system',
 };
 
+/**
+ * Zustand store for managing transcript data, audio state, and application configuration.
+ */
 export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Initial state
     segments: [],
@@ -240,8 +313,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 }));
 
 // Selector hooks for better performance
+/** Selector for accessing segments. */
 export const useSegments = () => useTranscriptStore((state) => state.segments);
+/** Selector for accessing the active segment ID. */
 export const useActiveSegmentId = () => useTranscriptStore((state) => state.activeSegmentId);
+/** Selector for accessing the current mode. */
 export const useMode = () => useTranscriptStore((state) => state.mode);
+/** Selector for accessing the processing status. */
 export const useProcessingStatus = () => useTranscriptStore((state) => state.processingStatus);
+/** Selector for accessing the current configuration. */
 export const useConfig = () => useTranscriptStore((state) => state.config);
