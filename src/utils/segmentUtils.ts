@@ -57,10 +57,18 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 let segmentEnd: number;
 
                 if (hasTimestamps && tokenMap) {
-                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
+                    // Use the last token of the current segment to determine end time
+                    // effectiveCharIndex points to the start of the punctuation (and next segment)
+                    // so we look at effectiveCharIndex - 1 to find the token for the last character
+                    const searchIndex = effectiveCharIndex > 0 ? effectiveCharIndex - 1 : 0;
+                    const found = findTimestampFromMap(tokenMap, searchIndex, lastTokenIndex);
 
                     if (found) {
-                        segmentEnd = found.timestamp + 0.2;
+                        // Use the last token's timestamp plus a small buffer based on length
+                        // This avoids using the start time of the *next* segment as the end time
+                        const effectiveLen = tokenMap.endIndices[found.index] - tokenMap.startIndices[found.index];
+                        const duration = Math.max(0.2, effectiveLen * 0.1);
+                        segmentEnd = found.timestamp + duration;
                         lastTokenIndex = found.index;
                     } else {
                         // Fallback
@@ -238,10 +246,10 @@ export function findSegmentAndIndexForTime(
         // Check next segment (common case for forward playback)
         const nextIdx = hintIndex + 1;
         if (nextIdx < segments.length) {
-             const nextSeg = segments[nextIdx];
-             if (nextSeg.start <= time && time <= nextSeg.end) {
-                 return { segment: nextSeg, index: nextIdx };
-             }
+            const nextSeg = segments[nextIdx];
+            if (nextSeg.start <= time && time <= nextSeg.end) {
+                return { segment: nextSeg, index: nextIdx };
+            }
         }
 
         // Check previous segment (common case for slight rewind/loops)
