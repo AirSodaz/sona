@@ -169,8 +169,33 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 transcriptionService.setPunctuationModelPath('');
             }
 
+            if (config.vadModelPath) {
+                transcriptionService.setVadModelPath(config.vadModelPath);
+            }
+
+            // Clear previous segments if we are starting a new import
+            // But if we want to APPEND, we shouldn't.
+            // Batch import usually replaces current transcript?
+            // "BatchImport" implies loading a file. 
+            // Existing logic: useTranscriptStore.getState().setSegments(...) at end replaces all.
+            // So we should clear at start to show progress.
+            useTranscriptStore.getState().clearSegments();
+
+
+
             const segments = await transcriptionService.transcribeFile(filePath, (progress) => {
                 setProcessingProgress(progress);
+            }, (segment) => {
+                // Streaming callback
+                if (enableTimeline) {
+                    // Attempt to split immediately? 
+                    // Or just show raw segment? 
+                    // splitByPunctuation might be stateless per segment.
+                    const split = splitByPunctuation([segment]);
+                    split.forEach(s => useTranscriptStore.getState().upsertSegment(s));
+                } else {
+                    useTranscriptStore.getState().upsertSegment(segment);
+                }
             });
 
             useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);

@@ -14,6 +14,7 @@ class TranscriptionService {
     private modelPath: string = '';
     private itnModelPaths: string[] = [];
     private punctuationModelPath: string = '';
+    private vadModelPath: string = '';
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
     private onError: ErrorCallback | null = null;
@@ -40,6 +41,13 @@ class TranscriptionService {
      */
     setPunctuationModelPath(path: string) {
         this.punctuationModelPath = path;
+    }
+
+    /**
+     * Set the VAD model path
+     */
+    setVadModelPath(path: string) {
+        this.vadModelPath = path;
     }
 
     /**
@@ -195,19 +203,21 @@ class TranscriptionService {
     /**
      * Transcribe an audio file in batch mode
      */
-    async transcribeFile(filePath: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
+
+
+    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
         try {
-            return await this._transcribeFileInternal(filePath, undefined, onProgress);
+            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment);
         } catch (error: any) {
             if (error.message === 'COREML_FAILURE') {
                 console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
-                return await this._transcribeFileInternal(filePath, 'cpu', onProgress);
+                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment);
             }
             throw error;
         }
     }
 
-    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
@@ -234,6 +244,10 @@ class TranscriptionService {
                     args.push('--punctuation-model', this.punctuationModelPath);
                 }
 
+                if (this.vadModelPath) {
+                    args.push('--vad-model', this.vadModelPath);
+                }
+
                 if (provider) {
                     args.push('--provider', provider);
                 }
@@ -246,19 +260,20 @@ class TranscriptionService {
 
                 // Optimization: Use array of chunks instead of string concatenation
                 // This prevents O(N^2) copying behavior for large outputs
-                const stdoutChunks: string[] = [];
                 const stderrChunks: string[] = [];
                 const stderrStreamBuffer = new StreamLineBuffer();
+                const stdoutStreamBuffer = new StreamLineBuffer();
+
+                // Accumulate segments to return at the end (compatibility)
+                const collectedSegments: TranscriptSegment[] = [];
 
                 command.on('close', (data) => {
                     console.log(`[Batch] Sidecar finished with code ${data.code}`);
 
-                    const stdoutBuffer = stdoutChunks.join('');
                     const stderrBuffer = stderrChunks.join('');
 
                     if (data.code === 0) {
                         // Check for silent CoreML failure
-                        // CoreML errors are printed to stderr but sometimes the process exits with 0
                         if (!provider &&
                             stderrBuffer.includes('Error executing model') &&
                             stderrBuffer.includes('CoreMLExecutionProvider')) {
@@ -267,35 +282,50 @@ class TranscriptionService {
                             return;
                         }
 
-                        try {
-                            // Find the JSON array in the output
-                            // The script might output logs before the JSON
+                        // Flush remaining buffer
+                        const lines = stdoutStreamBuffer.flush();
+                        lines.forEach(line => {
+                            try {
+                                const data = JSON.parse(line);
+                                // Check for segments (VAD mode or Stream mode)
+                                if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
+                                    const segment: TranscriptSegment = {
+                                        id: data.id || uuidv4(),
+                                        text: data.text,
+                                        start: data.start,
+                                        end: data.end,
+                                        isFinal: data.isFinal || true
+                                    };
+                                    collectedSegments.push(segment);
+                                    if (onSegment) onSegment(segment);
+                                }
+                            } catch (e) { }
+                        });
 
-                            let segments: TranscriptSegment[] = [];
+                        // If collectedSegments is empty, maybe fallback to parsing whole buffer if we used array output?
+                        // BUT: Sidecar now outputs lines.
+                        // If sidecar output [ ... ] array (fallback), LineBuffer breaks it.
+                        // Wait. If VAD is NOT enabled, sidecar might output one big array lines.
+                        // Standard line buffer might split `[`, `{`, `},`, `]` on separate lines if pretty printed.
+                        // Or straight JSON array on one line? `JSON.stringify(..., null, 2)` -> multi line.
 
-                            // Look for the line that looks like the start of our JSON array
-                            // Or accumulate all JSON-like output (though the script outputs one big JSON array at the end)
-                            // The script `console.log(JSON.stringify(segments, null, 2))` at the end.
+                        // IF VAD is used: JSON lines.
+                        // IF NOT VAD (old logic): JSON Array `[...]`.
 
-                            // Let's try to parse the whole buffer first, but it might contain logs if not careful
-                            // The script uses console.log for the final JSON and console.error for logs/progress
-                            // But in case some logs slipped into stdout
+                        // We need to handle both.
+                        // If `collectedSegments` has content, return it.
+                        // If empty, maybe check if we buffered a big array? 
 
-                            // Simple heuristic: find the first '[' and last ']'
-                            const start = stdoutBuffer.indexOf('[');
-                            const end = stdoutBuffer.lastIndexOf(']');
+                        // Actually, if we use StreamBuffer, and the sidecar prints `[\n  {...}\n]`, StreamBuffer will emit `[`, `{...`, `}`, `]`.
+                        // Parsing `[` fails.
 
-                            if (start !== -1 && end !== -1) {
-                                const jsonStr = stdoutBuffer.substring(start, end + 1);
-                                segments = JSON.parse(jsonStr);
-                                resolve(segments);
-                            } else {
-                                // Maybe it was empty?
-                                resolve([]);
-                            }
-                        } catch (e) {
-                            reject(new Error(`Failed to parse batch output: ${e}`));
-                        }
+                        // Solution: Capture ALL stdout text too, just in case we need to parse as array at end.
+                        // But for "Streaming" UX, we rely on lines.
+                        // VAD mode outputs single line JSON.
+                        // So if VAD on, this works. 
+
+                        resolve(collectedSegments);
+
                     } else {
                         reject(new Error(`Sidecar failed with code ${data.code}: ${stderrBuffer}`));
                     }
@@ -307,7 +337,38 @@ class TranscriptionService {
 
                 command.stdout.on('data', (chunk) => {
                     if (typeof chunk === 'string') {
-                        stdoutChunks.push(chunk);
+                        // Parse Lines for Streaming
+                        const lines = stdoutStreamBuffer.process(chunk);
+                        lines.forEach(line => {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
+                                    const segment: TranscriptSegment = {
+                                        id: data.id || uuidv4(),
+                                        text: data.text,
+                                        start: data.start,
+                                        end: data.end,
+                                        isFinal: data.isFinal || true
+                                    };
+                                    collectedSegments.push(segment);
+                                    if (onSegment) onSegment(segment);
+                                } else if (Array.isArray(data)) {
+                                    // Handle array (batch fallback output)
+                                    // If we receive a full array in one line (possible?)
+                                    data.forEach((item: any) => {
+                                        const segment: TranscriptSegment = {
+                                            id: item.id || uuidv4(),
+                                            text: item.text,
+                                            start: item.start,
+                                            end: item.end,
+                                            isFinal: item.isFinal || true
+                                        };
+                                        collectedSegments.push(segment);
+                                        // Don't call onSegment here effectively at the end, unless desired
+                                    });
+                                }
+                            } catch (e) { }
+                        });
                     }
                 });
 

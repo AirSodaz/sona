@@ -77,6 +77,9 @@ function parseArgs() {
             case '--punctuation-model':
                 options.punctuationModel = args[++i];
                 break;
+            case '--vad-model':
+                options.vadModel = args[++i];
+                break;
         }
     }
 
@@ -633,58 +636,183 @@ async function processExtraction(archivePath, targetDir) {
 
 
 
-async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
+async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation, vadModelPath) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
+    let vad = null;
     try {
-        console.error('Converting audio file (Offline)...');
+        console.error('Converting audio file (Offline VAD)...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
         const samples = new Float32Array(pcmData.length / 2);
         for (let i = 0; i < samples.length; i++) {
             samples[i] = pcmData.readInt16LE(i * 2) / 32768.0;
         }
 
-        console.error(`Processing ${samples.length} samples with OfflineRecognizer...`);
-        const stream = recognizer.createStream();
+        console.error(`Processing ${samples.length} samples with OfflineRecognizer + VAD...`);
 
-        // Emit initial progress
+        // Initialize VAD if path provided
+        if (vadModelPath && existsSync(vadModelPath)) {
+            const sherpaModule = await import('sherpa-onnx-node');
+            const sherpa = sherpaModule.default || sherpaModule;
+            const vadConfig = {
+                sileroVad: {
+                    model: vadModelPath,
+                    threshold: 0.5,
+                    minSilenceDuration: 0.5,
+                    minSpeechDuration: 0.25,
+                },
+                sampleRate: sampleRate,
+                debug: false,
+                numThreads: 1,
+            };
+            vad = new sherpa.Vad(vadConfig, 60);
+            console.error(`[Sidecar] VAD initialized with model: ${vadModelPath}`);
+        } else {
+            console.error('[Sidecar] No VAD model provided or found. Falling back to simple chunking.');
+            // Fallback to original logic if no VAD? Or error? 
+            // User explicitly asked for VAD. But for safety, let's keep non-VAD fallback or just error clearly.
+            // Given user request, I'll proceed with VAD logic only if VAD is present.
+            // If not present, I'll call the OLD logic (inline for now or revert to chunking).
+            // Let's implement VAD logic primarily.
+        }
+
+        if (!vad) {
+            // FALLBACK TO ORIGINAL LOGIC (Simplified for brevity in this tool call, but essentially the same)
+            const stream = recognizer.createStream();
+            console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
+            const chunkDuration = 30;
+            const chunkSize = Math.floor(sampleRate * chunkDuration);
+            for (let i = 0; i < samples.length; i += chunkSize) {
+                const end = Math.min(i + chunkSize, samples.length);
+                const chunk = samples.slice(i, end);
+                stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
+                recognizer.decode(stream);
+                const progress = Math.min(100, Math.round((end / samples.length) * 100));
+                console.error(JSON.stringify({ type: 'progress', percentage: progress }));
+            }
+            const result = recognizer.getResult(stream);
+            const segments = [];
+            if (result.text && result.text.trim()) {
+                let text = postProcessText(result.text.trim());
+                if (punctuation) text = punctuation.addPunct(text);
+                segments.push({
+                    id: randomUUID(),
+                    text: text,
+                    start: 0,
+                    end: samples.length / sampleRate,
+                    isFinal: true,
+                    tokens: result.tokens || [],
+                    timestamps: result.timestamps || []
+                });
+            }
+            console.log(JSON.stringify(segments, null, 2));
+
+            return;
+        }
+
+        // VAD LOGIC
+        const windowSize = Math.floor(sampleRate * 0.03); // 30ms for VAD
+        let currentSegmentSamples = []; // Array of Float32Array chunks
+        let currentSegmentLength = 0;
+        let segmentStartTime = 0;
+        let processedSamples = 0;
+
+        // Helper to flush
+        const transcribeSegment = (final = false) => {
+            if (currentSegmentLength === 0) return;
+
+            // Flatten
+            const totalSamples = new Float32Array(currentSegmentLength);
+            let offset = 0;
+            for (const c of currentSegmentSamples) {
+                totalSamples.set(c, offset);
+                offset += c.length;
+            }
+
+            // Create short-lived stream
+            const stream = recognizer.createStream();
+            stream.acceptWaveform({ samples: totalSamples, sampleRate: sampleRate });
+            recognizer.decode(stream);
+            const result = recognizer.getResult(stream);
+
+
+            if (result && result.text && result.text.trim().length > 0) {
+                let text = postProcessText(result.text.trim());
+                if (punctuation) text = punctuation.addPunct(text);
+
+                // Calculate approximate times
+                // Start time is when this segment detection started.
+                // We don't have exact timestamps from VAD easily unless we track strict state changes.
+                // Approximation: The segment ended NOW (processedSamples / sampleRate).
+                // Duration = currentSegmentLength / sampleRate.
+                const endTime = processedSamples / sampleRate;
+                const startTime = endTime - (currentSegmentLength / sampleRate);
+
+                const output = {
+                    id: randomUUID(),
+                    text: text,
+                    start: startTime,
+                    end: endTime,
+                    isFinal: true
+                };
+                // Stream the JSON line for UI
+                console.log(JSON.stringify(output));
+            }
+
+            currentSegmentSamples = [];
+            currentSegmentLength = 0;
+        };
+
         console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
 
-        // Chunking Strategy
-        const chunkDuration = 30; // seconds
-        const chunkSize = Math.floor(sampleRate * chunkDuration);
+        for (let i = 0; i < samples.length; i += windowSize) {
+            const end = Math.min(i + windowSize, samples.length);
+            const chunk = samples.slice(i, end);
+            processedSamples = end;
 
-        for (let i = 0; i < samples.length; i += chunkSize) {
-            const end = Math.min(i + chunkSize, samples.length);
-            const chunk = samples.slice(i, end); // Create a new Float32Array view/copy
+            vad.acceptWaveform(chunk);
 
-            stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
-            recognizer.decode(stream);
+            if (vad.isDetected()) {
+                currentSegmentSamples.push(chunk);
+                currentSegmentLength += chunk.length;
+            } else {
+                // Silence
+                if (currentSegmentLength > 0) {
+                    // Just finished speaking
+                    transcribeSegment();
+                }
+            }
 
-            // Progress Report
-            const progress = Math.min(100, Math.round((end / samples.length) * 100));
-            console.error(JSON.stringify({ type: 'progress', percentage: progress }));
+            // Progress update every ~1 sec
+            if (i % (sampleRate) < windowSize) {
+                const progress = Math.min(100, Math.round((i / samples.length) * 100));
+                console.error(JSON.stringify({ type: 'progress', percentage: progress }));
+            }
         }
 
-        const result = recognizer.getResult(stream);
-        const segments = [];
-
-        if (result.text && result.text.trim()) {
-            let text = postProcessText(result.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
-            segments.push({
-                id: randomUUID(),
-                text: text,
-                start: 0,
-                end: samples.length / sampleRate,
-                isFinal: true,
-                tokens: result.tokens || [],
-                timestamps: result.timestamps || []
-            });
+        // Flush remaining
+        if (currentSegmentLength > 0) {
+            transcribeSegment(true);
         }
-        console.log(JSON.stringify(segments, null, 2));
+
+        // Log done
+        // console.log(JSON.stringify({ done: true })); // Only if expected by parser, but usually batch expects array?
+        // Wait, the original batch mode output a SINGLE JSON ARRAY at the end.
+        // The user wants "pseudo-streaming".
+        // If I output JSON lines, the UI might not handle it if it expects an array.
+        // BUT, the user explicitly asked for "output text segment-by-segment".
+        // This suggests I should change the protocol to JSON lines (like 'stream' mode does).
+        // I will output JSON lines and then maybe a "done" or just exit.
+        // For array compatibility, maybe I shouldn't? 
+        // "result a poor user experience due to long wait times" -> they want immediate feedback.
+        // So JSON lines is the way.
+
     } catch (error) {
         throw error;
+    } finally {
+        if (vad) {
+            // vad.free(); // Ensure VAD is freed if API supports it, usually logic handles it via GC or explicit free
+        }
     }
 }
 
@@ -880,7 +1008,7 @@ async function main() {
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
             if (type === 'offline') {
-                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
+                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel);
             } else {
                 await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             }
