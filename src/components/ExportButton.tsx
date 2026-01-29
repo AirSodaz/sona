@@ -37,10 +37,18 @@ const CodeIcon = () => (
     </svg>
 );
 
+/** Props for ExportButton. */
 interface ExportButtonProps {
+    /** Optional CSS class name. */
     className?: string;
 }
 
+/**
+ * Dropdown button component for exporting transcript segments in various formats.
+ *
+ * @param props - Component props.
+ * @return The export button component.
+ */
 export const ExportButton: React.FC<ExportButtonProps> = ({ className = '' }) => {
     const { t } = useTranslation();
     const { alert } = useDialogStore();

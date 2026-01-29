@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
@@ -17,10 +18,18 @@ const FolderIcon = () => (
     </svg>
 );
 
+/** Props for TabNavigation. */
 interface TabNavigationProps {
+    /** Optional CSS class name. */
     className?: string;
 }
 
+/**
+ * Tab navigation component for switching between application modes (Live Record, Batch Import).
+ *
+ * @param props - Component props.
+ * @return The navigation tabs.
+ */
 export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) => {
     const { t } = useTranslation();
     const mode = useTranscriptStore((state) => state.mode);

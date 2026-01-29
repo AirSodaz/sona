@@ -3,57 +3,56 @@
  * This is the "source of truth" for all transcription data.
  */
 export interface TranscriptSegment {
-  /** Unique identifier (UUID) */
+  /** Unique identifier (UUID). */
   id: string;
-  /** Start time in seconds */
+  /** Start time in seconds. */
   start: number;
-  /** End time in seconds */
+  /** End time in seconds. */
   end: number;
-  /** The transcribed text content */
+  /** The transcribed text content. */
   text: string;
-  /** True if the segment is finalized (not a partial/in-progress result) */
+  /** True if the segment is finalized (not a partial/in-progress result). */
   isFinal: boolean;
-  /** List of tokens in the segment */
+  /** List of tokens in the segment. */
   tokens?: string[];
-  /** Start time of each token */
+  /** Start time of each token. */
   timestamps?: number[];
 }
 
 /**
- * Application operation mode
+ * Application operation mode.
  */
 export type AppMode = 'live' | 'batch';
 
 /**
- * Processing status for batch imports
+ * Processing status for batch imports.
  */
 export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
 
 /**
- * Configuration for the application
+ * Configuration for the application.
  */
 export interface AppConfig {
-  /** Path to streaming model (e.g. sherpa-onnx streaming zipformer) */
+  /** Path to streaming model (e.g. sherpa-onnx streaming zipformer). */
   streamingModelPath: string;
-  /** Path to offline model (e.g. sherpa-onnx offline paraformer/sensevoice) */
+  /** Path to offline model (e.g. sherpa-onnx offline paraformer/sensevoice). */
   offlineModelPath: string;
-  /** Selected language for transcription */
-  /** Selected language for transcription */
+  /** Selected language for transcription. */
   language: string;
-  /** Application UI language preference */
+  /** Application UI language preference. */
   appLanguage: 'auto' | 'en' | 'zh';
-  /** IDs of enabled ITN models */
+  /** IDs of enabled ITN models. */
   enabledITNModels?: string[];
-  /** Order of ITN models (IDs) for sorting */
+  /** Order of ITN models (IDs) for sorting. */
   itnRulesOrder?: string[];
-  /** DEPRECATED: Enable Inverse Text Normalization */
+  /** DEPRECATED: Enable Inverse Text Normalization. */
   enableITN?: boolean;
-  /** Path to punctuation model */
+  /** Path to punctuation model. */
   punctuationModelPath?: string;
-  /** Application theme preference */
+  /** Application theme preference. */
   theme?: 'auto' | 'light' | 'dark';
-  /** Font preference */
+  /** Font preference. */
   font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
-  /** Path to VAD model */
+  /** Path to VAD model. */
   vadModelPath?: string;
 }

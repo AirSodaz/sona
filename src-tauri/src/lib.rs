@@ -4,10 +4,18 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 
+/// State managed by Tauri to track active downloads and allow cancellation.
 struct DownloadState {
+    /// Map of download IDs to notification triggers.
     downloads: Mutex<HashMap<String, Arc<Notify>>>,
 }
 
+/// Cancels an active download by its ID.
+///
+/// # Arguments
+///
+/// * `state` - The managed `DownloadState`.
+/// * `id` - The unique ID of the download to cancel.
 #[tauri::command]
 fn cancel_download(state: tauri::State<DownloadState>, id: String) -> Result<(), String> {
     if let Ok(downloads) = state.downloads.lock() {
@@ -18,12 +26,25 @@ fn cancel_download(state: tauri::State<DownloadState>, id: String) -> Result<(),
     Ok(())
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+/// Simple greeting command for testing Tauri communication.
+///
+/// # Arguments
+///
+/// * `name` - The name to greet.
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+/// Extracts a `.tar.bz2` archive to a target directory.
+/// Runs in a blocking thread to avoid stalling the async runtime.
+/// Emits `extract-progress` events with the current filename being extracted.
+///
+/// # Arguments
+///
+/// * `app` - The Tauri app handle.
+/// * `archive_path` - Path to the source archive.
+/// * `target_dir` - Directory to extract into.
 #[tauri::command]
 async fn extract_tar_bz2<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -69,6 +90,14 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
     .map_err(|e| e.to_string())?
 }
 
+/// Helper to process a download stream and write to a file with progress callbacks.
+///
+/// # Arguments
+///
+/// * `stream` - The incoming byte stream.
+/// * `writer` - The async writer (file).
+/// * `total_size` - Total expected size of the download.
+/// * `on_progress` - Closure called with progress updates.
 pub async fn process_download<S, W, F>(
     mut stream: S,
     mut writer: W,
@@ -102,6 +131,17 @@ where
     Ok(())
 }
 
+/// Downloads a file from a URL to a specified path.
+/// Supports cancellation via the `DownloadState`.
+/// Emits `download-progress` events.
+///
+/// # Arguments
+///
+/// * `app` - The Tauri app handle.
+/// * `state` - The download state manager.
+/// * `url` - Source URL.
+/// * `output_path` - Destination file path.
+/// * `id` - Unique ID for this download (used for cancellation).
 #[tauri::command]
 async fn download_file<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -190,6 +230,8 @@ async fn download_file<R: tauri::Runtime>(
     result
 }
 
+/// Initializes and runs the Tauri application.
+/// Sets up plugins and invoke handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

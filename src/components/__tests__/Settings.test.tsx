@@ -119,7 +119,8 @@ describe('Settings', () => {
             itnRulesOrder: ['itn-zh-number'],
             appLanguage: 'auto',
             theme: 'auto',
-            font: 'system'
+            font: 'system',
+            vadModelPath: ''
         });
         expect(onClose).toHaveBeenCalled();
     });

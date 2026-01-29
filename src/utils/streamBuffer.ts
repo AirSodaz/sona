@@ -9,8 +9,8 @@ export class StreamLineBuffer {
      * Appends a chunk and returns complete lines.
      * The last incomplete line is kept in the buffer.
      *
-     * @param chunk The incoming string chunk
-     * @returns Array of complete lines found in this chunk (plus accumulated buffer)
+     * @param chunk - The incoming string chunk.
+     * @return Array of complete lines found in this chunk (plus accumulated buffer).
      */
     process(chunk: string): string[] {
         this.buffer += chunk;
@@ -29,6 +29,8 @@ export class StreamLineBuffer {
     /**
      * Returns any remaining buffer content as the last line.
      * Useful when the stream ends.
+     *
+     * @return Array containing the remaining line if any, or empty array.
      */
     flush(): string[] {
         if (this.buffer.trim().length > 0) {

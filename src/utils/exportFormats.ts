@@ -1,7 +1,10 @@
 import { TranscriptSegment } from '../types/transcript';
 
 /**
- * Formats seconds to SRT timestamp format (HH:MM:SS,mmm)
+ * Formats seconds to SRT timestamp format (HH:MM:SS,mmm).
+ *
+ * @param seconds - The time in seconds.
+ * @return The formatted timestamp string.
  */
 function formatSRTTimestamp(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
@@ -13,7 +16,10 @@ function formatSRTTimestamp(seconds: number): string {
 }
 
 /**
- * Formats seconds to display format (MM:SS.m)
+ * Formats seconds to display format (MM:SS.m).
+ *
+ * @param seconds - The time in seconds.
+ * @return The formatted display time string.
  */
 export function formatDisplayTime(seconds: number): string {
     const minutes = Math.floor(seconds / 60);
@@ -24,7 +30,10 @@ export function formatDisplayTime(seconds: number): string {
 }
 
 /**
- * Converts TranscriptSegment array to SRT (SubRip Subtitle) format
+ * Converts TranscriptSegment array to SRT (SubRip Subtitle) format.
+ *
+ * @param segments - The array of transcript segments to convert.
+ * @return The SRT formatted string.
  */
 export function toSRT(segments: TranscriptSegment[]): string {
     return segments
@@ -38,7 +47,10 @@ export function toSRT(segments: TranscriptSegment[]): string {
 }
 
 /**
- * Converts TranscriptSegment array to JSON format
+ * Converts TranscriptSegment array to JSON format.
+ *
+ * @param segments - The array of transcript segments to convert.
+ * @return The JSON formatted string.
  */
 export function toJSON(segments: TranscriptSegment[]): string {
     const exportData = segments
@@ -53,7 +65,10 @@ export function toJSON(segments: TranscriptSegment[]): string {
 }
 
 /**
- * Converts TranscriptSegment array to plain text format
+ * Converts TranscriptSegment array to plain text format.
+ *
+ * @param segments - The array of transcript segments to convert.
+ * @return The plain text string.
  */
 export function toTXT(segments: TranscriptSegment[]): string {
     return segments
@@ -63,7 +78,10 @@ export function toTXT(segments: TranscriptSegment[]): string {
 }
 
 /**
- * Converts TranscriptSegment array to VTT (WebVTT) format
+ * Converts TranscriptSegment array to VTT (WebVTT) format.
+ *
+ * @param segments - The array of transcript segments to convert.
+ * @return The VTT formatted string.
  */
 export function toVTT(segments: TranscriptSegment[]): string {
     const header = 'WEBVTT\n\n';
@@ -82,6 +100,14 @@ export function toVTT(segments: TranscriptSegment[]): string {
 
 export type ExportFormat = 'srt' | 'json' | 'txt' | 'vtt';
 
+/**
+ * Exports segments in the specified format.
+ *
+ * @param segments - The transcript segments to export.
+ * @param format - The target export format.
+ * @return The formatted string content.
+ * @throws {Error} If the format is unknown.
+ */
 export function exportSegments(segments: TranscriptSegment[], format: ExportFormat): string {
     switch (format) {
         case 'srt':
@@ -97,10 +123,22 @@ export function exportSegments(segments: TranscriptSegment[], format: ExportForm
     }
 }
 
+/**
+ * Gets the file extension for a given format.
+ *
+ * @param format - The export format.
+ * @return The file extension (e.g., ".srt").
+ */
 export function getFileExtension(format: ExportFormat): string {
     return `.${format}`;
 }
 
+/**
+ * Gets the MIME type for a given format.
+ *
+ * @param format - The export format.
+ * @return The MIME type string.
+ */
 export function getMimeType(format: ExportFormat): string {
     switch (format) {
         case 'srt':
