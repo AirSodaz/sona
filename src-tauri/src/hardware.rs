@@ -1,13 +1,12 @@
 /// Checks if a compatible GPU is available for acceleration.
 ///
-/// On macOS, it checks for Apple Silicon (arm64).
-/// On other platforms (Windows/Linux), it checks for NVIDIA GPUs via `nvidia-smi`.
+/// On macOS, checks for Apple Silicon (arm64).
+/// On other platforms (Windows/Linux), checks for NVIDIA GPUs via `nvidia-smi`.
 ///
 /// # Returns
 ///
-/// * `Ok(true)` if a compatible GPU is found.
-/// * `Ok(false)` if no compatible GPU is found.
-/// * `Err(String)` if an unexpected error occurs (though currently it returns `Ok(false)` on check failure).
+/// Returns `Ok(true)` if a compatible GPU is found, `Ok(false)` if not, or an `Err` containing
+/// an error message if the check fails in an unexpected way.
 #[tauri::command]
 pub fn check_gpu_availability() -> Result<bool, String> {
     #[cfg(target_os = "macos")]

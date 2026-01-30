@@ -7,9 +7,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** The version of Node.js to download and install. */
 const NODE_VERSION = 'v22.22.0';
 
-// Map Node.js platform/arch to Rust target triple
+/**
+ * Map of Node.js platform/arch combinations to Rust target triples.
+ * Used to determine the correct binary suffix for the current platform.
+ */
 const TARGETS = {
   'win32-x64': 'x86_64-pc-windows-msvc',
   'linux-x64': 'x86_64-unknown-linux-gnu',
@@ -17,6 +21,11 @@ const TARGETS = {
   'darwin-arm64': 'aarch64-apple-darwin',
 };
 
+/**
+ * Determines the Rust target triple for the current platform.
+ *
+ * @return {string} The Rust target triple (e.g., 'x86_64-unknown-linux-gnu').
+ */
 function getTarget() {
   const platform = process.platform;
   const arch = process.arch;
@@ -39,6 +48,14 @@ if (!fs.existsSync(binariesDir)) {
   fs.mkdirSync(binariesDir, { recursive: true });
 }
 
+/**
+ * Downloads a file from a URL to a local destination.
+ * Handles redirects (301/302) automatically.
+ *
+ * @param {string} url - The URL to download from.
+ * @param {string} dest - The local file path to save the download to.
+ * @return {Promise<void>} A promise that resolves when the download is complete.
+ */
 async function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
@@ -63,6 +80,12 @@ async function downloadFile(url, dest) {
   });
 }
 
+/**
+ * Sets up the Node.js binary for the sidecar.
+ * Checks if the binary already exists; if not, downloads and extracts it.
+ *
+ * @return {Promise<void>} A promise that resolves when Node.js is set up.
+ */
 async function setupNode() {
   const ext = process.platform === 'win32' ? '.exe' : '';
   const binaryName = `node-${targetTriple}${ext}`;
@@ -138,6 +161,11 @@ async function setupNode() {
   }
 }
 
+/**
+ * Installs dependencies and builds the sidecar application.
+ *
+ * @return {Promise<void>} A promise that resolves when the sidecar is built.
+ */
 async function installSidecarDeps() {
   console.log('Installing sidecar dependencies...');
   try {
@@ -162,6 +190,9 @@ async function installSidecarDeps() {
   }
 }
 
+/**
+ * Main execution function.
+ */
 async function main() {
   await setupNode();
   await installSidecarDeps();
