@@ -133,6 +133,7 @@ const DEFAULT_CONFIG: AppConfig = {
     vadModelPath: '',
     theme: 'auto',
     font: 'system',
+    vadBufferSize: 5,
 };
 
 /**

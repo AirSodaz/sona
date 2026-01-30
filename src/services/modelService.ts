@@ -33,8 +33,8 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
-        name: 'Multilingual - SenseVoice (Int8)',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (Int8 quantized)',
+        name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
+        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (optimized for Cantonese)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
@@ -42,13 +42,13 @@ export const PRESET_MODELS: ModelInfo[] = [
         engine: 'onnx'
     },
     {
-        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09',
-        name: 'Multilingual - SenseVoice',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2025-09-09.tar.bz2',
+        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+        name: 'Multilingual - SenseVoice - 2024-07-17 (Int8)',
+        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
-        size: '~845 MB',
+        size: '~155 MB',
         engine: 'onnx'
     },
     {
@@ -59,16 +59,6 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'punctuation',
         language: 'zh,en',
         size: '~62 MB',
-        engine: 'onnx'
-    },
-    {
-        id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12',
-        name: 'Punctuation - CT Transformer',
-        description: 'Chinese/English Punctuation Model. Adds punctuation to raw text.',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12.tar.bz2',
-        type: 'punctuation',
-        language: 'zh,en',
-        size: '~266 MB',
         engine: 'onnx'
     },
     {

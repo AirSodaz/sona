@@ -49,6 +49,8 @@
         "timeline_mode": "Timeline Mode",
         "timeline_hint": "Split transcript by punctuation",
         "timeline_mode_tooltip": "Toggle Timeline Mode",
+        "language": "Language",
+        "language_hint": "Select audio language",
         "unsupported_format": "Unsupported file format. Please use: {{formats}}",
         "no_model_error": "Please configure a model in Settings first.",
         "transcription_failed": "Transcription failed: {{error}}"
@@ -116,6 +118,10 @@
         "font_system": "System Default",
         "punctuation_models": "Punctuation Models",
         "itn_model_status": "ITN Model Status",
-        "toggle_model": "Toggle {{name}}"
+        "toggle_model": "Toggle {{name}}",
+        "vad_models": "VAD Models",
+        "vad_path_label": "VAD Model Path",
+        "vad_buffer_size": "VAD Buffer Size (s)",
+        "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences."
     }
 }

@@ -21,6 +21,7 @@ class TranscriptionService {
     private itnModelPaths: string[] = [];
     private punctuationModelPath: string = '';
     private vadModelPath: string = '';
+    private vadBufferSize: number = 5;
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
     private onError: ErrorCallback | null = null;
@@ -62,6 +63,15 @@ class TranscriptionService {
      */
     setVadModelPath(path: string) {
         this.vadModelPath = path;
+    }
+
+    /**
+     * Sets the VAD buffer size in seconds.
+     *
+     * @param size - Buffer size in seconds.
+     */
+    setVadBufferSize(size: number) {
+        this.vadBufferSize = size;
     }
 
     /**
@@ -232,13 +242,13 @@ class TranscriptionService {
      * @param onSegment - Optional callback for each segment transcribed.
      * @return A promise resolving to an array of all transcript segments.
      */
-    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
+    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string): Promise<TranscriptSegment[]> {
         try {
-            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment);
+            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language);
         } catch (error: any) {
             if (error.message === 'COREML_FAILURE') {
                 console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
-                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment);
+                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language);
             }
             throw error;
         }
@@ -253,12 +263,12 @@ class TranscriptionService {
      * @param onSegment - Segment callback.
      * @return Promise resolving to segments.
      */
-    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
 
-        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'})`);
+        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'}, Language: ${language || 'auto'})`);
 
         return new Promise(async (resolve, reject) => {
             try {
@@ -272,6 +282,10 @@ class TranscriptionService {
                     '--enable-itn', this.enableITN.toString()
                 ];
 
+                if (language && language !== 'auto') {
+                    args.push('--language', language);
+                }
+
                 if (this.itnModelPaths.length > 0) {
                     args.push('--itn-model', this.itnModelPaths.join(','));
                 }
@@ -282,6 +296,7 @@ class TranscriptionService {
 
                 if (this.vadModelPath) {
                     args.push('--vad-model', this.vadModelPath);
+                    args.push('--vad-buffer', this.vadBufferSize.toString());
                 }
 
                 if (provider) {

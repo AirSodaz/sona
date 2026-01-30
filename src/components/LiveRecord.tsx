@@ -281,8 +281,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
 
         // ITN Configuration
-        // ITN Configuration
-        // ITN Configuration
         const enabledITNModels = new Set(config.enabledITNModels || []);
         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
         // Legacy support or fallback: if order doesn't cover all enabled models, append them?
@@ -517,7 +515,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                             value={inputSource}
                             onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
                             aria-label={t('live.source_select')}
-                            className="source-select"
+                            className="settings-input"
+                            style={{ maxWidth: '160px' }}
                         >
                             <option value="microphone">{t('live.source_microphone')}</option>
                             <option value="desktop">{t('live.source_desktop')}</option>

@@ -40,6 +40,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     const { alert } = useDialogStore();
     const [isDragOver, setIsDragOver] = useState(false);
     const [enableTimeline, setEnableTimeline] = useState(true);
+    const [language, setLanguage] = useState<string>('auto');
 
     const processingStatus = useTranscriptStore((state) => state.processingStatus);
     const processingProgress = useTranscriptStore((state) => state.processingProgress);
@@ -180,6 +181,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
             if (config.vadModelPath) {
                 transcriptionService.setVadModelPath(config.vadModelPath);
+                transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
             }
 
             // Clear previous segments if we are starting a new import
@@ -205,7 +207,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 } else {
                     useTranscriptStore.getState().upsertSegment(segment);
                 }
-            });
+            }, language);
 
             useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);
             setProcessingStatus('complete');
@@ -305,6 +307,27 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                     >
                         <div className="toggle-switch-handle" />
                     </button>
+                </div>
+
+                <div className="options-row">
+                    <div className="options-label">
+                        <span>{t('batch.language')}</span>
+                        <span className="options-hint">{t('batch.language_hint')}</span>
+                    </div>
+                    <select
+                        className="settings-input"
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        style={{ maxWidth: '120px' }}
+                        aria-label={t('batch.language')}
+                    >
+                        <option value="auto">Auto</option>
+                        <option value="zh">Chinese</option>
+                        <option value="en">English</option>
+                        <option value="ja">Japanese</option>
+                        <option value="ko">Korean</option>
+                        <option value="yue">Cantonese</option>
+                    </select>
                 </div>
             </div>
         </div>

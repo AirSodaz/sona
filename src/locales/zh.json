@@ -19,7 +19,7 @@
     },
     "panel": {
         "live_record": "实时录音",
-        "batch_import": "批量导入",
+        "batch_import": "批量转录",
         "transcript": "转录文本",
         "mode_selection": "模式选择"
     },
@@ -49,6 +49,8 @@
         "timeline_mode": "时间轴模式",
         "timeline_hint": "按标点符号分割转录",
         "timeline_mode_tooltip": "切换时间轴模式",
+        "language": "语言",
+        "language_hint": "选择音频语言",
         "unsupported_format": "不支持的文件格式。请使用: {{formats}}",
         "no_model_error": "请先在设置中配置模型。",
         "transcription_failed": "转录失败: {{error}}"
@@ -118,6 +120,8 @@
         "vad_models": "VAD 模型",
         "itn_model_status": "ITN 模型状态",
         "vad_path_label": "VAD 模型路径",
-        "toggle_model": "切换 {{name}}"
+        "toggle_model": "切换 {{name}}",
+        "vad_buffer_size": "VAD 缓冲大小 (秒)",
+        "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。"
     }
 }

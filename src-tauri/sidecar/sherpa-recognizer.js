@@ -40,6 +40,8 @@ function parseArgs() {
         targetDir: null,
         itnModel: null,
         punctuationModel: null,
+        vadBuffer: 5, // Default 5s
+        language: '', // Default auto
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -79,6 +81,12 @@ function parseArgs() {
                 break;
             case '--vad-model':
                 options.vadModel = args[++i];
+                break;
+            case '--vad-buffer':
+                options.vadBuffer = parseFloat(args[++i]);
+                break;
+            case '--language':
+                options.language = args[++i];
                 break;
         }
     }
@@ -241,7 +249,7 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
 }
 
 // Find model configuration and detect type
-function findModelConfig(modelPath, enableITN, numThreads) {
+function findModelConfig(modelPath, enableITN, numThreads, language) {
     if (!existsSync(modelPath)) return null;
 
     try {
@@ -300,6 +308,7 @@ function findModelConfig(modelPath, enableITN, numThreads) {
                 numThreads: numThreads,
                 provider: 'cpu', // ONNX is CPU only now per requirement
                 debug: false,
+                language: '', // Placeholder, will be overwritten if passed separately? Or passed to findModelConfig?
             };
 
             if (joiner) {
@@ -327,7 +336,7 @@ function findModelConfig(modelPath, enableITN, numThreads) {
                     debug: false,
                     senseVoice: {
                         model: model,
-                        language: '',
+                        language: language || '',
                         useInverseTextNormalization: enableITN ? 1 : 0,
                     }
                 }
@@ -636,7 +645,7 @@ async function processExtraction(archivePath, targetDir) {
 
 
 
-async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation, vadModelPath) {
+async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation, vadModelPath, options) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     let vad = null;
@@ -657,8 +666,8 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
             const vadConfig = {
                 sileroVad: {
                     model: vadModelPath,
-                    threshold: 0.5,
-                    minSilenceDuration: 0.5,
+                    threshold: 0.35, // Tune: Lower threshold for higher sensitivity
+                    minSilenceDuration: 1.0, // Tune: Longer silence to avoid splitting mid-sentence
                     minSpeechDuration: 0.25,
                 },
                 sampleRate: sampleRate,
@@ -669,15 +678,10 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
             console.error(`[Sidecar] VAD initialized with model: ${vadModelPath}`);
         } else {
             console.error('[Sidecar] No VAD model provided or found. Falling back to simple chunking.');
-            // Fallback to original logic if no VAD? Or error? 
-            // User explicitly asked for VAD. But for safety, let's keep non-VAD fallback or just error clearly.
-            // Given user request, I'll proceed with VAD logic only if VAD is present.
-            // If not present, I'll call the OLD logic (inline for now or revert to chunking).
-            // Let's implement VAD logic primarily.
         }
 
         if (!vad) {
-            // FALLBACK TO ORIGINAL LOGIC (Simplified for brevity in this tool call, but essentially the same)
+            // FALLBACK TO ORIGINAL LOGIC
             const stream = recognizer.createStream();
             console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
             const chunkDuration = 30;
@@ -710,12 +714,18 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
             return;
         }
 
-        // VAD LOGIC
+        // VAD LOGIC with Start Padding
         const windowSize = Math.floor(sampleRate * 0.03); // 30ms for VAD
         let currentSegmentSamples = []; // Array of Float32Array chunks
         let currentSegmentLength = 0;
         let segmentStartTime = 0;
         let processedSamples = 0;
+
+        // Ring Buffer for Start Padding
+        // windowSize is ~0.03s.
+        const vadBufferSeconds = options.vadBuffer || 5;
+        const ringBufferSize = Math.ceil(vadBufferSeconds / 0.03);
+        const ringBuffer = [];
 
         // Helper to flush
         const transcribeSegment = (final = false) => {
@@ -741,12 +751,8 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
                 if (punctuation) text = punctuation.addPunct(text);
 
                 // Calculate approximate times
-                // Start time is when this segment detection started.
-                // We don't have exact timestamps from VAD easily unless we track strict state changes.
-                // Approximation: The segment ended NOW (processedSamples / sampleRate).
-                // Duration = currentSegmentLength / sampleRate.
                 const endTime = processedSamples / sampleRate;
-                const startTime = endTime - (currentSegmentLength / sampleRate);
+                const startTime = Math.max(0, endTime - (currentSegmentLength / sampleRate));
 
                 const output = {
                     id: randomUUID(),
@@ -773,6 +779,15 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
             vad.acceptWaveform(chunk);
 
             if (vad.isDetected()) {
+                // If starting a new segment, prepend ring buffer (padding)
+                if (currentSegmentLength === 0) {
+                    for (const bufChunk of ringBuffer) {
+                        currentSegmentSamples.push(bufChunk);
+                        currentSegmentLength += bufChunk.length;
+                    }
+                    // Clear ring buffer to prevent duplication
+                    ringBuffer.length = 0;
+                }
                 currentSegmentSamples.push(chunk);
                 currentSegmentLength += chunk.length;
             } else {
@@ -780,6 +795,12 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
                 if (currentSegmentLength > 0) {
                     // Just finished speaking
                     transcribeSegment();
+                }
+
+                // Add to ring buffer (only keep during silence or non-speech to be ready for next attack)
+                ringBuffer.push(chunk);
+                if (ringBuffer.length > ringBufferSize) {
+                    ringBuffer.shift();
                 }
             }
 
@@ -982,7 +1003,7 @@ async function main() {
     }
 
     try {
-        const found = findModelConfig(options.modelPath, options.enableITN, numThreads);
+        const found = findModelConfig(options.modelPath, options.enableITN, numThreads, options.language);
         if (!found) throw new Error('Could not find valid model configuration (NCNN or ONNX)');
 
         let recognizerObj;
@@ -1008,7 +1029,7 @@ async function main() {
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
             if (type === 'offline') {
-                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel);
+                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel, options);
             } else {
                 await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             }

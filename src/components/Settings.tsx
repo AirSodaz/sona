@@ -145,6 +145,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
 
     const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
     const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
+    const [vadBufferSize, setVadBufferSize] = useState(config.vadBufferSize || 5);
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
     const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number']);
     const [appLanguage, setAppLanguage] = useState(config.appLanguage || 'auto');
@@ -204,6 +205,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setOfflineModelPath(config.offlineModelPath);
         setPunctuationModelPath(config.punctuationModelPath || '');
         setVadModelPath(config.vadModelPath || '');
+        setVadBufferSize(config.vadBufferSize || 5);
         setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
         setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number']);
         setAppLanguage(config.appLanguage || 'auto');
@@ -211,7 +213,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
         setTheme(config.theme || 'auto');
         setFont(config.font || 'system');
         // Validate both (optional visual feedback, maybe just validate active input)
-    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.vadModelPath, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
+    }, [config.streamingModelPath, config.offlineModelPath, config.punctuationModelPath, config.vadModelPath, config.vadBufferSize, config.enabledITNModels, config.itnRulesOrder, config.appLanguage, config.theme, config.font]);
 
     useEffect(() => {
         checkInstalledModels();
@@ -226,6 +228,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             offlineModelPath,
             punctuationModelPath,
             vadModelPath,
+            vadBufferSize,
             enabledITNModels: enabledList,
             itnRulesOrder,
             enableITN: enabledList.length > 0, // Legacy support
@@ -238,6 +241,7 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
             offlineModelPath,
             punctuationModelPath,
             vadModelPath,
+            vadBufferSize,
             enabledITNModels: enabledList,
             itnRulesOrder,
             enableITN: enabledList.length > 0,
@@ -833,6 +837,26 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                         )}
                                     </div>
                                 ))}
+
+                                <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                                    <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
+                                    <div style={{ maxWidth: 300 }}>
+                                        <input
+                                            id="settings-vad-buffer"
+                                            type="number"
+                                            className="settings-input"
+                                            value={vadBufferSize}
+                                            onChange={(e) => setVadBufferSize(Number(e.target.value))}
+                                            min={0}
+                                            max={30}
+                                            step={0.5}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
+                                    <div className="settings-hint">
+                                        {t('settings.vad_buffer_hint')}
+                                    </div>
+                                </div>
                             </div>
                         )}
 

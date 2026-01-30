@@ -55,4 +55,6 @@ export interface AppConfig {
   font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
   /** Path to VAD model. */
   vadModelPath?: string;
+  /** VAD buffer size in seconds. Default: 5. */
+  vadBufferSize?: number;
 }
