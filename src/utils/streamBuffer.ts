@@ -13,10 +13,16 @@ export class StreamLineBuffer {
      * @return Array of complete lines found in this chunk (plus accumulated buffer).
      */
     process(chunk: string): string[] {
-        this.buffer += chunk;
-        if (this.buffer.indexOf('\n') === -1) {
+        // Optimization: Check for newline in the chunk itself first.
+        // If chunk has no newline, and buffer (invariant) has no newline,
+        // then buffer + chunk has no newline.
+        // This avoids scanning the entire growing buffer for a newline (O(N^2) -> O(N)).
+        if (chunk.indexOf('\n') === -1) {
+            this.buffer += chunk;
             return [];
         }
+
+        this.buffer += chunk;
 
         const lines = this.buffer.split('\n');
         // The last element is the potentially incomplete line
