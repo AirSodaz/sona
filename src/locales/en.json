@@ -63,7 +63,7 @@
         "error": "Audio playback failed: {{error}}. Code: {{code}}"
     },
     "editor": {
-        "empty_state": "No transcript segments yet.<br />Start recording or import a file.",
+        "empty_state": "No transcript segments yet.",
         "seek_tooltip": "Click to seek",
         "edit_tooltip": "Edit segment",
         "merge_tooltip": "Merge with next",
