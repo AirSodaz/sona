@@ -1267,6 +1267,12 @@ input[type="radio"]:focus {
   font-size: 0.875rem;
 }
 
+.empty-state-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
 /* ===========================
    Scrollbar Styles
    =========================== */

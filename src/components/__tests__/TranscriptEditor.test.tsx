@@ -112,4 +112,35 @@ describe('TranscriptEditor', () => {
 
         expect(mockScrollToIndex).not.toHaveBeenCalled();
     });
+
+    it('renders empty state with action buttons and switches mode', () => {
+        act(() => {
+            useTranscriptStore.setState({ segments: [] });
+        });
+
+        // Spy on setMode
+        const setModeSpy = vi.spyOn(useTranscriptStore.getState(), 'setMode');
+
+        const { getByText, getByLabelText } = render(<TranscriptEditor />);
+
+        expect(getByText('editor.empty_state')).toBeTruthy();
+
+        const liveButton = getByLabelText('panel.live_record');
+        expect(liveButton).toBeTruthy();
+
+        act(() => {
+            liveButton.click();
+        });
+
+        expect(setModeSpy).toHaveBeenCalledWith('live');
+
+        const batchButton = getByLabelText('panel.batch_import');
+        expect(batchButton).toBeTruthy();
+
+        act(() => {
+            batchButton.click();
+        });
+
+        expect(setModeSpy).toHaveBeenCalledWith('batch');
+    });
 });

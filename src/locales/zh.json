@@ -63,7 +63,7 @@
         "error": "音频播放失败: {{error}}. 代码: {{code}}"
     },
     "editor": {
-        "empty_state": "暂无转录内容。<br />开始录音或导入文件。",
+        "empty_state": "暂无转录内容。",
         "seek_tooltip": "点击跳转",
         "edit_tooltip": "编辑段落",
         "merge_tooltip": "合并下一段",
