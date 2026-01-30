@@ -1,7 +1,6 @@
 import React, { useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { Mic, Folder } from 'lucide-react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
@@ -234,7 +233,6 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
-    const setMode = useTranscriptStore((state) => state.setMode);
 
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
@@ -353,25 +351,7 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
                 </svg>
-                <p>{t('editor.empty_state')}</p>
-                <div className="empty-state-actions">
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => setMode('live')}
-                        aria-label={t('panel.live_record')}
-                    >
-                        <Mic size={16} />
-                        {t('panel.live_record')}
-                    </button>
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => setMode('batch')}
-                        aria-label={t('panel.batch_import')}
-                    >
-                        <Folder size={16} />
-                        {t('panel.batch_import')}
-                    </button>
-                </div>
+                <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
             </div>
         );
     }
