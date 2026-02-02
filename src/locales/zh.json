@@ -57,6 +57,7 @@
         "queue_title": "队列 ({{count}})",
         "queue_empty": "队列中没有文件",
         "queue_waiting": "等待处理...",
+        "processing_wait": "处理中无法添加文件",
         "clear_queue": "清空队列",
         "add_more_files": "添加更多文件",
         "file_failed": "失败",

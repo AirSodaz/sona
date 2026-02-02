@@ -57,6 +57,7 @@
         "queue_title": "Queue ({{count}})",
         "queue_empty": "No files in queue",
         "queue_waiting": "Waiting to process...",
+        "processing_wait": "Cannot add files while processing",
         "clear_queue": "Clear All",
         "add_more_files": "Add More Files",
         "file_failed": "Failed",
