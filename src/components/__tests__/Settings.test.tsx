@@ -120,7 +120,8 @@ describe('Settings', () => {
             appLanguage: 'auto',
             theme: 'auto',
             font: 'system',
-            vadModelPath: ''
+            vadModelPath: '',
+            vadBufferSize: 5
         });
         expect(onClose).toHaveBeenCalled();
     });
