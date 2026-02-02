@@ -49,3 +49,7 @@
 ## 2026-05-22 - Accessible Canvas Visualization
 **Learning:** Canvas elements used for visual feedback (like audio waves) are invisible to screen readers.
 **Action:** Add `role="img"` and a descriptive `aria-label` to `<canvas>` elements to indicate their purpose.
+
+## 2026-05-23 - Nested Interactive Elements
+**Learning:** Nesting a `<button>` inside a container with `role="button"` (like a drop zone) creates invalid semantics and confusing screen reader output.
+**Action:** Use a `div` with button styling and `aria-hidden="true"` for the inner element, ensuring the parent container handles the interaction.

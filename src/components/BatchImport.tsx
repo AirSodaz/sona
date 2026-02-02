@@ -331,9 +331,9 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                     <p>{t('batch.drop_desc')}</p>
                 </div>
 
-                <button className="btn btn-primary" style={{ marginTop: '8px', pointerEvents: 'none' }}>
+                <div className="btn btn-primary" style={{ marginTop: '8px', pointerEvents: 'none' }} aria-hidden="true">
                     {t('batch.select_file')}
-                </button>
+                </div>
 
                 <p className="supported-formats" style={{ marginTop: '8px' }}>
                     {t('batch.supports', { formats: ACCEPTED_EXTENSIONS.join(', ') })}
