@@ -18,7 +18,7 @@ vi.mock('@tauri-apps/plugin-shell', () => {
         stderr = new EventEmitter();
         spawn = vi.fn().mockResolvedValue(new MockChild());
 
-        static sidecar = vi.fn((bin, args) => {
+        static sidecar = vi.fn((_bin, _args) => {
             return new MockCommand();
         });
     }
