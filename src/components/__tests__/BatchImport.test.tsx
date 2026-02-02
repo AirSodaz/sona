@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BatchImport } from '../BatchImport';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
@@ -10,6 +11,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
     listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+vi.mock('@tauri-apps/api/window', () => ({
+    getCurrentWindow: () => ({
+        listen: vi.fn().mockResolvedValue(() => {}),
+    }),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -66,15 +73,26 @@ describe('BatchImport', () => {
 
     it('should have accessible progress bar when processing', () => {
         // Set processing state
-        useTranscriptStore.setState({
-            processingStatus: 'processing',
-            processingProgress: 50
+        useBatchQueueStore.setState({
+            queueItems: [
+                {
+                    id: 'test-id',
+                    filename: 'test.wav',
+                    filePath: '/test.wav',
+                    status: 'processing',
+                    progress: 50,
+                    segments: [],
+                    audioUrl: ''
+                }
+            ],
+            activeItemId: 'test-id',
+            isQueueProcessing: true
         });
 
         render(<BatchImport />);
 
         // This is expected to fail initially as the role is missing
-        const progressbar = screen.getByRole('progressbar');
+        const progressbar = screen.getByRole('progressbar', { name: 'batch.processing_title' });
         expect(progressbar).toBeDefined();
         expect(progressbar.getAttribute('aria-valuenow')).toBe('50');
         expect(progressbar.getAttribute('aria-valuemin')).toBe('0');

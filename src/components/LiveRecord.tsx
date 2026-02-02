@@ -5,6 +5,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
+import { RecordingTimer } from './RecordingTimer';
 
 interface LiveRecordProps {
     className?: string;
@@ -38,7 +39,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const [recordingTime, setRecordingTime] = useState(0);
     const isRecordingRef = useRef(false); // Use ref to track recording state for closure
     const isPausedRef = useRef(false);
     const mimeTypeRef = useRef<string>('');
@@ -49,13 +49,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const { t } = useTranslation();
-
-    // Format recording time
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    };
 
     // Draw visualizer
     const drawVisualizer = useCallback(() => {
@@ -407,25 +400,6 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     };
 
 
-    // Better Timer Effect
-    useEffect(() => {
-        let interval: number | undefined;
-
-        if (isRecording) {
-            interval = window.setInterval(() => {
-                if (!isPausedRef.current) {
-                    setRecordingTime(t => t + 1);
-                }
-            }, 1000);
-        } else {
-            setRecordingTime(0);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isRecording]); // Only dependency is isRecording, uses ref for pause check
-
     // Cleanup on unmount
     useEffect(() => {
         return () => {
@@ -462,14 +436,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 />
             </div>
 
-            <div
-                className="recording-timer"
-                style={{
-                    visibility: isRecording ? 'visible' : 'hidden'
-                }}
-            >
-                {formatTime(recordingTime)}
-            </div>
+            <RecordingTimer isRecording={isRecording} isPaused={isPaused} />
 
             <div className="record-controls">
                 {!isRecording ? (
