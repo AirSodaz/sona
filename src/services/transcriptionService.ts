@@ -185,36 +185,6 @@ class TranscriptionService {
     }
 
     /**
-     * Sends raw audio samples (Float32) to the sidecar.
-     * Optimization: Converts Float32 to Int16 with manual clamping.
-     *
-     * @param samples - Float32Array of audio samples (assumed 16kHz mono).
-     */
-    async sendAudio(samples: Float32Array) {
-        if (!this.child || !this.isRunning) return;
-
-        try {
-            // Convert Float32 to Int16 for the sidecar
-            // Optimization: Manual clamping to avoid function call overhead in tight loop
-            const len = samples.length;
-            const buffer = new Int16Array(len);
-            for (let i = 0; i < len; i++) {
-                let s = samples[i];
-                if (s > 1) s = 1;
-                else if (s < -1) s = -1;
-                buffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            }
-
-            // Command.write accepts string or Uint8Array
-            // We need to send bytes. Uint8Array view of Int16Array
-            const bytes = new Uint8Array(buffer.buffer);
-            await this.child.write(bytes);
-        } catch (error) {
-            console.error('Failed to write audio to sidecar:', error);
-        }
-    }
-
-    /**
      * Sends pre-converted Int16 audio samples to the sidecar.
      *
      * @param samples - Int16Array of audio samples.
