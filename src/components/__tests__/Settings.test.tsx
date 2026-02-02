@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Settings } from '../Settings';
 import { modelService } from '../../services/modelService';
 
@@ -56,8 +56,13 @@ describe('Settings', () => {
         vi.clearAllMocks();
     });
 
-    it('renders with vertical layout structure', () => {
+    it('renders with vertical layout structure', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+
+        // Wait for async checks on mount to settle
+        await waitFor(() => {
+             expect(modelService.isModelInstalled).toHaveBeenCalled();
+        });
 
         // Check for Sidebar items (buttons)
         // Note: settings.general appears in both sidebar button and header
@@ -72,8 +77,12 @@ describe('Settings', () => {
         expect(screen.getByLabelText('settings.theme')).toBeDefined();
     });
 
-    it('renders accessible model list buttons', () => {
+    it('renders accessible model list buttons', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+
+        // Wait for mount effects
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+
         fireEvent.click(screen.getByText('settings.model_hub'));
 
         // Check for accessible buttons
@@ -81,8 +90,9 @@ describe('Settings', () => {
         expect(screen.getByLabelText('common.download Test Model')).toBeDefined();
     });
 
-    it('switches tabs correctly', () => {
+    it('switches tabs correctly', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
 
         // Switch to Model Hub
         fireEvent.click(screen.getByText('settings.model_hub'));
@@ -94,8 +104,9 @@ describe('Settings', () => {
         expect(screen.getByDisplayValue('/test/streaming')).toBeDefined();
     });
 
-    it('closes when close button is clicked', () => {
+    it('closes when close button is clicked', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
 
         // Find close button (X icon usually has aria-label="Close")
         const closeBtn = screen.getByLabelText('common.close');
@@ -104,8 +115,9 @@ describe('Settings', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('saves configuration and closes', () => {
+    it('saves configuration and closes', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
 
         // Click Save
         fireEvent.click(screen.getByText('settings.save_button'));
@@ -129,6 +141,10 @@ describe('Settings', () => {
     it('renders accessible ITN toggle switches', async () => {
         vi.mocked(modelService.isITNModelInstalled).mockResolvedValue(true);
         render(<Settings isOpen={true} onClose={onClose} />);
+
+        // Wait for checks
+        await waitFor(() => expect(modelService.isITNModelInstalled).toHaveBeenCalled());
+
         fireEvent.click(screen.getByText('settings.local_path'));
 
         // Should find the switch because we mocked isITNModelInstalled to true
@@ -138,8 +154,9 @@ describe('Settings', () => {
         expect(toggle.getAttribute('aria-label')).toBe('settings.toggle_model');
     });
 
-    it('implements ARIA tabs pattern', () => {
+    it('implements ARIA tabs pattern', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
 
         // Check for tablist
         const tablist = screen.getByRole('tablist');
