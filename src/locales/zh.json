@@ -53,7 +53,18 @@
         "language_hint": "选择音频语言",
         "unsupported_format": "不支持的文件格式。请使用: {{formats}}",
         "no_model_error": "请先在设置中配置模型。",
-        "transcription_failed": "转录失败: {{error}}"
+        "transcription_failed": "转录失败: {{error}}",
+        "queue_title": "队列 ({{count}})",
+        "queue_empty": "队列中没有文件",
+        "queue_waiting": "等待处理...",
+        "clear_queue": "清空队列",
+        "add_more_files": "添加更多文件",
+        "file_failed": "失败",
+        "file_complete": "完成",
+        "status_pending": "等待中",
+        "status_processing": "处理中",
+        "status_complete": "已完成",
+        "status_error": "失败"
     },
     "player": {
         "play": "播放",

@@ -1,14 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Event } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { transcriptionService } from '../services/transcriptionService';
-import { modelService } from '../services/modelService';
-import { splitByPunctuation } from '../utils/segmentUtils';
+import { FileQueueSidebar } from './FileQueueSidebar';
 
 // Icons
 const UploadIcon = () => (
@@ -19,8 +17,6 @@ const UploadIcon = () => (
     </svg>
 );
 
-
-
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
 
 /** Props for BatchImport. */
@@ -30,127 +26,112 @@ interface BatchImportProps {
 }
 
 /**
- * Component for batch importing audio files.
- * Handles drag-and-drop, file selection, and initiates transcription.
+ * Component for batch importing audio files with multi-file queue support.
+ * Handles drag-and-drop, file selection, and displays queue sidebar.
  *
  * @param props - Component props.
  * @return The batch import UI.
  */
 export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
-    // const fileInputRef = useRef<HTMLInputElement>(null);
     const { alert } = useDialogStore();
     const [isDragOver, setIsDragOver] = useState(false);
-    const [enableTimeline, setEnableTimeline] = useState(true);
-    const [language, setLanguage] = useState<string>('auto');
-
-    const processingStatus = useTranscriptStore((state) => state.processingStatus);
-    const processingProgress = useTranscriptStore((state) => state.processingProgress);
-    const setProcessingStatus = useTranscriptStore((state) => state.setProcessingStatus);
-    const setProcessingProgress = useTranscriptStore((state) => state.setProcessingProgress);
-    const config = useTranscriptStore((state) => state.config);
     const { t } = useTranslation();
 
+    // Queue store
+    const queueItems = useBatchQueueStore((state) => state.queueItems);
+    const activeItemId = useBatchQueueStore((state) => state.activeItemId);
+    const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
+    const addFiles = useBatchQueueStore((state) => state.addFiles);
+    const enableTimeline = useBatchQueueStore((state) => state.enableTimeline);
+    const setEnableTimeline = useBatchQueueStore((state) => state.setEnableTimeline);
+    const language = useBatchQueueStore((state) => state.language);
+    const setLanguage = useBatchQueueStore((state) => state.setLanguage);
 
+    // Transcript store
+    const config = useTranscriptStore((state) => state.config);
+
+    // Get active item
+    const activeItem = useMemo(() => {
+        return queueItems.find((item) => item.id === activeItemId) || null;
+    }, [queueItems, activeItemId]);
+
+    // Determine if we should show the queue UI
+    const hasQueueItems = queueItems.length > 0;
 
     const handleDrop = useCallback((e: React.DragEvent) => {
-        // Fallback or visual handling only, actual logic handled by Tauri event
         e.preventDefault();
-        // e.stopPropagation(); // Allow bubbling to Tauri
         setIsDragOver(false);
     }, []);
 
     // Tauri File Drop Event Listener
     useEffect(() => {
-        let unlistenDrop: (() => void) | undefined;
-        let unlistenHover: (() => void) | undefined;
-        let unlistenCancelled: (() => void) | undefined;
+        let mounted = true;
+        const unlisteners: Array<() => void> = [];
 
         const setupListeners = async () => {
-
-
-            // Try explicit window listener
             const appWindow = getCurrentWindow();
 
-            unlistenDrop = await appWindow.listen('tauri://drag-drop', (event: Event<any>) => {
-                handleTauriDrop(event.payload);
+            // Only listen to tauri://drag-drop (Tauri v2)
+            const unlistenDrop = await appWindow.listen('tauri://drag-drop', (event: Event<unknown>) => {
+                if (mounted) {
+                    handleTauriDrop(event.payload);
+                }
             });
+            if (mounted) unlisteners.push(unlistenDrop);
 
-            // Also listen to file-drop incase
-            const unlistenFileDrop = await appWindow.listen('tauri://file-drop', (event: Event<any>) => {
-                handleTauriDrop(event.payload);
+            const unlistenHover = await appWindow.listen('tauri://drag-enter', () => {
+                if (mounted) setIsDragOver(true);
             });
+            if (mounted) unlisteners.push(unlistenHover);
 
-            unlistenHover = await appWindow.listen('tauri://drag-enter', () => {
-                setIsDragOver(true);
+            const unlistenCancelled = await appWindow.listen('tauri://drag-leave', () => {
+                if (mounted) setIsDragOver(false);
             });
-
-            // Handle legacy/other names just in case
-            const unlistenHoverLegacy = await appWindow.listen('tauri://file-drop-hover', () => {
-                setIsDragOver(true);
-            });
-
-            unlistenCancelled = await appWindow.listen('tauri://drag-leave', () => {
-                setIsDragOver(false);
-            });
-            const unlistenCancelledLegacy = await appWindow.listen('tauri://file-drop-cancelled', () => {
-                setIsDragOver(false);
-            });
-
-            // Combine unlisteners
-            const originalUnlistenDrop = unlistenDrop;
-            unlistenDrop = () => {
-                originalUnlistenDrop();
-                unlistenFileDrop();
-            };
-
-            const originalUnlistenHover = unlistenHover;
-            unlistenHover = () => {
-                originalUnlistenHover();
-                unlistenHoverLegacy();
-            };
-
-            const originalUnlistenCancelled = unlistenCancelled;
-            unlistenCancelled = () => {
-                originalUnlistenCancelled();
-                unlistenCancelledLegacy();
-            };
+            if (mounted) unlisteners.push(unlistenCancelled);
         };
 
         setupListeners();
 
-        // Prevent default browser behavior for drag and drop globally?
-        // Actually, if we want Tauri to handle it, we might NOT need to prevent default
-        // UNLESS the webview is swallowing it.
-        // Let's rely on Tauri events first. If they fire, good.
-
-        // Cleanup
         return () => {
-            if (unlistenDrop) unlistenDrop();
-            if (unlistenHover) unlistenHover();
-            if (unlistenCancelled) unlistenCancelled();
+            mounted = false;
+            unlisteners.forEach((unlisten) => unlisten());
         };
     }, []);
 
-    const handleTauriDrop = (payload: any) => {
+    const handleTauriDrop = (payload: unknown) => {
         let files: string[] = [];
 
-        // Payload might be { paths: [] } or just [] depending on version/plugin
         if (Array.isArray(payload)) {
-            files = payload;
-        } else if (payload && Array.isArray(payload.paths)) {
-            files = payload.paths;
+            files = payload as string[];
+        } else if (payload && typeof payload === 'object' && 'paths' in payload && Array.isArray((payload as { paths: unknown }).paths)) {
+            files = (payload as { paths: string[] }).paths;
         }
 
         if (files && files.length > 0) {
-            const filePath = files[0];
-            // Create a mock File object for validation or validate manually
-            const ext = filePath.split('.').pop()?.toLowerCase();
-            const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+            // Validate all files
+            const validFiles: string[] = [];
+            const invalidFiles: string[] = [];
 
-            if (isSupported) {
-                processFile(filePath);
-            } else {
+            files.forEach((filePath) => {
+                const ext = filePath.split('.').pop()?.toLowerCase();
+                const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+                if (isSupported) {
+                    validFiles.push(filePath);
+                } else {
+                    invalidFiles.push(filePath);
+                }
+            });
+
+            if (invalidFiles.length > 0) {
                 alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }), { variant: 'error' });
+            }
+
+            if (validFiles.length > 0) {
+                if (!config.offlineModelPath) {
+                    alert(t('batch.no_model_error'), { variant: 'error' });
+                    return;
+                }
+                addFiles(validFiles);
             }
         } else {
             console.warn('File drop event received but payload is empty or invalid.');
@@ -160,22 +141,16 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        // e.stopPropagation(); 
         if (!isDragOver) setIsDragOver(true);
     }, [isDragOver]);
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        // e.stopPropagation();
         setIsDragOver(true);
     }, []);
 
     const handleDragLeave = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        // e.stopPropagation();
-
-        // Only disable drag over if we're actually leaving the drop zone, 
-        // not just entering a child element
         if (e.currentTarget.contains(e.relatedTarget as Node)) {
             return;
         }
@@ -192,129 +167,147 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     const handleClick = async () => {
         try {
             const selected = await open({
-                multiple: false,
+                multiple: true,
                 filters: [{
                     name: 'Audio/Video',
                     extensions: ['wav', 'mp3', 'm4a', 'ogg', 'webm', 'mp4']
                 }]
             });
 
-            if (selected && typeof selected === 'string') {
-                await processFile(selected);
+            if (selected) {
+                const files = Array.isArray(selected) ? selected : [selected];
+                if (files.length > 0) {
+                    if (!config.offlineModelPath) {
+                        alert(t('batch.no_model_error'), { variant: 'error' });
+                        return;
+                    }
+                    addFiles(files);
+                }
             }
         } catch (err) {
             console.error('Failed to open dialog:', err);
         }
     };
 
-
-
-    // ... (existing code)
-
-    const processFile = async (filePath: string) => {
-        if (!config.offlineModelPath) {
-            alert(t('batch.no_model_error'), { variant: 'error' });
-            return;
-        }
-
-        setProcessingStatus('loading');
-        setProcessingProgress(0);
-
-        try {
-            const assetUrl = convertFileSrc(filePath);
-
-            useTranscriptStore.getState().setAudioUrl(assetUrl);
-
-            transcriptionService.setModelPath(config.offlineModelPath);
-            const enabledITNModels = new Set(config.enabledITNModels || []);
-            const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-
-            transcriptionService.setEnableITN(enabledITNModels.size > 0);
-
-            if (enabledITNModels.size > 0) {
-                try {
-                    const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                    transcriptionService.setITNModelPaths(paths);
-                } catch (e) { }
-            }
-
-            if (config.punctuationModelPath) {
-                transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
-            } else {
-                transcriptionService.setPunctuationModelPath('');
-            }
-
-            if (config.vadModelPath) {
-                transcriptionService.setVadModelPath(config.vadModelPath);
-                transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
-            }
-
-            // Clear previous segments if we are starting a new import
-            // But if we want to APPEND, we shouldn't.
-            // Batch import usually replaces current transcript?
-            // "BatchImport" implies loading a file. 
-            // Existing logic: useTranscriptStore.getState().setSegments(...) at end replaces all.
-            // So we should clear at start to show progress.
-            useTranscriptStore.getState().clearSegments();
-
-
-
-            const segments = await transcriptionService.transcribeFile(filePath, (progress) => {
-                setProcessingProgress(progress);
-            }, (segment) => {
-                // Streaming callback
-                if (enableTimeline) {
-                    // Attempt to split immediately? 
-                    // Or just show raw segment? 
-                    // splitByPunctuation might be stateless per segment.
-                    const split = splitByPunctuation([segment]);
-                    split.forEach(s => useTranscriptStore.getState().upsertSegment(s));
-                } else {
-                    useTranscriptStore.getState().upsertSegment(segment);
-                }
-            }, language);
-
-            useTranscriptStore.getState().setSegments(enableTimeline ? splitByPunctuation(segments) : segments);
-            setProcessingStatus('complete');
-            setProcessingProgress(100);
-        } catch (error) {
-            console.error('Transcription failed:', error);
-            setProcessingStatus('error');
-            alert(t('batch.transcription_failed', { error }), { variant: 'error' });
-        }
-    };
-
-    // No longer used
-    // const handleInputChange = ...
-
-    if (processingStatus === 'loading' || processingStatus === 'processing') {
+    // Render the queue view when we have items
+    if (hasQueueItems) {
         return (
-            <div className={`progress-container ${className}`}>
-                <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
-                    <h3>{t('batch.processing_title')}</h3>
-                    <p>{t('batch.processing_desc')}</p>
+            <div className={`batch-import-container batch-import-queue-view ${className}`}>
+                <FileQueueSidebar />
+
+                <div className="batch-queue-content">
+                    {activeItem ? (
+                        activeItem.status === 'processing' ? (
+                            <div className="batch-queue-processing">
+                                <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
+                                    <h3>{t('batch.processing_title')}</h3>
+                                    <p>{activeItem.filename}</p>
+                                </div>
+                                <div
+                                    className="progress-bar"
+                                    role="progressbar"
+                                    aria-valuenow={Math.round(activeItem.progress)}
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                    aria-label={t('batch.processing_title')}
+                                >
+                                    <div
+                                        className="progress-fill"
+                                        style={{ width: `${activeItem.progress}%` }}
+                                    />
+                                </div>
+                                <div className="progress-text" aria-live="polite">
+                                    <span>{t('batch.transcribing')}</span>
+                                    <span>{Math.round(activeItem.progress)}%</span>
+                                </div>
+                            </div>
+                        ) : activeItem.status === 'error' ? (
+                            <div className="batch-queue-error">
+                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                                    <h3>{t('batch.file_failed')}</h3>
+                                    <p>{activeItem.errorMessage || t('common.error')}</p>
+                                </div>
+                            </div>
+                        ) : activeItem.status === 'pending' ? (
+                            <div className="batch-queue-pending">
+                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                                    <h3>{t('batch.queue_waiting')}</h3>
+                                    <p>{activeItem.filename}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            // Complete - show nothing here, TranscriptEditor will show the content
+                            <div className="batch-queue-complete">
+                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                                    <h3>{t('batch.file_complete')}</h3>
+                                    <p>{activeItem.filename}</p>
+                                </div>
+                            </div>
+                        )
+                    ) : (
+                        <div className="batch-queue-empty">
+                            <p>{t('batch.queue_empty')}</p>
+                        </div>
+                    )}
+
+                    {/* Add more files button */}
+                    <div className="batch-add-more">
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleClick}
+                            disabled={isQueueProcessing}
+                        >
+                            {t('batch.add_more_files')}
+                        </button>
+                    </div>
                 </div>
-                <div
-                    className="progress-bar"
-                    role="progressbar"
-                    aria-valuenow={Math.round(processingProgress)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={t('batch.processing_title')}
-                >
-                    <div
-                        className="progress-fill"
-                        style={{ width: `${processingProgress}%` }}
-                    />
-                </div>
-                <div className="progress-text" aria-live="polite">
-                    <span>{t('batch.transcribing')}</span>
-                    <span>{Math.round(processingProgress)}%</span>
+
+                {/* Options */}
+                <div className="options-container">
+                    <div className="options-row">
+                        <div className="options-label">
+                            <span>{t('batch.timeline_mode')}</span>
+                            <span className="options-hint">{t('batch.timeline_hint')}</span>
+                        </div>
+                        <button
+                            className="toggle-switch"
+                            onClick={() => setEnableTimeline(!enableTimeline)}
+                            role="switch"
+                            aria-checked={enableTimeline}
+                            aria-label={t('batch.timeline_mode')}
+                            data-tooltip={t('batch.timeline_mode_tooltip')}
+                            data-tooltip-pos="left"
+                        >
+                            <div className="toggle-switch-handle" />
+                        </button>
+                    </div>
+
+                    <div className="options-row">
+                        <div className="options-label">
+                            <span>{t('batch.language')}</span>
+                            <span className="options-hint">{t('batch.language_hint')}</span>
+                        </div>
+                        <select
+                            className="settings-input"
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            style={{ maxWidth: '120px' }}
+                            aria-label={t('batch.language')}
+                        >
+                            <option value="auto">Auto</option>
+                            <option value="zh">Chinese</option>
+                            <option value="en">English</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="yue">Cantonese</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         );
     }
 
+    // Initial drop zone view (no queue items)
     return (
         <div className={`batch-import-container ${className}`}>
             <div
@@ -329,14 +322,6 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 tabIndex={0}
                 aria-label={t('batch.drop_desc')}
             >
-                {/* <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept={ACCEPTED_FORMATS.join(',')}
-                    onChange={handleInputChange}
-                    style={{ display: 'none' }}
-                /> */}
-
                 <div className="drop-zone-icon">
                     <UploadIcon />
                 </div>

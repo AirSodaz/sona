@@ -53,7 +53,18 @@
         "language_hint": "Select audio language",
         "unsupported_format": "Unsupported file format. Please use: {{formats}}",
         "no_model_error": "Please configure a model in Settings first.",
-        "transcription_failed": "Transcription failed: {{error}}"
+        "transcription_failed": "Transcription failed: {{error}}",
+        "queue_title": "Queue ({{count}})",
+        "queue_empty": "No files in queue",
+        "queue_waiting": "Waiting to process...",
+        "clear_queue": "Clear All",
+        "add_more_files": "Add More Files",
+        "file_failed": "Failed",
+        "file_complete": "Complete",
+        "status_pending": "Pending",
+        "status_processing": "Processing",
+        "status_complete": "Complete",
+        "status_error": "Failed"
     },
     "player": {
         "play": "Play",

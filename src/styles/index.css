@@ -1306,6 +1306,7 @@ input[type="radio"]:focus {
   padding: var(--spacing-xs) var(--spacing-sm);
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   border-radius: var(--radius-sm);
   white-space: nowrap;
@@ -1543,6 +1544,7 @@ input[type="radio"]:focus {
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
+
 .input-source-selector {
   margin-top: 1rem;
   display: flex;
@@ -1584,4 +1586,208 @@ input[type="radio"]:focus {
 .source-select option {
   color: var(--color-text-primary);
   background: var(--color-bg-elevated);
+}
+
+/* ===========================
+   File Queue Sidebar
+   =========================== */
+
+.batch-import-queue-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+
+.file-queue-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  max-height: 280px;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.queue-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.queue-clear-btn {
+  padding: 4px;
+  color: var(--color-text-muted);
+}
+
+.queue-clear-btn:hover {
+  color: var(--color-error);
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-xs);
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.queue-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.queue-item:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: -2px;
+}
+
+.queue-item-active {
+  background: var(--color-bg-tertiary);
+}
+
+.queue-item-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.queue-item-pending .queue-item-icon {
+  color: var(--color-text-muted);
+}
+
+.queue-item-processing .queue-item-icon {
+  color: var(--color-info);
+}
+
+.queue-item-complete .queue-item-icon {
+  color: var(--color-success);
+}
+
+.queue-item-error .queue-item-icon {
+  color: var(--color-error);
+}
+
+.queue-icon-spin {
+  animation: queue-spin 1s linear infinite;
+}
+
+@keyframes queue-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.queue-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.queue-item-filename {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-progress {
+  height: 3px;
+  background: var(--color-bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.queue-item-progress-fill {
+  height: 100%;
+  background: var(--color-info);
+  transition: width 0.2s ease-out;
+  border-radius: 2px;
+}
+
+.queue-item-error {
+  font-size: 0.75rem;
+  color: var(--color-error);
+}
+
+.queue-item-remove {
+  opacity: 0;
+  padding: 4px;
+  color: var(--color-text-muted);
+  transition: opacity var(--transition-fast);
+}
+
+.queue-item:hover .queue-item-remove {
+  opacity: 1;
+}
+
+.queue-item-remove:hover {
+  color: var(--color-error);
+}
+
+/* Batch Queue Content Area */
+.batch-queue-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  min-height: 150px;
+}
+
+.batch-queue-processing,
+.batch-queue-pending,
+.batch-queue-error,
+.batch-queue-complete,
+.batch-queue-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.batch-queue-processing .progress-bar {
+  width: 100%;
+  max-width: 300px;
+}
+
+.batch-queue-error .drop-zone-text h3 {
+  color: var(--color-error);
+}
+
+.batch-add-more {
+  margin-top: var(--spacing-sm);
 }

@@ -124,3 +124,26 @@ The entry point for the AI engine.
 3.  **Build**: `npm run tauri build`.
 
 **Important**: If you modify `src-tauri/sidecar/sherpa-recognizer.js`, you must verify the build pipeline correctly bundles it into `src-tauri/sidecar/dist/`.
+
+## 8. UI/UX Design Guidelines
+
+The application follows a **Warm Minimalism** design philosophy, inspired by tools like Notion and modernized with softer, organic touches. The goal is to create a workspace that feels calm, focused, and human, rather than sterile or purely utility-driven.
+
+### 8.1. Core Principles
+*   **Warmth over Sterility**: Avoid pure `#000000` black or `#FFFFFF` white. Use off-whites (`#FBFBFA`), warm grays, and soft charcoal for text.
+*   **Content First**: The UI should recede. Generous whitespace and a lack of heavy borders allow the content (transcripts) to breathe.
+*   **Tactile Feedback**: Interactive elements should have subtle states (hover, active) that feel responsive but not jumpy. Use soft shadows (`--shadow-sm`) instead of harsh outlines.
+*   **Typography**:
+    *   **Interface**: `Inter` for clean, legible UI text.
+    *   **Content**: `Merriweather` (or similar serif) for long-form reading (transcripts), evoking a book-like quality.
+    *   **Data/Code**: `JetBrains Mono` for timestamps and technical data.
+
+### 8.2. Design Tokens (ref: `src/styles/index.css`)
+*   **Backgrounds**: Layered warm neutrals.
+    *   Base: `--color-bg-primary` (Paper-like)
+    *   Sidebar/Header: `--color-bg-secondary` (Slightly darker warm gray)
+*   **Accents**: Use "Earthy" tones for actions rather than neon or primary colors.
+    *   Success: Muted Green (`#4ea067`)
+    *   Warning: Muted Yellow/Orange
+    *   Error: Soft Red (`#e03e3e`)
+*   **Radius**: Use softer border radii (`6px` to `12px`) to avoid sharp, aggressive corners.

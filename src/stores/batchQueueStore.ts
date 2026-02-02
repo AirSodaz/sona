@@ -1,0 +1,300 @@
+import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
+import { TranscriptSegment } from '../types/transcript';
+import { transcriptionService } from '../services/transcriptionService';
+import { modelService } from '../services/modelService';
+import { useTranscriptStore } from './transcriptStore';
+import { splitByPunctuation } from '../utils/segmentUtils';
+
+/** State interface for the batch queue store. */
+interface BatchQueueState {
+    /** List of queued files. */
+    queueItems: BatchQueueItem[];
+    /** ID of the currently active/selected item. */
+    activeItemId: string | null;
+    /** Whether the queue is currently processing. */
+    isQueueProcessing: boolean;
+    /** Whether to enable timeline mode (split by punctuation). */
+    enableTimeline: boolean;
+    /** Language setting for transcription. */
+    language: string;
+
+    /**
+     * Adds files to the queue.
+     * @param filePaths - Array of file paths to add.
+     */
+    addFiles: (filePaths: string[]) => void;
+
+    /**
+     * Starts processing the queue sequentially.
+     */
+    processQueue: () => Promise<void>;
+
+    /**
+     * Sets the active/selected item.
+     * @param id - Item ID to set as active.
+     */
+    setActiveItem: (id: string | null) => void;
+
+    /**
+     * Updates an item's status and progress.
+     * @param id - Item ID.
+     * @param status - New status.
+     * @param progress - New progress value.
+     */
+    updateItemStatus: (id: string, status: BatchQueueItemStatus, progress?: number) => void;
+
+    /**
+     * Updates an item's segments.
+     * @param id - Item ID.
+     * @param segments - New segments array.
+     */
+    updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
+
+    /**
+     * Sets error state for an item.
+     * @param id - Item ID.
+     * @param message - Error message.
+     */
+    setItemError: (id: string, message: string) => void;
+
+    /**
+     * Removes an item from the queue.
+     * @param id - Item ID to remove.
+     */
+    removeItem: (id: string) => void;
+
+    /** Clears all items from the queue. */
+    clearQueue: () => void;
+
+    /**
+     * Sets the timeline mode setting.
+     * @param enabled - Whether to enable timeline mode.
+     */
+    setEnableTimeline: (enabled: boolean) => void;
+
+    /**
+     * Sets the language setting.
+     * @param language - Language code.
+     */
+    setLanguage: (language: string) => void;
+}
+
+/**
+ * Zustand store for managing batch transcription queue.
+ */
+export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
+    queueItems: [],
+    activeItemId: null,
+    isQueueProcessing: false,
+    enableTimeline: true,
+    language: 'auto',
+
+    addFiles: (filePaths) => {
+        const newItems: BatchQueueItem[] = filePaths.map((filePath) => {
+            const filename = filePath.split(/[/\\]/).pop() || filePath;
+            return {
+                id: uuidv4(),
+                filename,
+                filePath,
+                status: 'pending',
+                progress: 0,
+                segments: [],
+                audioUrl: convertFileSrc(filePath),
+            };
+        });
+
+        set((state) => {
+            const updatedItems = [...state.queueItems, ...newItems];
+            // If no active item, set the first new item as active
+            const activeId = state.activeItemId || (newItems.length > 0 ? newItems[0].id : null);
+            return {
+                queueItems: updatedItems,
+                activeItemId: activeId,
+            };
+        });
+
+        // Auto-start processing if not already running
+        const state = get();
+        if (!state.isQueueProcessing) {
+            get().processQueue();
+        }
+    },
+
+    processQueue: async () => {
+        const state = get();
+        if (state.isQueueProcessing) return;
+
+        set({ isQueueProcessing: true });
+
+        const config = useTranscriptStore.getState().config;
+        if (!config.offlineModelPath) {
+            console.error('[BatchQueue] No model path configured');
+            set({ isQueueProcessing: false });
+            return;
+        }
+
+        // Configure transcription service
+        transcriptionService.setModelPath(config.offlineModelPath);
+        const enabledITNModels = new Set(config.enabledITNModels || []);
+        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
+
+        transcriptionService.setEnableITN(enabledITNModels.size > 0);
+
+        if (enabledITNModels.size > 0) {
+            try {
+                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
+                transcriptionService.setITNModelPaths(paths);
+            } catch (e) {
+                console.error('[BatchQueue] Failed to set ITN paths:', e);
+            }
+        }
+
+        if (config.punctuationModelPath) {
+            transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
+        } else {
+            transcriptionService.setPunctuationModelPath('');
+        }
+
+        if (config.vadModelPath) {
+            transcriptionService.setVadModelPath(config.vadModelPath);
+            transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
+        }
+
+        // Process items sequentially
+        while (true) {
+            const currentState = get();
+            const pendingItem = currentState.queueItems.find((item) => item.status === 'pending');
+
+            if (!pendingItem) {
+                break;
+            }
+
+            const { enableTimeline, language } = currentState;
+
+            // Update status to processing
+            get().updateItemStatus(pendingItem.id, 'processing', 0);
+
+            try {
+                const segments = await transcriptionService.transcribeFile(
+                    pendingItem.filePath,
+                    (progress) => {
+                        get().updateItemStatus(pendingItem.id, 'processing', progress);
+                    },
+                    (segment) => {
+                        // Stream segments as they arrive
+                        const state = get();
+                        const item = state.queueItems.find((i) => i.id === pendingItem.id);
+                        if (item) {
+                            const newSegment = enableTimeline ? splitByPunctuation([segment]) : [segment];
+                            const updatedSegments = [...item.segments, ...newSegment];
+                            get().updateItemSegments(pendingItem.id, updatedSegments);
+                        }
+                    },
+                    language === 'auto' ? undefined : language
+                );
+
+                // Finalize with complete segments
+                const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
+                get().updateItemSegments(pendingItem.id, finalSegments);
+                get().updateItemStatus(pendingItem.id, 'complete', 100);
+
+            } catch (error) {
+                console.error(`[BatchQueue] Failed to transcribe ${pendingItem.filename}:`, error);
+                get().setItemError(pendingItem.id, String(error));
+            }
+        }
+
+        set({ isQueueProcessing: false });
+    },
+
+    setActiveItem: (id) => {
+        set({ activeItemId: id });
+
+        // Update the main transcript store with the active item's data
+        const state = get();
+        const item = state.queueItems.find((i) => i.id === id);
+        if (item) {
+            useTranscriptStore.getState().setSegments(item.segments);
+            useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
+        }
+    },
+
+    updateItemStatus: (id, status, progress) => {
+        set((state) => ({
+            queueItems: state.queueItems.map((item) =>
+                item.id === id
+                    ? { ...item, status, progress: progress !== undefined ? progress : item.progress }
+                    : item
+            ),
+        }));
+    },
+
+    updateItemSegments: (id, segments) => {
+        set((state) => ({
+            queueItems: state.queueItems.map((item) =>
+                item.id === id ? { ...item, segments } : item
+            ),
+        }));
+
+        // If this is the active item, also update the main store
+        const state = get();
+        if (state.activeItemId === id) {
+            useTranscriptStore.getState().setSegments(segments);
+        }
+    },
+
+    setItemError: (id, message) => {
+        set((state) => ({
+            queueItems: state.queueItems.map((item) =>
+                item.id === id
+                    ? { ...item, status: 'error', errorMessage: message }
+                    : item
+            ),
+        }));
+    },
+
+    removeItem: (id) => {
+        set((state) => {
+            const newItems = state.queueItems.filter((item) => item.id !== id);
+            // If we removed the active item, select the first remaining item
+            const newActiveId =
+                state.activeItemId === id
+                    ? newItems.length > 0 ? newItems[0].id : null
+                    : state.activeItemId;
+            return {
+                queueItems: newItems,
+                activeItemId: newActiveId,
+            };
+        });
+    },
+
+    clearQueue: () => {
+        set({
+            queueItems: [],
+            activeItemId: null,
+            isQueueProcessing: false,
+        });
+        useTranscriptStore.getState().clearSegments();
+        useTranscriptStore.getState().setAudioUrl(null);
+    },
+
+    setEnableTimeline: (enabled) => {
+        set({ enableTimeline: enabled });
+    },
+
+    setLanguage: (language) => {
+        set({ language });
+    },
+}));
+
+/** Selector for queue items. */
+export const useQueueItems = () => useBatchQueueStore((state) => state.queueItems);
+
+/** Selector for active item ID. */
+export const useActiveItemId = () => useBatchQueueStore((state) => state.activeItemId);
+
+/** Selector for processing state. */
+export const useIsQueueProcessing = () => useBatchQueueStore((state) => state.isQueueProcessing);
