@@ -164,7 +164,8 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
         } catch (error) {
             console.error('Failed to start recording:', error);
-            alert(t('live.mic_error'), { variant: 'error' });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
         }
     };
 
@@ -213,7 +214,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     const startRecordingWithStream = async (stream: MediaStream, isFileSimulation = false) => {
         // Set up audio context and analyser if not already created (File mode creates it earlier)
-        if (!audioContextRef.current) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         }
 
@@ -385,6 +386,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close().catch(e => console.error('Error closing AudioContext:', e));
         }
+        audioContextRef.current = null;
 
         // Clear visualizer
         const canvas = canvasRef.current;
