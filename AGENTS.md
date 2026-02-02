@@ -46,8 +46,7 @@ The application relies on a "Sidecar" pattern. The frontend does NOT run the AI 
 This is the bridge between the React frontend and the AI Sidecar.
 *   **Lifecycle**: Manages `spawn` and `kill` of the sidecar process.
 *   **Audio Streaming**:
-    *   Converts `Float32Array` (Web Audio API) to `Int16Array`.
-    *   **Performance Optimization**: Uses manual `if/else` clamping loops instead of `Math.max/min` to minimize overhead in high-frequency audio callbacks.
+    *   Forwards pre-converted `Int16Array` audio (from AudioWorklet) to the sidecar.
 *   **Output Handling**:
     *   Uses `StreamLineBuffer` (`src/utils/streamBuffer.ts`) to reconstruct fragmented stdout chunks into valid JSON lines.
     *   Parses JSON to `TranscriptSegment` objects.
