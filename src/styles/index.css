@@ -1747,7 +1747,8 @@ input[type="radio"]:focus {
   transition: opacity var(--transition-fast);
 }
 
-.queue-item:hover .queue-item-remove {
+.queue-item:hover .queue-item-remove,
+.queue-item:focus-within .queue-item-remove {
   opacity: 1;
 }
 
