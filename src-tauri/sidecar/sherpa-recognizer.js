@@ -446,6 +446,8 @@ async function processStream(recognizer, sampleRate, punctuation) {
                     start: segmentStartTime,
                     end: currentTime,
                     isFinal: true,
+                    tokens: finalResult.tokens || [],
+                    timestamps: finalResult.timestamps || []
                 };
                 console.log(JSON.stringify(output));
             }
@@ -759,7 +761,9 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
                     text: text,
                     start: startTime,
                     end: endTime,
-                    isFinal: true
+                    isFinal: true,
+                    tokens: result.tokens || [],
+                    timestamps: result.timestamps || []
                 };
                 // Stream the JSON line for UI
                 console.log(JSON.stringify(output));

@@ -315,7 +315,9 @@ class TranscriptionService {
                                         text: data.text,
                                         start: data.start,
                                         end: data.end,
-                                        isFinal: data.isFinal || true
+                                        isFinal: data.isFinal || true,
+                                        tokens: data.tokens,
+                                        timestamps: data.timestamps
                                     };
                                     collectedSegments.push(segment);
                                     if (onSegment) onSegment(segment);
@@ -369,7 +371,9 @@ class TranscriptionService {
                                         text: data.text,
                                         start: data.start,
                                         end: data.end,
-                                        isFinal: data.isFinal || true
+                                        isFinal: data.isFinal || true,
+                                        tokens: data.tokens,
+                                        timestamps: data.timestamps
                                     };
                                     collectedSegments.push(segment);
                                     if (onSegment) onSegment(segment);
@@ -382,7 +386,9 @@ class TranscriptionService {
                                             text: item.text,
                                             start: item.start,
                                             end: item.end,
-                                            isFinal: item.isFinal || true
+                                            isFinal: item.isFinal || true,
+                                            tokens: item.tokens,
+                                            timestamps: item.timestamps
                                         };
                                         collectedSegments.push(segment);
                                         // Don't call onSegment here effectively at the end, unless desired
@@ -437,7 +443,9 @@ class TranscriptionService {
                     text: data.text,
                     start: data.start,
                     end: data.end,
-                    isFinal: data.isFinal || false
+                    isFinal: data.isFinal || false,
+                    tokens: data.tokens,
+                    timestamps: data.timestamps
                 };
 
                 if (this.onSegment) {

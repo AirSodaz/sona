@@ -46,6 +46,12 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
         let currentText = "";
         let currentSegmentStart = currentStart;
+
+        // Fix: Use the first token's timestamp as the true start time if available
+        if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
+            currentSegmentStart = tokenMap.timestamps[0];
+        }
+
         let lastTokenIndex = 0; // Optimization: hint for the next search
 
         for (let i = 0; i < parts.length; i++) {
@@ -135,7 +141,19 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
         // Leftover text
         if (currentText.trim()) {
-            const segmentEnd = segment.end;
+            let segmentEnd = segment.end;
+
+            if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
+                // Try to find the last token
+                const searchIndex = effectiveCharIndex > 0 ? effectiveCharIndex - 1 : 0;
+                const found = findTimestampFromMap(tokenMap, searchIndex, lastTokenIndex);
+                if (found) {
+                    const effectiveLen = tokenMap.endIndices[found.index] - tokenMap.startIndices[found.index];
+                    const duration = Math.max(0.2, effectiveLen * 0.1);
+                    segmentEnd = found.timestamp + duration;
+                }
+            }
+
             newSegments.push({
                 id: uuidv4(),
                 text: currentText.trim(),
@@ -186,7 +204,9 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
             startIndices.push(currentLen);
             currentLen += tokenLen;
             endIndices.push(currentLen);
-            timestamps.push(segment.timestamps[i]);
+            // Fix: Token timestamps are relative to the segment start (due to stream resets).
+            // Convert them to absolute time by adding segment.start.
+            timestamps.push(segment.timestamps[i] + segment.start);
         }
     }
 
