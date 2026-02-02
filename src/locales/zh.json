@@ -3,6 +3,7 @@
         "cancel": "取消",
         "save": "保存",
         "delete": "删除",
+        "delete_item": "删除 {{item}}",
         "download": "下载",
         "loading": "加载中...",
         "error": "错误",

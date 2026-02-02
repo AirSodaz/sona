@@ -3,6 +3,7 @@
         "cancel": "Cancel",
         "save": "Save",
         "delete": "Delete",
+        "delete_item": "Delete {{item}}",
         "download": "Download",
         "loading": "Loading...",
         "error": "Error",
