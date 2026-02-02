@@ -53,3 +53,11 @@
 ## 2026-05-23 - Nested Interactive Elements
 **Learning:** Nesting a `<button>` inside a container with `role="button"` (like a drop zone) creates invalid semantics and confusing screen reader output.
 **Action:** Use a `div` with button styling and `aria-hidden="true"` for the inner element, ensuring the parent container handles the interaction.
+
+## 2026-05-23 - Focus Visibility in Lists
+**Learning:** Elements hidden by default (opacity 0) and shown on hover must also be shown on `:focus` to be accessible to keyboard users.
+**Action:** Always include `.element:focus` in the selector that reveals the element (e.g., `.container:hover .element, .element:focus { opacity: 1; }`).
+
+## 2026-05-23 - Semantic Lists
+**Learning:** Lists of interactive items should use `role="list"` and `role="listitem"` (or native `ul/li`) instead of `listbox/option` unless they behave like a form select control.
+**Action:** Use `list/listitem` for file queues and similar collections where items are actionable but not just "selectable".

@@ -43,22 +43,7 @@
     ],
     "macOS": {
       "dmg": {
-        "windowPosition": {
-          "x": 400,
-          "y": 400
-        },
-        "windowSize": {
-          "width": 660,
-          "height": 400
-        },
-        "appPosition": {
-          "x": 180,
-          "y": 170
-        },
-        "applicationFolderPosition": {
-          "x": 480,
-          "y": 170
-        }
+        "background": null
       }
     },
     "externalBin": [

@@ -144,7 +144,7 @@ describe('BatchImport Integration', () => {
          });
 
          // Error details
-         const sidebar = screen.getByRole('listbox', { name: /Queue/ });
+         const sidebar = screen.getByRole('list', { name: /Queue/ });
          expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
     });
 
@@ -154,11 +154,11 @@ describe('BatchImport Integration', () => {
         addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
 
         // Wait for list
-        const sidebar = await screen.findByRole('listbox', { name: /Queue/ });
+        const sidebar = await screen.findByRole('list', { name: /Queue/ });
 
         // Check initial length
         await waitFor(() => {
-            expect(within(sidebar).getAllByRole('option')).toHaveLength(2);
+            expect(within(sidebar).getAllByRole('listitem')).toHaveLength(2);
         });
 
         // Find remove button for first item
@@ -166,7 +166,7 @@ describe('BatchImport Integration', () => {
         fireEvent.click(removeBtns[0]);
 
         await waitFor(() => {
-            expect(within(sidebar).getAllByRole('option')).toHaveLength(1);
+            expect(within(sidebar).getAllByRole('listitem')).toHaveLength(1);
         });
     });
 

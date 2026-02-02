@@ -112,16 +112,16 @@ export const FileQueueSidebar: React.FC<FileQueueSidebarProps> = ({ className = 
                 </button>
             </div>
 
-            <div className="queue-list" role="listbox" aria-label={t('batch.queue_title', { count: queueItems.length })}>
+            <div className="queue-list" role="list" aria-label={t('batch.queue_title', { count: queueItems.length })}>
                 {queueItems.map((item) => (
                     <div
                         key={item.id}
                         className={`queue-item queue-item-${item.status} ${activeItemId === item.id ? 'queue-item-active' : ''}`}
                         onClick={() => handleItemClick(item.id)}
                         onKeyDown={(e) => handleKeyDown(e, item.id)}
-                        role="option"
+                        role="listitem"
                         tabIndex={0}
-                        aria-selected={activeItemId === item.id}
+                        aria-current={activeItemId === item.id ? 'true' : undefined}
                         aria-label={`${item.filename} - ${t(`batch.status_${item.status}`)}`}
                     >
                         <div className="queue-item-icon" aria-hidden="true">
@@ -157,7 +157,6 @@ export const FileQueueSidebar: React.FC<FileQueueSidebarProps> = ({ className = 
                             className="btn btn-icon queue-item-remove"
                             onClick={(e) => handleRemoveItem(e, item.id)}
                             aria-label={t('common.delete')}
-                            tabIndex={-1}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18" />
