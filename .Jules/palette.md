@@ -49,3 +49,7 @@
 ## 2026-05-22 - Accessible Canvas Visualization
 **Learning:** Canvas elements used for visual feedback (like audio waves) are invisible to screen readers.
 **Action:** Add `role="img"` and a descriptive `aria-label` to `<canvas>` elements to indicate their purpose.
+
+## 2026-02-02 - Modal Focus Management
+**Learning:** Custom modals require explicit focus management (set focus on open, restore on close, handle Escape) to be accessible.
+**Action:** Use useEffect to capture `document.activeElement`, set focus to the modal container (ref), and restore it on cleanup.
