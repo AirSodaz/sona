@@ -1,8 +1,8 @@
 mod hardware;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tokio::sync::Notify;
+use std::sync::Arc;
+use tokio::sync::{Mutex, Notify};
 
 /// State managed by Tauri to track active downloads and allow cancellation.
 struct DownloadState {
@@ -21,11 +21,10 @@ struct DownloadState {
 ///
 /// Returns `Ok(())` if the cancellation signal was sent or if the download was not found.
 #[tauri::command]
-fn cancel_download(state: tauri::State<DownloadState>, id: String) -> Result<(), String> {
-    if let Ok(downloads) = state.downloads.lock() {
-        if let Some(notify) = downloads.get(&id) {
-            notify.notify_one();
-        }
+async fn cancel_download(state: tauri::State<'_, DownloadState>, id: String) -> Result<(), String> {
+    let downloads = state.downloads.lock().await;
+    if let Some(notify) = downloads.get(&id) {
+        notify.notify_one();
     }
     Ok(())
 }
@@ -175,7 +174,8 @@ async fn download_file<R: tauri::Runtime>(
     use tauri::Emitter;
 
     let notify = Arc::new(Notify::new());
-    if let Ok(mut downloads) = state.downloads.lock() {
+    {
+        let mut downloads = state.downloads.lock().await;
         downloads.insert(id.clone(), notify.clone());
     }
 
@@ -188,9 +188,8 @@ async fn download_file<R: tauri::Runtime>(
 
     if !res.status().is_success() {
         // cleanup
-        if let Ok(mut downloads) = state.downloads.lock() {
-            downloads.remove(&id);
-        }
+        let mut downloads = state.downloads.lock().await;
+        downloads.remove(&id);
         return Err(format!("Download failed with status: {}", res.status()));
     }
 
@@ -239,7 +238,8 @@ async fn download_file<R: tauri::Runtime>(
     };
 
     // Cleanup
-    if let Ok(mut downloads) = state.downloads.lock() {
+    {
+        let mut downloads = state.downloads.lock().await;
         downloads.remove(&id);
     }
 
@@ -259,7 +259,7 @@ async fn download_file<R: tauri::Runtime>(
 pub fn run() {
     tauri::Builder::default()
         .manage(DownloadState {
-            downloads: std::sync::Mutex::new(std::collections::HashMap::new()),
+            downloads: Mutex::new(std::collections::HashMap::new()),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
