@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { Event } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -54,60 +55,124 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
     const handleDrop = useCallback((e: React.DragEvent) => {
         // Fallback or visual handling only, actual logic handled by Tauri event
         e.preventDefault();
-        e.stopPropagation();
+        // e.stopPropagation(); // Allow bubbling to Tauri
         setIsDragOver(false);
     }, []);
 
     // Tauri File Drop Event Listener
     useEffect(() => {
-        const unlistenDrop = listen('tauri://file-drop', (event) => {
-            const files = event.payload as string[];
-            if (files && files.length > 0) {
-                const filePath = files[0];
-                // Create a mock File object for validation or validate manually
-                const ext = filePath.split('.').pop()?.toLowerCase();
-                const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+        let unlistenDrop: (() => void) | undefined;
+        let unlistenHover: (() => void) | undefined;
+        let unlistenCancelled: (() => void) | undefined;
 
-                if (isSupported) {
-                    processFile(filePath);
-                } else {
-                    alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }), { variant: 'error' });
-                }
-            }
-            setIsDragOver(false);
-        });
+        const setupListeners = async () => {
 
-        const unlistenHover = listen('tauri://file-drop-hover', () => {
-            setIsDragOver(true);
-        });
 
-        const unlistenCancelled = listen('tauri://file-drop-cancelled', () => {
-            setIsDragOver(false);
-        });
+            // Try explicit window listener
+            const appWindow = getCurrentWindow();
+
+            unlistenDrop = await appWindow.listen('tauri://drag-drop', (event: Event<any>) => {
+                handleTauriDrop(event.payload);
+            });
+
+            // Also listen to file-drop incase
+            const unlistenFileDrop = await appWindow.listen('tauri://file-drop', (event: Event<any>) => {
+                handleTauriDrop(event.payload);
+            });
+
+            unlistenHover = await appWindow.listen('tauri://drag-enter', () => {
+                setIsDragOver(true);
+            });
+
+            // Handle legacy/other names just in case
+            const unlistenHoverLegacy = await appWindow.listen('tauri://file-drop-hover', () => {
+                setIsDragOver(true);
+            });
+
+            unlistenCancelled = await appWindow.listen('tauri://drag-leave', () => {
+                setIsDragOver(false);
+            });
+            const unlistenCancelledLegacy = await appWindow.listen('tauri://file-drop-cancelled', () => {
+                setIsDragOver(false);
+            });
+
+            // Combine unlisteners
+            const originalUnlistenDrop = unlistenDrop;
+            unlistenDrop = () => {
+                originalUnlistenDrop();
+                unlistenFileDrop();
+            };
+
+            const originalUnlistenHover = unlistenHover;
+            unlistenHover = () => {
+                originalUnlistenHover();
+                unlistenHoverLegacy();
+            };
+
+            const originalUnlistenCancelled = unlistenCancelled;
+            unlistenCancelled = () => {
+                originalUnlistenCancelled();
+                unlistenCancelledLegacy();
+            };
+        };
+
+        setupListeners();
+
+        // Prevent default browser behavior for drag and drop globally?
+        // Actually, if we want Tauri to handle it, we might NOT need to prevent default
+        // UNLESS the webview is swallowing it.
+        // Let's rely on Tauri events first. If they fire, good.
 
         // Cleanup
         return () => {
-            unlistenDrop.then(f => f());
-            unlistenHover.then(f => f());
-            unlistenCancelled.then(f => f());
+            if (unlistenDrop) unlistenDrop();
+            if (unlistenHover) unlistenHover();
+            if (unlistenCancelled) unlistenCancelled();
         };
     }, []);
 
+    const handleTauriDrop = (payload: any) => {
+        let files: string[] = [];
+
+        // Payload might be { paths: [] } or just [] depending on version/plugin
+        if (Array.isArray(payload)) {
+            files = payload;
+        } else if (payload && Array.isArray(payload.paths)) {
+            files = payload.paths;
+        }
+
+        if (files && files.length > 0) {
+            const filePath = files[0];
+            // Create a mock File object for validation or validate manually
+            const ext = filePath.split('.').pop()?.toLowerCase();
+            const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+
+            if (isSupported) {
+                processFile(filePath);
+            } else {
+                alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }), { variant: 'error' });
+            }
+        } else {
+            console.warn('File drop event received but payload is empty or invalid.');
+        }
+        setIsDragOver(false);
+    };
+
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        e.stopPropagation();
+        // e.stopPropagation(); 
         if (!isDragOver) setIsDragOver(true);
     }, [isDragOver]);
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        e.stopPropagation();
+        // e.stopPropagation();
         setIsDragOver(true);
     }, []);
 
     const handleDragLeave = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        e.stopPropagation();
+        // e.stopPropagation();
 
         // Only disable drag over if we're actually leaving the drop zone, 
         // not just entering a child element
