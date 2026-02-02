@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { modelService, PRESET_MODELS, ITN_MODELS } from '../modelService';
 import { invoke } from '@tauri-apps/api/core';
-import { exists, mkdir, remove } from '@tauri-apps/plugin-fs';
-import { join, appLocalDataDir } from '@tauri-apps/api/path';
-import { listen } from '@tauri-apps/api/event';
+import { exists, remove } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
 import { Command } from '@tauri-apps/plugin-shell';
 
 // Mock mocks
@@ -57,16 +56,16 @@ describe('ModelService', () => {
         });
 
         // Add a fake NCNN model to PRESET_MODELS for testing if none exist
-        const ncnnModel = {
-            id: 'test-ncnn',
-            name: 'Test NCNN',
-            description: 'Test',
-            url: '',
-            type: 'offline' as const,
-            language: 'en',
-            size: '10MB',
-            engine: 'ncnn' as const
-        };
+        // const ncnnModel = {
+        //     id: 'test-ncnn',
+        //     name: 'Test NCNN',
+        //     description: 'Test',
+        //     url: '',
+        //     type: 'offline' as const,
+        //     language: 'en',
+        //     size: '10MB',
+        //     engine: 'ncnn' as const
+        // };
         // We can't easily push to the exported constant array directly if it's read-only,
         // but modelService imports it.
         // Strategy: We can mock the array imports in the test if needed, but for now let's see if we have NCNN models.
@@ -156,7 +155,7 @@ describe('ModelService', () => {
             const controller = new AbortController();
 
             // Mock download to hang or check signal
-            vi.mocked(invoke).mockImplementation(async (cmd, args: any) => {
+            vi.mocked(invoke).mockImplementation(async (cmd, _args: any) => {
                  if (cmd === 'download_file') {
                      // Check if aborted before starting (simulated)
                      if (controller.signal.aborted) throw new Error('cancelled');

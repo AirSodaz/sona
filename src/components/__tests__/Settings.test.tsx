@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Settings } from '../Settings';
 import { modelService } from '../../services/modelService';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -76,7 +76,7 @@ describe('Settings', () => {
         const downloadBtn = screen.getByLabelText('common.download Test Model');
 
         // Simulate download
-        vi.mocked(modelService.downloadModel).mockImplementation(async (id, onProgress) => {
+        vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
              if (onProgress) {
                  onProgress(50, 'Downloading...');
                  await new Promise(r => setTimeout(r, 10));
