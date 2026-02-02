@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BatchImport } from '../BatchImport';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
+import { transcriptionService } from '../../services/transcriptionService';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
-    convertFileSrc: vi.fn(),
+    convertFileSrc: vi.fn((path) => `asset://${path}`),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -21,40 +22,46 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
     open: vi.fn(),
+    message: vi.fn(),
 }));
 
+// Mock transcription service
 vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
         setITNModelPaths: vi.fn(),
         setPunctuationModelPath: vi.fn(),
+        setVadModelPath: vi.fn(),
+        setVadBufferSize: vi.fn(),
         transcribeFile: vi.fn(),
     }
 }));
 
 vi.mock('../../services/modelService', () => ({
     modelService: {
-        isITNModelInstalled: vi.fn(),
-        getITNModelPath: vi.fn(),
+        isITNModelInstalled: vi.fn().mockResolvedValue(true),
+        getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/itn/path']),
     }
 }));
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
-        t: (key: string) => key,
+        t: (key: string, options?: any) => {
+            if (key === 'batch.supports') return `Supports: ${options.formats}`;
+            if (key === 'batch.queue_title') return `Queue (${options.count})`;
+            return key;
+        },
     }),
 }));
 
-describe('BatchImport', () => {
+describe('BatchImport Integration', () => {
     beforeEach(() => {
-        // Reset store state
+        // Reset stores
         useTranscriptStore.setState({
-            processingStatus: 'idle',
-            processingProgress: 0,
             config: {
                 streamingModelPath: '',
-                offlineModelPath: '',
+                offlineModelPath: '/mock/offline/model',
                 punctuationModelPath: '',
                 enableITN: false,
                 enabledITNModels: [],
@@ -63,39 +70,122 @@ describe('BatchImport', () => {
                 font: 'system',
                 language: 'en',
                 appLanguage: 'auto'
-            }
+            },
+            segments: [],
+            audioUrl: null
         });
-    });
 
-    afterEach(() => {
+        useBatchQueueStore.setState({
+            queueItems: [],
+            activeItemId: null,
+            isQueueProcessing: false,
+            enableTimeline: true,
+            language: 'auto'
+        });
+
         vi.clearAllMocks();
     });
 
-    it('should have accessible progress bar when processing', () => {
-        // Set processing state
-        useBatchQueueStore.setState({
-            queueItems: [
-                {
-                    id: 'test-id',
-                    filename: 'test.wav',
-                    filePath: '/test.wav',
-                    status: 'processing',
-                    progress: 50,
-                    segments: [],
-                    audioUrl: ''
-                }
-            ],
-            activeItemId: 'test-id',
-            isQueueProcessing: true
-        });
+    it('renders drop zone initially', () => {
+        render(<BatchImport />);
+        expect(screen.getByText('batch.drop_title')).toBeDefined();
+        expect(screen.getByText('batch.drop_desc')).toBeDefined();
+    });
+
+    it('adds files to queue and starts processing automatically', async () => {
+        // Mock transcribeFile to simulate progress with delay
+        const mockTranscribe = vi.mocked(transcriptionService.transcribeFile).mockImplementation(
+            async (_path, onProgress, onSegment) => {
+                if (onProgress) onProgress(10);
+                if (onSegment) onSegment({ id: '1', start: 0, end: 1, text: 'Test', isFinal: true });
+                // Wait to allow assertion of processing state
+                await new Promise(resolve => setTimeout(resolve, 100));
+                return [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }];
+            }
+        );
 
         render(<BatchImport />);
 
-        // This is expected to fail initially as the role is missing
-        const progressbar = screen.getByRole('progressbar', { name: 'batch.processing_title' });
-        expect(progressbar).toBeDefined();
-        expect(progressbar.getAttribute('aria-valuenow')).toBe('50');
-        expect(progressbar.getAttribute('aria-valuemin')).toBe('0');
-        expect(progressbar.getAttribute('aria-valuemax')).toBe('100');
+        const { addFiles } = useBatchQueueStore.getState();
+
+        await waitFor(() => {
+            addFiles(['/path/to/test.wav']);
+        });
+
+        // 1. Check if sidebar appears
+        expect(screen.getByText('Queue (1)')).toBeDefined();
+
+        // 2. Check if processing view appears
+        await waitFor(() => {
+             expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
+        });
+
+        // 3. Check progress bar updates
+        // Look within the processing view container to avoid ambiguity with sidebar
+        const processingView = screen.getAllByText('batch.processing_title')[0].closest('.batch-queue-processing');
+        if (!processingView) throw new Error('Processing view not found');
+        const progress = within(processingView as HTMLElement).getByRole('progressbar');
+        expect(progress.getAttribute('aria-valuenow')).toBe('10');
+
+        // 4. Check if service was called
+        expect(mockTranscribe).toHaveBeenCalled();
+    });
+
+    it('shows error state when transcription fails', async () => {
+         vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Mock Error'));
+
+         render(<BatchImport />);
+
+         const { addFiles } = useBatchQueueStore.getState();
+         addFiles(['/path/to/fail.wav']);
+
+         await waitFor(() => {
+             expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
+         });
+
+         // Error details
+         const sidebar = screen.getByRole('listbox', { name: /Queue/ });
+         expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+    });
+
+    it('can remove items from queue', async () => {
+        render(<BatchImport />);
+        const { addFiles } = useBatchQueueStore.getState();
+        addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
+
+        // Wait for list
+        const sidebar = await screen.findByRole('listbox', { name: /Queue/ });
+
+        // Check initial length
+        await waitFor(() => {
+            expect(within(sidebar).getAllByRole('option')).toHaveLength(2);
+        });
+
+        // Find remove button for first item
+        const removeBtns = within(sidebar).getAllByLabelText('common.delete');
+        fireEvent.click(removeBtns[0]);
+
+        await waitFor(() => {
+            expect(within(sidebar).getAllByRole('option')).toHaveLength(1);
+        });
+    });
+
+    it('allows clearing the queue', async () => {
+        render(<BatchImport />);
+        const { addFiles } = useBatchQueueStore.getState();
+        addFiles(['/path/to/file1.wav']);
+
+        await waitFor(() => {
+            expect(screen.getByText('Queue (1)')).toBeDefined();
+        });
+
+        const clearBtn = screen.getByLabelText('batch.clear_queue');
+        fireEvent.click(clearBtn);
+
+        await waitFor(() => {
+            expect(screen.queryByText('Queue (1)')).toBeNull();
+            // Should revert to drop zone
+            expect(screen.getByText('batch.drop_title')).toBeDefined();
+        });
     });
 });
