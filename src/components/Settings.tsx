@@ -869,9 +869,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 tabIndex={0}
                             >
                                 <div className="settings-item">
-                                    <label className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
+                                    <label htmlFor="settings-streaming-path" className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
+                                            id="settings-streaming-path"
                                             type="text"
                                             title={streamingModelPath}
                                             className="settings-input"
@@ -891,9 +892,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>
+                                    <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
+                                            id="settings-offline-path"
                                             type="text"
                                             title={offlineModelPath}
                                             className="settings-input"
@@ -913,9 +915,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">{t('settings.punctuation_path_label')}</label>
+                                    <label htmlFor="settings-punctuation-path" className="settings-label">{t('settings.punctuation_path_label')}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
+                                            id="settings-punctuation-path"
                                             type="text"
                                             title={punctuationModelPath}
                                             className="settings-input"
@@ -935,9 +938,10 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="settings-item" style={{ marginTop: 16 }}>
-                                    <label className="settings-label">{t('settings.vad_path_label', { defaultValue: 'VAD Model Path' })}</label>
+                                    <label htmlFor="settings-vad-path" className="settings-label">{t('settings.vad_path_label', { defaultValue: 'VAD Model Path' })}</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <input
+                                            id="settings-vad-path"
                                             type="text"
                                             title={vadModelPath}
                                             className="settings-input"
