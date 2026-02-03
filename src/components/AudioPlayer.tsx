@@ -38,23 +38,11 @@ const MuteIcon = () => (
 
 /**
  * Displays the current audio time.
- * Optimized to bypass React re-renders by updating DOM directly via ref.
+ * Subscribes only to currentTime to prevent full AudioPlayer re-renders.
  */
 const TimeDisplay = React.memo(() => {
-    const spanRef = useRef<HTMLSpanElement>(null);
-
-    useEffect(() => {
-        // Subscribe to store without triggering re-renders of this component
-        const unsub = useTranscriptStore.subscribe((state) => {
-            if (spanRef.current) {
-                spanRef.current.textContent = formatDisplayTime(state.currentTime);
-            }
-        });
-        return unsub;
-    }, []);
-
-    // Initial render with current state (non-reactive for React)
-    return <span ref={spanRef} className="audio-time">{formatDisplayTime(useTranscriptStore.getState().currentTime)}</span>;
+    const currentTime = useTranscriptStore((state) => state.currentTime);
+    return <span className="audio-time">{formatDisplayTime(currentTime)}</span>;
 });
 
 /** Props for the SeekSlider component. */
@@ -69,49 +57,25 @@ interface SeekSliderProps {
 
 /**
  * Slider for seeking through audio.
- * Optimized to bypass React re-renders by updating DOM directly.
+ * Subscribes to currentTime updates.
  */
 const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel }) => {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const isDragging = useRef(false);
-
-    useEffect(() => {
-        const unsub = useTranscriptStore.subscribe((state) => {
-            if (inputRef.current && !isDragging.current) {
-                // Only update if not dragging to avoid fighting the user
-                inputRef.current.value = String(state.currentTime);
-            }
-        });
-        return unsub;
-    }, []);
+    const currentTime = useTranscriptStore((state) => state.currentTime);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const time = parseFloat(e.target.value);
         onSeek(time);
     };
 
-    const handleMouseDown = () => {
-        isDragging.current = true;
-    };
-
-    const handleMouseUp = () => {
-        isDragging.current = false;
-    };
-
     return (
         <input
-            ref={inputRef}
             type="range"
             className="audio-slider"
             min={0}
             max={duration || 0}
             step={0.1}
-            defaultValue={useTranscriptStore.getState().currentTime}
+            value={currentTime}
             onChange={handleChange}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onTouchStart={handleMouseDown}
-            onTouchEnd={handleMouseUp}
             aria-label={seekLabel}
         />
     );
