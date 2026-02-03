@@ -53,3 +53,6 @@
 ## 2026-02-02 - Modal Focus Management
 **Learning:** Custom modals require explicit focus management (set focus on open, restore on close, handle Escape) to be accessible.
 **Action:** Use useEffect to capture `document.activeElement`, set focus to the modal container (ref), and restore it on cleanup.
+## 2025-05-26 - Missing Focus Trap in Modals
+**Learning:** The custom `GlobalDialog` component manually managed initial focus but failed to trap focus within the modal, allowing keyboard users to interact with the background content.
+**Action:** When creating or modifying custom modal components, always implement a `useEffect` that listens for `Tab` and `Shift+Tab` to constrain focus within the modal boundaries.
