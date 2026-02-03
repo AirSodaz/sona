@@ -9,13 +9,15 @@ import { useDialogStore } from '../stores/dialogStore';
 import { FileQueueSidebar } from './FileQueueSidebar';
 
 // Icons
-const UploadIcon = () => (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-        <path d="M12 12v9" />
-        <path d="m16 16-4-4-4 4" />
-    </svg>
-);
+function UploadIcon(): React.JSX.Element {
+    return (
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+            <path d="M12 12v9" />
+            <path d="m16 16-4-4-4 4" />
+        </svg>
+    );
+}
 
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
 
@@ -32,7 +34,7 @@ interface BatchImportProps {
  * @param props - Component props.
  * @return The batch import UI.
  */
-export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
+export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
     const { alert } = useDialogStore();
     const [isDragOver, setIsDragOver] = useState(false);
     const { t } = useTranslation();
@@ -151,26 +153,22 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
 
     const handleDragLeave = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        if (e.currentTarget.contains(e.relatedTarget as Node)) {
-            return;
-        }
         setIsDragOver(false);
     }, []);
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
             handleClick();
         }
-    };
+    }, []);
 
     const handleClick = async () => {
         try {
             const selected = await open({
                 multiple: true,
                 filters: [{
-                    name: 'Audio/Video',
-                    extensions: ['wav', 'mp3', 'm4a', 'ogg', 'webm', 'mp4']
+                    name: 'Audio',
+                    extensions: ACCEPTED_EXTENSIONS.map(ext => ext.replace('.', ''))
                 }]
             });
 
@@ -189,6 +187,73 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
         }
     };
 
+    const renderActiveItemContent = () => {
+        if (!activeItem) {
+            return (
+                <div className="batch-queue-empty">
+                    <p>{t('batch.queue_empty')}</p>
+                </div>
+            );
+        }
+
+        switch (activeItem.status) {
+            case 'processing':
+                return (
+                    <div className="batch-queue-processing">
+                        <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
+                            <h3>{t('batch.processing_title')}</h3>
+                            <p>{activeItem.filename}</p>
+                        </div>
+                        <div
+                            className="progress-bar"
+                            role="progressbar"
+                            aria-valuenow={Math.round(activeItem.progress)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={t('batch.processing_title')}
+                        >
+                            <div
+                                className="progress-fill"
+                                style={{ width: `${activeItem.progress}%` }}
+                            />
+                        </div>
+                        <div className="progress-text" aria-live="polite">
+                            <span>{t('batch.transcribing')}</span>
+                            <span>{Math.round(activeItem.progress)}%</span>
+                        </div>
+                    </div>
+                );
+            case 'error':
+                return (
+                    <div className="batch-queue-error">
+                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                            <h3>{t('batch.file_failed')}</h3>
+                            <p>{activeItem.errorMessage || t('common.error')}</p>
+                        </div>
+                    </div>
+                );
+            case 'pending':
+                return (
+                    <div className="batch-queue-pending">
+                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                            <h3>{t('batch.queue_waiting')}</h3>
+                            <p>{activeItem.filename}</p>
+                        </div>
+                    </div>
+                );
+            default:
+                // Complete - show nothing here, TranscriptEditor will show the content
+                return (
+                    <div className="batch-queue-complete">
+                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                            <h3>{t('batch.file_complete')}</h3>
+                            <p>{activeItem.filename}</p>
+                        </div>
+                    </div>
+                );
+        }
+    };
+
     // Render the queue view when we have items
     if (hasQueueItems) {
         return (
@@ -196,59 +261,7 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
                 <FileQueueSidebar />
 
                 <div className="batch-queue-content">
-                    {activeItem ? (
-                        activeItem.status === 'processing' ? (
-                            <div className="batch-queue-processing">
-                                <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
-                                    <h3>{t('batch.processing_title')}</h3>
-                                    <p>{activeItem.filename}</p>
-                                </div>
-                                <div
-                                    className="progress-bar"
-                                    role="progressbar"
-                                    aria-valuenow={Math.round(activeItem.progress)}
-                                    aria-valuemin={0}
-                                    aria-valuemax={100}
-                                    aria-label={t('batch.processing_title')}
-                                >
-                                    <div
-                                        className="progress-fill"
-                                        style={{ width: `${activeItem.progress}%` }}
-                                    />
-                                </div>
-                                <div className="progress-text" aria-live="polite">
-                                    <span>{t('batch.transcribing')}</span>
-                                    <span>{Math.round(activeItem.progress)}%</span>
-                                </div>
-                            </div>
-                        ) : activeItem.status === 'error' ? (
-                            <div className="batch-queue-error">
-                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                                    <h3>{t('batch.file_failed')}</h3>
-                                    <p>{activeItem.errorMessage || t('common.error')}</p>
-                                </div>
-                            </div>
-                        ) : activeItem.status === 'pending' ? (
-                            <div className="batch-queue-pending">
-                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                                    <h3>{t('batch.queue_waiting')}</h3>
-                                    <p>{activeItem.filename}</p>
-                                </div>
-                            </div>
-                        ) : (
-                            // Complete - show nothing here, TranscriptEditor will show the content
-                            <div className="batch-queue-complete">
-                                <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                                    <h3>{t('batch.file_complete')}</h3>
-                                    <p>{activeItem.filename}</p>
-                                </div>
-                            </div>
-                        )
-                    ) : (
-                        <div className="batch-queue-empty">
-                            <p>{t('batch.queue_empty')}</p>
-                        </div>
-                    )}
+                    {renderActiveItemContent()}
 
                     {/* Add more files button */}
                     <div className="batch-add-more">
@@ -384,6 +397,6 @@ export const BatchImport: React.FC<BatchImportProps> = ({ className = '' }) => {
             </div>
         </div>
     );
-};
+}
 
 export default BatchImport;
