@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -26,27 +26,23 @@ const VolumeIcon = () => (
     </svg>
 );
 
+const MuteIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <line x1="23" y1="9" x2="17" y2="15" />
+        <line x1="17" y1="9" x2="23" y2="15" />
+    </svg>
+);
+
 // --- Sub-components for Optimization ---
 
 /**
  * Displays the current audio time.
- * Optimized to bypass React re-renders by updating DOM directly via ref.
+ * Subscribes only to currentTime to prevent full AudioPlayer re-renders.
  */
 const TimeDisplay = React.memo(() => {
-    const spanRef = useRef<HTMLSpanElement>(null);
-
-    useEffect(() => {
-        // Subscribe to store without triggering re-renders of this component
-        const unsub = useTranscriptStore.subscribe((state) => {
-            if (spanRef.current) {
-                spanRef.current.textContent = formatDisplayTime(state.currentTime);
-            }
-        });
-        return unsub;
-    }, []);
-
-    // Initial render with current state (non-reactive for React)
-    return <span ref={spanRef} className="audio-time">{formatDisplayTime(useTranscriptStore.getState().currentTime)}</span>;
+    const currentTime = useTranscriptStore((state) => state.currentTime);
+    return <span className="audio-time">{formatDisplayTime(currentTime)}</span>;
 });
 
 /** Props for the SeekSlider component. */
@@ -61,49 +57,25 @@ interface SeekSliderProps {
 
 /**
  * Slider for seeking through audio.
- * Optimized to bypass React re-renders by updating DOM directly.
+ * Subscribes to currentTime updates.
  */
 const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel }) => {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const isDragging = useRef(false);
-
-    useEffect(() => {
-        const unsub = useTranscriptStore.subscribe((state) => {
-            if (inputRef.current && !isDragging.current) {
-                // Only update if not dragging to avoid fighting the user
-                inputRef.current.value = String(state.currentTime);
-            }
-        });
-        return unsub;
-    }, []);
+    const currentTime = useTranscriptStore((state) => state.currentTime);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const time = parseFloat(e.target.value);
         onSeek(time);
     };
 
-    const handleMouseDown = () => {
-        isDragging.current = true;
-    };
-
-    const handleMouseUp = () => {
-        isDragging.current = false;
-    };
-
     return (
         <input
-            ref={inputRef}
             type="range"
             className="audio-slider"
             min={0}
             max={duration || 0}
             step={0.1}
-            defaultValue={useTranscriptStore.getState().currentTime}
+            value={currentTime}
             onChange={handleChange}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onTouchStart={handleMouseDown}
-            onTouchEnd={handleMouseUp}
             aria-label={seekLabel}
         />
     );
@@ -136,8 +108,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
 
-    const [duration, setDuration] = React.useState(0);
-    const [volume, setVolume] = React.useState(1);
+    const [duration, setDuration] = useState(0);
+    const [volume, setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
+    const [prevVolume, setPrevVolume] = useState(1);
 
     // Sync audio element with store state
     useEffect(() => {
@@ -233,8 +207,36 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const vol = parseFloat(e.target.value);
         setVolume(vol);
+
+        // If user drags slider while muted, unmute
+        if (isMuted && vol > 0) {
+            setIsMuted(false);
+            if (audioRef.current) audioRef.current.muted = false;
+        }
+
         if (audioRef.current) {
             audioRef.current.volume = vol;
+        }
+    };
+
+    const toggleMute = () => {
+        if (isMuted) {
+            // Unmute
+            setIsMuted(false);
+            setVolume(prevVolume);
+            if (audioRef.current) {
+                audioRef.current.muted = false;
+                audioRef.current.volume = prevVolume;
+            }
+        } else {
+            // Mute
+            setPrevVolume(volume || 1); // fallback to 1 if current is 0
+            setVolume(0);
+            setIsMuted(true);
+            if (audioRef.current) {
+                audioRef.current.muted = true;
+                audioRef.current.volume = 0;
+            }
         }
     };
 
@@ -278,7 +280,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
             </div>
 
             <div className="audio-controls">
-                <VolumeIcon />
+                <button
+                    className="btn btn-icon"
+                    onClick={toggleMute}
+                    aria-label={isMuted ? t('player.unmute') : t('player.mute')}
+                    aria-pressed={isMuted}
+                    data-tooltip={isMuted ? t('player.unmute') : t('player.mute')}
+                    data-tooltip-pos="top"
+                >
+                    {isMuted || volume === 0 ? <MuteIcon /> : <VolumeIcon />}
+                </button>
                 <input
                     type="range"
                     className="audio-slider audio-slider-volume"
@@ -288,7 +299,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
                     value={volume}
                     onChange={handleVolumeChange}
                     aria-label={t('player.volume')}
-                    data-tooltip={`${Math.round(volume * 100)}`}
+                    data-tooltip={`${Math.round(volume * 100)}%`}
                     data-tooltip-pos="top"
                 />
             </div>

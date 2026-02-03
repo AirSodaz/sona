@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { act } from 'react';
 import { AudioPlayer } from '../AudioPlayer';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 
@@ -10,17 +11,23 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+vi.mock('../../stores/dialogStore', () => ({
+    useDialogStore: () => ({
+        alert: vi.fn(),
+    }),
+}));
+
 describe('AudioPlayer', () => {
     beforeEach(() => {
         // Mock URL.createObjectURL/revokeObjectURL
         global.URL.createObjectURL = vi.fn(() => 'blob:test');
         global.URL.revokeObjectURL = vi.fn();
 
-        // Reset store
+        // Reset store state
         useTranscriptStore.setState({
-            audioUrl: 'blob:test',
-            currentTime: 0,
+            audioUrl: 'test-audio.mp3',
             isPlaying: false,
+            currentTime: 0,
             segments: []
         });
     });
@@ -29,35 +36,49 @@ describe('AudioPlayer', () => {
         vi.clearAllMocks();
     });
 
+    it('renders mute and volume controls', () => {
+        render(<AudioPlayer />);
+        expect(screen.getByLabelText('player.play')).toBeDefined();
+        expect(screen.getByLabelText('player.mute')).toBeDefined();
+        expect(screen.getByLabelText('player.volume')).toBeDefined();
+    });
+
+    it('toggles mute state', () => {
+        render(<AudioPlayer />);
+        const muteButton = screen.getByLabelText('player.mute');
+
+        // Click to mute
+        fireEvent.click(muteButton);
+        expect(screen.getByLabelText('player.unmute')).toBeDefined();
+
+        // Click to unmute
+        fireEvent.click(muteButton);
+        expect(screen.getByLabelText('player.mute')).toBeDefined();
+    });
+
     it('renders time display and slider', () => {
         render(<AudioPlayer />);
         const times = screen.getAllByText('00:00.0');
         expect(times.length).toBeGreaterThan(0);
-        // Seek slider
         expect(screen.getByLabelText('player.seek')).toBeDefined();
     });
 
     it('updates time display when store updates', async () => {
         const { container } = render(<AudioPlayer />);
 
-        // Initial state: two 00:00.0 (current and total)
-        // The first .audio-time is the current time
         const timeDisplay = container.querySelector('.audio-time');
         expect(timeDisplay?.textContent).toBe('00:00.0');
 
-        // Update store
         act(() => {
             useTranscriptStore.setState({ currentTime: 61.5 });
         });
 
-        // Should see 01:01.5
         expect(timeDisplay?.textContent).toBe('01:01.5');
     });
 
     it('updates slider value when store updates', async () => {
         const { container } = render(<AudioPlayer />);
 
-        // Set duration so slider can move
         const audio = container.querySelector('audio');
         if (audio) {
             Object.defineProperty(audio, 'duration', { value: 100, writable: true });
