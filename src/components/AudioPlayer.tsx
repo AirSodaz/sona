@@ -5,34 +5,42 @@ import { useDialogStore } from '../stores/dialogStore';
 import { formatDisplayTime } from '../utils/exportFormats';
 
 // Icons
-const PlayIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-        <path d="M8 5v14l11-7z" />
-    </svg>
-);
+function PlayIcon(): React.JSX.Element {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+        </svg>
+    );
+}
 
-const PauseIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16" />
-        <rect x="14" y="4" width="4" height="16" />
-    </svg>
-);
+function PauseIcon(): React.JSX.Element {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="4" width="4" height="16" />
+            <rect x="14" y="4" width="4" height="16" />
+        </svg>
+    );
+}
 
-const VolumeIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    </svg>
-);
+function VolumeIcon(): React.JSX.Element {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        </svg>
+    );
+}
 
-const MuteIcon = () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-        <line x1="23" y1="9" x2="17" y2="15" />
-        <line x1="17" y1="9" x2="23" y2="15" />
-    </svg>
-);
+function MuteIcon(): React.JSX.Element {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
+        </svg>
+    );
+}
 
 // --- Sub-components for Optimization ---
 
@@ -40,10 +48,11 @@ const MuteIcon = () => (
  * Displays the current audio time.
  * Subscribes only to currentTime to prevent full AudioPlayer re-renders.
  */
-const TimeDisplay = React.memo(() => {
+function TimeDisplayComponent(): React.JSX.Element {
     const currentTime = useTranscriptStore((state) => state.currentTime);
     return <span className="audio-time">{formatDisplayTime(currentTime)}</span>;
-});
+}
+const TimeDisplay = React.memo(TimeDisplayComponent);
 
 /** Props for the SeekSlider component. */
 interface SeekSliderProps {
@@ -59,7 +68,7 @@ interface SeekSliderProps {
  * Slider for seeking through audio.
  * Subscribes to currentTime updates.
  */
-const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel }) => {
+function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): React.JSX.Element {
     const currentTime = useTranscriptStore((state) => state.currentTime);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,7 +88,8 @@ const SeekSlider = React.memo<SeekSliderProps>(({ duration, onSeek, seekLabel })
             aria-label={seekLabel}
         />
     );
-});
+}
+const SeekSlider = React.memo(SeekSliderComponent);
 
 // --- Main Component ---
 
@@ -96,7 +106,7 @@ interface AudioPlayerProps {
  * @param props - Component props.
  * @return The rendered audio player or null if no audio is loaded.
  */
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
+export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const { alert } = useDialogStore();
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -305,7 +315,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
             </div>
         </div>
     );
-};
+}
 
 /**
  * Helper function to programmatically seek the audio player from anywhere.
@@ -313,11 +323,11 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ className = '' }) => {
  *
  * @param time - Time to seek to in seconds.
  */
-export const seekAudio = (time: number) => {
+export function seekAudio(time: number): void {
     const seekFn = (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
     if (seekFn) {
         seekFn(time);
     }
-};
+}
 
 export default AudioPlayer;
