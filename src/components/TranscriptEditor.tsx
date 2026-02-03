@@ -58,7 +58,7 @@ interface SegmentItemProps {
  * Individual transcript segment item.
  * Supports viewing, seeking, editing, deleting, and merging.
  */
-const SegmentItem = React.memo<SegmentItemProps>(({
+function SegmentItemComponent({
     segment,
     onSeek,
     onEdit,
@@ -66,7 +66,7 @@ const SegmentItem = React.memo<SegmentItemProps>(({
     onDelete,
     onMergeWithNext,
     hasNext,
-}) => {
+}: SegmentItemProps): React.JSX.Element {
     const { t } = useTranslation();
     const isActive = useTranscriptStore(useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
     const isEditing = useTranscriptStore(useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
@@ -208,7 +208,8 @@ const SegmentItem = React.memo<SegmentItemProps>(({
             </div>
         </div>
     );
-});
+}
+const SegmentItem = React.memo(SegmentItemComponent);
 
 /** Props for TranscriptEditor. */
 interface TranscriptEditorProps {
@@ -223,7 +224,7 @@ interface TranscriptEditorProps {
  * @param props - Component props.
  * @return The transcript editor interface.
  */
-export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) => {
+export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.Element {
     const { t } = useTranslation();
     const { confirm } = useDialogStore();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -367,6 +368,6 @@ export const TranscriptEditor: React.FC<TranscriptEditorProps> = ({ onSeek }) =>
             />
         </div>
     );
-};
+}
 
 export default TranscriptEditor;
