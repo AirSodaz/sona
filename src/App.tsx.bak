@@ -46,9 +46,7 @@ function App() {
   };
 
   // Apply theme
-  // Optimize: Select only needed config properties to avoid re-renders on other config changes
-  const theme = useTranscriptStore((state) => state.config.theme);
-  const font = useTranscriptStore((state) => state.config.font);
+  const config = useTranscriptStore((state) => state.config);
 
   useEffect(() => {
     // Hydrate config from localStorage
@@ -90,12 +88,12 @@ function App() {
 
   useEffect(() => {
     const applyTheme = () => {
-      const currentTheme = theme || 'auto';
+      const theme = config.theme || 'auto';
       const root = document.documentElement;
 
-      if (currentTheme === 'dark') {
+      if (theme === 'dark') {
         root.setAttribute('data-theme', 'dark');
-      } else if (currentTheme === 'light') {
+      } else if (theme === 'light') {
         root.setAttribute('data-theme', 'light');
       } else {
         root.removeAttribute('data-theme');
@@ -103,27 +101,27 @@ function App() {
     };
 
     applyTheme();
-  }, [theme]);
+  }, [config.theme]);
 
   // Apply font
   useEffect(() => {
-    const currentFont = font || 'system';
+    const font = config.font || 'system';
     const root = document.documentElement;
 
-    if (currentFont === 'system') {
+    if (font === 'system') {
       root.style.removeProperty('--font-sans');
-    } else if (currentFont === 'serif') {
+    } else if (font === 'serif') {
       root.style.setProperty('--font-sans', 'Merriweather, serif');
-    } else if (currentFont === 'sans') {
+    } else if (font === 'sans') {
       root.style.setProperty('--font-sans', 'Inter, sans-serif');
-    } else if (currentFont === 'mono') {
+    } else if (font === 'mono') {
       root.style.setProperty('--font-sans', 'JetBrains Mono, monospace');
-    } else if (currentFont === 'arial') {
+    } else if (font === 'arial') {
       root.style.setProperty('--font-sans', 'Arial, sans-serif');
-    } else if (currentFont === 'georgia') {
+    } else if (font === 'georgia') {
       root.style.setProperty('--font-sans', 'Georgia, serif');
     }
-  }, [font]);
+  }, [config.font]);
 
   return (
     <div className="app">
