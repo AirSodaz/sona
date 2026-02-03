@@ -11,6 +11,26 @@ const PUNCTUATION_REGEX = /[\s\p{P}]/u;
 const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
 /**
+ * Calculates the length of the text excluding punctuation and whitespace.
+ * Optimized to avoid unnecessary string allocations.
+ */
+function getEffectiveLength(text: string): number {
+    // Optimization: Check for punctuation first to avoid unnecessary allocation
+    if (!PUNCTUATION_REGEX.test(text)) {
+        return text.length;
+    }
+
+    let reduction = 0;
+    // Reset lastIndex for the global regex before reuse
+    PUNCTUATION_REPLACE_REGEX.lastIndex = 0;
+    let match;
+    while ((match = PUNCTUATION_REPLACE_REGEX.exec(text)) !== null) {
+        reduction += match[0].length;
+    }
+    return text.length - reduction;
+}
+
+/**
  * Splits transcript segments based on punctuation marks.
  * Uses token timestamps for precise splitting if available.
  *
@@ -59,9 +79,7 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
             // Calculate effective length of this part to update the running index
             // We use the same regex as in buildTokenMap to ensure consistency
             // Optimization: Avoid allocation if no punctuation/space
-            const partEffectiveLen = PUNCTUATION_REGEX.test(part)
-                ? part.replace(PUNCTUATION_REPLACE_REGEX, '').length
-                : part.length;
+            const partEffectiveLen = getEffectiveLength(part);
 
             if (SPLIT_REGEX.test(part)) {
                 // It's punctuation
@@ -196,9 +214,7 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
         const token = segment.tokens[i];
         // Strip punctuation and whitespace
         // Optimization: Check for punctuation first to avoid unnecessary allocation
-        const tokenLen = PUNCTUATION_REGEX.test(token)
-            ? token.replace(PUNCTUATION_REPLACE_REGEX, '').length
-            : token.length;
+        const tokenLen = getEffectiveLength(token);
 
         if (tokenLen > 0) {
             startIndices.push(currentLen);
