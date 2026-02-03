@@ -72,7 +72,7 @@
         "play": "Play",
         "pause": "Pause",
         "seek": "Seek",
-        "volume": "Volume",
+        "volume": "Volume", "mute": "Mute", "unmute": "Unmute",
         "error": "Audio playback failed: {{error}}. Code: {{code}}"
     },
     "editor": {
