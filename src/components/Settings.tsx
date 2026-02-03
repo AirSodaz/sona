@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -163,12 +163,39 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
     const [abortController, setAbortController] = useState<AbortController | null>(null);
+    const modalRef = useRef<HTMLDivElement>(null);
+
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
+
+    // Focus management
+    useEffect(() => {
+        if (isOpen) {
+            const previousFocus = document.activeElement as HTMLElement;
+            // Wait for render
+            requestAnimationFrame(() => {
+                modalRef.current?.focus();
+            });
+
+            const handleKeyDown = (e: KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                    // Only close if no other dialog is open (GlobalDialog)
+                    if (useDialogStore.getState().isOpen) return;
+                    onClose();
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+
+            return () => {
+                window.removeEventListener('keydown', handleKeyDown);
+                previousFocus?.focus();
+            };
+        }
+    }, [isOpen, onClose]);
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -457,11 +484,14 @@ export const Settings: React.FC<SettingsProps> = ({ isOpen, onClose }) => {
     return (
         <div className="settings-overlay" onClick={onClose}>
             <div
+                ref={modalRef}
                 className="settings-modal"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="settings-title"
+                tabIndex={-1}
+                style={{ outline: 'none' }}
             >
                 {/* Sidebar */}
                 <div className="settings-sidebar">
