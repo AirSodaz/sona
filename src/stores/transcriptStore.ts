@@ -83,7 +83,7 @@ interface TranscriptState {
 
     // UI actions
     /** Sets the active segment ID. */
-    setActiveSegmentId: (id: string | null) => void;
+    setActiveSegmentId: (id: string | null, index?: number) => void;
     /** Sets the editing segment ID. */
     setEditingSegmentId: (id: string | null) => void;
     /** Sets the application mode. */
@@ -256,12 +256,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     // UI actions
-    setActiveSegmentId: (id) => set({
+    setActiveSegmentId: (id, index = -1) => set({
         activeSegmentId: id,
-        // We could look up index here, but it's O(N).
-        // Better to let next setCurrentTime fix it or lazily update.
-        // For now, reset to -1 so findSegmentForTime falls back to binary search once
-        activeSegmentIndex: -1
+        activeSegmentIndex: index
     }),
     setEditingSegmentId: (id) => set({ editingSegmentId: id }),
     setMode: (mode) => set({ mode }),
