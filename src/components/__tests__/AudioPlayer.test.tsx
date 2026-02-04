@@ -93,4 +93,26 @@ describe('AudioPlayer', () => {
 
         expect(slider.value).toBe('10.5');
     });
+
+    it('updates slider accessibility attributes when store updates', async () => {
+        render(<AudioPlayer />);
+        const slider = screen.getByLabelText('player.seek') as HTMLInputElement;
+
+        act(() => {
+            useTranscriptStore.setState({ currentTime: 61.5 });
+        });
+
+        expect(slider.getAttribute('aria-valuenow')).toBe('61.5');
+        expect(slider.getAttribute('aria-valuetext')).toBe('01:01.5');
+    });
+
+    it('volume slider has accessibility attributes', () => {
+        render(<AudioPlayer />);
+        const volumeSlider = screen.getByLabelText('player.volume') as HTMLInputElement;
+
+        expect(volumeSlider.getAttribute('aria-valuemin')).toBe('0');
+        expect(volumeSlider.getAttribute('aria-valuemax')).toBe('1');
+        expect(volumeSlider.getAttribute('aria-valuenow')).toBe('1');
+        expect(volumeSlider.getAttribute('aria-valuetext')).toBe('100%');
+    });
 });

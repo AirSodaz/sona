@@ -56,7 +56,10 @@ function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): 
 
     useEffect(() => {
         if (inputRef.current) {
-            inputRef.current.value = String(useTranscriptStore.getState().currentTime);
+            const currentTime = useTranscriptStore.getState().currentTime;
+            inputRef.current.value = String(currentTime);
+            inputRef.current.setAttribute('aria-valuenow', String(currentTime));
+            inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
         }
 
         const unsubscribe = useTranscriptStore.subscribe((state) => {
@@ -67,6 +70,8 @@ function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): 
                 // Update only if difference is significant to avoid fighting user input
                 if (Math.abs(currentVal - time) > 0.1) {
                     inputRef.current.value = String(time);
+                    inputRef.current.setAttribute('aria-valuenow', String(time));
+                    inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(time));
                 }
             }
         });
@@ -101,6 +106,8 @@ function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): 
             onTouchStart={handleInteractionStart}
             onTouchEnd={handleInteractionEnd}
             aria-label={seekLabel}
+            aria-valuemin={0}
+            aria-valuemax={duration || 0}
         />
     );
 }
@@ -324,6 +331,10 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     value={volume}
                     onChange={handleVolumeChange}
                     aria-label={t('player.volume')}
+                    aria-valuenow={volume}
+                    aria-valuemin={0}
+                    aria-valuemax={1}
+                    aria-valuetext={`${Math.round(volume * 100)}%`}
                     data-tooltip={`${Math.round(volume * 100)}%`}
                     data-tooltip-pos="top"
                 />
