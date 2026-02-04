@@ -34,3 +34,6 @@ futures-util = "0.3"
 bytes = "1"
 tokio = { version = "1.49.0", features = ["full"] }
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state = "2"
+
