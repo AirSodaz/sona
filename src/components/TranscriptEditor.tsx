@@ -6,7 +6,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
 import { formatDisplayTime } from '../utils/exportFormats';
-import { EditIcon, TrashIcon, MergeIcon } from './Icons';
+import { EditIcon, TrashIcon, MergeIcon, PlusCircleIcon } from './Icons';
 
 // Icons
 
@@ -286,9 +286,7 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     if (segments.length === 0) {
         return (
             <div className="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-                </svg>
+                <PlusCircleIcon />
                 <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
             </div>
         );
