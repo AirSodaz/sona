@@ -1,0 +1,3 @@
+## 2025-05-23 - Keyboard Navigation for Dropdown Menus
+**Learning:** For custom dropdown menus using `role="menu"`, items should use `tabindex="-1"` to remove them from the natural tab sequence, allowing focus to be managed programmatically via Arrow keys. This prevents Tab from navigating through every menu item, which is the expected behavior for application menus. Also, Vitest setup lacks `jest-dom`, so standard matchers like `toBeInTheDocument` are unavailable.
+**Action:** When implementing menus, implement `onKeyDown` for Arrows/Escape/Home/End and use `tabindex="-1"` on items. Use `expect(document.activeElement).toBe(el)` for focus assertions.
