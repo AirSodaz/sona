@@ -259,13 +259,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // If context was created for file, it already has the source connected to destination/stream.
         // But we need 'source' variable for Analyser connection below.
 
-        if (isFileSimulation) {
-            // For file simulation, the stream comes from destination, which is already a node.
-            // We need to connect the stream to analyser.
-            source = audioContextRef.current.createMediaStreamSource(stream);
-        } else {
-            source = audioContextRef.current.createMediaStreamSource(stream);
-        }
+        source = audioContextRef.current.createMediaStreamSource(stream);
 
 
         // Analyser for visualizer
@@ -323,11 +317,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
         }
 
-        if (config.punctuationModelPath) {
-            transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
-        } else {
-            transcriptionService.setPunctuationModelPath('');
-        }
+        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
 
         await transcriptionService.start(
             (segment) => {
@@ -352,13 +342,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             chunks.push(e.data);
         };
 
-        mediaRecorderRef.current.onstop = async () => {
+        mediaRecorderRef.current.onstop = () => {
             const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
             const blob = new Blob(chunks, { type });
             const url = URL.createObjectURL(blob);
             useTranscriptStore.getState().setAudioUrl(url);
 
-            await transcriptionService.softStop();
+            // Stop sidecar in background - no need to block UI
+            transcriptionService.softStop();
         };
 
         mediaRecorderRef.current.start();
