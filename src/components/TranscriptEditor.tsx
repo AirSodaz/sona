@@ -6,7 +6,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
 import { formatDisplayTime } from '../utils/exportFormats';
-import { EditIcon, TrashIcon, MergeIcon, PlusCircleIcon } from './Icons';
+import { EditIcon, TrashIcon, MergeIcon, PlusCircleIcon, MicIcon, ImportIcon } from './Icons';
 
 // Icons
 
@@ -286,8 +286,29 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     if (segments.length === 0) {
         return (
             <div className="empty-state">
-                <PlusCircleIcon />
-                <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
+                <div style={{ opacity: 0.5, marginBottom: '16px' }}>
+                    <PlusCircleIcon />
+                </div>
+                <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} style={{ marginBottom: '24px' }} />
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => useTranscriptStore.getState().setMode('live')}
+                        aria-label={t('live.start_recording')}
+                    >
+                        <MicIcon />
+                        {t('live.start_recording')}
+                    </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => useTranscriptStore.getState().setMode('batch')}
+                        aria-label={t('batch.select_file')}
+                    >
+                        <ImportIcon />
+                        {t('batch.select_file')}
+                    </button>
+                </div>
             </div>
         );
     }

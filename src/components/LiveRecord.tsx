@@ -244,7 +244,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
 
-    async function initializeRecordingSession(stream: MediaStream, isFileSimulation = false): Promise<void> {
+    async function initializeRecordingSession(stream: MediaStream, _isFileSimulation = false): Promise<void> {
         // Set up audio context and analyser if not already created (File mode creates it earlier)
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
