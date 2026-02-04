@@ -139,6 +139,7 @@ function SegmentItemComponent({
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={handleKeyDown}
                         onBlur={handleBlur}
+                        aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
                     />
                 ) : (
                     <p className={`segment-text ${!segment.isFinal ? 'partial' : ''}`}>
@@ -213,6 +214,7 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
+    const setMode = useTranscriptStore((state) => state.setMode);
 
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
@@ -286,10 +288,18 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     if (segments.length === 0) {
         return (
             <div className="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" role="img" aria-hidden="true">
                     <path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
                 </svg>
                 <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
+                <div className="empty-state-actions">
+                    <button className="btn btn-secondary" onClick={() => setMode('live')}>
+                        {t('panel.live_record')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setMode('batch')}>
+                        {t('panel.batch_import')}
+                    </button>
+                </div>
             </div>
         );
     }
