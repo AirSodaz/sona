@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInfo } from '../../services/modelService';
 import { CheckIcon, PlayIcon, TrashIcon, DownloadIcon, XIcon } from '../Icons';
@@ -80,7 +80,7 @@ function ModelCardActions({
     );
 }
 
-export function ModelCard({
+function ModelCardComponent({
     model,
     isInstalled,
     isSelected,
@@ -141,3 +141,5 @@ export function ModelCard({
         </div>
     );
 }
+
+export const ModelCard = memo(ModelCardComponent);

@@ -49,8 +49,8 @@ export function SettingsModelsTab({
                         isSelected={isModelSelected(model)}
                         downloadingId={downloadingId}
                         deletingId={deletingId}
-                        progress={progress}
-                        statusMessage={statusMessage}
+                        progress={downloadingId === model.id ? progress : 0}
+                        statusMessage={downloadingId === model.id ? statusMessage : ''}
                         onLoad={onLoad}
                         onDelete={onDelete}
                         onDownload={onDownload}

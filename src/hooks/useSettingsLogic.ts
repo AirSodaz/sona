@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -58,7 +58,7 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         setFont(config.font || 'system');
     }, [config, isOpen]); // Added isOpen to ensure refresh on open
 
-    async function checkInstalledModels() {
+    const checkInstalledModels = useCallback(async () => {
         const installed = new Set<string>();
         for (const model of PRESET_MODELS) {
             if (await modelService.isModelInstalled(model.id)) {
@@ -74,13 +74,13 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             }
         }
         setInstalledITNModels(installedITN);
-    }
+    }, []);
 
     useEffect(() => {
         checkInstalledModels();
-    }, []);
+    }, [checkInstalledModels]);
 
-    function handleSave() {
+    const handleSave = useCallback(() => {
         const enabledList = Array.from(enabledITNModels);
         setConfig({
             streamingModelPath,
@@ -117,9 +117,23 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         }
 
         onClose();
-    }
+    }, [
+        enabledITNModels,
+        streamingModelPath,
+        offlineModelPath,
+        punctuationModelPath,
+        vadModelPath,
+        vadBufferSize,
+        itnRulesOrder,
+        appLanguage,
+        theme,
+        font,
+        setConfig,
+        i18n,
+        onClose
+    ]);
 
-    function getBrowseTitle(type: 'streaming' | 'offline' | 'punctuation' | 'vad'): string {
+    const getBrowseTitle = useCallback((type: 'streaming' | 'offline' | 'punctuation' | 'vad'): string => {
         switch (type) {
             case 'streaming':
                 return t('settings.streaming_path_label');
@@ -130,9 +144,9 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             default:
                 return 'Select Punctuation Model Path';
         }
-    }
+    }, [t]);
 
-    async function handleBrowse(type: 'streaming' | 'offline' | 'punctuation' | 'vad') {
+    const handleBrowse = useCallback(async (type: 'streaming' | 'offline' | 'punctuation' | 'vad') => {
         try {
             const selected = await open({
                 directory: true,
@@ -157,17 +171,17 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         } catch (err) {
             console.error('Failed to open dialog:', err);
         }
-    }
+    }, [getBrowseTitle]);
 
-    function handleCancelDownload() {
+    const handleCancelDownload = useCallback(() => {
         if (abortController) {
             abortController.abort();
             setAbortController(null);
             setStatusMessage('Cancelling...');
         }
-    }
+    }, [abortController]);
 
-    function setModelPathByType(type: 'streaming' | 'offline' | 'punctuation' | 'vad', path: string) {
+    const setModelPathByType = useCallback((type: 'streaming' | 'offline' | 'punctuation' | 'vad', path: string) => {
         if (type === 'streaming') {
             setStreamingModelPath(path);
         } else if (type === 'offline') {
@@ -177,9 +191,9 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         } else {
             setPunctuationModelPath(path);
         }
-    }
+    }, []);
 
-    async function handleDownload(model: ModelInfo) {
+    const handleDownload = useCallback(async (model: ModelInfo) => {
         if (downloadingId) return;
 
         // Check hardware compatibility
@@ -223,9 +237,9 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             setDownloadingId(null);
             setAbortController(null);
         }
-    }
+    }, [downloadingId, confirm, checkInstalledModels, setModelPathByType]);
 
-    async function handleDownloadITN(modelId: string) {
+    const handleDownloadITN = useCallback(async (modelId: string) => {
         if (downloadingId) return;
 
         const controller = new AbortController();
@@ -254,18 +268,18 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             setDownloadingId(null);
             setAbortController(null);
         }
-    }
+    }, [downloadingId, checkInstalledModels]);
 
-    async function handleLoad(model: ModelInfo) {
+    const handleLoad = useCallback(async (model: ModelInfo) => {
         try {
             const path = await modelService.getModelPath(model.id);
             setModelPathByType(model.type, path);
         } catch (error: any) {
             console.error('Load failed:', error);
         }
-    }
+    }, [setModelPathByType]);
 
-    async function handleDelete(model: ModelInfo) {
+    const handleDelete = useCallback(async (model: ModelInfo) => {
         if (deletingId) return;
 
         // Confirm deletion
@@ -303,9 +317,19 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         } finally {
             setDeletingId(null);
         }
-    }
+    }, [
+        deletingId,
+        confirm,
+        t,
+        alert,
+        checkInstalledModels,
+        streamingModelPath,
+        offlineModelPath,
+        punctuationModelPath,
+        vadModelPath
+    ]);
 
-    function isModelSelected(model: ModelInfo): boolean {
+    const isModelSelected = useCallback((model: ModelInfo): boolean => {
         if (model.type === 'streaming') {
             return streamingModelPath.includes(model.filename || model.id);
         }
@@ -319,7 +343,7 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             return vadModelPath.includes(model.filename || model.id);
         }
         return false;
-    }
+    }, [streamingModelPath, offlineModelPath, punctuationModelPath, vadModelPath]);
 
     return {
         activeTab,
