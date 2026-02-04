@@ -103,7 +103,13 @@ class TranscriptionService {
      * @param onError A callback for when an error occurs.
      */
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
-        if (this.isRunning) return;
+        if (this.isRunning) {
+            console.log('[TranscriptionService] Service already running, updating callbacks');
+            this.onSegment = onSegment;
+            this.onError = onError;
+            return;
+        }
+
         if (!this.modelPath) {
             onError('Model path not configured');
             return;

@@ -143,6 +143,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Start recording
     async function startRecording(): Promise<void> {
+        // Validation: Check if model is configured
+        const config = useTranscriptStore.getState().config;
+        if (!config.streamingModelPath) {
+            alert(t('batch.no_model_error'), { variant: 'error' });
+            return;
+        }
+
         // Reset player state
         setAudioFile(null);
 
@@ -326,6 +333,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             },
             (error) => {
                 console.error('Transcription error:', error);
+                alert(`${t('live.mic_error')} (${error})`, { variant: 'error' });
             }
         );
 
@@ -365,7 +373,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Pause recording
     function pauseRecording(): void {
-        if (mediaRecorderRef.current && isRecording && !isPaused) {
+        if (mediaRecorderRef.current && isRecordingRef.current && !isPausedRef.current) {
             mediaRecorderRef.current.pause();
             if (audioRef.current) audioRef.current.pause();
             setIsPaused(true);
@@ -375,7 +383,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Resume recording
     function resumeRecording(): void {
-        if (mediaRecorderRef.current && isRecording && isPaused) {
+        if (mediaRecorderRef.current && isRecordingRef.current && isPausedRef.current) {
             mediaRecorderRef.current.resume();
             if (audioRef.current) audioRef.current.play();
             setIsPaused(false);
@@ -398,7 +406,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             audioRef.current = null;
         }
 
-        if (mediaRecorderRef.current && isRecording) {
+        if (mediaRecorderRef.current && isRecordingRef.current) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
@@ -446,6 +454,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 audioRef.current.pause();
                 audioRef.current = null;
             }
+            // Stop transcription service when component unmounts to prevent detached state
+            transcriptionService.stop().catch(e => console.error('Error stopping transcription service:', e));
         };
     }, []);
 
