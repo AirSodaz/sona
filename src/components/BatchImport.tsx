@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Event } from '@tauri-apps/api/event';
@@ -27,7 +27,7 @@ interface BatchImportOptionsProps {
  * @param props Component props.
  * @return The rendered options component.
  */
-function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLanguage }: BatchImportOptionsProps): React.JSX.Element {
+const BatchImportOptions = React.memo(function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLanguage }: BatchImportOptionsProps): React.JSX.Element {
     const { t } = useTranslation();
     return (
         <div className="options-container">
@@ -71,26 +71,19 @@ function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLa
             </div>
         </div>
     );
-}
-
-/** Props for ActiveItemStatus component. */
-interface ActiveItemStatusProps {
-    item: {
-        status: 'processing' | 'error' | 'pending' | 'complete';
-        filename: string;
-        progress: number;
-        errorMessage?: string;
-    } | null;
-}
+});
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
  *
- * @param props Component props.
+ * Connected component that subscribes to the batch queue store directly.
+ * Optimized with React.memo to prevent re-renders when other items update.
+ *
  * @return The status display component.
  */
-function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | null {
+function ActiveItemStatusComponent(): React.JSX.Element | null {
     const { t } = useTranslation();
+    const item = useBatchQueueStore((state) => state.queueItems.find((i) => i.id === state.activeItemId) || null);
 
     if (!item) {
         return (
@@ -158,6 +151,9 @@ function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | 
     }
 }
 
+// Optimization: Memoize to prevent re-renders unless the active item changes
+const ActiveItemStatus = React.memo(ActiveItemStatusComponent);
+
 /** Props for BatchImport. */
 interface BatchImportProps {
     /** Optional CSS class name. */
@@ -178,8 +174,8 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     const { t } = useTranslation();
 
     // Queue store
-    const queueItems = useBatchQueueStore((state) => state.queueItems);
-    const activeItemId = useBatchQueueStore((state) => state.activeItemId);
+    // Optimization: Only subscribe to queue length to avoid re-renders on progress updates
+    const hasQueueItems = useBatchQueueStore((state) => state.queueItems.length > 0);
     const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
     const addFiles = useBatchQueueStore((state) => state.addFiles);
     const enableTimeline = useBatchQueueStore((state) => state.enableTimeline);
@@ -189,14 +185,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     // Transcript store
     const config = useTranscriptStore((state) => state.config);
-
-    // Get active item
-    const activeItem = useMemo(() => {
-        return queueItems.find((item) => item.id === activeItemId) || null;
-    }, [queueItems, activeItemId]);
-
-    // Determine if we should show the queue UI
-    const hasQueueItems = queueItems.length > 0;
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -334,7 +322,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 <FileQueueSidebar />
 
                 <div className="batch-queue-content">
-                    <ActiveItemStatus item={activeItem} />
+                    <ActiveItemStatus />
 
                     {/* Add more files button */}
                     <div className="batch-add-more">
