@@ -2,6 +2,12 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
+/**
+ * Configuration for internationalization using i18next.
+ *
+ * Sets up resources, language detection, and fallback language.
+ */
+
 import en from './locales/en.json';
 import zh from './locales/zh.json';
 

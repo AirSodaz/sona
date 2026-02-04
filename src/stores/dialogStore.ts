@@ -35,8 +35,8 @@ interface DialogState {
     /**
      * Shows an alert dialog.
      *
-     * @param message - The message to display.
-     * @param options - Additional options.
+     * @param message The message to display.
+     * @param options Additional options.
      * @return A promise that resolves when the alert is closed.
      */
     alert: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<void>;
@@ -44,8 +44,8 @@ interface DialogState {
     /**
      * Shows a confirmation dialog.
      *
-     * @param message - The question/message to display.
-     * @param options - Additional options.
+     * @param message The question/message to display.
+     * @param options Additional options.
      * @return A promise that resolves to true if confirmed, false otherwise.
      */
     confirm: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<boolean>;
@@ -53,7 +53,7 @@ interface DialogState {
     /**
      * Closes the dialog with a result.
      *
-     * @param result - The result value (true for confirm, false for cancel).
+     * @param result The result value (true for confirm, false for cancel).
      */
     close: (result: boolean) => void;
 }

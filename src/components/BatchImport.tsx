@@ -13,6 +13,7 @@ import { UploadIcon } from './Icons';
 
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
 
+/** Props for BatchImportOptions component. */
 interface BatchImportOptionsProps {
     enableTimeline: boolean;
     setEnableTimeline: (value: boolean) => void;
@@ -20,6 +21,12 @@ interface BatchImportOptionsProps {
     setLanguage: (value: string) => void;
 }
 
+/**
+ * Component for configuring batch import options (timeline, language).
+ *
+ * @param props Component props.
+ * @return The rendered options component.
+ */
 function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLanguage }: BatchImportOptionsProps): React.JSX.Element {
     const { t } = useTranslation();
     return (
@@ -66,6 +73,7 @@ function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLa
     );
 }
 
+/** Props for ActiveItemStatus component. */
 interface ActiveItemStatusProps {
     item: {
         status: 'processing' | 'error' | 'pending' | 'complete';
@@ -75,6 +83,12 @@ interface ActiveItemStatusProps {
     } | null;
 }
 
+/**
+ * Displays the status of the currently processing or selected item in the queue.
+ *
+ * @param props Component props.
+ * @return The status display component.
+ */
 function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | null {
     const { t } = useTranslation();
 
@@ -152,9 +166,10 @@ interface BatchImportProps {
 
 /**
  * Component for batch importing audio files with multi-file queue support.
+ *
  * Handles drag-and-drop, file selection, and displays queue sidebar.
  *
- * @param props - Component props.
+ * @param props Component props.
  * @return The batch import UI.
  */
 export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {

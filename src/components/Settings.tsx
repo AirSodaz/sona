@@ -12,11 +12,13 @@ import {
     XIcon
 } from './Icons';
 
+/** Props for the Settings modal. */
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
+/** Props for the SettingsTabButton component. */
 interface SettingsTabButtonProps {
     id: 'general' | 'models' | 'local';
     label: string;
@@ -25,6 +27,12 @@ interface SettingsTabButtonProps {
     setActiveTab: (id: 'general' | 'models' | 'local') => void;
 }
 
+/**
+ * A tab button for the settings sidebar.
+ *
+ * @param props Component props.
+ * @return The rendered tab button.
+ */
 function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps) {
     return (
         <button
@@ -41,6 +49,14 @@ function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: Setting
     );
 }
 
+/**
+ * Modal dialog for application settings.
+ *
+ * Handles configuration for general settings, model management, and local paths.
+ *
+ * @param props Component props.
+ * @return The settings modal or null if not closed.
+ */
 export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);

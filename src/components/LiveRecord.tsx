@@ -7,10 +7,18 @@ import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 import { RecordingTimer } from './RecordingTimer';
 
+/** Props for the LiveRecord component. */
 interface LiveRecordProps {
     className?: string;
 }
 
+/**
+ * Determines the supported audio MIME type for the current browser.
+ *
+ * Checks a list of common types and returns the first supported one.
+ *
+ * @return The supported MIME type string, or empty string if none found.
+ */
 export function getSupportedMimeType(): string {
     const types = [
         'audio/webm;codecs=opus',
@@ -29,17 +37,28 @@ export function getSupportedMimeType(): string {
     return '';
 }
 
+function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
+    switch (source) {
+        case 'microphone': return <Mic size={18} />;
+        case 'desktop': return <Monitor size={18} />;
+        case 'file': return <FileAudio size={18} />;
+        default: return <Mic size={18} />;
+    }
+}
+
+/**
+ * Component for handling real-time audio recording and visualization.
+ *
+ * Supports recording from microphone, system audio (desktop), or file simulation.
+ * Includes a visualizer and timer.
+ *
+ * @param props Component props.
+ * @return The rendered LiveRecord component.
+ */
 export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElement {
     const { alert } = useDialogStore();
 
-    function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
-        switch (source) {
-            case 'microphone': return <Mic size={18} />;
-            case 'desktop': return <Monitor size={18} />;
-            case 'file': return <FileAudio size={18} />;
-            default: return <Mic size={18} />;
-        }
-    }
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationRef = useRef<number>(0);
@@ -225,7 +244,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
 
-    async function initializeRecordingSession(stream: MediaStream, isFileSimulation = false) {
+    async function initializeRecordingSession(stream: MediaStream, isFileSimulation = false): Promise<void> {
         // Set up audio context and analyser if not already created (File mode creates it earlier)
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });

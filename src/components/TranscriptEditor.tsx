@@ -197,9 +197,10 @@ interface TranscriptEditorProps {
 
 /**
  * Editor component for displaying and managing transcript segments.
+ *
  * Uses virtualization for performance with large transcripts.
  *
- * @param props - Component props.
+ * @param props Component props.
  * @return The transcript editor interface.
  */
 export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.Element {

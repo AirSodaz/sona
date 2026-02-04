@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react';
 import { VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
 
+/**
+ * Automatically scrolls the transcript view to keep the active segment in view.
+ *
+ * @param virtuosoRef The ref to the Virtuoso list component.
+ */
 export function useAutoScroll(virtuosoRef: React.RefObject<VirtuosoHandle | null>) {
     const lastActiveIndexRef = useRef<number>(-1);
 

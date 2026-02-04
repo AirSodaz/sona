@@ -6,20 +6,33 @@ import { Command } from '@tauri-apps/plugin-shell';
 import { resolveResource } from '@tauri-apps/api/path';
 
 
+/**
+ * Interface defining the structure and metadata for an AI model.
+ */
 export interface ModelInfo {
+    /** Unique identifier for the model. */
     id: string;
+    /** Human-readable name of the model. */
     name: string;
+    /** Brief description of the model's capabilities. */
     description: string;
+    /** URL to download the model archive or file. */
     url: string;
+    /** Type of the model (e.g., streaming, offline). */
     type: 'streaming' | 'offline' | 'punctuation' | 'vad';
+    /** Languages supported by the model (comma-separated). */
     language: string;
-    size: string; // Display size
+    /** Display size of the model (e.g., "~100 MB"). */
+    size: string;
+    /** Whether the download is an archive that needs extraction. Defaults to true. */
     isArchive?: boolean;
+    /** Specific filename to look for or save as. */
     filename?: string;
+    /** Inference engine used by the model. */
     engine: 'onnx' | 'ncnn';
 }
 
-/** Pre-defined models available for download. */
+/** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
@@ -75,7 +88,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     }
 ];
 
-/** Pre-defined Inverse Text Normalization (ITN) models. */
+/** List of pre-defined Inverse Text Normalization (ITN) models. */
 export const ITN_MODELS = [
     {
         id: 'itn-zh-number',
@@ -87,7 +100,12 @@ export const ITN_MODELS = [
     }
 ];
 
-/** Callback function for reporting progress. */
+/**
+ * Callback function for reporting download or extraction progress.
+ *
+ * @param percentage The progress percentage (0-100).
+ * @param status A short description of the current status.
+ */
 export type ProgressCallback = (percentage: number, status: string) => void;
 
 /**
@@ -96,6 +114,7 @@ export type ProgressCallback = (percentage: number, status: string) => void;
 class ModelService {
     /**
      * Gets the local directory where models are stored.
+     *
      * Creates the directory if it does not exist.
      *
      * @return A promise that resolves to the absolute path of the models directory.
@@ -113,8 +132,8 @@ class ModelService {
     /**
      * Checks if the user's hardware is compatible with a specific model.
      *
-     * @param modelId - The ID of the model to check.
-     * @return A promise resolving to an object indicating compatibility and an optional reason for failure.
+     * @param modelId The ID of the model to check.
+     * @return A promise resolving to an object with compatibility status and optional reason.
      */
     async checkHardware(modelId: string): Promise<{ compatible: boolean, reason?: string }> {
         const model = PRESET_MODELS.find(m => m.id === modelId);
@@ -140,11 +159,12 @@ class ModelService {
 
     /**
      * Downloads a model by its ID.
+     *
      * Handles mirrors, progress reporting, and cancellation.
      *
-     * @param modelId - The ID of the model to download.
-     * @param onProgress - Optional callback for progress updates.
-     * @param signal - Optional AbortSignal to cancel the download.
+     * @param modelId The ID of the model to download.
+     * @param onProgress Optional callback for progress updates.
+     * @param signal Optional AbortSignal to cancel the download.
      * @return A promise resolving to the local path of the downloaded model.
      * @throws {Error} If the model is not found or download fails.
      */
@@ -322,7 +342,7 @@ class ModelService {
     /**
      * Resolves the local file system path for a given model ID.
      *
-     * @param modelId - The ID of the model.
+     * @param modelId The ID of the model.
      * @return A promise resolving to the model's path.
      */
     async getModelPath(modelId: string): Promise<string> {
@@ -337,7 +357,7 @@ class ModelService {
     /**
      * Checks if a model is currently installed.
      *
-     * @param modelId - The ID of the model.
+     * @param modelId The ID of the model.
      * @return A promise resolving to true if installed, false otherwise.
      */
     async isModelInstalled(modelId: string): Promise<boolean> {
@@ -348,7 +368,7 @@ class ModelService {
     /**
      * Deletes an installed model.
      *
-     * @param modelId - The ID of the model to delete.
+     * @param modelId The ID of the model to delete.
      * @return A promise resolving when deletion is complete.
      */
     async deleteModel(modelId: string): Promise<void> {
@@ -361,7 +381,7 @@ class ModelService {
     /**
      * Gets the path for an Inverse Text Normalization (ITN) model.
      *
-     * @param modelId - The ID of the ITN model.
+     * @param modelId The ID of the ITN model.
      * @return A promise resolving to the path, or empty string if not found.
      */
     async getITNModelPath(modelId: string): Promise<string> {
@@ -372,11 +392,10 @@ class ModelService {
     }
 
     /**
-     * Efficiently resolve paths for all enabled ITN models in parallel.
-     * Respects the provided order.
+     * Efficiently resolves paths for all enabled ITN models in parallel, respecting preference order.
      *
-     * @param enabledModels - A set of enabled model IDs.
-     * @param order - The preferred order of model IDs.
+     * @param enabledModels A set of enabled model IDs.
+     * @param order The preferred order of model IDs.
      * @return A promise resolving to an array of valid file paths.
      */
     async getEnabledITNModelPaths(enabledModels: Set<string>, order: string[]): Promise<string[]> {
@@ -409,7 +428,7 @@ class ModelService {
     /**
      * Checks if an ITN model is installed.
      *
-     * @param modelId - The ID of the ITN model.
+     * @param modelId The ID of the ITN model.
      * @return A promise resolving to true if installed.
      */
     async isITNModelInstalled(modelId: string): Promise<boolean> {
@@ -420,9 +439,9 @@ class ModelService {
     /**
      * Downloads an ITN model.
      *
-     * @param modelId - The ID of the ITN model.
-     * @param onProgress - Optional callback for progress updates.
-     * @param signal - Optional AbortSignal for cancellation.
+     * @param modelId The ID of the ITN model.
+     * @param onProgress Optional callback for progress updates.
+     * @param signal Optional AbortSignal for cancellation.
      * @return A promise resolving to the path of the downloaded model.
      * @throws {Error} If download fails.
      */
@@ -539,12 +558,14 @@ class ModelService {
     }
 
     /**
-     * Extracts an archive using a sidecar process (e.g., node script utilizing system tools or libraries).
+     * Extracts an archive using a sidecar process.
      *
-     * @param archivePath - The path to the archive file.
-     * @param targetDir - The directory to extract into.
-     * @param onProgress - Optional callback for extraction progress.
-     * @param signal - Optional AbortSignal.
+     * Uses a node script utilizing system tools or libraries to handle the extraction.
+     *
+     * @param archivePath The path to the archive file.
+     * @param targetDir The directory to extract into.
+     * @param onProgress Optional callback for extraction progress.
+     * @param signal Optional AbortSignal.
      * @return A promise that resolves when extraction is complete.
      */
     private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {

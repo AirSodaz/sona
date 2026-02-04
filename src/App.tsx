@@ -13,6 +13,7 @@ import { GlobalDialog } from './components/GlobalDialog';
 import { useTranscriptStore } from './stores/transcriptStore';
 
 // Icons
+/** Icon for opening settings. */
 function SettingsIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -22,6 +23,7 @@ function SettingsIcon(): React.JSX.Element {
   );
 }
 
+/** Icon for the application logo. */
 function WaveformIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -35,6 +37,7 @@ function WaveformIcon(): React.JSX.Element {
 
 /**
  * Main application component.
+ *
  * Handles layout, initialization of config, theme, and language.
  *
  * @return The root application element.

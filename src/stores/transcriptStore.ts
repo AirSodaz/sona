@@ -40,41 +40,48 @@ interface TranscriptState {
     // Segment CRUD operations
     /**
      * Adds a new segment.
-     * @param segment - The segment data (excluding ID).
+     *
+     * @param segment The segment data (excluding ID).
      * @return The ID of the newly created segment.
      */
     addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
 
     /**
      * Updates an existing segment or adds it if it doesn't exist.
+     *
      * Optimized for streaming usage.
-     * @param segment - The segment to upsert.
+     *
+     * @param segment The segment to upsert.
      */
     upsertSegment: (segment: TranscriptSegment) => void;
 
     /**
      * Updates specific fields of a segment.
-     * @param id - The ID of the segment to update.
-     * @param updates - Partial segment data.
+     *
+     * @param id The ID of the segment to update.
+     * @param updates Partial segment data.
      */
     updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
 
     /**
      * Deletes a segment by ID.
-     * @param id - The ID of the segment to delete.
+     *
+     * @param id The ID of the segment to delete.
      */
     deleteSegment: (id: string) => void;
 
     /**
      * Merges two segments into one.
-     * @param id1 - The ID of the first segment.
-     * @param id2 - The ID of the second segment.
+     *
+     * @param id1 The ID of the first segment.
+     * @param id2 The ID of the second segment.
      */
     mergeSegments: (id1: string, id2: string) => void;
 
     /**
      * Replaces all segments with a new list.
-     * @param segments - The new list of segments.
+     *
+     * @param segments The new list of segments.
      */
     setSegments: (segments: TranscriptSegment[]) => void;
 
@@ -96,17 +103,20 @@ interface TranscriptState {
     // Audio actions
     /**
      * Sets the current audio file and generates a URL.
-     * @param file - The file object or null.
+     *
+     * @param file The file object or null.
      */
     setAudioFile: (file: File | null) => void;
     /**
      * Sets the audio URL directly.
-     * @param url - The audio URL or null.
+     *
+     * @param url The audio URL or null.
      */
     setAudioUrl: (url: string | null) => void;
     /**
      * Sets the current playback time and updates active segment.
-     * @param time - Current time in seconds.
+     *
+     * @param time Current time in seconds.
      */
     setCurrentTime: (time: number) => void;
     /** Sets the playing state. */
@@ -115,7 +125,8 @@ interface TranscriptState {
     // Config actions
     /**
      * Updates the application configuration.
-     * @param config - Partial configuration updates.
+     *
+     * @param config Partial configuration updates.
      */
     setConfig: (config: Partial<AppConfig>) => void;
 }

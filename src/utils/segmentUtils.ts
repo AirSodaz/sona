@@ -12,6 +12,7 @@ const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
 /**
  * Calculates the length of the text excluding punctuation and whitespace.
+ *
  * Optimized to avoid unnecessary string allocations.
  */
 function getEffectiveLength(text: string): number {
@@ -32,9 +33,10 @@ function getEffectiveLength(text: string): number {
 
 /**
  * Splits transcript segments based on punctuation marks.
+ *
  * Uses token timestamps for precise splitting if available.
  *
- * @param segments - The array of transcript segments to split.
+ * @param segments The array of transcript segments to split.
  * @return A new array of split transcript segments.
  */
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
@@ -198,7 +200,7 @@ interface TokenMap {
 /**
  * Builds a map of tokens to their timestamps and effective indices.
  *
- * @param segment - The transcript segment to build the map from.
+ * @param segment The transcript segment to build the map from.
  * @return The token map, or null if tokens or timestamps are missing.
  */
 function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
@@ -232,9 +234,9 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
 /**
  * Finds the timestamp corresponding to an effective character index from the map.
  *
- * @param map - The token map.
- * @param effectiveIndex - The effective character index to search for.
- * @param hintIndex - An optional hint index to optimize sequential access.
+ * @param map The token map.
+ * @param effectiveIndex The effective character index to search for.
+ * @param hintIndex An optional hint index to optimize sequential access.
  * @return An object containing the timestamp and the index in the map, or undefined if not found.
  */
 function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: number = 0): { timestamp: number, index: number } | undefined {
@@ -286,12 +288,12 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
 
 /**
  * Efficiently finds the segment containing the given time using binary search.
- * Assumes segments are sorted by start time.
- * Accepts an optional hint index for O(1) sequential access.
  *
- * @param segments - The list of transcript segments.
- * @param time - The time to search for.
- * @param hintIndex - Optional hint index to start the search from.
+ * Assumes segments are sorted by start time. Accepts an optional hint index for O(1) sequential access.
+ *
+ * @param segments The list of transcript segments.
+ * @param time The time to search for.
+ * @param hintIndex Optional hint index to start the search from.
  * @return An object containing the segment (if found) and its index.
  */
 export function findSegmentAndIndexForTime(
@@ -353,10 +355,11 @@ export function findSegmentAndIndexForTime(
 
 /**
  * Efficiently finds the segment containing the given time using binary search.
+ *
  * Assumes segments are sorted by start time.
  *
- * @param segments - The list of transcript segments.
- * @param time - The time to search for.
+ * @param segments The list of transcript segments.
+ * @param time The time to search for.
  * @return The segment containing the time, or undefined if not found.
  */
 export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {

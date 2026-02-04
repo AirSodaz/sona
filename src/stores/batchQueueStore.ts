@@ -23,7 +23,8 @@ interface BatchQueueState {
 
     /**
      * Adds files to the queue.
-     * @param filePaths - Array of file paths to add.
+     *
+     * @param filePaths Array of file paths to add.
      */
     addFiles: (filePaths: string[]) => void;
 
@@ -34,35 +35,40 @@ interface BatchQueueState {
 
     /**
      * Sets the active/selected item.
-     * @param id - Item ID to set as active.
+     *
+     * @param id Item ID to set as active.
      */
     setActiveItem: (id: string | null) => void;
 
     /**
      * Updates an item's status and progress.
-     * @param id - Item ID.
-     * @param status - New status.
-     * @param progress - New progress value.
+     *
+     * @param id Item ID.
+     * @param status New status.
+     * @param progress New progress value.
      */
     updateItemStatus: (id: string, status: BatchQueueItemStatus, progress?: number) => void;
 
     /**
      * Updates an item's segments.
-     * @param id - Item ID.
-     * @param segments - New segments array.
+     *
+     * @param id Item ID.
+     * @param segments New segments array.
      */
     updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
 
     /**
      * Sets error state for an item.
-     * @param id - Item ID.
-     * @param message - Error message.
+     *
+     * @param id Item ID.
+     * @param message Error message.
      */
     setItemError: (id: string, message: string) => void;
 
     /**
      * Removes an item from the queue.
-     * @param id - Item ID to remove.
+     *
+     * @param id Item ID to remove.
      */
     removeItem: (id: string) => void;
 
@@ -71,13 +77,15 @@ interface BatchQueueState {
 
     /**
      * Sets the timeline mode setting.
-     * @param enabled - Whether to enable timeline mode.
+     *
+     * @param enabled Whether to enable timeline mode.
      */
     setEnableTimeline: (enabled: boolean) => void;
 
     /**
      * Sets the language setting.
-     * @param language - Language code.
+     *
+     * @param language Language code.
      */
     setLanguage: (language: string) => void;
 }

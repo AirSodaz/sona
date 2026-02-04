@@ -15,7 +15,7 @@ interface ExportOptions {
 /**
  * Opens a save dialog and exports the transcript segments to the selected file.
  *
- * @param options - The export options containing segments, format, and optional filename.
+ * @param options The export options containing segments, format, and optional filename.
  * @return A promise that resolves to true if the file was saved, false if cancelled.
  * @throws {Error} If writing the file fails.
  */

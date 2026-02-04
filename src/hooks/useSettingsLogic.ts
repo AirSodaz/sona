@@ -5,6 +5,15 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
 import { open } from '@tauri-apps/plugin-dialog';
 
+/**
+ * Custom hook managing the business logic for the Settings dialog.
+ *
+ * Handles state for tabs, model paths, downloading, and saving configuration.
+ *
+ * @param isOpen Whether the settings dialog is open.
+ * @param onClose Callback to close the dialog.
+ * @return An object containing form state and action handlers.
+ */
 export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
