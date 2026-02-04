@@ -73,19 +73,26 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
 
     return (
         <div className={`export-menu ${className}`} ref={dropdownRef}>
-            <button
-                id="export-menu-button"
-                className="btn btn-secondary"
-                onClick={() => setIsOpen(!isOpen)}
-                disabled={isExporting || segments.length === 0}
-                aria-haspopup="true"
-                aria-expanded={isOpen}
-                aria-controls="export-menu-dropdown"
+            <div
+                data-tooltip={segments.length === 0 ? t('export.no_segments') : undefined}
+                data-tooltip-pos="bottom"
+                style={{ display: 'inline-block' }}
             >
-                <DownloadIcon />
-                <span>{isExporting ? t('export.exporting') : t('export.button')}</span>
-                <ChevronDownIcon />
-            </button>
+                <button
+                    id="export-menu-button"
+                    className="btn btn-secondary"
+                    onClick={() => setIsOpen(!isOpen)}
+                    disabled={isExporting || segments.length === 0}
+                    style={isExporting || segments.length === 0 ? { pointerEvents: 'none' } : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={isOpen}
+                    aria-controls="export-menu-dropdown"
+                >
+                    <DownloadIcon />
+                    <span>{isExporting ? t('export.exporting') : t('export.button')}</span>
+                    <ChevronDownIcon />
+                </button>
+            </div>
 
             {isOpen && (
                 <div
