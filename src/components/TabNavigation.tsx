@@ -18,7 +18,7 @@ interface TabNavigationProps {
  * @param props - Component props.
  * @return The navigation tabs.
  */
-export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) => {
+export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX.Element {
     const { t } = useTranslation();
     const mode = useTranscriptStore((state) => state.mode);
     const setMode = useTranscriptStore((state) => state.setMode);
@@ -53,6 +53,6 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ className = '' }) 
             </button>
         </div>
     );
-};
+}
 
 export default TabNavigation;

@@ -66,6 +66,84 @@ function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLa
     );
 }
 
+interface ActiveItemStatusProps {
+    item: {
+        status: 'processing' | 'error' | 'pending' | 'complete';
+        filename: string;
+        progress: number;
+        errorMessage?: string;
+    } | null;
+}
+
+function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | null {
+    const { t } = useTranslation();
+
+    if (!item) {
+        return (
+            <div className="batch-queue-empty">
+                <p>{t('batch.queue_empty')}</p>
+            </div>
+        );
+    }
+
+    switch (item.status) {
+        case 'processing':
+            return (
+                <div className="batch-queue-processing">
+                    <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
+                        <h3>{t('batch.processing_title')}</h3>
+                        <p>{item.filename}</p>
+                    </div>
+                    <div
+                        className="progress-bar"
+                        role="progressbar"
+                        aria-valuenow={Math.round(item.progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={t('batch.processing_title')}
+                    >
+                        <div
+                            className="progress-fill"
+                            style={{ width: `${item.progress}%` }}
+                        />
+                    </div>
+                    <div className="progress-text" aria-live="polite">
+                        <span>{t('batch.transcribing')}</span>
+                        <span>{Math.round(item.progress)}%</span>
+                    </div>
+                </div>
+            );
+        case 'error':
+            return (
+                <div className="batch-queue-error">
+                    <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                        <h3>{t('batch.file_failed')}</h3>
+                        <p>{item.errorMessage || t('common.error')}</p>
+                    </div>
+                </div>
+            );
+        case 'pending':
+            return (
+                <div className="batch-queue-pending">
+                    <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                        <h3>{t('batch.queue_waiting')}</h3>
+                        <p>{item.filename}</p>
+                    </div>
+                </div>
+            );
+        default:
+            // Complete - show nothing here, TranscriptEditor will show the content
+            return (
+                <div className="batch-queue-complete">
+                    <div className="drop-zone-text" style={{ textAlign: 'center' }}>
+                        <h3>{t('batch.file_complete')}</h3>
+                        <p>{item.filename}</p>
+                    </div>
+                </div>
+            );
+    }
+}
+
 /** Props for BatchImport. */
 interface BatchImportProps {
     /** Optional CSS class name. */
@@ -145,7 +223,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         };
     }, []);
 
-    const handleTauriDrop = (payload: unknown) => {
+    const handleTauriDrop = (payload: unknown): void => {
         let files: string[] = [];
 
         if (Array.isArray(payload)) {
@@ -186,28 +264,28 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         setIsDragOver(false);
     };
 
-    const handleDragOver = useCallback((e: React.DragEvent) => {
+    const handleDragOver = useCallback((e: React.DragEvent): void => {
         e.preventDefault();
         if (!isDragOver) setIsDragOver(true);
     }, [isDragOver]);
 
-    const handleDragEnter = useCallback((e: React.DragEvent) => {
+    const handleDragEnter = useCallback((e: React.DragEvent): void => {
         e.preventDefault();
         setIsDragOver(true);
     }, []);
 
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const handleDragLeave = useCallback((e: React.DragEvent): void => {
         e.preventDefault();
         setIsDragOver(false);
     }, []);
 
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent): void => {
         if (e.key === 'Enter' || e.key === ' ') {
             handleClick();
         }
     }, []);
 
-    const handleClick = async () => {
+    const handleClick = async (): Promise<void> => {
         try {
             const selected = await open({
                 multiple: true,
@@ -232,83 +310,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         }
     };
 
-    interface ActiveItemStatusProps {
-        item: {
-            status: 'processing' | 'error' | 'pending' | 'complete';
-            filename: string;
-            progress: number;
-            errorMessage?: string;
-        } | null;
-    }
 
-    function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | null {
-        const { t } = useTranslation();
-
-        if (!item) {
-            return (
-                <div className="batch-queue-empty">
-                    <p>{t('batch.queue_empty')}</p>
-                </div>
-            );
-        }
-
-        switch (item.status) {
-            case 'processing':
-                return (
-                    <div className="batch-queue-processing">
-                        <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
-                            <h3>{t('batch.processing_title')}</h3>
-                            <p>{item.filename}</p>
-                        </div>
-                        <div
-                            className="progress-bar"
-                            role="progressbar"
-                            aria-valuenow={Math.round(item.progress)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={t('batch.processing_title')}
-                        >
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${item.progress}%` }}
-                            />
-                        </div>
-                        <div className="progress-text" aria-live="polite">
-                            <span>{t('batch.transcribing')}</span>
-                            <span>{Math.round(item.progress)}%</span>
-                        </div>
-                    </div>
-                );
-            case 'error':
-                return (
-                    <div className="batch-queue-error">
-                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                            <h3>{t('batch.file_failed')}</h3>
-                            <p>{item.errorMessage || t('common.error')}</p>
-                        </div>
-                    </div>
-                );
-            case 'pending':
-                return (
-                    <div className="batch-queue-pending">
-                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                            <h3>{t('batch.queue_waiting')}</h3>
-                            <p>{item.filename}</p>
-                        </div>
-                    </div>
-                );
-            default:
-                // Complete - show nothing here, TranscriptEditor will show the content
-                return (
-                    <div className="batch-queue-complete">
-                        <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-                            <h3>{t('batch.file_complete')}</h3>
-                            <p>{item.filename}</p>
-                        </div>
-                    </div>
-                );
-        }
-    }
 
     // Render the queue view when we have items
     if (hasQueueItems) {

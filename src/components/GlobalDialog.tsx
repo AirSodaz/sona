@@ -4,6 +4,38 @@ import { AlertCircle, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useDialogStore } from '../stores/dialogStore';
 
 /**
+ * Renders the appropriate icon based on dialog variant.
+ */
+function DialogIcon({ variant }: { variant: string }): React.JSX.Element {
+    switch (variant) {
+        case 'error':
+            return <AlertCircle className="w-6 h-6 text-red-500" style={{ color: 'var(--color-error)' }} />;
+        case 'warning':
+            return <AlertTriangle className="w-6 h-6 text-amber-500" style={{ color: 'var(--color-warning)' }} />;
+        case 'success':
+            return <CheckCircle className="w-6 h-6 text-green-500" style={{ color: 'var(--color-success)' }} />;
+        case 'info':
+        default:
+            return <Info className="w-6 h-6 text-blue-500" style={{ color: 'var(--color-info)' }} />;
+    }
+}
+
+/**
+ * Gets the dialog title based on variant if not provided.
+ * Note: 't' is passed from the component to avoid hook rules in helper.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getDialogTitle(t: any, variant: string, title?: string): string {
+    if (title) return title;
+    switch (variant) {
+        case 'error': return t('common.error', { defaultValue: 'Error' });
+        case 'warning': return t('common.warning', { defaultValue: 'Warning' });
+        case 'success': return t('common.success', { defaultValue: 'Success' });
+        default: return t('common.info', { defaultValue: 'Info' });
+    }
+}
+
+/**
  * Global modal dialog component.
  * Renders alert or confirm dialogs based on the dialog store state.
  * Handles focus management and keyboard interaction (Escape to close).
@@ -83,30 +115,6 @@ export function GlobalDialog(): React.JSX.Element | null {
         cancelLabel,
     } = options;
 
-    const getIcon = () => {
-        switch (variant) {
-            case 'error':
-                return <AlertCircle className="w-6 h-6 text-red-500" style={{ color: 'var(--color-error)' }} />;
-            case 'warning':
-                return <AlertTriangle className="w-6 h-6 text-amber-500" style={{ color: 'var(--color-warning)' }} />;
-            case 'success':
-                return <CheckCircle className="w-6 h-6 text-green-500" style={{ color: 'var(--color-success)' }} />;
-            case 'info':
-            default:
-                return <Info className="w-6 h-6 text-blue-500" style={{ color: 'var(--color-info)' }} />;
-        }
-    };
-
-    const getTitle = () => {
-        if (title) return title;
-        switch (variant) {
-            case 'error': return t('common.error', { defaultValue: 'Error' });
-            case 'warning': return t('common.warning', { defaultValue: 'Warning' });
-            case 'success': return t('common.success', { defaultValue: 'Success' });
-            default: return t('common.info', { defaultValue: 'Info' });
-        }
-    };
-
     return (
         <div className="settings-overlay" style={{ zIndex: 2000 }}>
             <div
@@ -131,7 +139,7 @@ export function GlobalDialog(): React.JSX.Element | null {
             >
                 <div style={{ display: 'flex', alignItems: 'start', gap: 'var(--spacing-md)' }}>
                     <div style={{ flexShrink: 0, paddingTop: 4 }}>
-                        {getIcon()}
+                        <DialogIcon variant={variant} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <h3
@@ -143,7 +151,7 @@ export function GlobalDialog(): React.JSX.Element | null {
                                 marginBottom: 'var(--spacing-xs)',
                             }}
                         >
-                            {getTitle()}
+                            {getDialogTitle(t, variant, title)}
                         </h3>
                         <p
                             id="dialog-desc"

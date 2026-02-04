@@ -17,6 +17,30 @@ interface SettingsProps {
     onClose: () => void;
 }
 
+interface SettingsTabButtonProps {
+    id: 'general' | 'models' | 'local';
+    label: string;
+    Icon: React.FC;
+    activeTab: string;
+    setActiveTab: (id: 'general' | 'models' | 'local') => void;
+}
+
+function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps) {
+    return (
+        <button
+            className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
+            onClick={() => setActiveTab(id)}
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`settings-panel-${id}`}
+            id={`settings-tab-${id}`}
+        >
+            <Icon />
+            {label}
+        </button>
+    );
+}
+
 export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
@@ -116,21 +140,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         }
     }, [isOpen, onClose]);
 
-    function renderTabButton(id: 'general' | 'models' | 'local', label: string, Icon: React.FC) {
-        return (
-            <button
-                className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
-                onClick={() => setActiveTab(id)}
-                role="tab"
-                aria-selected={activeTab === id}
-                aria-controls={`settings-panel-${id}`}
-                id={`settings-tab-${id}`}
-            >
-                <Icon />
-                {label}
-            </button>
-        );
-    }
+
 
     if (!isOpen) return null;
 
@@ -153,9 +163,27 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                     </div>
 
                     <div className="settings-tabs-container" role="tablist" aria-orientation="vertical">
-                        {renderTabButton('general', t('settings.general'), GeneralIcon)}
-                        {renderTabButton('models', t('settings.model_hub'), ModelIcon)}
-                        {renderTabButton('local', t('settings.local_path'), LocalIcon)}
+                        <SettingsTabButton
+                            id="general"
+                            label={t('settings.general')}
+                            Icon={GeneralIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                        />
+                        <SettingsTabButton
+                            id="models"
+                            label={t('settings.model_hub')}
+                            Icon={ModelIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                        />
+                        <SettingsTabButton
+                            id="local"
+                            label={t('settings.local_path')}
+                            Icon={LocalIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                        />
                     </div>
                 </div>
 

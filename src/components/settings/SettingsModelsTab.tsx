@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, ModelInfo } from '../../services/modelService';
-import { ModelCard } from '../ModelCard';
+import { ModelCard } from './ModelCard';
 
 interface SettingsModelsTabProps {
     installedModels: Set<string>;
