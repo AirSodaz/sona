@@ -1,7 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { TFunction } from 'i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
-import { BatchQueueItemStatus } from '../types/batchQueue';
+import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon } from './Icons';
 
 
@@ -24,6 +25,91 @@ const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
     }
 };
 
+/** Props for QueueItem component. */
+interface QueueItemProps {
+    item: BatchQueueItem;
+    isActive: boolean;
+    onActivate: (id: string) => void;
+    onRemove: (id: string) => void;
+    t: TFunction;
+}
+
+/**
+ * Individual queue item component.
+ * Memoized to prevent re-renders of the entire list when only one item updates.
+ */
+function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueItemProps): React.JSX.Element {
+    const handleClick = () => {
+        onActivate(item.id);
+    };
+
+    const handleRemove = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onRemove(item.id);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onActivate(item.id);
+        }
+    };
+
+    return (
+        <div
+            className={`queue-item queue-item-${item.status} ${isActive ? 'queue-item-active' : ''}`}
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            role="listitem"
+            tabIndex={0}
+            aria-current={isActive ? 'true' : undefined}
+            aria-label={`${item.filename} - ${t(`batch.status_${item.status}`)}`}
+        >
+            <div className="queue-item-icon" aria-hidden="true">
+                {getStatusIcon(item.status)}
+            </div>
+
+            <div className="queue-item-content">
+                <div className="queue-item-filename" title={item.filename}>
+                    {item.filename}
+                </div>
+
+                {item.status === 'processing' && (
+                    <div className="queue-item-progress">
+                        <div
+                            className="queue-item-progress-fill"
+                            style={{ width: `${item.progress}%` }}
+                            role="progressbar"
+                            aria-valuenow={Math.round(item.progress)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                        />
+                    </div>
+                )}
+
+                {item.status === 'error' && item.errorMessage && (
+                    <div className="queue-item-error" title={item.errorMessage}>
+                        {t('batch.file_failed')}
+                    </div>
+                )}
+            </div>
+
+            <button
+                className="btn btn-icon queue-item-remove"
+                onClick={handleRemove}
+                aria-label={t('common.delete_item', { item: item.filename })}
+            >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+            </button>
+        </div>
+    );
+}
+
+const QueueItem = React.memo(QueueItemComponent);
+
 /** Props for FileQueueSidebar. */
 interface FileQueueSidebarProps {
     /** Optional CSS class name. */
@@ -44,22 +130,6 @@ export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): Rea
     const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
     const removeItem = useBatchQueueStore((state) => state.removeItem);
     const clearQueue = useBatchQueueStore((state) => state.clearQueue);
-
-    const handleItemClick = (id: string) => {
-        setActiveItem(id);
-    };
-
-    const handleRemoveItem = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        removeItem(id);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setActiveItem(id);
-        }
-    };
 
     if (queueItems.length === 0) {
         return null;
@@ -82,56 +152,14 @@ export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): Rea
 
             <div className="queue-list" role="list" aria-label={t('batch.queue_title', { count: queueItems.length })}>
                 {queueItems.map((item) => (
-                    <div
+                    <QueueItem
                         key={item.id}
-                        className={`queue-item queue-item-${item.status} ${activeItemId === item.id ? 'queue-item-active' : ''}`}
-                        onClick={() => handleItemClick(item.id)}
-                        onKeyDown={(e) => handleKeyDown(e, item.id)}
-                        role="listitem"
-                        tabIndex={0}
-                        aria-current={activeItemId === item.id ? 'true' : undefined}
-                        aria-label={`${item.filename} - ${t(`batch.status_${item.status}`)}`}
-                    >
-                        <div className="queue-item-icon" aria-hidden="true">
-                            {getStatusIcon(item.status)}
-                        </div>
-
-                        <div className="queue-item-content">
-                            <div className="queue-item-filename" title={item.filename}>
-                                {item.filename}
-                            </div>
-
-                            {item.status === 'processing' && (
-                                <div className="queue-item-progress">
-                                    <div
-                                        className="queue-item-progress-fill"
-                                        style={{ width: `${item.progress}%` }}
-                                        role="progressbar"
-                                        aria-valuenow={Math.round(item.progress)}
-                                        aria-valuemin={0}
-                                        aria-valuemax={100}
-                                    />
-                                </div>
-                            )}
-
-                            {item.status === 'error' && item.errorMessage && (
-                                <div className="queue-item-error" title={item.errorMessage}>
-                                    {t('batch.file_failed')}
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            className="btn btn-icon queue-item-remove"
-                            onClick={(e) => handleRemoveItem(e, item.id)}
-                            aria-label={t('common.delete_item', { item: item.filename })}
-                        >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    </div>
+                        item={item}
+                        isActive={activeItemId === item.id}
+                        onActivate={setActiveItem}
+                        onRemove={removeItem}
+                        t={t}
+                    />
                 ))}
             </div>
         </div>
