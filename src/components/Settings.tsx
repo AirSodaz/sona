@@ -17,7 +17,7 @@ interface SettingsProps {
     onClose: () => void;
 }
 
-export function Settings({ isOpen, onClose }: SettingsProps) {
+export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
 

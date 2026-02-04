@@ -123,7 +123,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, []);
 
     // Start recording
-    const startRecording = async () => {
+    async function startRecording(): Promise<void> {
         // Reset player state
         setAudioFile(null);
 
@@ -180,9 +180,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
         }
-    };
+    }
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -353,17 +353,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     };
 
     // Pause recording
-    const pauseRecording = () => {
+    function pauseRecording(): void {
         if (mediaRecorderRef.current && isRecording && !isPaused) {
             mediaRecorderRef.current.pause();
             if (audioRef.current) audioRef.current.pause();
             setIsPaused(true);
             isPausedRef.current = true;
         }
-    };
+    }
 
     // Resume recording
-    const resumeRecording = () => {
+    function resumeRecording(): void {
         if (mediaRecorderRef.current && isRecording && isPaused) {
             mediaRecorderRef.current.resume();
             if (audioRef.current) audioRef.current.play();
@@ -378,10 +378,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             // Restart visualizer loop
             drawVisualizer();
         }
-    };
+    }
 
     // Stop recording
-    const stopRecording = () => {
+    function stopRecording(): void {
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current = null;
@@ -412,7 +412,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         setIsPaused(false);
         isRecordingRef.current = false;
         isPausedRef.current = false;
-    };
+    }
+
+    function getRecordingStatusText(): string {
+        if (isRecording) {
+            return isPaused ? t('live.recording_paused') : t('live.recording_active');
+        }
+        return t('live.start_hint');
+    }
 
 
     // Cleanup on unmount
@@ -509,10 +516,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             )}
 
             <p className="recording-status-text" aria-live="polite">
-                {isRecording
-                    ? (isPaused ? t('live.recording_paused') : t('live.recording_active'))
-                    : t('live.start_hint')
-                }
+                {getRecordingStatusText()}
             </p>
         </div>
     );

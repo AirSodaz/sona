@@ -10,7 +10,7 @@ import { useDialogStore } from '../stores/dialogStore';
  *
  * @return The rendered dialog or null if closed.
  */
-export const GlobalDialog: React.FC = () => {
+export function GlobalDialog(): React.JSX.Element | null {
     const { isOpen, options, close } = useDialogStore();
     const { t } = useTranslation();
     const confirmButtonRef = useRef<HTMLButtonElement>(null);

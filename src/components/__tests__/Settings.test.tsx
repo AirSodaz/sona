@@ -13,18 +13,20 @@ vi.mock('react-i18next', () => ({
 }));
 
 const mockSetConfig = vi.fn();
+const mockState = {
+    config: {
+        streamingModelPath: '/test/streaming',
+        offlineModelPath: '/test/offline',
+        enableITN: true,
+        enabledITNModels: ['itn-zh-number'],
+        itnRulesOrder: ['itn-zh-number'],
+        appLanguage: 'auto'
+    },
+    setConfig: mockSetConfig
+};
+
 vi.mock('../../stores/transcriptStore', () => ({
-    useTranscriptStore: (selector: any) => selector({
-        config: {
-            streamingModelPath: '/test/streaming',
-            offlineModelPath: '/test/offline',
-            enableITN: true,
-            enabledITNModels: ['itn-zh-number'],
-            itnRulesOrder: ['itn-zh-number'],
-            appLanguage: 'auto'
-        },
-        setConfig: mockSetConfig
-    })
+    useTranscriptStore: (selector: (state: any) => any) => selector(mockState)
 }));
 
 vi.mock('../../services/modelService', () => ({
@@ -77,24 +79,23 @@ describe('Settings', () => {
 
         // Simulate download
         vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
-             if (onProgress) {
-                 onProgress(50, 'Downloading...');
-                 await new Promise(r => setTimeout(r, 10));
-                 onProgress(100, 'Done');
-             }
-             return '/path/to/downloaded/model';
+            if (onProgress) {
+                onProgress(50, 'Downloading...');
+                onProgress(100, 'Done');
+            }
+            return '/path/to/downloaded/model';
         });
 
         fireEvent.click(downloadBtn);
 
         // Check for progress bar
         await waitFor(() => {
-             expect(screen.getByRole('progressbar')).toBeDefined();
+            expect(screen.getByRole('progressbar')).toBeDefined();
         });
 
         // Wait for completion (modelService.downloadModel resolves)
         await waitFor(() => {
-             expect(modelService.downloadModel).toHaveBeenCalledWith('test-model', expect.any(Function), expect.any(AbortSignal));
+            expect(modelService.downloadModel).toHaveBeenCalledWith('test-model', expect.any(Function), expect.any(AbortSignal));
         });
     });
 
@@ -121,11 +122,11 @@ describe('Settings', () => {
         });
 
         // Verify list refreshes
-        expect(modelService.isModelInstalled).toHaveBeenCalledTimes(3); // Initial + after delete + ...
+        expect(modelService.isModelInstalled).toHaveBeenCalledTimes(2); // Initial + after delete
     });
 
     it('loads a model path when Load is clicked', async () => {
-         // Setup: Model is installed
+        // Setup: Model is installed
         vi.mocked(modelService.isModelInstalled).mockResolvedValue(true);
 
         render(<Settings isOpen={true} onClose={onClose} />);
@@ -140,7 +141,9 @@ describe('Settings', () => {
 
         // Check if path was set in state (switch to Local Path tab to verify)
         fireEvent.click(screen.getByText('settings.local_path'));
-        expect(screen.getByDisplayValue('/path/to/model')).toBeDefined();
+        await waitFor(() => {
+            expect(screen.getByDisplayValue('/path/to/model')).toBeDefined();
+        });
     });
 
     it('saves configuration', async () => {
