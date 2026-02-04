@@ -6,43 +6,28 @@ import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 import { RecordingTimer } from './RecordingTimer';
+import { drawAudioVisualizer } from '../utils/visualizer';
+import { getSupportedMimeType } from '../utils/audioUtils';
 
 interface LiveRecordProps {
     className?: string;
 }
 
-export function getSupportedMimeType(): string {
-    const types = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-        'audio/aac',
-        'audio/ogg',
-        ''
-    ];
-
-    for (const type of types) {
-        if (type === '' || MediaRecorder.isTypeSupported(type)) {
-            return type;
-        }
+function SourceIcon({ source }: { source: 'microphone' | 'desktop' | 'file' }): React.JSX.Element {
+    switch (source) {
+        case 'microphone': return <Mic size={18} />;
+        case 'desktop': return <Monitor size={18} />;
+        case 'file': return <FileAudio size={18} />;
+        default: return <Mic size={18} />;
     }
-    return '';
 }
 
 export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElement {
     const { alert } = useDialogStore();
 
-    function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
-        switch (source) {
-            case 'microphone': return <Mic size={18} />;
-            case 'desktop': return <Monitor size={18} />;
-            case 'file': return <FileAudio size={18} />;
-            default: return <Mic size={18} />;
-        }
-    }
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
-    const animationRef = useRef<number>(0);
+    const visualizerCleanupRef = useRef<(() => void) | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -66,60 +51,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         const analyser = analyserRef.current;
         if (!canvas || !analyser) return;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        // Cleanup previous if any
+        if (visualizerCleanupRef.current) {
+            visualizerCleanupRef.current();
+        }
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        // Cache for gradients: 256 possible byte values
-        const gradients = new Array<CanvasGradient | undefined>(256);
-        let cachedHeight = canvas.height;
-
-        const draw = () => {
-            // Optimization: Stop the loop if paused
-            if (isPausedRef.current) {
-                return;
-            }
-
-            animationRef.current = window.requestAnimationFrame(draw);
-
-            // Invalidate cache if height changes (e.g. resize)
-            if (canvas.height !== cachedHeight) {
-                gradients.fill(undefined);
-                cachedHeight = canvas.height;
-            }
-
-            analyser.getByteFrequencyData(dataArray);
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Use CSS background
-
-            const barWidth = (canvas.width / bufferLength) * 2.5;
-            let x = 0;
-
-            for (let i = 0; i < bufferLength; i++) {
-                const value = dataArray[i];
-                const barHeight = (value / 255) * canvas.height * 0.8;
-
-                // Optimization: Cache gradients based on value (0-255)
-                // This prevents creating ~7680 CanvasGradient objects per second
-                if (!gradients[value]) {
-                    // Create gradient - Warm Black/Gray for Notion look
-                    const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
-                    gradient.addColorStop(0, '#37352f'); // Notion Black
-                    gradient.addColorStop(1, '#787774'); // Notion Gray
-                    gradients[value] = gradient;
-                }
-
-                ctx.fillStyle = gradients[value]!;
-                // Rounded tops would require more complex drawing (arc), simple rect is fine for now
-                ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
-
-                x += barWidth;
-            }
-        };
-
-        draw();
+        visualizerCleanupRef.current = drawAudioVisualizer(canvas, analyser, isPausedRef);
     }, []);
 
     // Start recording
@@ -372,8 +309,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             isPausedRef.current = false;
 
             // Prevent double loops if resume happens quickly
-            if (animationRef.current) {
-                window.cancelAnimationFrame(animationRef.current);
+            if (visualizerCleanupRef.current) {
+                visualizerCleanupRef.current();
             }
 
             // Restart visualizer loop
@@ -393,8 +330,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
 
-        if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
-            window.cancelAnimationFrame(animationRef.current);
+        if (visualizerCleanupRef.current) {
+            visualizerCleanupRef.current();
+            visualizerCleanupRef.current = null;
         }
 
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -426,8 +364,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
-                window.cancelAnimationFrame(animationRef.current);
+            if (visualizerCleanupRef.current) {
+                visualizerCleanupRef.current();
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close();
@@ -500,7 +438,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             {!isRecording && (
                 <div className="input-source-selector">
                     <div className="source-select-wrapper">
-                        {getSourceIcon(inputSource)}
+                        <SourceIcon source={inputSource} />
                         <select
                             value={inputSource}
                             onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}

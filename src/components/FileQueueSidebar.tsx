@@ -9,7 +9,7 @@ import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon } from 
 /**
  * Returns the appropriate icon for a queue item status.
  */
-const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
+function getStatusIcon(status: BatchQueueItemStatus): React.JSX.Element {
     switch (status) {
         case 'pending':
             return <PendingIcon />;
@@ -22,7 +22,7 @@ const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
         default:
             return <PendingIcon />;
     }
-};
+}
 
 /** Props for FileQueueSidebar. */
 interface FileQueueSidebarProps {
