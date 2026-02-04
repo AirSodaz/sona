@@ -1792,3 +1792,38 @@ input[type="radio"]:focus {
 .batch-add-more {
   margin-top: var(--spacing-sm);
 }
+
+/* ===========================
+   Progress Bar Mini (for Model Cards)
+   =========================== */
+
+.progress-container-mini {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.progress-info-mini {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.progress-bar-mini {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
+  transition: width 0.2s ease-out;
+}

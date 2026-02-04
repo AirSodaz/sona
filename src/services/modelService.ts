@@ -205,19 +205,22 @@ class ModelService {
         }
 
         if (onProgress) {
-            unlisten = await listen<any>('download-progress', (event) => { // Changed type to any to inspect raw payload
-
+            unlisten = await listen<any>('download-progress', (event) => {
                 const payload = event.payload;
-                // Handle both [downloaded, total] tuple and potential object wrapper
                 let downloaded = 0;
                 let total = 0;
+                let id = '';
 
                 if (Array.isArray(payload)) {
-                    [downloaded, total] = payload;
+                    [downloaded, total, id] = payload;
                 } else if (typeof payload === 'object' && payload !== null) {
                     downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
                     total = (payload as any)[1] || (payload as any).total || 0;
+                    id = (payload as any)[2] || (payload as any).id || '';
                 }
+
+                // Filter by ID
+                if (id && id !== downloadId) return;
 
                 // Calculate speed
                 const now = Date.now();
@@ -482,13 +485,17 @@ class ModelService {
                 const payload = event.payload;
                 let downloaded = 0;
                 let total = 0;
+                let id = '';
 
                 if (Array.isArray(payload)) {
-                    [downloaded, total] = payload;
+                    [downloaded, total, id] = payload;
                 } else if (typeof payload === 'object' && payload !== null) {
                     downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
                     total = (payload as any)[1] || (payload as any).total || 0;
+                    id = (payload as any)[2] || (payload as any).id || '';
                 }
+
+                if (id && id !== downloadId) return;
 
                 const now = Date.now();
                 const timeDiff = now - lastTime;

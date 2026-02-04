@@ -224,7 +224,7 @@ async fn download_file<R: tauri::Runtime>(
 
                          if total_size > 0 {
                              if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
-                                 let _ = app.emit("download-progress", (downloaded, total_size));
+                                 let _ = app.emit("download-progress", (downloaded, total_size, &id));
                                  last_emit = std::time::Instant::now();
                              }
                          }

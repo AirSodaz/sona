@@ -4,25 +4,26 @@ import { ModelCard } from './ModelCard';
 
 interface SettingsModelsTabProps {
     installedModels: Set<string>;
-    downloadingId: string | null;
-    deletingId: string | null;
-    progress: number;
-    statusMessage: string;
+    // downloadingId: string | null;
+    // deletingId: string | null;
+    // progress: number;
+    // statusMessage: string;
+    downloads: Record<string, { progress: number; status: string }>;
     vadBufferSize: number;
     setVadBufferSize: (size: number) => void;
     onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
-    onCancelDownload: () => void;
+    onCancelDownload: (modelId: string) => void;
     isModelSelected: (model: ModelInfo) => boolean;
 }
 
 export function SettingsModelsTab({
     installedModels,
-    downloadingId,
-    deletingId,
-    progress,
-    statusMessage,
+    downloads,
+    // deletingId,
+    // progress,
+    // statusMessage,
     vadBufferSize,
     setVadBufferSize,
     onLoad,
@@ -47,14 +48,14 @@ export function SettingsModelsTab({
                         model={model}
                         isInstalled={installedModels.has(model.id)}
                         isSelected={isModelSelected(model)}
-                        downloadingId={downloadingId}
-                        deletingId={deletingId}
-                        progress={progress}
-                        statusMessage={statusMessage}
+                        isDownloading={!!downloads[model.id]}
+                        // deletingId={deletingId}
+                        progress={downloads[model.id]?.progress || 0}
+                        statusMessage={downloads[model.id]?.status || ''}
                         onLoad={onLoad}
                         onDelete={onDelete}
                         onDownload={onDownload}
-                        onCancelDownload={onCancelDownload}
+                        onCancelDownload={() => onCancelDownload(model.id)}
                     />
                 ))}
             </>

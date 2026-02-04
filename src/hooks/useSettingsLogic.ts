@@ -35,13 +35,15 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
     const [font, setFont] = useState<string>(config.font || 'system');
 
     // Download state
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [progress, setProgress] = useState(0);
-    const [statusMessage, setStatusMessage] = useState('');
+    type DownloadState = {
+        progress: number;
+        status: string;
+        controller: AbortController;
+    };
+    const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
+
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
-    const [abortController, setAbortController] = useState<AbortController | null>(null);
 
     // Sync from config when isOpen or config changes
     useEffect(() => {
@@ -159,11 +161,15 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         }
     }
 
-    function handleCancelDownload() {
-        if (abortController) {
-            abortController.abort();
-            setAbortController(null);
-            setStatusMessage('Cancelling...');
+    function handleCancelDownload(modelId: string) {
+        const download = downloads[modelId];
+        if (download) {
+            download.controller.abort();
+            setDownloads(prev => {
+                const next = { ...prev };
+                delete next[modelId];
+                return next;
+            });
         }
     }
 
@@ -180,7 +186,7 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
     }
 
     async function handleDownload(model: ModelInfo) {
-        if (downloadingId) return;
+        if (downloads[model.id]) return;
 
         // Check hardware compatibility
         const { compatible, reason } = await modelService.checkHardware(model.id);
@@ -193,25 +199,35 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         }
 
         const controller = new AbortController();
-        setAbortController(controller);
-        setDownloadingId(model.id);
-        setProgress(0);
+        setDownloads(prev => ({
+            ...prev,
+            [model.id]: { progress: 0, status: '', controller }
+        }));
 
         try {
             const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
-                setProgress(pct);
-                setStatusMessage(status);
+                setDownloads(prev => {
+                    if (!prev[model.id]) return prev;
+                    return {
+                        ...prev,
+                        [model.id]: { ...prev[model.id], progress: pct, status: status }
+                    }
+                });
             }, controller.signal);
 
             setModelPathByType(model.type, downloadedPath);
 
             await checkInstalledModels();
 
-            // Auto-switch to local tab to show result
-            setTimeout(() => {
-                setActiveTab('local');
-                setDownloadingId(null);
-            }, 1000);
+            // Auto-switch to local tab to show result for a moment, but this might be jarring if downloading multiple.
+            // Let's remove the auto-switch or make it smarter. For now, let's keep it simple and just finish.
+            // Actually, if we are doing parallel downloads, switching tabs might hide other download progress.
+            // Let's NOT switch tabs automatically for now to allow user to trigger more downloads.
+            setDownloads(prev => {
+                const next = { ...prev };
+                delete next[model.id];
+                return next;
+            });
 
         } catch (error: any) {
             if (error.message === 'Download cancelled') {
@@ -220,29 +236,42 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
                 console.error('Download failed:', error);
             }
             // Reset state
-            setDownloadingId(null);
-            setAbortController(null);
+            setDownloads(prev => {
+                const next = { ...prev };
+                delete next[model.id];
+                return next;
+            });
         }
     }
 
     async function handleDownloadITN(modelId: string) {
-        if (downloadingId) return;
+        if (downloads[modelId]) return;
 
         const controller = new AbortController();
-        setAbortController(controller);
-        setDownloadingId(modelId);
-        setProgress(0);
+        setDownloads(prev => ({
+            ...prev,
+            [modelId]: { progress: 0, status: '', controller }
+        }));
 
         try {
             await modelService.downloadITNModel(modelId, (pct, status) => {
-                setProgress(pct);
-                setStatusMessage(status);
+                setDownloads(prev => {
+                    if (!prev[modelId]) return prev;
+                    return {
+                        ...prev,
+                        [modelId]: { ...prev[modelId], progress: pct, status: status }
+                    }
+                });
             }, controller.signal);
 
             await checkInstalledModels();
             // Automatically enable ITN after download
             setEnabledITNModels(prev => new Set(prev).add(modelId));
-            setDownloadingId(null);
+            setDownloads(prev => {
+                const next = { ...prev };
+                delete next[modelId];
+                return next;
+            });
 
         } catch (error: any) {
             if (error.message === 'Download cancelled') {
@@ -251,8 +280,11 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
                 console.error('Download failed:', error);
             }
             // Reset state
-            setDownloadingId(null);
-            setAbortController(null);
+            setDownloads(prev => {
+                const next = { ...prev };
+                delete next[modelId];
+                return next;
+            });
         }
     }
 
@@ -264,6 +296,9 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             console.error('Load failed:', error);
         }
     }
+
+    // Delete state
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     async function handleDelete(model: ModelInfo) {
         if (deletingId) return;
@@ -349,10 +384,8 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         setEnabledITNModels,
         installedITNModels,
 
-        downloadingId,
         deletingId,
-        progress,
-        statusMessage,
+        downloads,
         installedModels,
 
         handleSave,

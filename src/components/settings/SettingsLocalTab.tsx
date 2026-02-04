@@ -20,10 +20,12 @@ interface SettingsLocalTabProps {
     enabledITNModels: Set<string>;
     setEnabledITNModels: Dispatch<SetStateAction<Set<string>>>;
     installedITNModels: Set<string>;
-    downloadingId: string | null;
-    progress: number;
+
+    // downloadingId: string | null;
+    // progress: number;
+    downloads: Record<string, { progress: number; status: string }>;
     onDownloadITN: (id: string) => void;
-    onCancelDownload: () => void;
+    onCancelDownload: (modelId: string) => void;
 }
 
 export function SettingsLocalTab({
@@ -42,8 +44,9 @@ export function SettingsLocalTab({
     enabledITNModels,
     setEnabledITNModels,
     installedITNModels,
-    downloadingId,
-    progress,
+    downloads,
+    // downloadingId,
+    // progress,
     onDownloadITN,
     onCancelDownload
 }: SettingsLocalTabProps) {
@@ -155,8 +158,9 @@ export function SettingsLocalTab({
                 enabledITNModels={enabledITNModels}
                 setEnabledITNModels={setEnabledITNModels}
                 installedITNModels={installedITNModels}
-                downloadingId={downloadingId}
-                progress={progress}
+                downloads={downloads}
+                // downloadingId={downloadingId}
+                // progress={progress}
                 onDownload={onDownloadITN}
                 onCancelDownload={onCancelDownload}
             />

@@ -7,8 +7,9 @@ interface ModelCardProps {
     model: ModelInfo;
     isInstalled: boolean;
     isSelected: boolean;
-    downloadingId: string | null;
-    deletingId: string | null;
+    isDownloading: boolean;
+    // downloadingId: string | null;
+    // deletingId: string | null;
     progress: number;
     statusMessage: string;
     onLoad: (model: ModelInfo) => void;
@@ -21,8 +22,9 @@ interface ModelCardActionsProps {
     model: ModelInfo;
     isInstalled: boolean;
     isSelected: boolean;
-    downloadingId: string | null;
-    deletingId: string | null;
+    isDownloading: boolean;
+    // downloadingId: string | null;
+    // deletingId: string | null;
     onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
@@ -33,16 +35,18 @@ function ModelCardActions({
     model,
     isInstalled,
     isSelected,
-    downloadingId,
-    deletingId,
+    isDownloading,
+    // downloadingId,
+    // deletingId,
     onLoad,
     onDelete,
     onDownload,
     onCancelDownload
 }: ModelCardActionsProps): React.JSX.Element {
     const { t } = useTranslation();
-    const isDownloading = downloadingId === model.id;
-    const isDeleting = deletingId === model.id;
+    // const isDownloading = downloadingId === model.id;
+    // const isDeleting = deletingId === model.id;
+    const isDeleting = false; // Simplified for now, we can add isDeleting prop later if needed per model
 
     if (isInstalled) {
         return (
@@ -58,7 +62,7 @@ function ModelCardActions({
                 <button
                     className="btn btn-secondary"
                     onClick={() => onDelete(model)}
-                    disabled={!!deletingId || !!downloadingId}
+                    disabled={false} // Allow delete even if something else is happening
                     aria-label={`${t('common.delete')} ${model.name}`}
                 >
                     {isDeleting ? <div className="spinner" /> : <TrashIcon />}
@@ -71,7 +75,7 @@ function ModelCardActions({
         <button
             className="btn btn-secondary"
             onClick={isDownloading ? onCancelDownload : () => onDownload(model)}
-            disabled={!!downloadingId && !isDownloading}
+            // disabled={!!downloadingId && !isDownloading} // Allow parallel downloads
             aria-label={isDownloading ? t('common.cancel') : `${t('common.download')} ${model.name}`}
             data-tooltip={isDownloading ? t('common.cancel') : t('common.download')}
         >
@@ -84,8 +88,9 @@ export function ModelCard({
     model,
     isInstalled,
     isSelected,
-    downloadingId,
-    deletingId,
+    isDownloading,
+    // downloadingId,
+    // deletingId,
     progress,
     statusMessage,
     onLoad,
@@ -94,7 +99,7 @@ export function ModelCard({
     onCancelDownload
 }: ModelCardProps): React.JSX.Element {
     const { t } = useTranslation();
-    const isDownloading = downloadingId === model.id;
+    // const isDownloading = downloadingId === model.id;
 
     return (
         <div className="model-card">
@@ -112,8 +117,9 @@ export function ModelCard({
                     model={model}
                     isInstalled={isInstalled}
                     isSelected={isSelected}
-                    downloadingId={downloadingId}
-                    deletingId={deletingId}
+                    isDownloading={isDownloading}
+                    // downloadingId={downloadingId}
+                    // deletingId={deletingId}
                     onLoad={onLoad}
                     onDelete={onDelete}
                     onDownload={onDownload}

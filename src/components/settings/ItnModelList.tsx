@@ -66,10 +66,11 @@ interface ItnModelListProps {
     enabledITNModels: Set<string>;
     setEnabledITNModels: Dispatch<SetStateAction<Set<string>>>;
     installedITNModels: Set<string>;
-    downloadingId: string | null;
-    progress: number;
+    // downloadingId: string | null;
+    // progress: number;
+    downloads: Record<string, { progress: number; status: string }>;
     onDownload: (id: string) => void;
-    onCancelDownload: () => void;
+    onCancelDownload: (modelId: string) => void;
 }
 
 export function ItnModelList({
@@ -78,8 +79,9 @@ export function ItnModelList({
     enabledITNModels,
     setEnabledITNModels,
     installedITNModels,
-    downloadingId,
-    progress,
+    downloads,
+    // downloadingId,
+    // progress,
     onDownload,
     onCancelDownload
 }: ItnModelListProps) {
@@ -146,10 +148,10 @@ export function ItnModelList({
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             {!isInstalled ? (
                                                 <>
-                                                    {downloadingId === model.id ? (
+                                                    {downloads[model.id] ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            <span style={{ fontSize: '0.8rem' }}>{Math.round(progress)}%</span>
-                                                            <button className="btn btn-sm btn-icon" onClick={onCancelDownload} title="Cancel">
+                                                            <span style={{ fontSize: '0.8rem' }}>{Math.round(downloads[model.id].progress)}%</span>
+                                                            <button className="btn btn-sm btn-icon" onClick={() => onCancelDownload(model.id)} title="Cancel">
                                                                 <XIcon />
                                                             </button>
                                                         </div>
@@ -157,7 +159,7 @@ export function ItnModelList({
                                                         <button
                                                             className="btn btn-sm btn-secondary"
                                                             onClick={() => onDownload(model.id)}
-                                                            disabled={!!downloadingId}
+                                                        // disabled={!!downloadingId} // Allow parallel
                                                         >
                                                             <DownloadIcon />
                                                             Download

@@ -89,10 +89,9 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         setEnabledITNModels,
         installedITNModels,
 
-        downloadingId,
-        deletingId,
-        progress,
-        statusMessage,
+        downloads,
+        // Legacy props might be returned but we ignore them or remove them from hook return
+        // downloadingId, progress, statusMessage,
         installedModels,
 
         handleSave,
@@ -243,10 +242,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                         {activeTab === 'models' && (
                             <SettingsModelsTab
                                 installedModels={installedModels}
-                                downloadingId={downloadingId}
-                                deletingId={deletingId}
-                                progress={progress}
-                                statusMessage={statusMessage}
+                                downloads={downloads}
                                 vadBufferSize={vadBufferSize}
                                 setVadBufferSize={setVadBufferSize}
                                 onLoad={handleLoad}
@@ -274,8 +270,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 enabledITNModels={enabledITNModels}
                                 setEnabledITNModels={setEnabledITNModels}
                                 installedITNModels={installedITNModels}
-                                downloadingId={downloadingId}
-                                progress={progress}
+                                downloads={downloads}
                                 onDownloadITN={handleDownloadITN}
                                 onCancelDownload={handleCancelDownload}
                             />

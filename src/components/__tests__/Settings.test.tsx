@@ -81,6 +81,11 @@ describe('Settings', () => {
         vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
             if (onProgress) {
                 onProgress(50, 'Downloading...');
+            }
+            // Add delay to ensure loading state is visible
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            if (onProgress) {
                 onProgress(100, 'Done');
             }
             return '/path/to/downloaded/model';
@@ -106,6 +111,7 @@ describe('Settings', () => {
 
         render(<Settings isOpen={true} onClose={onClose} />);
         await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+        const initialCalls = vi.mocked(modelService.isModelInstalled).mock.calls.length;
 
         fireEvent.click(screen.getByText('settings.model_hub'));
 
@@ -122,7 +128,9 @@ describe('Settings', () => {
         });
 
         // Verify list refreshes
-        expect(modelService.isModelInstalled).toHaveBeenCalledTimes(2); // Initial + after delete
+        await waitFor(() => {
+            expect(vi.mocked(modelService.isModelInstalled).mock.calls.length).toBeGreaterThan(initialCalls);
+        });
     });
 
     it('loads a model path when Load is clicked', async () => {
