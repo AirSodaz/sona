@@ -111,4 +111,55 @@ describe('ExportButton', () => {
              expect(alertSpy).toHaveBeenCalledWith('export.failed', { variant: 'error' });
         });
     });
+
+    describe('Keyboard Navigation', () => {
+        it('focuses first item when opened', async () => {
+            render(<ExportButton />);
+            const trigger = screen.getByRole('button', { name: /export.button/i });
+            fireEvent.click(trigger);
+
+            const menuItems = screen.getAllByRole('menuitem');
+            await waitFor(() => {
+                expect(document.activeElement).toBe(menuItems[0]);
+            });
+        });
+
+        it('navigates with arrow keys', async () => {
+            render(<ExportButton />);
+            const trigger = screen.getByRole('button', { name: /export.button/i });
+            fireEvent.click(trigger);
+
+            const menuItems = screen.getAllByRole('menuitem');
+            await waitFor(() => expect(document.activeElement).toBe(menuItems[0]));
+
+            // Arrow Down
+            fireEvent.keyDown(menuItems[0], { key: 'ArrowDown', bubbles: true });
+            expect(document.activeElement).toBe(menuItems[1]);
+
+            // Loop from last to first
+            menuItems[3].focus();
+            fireEvent.keyDown(menuItems[3], { key: 'ArrowDown', bubbles: true });
+            expect(document.activeElement).toBe(menuItems[0]);
+
+            // Arrow Up loop from first to last
+            fireEvent.keyDown(menuItems[0], { key: 'ArrowUp', bubbles: true });
+            expect(document.activeElement).toBe(menuItems[3]);
+        });
+
+        it('closes on Escape and returns focus to trigger', async () => {
+            render(<ExportButton />);
+            const trigger = screen.getByRole('button', { name: /export.button/i });
+            trigger.focus();
+            fireEvent.click(trigger);
+
+            await waitFor(() => expect(screen.getByRole('menu')).toBeDefined());
+
+            // Press Escape on a menu item
+            const menuItems = screen.getAllByRole('menuitem');
+            fireEvent.keyDown(menuItems[0], { key: 'Escape', bubbles: true });
+
+            expect(screen.queryByRole('menu')).toBeNull();
+            expect(document.activeElement).toBe(trigger);
+        });
+    });
 });
