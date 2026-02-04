@@ -21,6 +21,59 @@ function UploadIcon(): React.JSX.Element {
 
 const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
 
+interface BatchImportOptionsProps {
+    enableTimeline: boolean;
+    setEnableTimeline: (value: boolean) => void;
+    language: string;
+    setLanguage: (value: string) => void;
+}
+
+function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLanguage }: BatchImportOptionsProps): React.JSX.Element {
+    const { t } = useTranslation();
+    return (
+        <div className="options-container">
+            <div className="options-row">
+                <div className="options-label">
+                    <span>{t('batch.timeline_mode')}</span>
+                    <span className="options-hint">{t('batch.timeline_hint')}</span>
+                </div>
+                <button
+                    className="toggle-switch"
+                    onClick={() => setEnableTimeline(!enableTimeline)}
+                    role="switch"
+                    aria-checked={enableTimeline}
+                    aria-label={t('batch.timeline_mode')}
+                    data-tooltip={t('batch.timeline_mode_tooltip')}
+                    data-tooltip-pos="left"
+                >
+                    <div className="toggle-switch-handle" />
+                </button>
+            </div>
+
+            <div className="options-row">
+                <div className="options-label">
+                    <span>{t('batch.language')}</span>
+                    <span className="options-hint">{t('batch.language_hint')}</span>
+                </div>
+                <select
+                    className="settings-input"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    style={{ maxWidth: '120px' }}
+                    aria-label={t('batch.language')}
+                >
+                    <option value="auto">Auto</option>
+                    <option value="zh">Chinese</option>
+                    <option value="en">English</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="yue">Cantonese</option>
+                </select>
+            </div>
+        </div>
+    );
+}
+
 /** Props for BatchImport. */
 interface BatchImportProps {
     /** Optional CSS class name. */
@@ -278,46 +331,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </div>
 
                 {/* Options */}
-                <div className="options-container">
-                    <div className="options-row">
-                        <div className="options-label">
-                            <span>{t('batch.timeline_mode')}</span>
-                            <span className="options-hint">{t('batch.timeline_hint')}</span>
-                        </div>
-                        <button
-                            className="toggle-switch"
-                            onClick={() => setEnableTimeline(!enableTimeline)}
-                            role="switch"
-                            aria-checked={enableTimeline}
-                            aria-label={t('batch.timeline_mode')}
-                            data-tooltip={t('batch.timeline_mode_tooltip')}
-                            data-tooltip-pos="left"
-                        >
-                            <div className="toggle-switch-handle" />
-                        </button>
-                    </div>
-
-                    <div className="options-row">
-                        <div className="options-label">
-                            <span>{t('batch.language')}</span>
-                            <span className="options-hint">{t('batch.language_hint')}</span>
-                        </div>
-                        <select
-                            className="settings-input"
-                            value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                            style={{ maxWidth: '120px' }}
-                            aria-label={t('batch.language')}
-                        >
-                            <option value="auto">Auto</option>
-                            <option value="zh">Chinese</option>
-                            <option value="en">English</option>
-                            <option value="ja">Japanese</option>
-                            <option value="ko">Korean</option>
-                            <option value="yue">Cantonese</option>
-                        </select>
-                    </div>
-                </div>
+                <BatchImportOptions
+                    enableTimeline={enableTimeline}
+                    setEnableTimeline={setEnableTimeline}
+                    language={language}
+                    setLanguage={setLanguage}
+                />
             </div>
         );
     }
@@ -355,46 +374,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </p>
             </div>
 
-            <div className="options-container">
-                <div className="options-row">
-                    <div className="options-label">
-                        <span>{t('batch.timeline_mode')}</span>
-                        <span className="options-hint">{t('batch.timeline_hint')}</span>
-                    </div>
-                    <button
-                        className="toggle-switch"
-                        onClick={() => setEnableTimeline(!enableTimeline)}
-                        role="switch"
-                        aria-checked={enableTimeline}
-                        aria-label={t('batch.timeline_mode')}
-                        data-tooltip={t('batch.timeline_mode_tooltip')}
-                        data-tooltip-pos="left"
-                    >
-                        <div className="toggle-switch-handle" />
-                    </button>
-                </div>
-
-                <div className="options-row">
-                    <div className="options-label">
-                        <span>{t('batch.language')}</span>
-                        <span className="options-hint">{t('batch.language_hint')}</span>
-                    </div>
-                    <select
-                        className="settings-input"
-                        value={language}
-                        onChange={(e) => setLanguage(e.target.value)}
-                        style={{ maxWidth: '120px' }}
-                        aria-label={t('batch.language')}
-                    >
-                        <option value="auto">Auto</option>
-                        <option value="zh">Chinese</option>
-                        <option value="en">English</option>
-                        <option value="ja">Japanese</option>
-                        <option value="ko">Korean</option>
-                        <option value="yue">Cantonese</option>
-                    </select>
-                </div>
-            </div>
+            <BatchImportOptions
+                enableTimeline={enableTimeline}
+                setEnableTimeline={setEnableTimeline}
+                language={language}
+                setLanguage={setLanguage}
+            />
         </div>
     );
 }
