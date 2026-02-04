@@ -1,0 +1,3 @@
+## 2024-05-22 - Binary Search Optimization for Playback Cursors
+**Learning:** Frequent O(log N) searches (like binary search) on every frame (60Hz) can add up, even if individually fast. When tracking a cursor that moves linearly through a sorted list, we can optimize to O(1) by retaining the last index as a hint.
+**Action:** When implementing time-based lookups in a sequence (audio/video players), always check the "current" and "next" items (using a cached index) before falling back to binary search. Crucially, handle "gaps" between items by keeping the cursor at the preceding item index instead of resetting to "not found" (-1), which forces a full binary search on the next frame.

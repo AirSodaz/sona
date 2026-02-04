@@ -302,28 +302,51 @@ export function findSegmentAndIndexForTime(
     hintIndex?: number
 ): { segment: TranscriptSegment | undefined, index: number } {
     // Optimization: Check hint and surrounding indices first (O(1))
-    if (hintIndex !== undefined && hintIndex >= 0 && hintIndex < segments.length) {
-        // Check current hint
-        const seg = segments[hintIndex];
-        if (seg.start <= time && time <= seg.end) {
-            return { segment: seg, index: hintIndex };
-        }
+    if (hintIndex !== undefined && hintIndex >= -1 && hintIndex < segments.length) {
 
-        // Check next segment (common case for forward playback)
-        const nextIdx = hintIndex + 1;
-        if (nextIdx < segments.length) {
-            const nextSeg = segments[nextIdx];
-            if (nextSeg.start <= time && time <= nextSeg.end) {
-                return { segment: nextSeg, index: nextIdx };
+        // Handle pre-roll (hint -1)
+        if (hintIndex === -1) {
+            if (segments.length > 0 && time < segments[0].start) {
+                return { segment: undefined, index: -1 };
             }
-        }
+            if (segments.length > 0 && time <= segments[0].end && time >= segments[0].start) {
+                return { segment: segments[0], index: 0 };
+            }
+        } else {
+            // Check current hint
+            const seg = segments[hintIndex];
+            if (seg.start <= time && time <= seg.end) {
+                return { segment: seg, index: hintIndex };
+            }
 
-        // Check previous segment (common case for slight rewind/loops)
-        const prevIdx = hintIndex - 1;
-        if (prevIdx >= 0) {
-            const prevSeg = segments[prevIdx];
-            if (prevSeg.start <= time && time <= prevSeg.end) {
-                return { segment: prevSeg, index: prevIdx };
+            // Check next segment (common case for forward playback)
+            const nextIdx = hintIndex + 1;
+            if (nextIdx < segments.length) {
+                const nextSeg = segments[nextIdx];
+                if (nextSeg.start <= time && time <= nextSeg.end) {
+                    return { segment: nextSeg, index: nextIdx };
+                }
+            }
+
+            // Check gap after hint (time > seg.end AND (next doesn't exist OR time < next.start))
+            if (time > seg.end) {
+                if (nextIdx >= segments.length || time < segments[nextIdx].start) {
+                    return { segment: undefined, index: hintIndex };
+                }
+            }
+
+            // Check previous segment (common case for slight rewind/loops)
+            const prevIdx = hintIndex - 1;
+            if (prevIdx >= 0) {
+                const prevSeg = segments[prevIdx];
+                if (prevSeg.start <= time && time <= prevSeg.end) {
+                    return { segment: prevSeg, index: prevIdx };
+                }
+
+                // Check gap after prev (time > prevSeg.end AND time < seg.start)
+                if (time > prevSeg.end && time < seg.start) {
+                    return { segment: undefined, index: prevIdx };
+                }
             }
         }
     }
@@ -348,6 +371,9 @@ export function findSegmentAndIndexForTime(
         if (time <= seg.end) {
             return { segment: seg, index: idx };
         }
+        // If time > seg.end, we are in the gap after 'idx'.
+        // Return 'idx' as the "closest preceding segment index".
+        return { segment: undefined, index: idx };
     }
 
     return { segment: undefined, index: -1 };
