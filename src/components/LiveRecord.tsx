@@ -39,10 +39,10 @@ export function getSupportedMimeType(): string {
 
 function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
     switch (source) {
-        case 'microphone': return <Mic size={18} />;
-        case 'desktop': return <Monitor size={18} />;
-        case 'file': return <FileAudio size={18} />;
-        default: return <Mic size={18} />;
+        case 'microphone': return <Mic size={18} aria-hidden="true" />;
+        case 'desktop': return <Monitor size={18} aria-hidden="true" />;
+        case 'file': return <FileAudio size={18} aria-hidden="true" />;
+        default: return <Mic size={18} aria-hidden="true" />;
     }
 }
 
@@ -500,7 +500,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
                             data-tooltip-pos="bottom"
                         >
-                            {isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}
+                            {isPaused ? <Play size={24} fill="currentColor" aria-hidden="true" /> : <Pause size={24} fill="currentColor" aria-hidden="true" />}
                         </button>
 
                         <button
@@ -510,7 +510,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             data-tooltip={t('live.stop')}
                             data-tooltip-pos="bottom"
                         >
-                            <Square size={28} fill="white" color="white" />
+                            <Square size={28} fill="white" color="white" aria-hidden="true" />
                         </button>
                     </>
                 )}
