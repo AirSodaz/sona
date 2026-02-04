@@ -56,6 +56,7 @@ function ModelCardActions({
                     onClick={() => onLoad(model)}
                     disabled={isSelected}
                     aria-label={`${t('settings.load')} ${model.name}`}
+                    data-tooltip={t('settings.load')}
                 >
                     {isSelected ? <CheckIcon /> : <PlayIcon />}
                 </button>
@@ -64,6 +65,7 @@ function ModelCardActions({
                     onClick={() => onDelete(model)}
                     disabled={false} // Allow delete even if something else is happening
                     aria-label={`${t('common.delete')} ${model.name}`}
+                    data-tooltip={t('common.delete')}
                 >
                     {isDeleting ? <div className="spinner" /> : <TrashIcon />}
                 </button>
