@@ -5,7 +5,7 @@ interface RecordingTimerProps {
     isPaused: boolean;
 }
 
-export const RecordingTimer: React.FC<RecordingTimerProps> = ({ isRecording, isPaused }) => {
+export function RecordingTimer({ isRecording, isPaused }: RecordingTimerProps): React.ReactElement {
     const [recordingTime, setRecordingTime] = useState(0);
     const isPausedRef = useRef(isPaused);
 
@@ -15,11 +15,11 @@ export const RecordingTimer: React.FC<RecordingTimerProps> = ({ isRecording, isP
     }, [isPaused]);
 
     // Format recording time
-    const formatTime = (seconds: number) => {
+    function formatTime(seconds: number): string {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    };
+    }
 
     useEffect(() => {
         let interval: number | undefined;
@@ -49,4 +49,4 @@ export const RecordingTimer: React.FC<RecordingTimerProps> = ({ isRecording, isP
             {formatTime(recordingTime)}
         </div>
     );
-};
+}

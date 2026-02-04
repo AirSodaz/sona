@@ -149,4 +149,39 @@ describe('LiveRecord', () => {
 
         expect(timeDisplay.textContent).toBe('00:03');
     }, 10000);
+
+    it('should reset player state when recording starts', async () => {
+        render(<LiveRecord />);
+
+        // Mock store method if possible, but since we are using the real store hook within the component
+        // and we mocked the service, we can't easily spy on the store hook return value here
+        // UNLESS we mock the store hook itself.
+        // However, the test file doesn't mock the store hook currently.
+
+        // Let's assume we want to check side effects.
+        // But wait, the previous tests use the REAL store? No, they don't seem to import it?
+        // Ah, `useTranscriptStore` is imported in `LiveRecord.tsx`.
+        // The test above does NOT mock `../stores/transcriptStore`.
+        // So it uses the real zustand store.
+
+        // We can spy on the store state.
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        // Set up initial state with an audio file
+        act(() => {
+            useTranscriptStore.setState({ audioUrl: 'blob:test', isPlaying: true });
+        });
+
+        expect(useTranscriptStore.getState().audioUrl).toBe('blob:test');
+
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+        await act(async () => {
+            fireEvent.click(startBtn);
+        });
+
+        // Verify audioUrl is reset to null
+        expect(useTranscriptStore.getState().audioUrl).toBeNull();
+        expect(useTranscriptStore.getState().isPlaying).toBe(false); // setAudioFile(null) also sets isPlaying to false
+    });
 });

@@ -240,8 +240,19 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         }
     };
 
-    const renderActiveItemContent = () => {
-        if (!activeItem) {
+    interface ActiveItemStatusProps {
+        item: {
+            status: 'processing' | 'error' | 'pending' | 'complete';
+            filename: string;
+            progress: number;
+            errorMessage?: string;
+        } | null;
+    }
+
+    function ActiveItemStatus({ item }: ActiveItemStatusProps): React.JSX.Element | null {
+        const { t } = useTranslation();
+
+        if (!item) {
             return (
                 <div className="batch-queue-empty">
                     <p>{t('batch.queue_empty')}</p>
@@ -249,30 +260,30 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             );
         }
 
-        switch (activeItem.status) {
+        switch (item.status) {
             case 'processing':
                 return (
                     <div className="batch-queue-processing">
                         <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
                             <h3>{t('batch.processing_title')}</h3>
-                            <p>{activeItem.filename}</p>
+                            <p>{item.filename}</p>
                         </div>
                         <div
                             className="progress-bar"
                             role="progressbar"
-                            aria-valuenow={Math.round(activeItem.progress)}
+                            aria-valuenow={Math.round(item.progress)}
                             aria-valuemin={0}
                             aria-valuemax={100}
                             aria-label={t('batch.processing_title')}
                         >
                             <div
                                 className="progress-fill"
-                                style={{ width: `${activeItem.progress}%` }}
+                                style={{ width: `${item.progress}%` }}
                             />
                         </div>
                         <div className="progress-text" aria-live="polite">
                             <span>{t('batch.transcribing')}</span>
-                            <span>{Math.round(activeItem.progress)}%</span>
+                            <span>{Math.round(item.progress)}%</span>
                         </div>
                     </div>
                 );
@@ -281,7 +292,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                     <div className="batch-queue-error">
                         <div className="drop-zone-text" style={{ textAlign: 'center' }}>
                             <h3>{t('batch.file_failed')}</h3>
-                            <p>{activeItem.errorMessage || t('common.error')}</p>
+                            <p>{item.errorMessage || t('common.error')}</p>
                         </div>
                     </div>
                 );
@@ -290,7 +301,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                     <div className="batch-queue-pending">
                         <div className="drop-zone-text" style={{ textAlign: 'center' }}>
                             <h3>{t('batch.queue_waiting')}</h3>
-                            <p>{activeItem.filename}</p>
+                            <p>{item.filename}</p>
                         </div>
                     </div>
                 );
@@ -300,12 +311,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                     <div className="batch-queue-complete">
                         <div className="drop-zone-text" style={{ textAlign: 'center' }}>
                             <h3>{t('batch.file_complete')}</h3>
-                            <p>{activeItem.filename}</p>
+                            <p>{item.filename}</p>
                         </div>
                     </div>
                 );
         }
-    };
+    }
 
     // Render the queue view when we have items
     if (hasQueueItems) {
@@ -314,7 +325,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 <FileQueueSidebar />
 
                 <div className="batch-queue-content">
-                    {renderActiveItemContent()}
+                    <ActiveItemStatus item={activeItem} />
 
                     {/* Add more files button */}
                     <div className="batch-add-more">

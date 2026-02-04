@@ -11,7 +11,7 @@ interface LiveRecordProps {
     className?: string;
 }
 
-const getSupportedMimeType = () => {
+export function getSupportedMimeType(): string {
     const types = [
         'audio/webm;codecs=opus',
         'audio/webm',
@@ -27,10 +27,19 @@ const getSupportedMimeType = () => {
         }
     }
     return '';
-};
+}
 
-export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
+export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElement {
     const { alert } = useDialogStore();
+
+    function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
+        switch (source) {
+            case 'microphone': return <Mic size={18} />;
+            case 'desktop': return <Monitor size={18} />;
+            case 'file': return <FileAudio size={18} />;
+            default: return <Mic size={18} />;
+        }
+    }
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationRef = useRef<number>(0);
@@ -48,6 +57,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
+    const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
     const { t } = useTranslation();
 
     // Draw visualizer
@@ -114,6 +124,9 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
 
     // Start recording
     const startRecording = async () => {
+        // Reset player state
+        setAudioFile(null);
+
         if (inputSource === 'file') {
             fileInputRef.current?.click();
             return;
@@ -160,7 +173,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
 
-            await startRecordingWithStream(stream);
+            await initializeRecordingSession(stream);
 
         } catch (error) {
             console.error('Failed to start recording:', error);
@@ -200,7 +213,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
                 stopRecording();
             };
 
-            await startRecordingWithStream(stream, true);
+            await initializeRecordingSession(stream, true);
 
         } catch (error) {
             console.error('Failed to start file simulation:', error);
@@ -212,7 +225,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
     }
 
 
-    const startRecordingWithStream = async (stream: MediaStream, isFileSimulation = false) => {
+    async function initializeRecordingSession(stream: MediaStream, isFileSimulation = false) {
         // Set up audio context and analyser if not already created (File mode creates it earlier)
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -479,7 +492,7 @@ export const LiveRecord: React.FC<LiveRecordProps> = ({ className = '' }) => {
             {!isRecording && (
                 <div className="input-source-selector">
                     <div className="source-select-wrapper">
-                        {inputSource === 'microphone' ? <Mic size={18} /> : (inputSource === 'desktop' ? <Monitor size={18} /> : <FileAudio size={18} />)}
+                        {getSourceIcon(inputSource)}
                         <select
                             value={inputSource}
                             onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
