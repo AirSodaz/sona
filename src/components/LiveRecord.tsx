@@ -333,12 +333,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             chunks.push(e.data);
         };
 
-        mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current.onstop = async () => {
             const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
             const blob = new Blob(chunks, { type });
             const url = URL.createObjectURL(blob);
             useTranscriptStore.getState().setAudioUrl(url);
-            transcriptionService.stop();
+
+            await transcriptionService.softStop();
         };
 
         mediaRecorderRef.current.start();

@@ -402,6 +402,11 @@ async function processStream(recognizer, sampleRate, punctuation) {
     let currentSegmentId = randomUUID();
 
     process.stdin.on('data', (chunk) => {
+        if (chunk.toString() === '__EOS__') {
+            process.stdin.emit('end');
+            return;
+        }
+
         const samples = new Float32Array(chunk.length / 2);
         for (let i = 0; i < samples.length; i++) {
             const int16 = chunk.readInt16LE(i * 2);

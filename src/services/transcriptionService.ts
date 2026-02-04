@@ -184,6 +184,45 @@ class TranscriptionService {
         }
     }
 
+
+    /**
+     * Gracefully stops the transcription by sending an EOS signal.
+     * This allows the model to finalize the last segment and apply punctuation.
+     */
+    async softStop() {
+        if (!this.child || !this.isRunning) return;
+
+        try {
+            await this.child.write('__EOS__');
+
+            // Wait for sidecar to finish processing
+            // We can wait a bit or let the 'close' event handle cleanup
+            // Actually, we should wait until the sidecar emits the last segment (isFinal: true) or closes.
+            // But since LiveRecord calls this, and LiveRecord expects async...
+
+            // Actually, after sending EOS, the sidecar will emit 'end' on stdin, then process remaining, then exit(0).
+            // So we just need to wait for the child process to exit.
+
+            // Problem: TranscriptionService.start sets up 'close' handler which sets isRunning=false.
+
+            // Ideally we wait for this.isRunning to become false.
+            let checks = 0;
+            while (this.isRunning && checks < 20) { // Wait up to 2 seconds
+                await new Promise(r => setTimeout(r, 100));
+                checks++;
+            }
+
+            if (this.isRunning) {
+                console.warn('[TranscriptionService] Soft stop timed out, forcing kill');
+                await this.child.kill();
+            }
+
+        } catch (error) {
+            console.error('Failed to soft stop sidecar:', error);
+            await this.stop(); // Fallback to hard kill
+        }
+    }
+
     /**
      * Sends pre-converted Int16 audio samples to the sidecar.
      *

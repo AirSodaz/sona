@@ -7,6 +7,7 @@ vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
         start: vi.fn(),
         stop: vi.fn(),
+        softStop: vi.fn(),
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
@@ -127,7 +128,7 @@ describe('LiveRecord', () => {
         vi.clearAllMocks();
     });
 
-    it('should increment timer correctly (not double speed)', async () => {
+    it('should increment timer correctly', async () => {
         render(<LiveRecord />);
 
         // Find the start button (it's the only button initially)
@@ -183,5 +184,68 @@ describe('LiveRecord', () => {
         // Verify audioUrl is reset to null
         expect(useTranscriptStore.getState().audioUrl).toBeNull();
         expect(useTranscriptStore.getState().isPlaying).toBe(false); // setAudioFile(null) also sets isPlaying to false
+    });
+
+    it('should finalize the last segment when recording stops', async () => {
+        render(<LiveRecord />);
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { transcriptionService } = await import('../../services/transcriptionService');
+
+        // Capture the onSegment callback passed to transcriptionService.start
+        let onSegmentCallback: ((segment: any) => void) | undefined;
+        (transcriptionService.start as any).mockImplementation((onSegment: any) => {
+            onSegmentCallback = onSegment;
+            return Promise.resolve();
+        });
+
+        // Mock softStop to simulate sidecar finalizing the segment
+        (transcriptionService.softStop as any).mockImplementation(async () => {
+            if (onSegmentCallback) {
+                onSegmentCallback({
+                    id: 'seg-1',
+                    text: 'Incomplete sentence.',
+                    start: 0,
+                    end: 1,
+                    isFinal: true,
+                });
+            }
+        });
+
+        // Start recording
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+        await act(async () => {
+            fireEvent.click(startBtn);
+        });
+
+        // Simulate receiving a partial segment
+        act(() => {
+            if (onSegmentCallback) {
+                onSegmentCallback({
+                    id: 'seg-1',
+                    text: 'Incomplete sentence',
+                    start: 0,
+                    end: 1,
+                    isFinal: false,
+                });
+            }
+        });
+
+        // Verify segment is in store and is not final
+        expect(useTranscriptStore.getState().segments).toHaveLength(1);
+        expect(useTranscriptStore.getState().segments[0].isFinal).toBe(false);
+
+        // Stop recording
+        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+        await act(async () => {
+            fireEvent.click(stopBtn);
+        });
+
+        // Verify softStop was called
+        expect(transcriptionService.softStop).toHaveBeenCalled();
+
+        // Verify segment is now final (updated by the mock)
+        expect(useTranscriptStore.getState().segments).toHaveLength(1);
+        expect(useTranscriptStore.getState().segments[0].isFinal).toBe(true);
+        expect(useTranscriptStore.getState().segments[0].text).toBe('Incomplete sentence.');
     });
 });
