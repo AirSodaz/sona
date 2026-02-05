@@ -191,6 +191,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             // Update status to processing
             get().updateItemStatus(pendingItem.id, 'processing', 0);
 
+            let segmentBuffer: TranscriptSegment[] = [];
+            let lastUpdateTime = 0;
+
             try {
                 const segments = await transcriptionService.transcribeFile(
                     pendingItem.filePath,
@@ -198,13 +201,28 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         get().updateItemStatus(pendingItem.id, 'processing', progress);
                     },
                     (segment) => {
-                        // Stream segments as they arrive
-                        const state = get();
-                        const item = state.queueItems.find((i) => i.id === pendingItem.id);
-                        if (item) {
-                            const newSegment = enableTimeline ? splitByPunctuation([segment]) : [segment];
-                            const updatedSegments = [...item.segments, ...newSegment];
-                            get().updateItemSegments(pendingItem.id, updatedSegments);
+                        // Buffer segments to reduce render frequency and O(N) copy operations
+                        segmentBuffer.push(segment);
+                        const now = Date.now();
+
+                        // Flush buffer every 500ms or 50 segments
+                        if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
+                            const state = get();
+                            const item = state.queueItems.find((i) => i.id === pendingItem.id);
+
+                            if (item) {
+                                // Process the buffered segments
+                                const { enableTimeline } = state;
+                                const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
+
+                                // Append to existing segments
+                                const updatedSegments = [...item.segments, ...newSegments];
+                                get().updateItemSegments(pendingItem.id, updatedSegments);
+
+                                // Reset buffer
+                                segmentBuffer = [];
+                                lastUpdateTime = now;
+                            }
                         }
                     },
                     language === 'auto' ? undefined : language
