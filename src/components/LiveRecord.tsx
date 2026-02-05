@@ -70,6 +70,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const isRecordingRef = useRef(false); // Use ref to track recording state for closure
     const isPausedRef = useRef(false);
     const mimeTypeRef = useRef<string>('');
+    const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop' | 'file'>('microphone');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -158,10 +159,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             return;
         }
 
+        setIsInitializing(true);
+
         try {
             let stream: MediaStream;
 
             if (inputSource === 'desktop') {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    throw new Error(t('live.mic_error') + ': Display media not supported');
+                }
+
                 try {
                     // Capture system audio
                     stream = await navigator.mediaDevices.getDisplayMedia({
@@ -191,12 +198,29 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
                 } catch (err) {
                     console.error('Error getting display media:', err);
-                    // Fallback or re-throw? Re-throw mostly.
                     throw err;
                 }
             } else {
-                // Default microphone
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Check support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Media devices API not supported in this environment');
+                }
+
+                try {
+                    // Default microphone
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                } catch (err: any) {
+                    console.error('GetUserMedia Error:', err);
+                    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                        throw new Error(t('live.mic_permission_denied') || 'Microphone permission denied');
+                    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                        throw new Error(t('live.mic_not_found') || 'No microphone found');
+                    } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                        throw new Error(t('live.mic_busy') || 'Microphone is busy or not readable');
+                    } else {
+                        throw err;
+                    }
+                }
             }
 
             await initializeRecordingSession(stream);
@@ -205,12 +229,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             console.error('Failed to start recording:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
+        } finally {
+            setIsInitializing(false);
         }
     }
 
     async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        setIsInitializing(true);
 
         try {
             // Create audio element for playback
@@ -239,7 +267,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 stopRecording();
             };
 
-            await initializeRecordingSession(stream, true);
+            await initializeRecordingSession(stream);
 
         } catch (error) {
             console.error('Failed to start file simulation:', error);
@@ -247,11 +275,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         } finally {
             // Reset input
             if (fileInputRef.current) fileInputRef.current.value = '';
+            setIsInitializing(false);
         }
     }
 
 
-    async function initializeRecordingSession(stream: MediaStream, isFileSimulation = false): Promise<void> {
+    async function initializeRecordingSession(stream: MediaStream): Promise<void> {
         // Set up audio context and analyser if not already created (File mode creates it earlier)
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -369,7 +398,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         // Start visualizer
         drawVisualizer();
-    };
+    }
+
 
     // Pause recording
     function pauseRecording(): void {
@@ -486,9 +516,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     <button
                         className="control-button start"
                         onClick={startRecording}
+                        disabled={isInitializing}
                         aria-label={t('live.start_recording')}
-                        data-tooltip={t('live.start_recording')}
+                        data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
                         data-tooltip-pos="bottom"
+                        style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
                     >
                         <div className="control-button-inner" />
                     </button>
@@ -497,6 +529,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         <button
                             className="control-button pause"
                             onClick={isPaused ? resumeRecording : pauseRecording}
+                            disabled={isInitializing}
                             aria-label={isPaused ? t('live.resume') : t('live.pause')}
                             data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
                             data-tooltip-pos="bottom"
@@ -507,6 +540,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         <button
                             className="control-button stop"
                             onClick={stopRecording}
+                            disabled={isInitializing}
                             aria-label={t('live.stop')}
                             data-tooltip={t('live.stop')}
                             data-tooltip-pos="bottom"

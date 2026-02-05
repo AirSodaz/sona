@@ -5,9 +5,9 @@ import { LiveRecord } from '../LiveRecord';
 // Mock transcription service
 vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
-        start: vi.fn(),
-        stop: vi.fn(),
-        softStop: vi.fn(),
+        start: vi.fn().mockResolvedValue(undefined),
+        stop: vi.fn().mockResolvedValue(undefined),
+        softStop: vi.fn().mockResolvedValue(undefined),
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 describe('LiveRecord', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.useFakeTimers();
 
         const raf = vi.fn((cb) => setTimeout(cb, 16));
@@ -121,6 +121,14 @@ describe('LiveRecord', () => {
             fillRect: vi.fn(),
             fillStyle: '',
         })) as any;
+
+        // Setup store config
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        act(() => {
+            useTranscriptStore.setState({
+                config: { ...useTranscriptStore.getState().config, streamingModelPath: '/path/to/model' }
+            });
+        });
     });
 
     afterEach(() => {
@@ -136,7 +144,12 @@ describe('LiveRecord', () => {
 
         await act(async () => {
             fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
         });
+
+        // Wait for recording to start (Stop button appears)
+        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+        expect(stopBtn).toBeTruthy();
 
         // Advance 3 seconds
         await act(async () => {
@@ -144,28 +157,11 @@ describe('LiveRecord', () => {
         });
 
         // Check text. formatTime(3) -> "00:03"
-        const timeDisplay = screen.getByText(/00:0[0-9]/);
-
-        console.log('Time Displayed:', timeDisplay.textContent);
-
-        expect(timeDisplay.textContent).toBe('00:03');
+        const timeDisplay = screen.getByText(/00:03/);
+        expect(timeDisplay).toBeTruthy();
     }, 10000);
 
     it('should reset player state when recording starts', async () => {
-        render(<LiveRecord />);
-
-        // Mock store method if possible, but since we are using the real store hook within the component
-        // and we mocked the service, we can't easily spy on the store hook return value here
-        // UNLESS we mock the store hook itself.
-        // However, the test file doesn't mock the store hook currently.
-
-        // Let's assume we want to check side effects.
-        // But wait, the previous tests use the REAL store? No, they don't seem to import it?
-        // Ah, `useTranscriptStore` is imported in `LiveRecord.tsx`.
-        // The test above does NOT mock `../stores/transcriptStore`.
-        // So it uses the real zustand store.
-
-        // We can spy on the store state.
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
 
         // Set up initial state with an audio file
@@ -175,11 +171,16 @@ describe('LiveRecord', () => {
 
         expect(useTranscriptStore.getState().audioUrl).toBe('blob:test');
 
+        render(<LiveRecord />);
         const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
 
         await act(async () => {
             fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
         });
+
+        // Wait for recording to start
+        expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
 
         // Verify audioUrl is reset to null
         expect(useTranscriptStore.getState().audioUrl).toBeNull();
@@ -215,7 +216,11 @@ describe('LiveRecord', () => {
         const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
         await act(async () => {
             fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
         });
+
+        // Wait for recording to start
+        expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
 
         // Simulate receiving a partial segment
         act(() => {
@@ -247,5 +252,33 @@ describe('LiveRecord', () => {
         expect(useTranscriptStore.getState().segments).toHaveLength(1);
         expect(useTranscriptStore.getState().segments[0].isFinal).toBe(true);
         expect(useTranscriptStore.getState().segments[0].text).toBe('Incomplete sentence.');
+    });
+
+    it('should show alert when microphone permission is denied', async () => {
+        // Mock NotAllowedError
+        navigator.mediaDevices.getUserMedia = vi.fn().mockRejectedValue({
+            name: 'NotAllowedError',
+            message: 'Permission denied',
+        });
+
+        const { useDialogStore } = await import('../../stores/dialogStore');
+        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert');
+
+        render(<LiveRecord />);
+
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+        await act(async () => {
+            fireEvent.click(startBtn);
+        });
+
+        expect(alertSpy).toHaveBeenCalledWith(
+            expect.stringContaining('live.mic_error'),
+            expect.objectContaining({ variant: 'error' })
+        );
+        expect(alertSpy).toHaveBeenCalledWith(
+            expect.stringContaining('live.mic_permission_denied'),
+            expect.anything()
+        );
     });
 });
