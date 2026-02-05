@@ -250,6 +250,7 @@ body {
   border: none;
   background: transparent;
   color: var(--color-text-muted);
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
@@ -348,6 +349,7 @@ body {
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
   border-radius: var(--radius-sm);
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -1116,6 +1118,7 @@ input[type="radio"]:focus {
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
   transition: all var(--transition-fast);

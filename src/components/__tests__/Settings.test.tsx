@@ -154,13 +154,26 @@ describe('Settings', () => {
         });
     });
 
-    it('saves configuration', async () => {
+    it('auto-saves configuration on change', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
         await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
 
-        fireEvent.click(screen.getByText('settings.save_button'));
+        // Switch to Local Path tab
+        fireEvent.click(screen.getByText('settings.local_path'));
 
-        expect(mockSetConfig).toHaveBeenCalled();
-        expect(onClose).toHaveBeenCalled();
+        // Find the input associated with the label. 
+        // Note: In the actual component, the label has htmlFor="settings-streaming-path" and input has id="settings-streaming-path".
+        // Testing library's getByLabelText should work if id matches. 
+        // However, standard getByLabelText might require exact match of translation key if I'm mocking translation to return key.
+        // The mock returns key as translation.
+        // Label text in SettingsLocalTab is t('settings.streaming_path_label') which becomes "settings.streaming_path_label".
+
+        const input = screen.getByLabelText('settings.streaming_path_label');
+        fireEvent.change(input, { target: { value: '/new/streaming/path' } });
+
+        // Verify setConfig was called with new value
+        expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
+            streamingModelPath: '/new/streaming/path'
+        }));
     });
 });

@@ -90,11 +90,9 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         installedITNModels,
 
         downloads,
-        // Legacy props might be returned but we ignore them or remove them from hook return
         // downloadingId, progress, statusMessage,
         installedModels,
 
-        handleSave,
         handleBrowse,
         handleDownload,
         handleDownloadITN,
@@ -218,7 +216,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                     </div>
 
                     {/* Scrollable Content Area */}
-                    <div className="settings-content-scroll">
+                    <div className="settings-content-scroll full-height">
                         <div className="settings-section-header">
                             <h3 className="settings-section-title">
                                 {activeTab === 'general' && t('settings.general')}
@@ -278,15 +276,6 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
 
                     </div>
 
-                    {/* Footer */}
-                    <div className="settings-footer">
-                        <button className="btn btn-secondary" onClick={onClose}>
-                            {t('common.cancel')}
-                        </button>
-                        <button className="btn btn-primary" onClick={handleSave}>
-                            {t('settings.save_button')}
-                        </button>
-                    </div>
                 </div>
             </div>
         </div >

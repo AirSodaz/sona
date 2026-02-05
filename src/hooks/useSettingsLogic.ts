@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -14,25 +14,17 @@ import { open } from '@tauri-apps/plugin-dialog';
  * @param onClose Callback to close the dialog.
  * @return An object containing form state and action handlers.
  */
-export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
+export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
-    const [streamingModelPath, setStreamingModelPath] = useState(config.streamingModelPath);
-    const [offlineModelPath, setOfflineModelPath] = useState(config.offlineModelPath);
 
-    const [punctuationModelPath, setPunctuationModelPath] = useState(config.punctuationModelPath || '');
-    const [vadModelPath, setVadModelPath] = useState(config.vadModelPath || '');
-    const [vadBufferSize, setVadBufferSize] = useState(config.vadBufferSize || 5);
+    // We read directly from the config store
+    // Local state for ITN set is derived from config for easier UI handling, but we will sync it back immediately on change.
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-    const [itnRulesOrder, setItnRulesOrder] = useState<string[]>(config.itnRulesOrder || ['itn-zh-number']);
-    const [appLanguage, setAppLanguage] = useState<'auto' | 'en' | 'zh'>((config.appLanguage as any) || 'auto');
-
-    const [theme, setTheme] = useState<'auto' | 'light' | 'dark'>((config.theme as any) || 'auto');
-    const [font, setFont] = useState<string>(config.font || 'system');
 
     // Download state
     type DownloadState = {
@@ -45,20 +37,10 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
 
-    // Sync from config when isOpen or config changes
+    // Sync ITN state when config changes externally (though we update config immediately now)
     useEffect(() => {
-        setStreamingModelPath(config.streamingModelPath);
-        setOfflineModelPath(config.offlineModelPath);
-        setPunctuationModelPath(config.punctuationModelPath || '');
-        setVadModelPath(config.vadModelPath || '');
-        setVadBufferSize(config.vadBufferSize || 5);
         setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
-        setItnRulesOrder(config.itnRulesOrder || ['itn-zh-number']);
-        setAppLanguage(config.appLanguage || 'auto');
-
-        setTheme(config.theme || 'auto');
-        setFont(config.font || 'system');
-    }, [config, isOpen]); // Added isOpen to ensure refresh on open
+    }, [config.enabledITNModels, config.enableITN]);
 
     async function checkInstalledModels() {
         const installed = new Set<string>();
@@ -82,44 +64,66 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
         checkInstalledModels();
     }, []);
 
-    function handleSave() {
-        const enabledList = Array.from(enabledITNModels);
-        setConfig({
-            streamingModelPath,
-            offlineModelPath,
-            punctuationModelPath,
-            vadModelPath,
-            vadBufferSize,
-            enabledITNModels: enabledList,
-            itnRulesOrder,
-            enableITN: enabledList.length > 0, // Legacy support
-            appLanguage,
-            theme,
-            font: font as any
-        });
-        localStorage.setItem('sona-config', JSON.stringify({
-            streamingModelPath,
-            offlineModelPath,
-            punctuationModelPath,
-            vadModelPath,
-            vadBufferSize,
-            enabledITNModels: enabledList,
-            itnRulesOrder,
-            enableITN: enabledList.length > 0,
-            appLanguage,
-            theme,
-            font
-        }));
+    // Helper to update config and persist immediately
+    const updateConfig = (updates: Partial<typeof config>) => {
+        const newConfig = { ...config, ...updates };
+        setConfig(newConfig);
 
-        // Apply language immediately
-        if (appLanguage === 'auto') {
+        // Persist to localStorage
+        localStorage.setItem('sona-config', JSON.stringify({
+            streamingModelPath: newConfig.streamingModelPath,
+            offlineModelPath: newConfig.offlineModelPath,
+            punctuationModelPath: newConfig.punctuationModelPath,
+            vadModelPath: newConfig.vadModelPath,
+            vadBufferSize: newConfig.vadBufferSize,
+            enabledITNModels: newConfig.enabledITNModels,
+            itnRulesOrder: newConfig.itnRulesOrder,
+            enableITN: (newConfig.enabledITNModels?.length ?? 0) > 0,
+            appLanguage: newConfig.appLanguage,
+            theme: newConfig.theme,
+            font: newConfig.font as any
+        }));
+    };
+
+    // Setters that update store immediately
+    const setStreamingModelPath = (path: string) => updateConfig({ streamingModelPath: path });
+    const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
+    const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
+    const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
+    const setVadBufferSize = (size: number) => updateConfig({ vadBufferSize: size });
+
+    const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
+        const newOrder = typeof action === 'function'
+            ? (action as (prev: string[]) => string[])(config.itnRulesOrder || ['itn-zh-number'])
+            : action;
+        updateConfig({ itnRulesOrder: newOrder });
+    };
+
+    const handleSetEnabledITNModels = (action: React.SetStateAction<Set<string>>) => {
+        const currentSet = new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : []));
+        const newSet = typeof action === 'function'
+            ? (action as (prev: Set<string>) => Set<string>)(currentSet)
+            : action;
+
+        setEnabledITNModels(newSet);
+        updateConfig({
+            enabledITNModels: Array.from(newSet),
+            enableITN: newSet.size > 0
+        });
+    };
+
+    const setAppLanguage = (lang: 'auto' | 'en' | 'zh') => {
+        updateConfig({ appLanguage: lang });
+        if (lang === 'auto') {
             i18n.changeLanguage(navigator.language);
         } else {
-            i18n.changeLanguage(appLanguage);
+            i18n.changeLanguage(lang);
         }
+    };
 
-        onClose();
-    }
+    const setTheme = (theme: 'auto' | 'light' | 'dark') => updateConfig({ theme: theme });
+    const setFont = (font: string) => updateConfig({ font: font as any });
+
 
     function getBrowseTitle(type: 'streaming' | 'offline' | 'punctuation' | 'vad'): string {
         switch (type) {
@@ -317,16 +321,16 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
-            if (streamingModelPath === deletedPath) {
+            if (config.streamingModelPath === deletedPath) {
                 setStreamingModelPath('');
             }
-            if (offlineModelPath === deletedPath) {
+            if (config.offlineModelPath === deletedPath) {
                 setOfflineModelPath('');
             }
-            if (punctuationModelPath === deletedPath) {
+            if (config.punctuationModelPath === deletedPath) {
                 setPunctuationModelPath('');
             }
-            if (vadModelPath === deletedPath) {
+            if (config.vadModelPath === deletedPath) {
                 setVadModelPath('');
             }
         } catch (error: any) {
@@ -342,16 +346,16 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
 
     function isModelSelected(model: ModelInfo): boolean {
         if (model.type === 'streaming') {
-            return streamingModelPath.includes(model.filename || model.id);
+            return (config.streamingModelPath || '').includes(model.filename || model.id);
         }
         if (model.type === 'offline') {
-            return offlineModelPath.includes(model.filename || model.id);
+            return (config.offlineModelPath || '').includes(model.filename || model.id);
         }
         if (model.type === 'punctuation') {
-            return punctuationModelPath.includes(model.filename || model.id);
+            return (config.punctuationModelPath || '').includes(model.filename || model.id);
         }
         if (model.type === 'vad') {
-            return vadModelPath.includes(model.filename || model.id);
+            return (config.vadModelPath || '').includes(model.filename || model.id);
         }
         return false;
     }
@@ -359,36 +363,38 @@ export function useSettingsLogic(isOpen: boolean, onClose: () => void) {
     return {
         activeTab,
         setActiveTab,
-        appLanguage,
+
+        // Return values directly from config store or local state
+        appLanguage: config.appLanguage || 'auto',
         setAppLanguage,
-        theme,
+        theme: config.theme || 'auto',
         setTheme,
-        font,
+        font: config.font || 'system',
         setFont,
 
-        streamingModelPath,
+        streamingModelPath: config.streamingModelPath,
         setStreamingModelPath,
-        offlineModelPath,
+        offlineModelPath: config.offlineModelPath,
         setOfflineModelPath,
-        punctuationModelPath,
+        punctuationModelPath: config.punctuationModelPath || '',
         setPunctuationModelPath,
-        vadModelPath,
+        vadModelPath: config.vadModelPath || '',
         setVadModelPath,
 
-        vadBufferSize,
+        vadBufferSize: config.vadBufferSize || 5,
         setVadBufferSize,
 
-        itnRulesOrder,
+        itnRulesOrder: config.itnRulesOrder || ['itn-zh-number'],
         setItnRulesOrder,
+
         enabledITNModels,
-        setEnabledITNModels,
+        setEnabledITNModels: handleSetEnabledITNModels,
         installedITNModels,
 
         deletingId,
         downloads,
         installedModels,
 
-        handleSave,
         handleBrowse,
         handleDownload,
         handleDownloadITN,

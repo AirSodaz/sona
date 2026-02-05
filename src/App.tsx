@@ -115,25 +115,37 @@ function App(): React.JSX.Element {
     const font = config.font || 'system';
     const root = document.documentElement;
 
+    const setFontVars = (fontFamily: string) => {
+      root.style.setProperty('--font-sans', fontFamily);
+      root.style.setProperty('--font-serif', fontFamily);
+      root.style.setProperty('--font-mono', fontFamily);
+    };
+
+    const removeFontVars = () => {
+      root.style.removeProperty('--font-sans');
+      root.style.removeProperty('--font-serif');
+      root.style.removeProperty('--font-mono');
+    };
+
     switch (font) {
       case 'serif':
-        root.style.setProperty('--font-sans', 'Merriweather, serif');
+        setFontVars('Merriweather, serif');
         break;
       case 'sans':
-        root.style.setProperty('--font-sans', 'Inter, sans-serif');
+        setFontVars('Inter, sans-serif');
         break;
       case 'mono':
-        root.style.setProperty('--font-sans', 'JetBrains Mono, monospace');
+        setFontVars('JetBrains Mono, monospace');
         break;
       case 'arial':
-        root.style.setProperty('--font-sans', 'Arial, sans-serif');
+        setFontVars('Arial, sans-serif');
         break;
       case 'georgia':
-        root.style.setProperty('--font-sans', 'Georgia, serif');
+        setFontVars('Georgia, serif');
         break;
       case 'system':
       default:
-        root.style.removeProperty('--font-sans');
+        removeFontVars();
         break;
     }
   }, [config.font]);
