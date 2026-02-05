@@ -249,6 +249,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             // Wait for metadata to load to get duration etc if needed, but here we just need to play
             await audio.play(); // User interaction likely covered by the file input change event
 
+            // Sync time to store for auto-scroll
+            const { setCurrentTime } = useTranscriptStore.getState();
+            audio.ontimeupdate = () => {
+                setCurrentTime(audio.currentTime);
+            };
+
             // Create AudioContext
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
             const source = audioContextRef.current.createMediaElementSource(audio);
@@ -359,6 +365,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (segment) => {
                 console.log('[LiveRecord] Received segment:', segment);
                 upsertSegment(segment);
+
+                // Auto-focus on the live segment
+                const store = useTranscriptStore.getState();
+                // Find index of the segment we just upserted
+                const index = store.segments.findIndex(s => s.id === segment.id);
+                if (index !== -1) {
+                    store.setActiveSegmentId(segment.id, index);
+                }
             },
             (error) => {
                 console.error('Transcription error:', error);

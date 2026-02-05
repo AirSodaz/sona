@@ -72,7 +72,9 @@
         "play": "播放",
         "pause": "暂停",
         "seek": "跳转",
-        "volume": "音量", "mute": "静音", "unmute": "取消静音",
+        "volume": "音量",
+        "mute": "静音",
+        "unmute": "取消静音",
         "error": "音频播放失败: {{error}}. 代码: {{code}}"
     },
     "editor": {
