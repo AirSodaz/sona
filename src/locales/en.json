@@ -75,6 +75,7 @@
         "volume": "Volume",
         "mute": "Mute",
         "unmute": "Unmute",
+        "speed": "Playback Speed",
         "error": "Audio playback failed: {{error}}. Code: {{code}}"
     },
     "editor": {

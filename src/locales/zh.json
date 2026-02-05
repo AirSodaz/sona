@@ -75,6 +75,7 @@
         "volume": "音量",
         "mute": "静音",
         "unmute": "取消静音",
+        "speed": "播放速度",
         "error": "音频播放失败: {{error}}. 代码: {{code}}"
     },
     "editor": {

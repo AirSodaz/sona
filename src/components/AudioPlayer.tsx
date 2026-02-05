@@ -144,6 +144,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(1);
+    const [playbackRate, setPlaybackRate] = useState(1.0);
 
     // Sync audio element with store state
     useEffect(() => {
@@ -156,6 +157,13 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             audio.pause();
         }
     }, [isPlaying]);
+
+    // Sync playback rate
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
 
     // Handle audio events
     useEffect(() => {
@@ -312,6 +320,21 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             </div>
 
             <div className="audio-controls">
+                <button
+                    className="btn btn-icon btn-text"
+                    onClick={() => {
+                        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
+                        const currentIndex = speeds.indexOf(playbackRate);
+                        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+                        setPlaybackRate(nextSpeed);
+                    }}
+                    aria-label={t('player.speed')}
+                    data-tooltip={t('player.speed')}
+                    data-tooltip-pos="top"
+                    style={{ minWidth: '3ch', fontSize: '0.85rem', fontWeight: 500 }}
+                >
+                    {playbackRate}x
+                </button>
                 <button
                     className="btn btn-icon"
                     onClick={toggleMute}
