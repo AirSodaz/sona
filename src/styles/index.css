@@ -67,11 +67,11 @@
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
 
-  /* Border Radius - Softer */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 20px;
+  /* Border Radius - Rounded */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
 
   /* Typography */
@@ -908,11 +908,27 @@ input[type="radio"]:focus {
    Export Menu
    =========================== */
 
-.export-menu {
-  position: relative;
+@keyframes dropdownPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.export-dropdown {
+.export-menu,
+.dropdown-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.export-dropdown,
+.dropdown-menu {
   position: absolute;
   top: 100%;
   right: 0;
@@ -920,13 +936,39 @@ input[type="radio"]:focus {
   min-width: 180px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: 100;
   overflow: hidden;
+  transform-origin: top right;
+  animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-.export-dropdown-item {
+.export-dropdown.position-top,
+.dropdown-menu.position-top {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: var(--spacing-xs);
+  transform-origin: bottom right;
+}
+
+/* Ensure left-aligned dropdowns (default) originate from top left */
+.dropdown-menu {
+  right: auto;
+  left: 0;
+  transform-origin: top left;
+  width: 100%;
+}
+
+.dropdown-menu.position-top {
+  transform-origin: bottom left;
+}
+
+.export-dropdown-item,
+.dropdown-item {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -938,6 +980,61 @@ input[type="radio"]:focus {
   font-size: 0.875rem;
   cursor: pointer;
   transition: background var(--transition-fast);
+  text-align: left;
+  font-family: var(--font-sans);
+}
+
+.export-dropdown-item:hover,
+.dropdown-item:hover,
+.dropdown-item.selected {
+  background: var(--color-bg-hover);
+}
+
+.dropdown-trigger {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: all var(--transition-fast);
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.dropdown-trigger:hover {
+  border-color: var(--color-border-hover);
+}
+
+.dropdown-trigger.active,
+.dropdown-trigger:focus {
+  border-color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.dropdown-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.dropdown-trigger.active .dropdown-icon {
+  transform: rotate(180deg);
 }
 
 .export-dropdown-item:hover {
@@ -1826,4 +1923,163 @@ input[type="radio"]:focus {
   background: var(--color-info);
   border-radius: var(--radius-full);
   transition: width 0.2s ease-out;
+}
+
+/* ===========================
+   Theme Selector
+   =========================== */
+
+.theme-selector-container {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.theme-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.theme-preview {
+  width: 100%;
+  aspect-ratio: 1.5;
+  border-radius: 12px;
+  border: 2px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.theme-card:hover .theme-preview {
+  border-color: var(--color-text-muted);
+}
+
+.theme-card.active .theme-preview {
+  border-color: #007aff;
+}
+
+.theme-preview-window {
+  position: absolute;
+  top: 15%;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  background: var(--color-bg-primary);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  overflow: hidden;
+}
+
+.theme-preview-sidebar {
+  width: 30%;
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+}
+
+.theme-preview-lines {
+  flex: 1;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.line {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+
+.line.short {
+  width: 40%;
+}
+
+.line.long {
+  width: 80%;
+}
+
+/* Light Theme Styling */
+.theme-preview.light {
+  background: #f5f5f5;
+}
+
+.theme-preview.light .theme-preview-window {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.theme-preview.light .theme-preview-sidebar {
+  background: #f0f0f0;
+  border-color: #e5e5e5;
+}
+
+.theme-preview.light .line {
+  background: #e5e5e5;
+}
+
+/* Dark Theme Styling */
+.theme-preview.dark {
+  background: #191919;
+  border-color: #333;
+}
+
+.theme-preview.dark .theme-preview-window {
+  background: #2a2a2a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.theme-preview.dark .theme-preview-sidebar {
+  background: #202020;
+  border-color: #333;
+}
+
+.theme-preview.dark .line {
+  background: #333;
+}
+
+/* active dark override */
+.theme-card.active .theme-preview.dark {
+  border-color: #007aff;
+  /* or use a specific dark mode active color if needed, but blue is standard */
+}
+
+/* Auto Theme Styling (Split) */
+.theme-preview.auto {
+  background: linear-gradient(90deg, #f5f5f5 50%, #191919 50%);
+}
+
+.theme-preview.auto .theme-preview-window {
+  background: linear-gradient(90deg, #ffffff 50%, #2a2a2a 50%);
+}
+
+.theme-preview.auto .theme-preview-sidebar {
+  background: linear-gradient(90deg, #f0f0f0 50%, #202020 50%);
+  border-right: none;
+  position: relative;
+}
+
+/* Split lines for auto */
+.theme-preview.auto .line {
+  background: linear-gradient(90deg, #e5e5e5 50%, #333 50%);
+}
+
+.theme-label {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  transition: color 0.2s;
+}
+
+.theme-card.active .theme-label {
+  color: var(--color-text-primary);
+  font-weight: 500;
 }

@@ -24,6 +24,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
     const { t } = useTranslation();
     const { alert } = useDialogStore();
     const [isOpen, setIsOpen] = useState(false);
+    const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [isExporting, setIsExporting] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -39,9 +40,22 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             }
         };
 
+        if (isOpen && dropdownRef.current) {
+            const rect = dropdownRef.current.getBoundingClientRect();
+            // Estimate dropdown height
+            const estimatedHeight = 200;
+            const spaceBelow = window.innerHeight - rect.bottom;
+
+            if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
+                setPosition('top');
+            } else {
+                setPosition('bottom');
+            }
+        }
+
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isOpen]);
 
     // Focus management when opening
     useEffect(() => {
@@ -157,7 +171,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
                 <div
                     ref={menuRef}
                     id="export-menu-dropdown"
-                    className="export-dropdown"
+                    className={`export-dropdown position-${position}`}
                     role="menu"
                     aria-labelledby="export-menu-button"
                 >

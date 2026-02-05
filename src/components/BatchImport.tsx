@@ -8,6 +8,7 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { FileQueueSidebar } from './FileQueueSidebar';
 import { UploadIcon } from './Icons';
+import { Dropdown } from './Dropdown';
 
 
 
@@ -54,20 +55,19 @@ const BatchImportOptions = React.memo(function BatchImportOptions({ enableTimeli
                     <span>{t('batch.language')}</span>
                     <span className="options-hint">{t('batch.language_hint')}</span>
                 </div>
-                <select
-                    className="settings-input"
+                <Dropdown
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    style={{ maxWidth: '120px' }}
-                    aria-label={t('batch.language')}
-                >
-                    <option value="auto">Auto</option>
-                    <option value="zh">Chinese</option>
-                    <option value="en">English</option>
-                    <option value="ja">Japanese</option>
-                    <option value="ko">Korean</option>
-                    <option value="yue">Cantonese</option>
-                </select>
+                    onChange={setLanguage}
+                    options={[
+                        { value: 'auto', label: 'Auto' },
+                        { value: 'zh', label: 'Chinese' },
+                        { value: 'en', label: 'English' },
+                        { value: 'ja', label: 'Japanese' },
+                        { value: 'ko', label: 'Korean' },
+                        { value: 'yue', label: 'Cantonese' }
+                    ]}
+                    style={{ minWidth: '140px' }}
+                />
             </div>
         </div>
     );

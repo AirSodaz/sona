@@ -6,6 +6,7 @@ import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
 import { RecordingTimer } from './RecordingTimer';
+import { Dropdown } from './Dropdown';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -569,17 +570,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 <div className="input-source-selector">
                     <div className="source-select-wrapper">
                         {getSourceIcon(inputSource)}
-                        <select
+                        <Dropdown
                             value={inputSource}
-                            onChange={(e) => setInputSource(e.target.value as 'microphone' | 'desktop' | 'file')}
-                            aria-label={t('live.source_select')}
-                            className="settings-input"
-                            style={{ maxWidth: '160px' }}
-                        >
-                            <option value="microphone">{t('live.source_microphone')}</option>
-                            <option value="desktop">{t('live.source_desktop')}</option>
-                            <option value="file">{t('live.source_file')}</option>
-                        </select>
+                            onChange={(value) => setInputSource(value as 'microphone' | 'desktop' | 'file')}
+                            options={[
+                                { value: 'microphone', label: t('live.source_microphone') },
+                                { value: 'desktop', label: t('live.source_desktop') },
+                                { value: 'file', label: t('live.source_file') }
+                            ]}
+                            style={{ minWidth: '160px' }}
+                        />
                     </div>
                 </div>
             )}

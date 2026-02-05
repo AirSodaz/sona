@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Dropdown } from '../Dropdown';
 
 interface SettingsGeneralTabProps {
     appLanguage: string;
@@ -39,17 +40,16 @@ export function SettingsGeneralTab({
             <div className="settings-item">
                 <label htmlFor="settings-language" className="settings-label">{t('settings.language')}</label>
                 <div style={{ maxWidth: 300 }}>
-                    <select
+                    <Dropdown
                         id="settings-language"
-                        className="settings-input"
                         value={appLanguage}
-                        onChange={(e) => setAppLanguage(e.target.value as 'auto' | 'en' | 'zh')}
-                        style={{ width: '100%' }}
-                    >
-                        <option value="auto">{t('common.auto')}</option>
-                        <option value="en">English</option>
-                        <option value="zh">中文</option>
-                    </select>
+                        onChange={(value) => setAppLanguage(value as 'auto' | 'en' | 'zh')}
+                        options={[
+                            { value: 'auto', label: t('common.auto') },
+                            { value: 'en', label: 'English' },
+                            { value: 'zh', label: '中文' }
+                        ]}
+                    />
                 </div>
                 <div className="settings-hint">
                     {t('settings.language_hint', { defaultValue: '' })}
@@ -58,38 +58,82 @@ export function SettingsGeneralTab({
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <label htmlFor="settings-theme" className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
-                <div style={{ maxWidth: 300 }}>
-                    <select
-                        id="settings-theme"
-                        className="settings-input"
-                        value={theme}
-                        onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}
-                        style={{ width: '100%' }}
-                    >
-                        <option value="auto">{t('common.auto')}</option>
-                        <option value="light">{t('settings.theme_light', { defaultValue: 'Light' })}</option>
-                        <option value="dark">{t('settings.theme_dark', { defaultValue: 'Dark' })}</option>
-                    </select>
+                <div style={{ maxWidth: 400 }}>
+                    <div className="theme-selector-container">
+                        <button
+                            className={`theme-card ${theme === 'light' ? 'active' : ''}`}
+                            onClick={() => setTheme('light')}
+                            aria-label={t('settings.theme_light', { defaultValue: 'Light' })}
+                            aria-pressed={theme === 'light'}
+                        >
+                            <div className="theme-preview light">
+                                <div className="theme-preview-window">
+                                    <div className="theme-preview-lines">
+                                        <div className="line short"></div>
+                                        <div className="line long"></div>
+                                    </div>
+                                    <div className="theme-preview-sidebar"></div>
+                                </div>
+                            </div>
+                            <span className="theme-label">{t('settings.theme_light', { defaultValue: 'Light' })}</span>
+                        </button>
+
+                        <button
+                            className={`theme-card ${theme === 'dark' ? 'active' : ''}`}
+                            onClick={() => setTheme('dark')}
+                            aria-label={t('settings.theme_dark', { defaultValue: 'Dark' })}
+                            aria-pressed={theme === 'dark'}
+                        >
+                            <div className="theme-preview dark">
+                                <div className="theme-preview-window">
+                                    <div className="theme-preview-lines">
+                                        <div className="line short"></div>
+                                        <div className="line long"></div>
+                                    </div>
+                                    <div className="theme-preview-sidebar"></div>
+                                </div>
+                            </div>
+                            <span className="theme-label">{t('settings.theme_dark', { defaultValue: 'Dark' })}</span>
+                        </button>
+
+                        <button
+                            className={`theme-card ${theme === 'auto' ? 'active' : ''}`}
+                            onClick={() => setTheme('auto')}
+                            aria-label={t('common.auto')}
+                            aria-pressed={theme === 'auto'}
+                        >
+                            <div className="theme-preview auto">
+                                <div className="theme-preview-window">
+                                    <div className="theme-preview-lines">
+                                        <div className="line short"></div>
+                                        <div className="line long"></div>
+                                    </div>
+                                    <div className="theme-preview-sidebar"></div>
+                                </div>
+                            </div>
+                            <span className="theme-label">{t('common.auto')}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <label htmlFor="settings-font" className="settings-label">{t('settings.font', { defaultValue: 'Font' })}</label>
                 <div style={{ maxWidth: 300 }}>
-                    <select
+                    <Dropdown
                         id="settings-font"
-                        className="settings-input"
                         value={font}
-                        onChange={(e) => setFont(e.target.value)}
-                        style={{ width: '100%', fontFamily: getFontFamily(font) }}
-                    >
-                        <option value="system">{t('settings.font_system', { defaultValue: 'System Default' })}</option>
-                        <option value="serif">Serif (Merriweather)</option>
-                        <option value="sans">Sans Serif (Inter)</option>
-                        <option value="mono">Monospace (JetBrains Mono)</option>
-                        <option value="arial">Arial</option>
-                        <option value="georgia">Georgia</option>
-                    </select>
+                        onChange={setFont}
+                        options={[
+                            { value: 'system', label: t('settings.font_system', { defaultValue: 'System Default' }), style: { fontFamily: 'inherit' } },
+                            { value: 'serif', label: 'Serif (Merriweather)', style: { fontFamily: 'serif' } },
+                            { value: 'sans', label: 'Sans Serif (Inter)', style: { fontFamily: 'sans-serif' } },
+                            { value: 'mono', label: 'Monospace (JetBrains Mono)', style: { fontFamily: 'monospace' } },
+                            { value: 'arial', label: 'Arial', style: { fontFamily: 'Arial' } },
+                            { value: 'georgia', label: 'Georgia', style: { fontFamily: 'Georgia' } }
+                        ]}
+                        style={{ fontFamily: getFontFamily(font) }}
+                    />
                 </div>
             </div>
         </div>
