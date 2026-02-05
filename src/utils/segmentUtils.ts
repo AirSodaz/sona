@@ -301,6 +301,10 @@ export function findSegmentAndIndexForTime(
     time: number,
     hintIndex?: number
 ): { segment: TranscriptSegment | undefined, index: number } {
+    // Tolerance for floating point precision issues and micro-gaps (e.g. 50ms)
+    const EPSILON = 0.05;
+    const searchTime = time + EPSILON;
+
     // Optimization: Check hint and surrounding indices first (O(1))
     if (hintIndex !== undefined && hintIndex >= -1 && hintIndex < segments.length) {
 
@@ -315,7 +319,7 @@ export function findSegmentAndIndexForTime(
         } else {
             // Check current hint
             const seg = segments[hintIndex];
-            if (seg.start <= time && time <= seg.end) {
+            if (seg.start <= searchTime && time <= seg.end) {
                 return { segment: seg, index: hintIndex };
             }
 
@@ -323,14 +327,14 @@ export function findSegmentAndIndexForTime(
             const nextIdx = hintIndex + 1;
             if (nextIdx < segments.length) {
                 const nextSeg = segments[nextIdx];
-                if (nextSeg.start <= time && time <= nextSeg.end) {
+                if (nextSeg.start <= searchTime && time <= nextSeg.end) {
                     return { segment: nextSeg, index: nextIdx };
                 }
             }
 
             // Check gap after hint (time > seg.end AND (next doesn't exist OR time < next.start))
             if (time > seg.end) {
-                if (nextIdx >= segments.length || time < segments[nextIdx].start) {
+                if (nextIdx >= segments.length || searchTime < segments[nextIdx].start) {
                     return { segment: undefined, index: hintIndex };
                 }
             }
@@ -339,12 +343,12 @@ export function findSegmentAndIndexForTime(
             const prevIdx = hintIndex - 1;
             if (prevIdx >= 0) {
                 const prevSeg = segments[prevIdx];
-                if (prevSeg.start <= time && time <= prevSeg.end) {
+                if (prevSeg.start <= searchTime && time <= prevSeg.end) {
                     return { segment: prevSeg, index: prevIdx };
                 }
 
                 // Check gap after prev (time > prevSeg.end AND time < seg.start)
-                if (time > prevSeg.end && time < seg.start) {
+                if (time > prevSeg.end && searchTime < seg.start) {
                     return { segment: undefined, index: prevIdx };
                 }
             }
@@ -358,7 +362,7 @@ export function findSegmentAndIndexForTime(
     // Binary search for the rightmost segment that starts at or before the time
     while (left <= right) {
         const mid = (left + right) >>> 1;
-        if (segments[mid].start <= time) {
+        if (segments[mid].start <= searchTime) {
             idx = mid;
             left = mid + 1;
         } else {

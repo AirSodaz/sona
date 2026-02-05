@@ -32,6 +32,8 @@ interface TranscriptState {
     currentTime: number;
     /** Whether audio is currently playing. */
     isPlaying: boolean;
+    /** Timestamp of the last user-initiated seek. */
+    lastSeekTimestamp: number;
 
     // Config
     /** Application configuration. */
@@ -121,6 +123,8 @@ interface TranscriptState {
     setCurrentTime: (time: number) => void;
     /** Sets the playing state. */
     setIsPlaying: (isPlaying: boolean) => void;
+    /** Triggers a seek event. */
+    triggerSeek: () => void;
 
     // Config actions
     /**
@@ -163,6 +167,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     audioUrl: null,
     currentTime: 0,
     isPlaying: false,
+    lastSeekTimestamp: 0,
     config: DEFAULT_CONFIG,
 
     // Segment CRUD
@@ -312,6 +317,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         }
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
+    triggerSeek: () => set({ lastSeekTimestamp: Date.now() }),
 
     // Config actions
     setConfig: (config) => {

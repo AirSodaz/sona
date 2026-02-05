@@ -19,8 +19,10 @@ export function useAutoScroll(virtuosoRef: React.RefObject<VirtuosoHandle | null
             // Only scroll if:
             // 1. The active segment changed (and exists)
             // 2. Playback just started (and we have an active segment)
+            // 3. User explicitly sought to a time (force scroll)
             const shouldScroll = (activeSegmentId !== prevActiveId && activeSegmentId !== null) ||
-                (isPlaying && !prevIsPlaying && activeSegmentId !== null);
+                (isPlaying && !prevIsPlaying && activeSegmentId !== null) ||
+                (state.lastSeekTimestamp !== prevState.lastSeekTimestamp);
 
             if (shouldScroll && virtuosoRef.current && activeSegmentIndex !== -1) {
                 virtuosoRef.current.scrollToIndex({

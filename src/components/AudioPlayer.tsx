@@ -139,6 +139,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
+    const triggerSeek = useTranscriptStore((state) => state.triggerSeek);
 
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
@@ -229,8 +230,9 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         if (audio) {
             audio.currentTime = time;
             setCurrentTime(time);
+            triggerSeek();
         }
-    }, [setCurrentTime]);
+    }, [setCurrentTime, triggerSeek]);
 
     // Store seekTo in window for global access (used by TranscriptEditor)
     useEffect(() => {
