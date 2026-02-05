@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { TFunction } from 'i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon } from './Icons';
@@ -110,6 +111,30 @@ function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueIt
 
 const QueueItem = React.memo(QueueItemComponent);
 
+/**
+ * Container for QueueItem that handles subscription to specific item updates.
+ * This prevents the parent list from re-rendering when a single item updates.
+ */
+function QueueItemContainer({ id, t }: { id: string; t: TFunction }): React.JSX.Element | null {
+    const item = useBatchQueueStore((state) => state.queueItems.find((i) => i.id === id));
+    // Subscribe to active state for this item
+    const isActive = useBatchQueueStore((state) => state.activeItemId === id);
+    const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
+    const removeItem = useBatchQueueStore((state) => state.removeItem);
+
+    if (!item) return null;
+
+    return (
+        <QueueItem
+            item={item}
+            isActive={isActive}
+            onActivate={setActiveItem}
+            onRemove={removeItem}
+            t={t}
+        />
+    );
+}
+
 /** Props for FileQueueSidebar. */
 interface FileQueueSidebarProps {
     /** Optional CSS class name. */
@@ -125,20 +150,24 @@ interface FileQueueSidebarProps {
  */
 export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const queueItems = useBatchQueueStore((state) => state.queueItems);
-    const activeItemId = useBatchQueueStore((state) => state.activeItemId);
-    const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
-    const removeItem = useBatchQueueStore((state) => state.removeItem);
+
+    // OPTIMIZATION: Subscribe only to the list of IDs using useShallow.
+    // This ensures the sidebar component ONLY re-renders when items are added, removed, or reordered,
+    // but NOT when an item's progress/status updates (which happens frequently).
+    const itemIds = useBatchQueueStore(
+        useShallow((state) => state.queueItems.map((i) => i.id))
+    );
+
     const clearQueue = useBatchQueueStore((state) => state.clearQueue);
 
-    if (queueItems.length === 0) {
+    if (itemIds.length === 0) {
         return null;
     }
 
     return (
         <div className={`file-queue-sidebar ${className}`}>
             <div className="queue-header">
-                <span className="queue-title">{t('batch.queue_title', { count: queueItems.length })}</span>
+                <span className="queue-title">{t('batch.queue_title', { count: itemIds.length })}</span>
                 <button
                     className="btn btn-icon queue-clear-btn"
                     onClick={clearQueue}
@@ -150,14 +179,11 @@ export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): Rea
                 </button>
             </div>
 
-            <div className="queue-list" role="list" aria-label={t('batch.queue_title', { count: queueItems.length })}>
-                {queueItems.map((item) => (
-                    <QueueItem
-                        key={item.id}
-                        item={item}
-                        isActive={activeItemId === item.id}
-                        onActivate={setActiveItem}
-                        onRemove={removeItem}
+            <div className="queue-list" role="list" aria-label={t('batch.queue_title', { count: itemIds.length })}>
+                {itemIds.map((id) => (
+                    <QueueItemContainer
+                        key={id}
+                        id={id}
                         t={t}
                     />
                 ))}
