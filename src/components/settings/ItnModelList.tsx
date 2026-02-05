@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction } from 'react';
+import React, { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     DndContext,
@@ -28,7 +28,7 @@ interface SortableItemProps {
     style?: React.CSSProperties;
 }
 
-function SortableItem({ id, children, style: propStyle }: SortableItemProps) {
+function SortableItem({ id, children, style: propStyle }: SortableItemProps): React.JSX.Element {
     const {
         attributes,
         listeners,
@@ -80,11 +80,9 @@ export function ItnModelList({
     setEnabledITNModels,
     installedITNModels,
     downloads,
-    // downloadingId,
-    // progress,
     onDownload,
     onCancelDownload
-}: ItnModelListProps) {
+}: ItnModelListProps): React.JSX.Element {
     const { t } = useTranslation();
 
     const sensors = useSensors(

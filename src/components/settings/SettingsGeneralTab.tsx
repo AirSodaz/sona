@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface SettingsGeneralTabProps {
@@ -9,6 +10,14 @@ interface SettingsGeneralTabProps {
     setFont: (font: string) => void;
 }
 
+function getFontFamily(fontValue: string): string {
+    switch (fontValue) {
+        case 'mono': return 'monospace';
+        case 'serif': return 'serif';
+        default: return 'inherit';
+    }
+}
+
 export function SettingsGeneralTab({
     appLanguage,
     setAppLanguage,
@@ -16,16 +25,8 @@ export function SettingsGeneralTab({
     setTheme,
     font,
     setFont
-}: SettingsGeneralTabProps) {
+}: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
-
-    function getFontFamily(fontValue: string): string {
-        switch (fontValue) {
-            case 'mono': return 'monospace';
-            case 'serif': return 'serif';
-            default: return 'inherit';
-        }
-    }
 
     return (
         <div

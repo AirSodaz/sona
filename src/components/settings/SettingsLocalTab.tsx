@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction } from 'react';
+import React, { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderIcon } from '../Icons';
 import { ItnModelList } from './ItnModelList';
@@ -45,11 +45,9 @@ export function SettingsLocalTab({
     setEnabledITNModels,
     installedITNModels,
     downloads,
-    // downloadingId,
-    // progress,
     onDownloadITN,
     onCancelDownload
-}: SettingsLocalTabProps) {
+}: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
     return (

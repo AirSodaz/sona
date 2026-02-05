@@ -22,7 +22,7 @@ interface SettingsProps {
 interface SettingsTabButtonProps {
     id: 'general' | 'models' | 'local';
     label: string;
-    Icon: React.FC;
+    Icon: () => React.JSX.Element;
     activeTab: string;
     setActiveTab: (id: 'general' | 'models' | 'local') => void;
 }
@@ -33,7 +33,7 @@ interface SettingsTabButtonProps {
  * @param props Component props.
  * @return The rendered tab button.
  */
-function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps) {
+function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps): React.JSX.Element {
     return (
         <button
             className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
