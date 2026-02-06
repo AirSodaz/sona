@@ -43,8 +43,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         isMuted,
         handleVolumeChange,
         toggleMute,
-        setVolume,
-        setIsMuted
+        setVolume
     } = useAudioVolume(audioRef);
 
     // Sync audio element with store state
