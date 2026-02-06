@@ -131,6 +131,7 @@ export function HistoryView() {
                         <input
                             type="text"
                             placeholder={t('history.search_placeholder', { defaultValue: 'Search history...' })}
+                            aria-label={t('history.search_placeholder', { defaultValue: 'Search history...' })}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{ paddingLeft: '32px', width: '100%' }}
@@ -182,6 +183,15 @@ export function HistoryView() {
                     <div
                         key={item.id}
                         onClick={() => handleLoad(item)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleLoad(item);
+                            }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
                         style={{
                             background: 'var(--color-bg-elevated)',
                             border: '1px solid var(--color-border)',
@@ -216,7 +226,9 @@ export function HistoryView() {
                             <button
                                 className="btn btn-icon"
                                 onClick={(e) => handleDelete(e, item.id)}
-                                title={t('history.delete_tooltip')}
+                                aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
+                                data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+                                data-tooltip-pos="left"
                                 style={{ padding: '4px', height: 'auto', color: 'var(--color-text-muted)' }}
                                 onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
                                 onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}

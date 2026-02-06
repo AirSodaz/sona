@@ -80,7 +80,7 @@ describe('HistoryView', () => {
 
         render(<HistoryView />);
 
-        const deleteBtn = screen.getByTitle('history.delete_tooltip');
+        const deleteBtn = screen.getByRole('button', { name: 'common.delete_item' });
         fireEvent.click(deleteBtn);
 
         expect(confirmSpy).toHaveBeenCalledWith(
@@ -105,7 +105,7 @@ describe('HistoryView', () => {
 
         render(<HistoryView />);
 
-        const deleteBtn = screen.getByTitle('history.delete_tooltip');
+        const deleteBtn = screen.getByRole('button', { name: 'common.delete_item' });
         fireEvent.click(deleteBtn);
 
         expect(confirmSpy).toHaveBeenCalled();
