@@ -80,7 +80,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const startTimeRef = useRef<number>(0);
 
-    const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
+    const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
     const { t } = useTranslation();
@@ -369,15 +369,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         await transcriptionService.start(
             (segment) => {
                 console.log('[LiveRecord] Received segment:', segment);
-                upsertSegment(segment);
-
-                // Auto-focus on the live segment
-                const store = useTranscriptStore.getState();
-                // Find index of the segment we just upserted
-                const index = store.segments.findIndex(s => s.id === segment.id);
-                if (index !== -1) {
-                    store.setActiveSegmentId(segment.id, index);
-                }
+                // Optimized update: Upsert and set active in one go to reduce re-renders
+                upsertSegmentAndSetActive(segment);
             },
             (error) => {
                 console.error('Transcription error:', error);
