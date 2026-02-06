@@ -6,6 +6,8 @@ import { formatDisplayTime } from '../utils/exportFormats';
 import { PlayFilledIcon, PauseIcon, VolumeIcon, MuteIcon } from './Icons';
 import { TimeDisplay } from './audio-player/TimeDisplay';
 import { SeekSlider } from './audio-player/SeekSlider';
+import { useAudioShortcuts } from '../hooks/useAudioShortcuts';
+import { useAudioVolume } from '../hooks/useAudioVolume';
 
 /** Props for AudioPlayer. */
 interface AudioPlayerProps {
@@ -28,17 +30,21 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
 
     const audioUrl = useTranscriptStore((state) => state.audioUrl);
     // OPTIMIZATION: Do not subscribe to currentTime in the main component.
-    // const currentTime = useTranscriptStore((state) => state.currentTime);
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
     const triggerSeek = useTranscriptStore((state) => state.triggerSeek);
 
     const [duration, setDuration] = useState(0);
-    const [volume, setVolume] = useState(1);
-    const [isMuted, setIsMuted] = useState(false);
-    const [prevVolume, setPrevVolume] = useState(1);
     const [playbackRate, setPlaybackRate] = useState(1.0);
+
+    const {
+        volume,
+        isMuted,
+        handleVolumeChange,
+        toggleMute,
+        setVolume
+    } = useAudioVolume(audioRef);
 
     // Sync audio element with store state
     useEffect(() => {
@@ -142,105 +148,19 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         };
     }, [seekTo]);
 
-
+    // Initialize shortcuts hook
+    useAudioShortcuts({
+        audioRef,
+        seekTo,
+        setIsPlaying,
+        volume,
+        setVolume,
+        toggleMute
+    });
 
     const handlePlayPause = () => {
         setIsPlaying(!isPlaying);
     };
-
-    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const vol = parseFloat(e.target.value);
-        setVolume(vol);
-
-        // If user drags slider while muted, unmute
-        if (isMuted && vol > 0) {
-            setIsMuted(false);
-            if (audioRef.current) audioRef.current.muted = false;
-        }
-
-        if (audioRef.current) {
-            audioRef.current.volume = vol;
-        }
-    };
-
-    const toggleMute = () => {
-        if (isMuted) {
-            // Unmute
-            setIsMuted(false);
-            setVolume(prevVolume);
-            if (audioRef.current) {
-                audioRef.current.muted = false;
-                audioRef.current.volume = prevVolume;
-            }
-        } else {
-            // Mute
-            setPrevVolume(volume || 1); // fallback to 1 if current is 0
-            setVolume(0);
-            setIsMuted(true);
-            if (audioRef.current) {
-                audioRef.current.muted = true;
-                audioRef.current.volume = 0;
-            }
-        }
-    };
-
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const audio = audioRef.current;
-            if (!audio) return;
-
-            // Ignore if user is typing in an input or textarea
-            const target = e.target as HTMLElement;
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-                return;
-            }
-
-            switch (e.key) {
-                case ' ':
-                case 'k': // YouTube style pause
-                    e.preventDefault();
-                    if (audio.paused) {
-                        audio.play().catch(console.error);
-                        setIsPlaying(true);
-                    } else {
-                        audio.pause();
-                        setIsPlaying(false);
-                    }
-                    break;
-                case 'ArrowLeft':
-                    e.preventDefault();
-                    seekTo(Math.max(0, audio.currentTime - 5));
-                    break;
-                case 'ArrowRight':
-                    e.preventDefault();
-                    seekTo(Math.min(audio.duration || 0, audio.currentTime + 5));
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    setVolume(Math.min(1, volume + 0.1));
-                    if (audio.muted) {
-                        audio.muted = false;
-                        setIsMuted(false);
-                    }
-                    audio.volume = Math.min(1, volume + 0.1);
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    setVolume(Math.max(0, volume - 0.1));
-                    audio.volume = Math.max(0, volume - 0.1);
-                    break;
-                case 'm':
-                    toggleMute();
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [seekTo, setIsPlaying, volume, toggleMute]);
 
     if (!audioUrl) {
         return null;
@@ -301,7 +221,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     className="btn btn-icon"
                     onClick={toggleMute}
                     aria-label={isMuted ? t('player.unmute') : t('player.mute')}
-                    aria-pressed={isMuted}
+                    aria-pressed={!!isMuted}
                     data-tooltip={isMuted ? t('player.unmute') : t('player.mute')}
                     data-tooltip-pos="top"
                 >
