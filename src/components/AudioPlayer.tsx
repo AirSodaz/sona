@@ -338,7 +338,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                         const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
                         setPlaybackRate(nextSpeed);
                     }}
-                    aria-label={t('player.speed')}
+                    aria-label={`${t('player.speed')} ${playbackRate}x`}
                     data-tooltip={t('player.speed')}
                     data-tooltip-pos="top"
                     style={{ minWidth: '3ch', fontSize: '0.85rem', fontWeight: 500 }}
