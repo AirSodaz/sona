@@ -13,7 +13,8 @@
         "not_installed": "Not Installed",
         "close": "Close",
         "confirm": "Confirm",
-        "ok": "OK"
+        "ok": "OK",
+        "skip_to_content": "Skip to Content"
     },
     "header": {
         "settings": "Settings"

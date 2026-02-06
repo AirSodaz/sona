@@ -2109,3 +2109,26 @@ input[type="radio"]:focus {
   color: var(--color-text-primary);
   font-weight: 500;
 }
+
+/* ===========================
+   Accessibility
+   =========================== */
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  padding: 8px;
+  z-index: 9999;
+  transition: top 0.2s;
+  font-weight: 500;
+  border: 2px solid var(--color-accent-primary);
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: none;
+}
