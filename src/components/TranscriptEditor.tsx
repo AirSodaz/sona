@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo, useState, useLayoutEffect } from 'react';
+import React, { useRef, useCallback, useMemo, useState, useLayoutEffect, useEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
@@ -55,7 +55,10 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     // Create a local store for UI state (newSegmentIds) to prevent Context updates
     // from re-rendering the entire list.
     const uiStore = useMemo(() => createStore<TranscriptUIState>(() => ({
-        newSegmentIds: new Set()
+        newSegmentIds: new Set(),
+        activeSegmentId: useTranscriptStore.getState().activeSegmentId,
+        editingSegmentId: useTranscriptStore.getState().editingSegmentId,
+        totalSegments: useTranscriptStore.getState().segments.length,
     })), []);
 
     // Compute new segment IDs synchronously during render
@@ -102,10 +105,35 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         return newIds;
     }, [segments, animationVersion]);
 
-    // Sync newSegmentIds to local store
+    // Sync newSegmentIds and totalSegments to local store
     useLayoutEffect(() => {
-        uiStore.setState({ newSegmentIds });
-    }, [newSegmentIds, uiStore]);
+        uiStore.setState({
+            newSegmentIds,
+            totalSegments: segments.length
+        });
+    }, [newSegmentIds, segments.length, uiStore]);
+
+    // Sync activeSegmentId and editingSegmentId from global store to local store
+    // This avoids this component re-rendering when they change
+    useEffect(() => {
+        return useTranscriptStore.subscribe((state, prevState) => {
+            const updates: Partial<TranscriptUIState> = {};
+            let hasUpdates = false;
+
+            if (state.activeSegmentId !== prevState.activeSegmentId) {
+                updates.activeSegmentId = state.activeSegmentId;
+                hasUpdates = true;
+            }
+            if (state.editingSegmentId !== prevState.editingSegmentId) {
+                updates.editingSegmentId = state.editingSegmentId;
+                hasUpdates = true;
+            }
+
+            if (hasUpdates) {
+                uiStore.setState(updates);
+            }
+        });
+    }, [uiStore]);
 
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);

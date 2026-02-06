@@ -8,6 +8,12 @@ import { StoreApi } from 'zustand';
 export interface TranscriptUIState {
     /** Set of segment IDs that are considered "new" and should be animated. */
     newSegmentIds: Set<string>;
+    /** ID of the currently active segment. */
+    activeSegmentId: string | null;
+    /** ID of the segment currently being edited. */
+    editingSegmentId: string | null;
+    /** Total number of segments (for calculating hasNext). */
+    totalSegments: number;
 }
 
 /**
