@@ -305,13 +305,13 @@ export function findSegmentAndIndexForTime(
             if (segments.length > 0 && time < segments[0].start) {
                 return { segment: undefined, index: -1 };
             }
-            if (segments.length > 0 && time <= segments[0].end && time >= segments[0].start) {
+            if (segments.length > 0 && time < segments[0].end && time >= segments[0].start) {
                 return { segment: segments[0], index: 0 };
             }
         } else {
             // Check current hint
             const seg = segments[hintIndex];
-            if (seg.start <= searchTime && time <= seg.end) {
+            if (seg.start <= searchTime && time < seg.end) {
                 return { segment: seg, index: hintIndex };
             }
 
@@ -319,13 +319,13 @@ export function findSegmentAndIndexForTime(
             const nextIdx = hintIndex + 1;
             if (nextIdx < segments.length) {
                 const nextSeg = segments[nextIdx];
-                if (nextSeg.start <= searchTime && time <= nextSeg.end) {
+                if (nextSeg.start <= searchTime && time < nextSeg.end) {
                     return { segment: nextSeg, index: nextIdx };
                 }
             }
 
-            // Check gap after hint (time > seg.end AND (next doesn't exist OR time < next.start))
-            if (time > seg.end) {
+            // Check gap after hint (time >= seg.end AND (next doesn't exist OR time < next.start))
+            if (time >= seg.end) {
                 if (nextIdx >= segments.length || searchTime < segments[nextIdx].start) {
                     return { segment: undefined, index: hintIndex };
                 }
@@ -335,12 +335,12 @@ export function findSegmentAndIndexForTime(
             const prevIdx = hintIndex - 1;
             if (prevIdx >= 0) {
                 const prevSeg = segments[prevIdx];
-                if (prevSeg.start <= searchTime && time <= prevSeg.end) {
+                if (prevSeg.start <= searchTime && time < prevSeg.end) {
                     return { segment: prevSeg, index: prevIdx };
                 }
 
-                // Check gap after prev (time > prevSeg.end AND time < seg.start)
-                if (time > prevSeg.end && searchTime < seg.start) {
+                // Check gap after prev (time >= prevSeg.end AND time < seg.start)
+                if (time >= prevSeg.end && searchTime < seg.start) {
                     return { segment: undefined, index: prevIdx };
                 }
             }

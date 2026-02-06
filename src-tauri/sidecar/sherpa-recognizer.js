@@ -6,9 +6,8 @@
  * - Mode A (Stream): Reads PCM audio from stdin, outputs JSON lines
  * - Mode B (Batch): Processes audio file, outputs full segment array
  * 
- * Supports two engines:
+ * Supports:
  * - sherpa-onnx-node: For CPU inference (ONNX models)
- * - sherpa-ncnn: For GPU inference (NCNN models with Vulkan/CoreML support)
  */
 
 import { spawn, execSync } from 'child_process';
@@ -131,55 +130,7 @@ async function convertToWav(inputPath, ffmpegPath) {
     });
 }
 
-// Create NCNN Recognizer (GPU/Vulkan/CoreML)
-async function createNcnnRecognizer(modelConfig, enableITN, numThreads) {
-    console.error(`Initializing NcnnRecognizer (Threads: ${numThreads})...`);
-    try {
-        const sherpaNcnn = await import('sherpa-ncnn');
 
-        // Configuration for sherpa-ncnn
-        const config = {
-            featConfig: {
-                samplingRate: 16000,
-                featureDim: 80,
-            },
-            modelConfig: {
-                ...modelConfig,
-                useVulkanCompute: 1, // Enable GPU
-                numThreads: numThreads,
-            },
-            decoderConfig: {
-                decodingMethod: 'greedy_search',
-                numActivePaths: 4,
-            },
-            enableEndpoint: 1,
-            rule1MinTrailingSilence: 2.4,
-            rule2MinTrailingSilence: 2.4,
-            rule3MinUtternceLength: 300, // Large number to mimic sherpa-onnx defaults? Or 0?
-        };
-
-        const recognizer = sherpaNcnn.createRecognizer(config);
-
-        // Wrap to match interface
-        return {
-            recognizer: {
-                createStream: () => recognizer.createStream(),
-                isReady: (stream) => recognizer.isReady(stream),
-                decode: (stream) => recognizer.decode(stream),
-                isEndpoint: (stream) => recognizer.isEndpoint(stream),
-                reset: (stream) => recognizer.reset(stream),
-                getResult: (stream) => {
-                    const text = recognizer.getResult(stream);
-                    return { text: text }; // Wrap string in object
-                }
-            },
-            type: 'online-ncnn',
-            supportsInternalITN: false
-        };
-    } catch (e) {
-        throw new Error(`Failed to initialize sherpa-ncnn: ${e.message}`);
-    }
-}
 
 // Create ONNX Recognizer (CPU)
 async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel) {
@@ -258,38 +209,7 @@ function findModelConfig(modelPath, enableITN, numThreads, language) {
 
         if (!tokens) return null; // All models need tokens.txt
 
-        // 1. Check for NCNN files (.bin + .param)
-        // Expected: encoder_jit_trace-pnnx.ncnn.bin/param, decoder..., joiner...
-        const hasNcnn = files.some(f => f.endsWith('.ncnn.bin'));
-
-        if (hasNcnn) {
-            // NCNN Logic
-            const findNcnnFile = (pattern) => {
-                const f = files.find(file => file.includes(pattern) && (file.endsWith('.bin') || file.endsWith('.param')));
-                return f ? join(modelPath, f) : null;
-            };
-
-            const encoderBin = findNcnnFile('encoder_jit_trace-pnnx.ncnn.bin');
-            const encoderParam = findNcnnFile('encoder_jit_trace-pnnx.ncnn.param');
-            const decoderBin = findNcnnFile('decoder_jit_trace-pnnx.ncnn.bin');
-            const decoderParam = findNcnnFile('decoder_jit_trace-pnnx.ncnn.param');
-            const joinerBin = findNcnnFile('joiner_jit_trace-pnnx.ncnn.bin');
-            const joinerParam = findNcnnFile('joiner_jit_trace-pnnx.ncnn.param');
-
-            if (encoderBin && encoderParam && decoderBin && decoderParam && joinerBin && joinerParam) {
-                return {
-                    type: 'ncnn',
-                    config: {
-                        encoderBin, encoderParam,
-                        decoderBin, decoderParam,
-                        joinerBin, joinerParam,
-                        tokens: join(modelPath, tokens)
-                    }
-                };
-            }
-        }
-
-        // 2. Check for ONNX files
+        // Check for ONNX files
         const findBestMatch = (prefix) => {
             const candidates = files.filter(f => f.includes(prefix) && f.endsWith('.onnx'));
             if (candidates.length === 0) return null;
@@ -413,11 +333,7 @@ async function processStream(recognizer, sampleRate, punctuation) {
             samples[i] = int16 / 32768.0;
         }
 
-        if (recognizer.isNcnn) {
-            stream.acceptWaveform(sampleRate, samples);
-        } else {
-            stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
-        }
+        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
 
         totalSamples += samples.length;
 
@@ -504,11 +420,7 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
             const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
 
             // UNIFIED call needed here
-            if (recognizer.isNcnn) {
-                stream.acceptWaveform(sampleRate, chunk);
-            } else {
-                stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
-            }
+            stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
 
             while (recognizer.isReady(stream)) recognizer.decode(stream);
 
@@ -1013,25 +925,12 @@ async function main() {
 
     try {
         const found = findModelConfig(options.modelPath, options.enableITN, numThreads, options.language);
-        if (!found) throw new Error('Could not find valid model configuration (NCNN or ONNX)');
+        if (!found) throw new Error('Could not find valid model configuration (ONNX)');
 
-        let recognizerObj;
-
-        if (found.type === 'ncnn') {
-            recognizerObj = await createNcnnRecognizer(found.config, options.enableITN, numThreads);
-            // Flag to helper know it is NCNN for stream API diffs
-            recognizerObj.recognizer.isNcnn = true;
-        } else {
-            recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads, options.itnModel);
-        }
+        const recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads, options.itnModel);
 
         const { recognizer, type, supportsInternalITN } = recognizerObj;
-
-        // Unified Stream Processor Wrapper
-        // Avoid spreading (...recognizer) on class instances as it strips prototype methods
         const unifiedRecognizer = recognizer;
-        // Ensure isNcnn flag is present (already set for NCNN path, undefined for ONNX)
-        unifiedRecognizer.isNcnn = !!recognizer.isNcnn;
 
         const punctuation = await createPunctuation(options.punctuationModel);
 
