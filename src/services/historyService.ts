@@ -1,4 +1,4 @@
-import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir, copyFile } from '@tauri-apps/plugin-fs';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { TranscriptSegment } from '../types/transcript';
@@ -76,6 +76,8 @@ export const historyService = {
 
             // Create Item
             const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
+            const searchContent = segments.map(s => s.text).join(' ');
+
             const newItem: HistoryItem = {
                 id,
                 timestamp,
@@ -83,7 +85,9 @@ export const historyService = {
                 audioPath: audioFileName, // Store relative path
                 transcriptPath: transcriptFileName, // Store relative path
                 title,
-                previewText
+                previewText,
+                type: 'recording',
+                searchContent
             };
 
             // Add to Index
@@ -100,6 +104,78 @@ export const historyService = {
             return newItem;
         } catch (error) {
             console.error('[History] Failed to save recording:', error);
+            return null;
+        }
+    },
+
+    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0): Promise<HistoryItem | null> {
+        console.log('[History] Saving imported file...', { filePath, segments: segments.length });
+        try {
+            await this.init();
+            const id = uuidv4();
+            const timestamp = Date.now();
+
+            // Get filename from path
+            const filename = filePath.split(/[/\\]/).pop() || 'Imported File';
+            const ext = filename.split('.').pop() || 'wav'; // Default fallback
+
+            // Generate title with Batch prefix
+            const title = `Batch ${filename}`;
+
+            // Save Audio (Copy)
+            const audioFileName = `${id}.${ext}`;
+            const audioPathDisplay = `${HISTORY_DIR}/${audioFileName}`;
+
+            console.log('[History] Copying audio file to:', audioPathDisplay);
+            // Copy the file to the history directory
+            // We use copyFile from plugin-fs to copy from specific path to AppLocalData
+            await copyFile(
+                filePath,
+                audioPathDisplay,
+                { toPathBaseDir: BaseDirectory.AppLocalData }
+            );
+
+            // Save Transcript
+            const transcriptFileName = `${id}.json`;
+            const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
+            console.log('[History] Writing transcript file:', transcriptPathDisplay);
+            await writeTextFile(
+                transcriptPathDisplay,
+                JSON.stringify(segments, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            // Create Item
+            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
+            const searchContent = segments.map(s => s.text).join(' ');
+
+            const newItem: HistoryItem = {
+                id,
+                timestamp,
+                duration, // This might be 0 if we don't have it, but that's okay for now
+                audioPath: audioFileName,
+                transcriptPath: transcriptFileName,
+                title,
+                previewText,
+                type: 'batch',
+                searchContent
+            };
+
+            // Add to Index
+            console.log('[History] Updating index');
+            const items = await this.getAll();
+            items.unshift(newItem); // Add to beginning
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(items, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            console.log('[History] Import save complete:', newItem);
+            return newItem;
+
+        } catch (error) {
+            console.error('[History] Failed to save imported file:', error);
             return null;
         }
     },

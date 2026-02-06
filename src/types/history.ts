@@ -6,4 +6,6 @@ export interface HistoryItem {
     transcriptPath: string; // Relative to app data dir or absolute
     title: string;
     previewText: string;
+    type?: 'recording' | 'batch';
+    searchContent?: string;
 }

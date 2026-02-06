@@ -1,23 +1,85 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
-import { Trash2, Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Search } from 'lucide-react';
+import {
+    TrashIcon,
+    MicIcon,
+    FileTextIcon
+} from './Icons';
+import { Dropdown } from './Dropdown';
 import { useDialogStore } from '../stores/dialogStore';
+
+type FilterType = 'all' | 'recording' | 'batch';
+type DateFilter = 'all' | 'today' | 'week' | 'month';
 
 export function HistoryView() {
     const { t } = useTranslation();
+
+    // Store State
     const items = useHistoryStore((state) => state.items);
     const isLoading = useHistoryStore((state) => state.isLoading);
     const deleteItem = useHistoryStore((state) => state.deleteItem);
+
+    // Actions
     const setSegments = useTranscriptStore((state) => state.setSegments);
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
     const confirm = useDialogStore((state) => state.confirm);
 
+    // Local UI State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState<FilterType>('all');
+    const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+
     useEffect(() => {
         useHistoryStore.getState().loadItems();
     }, []);
+
+    // Filter Logic
+    const filteredItems = useMemo(() => {
+        return items.filter(item => {
+            // 1. Search Query
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const titleMatch = item.title.toLowerCase().includes(query);
+                const contentMatch = item.searchContent?.toLowerCase().includes(query) ||
+                    item.previewText.toLowerCase().includes(query); // Fallback to preview
+
+                if (!titleMatch && !contentMatch) return false;
+            }
+
+            // 2. Type Filter
+            if (filterType !== 'all') {
+                // If item.type is undefined, assume 'recording' for now or handle as 'unknown'
+                // Let's assume undefined == 'recording' for legacy items compatibility
+                const itemType = item.type || 'recording';
+                if (itemType !== filterType) return false;
+            }
+
+            // 3. Date Filter
+            if (dateFilter !== 'all') {
+                const itemDate = new Date(item.timestamp);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                if (dateFilter === 'today') {
+                    if (itemDate < today) return false;
+                } else if (dateFilter === 'week') {
+                    const weekAgo = new Date(today);
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    if (itemDate < weekAgo) return false;
+                } else if (dateFilter === 'month') {
+                    const monthAgo = new Date(today);
+                    monthAgo.setMonth(monthAgo.getMonth() - 1);
+                    if (itemDate < monthAgo) return false;
+                }
+            }
+
+            return true;
+        });
+    }, [items, searchQuery, filterType, dateFilter]);
 
     const handleLoad = async (item: any) => {
         try {
@@ -28,11 +90,6 @@ export function HistoryView() {
             // Load Audio
             const url = await historyService.getAudioUrl(item.audioPath);
             setAudioUrl(url);
-
-            // Note: In History mode, we might want to stay in 'history' mode but 'active' state?
-            // Or maybe we use 'history' mode just for the list, and when playing it acts like batch/loaded file?
-            // Actually, let's keep it simple: We load it, and the right panel (TranscriptEditor) shows it.
-            // The left panel (HistoryView) stays open.
 
         } catch (error) {
             console.error('Failed to load item:', error);
@@ -64,112 +121,137 @@ export function HistoryView() {
     }
 
     return (
-        <div className="history-view">
-            <div className="history-list">
-                {isLoading && <div className="loading">{t('history.loading')}</div>}
+        <div className="panel-container" style={{ height: '100%', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
+            {/* Search and Filters Header */}
+            <div style={{ padding: 'var(--spacing-md)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                    {/* Search Bar */}
+                    <div style={{ position: 'relative' }}>
+                        <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                        <input
+                            type="text"
+                            placeholder={t('history.search_placeholder', { defaultValue: 'Search history...' })}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ paddingLeft: '32px', width: '100%' }}
+                        />
+                    </div>
 
-                {!isLoading && items.length === 0 && (
-                    <div className="empty-state">
-                        <p>{t('history.empty')}</p>
+                    {/* Filters */}
+                    <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
+                        <div style={{ flex: 1 }}>
+                            <Dropdown
+                                value={filterType}
+                                onChange={(val) => setFilterType(val as FilterType)}
+                                options={[
+                                    { value: 'all', label: t('history.filter_all', { defaultValue: 'All Types' }) },
+                                    { value: 'recording', label: t('history.filter_recordings', { defaultValue: 'Recordings' }) },
+                                    { value: 'batch', label: t('history.filter_batch', { defaultValue: 'Batch Imports' }) }
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <Dropdown
+                                value={dateFilter}
+                                onChange={(val) => setDateFilter(val as DateFilter)}
+                                options={[
+                                    { value: 'all', label: t('history.date_all', { defaultValue: 'Any Time' }) },
+                                    { value: 'today', label: t('history.date_today', { defaultValue: 'Today' }) },
+                                    { value: 'week', label: t('history.date_week', { defaultValue: 'Last 7 Days' }) },
+                                    { value: 'month', label: t('history.date_month', { defaultValue: 'Last 30 Days' }) }
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* List */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--spacing-md)' }}>
+                {isLoading && <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>{t('history.loading')}</div>}
+
+                {!isLoading && filteredItems.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                        <p>{items.length === 0 ? t('history.empty') : t('history.no_results', { defaultValue: 'No results found' })}</p>
                     </div>
                 )}
 
-                {items.map((item) => (
-                    <div key={item.id} className="history-item" onClick={() => handleLoad(item)}>
-                        <div className="history-item-header">
-                            <span className="history-title">{item.title}</span>
+                {filteredItems.map((item) => (
+                    <div
+                        key={item.id}
+                        onClick={() => handleLoad(item)}
+                        style={{
+                            background: 'var(--color-bg-elevated)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: 'var(--spacing-md)',
+                            marginBottom: 'var(--spacing-sm)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-border-hover)';
+                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-border)';
+                            e.currentTarget.style.boxShadow = 'none';
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xs)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                {item.type === 'batch' ? (
+                                    <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        <FileTextIcon />
+                                    </span>
+                                ) : (
+                                    <span title="Recording" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        <MicIcon />
+                                    </span>
+                                )}
+                                <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.title}</span>
+                            </div>
                             <button
-                                className="delete-btn"
+                                className="btn btn-icon"
                                 onClick={(e) => handleDelete(e, item.id)}
                                 title={t('history.delete_tooltip')}
+                                style={{ padding: '4px', height: 'auto', color: 'var(--color-text-muted)' }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
                             >
-                                <Trash2 size={16} />
+                                <TrashIcon />
                             </button>
                         </div>
 
-                        <div className="history-meta">
-                            <span className="meta-item">
+                        <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Calendar size={12} />
                                 {formatDate(item.timestamp)}
                             </span>
-                            <span className="meta-item">
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Clock size={12} />
                                 {formatDuration(item.duration)}
                             </span>
                         </div>
 
-                        <p className="history-preview">
+                        <p style={{
+                            fontSize: '0.875rem',
+                            color: 'var(--color-text-secondary)',
+                            lineHeight: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            margin: 0
+                        }}>
                             {item.previewText || <em>{t('history.no_transcript')}</em>}
                         </p>
                     </div>
                 ))}
             </div>
-
-            <style>{`
-                .history-view {
-                    display: flex;
-                    flex-direction: column;
-                    height: 100%;
-                    overflow-y: auto;
-                    padding: 1rem;
-                }
-                .history-item {
-                    background: var(--bg-secondary);
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    padding: 12px;
-                    margin-bottom: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-                .history-item:hover {
-                    background: var(--bg-hover);
-                    border-color: var(--primary-color);
-                }
-                .history-item-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 8px;
-                }
-                .history-title {
-                    font-weight: 600;
-                    font-size: 0.95rem;
-                }
-                .history-meta {
-                    display: flex;
-                    gap: 12px;
-                    font-size: 0.8rem;
-                    color: var(--text-secondary);
-                    margin-bottom: 8px;
-                }
-                .meta-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 4px;
-                }
-                .history-preview {
-                    font-size: 0.85rem;
-                    color: var(--text-secondary);
-                    display: -webkit-box;
-                    -webkit-line-clamp: 2;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                    margin: 0;
-                }
-                .delete-btn {
-                    background: none;
-                    border: none;
-                    color: var(--text-secondary);
-                    cursor: pointer;
-                    padding: 4px;
-                    border-radius: 4px;
-                }
-                .delete-btn:hover {
-                    color: var(--error-color);
-                    background: var(--bg-active);
-                }
-            `}</style>
         </div>
     );
 }
+

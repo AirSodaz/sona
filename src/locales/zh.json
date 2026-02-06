@@ -106,7 +106,15 @@
         "empty": "暂无历史记录。",
         "delete_confirm": "您确定要删除此录音吗？",
         "no_transcript": "无转录内容",
-        "delete_tooltip": "删除"
+        "delete_tooltip": "删除",
+        "search_placeholder": "搜索历史记录...",
+        "filter_all": "所有类型",
+        "filter_recordings": "录音",
+        "filter_batch": "批量导入",
+        "date_all": "所有时间",
+        "date_today": "今天",
+        "date_week": "最近 7 天",
+        "date_month": "最近 30 天"
     },
     "settings": {
         "title": "设置",

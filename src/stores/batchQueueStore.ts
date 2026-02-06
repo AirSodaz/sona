@@ -4,6 +4,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import { TranscriptSegment } from '../types/transcript';
 import { transcriptionService } from '../services/transcriptionService';
+import { historyService } from '../services/historyService';
 import { modelService } from '../services/modelService';
 import { useTranscriptStore } from './transcriptStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
@@ -228,9 +229,17 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     language === 'auto' ? undefined : language
                 );
 
-                // Finalize with complete segments
                 const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
                 get().updateItemSegments(pendingItem.id, finalSegments);
+
+                // Calculate duration from last segment
+                const duration = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : 0;
+
+                // Save to History
+                historyService.saveImportedFile(pendingItem.filePath, finalSegments, duration).catch(err => {
+                    console.error('[BatchQueue] Failed to save to history:', err);
+                });
+
                 get().updateItemStatus(pendingItem.id, 'complete', 100);
 
             } catch (error) {
