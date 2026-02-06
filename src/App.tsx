@@ -8,6 +8,7 @@ import { AudioPlayer, seekAudio } from './components/AudioPlayer';
 import { ExportButton } from './components/ExportButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
+import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -181,10 +182,10 @@ function App(): React.JSX.Element {
           {/* Left Panel - Input */}
           <div className="panel panel-left">
             <div className="panel-header">
-              <h2>{mode === 'live' ? t('panel.live_record') : t('panel.batch_import')}</h2>
+              <h2>{mode === 'live' ? t('panel.live_record') : mode === 'history' ? t('history.title') : t('panel.batch_import')}</h2>
             </div>
             <div className="panel-content">
-              {mode === 'live' ? <LiveRecord /> : <BatchImport />}
+              {mode === 'live' ? <LiveRecord /> : mode === 'history' ? <HistoryView /> : <BatchImport />}
             </div>
           </div>
 

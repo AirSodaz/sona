@@ -1,0 +1,158 @@
+import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { appLocalDataDir, join } from '@tauri-apps/api/path';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { TranscriptSegment } from '../types/transcript';
+import { HistoryItem } from '../types/history';
+import { v4 as uuidv4 } from 'uuid';
+
+const HISTORY_DIR = 'history';
+const INDEX_FILE = 'index.json';
+
+export const historyService = {
+
+    async init(): Promise<void> {
+        try {
+            const historyExists = await exists(HISTORY_DIR, { baseDir: BaseDirectory.AppLocalData });
+            if (!historyExists) {
+                await mkdir(HISTORY_DIR, { baseDir: BaseDirectory.AppLocalData, recursive: true });
+            }
+
+            const indexExists = await exists(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+            if (!indexExists) {
+                console.log('[History] Creating index file');
+                await writeTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, '[]', { baseDir: BaseDirectory.AppLocalData });
+            }
+        } catch (error) {
+            console.error('[History] Failed to initialize service:', error);
+            throw error; // Re-throw to see it upstream
+        }
+    },
+
+    async getAll(): Promise<HistoryItem[]> {
+        try {
+            console.log('[History] Getting all items');
+            await this.init();
+            const content = await readTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+            console.log('[History] Loaded index:', content?.substring(0, 50));
+            return JSON.parse(content);
+        } catch (error) {
+            console.error('[History] Failed to load history:', error);
+            return [];
+        }
+    },
+
+    async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
+        console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
+        try {
+            await this.init();
+            const id = uuidv4();
+            const timestamp = Date.now();
+            const dateStr = new Date(timestamp).toISOString().split('T')[0];
+            const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
+            const title = `Recording ${dateStr} ${timeStr}`;
+
+            // Save Audio
+            const audioBuffer = await audioBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(audioBuffer);
+            const audioFileName = `${id}.webm`;
+            const audioPathDisplay = `${HISTORY_DIR}/${audioFileName}`;
+
+            console.log('[History] Writing audio file:', audioPathDisplay);
+            await writeFile(
+                audioPathDisplay,
+                uint8Array,
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            // Save Transcript
+            const transcriptFileName = `${id}.json`;
+            const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
+            console.log('[History] Writing transcript file:', transcriptPathDisplay);
+            await writeTextFile(
+                transcriptPathDisplay,
+                JSON.stringify(segments, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            // Create Item
+            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
+            const newItem: HistoryItem = {
+                id,
+                timestamp,
+                duration,
+                audioPath: audioFileName, // Store relative path
+                transcriptPath: transcriptFileName, // Store relative path
+                title,
+                previewText
+            };
+
+            // Add to Index
+            console.log('[History] Updating index');
+            const items = await this.getAll();
+            items.unshift(newItem); // Add to beginning
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(items, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            console.log('[History] Save complete:', newItem);
+            return newItem;
+        } catch (error) {
+            console.error('[History] Failed to save recording:', error);
+            return null;
+        }
+    },
+
+    async deleteRecording(id: string): Promise<void> {
+        try {
+            const items = await this.getAll();
+            const itemToDelete = items.find(item => item.id === id);
+
+            if (itemToDelete) {
+                // Delete files
+                const audioPath = `${HISTORY_DIR}/${itemToDelete.audioPath}`;
+                const transcriptPath = `${HISTORY_DIR}/${itemToDelete.transcriptPath}`;
+
+                if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
+                    await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
+                }
+
+                if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
+                    await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
+                }
+            }
+
+            const newItems = items.filter(item => item.id !== id);
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(newItems, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+        } catch (error) {
+            console.error('Failed to delete recording:', error);
+        }
+    },
+
+    async loadTranscript(filename: string): Promise<TranscriptSegment[]> {
+        try {
+            const path = `${HISTORY_DIR}/${filename}`;
+            const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
+            return JSON.parse(content);
+        } catch (error) {
+            console.error('Failed to load transcript:', error);
+            return [];
+        }
+    },
+
+    async getAudioUrl(filename: string): Promise<string | null> {
+        try {
+            const appDataDirPath = await appLocalDataDir();
+            const fullPath = await join(appDataDirPath, HISTORY_DIR, filename);
+            return convertFileSrc(fullPath);
+        } catch (e) {
+            console.error('Failed to get audio URL:', e);
+            return null;
+        }
+    }
+};

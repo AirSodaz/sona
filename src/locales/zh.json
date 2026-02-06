@@ -99,6 +99,14 @@
         "no_segments": "没有可导出的段落",
         "failed": "导出转录失败"
     },
+    "history": {
+        "title": "历史记录",
+        "loading": "加载历史记录中...",
+        "empty": "暂无历史记录。",
+        "delete_confirm": "您确定要删除此录音吗？",
+        "no_transcript": "无转录内容",
+        "delete_tooltip": "删除"
+    },
     "settings": {
         "title": "设置",
         "general": "常规",

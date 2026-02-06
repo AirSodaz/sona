@@ -99,6 +99,14 @@
         "no_segments": "No segments to export",
         "failed": "Failed to export transcript"
     },
+    "history": {
+        "title": "History",
+        "loading": "Loading history...",
+        "empty": "No history yet.",
+        "delete_confirm": "Are you sure you want to delete this recording?",
+        "no_transcript": "No transcript",
+        "delete_tooltip": "Delete"
+    },
     "settings": {
         "title": "Settings",
         "general": "General",

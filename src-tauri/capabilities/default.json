@@ -15,7 +15,10 @@
     "fs:allow-read",
     "fs:allow-write",
     "fs:allow-write-text-file",
+    "fs:allow-applocaldata-write-recursive",
     "fs:allow-remove",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
     "shell:default",
     "shell:allow-open",
     {
@@ -61,8 +64,11 @@
       "identifier": "fs:scope",
       "allow": [
         "$APPDATA/models/**",
+        "$APPLOCALDATA",
         "$APPLOCALDATA/models/**",
-        "$APPLOCALDATA/models"
+        "$APPLOCALDATA/models",
+        "$APPLOCALDATA/history/**",
+        "$APPLOCALDATA/history"
       ]
     }
   ]

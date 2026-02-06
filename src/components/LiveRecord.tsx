@@ -5,6 +5,8 @@ import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
+import { historyService } from '../services/historyService';
+import { useHistoryStore } from '../stores/historyStore';
 import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
 
@@ -74,7 +76,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop' | 'file'>('microphone');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const startTimeRef = useRef<number>(0);
 
     const upsertSegment = useTranscriptStore((state) => state.upsertSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
@@ -394,14 +398,30 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             chunks.push(e.data);
         };
 
-        mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current.onstop = async () => {
             const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
             const blob = new Blob(chunks, { type });
             const url = URL.createObjectURL(blob);
             useTranscriptStore.getState().setAudioUrl(url);
 
-            // Stop sidecar in background - no need to block UI
-            transcriptionService.softStop();
+            // Wait for sidecar to finalize the last segment before saving
+            await transcriptionService.softStop();
+
+            // Save to History (after softStop so final segment is included)
+            const segments = useTranscriptStore.getState().segments;
+            const duration = (Date.now() - startTimeRef.current) / 1000;
+
+            // Only save if we have data (segments or substantial audio)
+            if (segments.length > 0 || duration > 1.0) {
+                try {
+                    const newItem = await historyService.saveRecording(blob, segments, duration);
+                    if (newItem) {
+                        useHistoryStore.getState().addItem(newItem);
+                    }
+                } catch (err) {
+                    console.error('Failed to save history:', err);
+                }
+            }
         };
 
         mediaRecorderRef.current.start();
@@ -409,6 +429,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         setIsPaused(false);
         isRecordingRef.current = true;
         isPausedRef.current = false;
+        startTimeRef.current = Date.now();
         clearSegments();
 
         // Start visualizer

@@ -3,7 +3,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
 
-import { MicIcon, FolderIcon } from './Icons';
+import { MicIcon, FolderIcon, HistoryIcon } from './Icons';
 
 
 /** Props for TabNavigation. */
@@ -50,6 +50,15 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
             >
                 <FolderIcon />
                 <span>{t('panel.batch_import')}</span>
+            </button>
+            <button
+                className={`tab-button ${mode === 'history' ? 'active' : ''}`}
+                onClick={() => handleTabChange('history')}
+                aria-selected={mode === 'history'}
+                role="tab"
+            >
+                <HistoryIcon />
+                <span>{t('history.title')}</span>
             </button>
         </div>
     );

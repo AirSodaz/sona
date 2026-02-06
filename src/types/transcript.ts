@@ -22,7 +22,7 @@ export interface TranscriptSegment {
 /**
  * Application operation mode.
  */
-export type AppMode = 'live' | 'batch';
+export type AppMode = 'live' | 'batch' | 'history';
 
 /**
  * Processing status for batch imports.
