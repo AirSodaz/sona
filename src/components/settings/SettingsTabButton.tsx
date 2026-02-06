@@ -7,6 +7,8 @@ export interface SettingsTabButtonProps {
     Icon: () => React.JSX.Element;
     activeTab: string;
     setActiveTab: (id: 'general' | 'models' | 'local') => void;
+    /** Optional tabIndex for keyboard navigation management. */
+    tabIndex?: number;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface SettingsTabButtonProps {
  * @param props Component props.
  * @return The rendered tab button.
  */
-export function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps): React.JSX.Element {
+export function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab, tabIndex }: SettingsTabButtonProps): React.JSX.Element {
     return (
         <button
             className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
@@ -24,6 +26,7 @@ export function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: 
             aria-selected={activeTab === id}
             aria-controls={`settings-panel-${id}`}
             id={`settings-tab-${id}`}
+            tabIndex={tabIndex}
         >
             <Icon />
             {label}

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Settings } from '../Settings';
 
@@ -10,10 +10,12 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+const setActiveTabMock = vi.fn();
+
 vi.mock('../../hooks/useSettingsLogic', () => ({
     useSettingsLogic: () => ({
         activeTab: 'general',
-        setActiveTab: vi.fn(),
+        setActiveTab: setActiveTabMock,
         appLanguage: 'auto',
         theme: 'auto',
         font: 'system',
@@ -65,7 +67,11 @@ vi.mock('../stores/dialogStore', () => ({
     }
 }));
 
-describe('Settings Focus Trap', () => {
+describe('Settings Focus Trap & Navigation', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
     it('traps focus inside the modal', async () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
@@ -95,5 +101,42 @@ describe('Settings Focus Trap', () => {
         // Press Shift+Tab (should cycle to last)
         fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
         expect(document.activeElement).toBe(lastElement);
+    });
+
+    it('navigates tabs with arrow keys', () => {
+        const onClose = vi.fn();
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        const tablist = screen.getByRole('tablist');
+        const tabs = screen.getAllByRole('tab');
+        const generalTab = tabs[0];
+
+        // Focus the first tab
+        generalTab.focus();
+
+        // Arrow Down -> Should switch to 'models'
+        fireEvent.keyDown(tablist, { key: 'ArrowDown' });
+        expect(setActiveTabMock).toHaveBeenCalledWith('models');
+
+        // Reset mock
+        setActiveTabMock.mockClear();
+
+        // Arrow Up -> Should switch to 'local' (loops around from general)
+        fireEvent.keyDown(tablist, { key: 'ArrowUp' });
+        expect(setActiveTabMock).toHaveBeenCalledWith('local');
+
+        // Reset mock
+        setActiveTabMock.mockClear();
+
+        // End -> Should switch to 'local' (last)
+        fireEvent.keyDown(tablist, { key: 'End' });
+        expect(setActiveTabMock).toHaveBeenCalledWith('local');
+
+        // Reset mock
+        setActiveTabMock.mockClear();
+
+        // Home -> Should switch to 'general' (first)
+        fireEvent.keyDown(tablist, { key: 'Home' });
+        expect(setActiveTabMock).toHaveBeenCalledWith('general');
     });
 });

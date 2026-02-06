@@ -75,6 +75,36 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
 
+    const handleTabKeyDown = (e: React.KeyboardEvent) => {
+        const tabs = ['general', 'models', 'local'] as const;
+        const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
+
+        let nextIndex = -1;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            nextIndex = (currentIndex + 1) % tabs.length;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (e.key === 'Home') {
+            e.preventDefault();
+            nextIndex = 0;
+        } else if (e.key === 'End') {
+            e.preventDefault();
+            nextIndex = tabs.length - 1;
+        }
+
+        if (nextIndex !== -1) {
+            const nextTab = tabs[nextIndex];
+            setActiveTab(nextTab);
+            // Move focus to the new tab button
+            requestAnimationFrame(() => {
+                const btn = document.getElementById(`settings-tab-${nextTab}`);
+                btn?.focus();
+            });
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -95,13 +125,19 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                         <h2 id="settings-title">{t('settings.title')}</h2>
                     </div>
 
-                    <div className="settings-tabs-container" role="tablist" aria-orientation="vertical">
+                    <div
+                        className="settings-tabs-container"
+                        role="tablist"
+                        aria-orientation="vertical"
+                        onKeyDown={handleTabKeyDown}
+                    >
                         <SettingsTabButton
                             id="general"
                             label={t('settings.general')}
                             Icon={GeneralIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'general' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="models"
@@ -109,6 +145,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                             Icon={ModelIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'models' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="local"
@@ -116,6 +153,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                             Icon={LocalIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'local' ? 0 : -1}
                         />
                     </div>
                 </div>
