@@ -30,6 +30,7 @@ export function Dropdown({
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
 
     const selectedOption = options.find(opt => opt.value === value);
 
@@ -43,6 +44,22 @@ export function Dropdown({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Focus management when opening
+    useEffect(() => {
+        if (isOpen && menuRef.current) {
+            // Try to find selected option first
+            const selectedBtn = menuRef.current.querySelector('.selected') as HTMLElement;
+            if (selectedBtn) {
+                requestAnimationFrame(() => selectedBtn.focus());
+            } else {
+                const firstButton = menuRef.current.querySelector('button');
+                if (firstButton) {
+                    requestAnimationFrame(() => firstButton.focus());
+                }
+            }
+        }
+    }, [isOpen]);
 
     // Reset position when closing
     useEffect(() => {
@@ -71,6 +88,56 @@ export function Dropdown({
     const handleSelect = (optionValue: string) => {
         onChange(optionValue);
         setIsOpen(false);
+        triggerRef.current?.focus();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setIsOpen(false);
+            triggerRef.current?.focus();
+            return;
+        }
+
+        // If not open, Open on ArrowDown/Enter/Space
+        if (!isOpen) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setIsOpen(true);
+            }
+            return;
+        }
+
+        if (menuRef.current) {
+            const buttons = Array.from(menuRef.current.querySelectorAll('button'));
+            const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = (currentIndex + 1) % buttons.length;
+                buttons[nextIndex].focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+                buttons[prevIndex].focus();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                buttons[0].focus();
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                buttons[buttons.length - 1].focus();
+            } else if (e.key === 'Tab') {
+                // Close on tab (default behavior of tabbing away)
+                setIsOpen(false);
+            }
+        }
+    };
+
+    const handleBlur = (e: React.FocusEvent) => {
+        // Close menu if focus leaves the component
+        if (!dropdownRef.current?.contains(e.relatedTarget as Node)) {
+            setIsOpen(false);
+        }
     };
 
     return (
@@ -79,8 +146,11 @@ export function Dropdown({
             ref={dropdownRef}
             style={style}
             id={id}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
         >
             <button
+                ref={triggerRef}
                 type="button"
                 className={`dropdown-trigger ${isOpen ? 'active' : ''}`}
                 onClick={() => setIsOpen(!isOpen)}
@@ -107,6 +177,7 @@ export function Dropdown({
                             onClick={() => handleSelect(option.value)}
                             role="option"
                             aria-selected={option.value === value}
+                            tabIndex={-1}
                             style={option.style}
                         >
                             {option.label}
