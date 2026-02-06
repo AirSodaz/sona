@@ -29,7 +29,7 @@ describe('TabNavigation', () => {
 
         // Check for tabs
         const tabs = screen.getAllByRole('tab');
-        expect(tabs).toHaveLength(2);
+        expect(tabs).toHaveLength(3);
 
         // Check live tab
         expect(tabs[0].getAttribute('aria-selected')).toBe('true');

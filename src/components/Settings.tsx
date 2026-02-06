@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDialogStore } from '../stores/dialogStore';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
+import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
     ModelIcon,
@@ -16,37 +17,6 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-}
-
-/** Props for the SettingsTabButton component. */
-interface SettingsTabButtonProps {
-    id: 'general' | 'models' | 'local';
-    label: string;
-    Icon: () => React.JSX.Element;
-    activeTab: string;
-    setActiveTab: (id: 'general' | 'models' | 'local') => void;
-}
-
-/**
- * A tab button for the settings sidebar.
- *
- * @param props Component props.
- * @return The rendered tab button.
- */
-function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab }: SettingsTabButtonProps): React.JSX.Element {
-    return (
-        <button
-            className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
-            onClick={() => setActiveTab(id)}
-            role="tab"
-            aria-selected={activeTab === id}
-            aria-controls={`settings-panel-${id}`}
-            id={`settings-tab-${id}`}
-        >
-            <Icon />
-            {label}
-        </button>
-    );
 }
 
 /**
@@ -103,57 +73,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
     } = useSettingsLogic(isOpen, onClose);
 
     // Focus management
-    useEffect(() => {
-        if (isOpen) {
-            const previousFocus = document.activeElement as HTMLElement;
-            // Wait for render
-            requestAnimationFrame(() => {
-                modalRef.current?.focus();
-            });
-
-            function handleKeyDown(e: KeyboardEvent) {
-                if (e.key === 'Escape') {
-                    // Only close if no other dialog is open (GlobalDialog)
-                    if (useDialogStore.getState().isOpen) return;
-                    onClose();
-                    return;
-                }
-
-                if (e.key === 'Tab') {
-                    if (!modalRef.current) return;
-
-                    // Trap focus inside modal
-                    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
-                    const focusableElements = modalRef.current.querySelectorAll(focusableSelector);
-
-                    if (focusableElements.length === 0) return;
-
-                    const firstElement = focusableElements[0] as HTMLElement;
-                    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-                    if (e.shiftKey) {
-                        if (document.activeElement === firstElement) {
-                            e.preventDefault();
-                            lastElement.focus();
-                        }
-                    } else {
-                        if (document.activeElement === lastElement) {
-                            e.preventDefault();
-                            firstElement.focus();
-                        }
-                    }
-                }
-            }
-            window.addEventListener('keydown', handleKeyDown);
-
-            return () => {
-                window.removeEventListener('keydown', handleKeyDown);
-                previousFocus?.focus();
-            };
-        }
-    }, [isOpen, onClose]);
-
-
+    useFocusTrap(isOpen, onClose, modalRef);
 
     if (!isOpen) return null;
 
