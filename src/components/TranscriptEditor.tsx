@@ -58,11 +58,26 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         const known = knownSegmentIdsRef.current;
         const newIds = new Set<string>();
         let hasNew = false;
+        let consecutiveKnowns = 0;
 
-        for (const segment of segments) {
+        // Optimization: Most segments in a long transcript are already "known" (animated).
+        // Iterate backwards to find new segments efficiently, assuming they are appended.
+        // We stop after finding 50 consecutive known segments, which makes this O(1)
+        // for the common case of text updates or appending to a long list.
+        for (let i = segments.length - 1; i >= 0; i--) {
+            const segment = segments[i];
             if (!known.has(segment.id)) {
                 newIds.add(segment.id);
                 hasNew = true;
+                consecutiveKnowns = 0;
+            } else {
+                consecutiveKnowns++;
+                // If we see a large block of known segments, assume the rest (older) are also known.
+                // This trade-off means manually inserted segments deep in history might not fade in,
+                // but significantly improves performance for large transcripts (O(N) -> O(1)).
+                if (consecutiveKnowns >= 50) {
+                    break;
+                }
             }
         }
 
