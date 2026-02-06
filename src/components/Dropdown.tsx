@@ -15,6 +15,7 @@ interface DropdownProps {
     className?: string;
     style?: React.CSSProperties;
     id?: string;
+    'aria-label'?: string;
 }
 
 export function Dropdown({
@@ -24,7 +25,8 @@ export function Dropdown({
     placeholder = 'Select...',
     className = '',
     style,
-    id
+    id,
+    'aria-label': ariaLabel
 }: DropdownProps): React.JSX.Element {
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
@@ -145,17 +147,18 @@ export function Dropdown({
             className={`dropdown-container ${className}`}
             ref={dropdownRef}
             style={style}
-            id={id}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
         >
             <button
                 ref={triggerRef}
                 type="button"
+                id={id}
                 className={`dropdown-trigger ${isOpen ? 'active' : ''}`}
                 onClick={() => setIsOpen(!isOpen)}
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
+                aria-label={ariaLabel}
             >
                 <span className="dropdown-value">
                     {selectedOption ? selectedOption.label : placeholder}
