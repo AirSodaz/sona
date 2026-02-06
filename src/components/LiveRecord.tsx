@@ -587,6 +587,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         <Dropdown
                             value={inputSource}
                             onChange={(value) => setInputSource(value as 'microphone' | 'desktop' | 'file')}
+                            aria-label={t('live.source_select')}
                             options={[
                                 { value: 'microphone', label: t('live.source_microphone') },
                                 { value: 'desktop', label: t('live.source_desktop') },
