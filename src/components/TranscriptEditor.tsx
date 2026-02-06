@@ -5,7 +5,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
-import { PlusCircleIcon } from './Icons';
+import { PlusCircleIcon, MicIcon, ImportIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
 
 
@@ -45,6 +45,7 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
+    const setMode = useTranscriptStore((state) => state.setMode);
 
     // Track which segment IDs have been seen (for animation)
     const knownSegmentIdsRef = useRef<Set<string>>(new Set());
@@ -177,6 +178,16 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
             <div className="empty-state">
                 <PlusCircleIcon />
                 <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
+                <div className="empty-state-actions" style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                    <button className="btn btn-primary" onClick={() => setMode('live')}>
+                        <MicIcon />
+                        {t('live.start_recording')}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setMode('batch')}>
+                        <ImportIcon />
+                        {t('batch.select_file')}
+                    </button>
+                </div>
             </div>
         );
     }

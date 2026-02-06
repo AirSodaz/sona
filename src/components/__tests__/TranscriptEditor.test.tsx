@@ -1,4 +1,4 @@
-import { render, act } from '@testing-library/react';
+import { render, act, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
 import { useTranscriptStore } from '../../stores/transcriptStore';
@@ -160,5 +160,24 @@ describe('TranscriptEditor', () => {
         // Segment 3: props stable.
         // Expectation: 1
         expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders empty state with action buttons', () => {
+        act(() => {
+            useTranscriptStore.setState({ segments: [] });
+        });
+
+        render(<TranscriptEditor />);
+
+        expect(screen.getByText('editor.empty_state')).toBeDefined();
+        expect(screen.getByText('live.start_recording')).toBeDefined();
+        expect(screen.getByText('batch.select_file')).toBeDefined();
+
+        // Test click
+        fireEvent.click(screen.getByText('live.start_recording'));
+        expect(useTranscriptStore.getState().mode).toBe('live');
+
+        fireEvent.click(screen.getByText('batch.select_file'));
+        expect(useTranscriptStore.getState().mode).toBe('batch');
     });
 });
