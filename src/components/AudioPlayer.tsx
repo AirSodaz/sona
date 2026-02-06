@@ -132,6 +132,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const { t } = useTranslation();
     const { alert } = useDialogStore();
     const audioRef = useRef<HTMLAudioElement>(null);
+    const lastUpdateTime = useRef(0);
 
     const audioUrl = useTranscriptStore((state) => state.audioUrl);
     // OPTIMIZATION: Do not subscribe to currentTime in the main component.
@@ -173,7 +174,12 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
 
         const handleTimeUpdate = () => {
             // This updates the store, triggering re-renders in subscribers (TimeDisplay, SeekSlider)
-            setCurrentTime(audio.currentTime);
+            // Optimization: Throttle store updates to ~20Hz (every 50ms) to reduce
+            // selector execution overhead in subscribed components.
+            if (Math.abs(audio.currentTime - lastUpdateTime.current) > 0.05) {
+                setCurrentTime(audio.currentTime);
+                lastUpdateTime.current = audio.currentTime;
+            }
         };
 
         const updateDuration = () => {
@@ -222,6 +228,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     // Reset duration when audioUrl changes
     useEffect(() => {
         setDuration(0);
+        lastUpdateTime.current = 0;
     }, [audioUrl]);
 
     // Expose seek function via store
@@ -230,6 +237,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         if (audio) {
             audio.currentTime = time;
             setCurrentTime(time);
+            lastUpdateTime.current = time;
             triggerSeek();
         }
     }, [setCurrentTime, triggerSeek]);
