@@ -13,7 +13,8 @@
         "not_installed": "未安装",
         "close": "关闭",
         "confirm": "确认",
-        "ok": "确定"
+        "ok": "确定",
+        "skip_to_content": "跳转到主要内容"
     },
     "header": {
         "settings": "设置"

@@ -153,6 +153,7 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <a href="#main-content" className="skip-link">{t('common.skip_to_content')}</a>
       {/* Header */}
       <header className="app-header">
         <div className="app-logo">
@@ -177,7 +178,7 @@ function App(): React.JSX.Element {
       </header>
 
       {/* Main Content */}
-      <main className="app-main">
+      <main id="main-content" className="app-main">
         <div className="panel-container">
           {/* Left Panel - Input */}
           <div className="panel panel-left">
