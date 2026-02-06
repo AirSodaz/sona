@@ -58,6 +58,14 @@ interface TranscriptState {
     upsertSegment: (segment: TranscriptSegment) => void;
 
     /**
+     * Updates an existing segment or adds it, AND sets it as active.
+     * Optimized to perform both operations in a single store update.
+     *
+     * @param segment The segment to upsert and set active.
+     */
+    upsertSegmentAndSetActive: (segment: TranscriptSegment) => void;
+
+    /**
      * Updates specific fields of a segment.
      *
      * @param id The ID of the segment to update.
@@ -210,6 +218,59 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
             return {
                 segments: [...state.segments, segment].sort((a, b) => a.start - b.start),
+            };
+        });
+    },
+
+    upsertSegmentAndSetActive: (segment) => {
+        set((state) => {
+            const len = state.segments.length;
+
+            // 1. Update last segment (Most common case in streaming)
+            if (len > 0) {
+                const lastIndex = len - 1;
+                const lastSegment = state.segments[lastIndex];
+                if (lastSegment.id === segment.id) {
+                    const newSegments = [...state.segments];
+                    newSegments[lastIndex] = segment;
+
+                    return {
+                        segments: newSegments,
+                        activeSegmentId: segment.id,
+                        activeSegmentIndex: lastIndex
+                    };
+                }
+            }
+
+            // 2. Update existing segment (middle)
+            const index = state.segments.findIndex((s) => s.id === segment.id);
+            if (index !== -1) {
+                const newSegments = [...state.segments];
+                newSegments[index] = segment;
+                return {
+                    segments: newSegments,
+                    activeSegmentId: segment.id,
+                    activeSegmentIndex: index
+                };
+            }
+
+            // 3. Append (Next most common)
+            if (len === 0 || state.segments[len - 1].start <= segment.start) {
+                return {
+                    segments: [...state.segments, segment],
+                    activeSegmentId: segment.id,
+                    activeSegmentIndex: len // Index is the old length
+                };
+            }
+
+            // 4. Insert/Sort (Rare)
+            const newSegments = [...state.segments, segment].sort((a, b) => a.start - b.start);
+            const newIndex = newSegments.findIndex(s => s.id === segment.id);
+
+            return {
+                segments: newSegments,
+                activeSegmentId: segment.id,
+                activeSegmentIndex: newIndex
             };
         });
     },
