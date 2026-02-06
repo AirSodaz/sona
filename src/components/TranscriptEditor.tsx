@@ -1,24 +1,24 @@
-import React, { useRef, useCallback, useMemo, useState } from 'react';
+import React, { useRef, useCallback, useMemo, useState, useLayoutEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
+import { TranscriptUIContext, TranscriptUIState } from './transcript/TranscriptUIContext';
 
 
-/** Context passed to virtualized list items. */
+/** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {
-    isLast: (index: number) => boolean;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
     onAnimationEnd: (id: string) => void;
-    newSegmentIds: Set<string>;
 }
 
 /** Props for TranscriptEditor. */
@@ -31,6 +31,7 @@ interface TranscriptEditorProps {
  * Editor component for displaying and managing transcript segments.
  *
  * Uses virtualization for performance with large transcripts.
+ * Optimized to minimize re-renders during high-frequency updates.
  *
  * @param props Component props.
  * @return The transcript editor interface.
@@ -51,19 +52,19 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const prevNewSegmentIdsRef = useRef<Set<string>>(new Set());
     const [animationVersion, setAnimationVersion] = useState(0);
 
-    // Compute new segment IDs synchronously during render so the segment-new
-    // class is applied on the first render (CSS animations require the class
-    // to be present when the element mounts).
+    // Create a local store for UI state (newSegmentIds) to prevent Context updates
+    // from re-rendering the entire list.
+    const uiStore = useMemo(() => createStore<TranscriptUIState>(() => ({
+        newSegmentIds: new Set()
+    })), []);
+
+    // Compute new segment IDs synchronously during render
     const newSegmentIds = useMemo(() => {
         const known = knownSegmentIdsRef.current;
         const newIds = new Set<string>();
         let hasNew = false;
         let consecutiveKnowns = 0;
 
-        // Optimization: Most segments in a long transcript are already "known" (animated).
-        // Iterate backwards to find new segments efficiently, assuming they are appended.
-        // We stop after finding 50 consecutive known segments, which makes this O(1)
-        // for the common case of text updates or appending to a long list.
         for (let i = segments.length - 1; i >= 0; i--) {
             const segment = segments[i];
             if (!known.has(segment.id)) {
@@ -72,26 +73,18 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
                 consecutiveKnowns = 0;
             } else {
                 consecutiveKnowns++;
-                // If we see a large block of known segments, assume the rest (older) are also known.
-                // This trade-off means manually inserted segments deep in history might not fade in,
-                // but significantly improves performance for large transcripts (O(N) -> O(1)).
                 if (consecutiveKnowns >= 50) {
                     break;
                 }
             }
         }
 
-        // Optimization: Return stable reference if the set of new IDs hasn't changed.
-        // This is critical for preventing Virtuoso context updates (and full re-renders)
-        // when segments are merely updated (e.g. text edit) rather than added.
         const prev = prevNewSegmentIdsRef.current;
 
-        // Fast path: both empty
         if (!hasNew && prev.size === 0) {
             return prev;
         }
 
-        // Slow path: check for equality
         if (newIds.size === prev.size) {
             let allSame = true;
             for (const id of newIds) {
@@ -109,9 +102,13 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         return newIds;
     }, [segments, animationVersion]);
 
+    // Sync newSegmentIds to local store
+    useLayoutEffect(() => {
+        uiStore.setState({ newSegmentIds });
+    }, [newSegmentIds, uiStore]);
+
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
-    // Update ref in render body to ensure it's available for itemContent in the same render cycle
     segmentsRef.current = segments;
 
     // Auto-scroll to active segment during playback
@@ -161,29 +158,27 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         setAnimationVersion(v => v + 1); // Trigger useMemo recomputation
     }, []);
 
+    // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({
-        isLast: (index: number) => index === segmentsRef.current.length - 1,
         onSeek: handleSeek,
         onEdit: handleEdit,
         onSave: handleSave,
         onDelete: handleDelete,
         onMergeWithNext: handleMergeWithNext,
         onAnimationEnd: handleAnimationEnd,
-        newSegmentIds,
-    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleAnimationEnd, newSegmentIds]);
+    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleAnimationEnd]);
 
     const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
         <SegmentItem
             key={segment.id}
             segment={segment}
+            index={index}
             onSeek={context.onSeek}
             onEdit={context.onEdit}
             onSave={context.onSave}
             onDelete={context.onDelete}
             onMergeWithNext={context.onMergeWithNext}
             onAnimationEnd={context.onAnimationEnd}
-            hasNext={!context.isLast(index)}
-            isNew={context.newSegmentIds.has(segment.id)}
         />
     ), []);
 
@@ -198,13 +193,15 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
 
     return (
         <div className="transcript-editor">
-            <Virtuoso<TranscriptSegment, TranscriptContext>
-                ref={virtuosoRef}
-                className="transcript-list"
-                data={segments}
-                context={contextValue}
-                itemContent={itemContent}
-            />
+            <TranscriptUIContext.Provider value={uiStore}>
+                <Virtuoso<TranscriptSegment, TranscriptContext>
+                    ref={virtuosoRef}
+                    className="transcript-list"
+                    data={segments}
+                    context={contextValue}
+                    itemContent={itemContent}
+                />
+            </TranscriptUIContext.Provider>
         </div>
     );
 }
