@@ -1,22 +1,23 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStore } from 'zustand';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { TranscriptSegment } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { EditIcon, TrashIcon, MergeIcon } from '../Icons';
 import { SegmentTimestamp } from './SegmentTimestamp';
+import { TranscriptUIContext } from './TranscriptUIContext';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
     segment: TranscriptSegment;
+    index: number;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
     onAnimationEnd: (id: string) => void;
-    hasNext: boolean;
-    isNew: boolean;
 }
 
 /**
@@ -25,18 +26,27 @@ export interface SegmentItemProps {
  */
 function SegmentItemComponent({
     segment,
+    index,
     onSeek,
     onEdit,
     onSave,
     onDelete,
     onMergeWithNext,
     onAnimationEnd,
-    hasNext,
-    isNew,
 }: SegmentItemProps): React.JSX.Element {
     const { t } = useTranslation();
     const isActive = useTranscriptStore(useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
     const isEditing = useTranscriptStore(useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
+
+    // Subscribe to UI state (newSegmentIds) via context store to avoid parent re-renders
+    const uiStore = useContext(TranscriptUIContext);
+    if (!uiStore) throw new Error('SegmentItem must be used within TranscriptUIContext');
+
+    const isNew = useStore(uiStore, useCallback((state) => state.newSegmentIds.has(segment.id), [segment.id]));
+
+    // Subscribe to store for hasNext to avoid passing unstable props
+    const hasNext = useTranscriptStore(useCallback((state) => index < state.segments.length - 1, [index]));
+
     const [editText, setEditText] = useState(segment.text);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
