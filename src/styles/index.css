@@ -2132,3 +2132,32 @@ input[type="radio"]:focus {
   top: 0;
   outline: none;
 }
+
+/* ===========================
+   History View
+   =========================== */
+
+.history-item {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.history-item:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.history-item .delete-btn {
+  padding: 4px;
+  height: auto;
+  color: var(--color-text-muted);
+}
+
+.history-item .delete-btn:hover {
+  color: var(--color-error);
+}

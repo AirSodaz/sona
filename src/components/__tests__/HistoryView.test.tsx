@@ -5,6 +5,20 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { useDialogStore } from '../../stores/dialogStore';
 
 // Mock dependencies
+vi.mock('react-virtuoso', () => ({
+    Virtuoso: ({ data, itemContent }: any) => {
+        return (
+            <div>
+                {data.map((item: any, index: number) => (
+                    <div key={item.id || index}>
+                        {itemContent(index, item)}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+}));
+
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
         t: (key: string) => key,
