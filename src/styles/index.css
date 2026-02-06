@@ -697,6 +697,29 @@ input[type="radio"]:focus {
   font-size: 1rem;
 }
 
+/* New segment fade-in animation */
+@keyframes segmentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transcript-segment.segment-new {
+  animation: segmentFadeIn 250ms ease-out forwards;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .transcript-segment.segment-new {
+    animation: none;
+  }
+}
+
 .segment-input {
   width: 100%;
   padding: 0;

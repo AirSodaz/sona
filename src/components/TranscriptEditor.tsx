@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
@@ -7,8 +7,6 @@ import { useDialogStore } from '../stores/dialogStore';
 import { TranscriptSegment } from '../types/transcript';
 import { formatDisplayTime } from '../utils/exportFormats';
 import { EditIcon, TrashIcon, MergeIcon, PlusCircleIcon } from './Icons';
-
-// Icons
 
 
 /** Context passed to virtualized list items. */
@@ -19,6 +17,8 @@ interface TranscriptContext {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
+    onAnimationEnd: (id: string) => void;
+    newSegmentIds: Set<string>;
 }
 
 /** Props for SegmentItem component. */
@@ -29,7 +29,9 @@ interface SegmentItemProps {
     onSave: (id: string, text: string) => void;
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
+    onAnimationEnd: (id: string) => void;
     hasNext: boolean;
+    isNew: boolean;
 }
 
 /** Props for SegmentTimestamp component. */
@@ -87,7 +89,9 @@ function SegmentItemComponent({
     onSave,
     onDelete,
     onMergeWithNext,
+    onAnimationEnd,
     hasNext,
+    isNew,
 }: SegmentItemProps): React.JSX.Element {
     const { t } = useTranslation();
     const isActive = useTranscriptStore(useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
@@ -141,14 +145,22 @@ function SegmentItemComponent({
         onSave(segment.id, editText);
     }
 
+    function handleAnimationEnd(e: React.AnimationEvent): void {
+        // Only respond to our fade-in animation, not animations on child elements
+        if (isNew && e.animationName === 'segmentFadeIn' && e.target === e.currentTarget) {
+            onAnimationEnd(segment.id);
+        }
+    }
+
     const classNames = [
         'transcript-segment',
         isActive ? 'active' : '',
         isEditing ? 'editing' : '',
+        isNew ? 'segment-new' : '',
     ].filter(Boolean).join(' ');
 
     return (
-        <div className={classNames}>
+        <div className={classNames} onAnimationEnd={handleAnimationEnd}>
             <SegmentTimestamp start={segment.start} onSeek={onSeek} />
 
             <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
@@ -235,6 +247,24 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
 
+    // Track which segment IDs have been seen (for animation)
+    const knownSegmentIdsRef = useRef<Set<string>>(new Set());
+    const [animationVersion, setAnimationVersion] = useState(0);
+
+    // Compute new segment IDs synchronously during render so the segment-new
+    // class is applied on the first render (CSS animations require the class
+    // to be present when the element mounts).
+    const newSegmentIds = useMemo(() => {
+        const known = knownSegmentIdsRef.current;
+        const newIds = new Set<string>();
+        for (const segment of segments) {
+            if (!known.has(segment.id)) {
+                newIds.add(segment.id);
+            }
+        }
+        return newIds;
+    }, [segments, animationVersion]);
+
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
     // Update ref in render body to ensure it's available for itemContent in the same render cycle
@@ -282,6 +312,11 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         }
     }, [mergeSegments, t]);
 
+    const handleAnimationEnd = useCallback((id: string) => {
+        knownSegmentIdsRef.current.add(id);
+        setAnimationVersion(v => v + 1); // Trigger useMemo recomputation
+    }, []);
+
     const contextValue = useMemo<TranscriptContext>(() => ({
         isLast: (index: number) => index === segmentsRef.current.length - 1,
         onSeek: handleSeek,
@@ -289,7 +324,9 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         onSave: handleSave,
         onDelete: handleDelete,
         onMergeWithNext: handleMergeWithNext,
-    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext]);
+        onAnimationEnd: handleAnimationEnd,
+        newSegmentIds,
+    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleAnimationEnd, newSegmentIds]);
 
     const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
         <SegmentItem
@@ -300,7 +337,9 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
             onSave={context.onSave}
             onDelete={context.onDelete}
             onMergeWithNext={context.onMergeWithNext}
+            onAnimationEnd={context.onAnimationEnd}
             hasNext={!context.isLast(index)}
+            isNew={context.newSegmentIds.has(segment.id)}
         />
     ), []);
 

@@ -4,6 +4,8 @@ import { Settings } from '../Settings';
 import { modelService } from '../../services/modelService';
 import { useDialogStore } from '../../stores/dialogStore';
 
+import { useTranscriptStore } from '../../stores/transcriptStore';
+
 // Mock dependencies
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -12,22 +14,34 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
-const mockSetConfig = vi.fn();
-const mockState = {
-    config: {
-        streamingModelPath: '/test/streaming',
-        offlineModelPath: '/test/offline',
-        enableITN: true,
-        enabledITNModels: ['itn-zh-number'],
-        itnRulesOrder: ['itn-zh-number'],
-        appLanguage: 'auto'
-    },
-    setConfig: mockSetConfig
-};
+vi.mock('../../stores/transcriptStore', async () => {
+    const { create } = await import('zustand');
+    const actual = await vi.importActual('../../stores/transcriptStore');
 
-vi.mock('../../stores/transcriptStore', () => ({
-    useTranscriptStore: (selector: (state: any) => any) => selector(mockState)
-}));
+    // Create a functional store for testing
+    const useTranscriptStore = create((set) => ({
+        config: {
+            streamingModelPath: '/test/streaming',
+            offlineModelPath: '/test/offline',
+            enableITN: true,
+            enabledITNModels: ['itn-zh-number'],
+            itnRulesOrder: ['itn-zh-number'],
+            appLanguage: 'auto',
+            language: 'en',
+            punctuationModelPath: '',
+            vadModelPath: '',
+            theme: 'auto',
+            font: 'system',
+            vadBufferSize: 5
+        },
+        setConfig: (config: any) => set((state: any) => ({ config: { ...state.config, ...config } })),
+    }));
+
+    return {
+        ...actual,
+        useTranscriptStore
+    };
+});
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
@@ -59,6 +73,23 @@ describe('Settings', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // Reset store state
+        useTranscriptStore.setState({
+            config: {
+                streamingModelPath: '/test/streaming',
+                offlineModelPath: '/test/offline',
+                enableITN: true,
+                enabledITNModels: ['itn-zh-number'],
+                itnRulesOrder: ['itn-zh-number'],
+                appLanguage: 'auto',
+                language: 'en',
+                punctuationModelPath: '',
+                vadModelPath: '',
+                theme: 'auto',
+                font: 'system',
+                vadBufferSize: 5
+            }
+        });
     });
 
     it('renders with vertical layout structure', async () => {
@@ -171,9 +202,9 @@ describe('Settings', () => {
         const input = screen.getByLabelText('settings.streaming_path_label');
         fireEvent.change(input, { target: { value: '/new/streaming/path' } });
 
-        // Verify setConfig was called with new value
-        expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
+        // Verify setConfig was called with new value (by checking state update)
+        expect(useTranscriptStore.getState().config).toMatchObject({
             streamingModelPath: '/new/streaming/path'
-        }));
+        });
     });
 });

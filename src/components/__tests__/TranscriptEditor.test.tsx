@@ -48,6 +48,7 @@ describe('TranscriptEditor', () => {
             useTranscriptStore.setState({
                 segments: [],
                 activeSegmentId: null,
+                activeSegmentIndex: -1,
                 isPlaying: false,
                 editingSegmentId: null
             });
@@ -66,6 +67,7 @@ describe('TranscriptEditor', () => {
             useTranscriptStore.setState({
                 segments,
                 activeSegmentId: '1',
+                activeSegmentIndex: 0,
                 isPlaying: false
             });
         });
@@ -79,7 +81,7 @@ describe('TranscriptEditor', () => {
 
         // Changing active segment should trigger scroll
         act(() => {
-            useTranscriptStore.setState({ activeSegmentId: '2' });
+            useTranscriptStore.setState({ activeSegmentId: '2', activeSegmentIndex: 1 });
         });
 
         expect(mockScrollToIndex).toHaveBeenCalledWith(expect.objectContaining({
