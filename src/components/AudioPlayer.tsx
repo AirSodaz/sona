@@ -142,6 +142,8 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         };
     }, [seekTo]);
 
+
+
     const handlePlayPause = () => {
         setIsPlaying(!isPlaying);
     };
@@ -181,6 +183,64 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             }
         }
     };
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const audio = audioRef.current;
+            if (!audio) return;
+
+            // Ignore if user is typing in an input or textarea
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                return;
+            }
+
+            switch (e.key) {
+                case ' ':
+                case 'k': // YouTube style pause
+                    e.preventDefault();
+                    if (audio.paused) {
+                        audio.play().catch(console.error);
+                        setIsPlaying(true);
+                    } else {
+                        audio.pause();
+                        setIsPlaying(false);
+                    }
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    seekTo(Math.max(0, audio.currentTime - 5));
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    seekTo(Math.min(audio.duration || 0, audio.currentTime + 5));
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    setVolume(Math.min(1, volume + 0.1));
+                    if (audio.muted) {
+                        audio.muted = false;
+                        setIsMuted(false);
+                    }
+                    audio.volume = Math.min(1, volume + 0.1);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    setVolume(Math.max(0, volume - 0.1));
+                    audio.volume = Math.max(0, volume - 0.1);
+                    break;
+                case 'm':
+                    toggleMute();
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [seekTo, setIsPlaying, volume, toggleMute]);
 
     if (!audioUrl) {
         return null;
