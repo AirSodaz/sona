@@ -12,11 +12,9 @@ const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
 /**
  * Calculates the length of the text excluding punctuation and whitespace.
- *
- * Optimized to avoid unnecessary string allocations.
  */
 function getEffectiveLength(text: string): number {
-    // Optimization: Check for punctuation first to avoid unnecessary allocation
+    // Check for punctuation first to avoid unnecessary allocation
     if (!PUNCTUATION_REGEX.test(text)) {
         return text.length;
     }
@@ -53,8 +51,6 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
 
         let tokenMap: TokenMap | null = null;
         if (hasTimestamps) {
-            // Optimization: Build a token map for O(1) effective index lookups
-            // This replaces the previous O(N) linear scan per character, reducing complexity from O(N^2) to O(N log N)
             tokenMap = buildTokenMap(segment);
         }
 
@@ -62,7 +58,6 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
         const totalDuration = segment.end - segment.start;
         const totalLength = text.length;
 
-        // let tokenIndex = 0; // Unused
         let charIndex = 0; // Current character index in the original text
         let effectiveCharIndex = 0; // Current effective character index (ignoring punctuation/spaces)
 
@@ -74,13 +69,11 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
             currentSegmentStart = tokenMap.timestamps[0];
         }
 
-        let lastTokenIndex = 0; // Optimization: hint for the next search
+        let lastTokenIndex = 0; // Hint for the next search
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
             // Calculate effective length of this part to update the running index
-            // We use the same regex as in buildTokenMap to ensure consistency
-            // Optimization: Avoid allocation if no punctuation/space
             const partEffectiveLen = getEffectiveLength(part);
 
             if (SPLIT_REGEX.test(part)) {
@@ -215,7 +208,6 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
         // Strip punctuation and whitespace
-        // Optimization: Check for punctuation first to avoid unnecessary allocation
         const tokenLen = getEffectiveLength(token);
 
         if (tokenLen > 0) {
