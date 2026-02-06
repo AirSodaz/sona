@@ -4,7 +4,7 @@ import { TFunction } from 'i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
-import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon } from './Icons';
+import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon, XIcon } from './Icons';
 
 
 
@@ -99,11 +99,10 @@ function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueIt
                 className="btn btn-icon queue-item-remove"
                 onClick={handleRemove}
                 aria-label={t('common.delete_item', { item: item.filename })}
+                data-tooltip={t('common.delete')}
+                data-tooltip-pos="left"
             >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <XIcon width={12} height={12} />
             </button>
         </div>
     );
