@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface RecordingTimerProps {
     isRecording: boolean;
@@ -6,6 +7,7 @@ interface RecordingTimerProps {
 }
 
 export function RecordingTimer({ isRecording, isPaused }: RecordingTimerProps): React.ReactElement {
+    const { t } = useTranslation();
     const [recordingTime, setRecordingTime] = useState(0);
     const isPausedRef = useRef(isPaused);
 
@@ -42,6 +44,9 @@ export function RecordingTimer({ isRecording, isPaused }: RecordingTimerProps): 
     return (
         <div
             className="recording-timer"
+            role="timer"
+            aria-label={t('live.timer_label')}
+            aria-live="off"
             style={{
                 visibility: isRecording ? 'visible' : 'hidden'
             }}

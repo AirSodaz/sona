@@ -38,7 +38,8 @@
         "source_desktop": "Desktop Audio",
         "source_file": "Audio File Simulation",
         "source_select": "Select Input Source",
-        "visualizer_label": "Audio Visualizer"
+        "visualizer_label": "Audio Visualizer",
+        "timer_label": "Recording duration"
     },
     "batch": {
         "processing_title": "Processing Audio",
