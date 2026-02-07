@@ -138,7 +138,7 @@ export function HistoryView() {
         formatDate
     }), [handleLoad, handleDelete, t, formatDuration, formatDate]);
 
-    const itemContent = useCallback((index: number, item: HistoryItem, context: HistoryContext) => {
+    const itemContent = useCallback((_index: number, item: HistoryItem, context: HistoryContext) => {
         const { handleLoad, handleDelete, t, formatDuration, formatDate } = context;
 
         return (
