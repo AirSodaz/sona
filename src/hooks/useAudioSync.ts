@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 /** Props for useAudioSync hook. */
 interface UseAudioSyncProps {
     /** Ref to the audio element. */
-    audioRef: React.RefObject<HTMLAudioElement>;
+    audioRef: React.RefObject<HTMLAudioElement | null>;
     /** Current audio URL. */
     audioUrl: string | null;
     /** Current playback state. */
