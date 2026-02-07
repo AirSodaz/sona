@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Virtuoso } from 'react-virtuoso';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
@@ -11,9 +12,18 @@ import {
 } from './Icons';
 import { Dropdown } from './Dropdown';
 import { useDialogStore } from '../stores/dialogStore';
+import { HistoryItem } from '../types/history';
 
 type FilterType = 'all' | 'recording' | 'batch';
 type DateFilter = 'all' | 'today' | 'week' | 'month';
+
+interface HistoryContext {
+    handleLoad: (item: HistoryItem) => void;
+    handleDelete: (e: React.MouseEvent, id: string) => void;
+    t: (key: string, options?: any) => string;
+    formatDuration: (seconds: number) => string;
+    formatDate: (timestamp: number) => string;
+}
 
 export function HistoryView() {
     const { t } = useTranslation();
@@ -81,7 +91,7 @@ export function HistoryView() {
         });
     }, [items, searchQuery, filterType, dateFilter]);
 
-    const handleLoad = async (item: any) => {
+    const handleLoad = useCallback(async (item: HistoryItem) => {
         try {
             // Load Transcript
             const segments = await historyService.loadTranscript(item.transcriptPath);
@@ -94,9 +104,9 @@ export function HistoryView() {
         } catch (error) {
             console.error('Failed to load item:', error);
         }
-    };
+    }, [setSegments, setAudioUrl]);
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleDelete = useCallback(async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
 
         const confirmed = await confirm(t('history.delete_confirm'), {
@@ -108,17 +118,113 @@ export function HistoryView() {
         if (confirmed) {
             await deleteItem(id);
         }
-    };
+    }, [confirm, deleteItem, t]);
 
-    function formatDuration(seconds: number): string {
+    const formatDuration = useCallback((seconds: number): string => {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
+    }, []);
 
-    function formatDate(timestamp: number): string {
+    const formatDate = useCallback((timestamp: number): string => {
         return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
-    }
+    }, []);
+
+    const contextValue = useMemo<HistoryContext>(() => ({
+        handleLoad,
+        handleDelete,
+        t,
+        formatDuration,
+        formatDate
+    }), [handleLoad, handleDelete, t, formatDuration, formatDate]);
+
+    const itemContent = useCallback((index: number, item: HistoryItem, context: HistoryContext) => {
+        const { handleLoad, handleDelete, t, formatDuration, formatDate } = context;
+
+        return (
+            <div
+                key={item.id}
+                onClick={() => handleLoad(item)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleLoad(item);
+                    }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
+                style={{
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--spacing-md)',
+                    marginBottom: 'var(--spacing-sm)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--color-border-hover)';
+                    e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                    e.currentTarget.style.boxShadow = 'none';
+                }}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xs)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                        {item.type === 'batch' ? (
+                            <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
+                                <FileTextIcon />
+                            </span>
+                        ) : (
+                            <span title="Recording" style={{ color: 'var(--color-text-tertiary)' }}>
+                                <MicIcon />
+                            </span>
+                        )}
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.title}</span>
+                    </div>
+                    <button
+                        className="btn btn-icon"
+                        onClick={(e) => handleDelete(e, item.id)}
+                        aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
+                        data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+                        data-tooltip-pos="left"
+                        style={{ padding: '4px', height: 'auto', color: 'var(--color-text-muted)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
+                    >
+                        <TrashIcon />
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Calendar size={12} />
+                        {formatDate(item.timestamp)}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} />
+                        {formatDuration(item.duration)}
+                    </span>
+                </div>
+
+                <p style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--color-text-secondary)',
+                    lineHeight: 1.5,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    margin: 0
+                }}>
+                    {item.previewText || <em>{t('history.no_transcript')}</em>}
+                </p>
+            </div>
+        );
+    }, []);
 
     return (
         <div className="panel-container" style={{ height: '100%', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
@@ -170,7 +276,7 @@ export function HistoryView() {
             </div>
 
             {/* List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--spacing-md)' }}>
+            <div style={{ flex: 1, padding: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
                 {isLoading && <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>{t('history.loading')}</div>}
 
                 {!isLoading && filteredItems.length === 0 && (
@@ -179,91 +285,16 @@ export function HistoryView() {
                     </div>
                 )}
 
-                {filteredItems.map((item) => (
-                    <div
-                        key={item.id}
-                        onClick={() => handleLoad(item)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleLoad(item);
-                            }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
-                        style={{
-                            background: 'var(--color-bg-elevated)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: 'var(--spacing-md)',
-                            marginBottom: 'var(--spacing-sm)',
-                            cursor: 'pointer',
-                            transition: 'all var(--transition-fast)'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border-hover)';
-                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border)';
-                            e.currentTarget.style.boxShadow = 'none';
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xs)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                                {item.type === 'batch' ? (
-                                    <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        <FileTextIcon />
-                                    </span>
-                                ) : (
-                                    <span title="Recording" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        <MicIcon />
-                                    </span>
-                                )}
-                                <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.title}</span>
-                            </div>
-                            <button
-                                className="btn btn-icon"
-                                onClick={(e) => handleDelete(e, item.id)}
-                                aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                                data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                                data-tooltip-pos="left"
-                                style={{ padding: '4px', height: 'auto', color: 'var(--color-text-muted)' }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
-                            >
-                                <TrashIcon />
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Calendar size={12} />
-                                {formatDate(item.timestamp)}
-                            </span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Clock size={12} />
-                                {formatDuration(item.duration)}
-                            </span>
-                        </div>
-
-                        <p style={{
-                            fontSize: '0.875rem',
-                            color: 'var(--color-text-secondary)',
-                            lineHeight: 1.5,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            margin: 0
-                        }}>
-                            {item.previewText || <em>{t('history.no_transcript')}</em>}
-                        </p>
-                    </div>
-                ))}
+                {!isLoading && filteredItems.length > 0 && (
+                    <Virtuoso<HistoryItem, HistoryContext>
+                        style={{ flex: 1 }}
+                        data={filteredItems}
+                        computeItemKey={(_, item) => item.id}
+                        context={contextValue}
+                        itemContent={itemContent}
+                    />
+                )}
             </div>
         </div>
     );
 }
-
