@@ -8,6 +8,7 @@ import { TimeDisplay } from './audio-player/TimeDisplay';
 import { SeekSlider } from './audio-player/SeekSlider';
 import { useAudioShortcuts } from '../hooks/useAudioShortcuts';
 import { useAudioVolume } from '../hooks/useAudioVolume';
+import { useAudioSync } from '../hooks/useAudioSync';
 
 /** Props for AudioPlayer. */
 interface AudioPlayerProps {
@@ -46,88 +47,17 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         setVolume
     } = useAudioVolume(audioRef);
 
-    // Sync audio element with store state
-    useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        if (isPlaying) {
-            audio.play().catch(console.error);
-        } else {
-            audio.pause();
-        }
-    }, [isPlaying]);
-
-    // Sync playback rate
-    useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.playbackRate = playbackRate;
-        }
-    }, [playbackRate]);
-
-    // Handle audio events
-    useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        const handleTimeUpdate = () => {
-            // This updates the store, triggering re-renders in subscribers (TimeDisplay, SeekSlider)
-            // Optimization: Throttle store updates to ~20Hz (every 50ms) to reduce
-            // selector execution overhead in subscribed components.
-            if (Math.abs(audio.currentTime - lastUpdateTime.current) > 0.05) {
-                setCurrentTime(audio.currentTime);
-                lastUpdateTime.current = audio.currentTime;
-            }
-        };
-
-        const updateDuration = () => {
-            const d = audio.duration;
-            if (d && Number.isFinite(d)) {
-                setDuration(d);
-            }
-        };
-
-        const handleLoadedMetadata = () => {
-            updateDuration();
-        };
-
-        const handleDurationChange = () => {
-            updateDuration();
-        };
-
-        const handleEnded = () => {
-            setIsPlaying(false);
-        };
-
-        const handleError = (e: Event) => {
-            console.error('[AudioPlayer] Error event:', e);
-        };
-
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-        audio.addEventListener('durationchange', handleDurationChange);
-        audio.addEventListener('ended', handleEnded);
-        audio.addEventListener('error', handleError);
-
-        // Check if metadata is already loaded (HAVE_METADATA = 1)
-        if (audio.readyState >= 1) {
-            updateDuration();
-        }
-
-        return () => {
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            audio.removeEventListener('durationchange', handleDurationChange);
-            audio.removeEventListener('ended', handleEnded);
-            audio.removeEventListener('error', handleError);
-        };
-    }, [setCurrentTime, setIsPlaying, audioUrl]);
-
-    // Reset duration when audioUrl changes
-    useEffect(() => {
-        setDuration(0);
-        lastUpdateTime.current = 0;
-    }, [audioUrl]);
+    // Sync audio state and events
+    useAudioSync({
+        audioRef,
+        audioUrl,
+        isPlaying,
+        playbackRate,
+        setCurrentTime,
+        setIsPlaying,
+        setDuration,
+        lastUpdateTimeRef: lastUpdateTime
+    });
 
     // Expose seek function via store
     const seekTo = useCallback((time: number) => {

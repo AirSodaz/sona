@@ -190,87 +190,18 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     upsertSegment: (segment) => {
         set((state) => {
-            // Optimization: Check last segment first (common case for streaming updates)
-            const len = state.segments.length;
-            if (len > 0) {
-                const lastIndex = len - 1;
-                const lastSegment = state.segments[lastIndex];
-                if (lastSegment.id === segment.id) {
-                    const newSegments = [...state.segments];
-                    newSegments[lastIndex] = segment;
-                    return { segments: newSegments };
-                }
-            }
-
-            const index = state.segments.findIndex((s) => s.id === segment.id);
-            if (index !== -1) {
-                const newSegments = [...state.segments];
-                newSegments[index] = segment;
-                return { segments: newSegments };
-            }
-
-            // Optimization: Append at end if chronological (avoid sort)
-            if (len === 0 || state.segments[len - 1].start <= segment.start) {
-                return {
-                    segments: [...state.segments, segment]
-                };
-            }
-
-            return {
-                segments: [...state.segments, segment].sort((a, b) => a.start - b.start),
-            };
+            const result = calculateSegmentUpdate(state.segments, segment);
+            return { segments: result.segments };
         });
     },
 
     upsertSegmentAndSetActive: (segment) => {
         set((state) => {
-            const len = state.segments.length;
-
-            // 1. Update last segment (Most common case in streaming)
-            if (len > 0) {
-                const lastIndex = len - 1;
-                const lastSegment = state.segments[lastIndex];
-                if (lastSegment.id === segment.id) {
-                    const newSegments = [...state.segments];
-                    newSegments[lastIndex] = segment;
-
-                    return {
-                        segments: newSegments,
-                        activeSegmentId: segment.id,
-                        activeSegmentIndex: lastIndex
-                    };
-                }
-            }
-
-            // 2. Update existing segment (middle)
-            const index = state.segments.findIndex((s) => s.id === segment.id);
-            if (index !== -1) {
-                const newSegments = [...state.segments];
-                newSegments[index] = segment;
-                return {
-                    segments: newSegments,
-                    activeSegmentId: segment.id,
-                    activeSegmentIndex: index
-                };
-            }
-
-            // 3. Append (Next most common)
-            if (len === 0 || state.segments[len - 1].start <= segment.start) {
-                return {
-                    segments: [...state.segments, segment],
-                    activeSegmentId: segment.id,
-                    activeSegmentIndex: len // Index is the old length
-                };
-            }
-
-            // 4. Insert/Sort (Rare)
-            const newSegments = [...state.segments, segment].sort((a, b) => a.start - b.start);
-            const newIndex = newSegments.findIndex(s => s.id === segment.id);
-
+            const result = calculateSegmentUpdate(state.segments, segment);
             return {
-                segments: newSegments,
+                segments: result.segments,
                 activeSegmentId: segment.id,
-                activeSegmentIndex: newIndex
+                activeSegmentIndex: result.index
             };
         });
     },
@@ -399,3 +330,50 @@ export const useMode = () => useTranscriptStore((state) => state.mode);
 export const useProcessingStatus = () => useTranscriptStore((state) => state.processingStatus);
 /** Selector for accessing the current configuration. */
 export const useConfig = () => useTranscriptStore((state) => state.config);
+
+/**
+ * Calculates the new segments array and the index of the updated/inserted segment.
+ *
+ * @param segments The current list of segments.
+ * @param segment The segment to update or insert.
+ * @return An object containing the new segments array and the index of the segment.
+ */
+function calculateSegmentUpdate(segments: TranscriptSegment[], segment: TranscriptSegment): { segments: TranscriptSegment[], index: number } {
+    const len = segments.length;
+
+    // 1. Update last segment (Most common case in streaming)
+    if (len > 0) {
+        const lastIndex = len - 1;
+        const lastSegment = segments[lastIndex];
+        if (lastSegment.id === segment.id) {
+            const newSegments = [...segments];
+            newSegments[lastIndex] = segment;
+            return { segments: newSegments, index: lastIndex };
+        }
+    }
+
+    // 2. Update existing segment (middle)
+    const index = segments.findIndex((s) => s.id === segment.id);
+    if (index !== -1) {
+        const newSegments = [...segments];
+        newSegments[index] = segment;
+        return { segments: newSegments, index };
+    }
+
+    // 3. Append (Next most common)
+    if (len === 0 || segments[len - 1].start <= segment.start) {
+        return {
+            segments: [...segments, segment],
+            index: len // New index is at the end (old length)
+        };
+    }
+
+    // 4. Insert/Sort (Rare)
+    const newSegments = [...segments, segment].sort((a, b) => a.start - b.start);
+    const newIndex = newSegments.findIndex(s => s.id === segment.id);
+
+    return {
+        segments: newSegments,
+        index: newIndex
+    };
+}
