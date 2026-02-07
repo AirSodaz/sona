@@ -11,6 +11,20 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+vi.mock('react-virtuoso', () => ({
+    Virtuoso: ({ data, itemContent, context }: any) => {
+        return (
+            <div>
+                {data.map((item: any, index: number) => (
+                    <div key={item.id || index}>
+                        {itemContent(index, item, context)}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+}));
+
 vi.mock('../../stores/historyStore', async () => {
     const { create } = await import('zustand');
     const actual = await vi.importActual('../../stores/historyStore');
