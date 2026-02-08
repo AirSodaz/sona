@@ -158,24 +158,21 @@ class ModelService {
     }
 
     /**
-     * Downloads a model by its ID.
+     * Generic file downloader with mirror support, progress reporting, and cancellation.
      *
-     * Handles mirrors, progress reporting, and cancellation.
-     *
-     * @param modelId The ID of the model to download.
+     * @param url The primary URL to download from.
+     * @param outputPath The local path to save the file to.
      * @param onProgress Optional callback for progress updates.
-     * @param signal Optional AbortSignal to cancel the download.
-     * @return A promise resolving to the local path of the downloaded model.
-     * @throws {Error} If the model is not found or download fails.
+     * @param signal Optional AbortSignal for cancellation.
+     * @param label Optional label for the download (used in progress messages).
      */
-    async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const model = PRESET_MODELS.find(m => m.id === modelId);
-        if (!model) throw new Error('Model not found');
-
-        const modelsDir = await this.getModelsDir();
-        const targetFilename = model.filename || `${modelId}.tar.bz2`;
-        const tempFilePath = await join(modelsDir, targetFilename);
-
+    private async downloadFile(
+        url: string,
+        outputPath: string,
+        onProgress?: ProgressCallback,
+        signal?: AbortSignal,
+        label: string = 'Downloading'
+    ): Promise<void> {
         // Mirrors to try in order
         const mirrors = [
             '', // Direct
@@ -241,10 +238,10 @@ class ModelService {
                     lastTime = now;
 
                     if (total > 0) {
-                        const percentage = Math.round((downloaded / total) * 50); // First 50% is download
+                        const percentage = Math.round((downloaded / total) * (label === 'Downloading' ? 50 : 100)); // 50% for archives, 100% for direct
                         const downloadedMB = Math.round(downloaded / 1024 / 1024);
                         const totalMB = Math.round(total / 1024 / 1024);
-                        onProgress(percentage, `Downloading... ${downloadedMB}MB / ${totalMB}MB (${speedStr})`);
+                        onProgress(percentage, `${label}... ${downloadedMB}MB / ${totalMB}MB (${speedStr})`);
                     }
                 }
             });
@@ -255,16 +252,16 @@ class ModelService {
                 if (signal?.aborted) throw new Error('Download cancelled');
 
                 try {
-                    const url = mirror ? `${mirror}${model.url}` : model.url;
+                    const downloadUrl = mirror ? `${mirror}${url}` : url;
 
                     if (onProgress) {
-                        onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
+                        onProgress(0, mirror ? `${label} from mirror...` : `${label}...`);
                     }
 
-                    console.log(`Attempting download from: ${url} with ID: ${downloadId}`);
+                    console.log(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
                     await invoke('download_file', {
-                        url: url,
-                        outputPath: tempFilePath,
+                        url: downloadUrl,
+                        outputPath: outputPath,
                         id: downloadId
                     });
 
@@ -286,6 +283,28 @@ class ModelService {
         if (!downloadSuccess) {
             throw new Error(`Download failed after all attempts. Last error: ${lastError}`);
         }
+    }
+
+    /**
+     * Downloads a model by its ID.
+     *
+     * Handles mirrors, progress reporting, and cancellation.
+     *
+     * @param modelId The ID of the model to download.
+     * @param onProgress Optional callback for progress updates.
+     * @param signal Optional AbortSignal to cancel the download.
+     * @return A promise resolving to the local path of the downloaded model.
+     * @throws {Error} If the model is not found or download fails.
+     */
+    async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
+        const model = PRESET_MODELS.find(m => m.id === modelId);
+        if (!model) throw new Error('Model not found');
+
+        const modelsDir = await this.getModelsDir();
+        const targetFilename = model.filename || `${modelId}.tar.bz2`;
+        const tempFilePath = await join(modelsDir, targetFilename);
+
+        await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
 
         if (model.isArchive === false) {
             onProgress?.(100, 'Done');
@@ -328,18 +347,12 @@ class ModelService {
             return await join(modelsDir, model.filename);
         }
         if (model.type === 'punctuation') {
-            // Punctuation models extract to a folder, usually named after the archive
-            // We need to point to the directory itself or a specific file?
-            // sherpa-onnx expects the directory containing model.onnx (or similar) or the model file itself depending on usage.
-            // For OfflinePunctuation, it looks for model.onnx within the passed config path typically, or we construct config object.
-            // Let's just return the directory path for now, consistent with others.
             return await join(modelsDir, modelId);
         }
         if (model.type === 'vad') {
-            // VAD models are single files
-            return tempFilePath; // already joined with modelsDir and filename
+            return tempFilePath;
         }
-        return await join(modelsDir, modelId); // Approximate path, real path depends on archive structure
+        return await join(modelsDir, modelId);
     }
 
     /**
@@ -457,111 +470,9 @@ class ModelService {
 
         if (await exists(targetPath)) return targetPath;
 
-        // Mirrors to try in order
-        const mirrors = [
-            '', // Direct
-            'https://mirror.ghproxy.com/',
-            'https://ghproxy.net/'
-        ];
+        await this.downloadFile(model.url, targetPath, onProgress, signal, 'Downloading ITN Model');
 
-        const downloadId = Math.random().toString(36).substring(7);
-
-        if (signal) {
-            signal.addEventListener('abort', async () => {
-                try {
-                    await invoke('cancel_download', { id: downloadId });
-                } catch (e) {
-                    console.error('Failed to cancel download:', e);
-                }
-            });
-        }
-
-        let unlisten: (() => void) | undefined;
-        let lastDownloaded = 0;
-        let lastTime = Date.now();
-
-        if (onProgress) {
-            unlisten = await listen<any>('download-progress', (event) => {
-                const payload = event.payload;
-                let downloaded = 0;
-                let total = 0;
-                let id = '';
-
-                if (Array.isArray(payload)) {
-                    [downloaded, total, id] = payload;
-                } else if (typeof payload === 'object' && payload !== null) {
-                    downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
-                    total = (payload as any)[1] || (payload as any).total || 0;
-                    id = (payload as any)[2] || (payload as any).id || '';
-                }
-
-                if (id && id !== downloadId) return;
-
-                const now = Date.now();
-                const timeDiff = now - lastTime;
-
-                if (timeDiff > 500 || total === downloaded) {
-                    const bytesDiff = downloaded - lastDownloaded;
-                    const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-                    let speedStr = '';
-
-                    if (speedBytesPerSec > 1024 * 1024) {
-                        speedStr = `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`;
-                    } else {
-                        speedStr = `${Math.round(speedBytesPerSec / 1024)} KB/s`;
-                    }
-
-                    lastDownloaded = downloaded;
-                    lastTime = now;
-
-                    if (total > 0) {
-                        const percentage = Math.round((downloaded / total) * 100);
-                        onProgress(percentage, `Downloading ITN Model... (${speedStr})`);
-                    }
-                }
-            });
-        }
-
-        try {
-            let downloadSuccess = false;
-            let lastError: any = null;
-
-            for (const mirror of mirrors) {
-                if (signal?.aborted) throw new Error('Download cancelled');
-
-                try {
-                    const url = mirror ? `${mirror}${model.url}` : model.url;
-
-                    if (onProgress) {
-                        onProgress(0, mirror ? `Downloading from mirror...` : 'Downloading...');
-                    }
-
-                    console.log(`Attempting download ITN from: ${url} with ID: ${downloadId}`);
-                    await invoke('download_file', {
-                        url: url,
-                        outputPath: targetPath,
-                        id: downloadId
-                    });
-
-                    downloadSuccess = true;
-                    break;
-                } catch (error: any) {
-                    if (signal?.aborted || error.toString().includes('cancelled')) {
-                        throw new Error('Download cancelled');
-                    }
-                    console.warn(`Download ITN failed via ${mirror || 'direct'}:`, error);
-                    lastError = error;
-                }
-            }
-
-            if (!downloadSuccess) {
-                throw new Error(`Download ITN failed: ${lastError}`);
-            }
-
-            return targetPath;
-        } finally {
-            if (unlisten) unlisten();
-        }
+        return targetPath;
     }
 
     /**

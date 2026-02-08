@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo } from '../services/modelService';
+import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { open } from '@tauri-apps/plugin-dialog';
 
 /**
@@ -189,66 +189,14 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         }
     }
 
-    async function handleDownload(model: ModelInfo) {
-        if (downloads[model.id]) return;
-
-        // Check hardware compatibility
-        const { compatible, reason } = await modelService.checkHardware(model.id);
-        if (!compatible) {
-            const confirmed = await confirm(
-                `${reason}\n\nDo you want to download it anyway?`,
-                { title: 'Hardware Warning', variant: 'warning' }
-            );
-            if (!confirmed) return;
-        }
-
-        const controller = new AbortController();
-        setDownloads(prev => ({
-            ...prev,
-            [model.id]: { progress: 0, status: '', controller }
-        }));
-
-        try {
-            const downloadedPath = await modelService.downloadModel(model.id, (pct, status) => {
-                setDownloads(prev => {
-                    if (!prev[model.id]) return prev;
-                    return {
-                        ...prev,
-                        [model.id]: { ...prev[model.id], progress: pct, status: status }
-                    }
-                });
-            }, controller.signal);
-
-            setModelPathByType(model.type, downloadedPath);
-
-            await checkInstalledModels();
-
-            // Auto-switch to local tab to show result for a moment, but this might be jarring if downloading multiple.
-            // Let's remove the auto-switch or make it smarter. For now, let's keep it simple and just finish.
-            // Actually, if we are doing parallel downloads, switching tabs might hide other download progress.
-            // Let's NOT switch tabs automatically for now to allow user to trigger more downloads.
-            setDownloads(prev => {
-                const next = { ...prev };
-                delete next[model.id];
-                return next;
-            });
-
-        } catch (error: any) {
-            if (error.message === 'Download cancelled') {
-                console.log('Download cancelled by user');
-            } else {
-                console.error('Download failed:', error);
-            }
-            // Reset state
-            setDownloads(prev => {
-                const next = { ...prev };
-                delete next[model.id];
-                return next;
-            });
-        }
-    }
-
-    async function handleDownloadITN(modelId: string) {
+    /**
+     * Executes a download operation with common lifecycle management.
+     */
+    async function executeDownload(
+        modelId: string,
+        downloadFn: (id: string, callback: ProgressCallback, signal: AbortSignal) => Promise<string>,
+        onSuccess: (path: string) => void | Promise<void>
+    ) {
         if (downloads[modelId]) return;
 
         const controller = new AbortController();
@@ -258,7 +206,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         }));
 
         try {
-            await modelService.downloadITNModel(modelId, (pct, status) => {
+            const downloadedPath = await downloadFn(modelId, (pct, status) => {
                 setDownloads(prev => {
                     if (!prev[modelId]) return prev;
                     return {
@@ -269,13 +217,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             }, controller.signal);
 
             await checkInstalledModels();
-            // Automatically enable ITN after download
-            setEnabledITNModels(prev => new Set(prev).add(modelId));
-            setDownloads(prev => {
-                const next = { ...prev };
-                delete next[modelId];
-                return next;
-            });
+            await onSuccess(downloadedPath);
 
         } catch (error: any) {
             if (error.message === 'Download cancelled') {
@@ -283,6 +225,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             } else {
                 console.error('Download failed:', error);
             }
+        } finally {
             // Reset state
             setDownloads(prev => {
                 const next = { ...prev };
@@ -290,6 +233,32 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
                 return next;
             });
         }
+    }
+
+    async function handleDownload(model: ModelInfo) {
+        // Check hardware compatibility
+        const { compatible, reason } = await modelService.checkHardware(model.id);
+        if (!compatible) {
+            const confirmed = await confirm(
+                `${reason}\n\nDo you want to download it anyway?`,
+                { title: 'Hardware Warning', variant: 'warning' }
+            );
+            if (!confirmed) return;
+        }
+
+        await executeDownload(
+            model.id,
+            (id, cb, sig) => modelService.downloadModel(id, cb, sig),
+            (path) => setModelPathByType(model.type, path)
+        );
+    }
+
+    async function handleDownloadITN(modelId: string) {
+        await executeDownload(
+            modelId,
+            (id, cb, sig) => modelService.downloadITNModel(id, cb, sig),
+            () => setEnabledITNModels(prev => new Set(prev).add(modelId))
+        );
     }
 
     async function handleLoad(model: ModelInfo) {

@@ -1,18 +1,19 @@
 import { TranscriptSegment } from '../types/transcript';
 
 /**
- * Formats seconds to SRT timestamp format (HH:MM:SS,mmm).
+ * Formats seconds to timestamp format (HH:MM:SS<separator>mmm).
  *
  * @param seconds The time in seconds.
+ * @param separator The decimal separator (defaults to comma for SRT).
  * @return The formatted timestamp string.
  */
-function formatSRTTimestamp(seconds: number): string {
+function formatTimestamp(seconds: number, separator: string = ','): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const millis = Math.floor((seconds % 1) * 1000);
 
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}${separator}${String(millis).padStart(3, '0')}`;
 }
 
 /**
@@ -39,8 +40,8 @@ export function toSRT(segments: TranscriptSegment[]): string {
     return segments
         .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
         .map((segment, index) => {
-            const startTime = formatSRTTimestamp(segment.start);
-            const endTime = formatSRTTimestamp(segment.end);
+            const startTime = formatTimestamp(segment.start);
+            const endTime = formatTimestamp(segment.end);
             return `${index + 1}\n${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
         })
         .join('\n');
@@ -88,9 +89,9 @@ export function toVTT(segments: TranscriptSegment[]): string {
     const content = segments
         .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
         .map((segment) => {
-            // VTT uses different timestamp format (HH:MM:SS.mmm)
-            const startTime = formatSRTTimestamp(segment.start).replace(',', '.');
-            const endTime = formatSRTTimestamp(segment.end).replace(',', '.');
+            // VTT uses dot separator for milliseconds
+            const startTime = formatTimestamp(segment.start, '.');
+            const endTime = formatTimestamp(segment.end, '.');
             return `${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
         })
         .join('\n');
