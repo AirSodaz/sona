@@ -6,6 +6,13 @@ window.__TAURI__ = window.__TAURI__ || {};
 // Mock Event System
 const listeners = new Map();
 
+// Mock transformCallback (required for Channels in Tauri v2)
+window.__TAURI_INTERNALS__.transformCallback = (callback) => {
+    const id = Math.round(Math.random() * 1000000);
+    window[`_${id}`] = (payload) => callback(payload);
+    return id;
+};
+
 window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
   console.log(`[MockTauri] Invoke: ${cmd}`, args);
 
@@ -58,6 +65,7 @@ window.__TAURI_INTERNALS__.invoke = async (cmd, args) => {
 
   // File System Mocks
   if (cmd === 'plugin:fs|exists') {
+      if (!args.path) return false;
       // Pretend everything exists for now, or check specific paths
       if (args.path.includes('models')) return true;
       return false;
@@ -150,12 +158,13 @@ function startMockStream(pid) {
         // Since we can't easily reverse-engineer the callback ID mapping of Tauri v2,
         // we might be blocked on deep integration testing of the sidecar via pure JS injection.
 
-        // ALTERNATIVE: Use `page.evaluate` to directly interact with `transcriptionService` if it was exposed globally.
-        // But it's not.
-
-        // CRITICAL FIX: We will verify UI state changes rather than internal data if we can't mock data ingestion.
-        // OR: We expose a global helper in `main.tsx` or similar just for E2E testing?
-        // "if (import.meta.env.DEV) window.services = { transcriptionService }"
+        // Use the globally exposed transcriptionService to simulate data ingestion
+        if (window.transcriptionService && typeof window.transcriptionService.emitSegment === 'function') {
+            window.transcriptionService.emitSegment(segment);
+            console.log('[MockTauri] Stream emitted via transcriptionService:', segment.id);
+        } else {
+            console.warn('[MockTauri] transcriptionService not available or emitSegment missing');
+        }
 
         console.log('[MockTauri] Stream emitting:', JSON.stringify(segment));
 
