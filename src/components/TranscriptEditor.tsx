@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo, useState, useLayoutEffect, useEffect } from 'react';
+import React, { useRef, useCallback, useMemo, useLayoutEffect, useEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
@@ -9,6 +9,7 @@ import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from './transcript/TranscriptUIContext';
+import { useNewSegments } from '../hooks/useNewSegments';
 
 
 /** Context passed to virtualized list items via Virtuoso. */
@@ -47,10 +48,8 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
 
-    // Track which segment IDs have been seen (for animation)
-    const knownSegmentIdsRef = useRef<Set<string>>(new Set());
-    const prevNewSegmentIdsRef = useRef<Set<string>>(new Set());
-    const [animationVersion, setAnimationVersion] = useState(0);
+    // Track which segment IDs have been seen (for animation) using custom hook
+    const { newSegmentIds, handleAnimationEnd } = useNewSegments(segments);
 
     // Create a local store for UI state (newSegmentIds) to prevent Context updates
     // from re-rendering the entire list.
@@ -61,50 +60,6 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
         currentTime: useTranscriptStore.getState().currentTime,
         totalSegments: useTranscriptStore.getState().segments.length,
     })), []);
-
-    // Compute new segment IDs synchronously during render
-    const newSegmentIds = useMemo(() => {
-        const known = knownSegmentIdsRef.current;
-        const newIds = new Set<string>();
-        let hasNew = false;
-        let consecutiveKnowns = 0;
-
-        for (let i = segments.length - 1; i >= 0; i--) {
-            const segment = segments[i];
-            if (!known.has(segment.id)) {
-                newIds.add(segment.id);
-                hasNew = true;
-                consecutiveKnowns = 0;
-            } else {
-                consecutiveKnowns++;
-                if (consecutiveKnowns >= 50) {
-                    break;
-                }
-            }
-        }
-
-        const prev = prevNewSegmentIdsRef.current;
-
-        if (!hasNew && prev.size === 0) {
-            return prev;
-        }
-
-        if (newIds.size === prev.size) {
-            let allSame = true;
-            for (const id of newIds) {
-                if (!prev.has(id)) {
-                    allSame = false;
-                    break;
-                }
-            }
-            if (allSame) {
-                return prev;
-            }
-        }
-
-        prevNewSegmentIdsRef.current = newIds;
-        return newIds;
-    }, [segments, animationVersion]);
 
     // Sync newSegmentIds and totalSegments to local store
     useLayoutEffect(() => {
@@ -186,11 +141,6 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
             }
         }
     }, [mergeSegments, t]);
-
-    const handleAnimationEnd = useCallback((id: string) => {
-        knownSegmentIdsRef.current.add(id);
-        setAnimationVersion(v => v + 1); // Trigger useMemo recomputation
-    }, []);
 
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({

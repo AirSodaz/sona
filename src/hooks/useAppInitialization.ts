@@ -3,6 +3,24 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import i18n from '../i18n';
 
 /**
+ * Sets the font CSS variables on the root element.
+ */
+function setFontVars(root: HTMLElement, fontFamily: string) {
+    root.style.setProperty('--font-sans', fontFamily);
+    root.style.setProperty('--font-serif', fontFamily);
+    root.style.setProperty('--font-mono', fontFamily);
+}
+
+/**
+ * Removes the font CSS variables from the root element.
+ */
+function removeFontVars(root: HTMLElement) {
+    root.style.removeProperty('--font-sans');
+    root.style.removeProperty('--font-serif');
+    root.style.removeProperty('--font-mono');
+}
+
+/**
  * Hook to handle application initialization.
  *
  * - Loads configuration from localStorage.
@@ -70,37 +88,25 @@ export function useAppInitialization() {
         const font = config.font || 'system';
         const root = document.documentElement;
 
-        const setFontVars = (fontFamily: string) => {
-            root.style.setProperty('--font-sans', fontFamily);
-            root.style.setProperty('--font-serif', fontFamily);
-            root.style.setProperty('--font-mono', fontFamily);
-        };
-
-        const removeFontVars = () => {
-            root.style.removeProperty('--font-sans');
-            root.style.removeProperty('--font-serif');
-            root.style.removeProperty('--font-mono');
-        };
-
         switch (font) {
             case 'serif':
-                setFontVars('Merriweather, serif');
+                setFontVars(root, 'Merriweather, serif');
                 break;
             case 'sans':
-                setFontVars('Inter, sans-serif');
+                setFontVars(root, 'Inter, sans-serif');
                 break;
             case 'mono':
-                setFontVars('JetBrains Mono, monospace');
+                setFontVars(root, 'JetBrains Mono, monospace');
                 break;
             case 'arial':
-                setFontVars('Arial, sans-serif');
+                setFontVars(root, 'Arial, sans-serif');
                 break;
             case 'georgia':
-                setFontVars('Georgia, serif');
+                setFontVars(root, 'Georgia, serif');
                 break;
             case 'system':
             default:
-                removeFontVars();
+                removeFontVars(root);
                 break;
         }
     }, [config.font]);

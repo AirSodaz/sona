@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptEditor } from './components/TranscriptEditor';
-import { AudioPlayer, seekAudio } from './components/AudioPlayer';
+import { AudioPlayer } from './components/AudioPlayer';
 import { ExportButton } from './components/ExportButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
@@ -25,10 +25,11 @@ function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
+  const requestSeek = useTranscriptStore((state) => state.requestSeek);
   const { t } = useTranslation();
 
   const handleSeek = (time: number) => {
-    seekAudio(time);
+    requestSeek(time);
   };
 
   // Run application initialization logic

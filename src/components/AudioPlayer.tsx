@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -9,6 +9,39 @@ import { SeekSlider } from './audio-player/SeekSlider';
 import { useAudioShortcuts } from '../hooks/useAudioShortcuts';
 import { useAudioVolume } from '../hooks/useAudioVolume';
 import { useAudioSync } from '../hooks/useAudioSync';
+
+/** Props for PlaybackRateButton. */
+interface PlaybackRateButtonProps {
+    playbackRate: number;
+    setPlaybackRate: (rate: number) => void;
+}
+
+/**
+ * Button to cycle through playback speeds.
+ */
+function PlaybackRateButton({ playbackRate, setPlaybackRate }: PlaybackRateButtonProps): React.JSX.Element {
+    const { t } = useTranslation();
+
+    const handleSpeedChange = () => {
+        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
+        const currentIndex = speeds.indexOf(playbackRate);
+        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+        setPlaybackRate(nextSpeed);
+    };
+
+    return (
+        <button
+            className="btn btn-icon btn-text"
+            onClick={handleSpeedChange}
+            aria-label={`${t('player.speed')} ${playbackRate}x`}
+            data-tooltip={t('player.speed')}
+            data-tooltip-pos="top"
+            style={{ minWidth: '3ch', fontSize: '0.85rem', fontWeight: 500 }}
+        >
+            {playbackRate}x
+        </button>
+    );
+}
 
 /** Props for AudioPlayer. */
 interface AudioPlayerProps {
@@ -34,7 +67,8 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
-    const triggerSeek = useTranscriptStore((state) => state.triggerSeek);
+    const requestSeek = useTranscriptStore((state) => state.requestSeek);
+    const seekRequest = useTranscriptStore((state) => state.seekRequest);
 
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -59,29 +93,25 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         lastUpdateTimeRef: lastUpdateTime
     });
 
-    // Expose seek function via store
-    const seekTo = useCallback((time: number) => {
-        const audio = audioRef.current;
-        if (audio) {
-            audio.currentTime = time;
-            setCurrentTime(time);
-            lastUpdateTime.current = time;
-            triggerSeek();
-        }
-    }, [setCurrentTime, triggerSeek]);
-
-    // Store seekTo in window for global access (used by TranscriptEditor)
+    // Handle seek requests from store
     useEffect(() => {
-        (window as unknown as { __audioSeekTo: (time: number) => void }).__audioSeekTo = seekTo;
-        return () => {
-            delete (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
-        };
-    }, [seekTo]);
+        const audio = audioRef.current;
+        if (seekRequest && audio) {
+            // Only update if difference is significant to avoid micro-loops
+            if (Math.abs(audio.currentTime - seekRequest.time) > 0.001) {
+                audio.currentTime = seekRequest.time;
+                // We don't need to manually set currentTime in store here,
+                // the 'timeupdate' event handler in useAudioSync will do it.
+                // But we update lastUpdateTime to prevent the next timeupdate from thinking it's a normal progress
+                lastUpdateTime.current = seekRequest.time;
+            }
+        }
+    }, [seekRequest]);
 
     // Initialize shortcuts hook
     useAudioShortcuts({
         audioRef,
-        seekTo,
+        seekTo: requestSeek,
         setIsPlaying,
         volume,
         setVolume,
@@ -125,28 +155,14 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                 <TimeDisplay />
                 <SeekSlider
                     duration={duration}
-                    onSeek={seekTo}
+                    onSeek={requestSeek}
                     seekLabel={t('player.seek')}
                 />
                 <span className="audio-time">{formatDisplayTime(duration)}</span>
             </div>
 
             <div className="audio-controls">
-                <button
-                    className="btn btn-icon btn-text"
-                    onClick={() => {
-                        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
-                        const currentIndex = speeds.indexOf(playbackRate);
-                        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
-                        setPlaybackRate(nextSpeed);
-                    }}
-                    aria-label={`${t('player.speed')} ${playbackRate}x`}
-                    data-tooltip={t('player.speed')}
-                    data-tooltip-pos="top"
-                    style={{ minWidth: '3ch', fontSize: '0.85rem', fontWeight: 500 }}
-                >
-                    {playbackRate}x
-                </button>
+                <PlaybackRateButton playbackRate={playbackRate} setPlaybackRate={setPlaybackRate} />
                 <button
                     className="btn btn-icon"
                     onClick={toggleMute}
@@ -176,19 +192,6 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             </div>
         </div>
     );
-}
-
-/**
- * Helper function to programmatically seek the audio player from anywhere.
- * Depends on AudioPlayer being mounted.
- *
- * @param time - Time to seek to in seconds.
- */
-export function seekAudio(time: number): void {
-    const seekFn = (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
-    if (seekFn) {
-        seekFn(time);
-    }
 }
 
 export default AudioPlayer;
