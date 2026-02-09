@@ -3,13 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
-import { Calendar, Clock, Search } from 'lucide-react';
-import {
-    TrashIcon,
-    MicIcon,
-    FileTextIcon
-} from './Icons';
+import { Search } from 'lucide-react';
 import { Dropdown } from './Dropdown';
+import { Virtuoso } from 'react-virtuoso';
+import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
 
 type FilterType = 'all' | 'recording' | 'batch';
@@ -110,16 +107,6 @@ export function HistoryView() {
         }
     };
 
-    function formatDuration(seconds: number): string {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    function formatDate(timestamp: number): string {
-        return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
-    }
-
     return (
         <div className="panel-container" style={{ height: '100%', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
             {/* Search and Filters Header */}
@@ -170,7 +157,7 @@ export function HistoryView() {
             </div>
 
             {/* List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--spacing-md)' }}>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
                 {isLoading && <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>{t('history.loading')}</div>}
 
                 {!isLoading && filteredItems.length === 0 && (
@@ -179,89 +166,28 @@ export function HistoryView() {
                     </div>
                 )}
 
-                {filteredItems.map((item) => (
-                    <div
-                        key={item.id}
-                        onClick={() => handleLoad(item)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleLoad(item);
-                            }
+                {!isLoading && filteredItems.length > 0 && (
+                    <Virtuoso
+                        style={{ height: '100%' }}
+                        data={filteredItems}
+                        itemContent={(_index, item) => (
+                            <HistoryItem
+                                item={item}
+                                onLoad={handleLoad}
+                                onDelete={handleDelete}
+                            />
+                        )}
+                        components={{
+                            List: React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
+                                <div
+                                    {...props}
+                                    ref={ref}
+                                    style={{ ...props.style, padding: 'var(--spacing-md)' }}
+                                />
+                            ))
                         }}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
-                        style={{
-                            background: 'var(--color-bg-elevated)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: 'var(--spacing-md)',
-                            marginBottom: 'var(--spacing-sm)',
-                            cursor: 'pointer',
-                            transition: 'all var(--transition-fast)'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border-hover)';
-                            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border)';
-                            e.currentTarget.style.boxShadow = 'none';
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xs)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                                {item.type === 'batch' ? (
-                                    <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        <FileTextIcon />
-                                    </span>
-                                ) : (
-                                    <span title="Recording" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        <MicIcon />
-                                    </span>
-                                )}
-                                <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.title}</span>
-                            </div>
-                            <button
-                                className="btn btn-icon"
-                                onClick={(e) => handleDelete(e, item.id)}
-                                aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                                data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                                data-tooltip-pos="left"
-                                style={{ padding: '4px', height: 'auto', color: 'var(--color-text-muted)' }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-error)'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
-                            >
-                                <TrashIcon />
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Calendar size={12} />
-                                {formatDate(item.timestamp)}
-                            </span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Clock size={12} />
-                                {formatDuration(item.duration)}
-                            </span>
-                        </div>
-
-                        <p style={{
-                            fontSize: '0.875rem',
-                            color: 'var(--color-text-secondary)',
-                            lineHeight: 1.5,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            margin: 0
-                        }}>
-                            {item.previewText || <em>{t('history.no_transcript')}</em>}
-                        </p>
-                    </div>
-                ))}
+                    />
+                )}
             </div>
         </div>
     );
