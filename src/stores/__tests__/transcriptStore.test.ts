@@ -44,4 +44,37 @@ describe('TranscriptStore', () => {
             expect(useTranscriptStore.getState().activeSegmentIndex).toBe(1);
         });
     });
+
+    describe('requestSeek', () => {
+        it('should update currentTime and set seekRequest', () => {
+            const time = 10.5;
+            useTranscriptStore.getState().requestSeek(time);
+
+            expect(useTranscriptStore.getState().currentTime).toBe(time);
+            expect(useTranscriptStore.getState().seekRequest).toEqual({
+                time,
+                timestamp: expect.any(Number)
+            });
+            expect(useTranscriptStore.getState().lastSeekTimestamp).toEqual(expect.any(Number));
+        });
+
+        it('should update activeSegmentId based on seek time', () => {
+            const id1 = uuidv4();
+            const id2 = uuidv4();
+            const segments: TranscriptSegment[] = [
+                { id: id1, text: 'First', start: 0, end: 5, isFinal: true },
+                { id: id2, text: 'Second', start: 5, end: 10, isFinal: true }
+            ];
+
+            useTranscriptStore.getState().setSegments(segments);
+
+            // Seek to middle of second segment
+            useTranscriptStore.getState().requestSeek(7.5);
+
+            expect(useTranscriptStore.getState().currentTime).toBe(7.5);
+            expect(useTranscriptStore.getState().activeSegmentId).toBe(id2);
+            // activeSegmentIndex should be set by findSegmentAndIndexForTime
+            expect(useTranscriptStore.getState().activeSegmentIndex).toBe(1);
+        });
+    });
 });

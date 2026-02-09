@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptEditor } from './components/TranscriptEditor';
-import { AudioPlayer, seekAudio } from './components/AudioPlayer';
+import { AudioPlayer } from './components/AudioPlayer';
 import { ExportButton } from './components/ExportButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
@@ -26,10 +26,6 @@ function App(): React.JSX.Element {
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const { t } = useTranslation();
-
-  const handleSeek = (time: number) => {
-    seekAudio(time);
-  };
 
   // Run application initialization logic
   useAppInitialization();
@@ -79,7 +75,7 @@ function App(): React.JSX.Element {
               <h2>{t('panel.transcript')}</h2>
             </div>
             <div className="panel-content">
-              <TranscriptEditor onSeek={handleSeek} />
+              <TranscriptEditor />
             </div>
             {audioUrl && <AudioPlayer />}
           </div>

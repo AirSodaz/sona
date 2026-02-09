@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -34,7 +34,8 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const isPlaying = useTranscriptStore((state) => state.isPlaying);
     const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
     const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
-    const triggerSeek = useTranscriptStore((state) => state.triggerSeek);
+    const seekRequest = useTranscriptStore((state) => state.seekRequest);
+    const requestSeek = useTranscriptStore((state) => state.requestSeek);
 
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -59,29 +60,21 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         lastUpdateTimeRef: lastUpdateTime
     });
 
-    // Expose seek function via store
-    const seekTo = useCallback((time: number) => {
-        const audio = audioRef.current;
-        if (audio) {
-            audio.currentTime = time;
-            setCurrentTime(time);
-            lastUpdateTime.current = time;
-            triggerSeek();
-        }
-    }, [setCurrentTime, triggerSeek]);
-
-    // Store seekTo in window for global access (used by TranscriptEditor)
+    // Handle seek request from store
     useEffect(() => {
-        (window as unknown as { __audioSeekTo: (time: number) => void }).__audioSeekTo = seekTo;
-        return () => {
-            delete (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
-        };
-    }, [seekTo]);
+        if (seekRequest && audioRef.current) {
+            // Only update if difference is significant to avoid stutter
+            if (Math.abs(audioRef.current.currentTime - seekRequest.time) > 0.001) {
+                audioRef.current.currentTime = seekRequest.time;
+                lastUpdateTime.current = seekRequest.time;
+            }
+        }
+    }, [seekRequest]);
 
     // Initialize shortcuts hook
     useAudioShortcuts({
         audioRef,
-        seekTo,
+        seekTo: requestSeek,
         setIsPlaying,
         volume,
         setVolume,
@@ -125,7 +118,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                 <TimeDisplay />
                 <SeekSlider
                     duration={duration}
-                    onSeek={seekTo}
+                    onSeek={requestSeek}
                     seekLabel={t('player.seek')}
                 />
                 <span className="audio-time">{formatDisplayTime(duration)}</span>
@@ -176,19 +169,6 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             </div>
         </div>
     );
-}
-
-/**
- * Helper function to programmatically seek the audio player from anywhere.
- * Depends on AudioPlayer being mounted.
- *
- * @param time - Time to seek to in seconds.
- */
-export function seekAudio(time: number): void {
-    const seekFn = (window as unknown as { __audioSeekTo?: (time: number) => void }).__audioSeekTo;
-    if (seekFn) {
-        seekFn(time);
-    }
 }
 
 export default AudioPlayer;

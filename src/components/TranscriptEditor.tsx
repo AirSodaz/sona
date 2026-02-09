@@ -23,8 +23,7 @@ interface TranscriptContext {
 
 /** Props for TranscriptEditor. */
 interface TranscriptEditorProps {
-    /** Callback fired when a segment requests to seek to a timestamp. */
-    onSeek?: (time: number) => void;
+    // No props currently
 }
 
 /**
@@ -36,7 +35,7 @@ interface TranscriptEditorProps {
  * @param props Component props.
  * @return The transcript editor interface.
  */
-export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.Element {
+export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Element {
     const { t } = useTranslation();
     const { confirm } = useDialogStore();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -46,6 +45,7 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
     const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
+    const requestSeek = useTranscriptStore((state) => state.requestSeek);
 
     // Track which segment IDs have been seen (for animation)
     const knownSegmentIdsRef = useRef<Set<string>>(new Set());
@@ -149,8 +149,8 @@ export function TranscriptEditor({ onSeek }: TranscriptEditorProps): React.JSX.E
     useAutoScroll(virtuosoRef);
 
     const handleSeek = useCallback((time: number) => {
-        onSeek?.(time);
-    }, [onSeek]);
+        requestSeek(time);
+    }, [requestSeek]);
 
     const handleEdit = useCallback((id: string) => {
         setEditingSegmentId(id);

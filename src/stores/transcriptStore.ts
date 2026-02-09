@@ -34,6 +34,8 @@ interface TranscriptState {
     isPlaying: boolean;
     /** Timestamp of the last user-initiated seek. */
     lastSeekTimestamp: number;
+    /** Current seek request. */
+    seekRequest: { time: number; timestamp: number } | null;
 
     // Config
     /** Application configuration. */
@@ -131,8 +133,13 @@ interface TranscriptState {
     setCurrentTime: (time: number) => void;
     /** Sets the playing state. */
     setIsPlaying: (isPlaying: boolean) => void;
-    /** Triggers a seek event. */
-    triggerSeek: () => void;
+    /**
+     * Requests a seek to a specific time.
+     * Updates current time and triggers a seek request for the audio player.
+     *
+     * @param time The time to seek to in seconds.
+     */
+    requestSeek: (time: number) => void;
 
     // Config actions
     /**
@@ -176,6 +183,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     currentTime: 0,
     isPlaying: false,
     lastSeekTimestamp: 0,
+    seekRequest: null,
     config: DEFAULT_CONFIG,
 
     // Segment CRUD
@@ -309,7 +317,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         }
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
-    triggerSeek: () => set({ lastSeekTimestamp: Date.now() }),
+    requestSeek: (time) => {
+        const state = get();
+        // Optimistically update current time and active segment
+        state.setCurrentTime(time);
+
+        set({
+            seekRequest: { time, timestamp: Date.now() },
+            lastSeekTimestamp: Date.now()
+        });
+    },
 
     // Config actions
     setConfig: (config) => {
