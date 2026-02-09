@@ -30,6 +30,15 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+// Mock historyService to avoid real FS calls
+vi.mock('../../services/historyService', () => ({
+    historyService: {
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'test-id' }),
+        init: vi.fn().mockResolvedValue(undefined),
+        getAll: vi.fn().mockResolvedValue([])
+    }
+}));
+
 describe('batchQueueStore buffering', () => {
     beforeEach(() => {
         vi.useFakeTimers();

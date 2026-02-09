@@ -7,20 +7,57 @@ import { v4 as uuidv4 } from 'uuid';
 
 const HISTORY_DIR = 'history';
 const INDEX_FILE = 'index.json';
+const HISTORY_FILE = 'history.jsonl';
+
+// In-memory cache
+let _cache: HistoryItem[] | null = null;
 
 export const historyService = {
 
     async init(): Promise<void> {
         try {
-            const historyExists = await exists(HISTORY_DIR, { baseDir: BaseDirectory.AppLocalData });
-            if (!historyExists) {
+            const historyDirExists = await exists(HISTORY_DIR, { baseDir: BaseDirectory.AppLocalData });
+            if (!historyDirExists) {
                 await mkdir(HISTORY_DIR, { baseDir: BaseDirectory.AppLocalData, recursive: true });
             }
 
-            const indexExists = await exists(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
-            if (!indexExists) {
-                console.log('[History] Creating index file');
-                await writeTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, '[]', { baseDir: BaseDirectory.AppLocalData });
+            // Migration Logic
+            const historyFileExists = await exists(`${HISTORY_DIR}/${HISTORY_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+
+            if (!historyFileExists) {
+                const indexExists = await exists(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+                if (indexExists) {
+                     console.log('[History] Migrating index.json to history.jsonl');
+                     try {
+                         const content = await readTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+                         let items: HistoryItem[] = [];
+                         try {
+                             items = JSON.parse(content);
+                         } catch (e) {
+                             console.error('[History] Failed to parse old index.json during migration', e);
+                         }
+
+                         // Items in index.json are usually [newest, ..., oldest]
+                         // We want append-only file to be chronological [oldest, ..., newest] so we can append new items at the end.
+                         items.reverse();
+
+                         let newContent = '';
+                         for (const item of items) {
+                             newContent += JSON.stringify(item) + '\n';
+                         }
+
+                         await writeTextFile(`${HISTORY_DIR}/${HISTORY_FILE}`, newContent, { baseDir: BaseDirectory.AppLocalData });
+                         // We can delete the old file, or rename it as backup.
+                         // Let's delete it to complete migration.
+                         await remove(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+                         console.log('[History] Migration complete');
+                     } catch (e) {
+                         console.error('[History] Migration failed:', e);
+                     }
+                } else {
+                    console.log('[History] Creating history file');
+                    await writeTextFile(`${HISTORY_DIR}/${HISTORY_FILE}`, '', { baseDir: BaseDirectory.AppLocalData });
+                }
             }
         } catch (error) {
             console.error('[History] Failed to initialize service:', error);
@@ -30,11 +67,38 @@ export const historyService = {
 
     async getAll(): Promise<HistoryItem[]> {
         try {
-            console.log('[History] Getting all items');
+            if (_cache) {
+                // console.log('[History] Returning cached items');
+                return _cache;
+            }
+
+            console.log('[History] Getting all items (reading from disk)');
             await this.init();
-            const content = await readTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
-            console.log('[History] Loaded index:', content?.substring(0, 50));
-            return JSON.parse(content);
+
+            const content = await readTextFile(`${HISTORY_DIR}/${HISTORY_FILE}`, { baseDir: BaseDirectory.AppLocalData });
+            if (!content) {
+                _cache = [];
+                return [];
+            }
+
+            const items: HistoryItem[] = [];
+            const lines = content.split('\n');
+            for (const line of lines) {
+                if (line.trim()) {
+                    try {
+                        items.push(JSON.parse(line));
+                    } catch (e) {
+                        console.error('[History] Failed to parse line:', line);
+                    }
+                }
+            }
+
+            // The file is chronological (oldest first). We want newest first.
+            items.reverse();
+
+            _cache = items;
+            console.log(`[History] Loaded ${items.length} items`);
+            return items;
         } catch (error) {
             console.error('[History] Failed to load history:', error);
             return [];
@@ -44,7 +108,14 @@ export const historyService = {
     async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
         console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
         try {
-            await this.init();
+            // Ensure cache is populated
+            if (!_cache) {
+                await this.getAll();
+            } else {
+                 // Ensure init is called at least once
+                 await this.init();
+            }
+
             const id = uuidv4();
             const timestamp = Date.now();
             const dateStr = new Date(timestamp).toISOString().split('T')[0];
@@ -90,14 +161,19 @@ export const historyService = {
                 searchContent
             };
 
-            // Add to Index
-            console.log('[History] Updating index');
-            const items = await this.getAll();
-            items.unshift(newItem); // Add to beginning
+            // Update Index (Append)
+            console.log('[History] Updating index (append)');
+
+            // Update cache
+            if (_cache) {
+                _cache.unshift(newItem);
+            }
+
+            // Append to file
             await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
+                `${HISTORY_DIR}/${HISTORY_FILE}`,
+                JSON.stringify(newItem) + '\n',
+                { baseDir: BaseDirectory.AppLocalData, append: true }
             );
 
             console.log('[History] Save complete:', newItem);
@@ -111,7 +187,13 @@ export const historyService = {
     async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0): Promise<HistoryItem | null> {
         console.log('[History] Saving imported file...', { filePath, segments: segments.length });
         try {
-            await this.init();
+             // Ensure cache is populated
+            if (!_cache) {
+                await this.getAll();
+            } else {
+                 await this.init();
+            }
+
             const id = uuidv4();
             const timestamp = Date.now();
 
@@ -161,14 +243,17 @@ export const historyService = {
                 searchContent
             };
 
-            // Add to Index
-            console.log('[History] Updating index');
-            const items = await this.getAll();
-            items.unshift(newItem); // Add to beginning
+            // Update Index (Append)
+            console.log('[History] Updating index (append)');
+
+            if (_cache) {
+                _cache.unshift(newItem);
+            }
+
             await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
+                `${HISTORY_DIR}/${HISTORY_FILE}`,
+                JSON.stringify(newItem) + '\n',
+                { baseDir: BaseDirectory.AppLocalData, append: true }
             );
 
             console.log('[History] Import save complete:', newItem);
@@ -182,7 +267,14 @@ export const historyService = {
 
     async deleteRecording(id: string): Promise<void> {
         try {
-            const items = await this.getAll();
+            // Ensure cache is populated
+            if (!_cache) {
+                await this.getAll();
+            } else {
+                 await this.init();
+            }
+
+            const items = _cache || [];
             const itemToDelete = items.find(item => item.id === id);
 
             if (itemToDelete) {
@@ -200,9 +292,20 @@ export const historyService = {
             }
 
             const newItems = items.filter(item => item.id !== id);
+            _cache = newItems;
+
+            // Rewrite file
+            // _cache is [newest, ..., oldest]
+            // We want [oldest, ..., newest] in file
+            const itemsToWrite = [...newItems].reverse();
+            let newContent = '';
+            for (const item of itemsToWrite) {
+                newContent += JSON.stringify(item) + '\n';
+            }
+
             await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(newItems, null, 2),
+                `${HISTORY_DIR}/${HISTORY_FILE}`,
+                newContent,
                 { baseDir: BaseDirectory.AppLocalData }
             );
         } catch (error) {
@@ -230,5 +333,10 @@ export const historyService = {
             console.error('Failed to get audio URL:', e);
             return null;
         }
+    },
+
+    // For testing purposes
+    _resetCache(): void {
+        _cache = null;
     }
 };
