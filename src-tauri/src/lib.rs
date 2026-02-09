@@ -194,9 +194,10 @@ async fn download_file<R: tauri::Runtime>(
     }
 
     let total_size = res.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&output_path)
+    let file = tokio::fs::File::create(&output_path)
         .await
         .map_err(|e| e.to_string())?;
+    let mut writer = tokio::io::BufWriter::new(file);
     let mut stream = res
         .bytes_stream()
         .map(|item| item.map_err(|e| e.to_string()));
@@ -217,7 +218,7 @@ async fn download_file<R: tauri::Runtime>(
                              Err(e) => break Err(e),
                          };
                          use tokio::io::AsyncWriteExt;
-                         if let Err(e) = file.write_all(&chunk).await {
+                         if let Err(e) = writer.write_all(&chunk).await {
                              break Err(e.to_string());
                          }
                          downloaded += chunk.len() as u64;
@@ -230,6 +231,10 @@ async fn download_file<R: tauri::Runtime>(
                          }
                      }
                      None => {
+                        use tokio::io::AsyncWriteExt;
+                        if let Err(e) = writer.flush().await {
+                            break Err(e.to_string());
+                        }
                         break Ok(());
                      }
                  }
@@ -245,6 +250,7 @@ async fn download_file<R: tauri::Runtime>(
 
     // If cancelled, delete the partial file
     if result.is_err() {
+        drop(writer);
         let _ = tokio::fs::remove_file(&output_path).await;
     }
 
