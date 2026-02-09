@@ -114,7 +114,9 @@
         "date_all": "Any Time",
         "date_today": "Today",
         "date_week": "Last 7 Days",
-        "date_month": "Last 30 Days"
+        "date_month": "Last 30 Days",
+        "no_results": "No results found",
+        "delete_title": "Delete History"
     },
     "settings": {
         "title": "Settings",

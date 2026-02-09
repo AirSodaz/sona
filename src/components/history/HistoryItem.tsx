@@ -8,6 +8,28 @@ interface HistoryItemProps {
     item: HistoryItemType;
     onLoad: (item: HistoryItemType) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
+    searchQuery?: string;
+}
+
+/**
+ * Highlights matching text by wrapping matches in <mark> tags
+ */
+function highlightText(text: string, query: string): React.ReactNode {
+    if (!query || !query.trim()) {
+        return text;
+    }
+
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+        regex.test(part) ? (
+            <mark key={index} className="search-highlight">{part}</mark>
+        ) : (
+            part
+        )
+    );
 }
 
 function formatDuration(seconds: number): string {
@@ -20,7 +42,7 @@ function formatDate(timestamp: number): string {
     return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
 }
 
-const HistoryItemComponent = ({ item, onLoad, onDelete }: HistoryItemProps) => {
+const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: HistoryItemProps) => {
     const { t } = useTranslation();
 
     return (
@@ -48,7 +70,7 @@ const HistoryItemComponent = ({ item, onLoad, onDelete }: HistoryItemProps) => {
                             <MicIcon />
                         </span>
                     )}
-                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{item.title}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{highlightText(item.title, searchQuery)}</span>
                 </div>
                 <button
                     className="btn btn-icon delete-btn"
@@ -82,7 +104,7 @@ const HistoryItemComponent = ({ item, onLoad, onDelete }: HistoryItemProps) => {
                 overflow: 'hidden',
                 margin: 0
             }}>
-                {item.previewText || <em>{t('history.no_transcript')}</em>}
+                {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
             </p>
         </div>
     );

@@ -959,7 +959,6 @@ input[type="radio"]:focus {
   top: 100%;
   right: 0;
   margin-top: var(--spacing-xs);
-  min-width: 180px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -970,6 +969,10 @@ input[type="radio"]:focus {
   animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 300px;
   overflow-y: auto;
+}
+
+.export-dropdown {
+  min-width: 180px;
 }
 
 .export-dropdown.position-top,
@@ -2161,6 +2164,20 @@ input[type="radio"]:focus {
 
 .history-item .delete-btn:hover {
   color: var(--color-error);
+}
+
+/* Search Highlight */
+.search-highlight {
+  background-color: #ffeb3b;
+  color: var(--color-text-primary);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Dark mode override for search highlight */
+:root[data-theme="dark"] .search-highlight {
+  background-color: #fdd835;
+  color: #000000;
 }
 
 /* ===========================

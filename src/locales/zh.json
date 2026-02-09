@@ -114,7 +114,9 @@
         "date_all": "所有时间",
         "date_today": "今天",
         "date_week": "最近 7 天",
-        "date_month": "最近 30 天"
+        "date_month": "最近 30 天",
+        "no_results": "未找到相关结果",
+        "delete_title": "删除历史记录"
     },
     "settings": {
         "title": "设置",

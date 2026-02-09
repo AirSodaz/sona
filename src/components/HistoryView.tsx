@@ -175,6 +175,7 @@ export function HistoryView() {
                                 item={item}
                                 onLoad={handleLoad}
                                 onDelete={handleDelete}
+                                searchQuery={searchQuery}
                             />
                         )}
                         components={{
