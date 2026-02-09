@@ -10,6 +10,7 @@ interface HistoryState {
     // Actions
     loadItems: () => Promise<void>;
     addItem: (item: HistoryItem) => void;
+    updateItem: (id: string, updates: Partial<HistoryItem>) => Promise<void>;
     deleteItem: (id: string) => Promise<void>;
     refresh: () => Promise<void>;
 }
@@ -36,6 +37,24 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         set((state) => ({
             items: [item, ...state.items]
         }));
+    },
+
+    updateItem: async (id, updates) => {
+        // Optimistic update
+        const originalItems = get().items;
+        set((state) => ({
+            items: state.items.map((item) =>
+                item.id === id ? { ...item, ...updates } : item
+            )
+        }));
+
+        try {
+            await historyService.updateHistoryItem(id, updates);
+        } catch (err: any) {
+            console.error('Failed to update history item:', err);
+            // Revert
+            set({ items: originalItems, error: 'Failed to update item' });
+        }
     },
 
     deleteItem: async (id) => {

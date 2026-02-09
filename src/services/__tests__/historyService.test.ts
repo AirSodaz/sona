@@ -102,9 +102,16 @@ describe('History Service Functional Tests', () => {
             size: 100,
             arrayBuffer: async () => new Uint8Array(100).buffer
         } as unknown as Blob;
-        // @ts-ignore
-        const segments = [{ start: 0, end: 1, text: 'New' }];
 
+        const segments = [{
+            id: 'seg-1',
+            start: 0,
+            end: 1,
+            text: 'New',
+            isFinal: true
+        }];
+
+        // @ts-ignore
         await historyService.saveRecording(blob, segments, 10);
 
         // Check file content
@@ -162,5 +169,50 @@ describe('History Service Functional Tests', () => {
         const items = await historyService.getAll();
         expect(items.length).toBe(2);
         expect(items.find(i => i.id === '2')).toBeUndefined();
+    });
+
+    it('should update a recording efficiently (append updated version)', async () => {
+        // Setup existing history.jsonl with 1 item
+        const existingItem = { id: '1', title: 'Original Title' };
+        mockFiles['history/history.jsonl'] = JSON.stringify(existingItem) + '\n';
+
+        // Pre-load cache
+        await historyService.getAll();
+
+        // Update item
+        await historyService.updateHistoryItem('1', { title: 'Updated Title' });
+
+        // Check file content (should have 2 lines: Original, then Updated)
+        const content = mockFiles['history/history.jsonl'] as string;
+        const lines = content.split('\n').filter(l => l.trim());
+        expect(lines.length).toBe(2);
+        expect(JSON.parse(lines[0]).title).toBe('Original Title');
+        expect(JSON.parse(lines[1]).title).toBe('Updated Title');
+        expect(JSON.parse(lines[1]).id).toBe('1');
+
+        // Check cache (should reflect update)
+        const items = await historyService.getAll();
+        expect(items.length).toBe(1); // Should only have 1 item (deduplicated)
+        expect(items[0].title).toBe('Updated Title');
+        expect(items[0].id).toBe('1');
+    });
+
+    it('should handle multiple updates correctly', async () => {
+        const item = { id: '1', title: 'v1' };
+        mockFiles['history/history.jsonl'] = JSON.stringify(item) + '\n';
+        await historyService.getAll();
+
+        await historyService.updateHistoryItem('1', { title: 'v2' });
+        await historyService.updateHistoryItem('1', { title: 'v3' });
+
+        const items = await historyService.getAll();
+        expect(items.length).toBe(1);
+        expect(items[0].title).toBe('v3');
+
+        // File should have 3 lines
+        const content = mockFiles['history/history.jsonl'] as string;
+        const lines = content.split('\n').filter(l => l.trim());
+        expect(lines.length).toBe(3);
+        expect(JSON.parse(lines[2]).title).toBe('v3');
     });
 });

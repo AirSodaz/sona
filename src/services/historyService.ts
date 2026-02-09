@@ -81,19 +81,28 @@ export const historyService = {
                 return [];
             }
 
-            const items: HistoryItem[] = [];
+            // Use a Map to store items by ID to handle updates (Last-Write-Wins)
+            const itemMap = new Map<string, HistoryItem>();
+
             const lines = content.split('\n');
             for (const line of lines) {
                 if (line.trim()) {
                     try {
-                        items.push(JSON.parse(line));
+                        const item = JSON.parse(line) as HistoryItem;
+                        // Determine if we should update or add
+                        // Since file is append-only chronological, later items overwrite earlier ones
+                        itemMap.set(item.id, item);
                     } catch (e) {
                         console.error('[History] Failed to parse line:', line);
                     }
                 }
             }
 
-            // The file is chronological (oldest first). We want newest first.
+            // Convert Map back to array
+            const items = Array.from(itemMap.values());
+
+            // The file order (and Map iteration order for insertion) is chronological [oldest, ..., newest].
+            // We want to display newest first.
             items.reverse();
 
             _cache = items;
@@ -265,6 +274,43 @@ export const historyService = {
         }
     },
 
+    async updateHistoryItem(id: string, updates: Partial<HistoryItem>): Promise<void> {
+        try {
+             // Ensure cache is populated
+            if (!_cache) {
+                await this.getAll();
+            } else {
+                 await this.init();
+            }
+
+            const items = _cache || [];
+            const index = items.findIndex(item => item.id === id);
+
+            if (index !== -1) {
+                const originalItem = items[index];
+                const updatedItem = { ...originalItem, ...updates };
+
+                // Update cache
+                items[index] = updatedItem;
+                _cache = items;
+
+                // Append updated item to file
+                // We append the FULL item, so subsequent reads will parse it and overwrite the old one in the Map
+                await writeTextFile(
+                    `${HISTORY_DIR}/${HISTORY_FILE}`,
+                    JSON.stringify(updatedItem) + '\n',
+                    { baseDir: BaseDirectory.AppLocalData, append: true }
+                );
+
+                console.log('[History] Item updated:', id);
+            } else {
+                console.warn('[History] Item not found for update:', id);
+            }
+        } catch (error) {
+            console.error('[History] Failed to update item:', error);
+        }
+    },
+
     async deleteRecording(id: string): Promise<void> {
         try {
             // Ensure cache is populated
@@ -294,7 +340,7 @@ export const historyService = {
             const newItems = items.filter(item => item.id !== id);
             _cache = newItems;
 
-            // Rewrite file
+            // Rewrite file (Compact)
             // _cache is [newest, ..., oldest]
             // We want [oldest, ..., newest] in file
             const itemsToWrite = [...newItems].reverse();
