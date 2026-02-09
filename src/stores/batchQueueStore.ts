@@ -305,11 +305,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const newItems = state.queueItems.filter((item) => item.id !== id);
 
+        // Calculate active item update before state change
+        const isActiveItem = state.activeItemId === id;
+        const newActiveId = newItems.length > 0 ? newItems[0].id : null;
+
         set({ queueItems: newItems });
 
         // If we removed the active item, select the first remaining item
-        if (state.activeItemId === id) {
-            const newActiveId = newItems.length > 0 ? newItems[0].id : null;
+        if (isActiveItem) {
             get().setActiveItem(newActiveId);
         }
     },

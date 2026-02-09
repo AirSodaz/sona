@@ -79,4 +79,57 @@ describe('batchQueueStore', () => {
         const transcriptState = useTranscriptStore.getState();
         expect(transcriptState.audioUrl).toBe('asset:///2.wav');
     });
+
+    it('should NOT sync to transcript store when removing a non-active item', () => {
+        // Setup
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav' },
+                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///2.wav' }
+            ],
+            activeItemId: '1'
+        });
+
+        // Simulate what happens when 1 is active
+        useTranscriptStore.getState().setAudioUrl('asset:///1.wav');
+
+        // Action: Remove non-active item
+        useBatchQueueStore.getState().removeItem('2');
+
+        // Assert Queue State
+        const queueState = useBatchQueueStore.getState();
+        expect(queueState.activeItemId).toBe('1'); // Should still be 1
+        expect(queueState.queueItems).toHaveLength(1);
+        expect(queueState.queueItems[0].id).toBe('1');
+
+        // Assert Transcript Store State (Should NOT change)
+        const transcriptState = useTranscriptStore.getState();
+        expect(transcriptState.audioUrl).toBe('asset:///1.wav');
+    });
+
+    it('should clear transcript store when removing the last active item', () => {
+        // Setup
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav' }
+            ],
+            activeItemId: '1'
+        });
+
+        // Simulate what happens when 1 is active
+        useTranscriptStore.getState().setAudioUrl('asset:///1.wav');
+
+        // Action: Remove active item (the only one)
+        useBatchQueueStore.getState().removeItem('1');
+
+        // Assert Queue State
+        const queueState = useBatchQueueStore.getState();
+        expect(queueState.activeItemId).toBeNull();
+        expect(queueState.queueItems).toHaveLength(0);
+
+        // Assert Transcript Store State (Should be cleared)
+        const transcriptState = useTranscriptStore.getState();
+        expect(transcriptState.audioUrl).toBeNull();
+        expect(transcriptState.segments).toHaveLength(0);
+    });
 });
