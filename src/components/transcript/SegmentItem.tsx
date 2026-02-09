@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from 'zustand';
 import { TranscriptSegment } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
-import { alignTokensToText } from '../../utils/segmentUtils';
 import { EditIcon, TrashIcon, MergeIcon } from '../Icons';
 import { SegmentTimestamp } from './SegmentTimestamp';
+import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
 
 /** Props for SegmentItem component. */
@@ -43,30 +43,7 @@ function SegmentItemComponent({
     const isActive = useStore(uiStore, useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
     const isEditing = useStore(uiStore, useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
     const isNew = useStore(uiStore, useCallback((state) => state.newSegmentIds.has(segment.id), [segment.id]));
-    const currentTime = useStore(uiStore, useCallback((state) => state.activeSegmentId === segment.id ? state.currentTime : -1, [segment.id]));
 
-    // Align tokens with formatted text
-    const alignedTokens = React.useMemo(() => {
-        if (!segment.tokens || !segment.timestamps) return null;
-        const result = alignTokensToText(segment.text, segment.tokens, segment.timestamps);
-        // console.log('SegmentItem alignment:', { 
-        //     id: segment.id,
-        //     text: segment.text, 
-        //     firstToken: segment.tokens[0], 
-        //     alignedCount: result.length 
-        // });
-        return result;
-    }, [segment.text, segment.tokens, segment.timestamps]);
-
-    // Determine active token timestamp if segment is active
-    // We track the timestamp instead of index to group tokens with same timestamp
-    const activeTokenTimestamp = React.useMemo(() => {
-        if (!isActive || !alignedTokens || currentTime < 0) return -1;
-        // Find the last token that has started
-        const nextTokenIndex = alignedTokens.findIndex(t => t.timestamp > currentTime);
-        const activeIdx = nextTokenIndex === -1 ? alignedTokens.length - 1 : nextTokenIndex - 1;
-        return activeIdx >= 0 ? alignedTokens[activeIdx].timestamp : -1;
-    }, [isActive, alignedTokens, currentTime]);
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
 
@@ -148,25 +125,11 @@ function SegmentItemComponent({
                         onBlur={handleBlur}
                     />
                 ) : (
-                    <p className={`segment-text ${!segment.isFinal ? 'partial' : ''}`}>
-                        {alignedTokens ? (
-                            alignedTokens.map((tokenObj, i) => (
-                                <span
-                                    key={i}
-                                    title={formatDisplayTime(tokenObj.timestamp)}
-                                    className={`token-hover ${tokenObj.timestamp === activeTokenTimestamp ? 'active-token' : ''}`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onSeek(tokenObj.timestamp);
-                                    }}
-                                >
-                                    {tokenObj.text}
-                                </span>
-                            ))
-                        ) : (
-                            segment.text || '(empty)'
-                        )}
-                    </p>
+                    <SegmentTokens
+                        segment={segment}
+                        isActive={isActive}
+                        onSeek={onSeek}
+                    />
                 )}
             </div>
 
