@@ -48,19 +48,27 @@ const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: Hist
     return (
         <div
             className="history-item"
-            onClick={() => onLoad(item)}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onLoad(item);
-                }
-            }}
-            role="button"
-            tabIndex={0}
-            aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
+            style={{ position: 'relative' }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xs)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+            <button
+                className="history-item-content"
+                onClick={() => onLoad(item)}
+                aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
+                style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    fontFamily: 'inherit',
+                    color: 'inherit'
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: '40px' }}>
                     {item.type === 'batch' ? (
                         <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
                             <FileTextIcon />
@@ -72,40 +80,48 @@ const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: Hist
                     )}
                     <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{highlightText(item.title, searchQuery)}</span>
                 </div>
-                <button
-                    className="btn btn-icon delete-btn"
-                    onClick={(e) => onDelete(e, item.id)}
-                    aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                    data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                    data-tooltip-pos="left"
-                >
-                    <TrashIcon />
-                </button>
-            </div>
 
-            <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Calendar size={12} />
-                    {formatDate(item.timestamp)}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={12} />
-                    {formatDuration(item.duration)}
-                </span>
-            </div>
+                <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Calendar size={12} />
+                        {formatDate(item.timestamp)}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} />
+                        {formatDuration(item.duration)}
+                    </span>
+                </div>
 
-            <p style={{
-                fontSize: '0.875rem',
-                color: 'var(--color-text-secondary)',
-                lineHeight: 1.5,
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                margin: 0
-            }}>
-                {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
-            </p>
+                <p style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--color-text-secondary)',
+                    lineHeight: 1.5,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    margin: 0,
+                    textAlign: 'left',
+                    width: '100%'
+                }}>
+                    {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
+                </p>
+            </button>
+
+            <button
+                className="btn btn-icon delete-btn"
+                onClick={(e) => onDelete(e, item.id)}
+                aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
+                data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+                data-tooltip-pos="left"
+                style={{
+                    position: 'absolute',
+                    top: 'var(--spacing-md)',
+                    right: 'var(--spacing-md)'
+                }}
+            >
+                <TrashIcon />
+            </button>
         </div>
     );
 };
