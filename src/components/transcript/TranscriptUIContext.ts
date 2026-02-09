@@ -12,6 +12,8 @@ export interface TranscriptUIState {
     activeSegmentId: string | null;
     /** ID of the segment currently being edited. */
     editingSegmentId: string | null;
+    /** Current playback time in seconds. */
+    currentTime: number;
     /** Total number of segments (for calculating hasNext). */
     totalSegments: number;
 }

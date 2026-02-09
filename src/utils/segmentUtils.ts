@@ -70,36 +70,66 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
         }
 
         let lastTokenIndex = 0; // Hint for the next search
+        let nextTokenSliceStart = 0; // Track token slicing
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
-            // Calculate effective length of this part to update the running index
             const partEffectiveLen = getEffectiveLength(part);
 
             if (SPLIT_REGEX.test(part)) {
                 // It's punctuation
                 currentText += part;
 
+                // Advance effective index first to capture the punctuation's place in the map 
+                // (though for punctuation len is 0, so it stays same, but conceptually we are "after" it)
+                charIndex += part.length;
+                effectiveCharIndex += partEffectiveLen;
+
                 let segmentEnd: number;
+                let currentTokens: string[] | undefined;
+                let currentTimestamps: number[] | undefined;
 
                 if (hasTimestamps && tokenMap) {
-                    // Use the last token of the current segment to determine end time
-                    // effectiveCharIndex points to the start of the punctuation (and next segment)
-                    // so we look at effectiveCharIndex - 1 to find the token for the last character
-                    const searchIndex = effectiveCharIndex > 0 ? effectiveCharIndex - 1 : 0;
-                    const found = findTimestampFromMap(tokenMap, searchIndex, lastTokenIndex);
+                    // Find the token at the current boundary
+                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
+
+                    // End index for slicing: if found, slice up to found.index (exclusive? no, see prior logic).
+                    // findTimestampFromMap returns the token matching effectiveCharIndex.
+                    // If effectiveCharIndex is 10, and "How" starts at 10, it returns "How".
+                    // We want to slice UP TO "How" (exclusive).
+
+                    let sliceEnd = tokenMap.timestamps.length; // Default to all remaining
 
                     if (found) {
-                        // Use the last token's timestamp plus a small buffer based on length
-                        // This avoids using the start time of the *next* segment as the end time
+                        sliceEnd = found.index;
+
+                        // Calculate time
                         const effectiveLen = tokenMap.endIndices[found.index] - tokenMap.startIndices[found.index];
                         const duration = Math.max(0.2, effectiveLen * 0.1);
-                        segmentEnd = found.timestamp + duration;
+                        segmentEnd = found.timestamp + duration; // Approximate end time based on next start? No that's weird.
+
+                        // Actually better: use found timestamp as start of NEXT.
+                        // End of CURRENT is found.timestamp.
+                        segmentEnd = found.timestamp;
+
                         lastTokenIndex = found.index;
                     } else {
-                        // Fallback
+                        // End of stream or drift
                         segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
                     }
+
+                    // Extract tokens
+                    if (sliceEnd > nextTokenSliceStart) {
+                        currentTokens = segment.tokens!.slice(nextTokenSliceStart, sliceEnd);
+                        currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart, sliceEnd);
+                        nextTokenSliceStart = sliceEnd;
+                    }
+
+                    // Fix start time if we have tokens
+                    if (currentTimestamps && currentTimestamps.length > 0) {
+                        currentSegmentStart = currentTimestamps[0];
+                    }
+
                 } else {
                     segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
                 }
@@ -109,43 +139,31 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                     text: currentText.trim(),
                     start: currentSegmentStart,
                     end: segmentEnd,
-                    isFinal: true
+                    isFinal: true,
+                    tokens: currentTokens,
+                    timestamps: currentTimestamps
                 });
 
-                charIndex += part.length;
-                effectiveCharIndex += partEffectiveLen;
                 currentStart = segmentEnd;
+                currentSegmentStart = segmentEnd; // Default for next
 
-                // If this isn't the last part, prepare for next segment
-                if (i < parts.length - 1) {
-                    if (hasTimestamps && tokenMap) {
-                        // Find timestamp for charIndex (which is now start of next part)
-                        // Effective index is updated.
-                        const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
-                        if (found) {
-                            currentSegmentStart = found.timestamp;
-                            currentStart = found.timestamp;
-                            lastTokenIndex = found.index;
-                        } else {
-                            currentSegmentStart = currentStart;
+                // If found valid next token start, use it
+                if (hasTimestamps && tokenMap && lastTokenIndex < tokenMap.timestamps.length) {
+                    // Verify if lastTokenIndex (which is `found.index` i.e. "How") is indeed the start
+                    // sliceEnd was found.index. So next starts at found.index.
+                    // The token at found.index is the start of next segment.
+                    // Its timestamp is in tokenMap.timestamps[found.index].
+                    if (lastTokenIndex === nextTokenSliceStart) { // Use slice tracker as truth
+                        if (nextTokenSliceStart < tokenMap.timestamps.length) {
+                            currentSegmentStart = tokenMap.timestamps[nextTokenSliceStart];
+                            currentStart = currentSegmentStart;
                         }
-                    } else {
-                        currentSegmentStart = currentStart;
                     }
                 }
 
                 currentText = "";
             } else {
-                // It's content
-
-                if (currentText === "" && hasTimestamps && tokenMap) {
-                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
-                    if (found) {
-                        currentSegmentStart = found.timestamp;
-                        lastTokenIndex = found.index;
-                    }
-                }
-
+                // It's content, tokenize logic handled at split
                 currentText += part;
                 charIndex += part.length;
                 effectiveCharIndex += partEffectiveLen;
@@ -155,15 +173,19 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
         // Leftover text
         if (currentText.trim()) {
             let segmentEnd = segment.end;
+            let currentTokens: string[] | undefined;
+            let currentTimestamps: number[] | undefined;
 
-            if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
-                // Try to find the last token
-                const searchIndex = effectiveCharIndex > 0 ? effectiveCharIndex - 1 : 0;
-                const found = findTimestampFromMap(tokenMap, searchIndex, lastTokenIndex);
-                if (found) {
-                    const effectiveLen = tokenMap.endIndices[found.index] - tokenMap.startIndices[found.index];
-                    const duration = Math.max(0.2, effectiveLen * 0.1);
-                    segmentEnd = found.timestamp + duration;
+            if (hasTimestamps && tokenMap) {
+                // Slice everything remaining
+                currentTokens = segment.tokens!.slice(nextTokenSliceStart);
+                currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart);
+
+                if (currentTimestamps.length > 0) {
+                    currentSegmentStart = currentTimestamps[0];
+
+                    // Try to refine end time based on last token?
+                    // Not critical.
                 }
             }
 
@@ -172,7 +194,9 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 text: currentText.trim(),
                 start: currentSegmentStart,
                 end: segmentEnd,
-                isFinal: true
+                isFinal: true,
+                tokens: currentTokens,
+                timestamps: currentTimestamps
             });
         }
     });
@@ -210,14 +234,12 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
         // Strip punctuation and whitespace
         const tokenLen = getEffectiveLength(token);
 
-        if (tokenLen > 0) {
-            startIndices.push(currentLen);
-            currentLen += tokenLen;
-            endIndices.push(currentLen);
-            // Fix: Token timestamps are relative to the segment start (due to stream resets).
-            // Convert them to absolute time by adding segment.start.
-            timestamps.push(segment.timestamps[i] + segment.start);
-        }
+        // Include all tokens, even whitespace/punctuation, to maintain alignment
+        startIndices.push(currentLen);
+        currentLen += tokenLen;
+        endIndices.push(currentLen);
+        // Token timestamps are already absolute
+        timestamps.push(segment.timestamps[i]);
     }
 
     return { startIndices, endIndices, timestamps };
@@ -386,4 +408,125 @@ export function findSegmentAndIndexForTime(
  */
 export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {
     return findSegmentAndIndexForTime(segments, time).segment;
+}
+
+/**
+ * Aligns formatted text with raw tokens to assign timestamps to display words.
+ * 
+ * @param text The formatted text (with punctuation/ITN).
+ * @param rawTokens The raw tokens from the recognizer.
+ * @param rawTimestamps The timestamps corresponding to rawTokens.
+ * @return Array of objects with text chunk and its start timestamp.
+ */
+export function alignTokensToText(
+    text: string,
+    rawTokens: string[],
+    rawTimestamps: number[]
+): { text: string; timestamp: number }[] {
+    const result: { text: string; timestamp: number }[] = [];
+
+    if (!text || !rawTokens || !rawTimestamps || rawTokens.length !== rawTimestamps.length) {
+        return [{ text: text, timestamp: rawTimestamps?.[0] || 0 }];
+    }
+
+    // Normalizing
+    const normalize = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+    // Tokenize text:
+    // 1. Whitespace (kept to preserve spacing)
+    // 2. Chinese characters (Han script) treated as individual words
+    // 3. Everything else (English, numbers, punctuation) grouped until whitespace/Han/End
+    const rawWords = text.match(/(\s+|[\p{sc=Han}]|[^\s\p{sc=Han}]+)/gu) || [];
+
+    // Merge standalone punctuation into the previous word
+    const words: string[] = [];
+    for (const w of rawWords) {
+        // Check if w is purely punctuation (and previous word exists and is not whitespace)
+        // We use a regex that matches only punctuation characters
+        if (words.length > 0 && /^[^\p{L}\p{N}]+$/u.test(w) && !/^\s+$/.test(w) && !/^\s+$/.test(words[words.length - 1])) {
+            // Append to previous word
+            words[words.length - 1] += w;
+        } else {
+            words.push(w);
+        }
+    }
+
+    let currentRawIndex = 0;
+
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        if (!word.trim()) {
+            result.push({ text: word, timestamp: rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] });
+            continue;
+        }
+
+        const normWord = normalize(word);
+        if (!normWord) {
+            result.push({ text: word, timestamp: rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] });
+            continue;
+        }
+
+        const startTimestamp = rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)];
+        result.push({ text: word, timestamp: startTimestamp });
+
+        // Try to match `normWord` against next N tokens.
+        let accumulatedTokenStr = "";
+        let tokensConsumed = 0;
+        let foundMatch = false;
+
+        for (let j = 0; j < 5 && (currentRawIndex + j) < rawTokens.length; j++) {
+            const t = rawTokens[currentRawIndex + j];
+            accumulatedTokenStr += normalize(t);
+            tokensConsumed++;
+
+            if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
+                if (accumulatedTokenStr.length >= normWord.length) {
+                    currentRawIndex += tokensConsumed;
+                    foundMatch = true;
+                    break;
+                }
+            }
+        }
+
+        if (!foundMatch) {
+            // Drastic mismatch (ITN).
+            // Find the NEXT content word in `words`.
+            let nextNorm = "";
+            for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
+                nextNorm = normalize(words[nextIdx]);
+                if (nextNorm) break;
+            }
+
+            if (nextNorm) {
+                // distinct next word
+                // Scan ahead in tokens to find `nextNorm`.
+                for (let k = 1; k < 10 && (currentRawIndex + k) < rawTokens.length; k++) {
+                    const t = normalize(rawTokens[currentRawIndex + k]);
+                    if (t && t.startsWith(nextNorm)) {
+                        // Found next word at k offset.
+                        // So current word consumes everything up to k.
+                        currentRawIndex += k;
+                        foundMatch = true;
+                        break;
+                    }
+                }
+            } else {
+                // If there is no next word, we are at the end.
+                // Consume all remaining tokens if reasonable
+                if (i === words.length - 1 || (i > words.length - 3 && !words.slice(i + 1).some(w => normalize(w)))) {
+                    currentRawIndex = rawTokens.length;
+                    foundMatch = true;
+                }
+            }
+
+            if (!foundMatch) {
+                // Fallback: Just consume 1 token.
+                currentRawIndex++;
+            }
+        }
+
+        if (currentRawIndex >= rawTokens.length) currentRawIndex = rawTokens.length;
+    }
+
+    return result;
 }

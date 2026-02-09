@@ -140,9 +140,8 @@ describe('splitByPunctuation', () => {
             end: 105.0,
             isFinal: true,
             tokens: ['Hello', '.', 'World', '.'],
-            // Relative timestamps: 0.0, 0.5, 2.0, 2.5
-            // Absolute timestamps should be: 100.0, 100.5, 102.0, 102.5
-            timestamps: [0.0, 0.5, 2.0, 2.5]
+            // Absolute timestamps: 100.0, 100.5, 102.0, 102.5
+            timestamps: [100.0, 100.5, 102.0, 102.5]
         };
 
         const result = splitByPunctuation([segment]);

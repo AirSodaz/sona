@@ -5,6 +5,7 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafb);
 }
+
 :root {
   font-family: var(--font-sans, Inter, Avenir, Helvetica, Arial, sans-serif);
   font-size: 16px;
@@ -81,6 +82,7 @@ button {
 button:hover {
   border-color: #396cd8;
 }
+
 button:active {
   border-color: #396cd8;
   background-color: #e8e8e8;
@@ -110,7 +112,23 @@ button {
     color: #ffffff;
     background-color: #0f0f0f98;
   }
+
   button:active {
     background-color: #0f0f0f69;
   }
+}
+
+/* Active token highlighting */
+.active-token {
+  font-weight: 700;
+  color: var(--color-primary, #646cff);
+  background-color: var(--color-surface-hover, rgba(100, 108, 255, 0.1));
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.token-hover:hover {
+  background-color: var(--color-surface-hover, rgba(100, 108, 255, 0.1));
+  border-radius: 2px;
+  cursor: pointer;
 }

@@ -703,6 +703,7 @@ input[type="radio"]:focus {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2160,4 +2161,43 @@ input[type="radio"]:focus {
 
 .history-item .delete-btn:hover {
   color: var(--color-error);
+}
+
+/* ===========================
+   Token Highlighting
+   =========================== */
+
+.active-token {
+  font-weight: 400;
+  /* Revert to normal weight to avoid spacing shift */
+  color: var(--color-text-primary);
+  background-color: #ffeb3b;
+  /* Highlighter yellow */
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+/* Dark mode override for highlighter */
+:root[data-theme="dark"] .active-token {
+  background-color: #fdd835;
+  color: #000000;
+  /* Ensure contrast on bright yellow */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .active-token {
+    background-color: #fdd835;
+    color: #000000;
+  }
+}
+
+.token-hover {
+  /* Removed padding to fix spacing issue */
+  border-radius: 2px;
+  transition: background-color var(--transition-fast);
+}
+
+.token-hover:hover {
+  background-color: var(--color-bg-hover);
+  cursor: pointer;
 }

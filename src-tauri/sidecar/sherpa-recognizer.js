@@ -11,18 +11,63 @@
  */
 
 import { spawn, execSync } from 'child_process';
-import os from 'os';
-import { createReadStream, existsSync, statSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { Readable, Transform } from 'stream';
 import { randomUUID } from 'crypto';
+import { createReadStream, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import os from 'os';
+import { dirname, join } from 'path';
+import { Readable, Transform } from 'stream';
+import { fileURLToPath } from 'url';
+import Seven from 'node-7z';
 
-
-// For ES modules
 const __scriptFile = fileURLToPath(import.meta.url);
 const __scriptDir = dirname(__scriptFile);
-const Seven = require('node-7z');
+
+/**
+ * Convert Int16 PCM buffer to Float32 audio samples.
+ * @param {Buffer} buffer - Raw PCM data as Int16LE
+ * @returns {Float32Array} Normalized audio samples
+ */
+function pcmInt16ToFloat32(buffer) {
+    const samples = new Float32Array(buffer.length / 2);
+    for (let i = 0; i < samples.length; i++) {
+        samples[i] = buffer.readInt16LE(i * 2) / 32768.0;
+    }
+    return samples;
+}
+
+/**
+ * Format transcript text with capitalization and punctuation.
+ * @param {string} text - Raw text from recognizer
+ * @param {object} [punctuation] - Optional punctuation model
+ * @returns {string} Formatted text
+ */
+function formatTranscript(text, punctuation) {
+    if (!text || !text.trim()) return '';
+    let result = text.trim();
+
+    // Fix all-caps output (naive heuristic)
+    if (/[a-zA-Z]/.test(result) && result === result.toUpperCase()) {
+        const lower = result.toLowerCase();
+        result = lower.charAt(0).toUpperCase() + lower.slice(1);
+    }
+
+    if (punctuation) {
+        result = punctuation.addPunct(result);
+    }
+    return result;
+}
+
+/**
+ * Filter and validate ITN model paths.
+ * @param {string} itnModel - Comma-separated paths
+ * @returns {string|null} Valid paths joined by comma, or null if none valid
+ */
+function getValidItnPaths(itnModel) {
+    if (!itnModel) return null;
+    const paths = itnModel.split(',');
+    const validPaths = paths.filter(p => existsSync(p.trim()));
+    return validPaths.length > 0 ? validPaths.join(',') : null;
+}
 
 // Parse command line arguments
 function parseArgs() {
@@ -93,15 +138,20 @@ function parseArgs() {
     return options;
 }
 
-// Get ffmpeg path
+/**
+ * Get path to FFmpeg binary.
+ * Checks local directory first, then system path, then static fallback.
+ * @returns {Promise<string>} Path to ffmpeg executable
+ */
 async function getFFmpegPath() {
-    const localOne = join(__scriptDir, 'ffmpeg.exe');
-    if (existsSync(localOne)) return localOne;
-    const localTwo = join(__scriptDir, 'ffmpeg');
-    if (existsSync(localTwo)) return localTwo;
+    const localBinary = join(__scriptDir, 'ffmpeg.exe');
+    if (existsSync(localBinary)) return localBinary;
 
-    const cwdOne = join(process.cwd(), 'ffmpeg.exe');
-    if (existsSync(cwdOne)) return cwdOne;
+    const localBinaryNix = join(__scriptDir, 'ffmpeg');
+    if (existsSync(localBinaryNix)) return localBinaryNix;
+
+    const cwdBinary = join(process.cwd(), 'ffmpeg.exe');
+    if (existsSync(cwdBinary)) return cwdBinary;
 
     try {
         const ffmpegStatic = await import('ffmpeg-static');
@@ -148,13 +198,10 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
                 maxActivePaths: 4,
             };
 
-            if (itnModel) {
-                const paths = itnModel.split(',');
-                const validPaths = paths.filter(p => existsSync(p.trim()));
-                if (validPaths.length > 0) {
-                    console.error(`[Sidecar] Using ITN models (Offline): ${validPaths.join(',')}`);
-                    config.ruleFsts = validPaths.join(',');
-                }
+            const validItnPaths = getValidItnPaths(itnModel);
+            if (validItnPaths) {
+                console.error(`[Sidecar] Using ITN models (Offline): ${validItnPaths}`);
+                config.ruleFsts = validItnPaths;
             }
 
             return {
@@ -178,13 +225,10 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             },
         };
 
-        if (itnModel) {
-            const paths = itnModel.split(',');
-            const validPaths = paths.filter(p => existsSync(p.trim()));
-            if (validPaths.length > 0) {
-                console.error(`[Sidecar] Using ITN models: ${validPaths.join(',')}`);
-                config.ruleFsts = validPaths.join(',');
-            }
+        const validItnPaths = getValidItnPaths(itnModel);
+        if (validItnPaths) {
+            console.error(`[Sidecar] Using ITN models: ${validItnPaths}`);
+            config.ruleFsts = validItnPaths;
         }
 
         const supportsInternalITN = !!config.ruleFsts || !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
@@ -210,13 +254,13 @@ function findModelConfig(modelPath, enableITN, numThreads, language) {
         if (!tokens) return null; // All models need tokens.txt
 
         // Check for ONNX files
-        const findBestMatch = (prefix) => {
+        function findBestMatch(prefix) {
             const candidates = files.filter(f => f.includes(prefix) && f.endsWith('.onnx'));
             if (candidates.length === 0) return null;
             const int8 = candidates.find(f => f.includes('int8'));
             if (int8) return join(modelPath, int8);
             return join(modelPath, candidates[0]);
-        };
+        }
 
         const encoder = findBestMatch('encoder');
         const decoder = findBestMatch('decoder');
@@ -302,15 +346,7 @@ async function createPunctuation(modelPath) {
     }
 }
 
-// Text post-processing
-function postProcessText(text) {
-    if (!text) return "";
-    if (/[a-zA-Z]/.test(text) && text === text.toUpperCase()) {
-        const lower = text.toLowerCase();
-        return lower.charAt(0).toUpperCase() + lower.slice(1);
-    }
-    return text;
-}
+
 
 
 
@@ -327,14 +363,8 @@ async function processStream(recognizer, sampleRate, punctuation) {
             return;
         }
 
-        const samples = new Float32Array(chunk.length / 2);
-        for (let i = 0; i < samples.length; i++) {
-            const int16 = chunk.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
-        }
-
-        stream.acceptWaveform({ samples: samples, sampleRate: sampleRate });
-
+        const samples = pcmInt16ToFloat32(chunk);
+        stream.acceptWaveform({ samples, sampleRate });
         totalSamples += samples.length;
 
         while (recognizer.isReady(stream)) {
@@ -344,33 +374,33 @@ async function processStream(recognizer, sampleRate, punctuation) {
         const result = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
 
+        // Partial result
         if (result.text.trim()) {
-            let text = postProcessText(result.text.trim());
-            const output = {
+            const text = formatTranscript(result.text); // No punctuation for partials
+            console.log(JSON.stringify({
                 id: currentSegmentId,
-                text: text,
+                text,
                 start: segmentStartTime,
                 end: currentTime,
                 isFinal: false,
-            };
-            console.log(JSON.stringify(output));
+            }));
         }
 
+        // Endpoint detected
         if (recognizer.isEndpoint(stream)) {
             const finalResult = recognizer.getResult(stream);
             if (finalResult.text.trim()) {
-                let text = postProcessText(finalResult.text.trim());
-                if (punctuation) text = punctuation.addPunct(text);
-                const output = {
+                const text = formatTranscript(finalResult.text, punctuation);
+                console.log(JSON.stringify({
                     id: currentSegmentId,
-                    text: text,
+                    text,
                     start: segmentStartTime,
                     end: currentTime,
                     isFinal: true,
+                    isFinal: true,
                     tokens: finalResult.tokens || [],
-                    timestamps: finalResult.timestamps || []
-                };
-                console.log(JSON.stringify(output));
+                    timestamps: (finalResult.timestamps || []).map(t => t + segmentStartTime)
+                }));
             }
             recognizer.reset(stream);
             segmentStartTime = currentTime;
@@ -381,12 +411,12 @@ async function processStream(recognizer, sampleRate, punctuation) {
     process.stdin.on('end', () => {
         const finalResult = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
+
         if (finalResult.text.trim()) {
-            let text = postProcessText(finalResult.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
+            const text = formatTranscript(finalResult.text, punctuation);
             console.log(JSON.stringify({
                 id: currentSegmentId,
-                text: text,
+                text,
                 start: segmentStartTime,
                 end: currentTime,
                 isFinal: true,
@@ -404,11 +434,7 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
     try {
         console.error('Converting audio file...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
-        const samples = new Float32Array(pcmData.length / 2);
-        for (let i = 0; i < samples.length; i++) {
-            const int16 = pcmData.readInt16LE(i * 2);
-            samples[i] = int16 / 32768.0;
-        }
+        const samples = pcmInt16ToFloat32(pcmData);
 
         console.error(`Processing ${samples.length} samples...`);
         const stream = recognizer.createStream();
@@ -419,20 +445,19 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
         for (let i = 0; i < samples.length; i += chunkSize) {
             const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
 
-            // UNIFIED call needed here
-            stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
+            stream.acceptWaveform({ samples: chunk, sampleRate });
 
             while (recognizer.isReady(stream)) recognizer.decode(stream);
 
             if (recognizer.isEndpoint(stream)) {
                 const result = recognizer.getResult(stream);
                 const currentTime = i / sampleRate;
+
                 if (result.text.trim()) {
-                    let text = postProcessText(result.text.trim());
-                    if (punctuation) text = punctuation.addPunct(text);
+                    const text = formatTranscript(result.text, punctuation);
                     segments.push({
                         id: randomUUID(),
-                        text: text,
+                        text,
                         start: segmentStartTime,
                         end: currentTime,
                         isFinal: true,
@@ -451,11 +476,10 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
         const finalResult = recognizer.getResult(stream);
         const totalDuration = samples.length / sampleRate;
         if (finalResult.text.trim()) {
-            let text = postProcessText(finalResult.text.trim());
-            if (punctuation) text = punctuation.addPunct(text);
+            const text = formatTranscript(finalResult.text, punctuation);
             segments.push({
                 id: randomUUID(),
-                text: text,
+                text,
                 start: segmentStartTime,
                 end: totalDuration,
                 isFinal: true,
@@ -463,8 +487,8 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
         }
         console.log(JSON.stringify(segments, null, 2));
 
-    } catch (error) {
-        throw error;
+    } finally {
+        // Completed batch processing
     }
 }
 
@@ -540,9 +564,8 @@ async function processExtraction(archivePath, targetDir) {
 
                     // Delete the intermediate .tar
                     try {
-                        const fs = require('fs');
-                        fs.unlinkSync(tarPath);
-                    } catch (e) { }
+                        unlinkSync(tarPath);
+                    } catch (e) { /* Ignore deletion errors */ }
 
                     console.log(JSON.stringify({ done: true }));
                     resolve();
@@ -564,197 +587,191 @@ async function processExtraction(archivePath, targetDir) {
 
 
 
+/**
+ * Generator that yields audio segments using VAD.
+ * @param {Float32Array} samples 
+ * @param {number} sampleRate 
+ * @param {object} vad - Initialized VAD instance
+ * @param {number} vadBufferSeconds 
+ */
+async function* yieldVADSegments(samples, sampleRate, vad, vadBufferSeconds = 5) {
+    const windowSize = Math.floor(sampleRate * 0.03); // 30ms for VAD
+    const ringBufferSize = Math.ceil(vadBufferSeconds / 0.03);
+    const ringBuffer = [];
+
+    let currentSegmentSamples = [];
+    let currentSegmentLength = 0;
+    let processedSamples = 0;
+
+    for (let i = 0; i < samples.length; i += windowSize) {
+        const end = Math.min(i + windowSize, samples.length);
+        const chunk = samples.slice(i, end);
+        processedSamples = end;
+
+        vad.acceptWaveform(chunk);
+
+        if (vad.isDetected()) {
+            // Speech Start
+            if (currentSegmentLength === 0) {
+                // Prepend ring buffer
+                for (const bufChunk of ringBuffer) {
+                    currentSegmentSamples.push(bufChunk);
+                    currentSegmentLength += bufChunk.length;
+                }
+                ringBuffer.length = 0;
+            }
+            currentSegmentSamples.push(chunk);
+            currentSegmentLength += chunk.length;
+        } else {
+            // Silence
+            if (currentSegmentLength > 0) {
+                // Speech End -> Yield Segment
+                const totalSamples = new Float32Array(currentSegmentLength);
+                let offset = 0;
+                for (const c of currentSegmentSamples) {
+                    totalSamples.set(c, offset);
+                    offset += c.length;
+                }
+
+                yield {
+                    type: 'segment',
+                    samples: totalSamples,
+                    endIndex: processedSamples,
+                    duration: currentSegmentLength / sampleRate
+                };
+
+                currentSegmentSamples = [];
+                currentSegmentLength = 0;
+            }
+
+            ringBuffer.push(chunk);
+            if (ringBuffer.length > ringBufferSize) {
+                ringBuffer.shift();
+            }
+        }
+
+        // Progress
+        if (i % sampleRate < windowSize) {
+            const progress = Math.min(100, Math.round((i / samples.length) * 100));
+            yield { type: 'progress', percentage: progress };
+        }
+    }
+
+    // Flush remaining
+    if (currentSegmentLength > 0) {
+        const totalSamples = new Float32Array(currentSegmentLength);
+        let offset = 0;
+        for (const c of currentSegmentSamples) {
+            totalSamples.set(c, offset);
+            offset += c.length;
+        }
+        yield {
+            type: 'segment',
+            samples: totalSamples,
+            endIndex: samples.length,
+            duration: currentSegmentLength / sampleRate
+        };
+    }
+}
+
+/**
+ * Generator that yields fixed audio chunks as fallback.
+ * @param {Float32Array} samples
+ * @param {number} sampleRate
+ * @param {number} chunkDuration
+ */
+async function* yieldFixedChunks(samples, sampleRate, chunkDuration = 30) {
+    const chunkSize = Math.floor(sampleRate * chunkDuration);
+    for (let i = 0; i < samples.length; i += chunkSize) {
+        const end = Math.min(i + chunkSize, samples.length);
+        const chunk = samples.slice(i, end);
+
+        yield {
+            type: 'segment',
+            samples: chunk,
+            endIndex: end
+        };
+
+        const progress = Math.min(100, Math.round((end / samples.length) * 100));
+        yield { type: 'progress', percentage: progress };
+    }
+}
+
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation, vadModelPath, options) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
-    let vad = null;
     try {
         console.error('Converting audio file (Offline VAD)...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
-        const samples = new Float32Array(pcmData.length / 2);
-        for (let i = 0; i < samples.length; i++) {
-            samples[i] = pcmData.readInt16LE(i * 2) / 32768.0;
-        }
+        const samples = pcmInt16ToFloat32(pcmData);
 
-        console.error(`Processing ${samples.length} samples with OfflineRecognizer + VAD...`);
-
-        // Initialize VAD if path provided
+        let vad = null;
         if (vadModelPath && existsSync(vadModelPath)) {
-            const sherpaModule = await import('sherpa-onnx-node');
-            const sherpa = sherpaModule.default || sherpaModule;
+            const sherpa = await import('sherpa-onnx-node');
             const vadConfig = {
                 sileroVad: {
                     model: vadModelPath,
-                    threshold: 0.35, // Tune: Lower threshold for higher sensitivity
-                    minSilenceDuration: 1.0, // Tune: Longer silence to avoid splitting mid-sentence
+                    threshold: 0.35,
+                    minSilenceDuration: 1.0,
                     minSpeechDuration: 0.25,
                 },
-                sampleRate: sampleRate,
+                sampleRate,
                 debug: false,
                 numThreads: 1,
             };
-            vad = new sherpa.Vad(vadConfig, 60);
+            vad = new sherpa.default.Vad(vadConfig, 60);
             console.error(`[Sidecar] VAD initialized with model: ${vadModelPath}`);
         } else {
             console.error('[Sidecar] No VAD model provided or found. Falling back to simple chunking.');
         }
 
-        if (!vad) {
-            // FALLBACK TO ORIGINAL LOGIC
-            const stream = recognizer.createStream();
-            console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
-            const chunkDuration = 30;
-            const chunkSize = Math.floor(sampleRate * chunkDuration);
-            for (let i = 0; i < samples.length; i += chunkSize) {
-                const end = Math.min(i + chunkSize, samples.length);
-                const chunk = samples.slice(i, end);
-                stream.acceptWaveform({ samples: chunk, sampleRate: sampleRate });
-                recognizer.decode(stream);
-                const progress = Math.min(100, Math.round((end / samples.length) * 100));
-                console.error(JSON.stringify({ type: 'progress', percentage: progress }));
-            }
-            const result = recognizer.getResult(stream);
-            const segments = [];
-            if (result.text && result.text.trim()) {
-                let text = postProcessText(result.text.trim());
-                if (punctuation) text = punctuation.addPunct(text);
-                segments.push({
-                    id: randomUUID(),
-                    text: text,
-                    start: 0,
-                    end: samples.length / sampleRate,
-                    isFinal: true,
-                    tokens: result.tokens || [],
-                    timestamps: result.timestamps || []
-                });
-            }
-            console.log(JSON.stringify(segments, null, 2));
-
-            return;
-        }
-
-        // VAD LOGIC with Start Padding
-        const windowSize = Math.floor(sampleRate * 0.03); // 30ms for VAD
-        let currentSegmentSamples = []; // Array of Float32Array chunks
-        let currentSegmentLength = 0;
-        let segmentStartTime = 0;
-        let processedSamples = 0;
-
-        // Ring Buffer for Start Padding
-        // windowSize is ~0.03s.
-        const vadBufferSeconds = options.vadBuffer || 5;
-        const ringBufferSize = Math.ceil(vadBufferSeconds / 0.03);
-        const ringBuffer = [];
-
-        // Helper to flush
-        const transcribeSegment = (final = false) => {
-            if (currentSegmentLength === 0) return;
-
-            // Flatten
-            const totalSamples = new Float32Array(currentSegmentLength);
-            let offset = 0;
-            for (const c of currentSegmentSamples) {
-                totalSamples.set(c, offset);
-                offset += c.length;
-            }
-
-            // Create short-lived stream
-            const stream = recognizer.createStream();
-            stream.acceptWaveform({ samples: totalSamples, sampleRate: sampleRate });
-            recognizer.decode(stream);
-            const result = recognizer.getResult(stream);
-
-
-            if (result && result.text && result.text.trim().length > 0) {
-                let text = postProcessText(result.text.trim());
-                if (punctuation) text = punctuation.addPunct(text);
-
-                // Calculate approximate times
-                const endTime = processedSamples / sampleRate;
-                const startTime = Math.max(0, endTime - (currentSegmentLength / sampleRate));
-
-                const output = {
-                    id: randomUUID(),
-                    text: text,
-                    start: startTime,
-                    end: endTime,
-                    isFinal: true,
-                    tokens: result.tokens || [],
-                    timestamps: result.timestamps || []
-                };
-                // Stream the JSON line for UI
-                console.log(JSON.stringify(output));
-            }
-
-            currentSegmentSamples = [];
-            currentSegmentLength = 0;
-        };
-
+        console.error(`Processing ${samples.length} samples...`);
         console.error(JSON.stringify({ type: 'progress', percentage: 0 }));
 
-        for (let i = 0; i < samples.length; i += windowSize) {
-            const end = Math.min(i + windowSize, samples.length);
-            const chunk = samples.slice(i, end);
-            processedSamples = end;
+        const generator = vad
+            ? yieldVADSegments(samples, sampleRate, vad, options.vadBuffer)
+            : yieldFixedChunks(samples, sampleRate);
 
-            vad.acceptWaveform(chunk);
-
-            if (vad.isDetected()) {
-                // If starting a new segment, prepend ring buffer (padding)
-                if (currentSegmentLength === 0) {
-                    for (const bufChunk of ringBuffer) {
-                        currentSegmentSamples.push(bufChunk);
-                        currentSegmentLength += bufChunk.length;
-                    }
-                    // Clear ring buffer to prevent duplication
-                    ringBuffer.length = 0;
-                }
-                currentSegmentSamples.push(chunk);
-                currentSegmentLength += chunk.length;
-            } else {
-                // Silence
-                if (currentSegmentLength > 0) {
-                    // Just finished speaking
-                    transcribeSegment();
-                }
-
-                // Add to ring buffer (only keep during silence or non-speech to be ready for next attack)
-                ringBuffer.push(chunk);
-                if (ringBuffer.length > ringBufferSize) {
-                    ringBuffer.shift();
-                }
+        for await (const item of generator) {
+            if (item.type === 'progress') {
+                console.error(JSON.stringify(item));
+                continue;
             }
 
-            // Progress update every ~1 sec
-            if (i % (sampleRate) < windowSize) {
-                const progress = Math.min(100, Math.round((i / samples.length) * 100));
-                console.error(JSON.stringify({ type: 'progress', percentage: progress }));
+            if (item.type === 'segment') {
+                const stream = recognizer.createStream();
+                stream.acceptWaveform({ samples: item.samples, sampleRate });
+                recognizer.decode(stream);
+                const result = recognizer.getResult(stream);
+
+                if (result && result.text && result.text.trim()) {
+                    const text = formatTranscript(result.text, punctuation);
+                    const endTime = item.endIndex / sampleRate;
+                    // Approximating start time based on duration (not perfect but matches original logic intent)
+                    // Original logic: startTime = Math.max(0, endTime - (currentSegmentLength / sampleRate));
+                    // Here we yielded currentSegmentLength but didn't pass it back precisely as seconds.
+                    // Wait, item.duration is available from VAD generator.
+                    // For fixed chunks, we can calc from samples length.
+                    const durationStr = item.duration || (item.samples.length / sampleRate);
+                    const startTime = Math.max(0, endTime - durationStr);
+
+                    const output = {
+                        id: randomUUID(),
+                        text,
+                        start: startTime,
+                        end: endTime,
+                        isFinal: true,
+                        isFinal: true,
+                        tokens: result.tokens || [],
+                        timestamps: (result.timestamps || []).map(t => t + startTime)
+                    };
+                    console.log(JSON.stringify(output));
+                }
             }
         }
 
-        // Flush remaining
-        if (currentSegmentLength > 0) {
-            transcribeSegment(true);
-        }
-
-        // Log done
-        // console.log(JSON.stringify({ done: true })); // Only if expected by parser, but usually batch expects array?
-        // Wait, the original batch mode output a SINGLE JSON ARRAY at the end.
-        // The user wants "pseudo-streaming".
-        // If I output JSON lines, the UI might not handle it if it expects an array.
-        // BUT, the user explicitly asked for "output text segment-by-segment".
-        // This suggests I should change the protocol to JSON lines (like 'stream' mode does).
-        // I will output JSON lines and then maybe a "done" or just exit.
-        // For array compatibility, maybe I shouldn't? 
-        // "result a poor user experience due to long wait times" -> they want immediate feedback.
-        // So JSON lines is the way.
-
-    } catch (error) {
-        throw error;
     } finally {
-        if (vad) {
-            // vad.free(); // Ensure VAD is freed if API supports it, usually logic handles it via GC or explicit free
-        }
+        // Cleanup if needed
     }
 }
 
@@ -826,7 +843,6 @@ async function ensureLibraryPath() {
         const candidates = [
             join(__scriptDir, '../../node_modules'),
             join(__scriptDir, 'node_modules'),
-            join(__scriptDir, '../node_modules'),
         ];
 
         for (const base of candidates) {
@@ -879,7 +895,6 @@ async function ensureLibraryPath() {
 }
 
 
-// Refactored main
 async function main() {
     if (await ensureLibraryPath()) return;
     const options = parseArgs();
@@ -927,19 +942,18 @@ async function main() {
         const found = findModelConfig(options.modelPath, options.enableITN, numThreads, options.language);
         if (!found) throw new Error('Could not find valid model configuration (ONNX)');
 
-        const recognizerObj = await createOnnxRecognizer(found.config, options.enableITN, numThreads, options.itnModel);
-
-        const { recognizer, type, supportsInternalITN } = recognizerObj;
-        const unifiedRecognizer = recognizer;
+        const { recognizer, type } = await createOnnxRecognizer(
+            found.config, options.enableITN, numThreads, options.itnModel
+        );
 
         const punctuation = await createPunctuation(options.punctuationModel);
 
         if (options.mode === 'batch') {
             if (!options.file) throw new Error('File path required for batch mode');
             if (type === 'offline') {
-                await processBatchOffline(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel, options);
+                await processBatchOffline(recognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel, options);
             } else {
-                await processBatch(unifiedRecognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
+                await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
             }
         } else {
             if (type === 'offline') {
@@ -947,7 +961,7 @@ async function main() {
                 process.exit(1);
             }
 
-            await processStream(unifiedRecognizer, options.sampleRate, punctuation);
+            await processStream(recognizer, options.sampleRate, punctuation);
         }
 
     } catch (error) {
