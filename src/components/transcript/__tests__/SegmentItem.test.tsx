@@ -4,9 +4,6 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
 import { createStore } from 'zustand/vanilla';
-// import React from 'react'; // React 17+ JSX transform doesn't need this, but we use React.useMemo in component.
-// Wait, the test uses React? No.
-import React from 'react';
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
@@ -105,7 +102,7 @@ describe('SegmentItem Highlighting', () => {
 
     it('updates highlighting when store updates (re-render check)', async () => {
         uiStore.setState({ currentTime: 0 });
-        const { rerender } = renderComponent();
+        renderComponent();
 
         expect(screen.getByText('Hello').className).toContain('active-token');
 
