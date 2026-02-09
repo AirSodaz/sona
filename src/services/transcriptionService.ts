@@ -465,6 +465,17 @@ class TranscriptionService {
     }
 
     /**
+     * Emits a segment as if it came from the sidecar.
+     * Useful for testing.
+     * @internal
+     */
+    emitSegment(segment: TranscriptSegment): void {
+        if (this.onSegment) {
+            this.onSegment(segment);
+        }
+    }
+
+    /**
      * Creates a TranscriptSegment from raw data.
      * 
      * @param data The raw data object.
