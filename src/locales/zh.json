@@ -36,7 +36,6 @@
         "start_recording": "开始录音",
         "source_microphone": "麦克风",
         "source_desktop": "桌面音频",
-        "source_file": "音频文件模拟",
         "source_select": "选择输入源",
         "visualizer_label": "音频可视化",
         "timer_label": "录音时长"

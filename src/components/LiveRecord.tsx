@@ -4,7 +4,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
-import { Pause, Play, Square, Mic, Monitor, FileAudio } from 'lucide-react';
+import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
 import { RecordingTimer } from './RecordingTimer';
@@ -44,7 +44,6 @@ function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactEl
     switch (source) {
         case 'microphone': return <Mic size={18} aria-hidden="true" />;
         case 'desktop': return <Monitor size={18} aria-hidden="true" />;
-        case 'file': return <FileAudio size={18} aria-hidden="true" />;
         default: return <Mic size={18} aria-hidden="true" />;
     }
 }
@@ -52,7 +51,7 @@ function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactEl
 /**
  * Component for handling real-time audio recording and visualization.
  *
- * Supports recording from microphone, system audio (desktop), or file simulation.
+ * Supports recording from microphone or system audio (desktop).
  * Includes a visualizer and timer.
  *
  * @param props Component props.
@@ -74,8 +73,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const isPausedRef = useRef(false);
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
-    const [inputSource, setInputSource] = useState<'microphone' | 'desktop' | 'file'>('microphone');
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const startTimeRef = useRef<number>(0);
@@ -159,10 +157,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // Reset player state
         setAudioFile(null);
 
-        if (inputSource === 'file') {
-            fileInputRef.current?.click();
-            return;
-        }
+
 
         setIsInitializing(true);
 
@@ -239,56 +234,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
     }
 
-    async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
-        const file = e.target.files?.[0];
-        if (!file) return;
 
-        setIsInitializing(true);
-
-        try {
-            // Create audio element for playback
-            const url = URL.createObjectURL(file);
-            const audio = new Audio(url);
-            audioRef.current = audio;
-
-            // Wait for metadata to load to get duration etc if needed, but here we just need to play
-            await audio.play(); // User interaction likely covered by the file input change event
-
-            // Sync time to store for auto-scroll
-            const { setCurrentTime } = useTranscriptStore.getState();
-            audio.ontimeupdate = () => {
-                setCurrentTime(audio.currentTime);
-            };
-
-            // Create AudioContext
-            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-            const source = audioContextRef.current.createMediaElementSource(audio);
-
-            // Connect to speakers so user can hear it
-            source.connect(audioContextRef.current.destination);
-
-            // Connect to a destination node to get a stream for processing/recording
-            const destination = audioContextRef.current.createMediaStreamDestination();
-            source.connect(destination);
-
-            const stream = destination.stream;
-
-            // Auto-stop when audio ends
-            audio.onended = () => {
-                stopRecording();
-            };
-
-            await initializeRecordingSession(stream);
-
-        } catch (error) {
-            console.error('Failed to start file simulation:', error);
-            alert(t('live.mic_error'), { variant: 'error' }); // Reuse error or add new one? Using generic for now
-        } finally {
-            // Reset input
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            setIsInitializing(false);
-        }
-    }
 
 
     async function initializeRecordingSession(stream: MediaStream): Promise<void> {
@@ -520,13 +466,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     return (
         <div className={`live-record-container ${className}`}>
-            <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept="audio/*,video/*"
-                onChange={handleFileSelect}
-            />
             <div className="visualizer-wrapper">
                 <canvas
                     ref={canvasRef}
@@ -586,14 +525,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         {getSourceIcon(inputSource)}
                         <Dropdown
                             value={inputSource}
-                            onChange={(value) => setInputSource(value as 'microphone' | 'desktop' | 'file')}
+                            onChange={(value) => setInputSource(value as 'microphone' | 'desktop')}
                             aria-label={t('live.source_select')}
                             options={[
                                 { value: 'microphone', label: t('live.source_microphone') },
-                                { value: 'desktop', label: t('live.source_desktop') },
-                                { value: 'file', label: t('live.source_file') }
+                                { value: 'desktop', label: t('live.source_desktop') }
                             ]}
-                            style={{ minWidth: '160px' }}
+                            style={{ minWidth: '180px' }}
                         />
                     </div>
                 </div>

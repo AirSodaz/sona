@@ -66,7 +66,7 @@ const BatchImportOptions = React.memo(function BatchImportOptions({ enableTimeli
                         { value: 'ko', label: 'Korean' },
                         { value: 'yue', label: 'Cantonese' }
                     ]}
-                    style={{ minWidth: '140px' }}
+                    style={{ width: '180px' }}
                 />
             </div>
         </div>

@@ -36,7 +36,6 @@
         "start_recording": "Start Recording",
         "source_microphone": "Microphone",
         "source_desktop": "Desktop Audio",
-        "source_file": "Audio File Simulation",
         "source_select": "Select Input Source",
         "visualizer_label": "Audio Visualizer",
         "timer_label": "Recording duration"
