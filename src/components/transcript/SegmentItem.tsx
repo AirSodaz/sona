@@ -58,12 +58,14 @@ function SegmentItemComponent({
         return result;
     }, [segment.text, segment.tokens, segment.timestamps]);
 
-    // Determine active token index if segment is active
-    const activeTokenIndex = React.useMemo(() => {
+    // Determine active token timestamp if segment is active
+    // We track the timestamp instead of index to group tokens with same timestamp
+    const activeTokenTimestamp = React.useMemo(() => {
         if (!isActive || !alignedTokens || currentTime < 0) return -1;
         // Find the last token that has started
         const nextTokenIndex = alignedTokens.findIndex(t => t.timestamp > currentTime);
-        return nextTokenIndex === -1 ? alignedTokens.length - 1 : nextTokenIndex - 1;
+        const activeIdx = nextTokenIndex === -1 ? alignedTokens.length - 1 : nextTokenIndex - 1;
+        return activeIdx >= 0 ? alignedTokens[activeIdx].timestamp : -1;
     }, [isActive, alignedTokens, currentTime]);
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
@@ -152,7 +154,7 @@ function SegmentItemComponent({
                                 <span
                                     key={i}
                                     title={formatDisplayTime(tokenObj.timestamp)}
-                                    className={`token-hover ${i === activeTokenIndex ? 'active-token' : ''}`}
+                                    className={`token-hover ${tokenObj.timestamp === activeTokenTimestamp ? 'active-token' : ''}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onSeek(tokenObj.timestamp);

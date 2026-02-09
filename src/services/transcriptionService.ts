@@ -480,7 +480,8 @@ class TranscriptionService {
                 end: data.end,
                 isFinal: data.isFinal ?? defaultIsFinal,
                 tokens: data.tokens,
-                timestamps: data.timestamps
+                timestamps: data.timestamps,
+                durations: data.durations
             };
         }
         return null;

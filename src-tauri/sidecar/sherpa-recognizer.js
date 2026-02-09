@@ -58,6 +58,22 @@ function formatTranscript(text, punctuation) {
 }
 
 /**
+ * Synthesize token durations from timestamps.
+ * Since OnlineRecognizer only provides start timestamps, we calculate durations
+ * as the difference between consecutive timestamps.
+ * @param {number[]} timestamps - Array of absolute token start times
+ * @param {number} segmentEndTime - End time of the segment
+ * @returns {number[]} Array of token durations
+ */
+function synthesizeDurations(timestamps, segmentEndTime) {
+    if (!timestamps || timestamps.length === 0) return [];
+    return timestamps.map((t, i) => {
+        const nextTime = timestamps[i + 1] ?? segmentEndTime;
+        return nextTime - t;
+    });
+}
+
+/**
  * Filter and validate ITN model paths.
  * @param {string} itnModel - Comma-separated paths
  * @returns {string|null} Valid paths joined by comma, or null if none valid
@@ -357,6 +373,11 @@ async function processStream(recognizer, sampleRate, punctuation) {
     let segmentStartTime = 0;
     let currentSegmentId = randomUUID();
 
+    // Track token timestamps incrementally
+    // Each entry: { token, endTime } - start time is derived from previous token's endTime
+    let trackedTokens = [];
+    let lastTokenCount = 0;
+
     process.stdin.on('data', (chunk) => {
         if (chunk.toString() === '__EOS__') {
             process.stdin.emit('end');
@@ -373,6 +394,18 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
         const result = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
+        const currentTokens = result.tokens || [];
+
+        // Track new tokens - if token count increased, record timestamps for new tokens
+        if (currentTokens.length > lastTokenCount) {
+            for (let i = lastTokenCount; i < currentTokens.length; i++) {
+                trackedTokens.push({
+                    token: currentTokens[i],
+                    endTime: currentTime
+                });
+            }
+            lastTokenCount = currentTokens.length;
+        }
 
         // Partial result
         if (result.text.trim()) {
@@ -389,22 +422,47 @@ async function processStream(recognizer, sampleRate, punctuation) {
         // Endpoint detected
         if (recognizer.isEndpoint(stream)) {
             const finalResult = recognizer.getResult(stream);
+
+            // Update tracked tokens with any remaining new tokens
+            const finalTokens = finalResult.tokens || [];
+            for (let i = lastTokenCount; i < finalTokens.length; i++) {
+                trackedTokens.push({
+                    token: finalTokens[i],
+                    endTime: currentTime
+                });
+            }
+
             if (finalResult.text.trim()) {
                 const text = formatTranscript(finalResult.text, punctuation);
+
+                // Build timestamps and durations from tracked tokens
+                const timestamps = [];
+                const durations = [];
+                for (let i = 0; i < trackedTokens.length; i++) {
+                    const startTime = i === 0 ? segmentStartTime : trackedTokens[i - 1].endTime;
+                    const endTime = trackedTokens[i].endTime;
+                    timestamps.push(startTime);
+                    durations.push(endTime - startTime);
+                }
+
                 console.log(JSON.stringify({
                     id: currentSegmentId,
                     text,
                     start: segmentStartTime,
                     end: currentTime,
                     isFinal: true,
-                    isFinal: true,
-                    tokens: finalResult.tokens || [],
-                    timestamps: (finalResult.timestamps || []).map(t => t + segmentStartTime)
+                    tokens: trackedTokens.map(t => t.token),
+                    timestamps,
+                    durations
                 }));
             }
+
+            // Reset for next segment
             recognizer.reset(stream);
             segmentStartTime = currentTime;
             currentSegmentId = randomUUID();
+            trackedTokens = [];
+            lastTokenCount = 0;
         }
     });
 
@@ -412,14 +470,37 @@ async function processStream(recognizer, sampleRate, punctuation) {
         const finalResult = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
 
+        // Update tracked tokens with any remaining new tokens
+        const finalTokens = finalResult.tokens || [];
+        for (let i = lastTokenCount; i < finalTokens.length; i++) {
+            trackedTokens.push({
+                token: finalTokens[i],
+                endTime: currentTime
+            });
+        }
+
         if (finalResult.text.trim()) {
             const text = formatTranscript(finalResult.text, punctuation);
+
+            // Build timestamps and durations from tracked tokens
+            const timestamps = [];
+            const durations = [];
+            for (let i = 0; i < trackedTokens.length; i++) {
+                const startTime = i === 0 ? segmentStartTime : trackedTokens[i - 1].endTime;
+                const endTime = trackedTokens[i].endTime;
+                timestamps.push(startTime);
+                durations.push(endTime - startTime);
+            }
+
             console.log(JSON.stringify({
                 id: currentSegmentId,
                 text,
                 start: segmentStartTime,
                 end: currentTime,
                 isFinal: true,
+                tokens: trackedTokens.map(t => t.token),
+                timestamps,
+                durations
             }));
         }
         console.log(JSON.stringify({ done: true }));

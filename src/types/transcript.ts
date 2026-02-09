@@ -17,6 +17,8 @@ export interface TranscriptSegment {
   tokens?: string[];
   /** Start time of each token. */
   timestamps?: number[];
+  /** Duration of each token. */
+  durations?: number[];
 }
 
 /**
