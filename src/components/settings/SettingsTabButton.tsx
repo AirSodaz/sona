@@ -2,11 +2,11 @@ import React from 'react';
 
 /** Props for the SettingsTabButton component. */
 export interface SettingsTabButtonProps {
-    id: 'general' | 'models' | 'local';
+    id: 'general' | 'models' | 'local' | 'shortcuts';
     label: string;
     Icon: () => React.JSX.Element;
-    activeTab: string;
-    setActiveTab: (id: 'general' | 'models' | 'local') => void;
+    activeTab: 'general' | 'models' | 'local' | 'shortcuts';
+    setActiveTab: (id: 'general' | 'models' | 'local' | 'shortcuts') => void;
     /** Optional tabIndex for keyboard navigation management. */
     tabIndex?: number;
 }

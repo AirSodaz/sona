@@ -55,8 +55,6 @@ function ModelSection({
 interface SettingsModelsTabProps {
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
-    vadBufferSize: number;
-    setVadBufferSize: (size: number) => void;
     onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
@@ -67,8 +65,6 @@ interface SettingsModelsTabProps {
 export function SettingsModelsTab({
     installedModels,
     downloads,
-    vadBufferSize,
-    setVadBufferSize,
     onLoad,
     onDelete,
     onDownload,
@@ -101,25 +97,7 @@ export function SettingsModelsTab({
             <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />
             <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
-                <div style={{ maxWidth: 300 }}>
-                    <input
-                        id="settings-vad-buffer"
-                        type="number"
-                        className="settings-input"
-                        value={vadBufferSize}
-                        onChange={(e) => setVadBufferSize(Number(e.target.value))}
-                        min={0}
-                        max={30}
-                        step={0.5}
-                        style={{ width: '100%' }}
-                    />
-                </div>
-                <div className="settings-hint">
-                    {t('settings.vad_buffer_hint')}
-                </div>
-            </div>
+            {/* Removed VAD buffer size setting */}
         </div>
     );
 }

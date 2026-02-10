@@ -14,6 +14,8 @@ interface SettingsLocalTabProps {
     setVadModelPath: (path: string) => void;
     ctcModelPath: string;
     setCtcModelPath: (path: string) => void;
+    vadBufferSize: number;
+    setVadBufferSize: (size: number) => void;
     handleBrowse: (type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
 
     // ITN Props
@@ -41,6 +43,8 @@ export function SettingsLocalTab({
     setVadModelPath,
     ctcModelPath,
     setCtcModelPath,
+    vadBufferSize,
+    setVadBufferSize,
     handleBrowse,
 
     itnRulesOrder,
@@ -154,6 +158,8 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
+
+
             <div className="settings-item" style={{ marginTop: 16 }}>
                 <label htmlFor="settings-ctc-path" className="settings-label">{t('settings.ctc_path_label', { defaultValue: 'CTC Model Path' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -174,6 +180,26 @@ export function SettingsLocalTab({
                     >
                         <FolderIcon />
                     </button>
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 16 }}>
+                <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
+                <div style={{ maxWidth: 300 }}>
+                    <input
+                        id="settings-vad-buffer"
+                        type="number"
+                        className="settings-input"
+                        value={vadBufferSize}
+                        onChange={(e) => setVadBufferSize(Number(e.target.value))}
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        style={{ width: '100%' }}
+                    />
+                </div>
+                <div className="settings-hint">
+                    {t('settings.vad_buffer_hint')}
                 </div>
             </div>
 

@@ -5,11 +5,13 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
+import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
     ModelIcon,
     LocalIcon,
+    KeyboardIcon,
     XIcon
 } from './Icons';
 
@@ -78,7 +80,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'models', 'local'] as const;
+        const tabs = ['general', 'models', 'local', 'shortcuts'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -157,6 +159,14 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                             setActiveTab={setActiveTab}
                             tabIndex={activeTab === 'local' ? 0 : -1}
                         />
+                        <SettingsTabButton
+                            id="shortcuts"
+                            label={t('shortcuts.title')}
+                            Icon={KeyboardIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'shortcuts' ? 0 : -1}
+                        />
                     </div>
                 </div>
 
@@ -182,6 +192,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 {activeTab === 'general' && t('settings.general')}
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
+                                {activeTab === 'shortcuts' && t('shortcuts.title')}
                             </h3>
                             <div className="settings-divider" />
                         </div>
@@ -201,8 +212,6 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                             <SettingsModelsTab
                                 installedModels={installedModels}
                                 downloads={downloads}
-                                vadBufferSize={vadBufferSize}
-                                setVadBufferSize={setVadBufferSize}
                                 onLoad={handleLoad}
                                 onDelete={handleDelete}
                                 onDownload={handleDownload}
@@ -223,6 +232,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 setVadModelPath={setVadModelPath}
                                 ctcModelPath={ctcModelPath}
                                 setCtcModelPath={setCtcModelPath}
+                                vadBufferSize={vadBufferSize}
+                                setVadBufferSize={setVadBufferSize}
                                 handleBrowse={handleBrowse}
 
                                 itnRulesOrder={itnRulesOrder}
@@ -234,6 +245,10 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 onDownloadITN={handleDownloadITN}
                                 onCancelDownload={handleCancelDownload}
                             />
+                        )}
+
+                        {activeTab === 'shortcuts' && (
+                            <SettingsShortcutsTab />
                         )}
 
                     </div>

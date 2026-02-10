@@ -20,7 +20,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts'>('general');
 
     // We read directly from the config store
     // Local state for ITN set is derived from config for easier UI handling, but we will sync it back immediately on change.

@@ -161,7 +161,24 @@
         "vad_buffer_size": "VAD Buffer Size (s)",
         "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
         "ctc_models": "CTC Models",
-        "ctc_path_label": "CTC Model Path"
+        "ctc_path_label": "CTC Model Path",
+        "shortcuts": "Keyboard Shortcuts"
+    },
+    "shortcuts": {
+        "title": "Keyboard Shortcuts",
+        "section_playback": "Playback",
+        "section_search": "Search",
+        "section_general": "General",
+        "play_pause": "Play / Pause",
+        "seek_forward": "Seek Forward 5s",
+        "seek_backward": "Seek Backward 5s",
+        "volume_up": "Volume Up",
+        "volume_down": "Volume Down",
+        "toggle_mute": "Toggle Mute",
+        "find": "Find",
+        "next_match": "Next Match",
+        "prev_match": "Previous Match",
+        "close": "Close"
     },
     "search": {
         "placeholder": "Find in transcript...",

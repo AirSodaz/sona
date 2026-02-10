@@ -30,6 +30,7 @@ export function useAppInitialization() {
                         offlineModelPath: parsed.offlineModelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
                         vadModelPath: parsed.vadModelPath || '',
+                        ctcModelPath: parsed.ctcModelPath || '',
                         enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
                         itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
                         vadBufferSize: parsed.vadBufferSize || 5,

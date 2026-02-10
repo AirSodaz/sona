@@ -161,7 +161,24 @@
         "vad_buffer_size": "VAD 缓冲大小 (秒)",
         "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。",
         "ctc_models": "CTC 模型",
-        "ctc_path_label": "CTC 模型路径"
+        "ctc_path_label": "CTC 模型路径",
+        "shortcuts": "键盘快捷键"
+    },
+    "shortcuts": {
+        "title": "键盘快捷键",
+        "section_playback": "播放控制",
+        "section_search": "搜索",
+        "section_general": "通用",
+        "play_pause": "播放 / 暂停",
+        "seek_forward": "快进 5秒",
+        "seek_backward": "快退 5秒",
+        "volume_up": "增加音量",
+        "volume_down": "降低音量",
+        "toggle_mute": "静音切换",
+        "find": "查找",
+        "next_match": "下一个匹配",
+        "prev_match": "上一个匹配",
+        "close": "关闭"
     },
     "search": {
         "placeholder": "在转录文本中查找...",
