@@ -108,7 +108,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     className="btn btn-icon"
                     onClick={handlePlayPause}
                     aria-label={isPlaying ? t('player.pause') : t('player.play')}
-                    data-tooltip={isPlaying ? t('player.pause') : t('player.play')}
+                    data-tooltip={`${isPlaying ? t('player.pause') : t('player.play')} (Space)`}
                 >
                     {isPlaying ? <PauseIcon /> : <PlayFilledIcon />}
                 </button>
@@ -145,7 +145,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     onClick={toggleMute}
                     aria-label={isMuted ? t('player.unmute') : t('player.mute')}
                     aria-pressed={!!isMuted}
-                    data-tooltip={isMuted ? t('player.unmute') : t('player.mute')}
+                    data-tooltip={`${isMuted ? t('player.unmute') : t('player.mute')} (M)`}
                     data-tooltip-pos="top"
                 >
                     {isMuted || volume === 0 ? <MuteIcon /> : <VolumeIcon />}

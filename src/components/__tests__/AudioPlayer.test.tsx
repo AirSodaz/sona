@@ -121,6 +121,16 @@ describe('AudioPlayer', () => {
         expect(volumeSlider.getAttribute('aria-valuetext')).toBe('100%');
     });
 
+    it('shows keyboard shortcuts in tooltips', () => {
+        render(<AudioPlayer />);
+
+        const playButton = screen.getByLabelText('player.play');
+        expect(playButton.getAttribute('data-tooltip')).toBe('player.play (Space)');
+
+        const muteButton = screen.getByLabelText('player.mute');
+        expect(muteButton.getAttribute('data-tooltip')).toBe('player.mute (M)');
+    });
+
     describe('Keyboard Shortcuts', () => {
         it('toggles play/pause with Space', () => {
             const { container } = render(<AudioPlayer />);
