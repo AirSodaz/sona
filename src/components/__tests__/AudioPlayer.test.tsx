@@ -121,14 +121,24 @@ describe('AudioPlayer', () => {
         expect(volumeSlider.getAttribute('aria-valuetext')).toBe('100%');
     });
 
-    it('shows keyboard shortcuts in tooltips', () => {
+    it('shows keyboard shortcuts in tooltips', async () => {
         render(<AudioPlayer />);
 
         const playButton = screen.getByLabelText('player.play');
-        expect(playButton.getAttribute('data-tooltip')).toBe('player.play (Space)');
+        // Simulate hover
+        fireEvent.mouseEnter(playButton.parentElement as Element);
+
+        // Wait for tooltip to appear (it has a timeout)
+        const tooltip = await screen.findByText('Space');
+        expect(tooltip.tagName).toBe('KBD');
+        expect(tooltip.parentElement?.textContent).toContain('player.play');
 
         const muteButton = screen.getByLabelText('player.mute');
-        expect(muteButton.getAttribute('data-tooltip')).toBe('player.mute (M)');
+        fireEvent.mouseEnter(muteButton.parentElement as Element);
+
+        const muteTooltip = await screen.findByText('M');
+        expect(muteTooltip.tagName).toBe('KBD');
+        expect(muteTooltip.parentElement?.textContent).toContain('player.mute');
     });
 
     describe('Keyboard Shortcuts', () => {

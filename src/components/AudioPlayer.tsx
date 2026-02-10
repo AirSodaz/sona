@@ -6,6 +6,7 @@ import { formatDisplayTime } from '../utils/exportFormats';
 import { PlayFilledIcon, PauseIcon, VolumeIcon, MuteIcon } from './Icons';
 import { TimeDisplay } from './audio-player/TimeDisplay';
 import { SeekSlider } from './audio-player/SeekSlider';
+import { Tooltip } from './Tooltip';
 import { useAudioShortcuts } from '../hooks/useAudioShortcuts';
 import { useAudioVolume } from '../hooks/useAudioVolume';
 import { useAudioSync } from '../hooks/useAudioSync';
@@ -104,14 +105,23 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             />
 
             <div className="audio-controls">
-                <button
-                    className="btn btn-icon"
-                    onClick={handlePlayPause}
-                    aria-label={isPlaying ? t('player.pause') : t('player.play')}
-                    data-tooltip={`${isPlaying ? t('player.pause') : t('player.play')} (Space)`}
+                <Tooltip
+                    content={
+                        <>
+                            {isPlaying ? t('player.pause') : t('player.play')}
+                            <kbd className="kbd">Space</kbd>
+                        </>
+                    }
+                    position="top"
                 >
-                    {isPlaying ? <PauseIcon /> : <PlayFilledIcon />}
-                </button>
+                    <button
+                        className="btn btn-icon"
+                        onClick={handlePlayPause}
+                        aria-label={isPlaying ? t('player.pause') : t('player.play')}
+                    >
+                        {isPlaying ? <PauseIcon /> : <PlayFilledIcon />}
+                    </button>
+                </Tooltip>
             </div>
 
             <div className="audio-timeline">
@@ -140,16 +150,24 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                 >
                     {playbackRate}x
                 </button>
-                <button
-                    className="btn btn-icon"
-                    onClick={toggleMute}
-                    aria-label={isMuted ? t('player.unmute') : t('player.mute')}
-                    aria-pressed={!!isMuted}
-                    data-tooltip={`${isMuted ? t('player.unmute') : t('player.mute')} (M)`}
-                    data-tooltip-pos="top"
+                <Tooltip
+                    content={
+                        <>
+                            {isMuted ? t('player.unmute') : t('player.mute')}
+                            <kbd className="kbd">M</kbd>
+                        </>
+                    }
+                    position="top"
                 >
-                    {isMuted || volume === 0 ? <MuteIcon /> : <VolumeIcon />}
-                </button>
+                    <button
+                        className="btn btn-icon"
+                        onClick={toggleMute}
+                        aria-label={isMuted ? t('player.unmute') : t('player.mute')}
+                        aria-pressed={!!isMuted}
+                    >
+                        {isMuted || volume === 0 ? <MuteIcon /> : <VolumeIcon />}
+                    </button>
+                </Tooltip>
                 <input
                     type="range"
                     className="audio-slider audio-slider-volume"
