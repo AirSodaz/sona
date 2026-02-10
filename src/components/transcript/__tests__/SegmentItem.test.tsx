@@ -4,6 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
 import { createStore } from 'zustand/vanilla';
+import { useTranscriptStore } from '../../../stores/transcriptStore';
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
@@ -49,11 +50,11 @@ describe('SegmentItem Highlighting', () => {
     };
 
     beforeEach(() => {
+        useTranscriptStore.setState({ currentTime: 0 });
         uiStore = createStore<TranscriptUIState>(() => ({
             newSegmentIds: new Set(),
             activeSegmentId: 'test-seg', // Active segment
             editingSegmentId: null,
-            currentTime: 0,
             totalSegments: 1,
             aligningSegmentIds: new Set(),
         }));
@@ -67,7 +68,7 @@ describe('SegmentItem Highlighting', () => {
 
     it('highlights the first token at start time', () => {
         // currentTime 0 (start)
-        uiStore.setState({ currentTime: 0 });
+        useTranscriptStore.setState({ currentTime: 0 });
         renderComponent();
 
         const token0 = screen.getByText('Hello');
@@ -78,7 +79,7 @@ describe('SegmentItem Highlighting', () => {
     });
 
     it('highlights the second token when time advances', () => {
-        uiStore.setState({ currentTime: 2.0 }); // 2.0 > 1.5 (world starts at 1.5)
+        useTranscriptStore.setState({ currentTime: 2.0 }); // 2.0 > 1.5 (world starts at 1.5)
         renderComponent();
 
         const token0 = screen.getByText('Hello');
@@ -91,7 +92,7 @@ describe('SegmentItem Highlighting', () => {
     });
 
     it('highlights the last token when time is near end', () => {
-        uiStore.setState({ currentTime: 4.0 }); // 4.0 > 3.0 (test starts at 3.0)
+        useTranscriptStore.setState({ currentTime: 4.0 }); // 4.0 > 3.0 (test starts at 3.0)
         renderComponent();
 
         const token1 = screen.getByText('world');
@@ -102,14 +103,14 @@ describe('SegmentItem Highlighting', () => {
     });
 
     it('updates highlighting when store updates (re-render check)', async () => {
-        uiStore.setState({ currentTime: 0 });
+        useTranscriptStore.setState({ currentTime: 0 });
         renderComponent();
 
         expect(screen.getByText('Hello').className).toContain('active-token');
 
         // Update store
         act(() => {
-            uiStore.setState({ currentTime: 2.0 });
+            useTranscriptStore.setState({ currentTime: 2.0 });
         });
 
         // Re-render implicitly handled by store subscription?
@@ -121,7 +122,8 @@ describe('SegmentItem Highlighting', () => {
     });
 
     it('does not highlight tokens if segment is not active', () => {
-        uiStore.setState({ currentTime: 0, activeSegmentId: 'other-seg' });
+        useTranscriptStore.setState({ currentTime: 0 });
+        uiStore.setState({ activeSegmentId: 'other-seg' });
         renderComponent();
 
         const token0 = screen.getByText('Hello');
