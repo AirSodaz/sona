@@ -15,6 +15,8 @@ import {
     XIcon
 } from './Icons';
 
+const SETTINGS_TABS = ['general', 'models', 'local', 'shortcuts'] as const;
+
 /** Props for the Settings modal. */
 interface SettingsProps {
     isOpen: boolean;
@@ -80,26 +82,25 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'models', 'local', 'shortcuts'] as const;
-        const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
+        const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
 
         let nextIndex = -1;
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            nextIndex = (currentIndex + 1) % tabs.length;
+            nextIndex = (currentIndex + 1) % SETTINGS_TABS.length;
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+            nextIndex = (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
         } else if (e.key === 'Home') {
             e.preventDefault();
             nextIndex = 0;
         } else if (e.key === 'End') {
             e.preventDefault();
-            nextIndex = tabs.length - 1;
+            nextIndex = SETTINGS_TABS.length - 1;
         }
 
         if (nextIndex !== -1) {
-            const nextTab = tabs[nextIndex];
+            const nextTab = SETTINGS_TABS[nextIndex];
             setActiveTab(nextTab);
             // Move focus to the new tab button
             requestAnimationFrame(() => {

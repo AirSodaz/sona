@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -9,6 +9,8 @@ import { SeekSlider } from './audio-player/SeekSlider';
 import { useAudioShortcuts } from '../hooks/useAudioShortcuts';
 import { useAudioVolume } from '../hooks/useAudioVolume';
 import { useAudioSync } from '../hooks/useAudioSync';
+
+const PLAYBACK_RATES = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
 
 /** Props for AudioPlayer. */
 interface AudioPlayerProps {
@@ -81,9 +83,15 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         toggleMute
     });
 
-    const handlePlayPause = () => {
+    const handlePlayPause = useCallback(() => {
         setIsPlaying(!isPlaying);
-    };
+    }, [isPlaying, setIsPlaying]);
+
+    const handleSpeedCycle = useCallback(() => {
+        const currentIndex = PLAYBACK_RATES.indexOf(playbackRate);
+        const nextSpeed = PLAYBACK_RATES[(currentIndex + 1) % PLAYBACK_RATES.length];
+        setPlaybackRate(nextSpeed);
+    }, [playbackRate]);
 
     if (!audioUrl) {
         return null;
@@ -127,12 +135,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             <div className="audio-controls">
                 <button
                     className="btn btn-icon btn-text"
-                    onClick={() => {
-                        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
-                        const currentIndex = speeds.indexOf(playbackRate);
-                        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
-                        setPlaybackRate(nextSpeed);
-                    }}
+                    onClick={handleSpeedCycle}
                     aria-label={`${t('player.speed')} ${playbackRate}x`}
                     data-tooltip={t('player.speed')}
                     data-tooltip-pos="top"

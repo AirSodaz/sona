@@ -31,20 +31,34 @@ export function formatDisplayTime(seconds: number): string {
 }
 
 /**
+ * Helper to process segments into a formatted string.
+ * Filters for final segments with content, then maps using the provided formatter.
+ */
+function formatSegments(
+    segments: TranscriptSegment[],
+    timeSeparator: string,
+    formatter: (index: number, start: string, end: string, text: string) => string
+): string {
+    return segments
+        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
+        .map((segment, index) => {
+            const startTime = formatTimestamp(segment.start, timeSeparator);
+            const endTime = formatTimestamp(segment.end, timeSeparator);
+            return formatter(index, startTime, endTime, segment.text.trim());
+        })
+        .join('\n');
+}
+
+/**
  * Converts TranscriptSegment array to SRT (SubRip Subtitle) format.
  *
  * @param segments The array of transcript segments to convert.
  * @return The SRT formatted string.
  */
 export function toSRT(segments: TranscriptSegment[]): string {
-    return segments
-        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
-        .map((segment, index) => {
-            const startTime = formatTimestamp(segment.start);
-            const endTime = formatTimestamp(segment.end);
-            return `${index + 1}\n${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
-        })
-        .join('\n');
+    return formatSegments(segments, ',', (index, start, end, text) => {
+        return `${index + 1}\n${start} --> ${end}\n${text}\n`;
+    });
 }
 
 /**
@@ -86,15 +100,9 @@ export function toTXT(segments: TranscriptSegment[]): string {
  */
 export function toVTT(segments: TranscriptSegment[]): string {
     const header = 'WEBVTT\n\n';
-    const content = segments
-        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
-        .map((segment) => {
-            // VTT uses dot separator for milliseconds
-            const startTime = formatTimestamp(segment.start, '.');
-            const endTime = formatTimestamp(segment.end, '.');
-            return `${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
-        })
-        .join('\n');
+    const content = formatSegments(segments, '.', (index, start, end, text) => {
+        return `${start} --> ${end}\n${text}\n`;
+    });
 
     return header + content;
 }
