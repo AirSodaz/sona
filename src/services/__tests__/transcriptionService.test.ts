@@ -213,4 +213,51 @@ describe('TranscriptionService', () => {
             expect(secondCallArgs).toContain('cpu');
         });
     });
+
+    describe('Alignment', () => {
+        it('executes alignment with correct args', async () => {
+            transcriptionService.setCtcModelPath('/mock/ctc/model');
+
+            const segment = {
+                id: 'seg-1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                tokens: ['H', 'e', 'l', 'l', 'o'],
+                timestamps: [0, 0.2, 0.4, 0.6, 0.8]
+            };
+
+            const promise = transcriptionService.alignSegment(segment, '/path/to/audio.wav');
+
+            // Wait a tick to ensure synchronous part has run
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            const mockCommandInstance = vi.mocked(Command.sidecar).mock.results[0].value;
+
+            // Simulate output
+            const resultData = {
+                tokens: ['H', 'e', 'l', 'l', 'o'],
+                timestamps: [0.1, 0.3, 0.5, 0.7, 0.9],
+                durations: [0.2, 0.2, 0.2, 0.2, 0.2],
+                ctcText: 'Hello'
+            };
+
+            mockCommandInstance.stdout.emit('data', JSON.stringify(resultData) + '\n');
+            mockCommandInstance.emit('close', { code: 0 });
+
+            const result = await promise;
+
+            expect(Command.sidecar).toHaveBeenCalledWith('binaries/node', expect.arrayContaining([
+                expect.stringContaining('sidecar.mjs'),
+                '--mode', 'align',
+                '--file', '/path/to/audio.wav',
+                '--ctc-model', '/mock/ctc/model',
+                '--start-time', '0',
+                '--end-time', '1'
+            ]));
+
+            expect(result).toEqual(resultData);
+        });
+    });
 });

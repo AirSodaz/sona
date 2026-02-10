@@ -311,6 +311,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
 
         transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
 
         await transcriptionService.start(
             (segment) => {
@@ -356,6 +357,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     const newItem = await historyService.saveRecording(blob, segments, duration);
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
+                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
                     }
                 } catch (err) {
                     console.error('Failed to save history:', err);

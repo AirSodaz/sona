@@ -22,6 +22,8 @@ interface TranscriptState {
     processingStatus: ProcessingStatus;
     /** Progress of processing (0-100). */
     processingProgress: number;
+    /** Set of segment IDs currently being re-aligned. */
+    aligningSegmentIds: Set<string>;
 
     // Audio state
     /** The loaded audio file object. */
@@ -37,9 +39,21 @@ interface TranscriptState {
     /** Current seek request. */
     seekRequest: { time: number; timestamp: number } | null;
 
+    // History tracking
+    /** ID of the history item the current segments originate from. */
+    sourceHistoryId: string | null;
+
     // Config
     /** Application configuration. */
     config: AppConfig;
+
+    // History tracking actions
+    /**
+     * Sets the source history item ID for the current segments.
+     *
+     * @param id The history item ID or null.
+     */
+    setSourceHistoryId: (id: string | null) => void;
 
     // Segment CRUD operations
     /**
@@ -97,6 +111,12 @@ interface TranscriptState {
      */
     setSegments: (segments: TranscriptSegment[]) => void;
 
+    /**
+     * Atomically loads segments and sets the source history ID.
+     * Prevents auto-save race conditions when switching items.
+     */
+    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null) => void;
+
     /** Clears all segments and resets segment-related state. */
     clearSegments: () => void;
 
@@ -111,6 +131,18 @@ interface TranscriptState {
     setProcessingStatus: (status: ProcessingStatus) => void;
     /** Sets the processing progress. */
     setProcessingProgress: (progress: number) => void;
+    /**
+     * Adds a segment ID to the aligning set.
+     *
+     * @param id The segment ID being aligned.
+     */
+    addAligningSegmentId: (id: string) => void;
+    /**
+     * Removes a segment ID from the aligning set.
+     *
+     * @param id The segment ID that finished aligning.
+     */
+    removeAligningSegmentId: (id: string) => void;
 
     // Audio actions
     /**
@@ -178,13 +210,18 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     mode: 'live',
     processingStatus: 'idle',
     processingProgress: 0,
+    aligningSegmentIds: new Set<string>(),
     audioFile: null,
     audioUrl: null,
     currentTime: 0,
     isPlaying: false,
     lastSeekTimestamp: 0,
     seekRequest: null,
+    sourceHistoryId: null,
     config: DEFAULT_CONFIG,
+
+    // History tracking
+    setSourceHistoryId: (id) => set({ sourceHistoryId: id }),
 
     // Segment CRUD
     addSegment: (segment) => {
@@ -262,12 +299,23 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
+    loadTranscript: (segments, sourceHistoryId) => {
+        set({
+            segments: segments.sort((a, b) => a.start - b.start),
+            sourceHistoryId,
+            activeSegmentIndex: -1,
+            activeSegmentId: null,
+            editingSegmentId: null
+        });
+    },
+
     clearSegments: () => {
         set({
             segments: [],
             activeSegmentId: null,
             activeSegmentIndex: -1,
-            editingSegmentId: null
+            editingSegmentId: null,
+            sourceHistoryId: null
         });
     },
 
@@ -280,6 +328,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     setMode: (mode) => set({ mode }),
     setProcessingStatus: (status) => set({ processingStatus: status }),
     setProcessingProgress: (progress) => set({ processingProgress: progress }),
+    addAligningSegmentId: (id) => set((state) => {
+        const next = new Set(state.aligningSegmentIds);
+        next.add(id);
+        return { aligningSegmentIds: next };
+    }),
+    removeAligningSegmentId: (id) => set((state) => {
+        const next = new Set(state.aligningSegmentIds);
+        next.delete(id);
+        return { aligningSegmentIds: next };
+    }),
 
     // Audio actions
     setAudioFile: (file) => {

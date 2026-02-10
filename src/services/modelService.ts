@@ -19,7 +19,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., streaming, offline). */
-    type: 'streaming' | 'offline' | 'punctuation' | 'vad';
+    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc';
     /** Languages supported by the model (comma-separated). */
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
@@ -72,6 +72,16 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'punctuation',
         language: 'zh,en',
         size: '~62 MB',
+        engine: 'onnx'
+    },
+    {
+        id: 'sherpa-onnx-wenetspeech-yue-u2pp-conformer-ctc-zh-en-cantonese-int8-2025-09-10',
+        name: 'Cantonese/Chinese/English - U2PP Conformer CTC (Int8)',
+        description: 'CTC model for Cantonese, Chinese, and English. WenetSpeech-based U2PP Conformer.',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-wenetspeech-yue-u2pp-conformer-ctc-zh-en-cantonese-int8-2025-09-10.tar.bz2',
+        type: 'ctc',
+        language: 'yue,zh,en',
+        size: '~112 MB',
         engine: 'onnx'
     },
     {

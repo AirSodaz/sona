@@ -10,6 +10,18 @@ export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
 
+/** Result from CTC forced alignment. */
+export interface AlignmentResult {
+    /** List of tokens from CTC recognition. */
+    tokens: string[];
+    /** Absolute start timestamps for each token. */
+    timestamps: number[];
+    /** Duration of each token. */
+    durations: number[];
+    /** Raw text from CTC recognition (may differ from user-edited text). */
+    ctcText: string;
+}
+
 /**
  * Service to manage the transcription process via a sidecar.
  *
@@ -27,6 +39,10 @@ class TranscriptionService {
     private punctuationModelPath: string = '';
     /** Path to the Voice Activity Detection (VAD) model. */
     private vadModelPath: string = '';
+    /** Path to the CTC model. */
+    private ctcModelPath: string = '';
+    /** Path to the source audio file for alignment. */
+    private sourceFilePath: string = '';
     /** Buffer size for VAD in seconds. */
     private vadBufferSize: number = 5;
     /** Whether to enable Inverse Text Normalization. */
@@ -76,6 +92,24 @@ class TranscriptionService {
      */
     setVadModelPath(path: string): void {
         this.vadModelPath = path;
+    }
+
+    /**
+     * Sets the path to the CTC model.
+     *
+     * @param path The absolute path to the CTC model.
+     */
+    setCtcModelPath(path: string): void {
+        this.ctcModelPath = path;
+    }
+
+    /**
+     * Sets the path to the source audio file for alignment.
+     *
+     * @param path The absolute path to the audio file.
+     */
+    setSourceFilePath(path: string): void {
+        this.sourceFilePath = path;
     }
 
     /**
@@ -472,6 +506,110 @@ class TranscriptionService {
     emitSegment(segment: TranscriptSegment): void {
         if (this.onSegment) {
             this.onSegment(segment);
+        }
+    }
+
+    /**
+     * Runs CTC forced alignment on a segment's audio slice.
+     *
+     * Spawns the sidecar in align mode to re-recognize the audio and produce
+     * fresh tokens/timestamps/durations. Returns null on any failure.
+     *
+     * @param segment The segment to align (uses start/end times).
+     * @param sourceFilePath Optional override for the audio file path.
+     * @return The alignment result, or null if alignment is unavailable or fails.
+     */
+    async alignSegment(segment: TranscriptSegment, sourceFilePath?: string): Promise<AlignmentResult | null> {
+        const filePath = sourceFilePath || this.sourceFilePath;
+        if (!this.ctcModelPath) {
+            console.log('[TranscriptionService] No CTC model configured, skipping alignment');
+            return null;
+        }
+        if (!filePath) {
+            console.log('[TranscriptionService] No source file path, skipping alignment');
+            return null;
+        }
+
+        console.log(`[TranscriptionService] Aligning segment ${segment.id} (${segment.start}-${segment.end})`);
+
+        try {
+            const scriptPath = await resolveResource('sidecar/dist/index.mjs');
+            const args = [
+                scriptPath,
+                '--mode', 'align',
+                '--file', filePath,
+                '--ctc-model', this.ctcModelPath,
+                '--start-time', segment.start.toString(),
+                '--end-time', segment.end.toString(),
+            ];
+
+            const command = Command.sidecar('binaries/node', args);
+            const stdoutBuffer = new StreamLineBuffer();
+
+            return new Promise<AlignmentResult | null>((resolve) => {
+                let result: AlignmentResult | null = null;
+
+                command.stdout.on('data', (chunk) => {
+                    if (typeof chunk === 'string') {
+                        const lines = stdoutBuffer.process(chunk);
+                        for (const line of lines) {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.tokens && Array.isArray(data.tokens)) {
+                                    result = {
+                                        tokens: data.tokens,
+                                        timestamps: data.timestamps || [],
+                                        durations: data.durations || [],
+                                        ctcText: data.ctcText || '',
+                                    };
+                                }
+                            } catch (e) { /* ignore non-JSON */ }
+                        }
+                    }
+                });
+
+                command.stderr.on('data', (chunk) => {
+                    console.log(`[Align] stderr: ${chunk}`);
+                });
+
+                command.on('close', (data) => {
+                    // Flush remaining buffer
+                    const remaining = stdoutBuffer.flush();
+                    for (const line of remaining) {
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.tokens && Array.isArray(data.tokens)) {
+                                result = {
+                                    tokens: data.tokens,
+                                    timestamps: data.timestamps || [],
+                                    durations: data.durations || [],
+                                    ctcText: data.ctcText || '',
+                                };
+                            }
+                        } catch (e) { /* ignore non-JSON */ }
+                    }
+
+                    if (data.code === 0 && result && result.tokens.length > 0) {
+                        resolve(result);
+                    } else {
+                        console.warn(`[TranscriptionService] Alignment failed (code ${data.code})`);
+                        resolve(null);
+                    }
+                });
+
+                command.on('error', (error) => {
+                    console.error(`[TranscriptionService] Alignment process error: ${error}`);
+                    resolve(null);
+                });
+
+                command.spawn().catch((error) => {
+                    console.error(`[TranscriptionService] Failed to spawn alignment sidecar: ${error}`);
+                    resolve(null);
+                });
+            });
+        } catch (error) {
+            console.error('[TranscriptionService] Alignment error:', error);
+            return null;
         }
     }
 

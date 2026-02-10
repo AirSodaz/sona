@@ -178,6 +178,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
         }
 
+        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+
         // Process items sequentially
         while (true) {
             const currentState = get();
@@ -236,9 +238,22 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 const duration = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : 0;
 
                 // Save to History
-                historyService.saveImportedFile(pendingItem.filePath, finalSegments, duration).catch(err => {
+                try {
+                    const historyItem = await historyService.saveImportedFile(pendingItem.filePath, finalSegments, duration);
+                    if (historyItem) {
+                        set((state) => ({
+                            queueItems: state.queueItems.map((item) =>
+                                item.id === pendingItem.id ? { ...item, historyId: historyItem.id } : item
+                            )
+                        }));
+                        // If this is the active item, propagate sourceHistoryId
+                        if (get().activeItemId === pendingItem.id) {
+                            useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                        }
+                    }
+                } catch (err) {
                     console.error('[BatchQueue] Failed to save to history:', err);
-                });
+                }
 
                 get().updateItemStatus(pendingItem.id, 'complete', 100);
 
@@ -258,12 +273,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const item = state.queueItems.find((i) => i.id === id);
         if (item) {
-            useTranscriptStore.getState().setSegments(item.segments);
+            // Use atomic load to prevent auto-save from overwriting previous item
+            useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null);
             useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
+            // Set source file path for CTC alignment
+            transcriptionService.setSourceFilePath(item.filePath);
         } else if (id === null) {
             // Clear if null
-            useTranscriptStore.getState().setSegments([]);
+            useTranscriptStore.getState().loadTranscript([], null);
             useTranscriptStore.getState().setAudioUrl(null);
+            transcriptionService.setSourceFilePath('');
         }
     },
 

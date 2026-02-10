@@ -676,6 +676,23 @@ input[type="radio"]:focus {
 
 .segment-content {
   min-width: 0;
+  position: relative;
+}
+
+.segment-aligning-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary, #4a9eff);
+  margin-left: 6px;
+  vertical-align: middle;
+  animation: alignPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes alignPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
 }
 
 .segment-text {

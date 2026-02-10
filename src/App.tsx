@@ -13,6 +13,7 @@ import { GlobalDialog } from './components/GlobalDialog';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
+import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 
 /**
  * Main application component.
@@ -29,6 +30,9 @@ function App(): React.JSX.Element {
 
   // Run application initialization logic
   useAppInitialization();
+
+  // Initialize auto-save hook
+  useAutoSaveTranscript();
 
   return (
     <div className="app">

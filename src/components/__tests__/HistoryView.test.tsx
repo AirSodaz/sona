@@ -43,12 +43,28 @@ vi.mock('../../stores/historyStore', async () => {
     };
 });
 
-vi.mock('../../stores/transcriptStore', () => ({
-    useTranscriptStore: (selector: any) => selector({
-        setSegments: vi.fn(),
-        setAudioUrl: vi.fn(),
-    }),
-}));
+vi.mock('../../stores/transcriptStore', () => {
+    const setSegments = vi.fn();
+    const setAudioUrl = vi.fn();
+    const setSourceHistoryId = vi.fn();
+    const loadTranscript = vi.fn();
+
+    const useTranscriptStore = (selector: any) => selector({
+        setSegments,
+        setAudioUrl,
+        setSourceHistoryId,
+        loadTranscript,
+    });
+
+    useTranscriptStore.getState = () => ({
+        setSegments,
+        setAudioUrl,
+        setSourceHistoryId,
+        loadTranscript,
+    });
+
+    return { useTranscriptStore };
+});
 
 vi.mock('../../services/historyService', () => ({
     historyService: {

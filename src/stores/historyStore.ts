@@ -12,6 +12,13 @@ interface HistoryState {
     addItem: (item: HistoryItem) => void;
     deleteItem: (id: string) => Promise<void>;
     refresh: () => Promise<void>;
+    /**
+     * Updates metadata fields for a specific history item in the in-memory list.
+     *
+     * @param id The history item ID.
+     * @param updates Partial fields to merge into the item.
+     */
+    updateItemMeta: (id: string, updates: Partial<HistoryItem>) => void;
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -56,5 +63,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     refresh: async () => {
         await get().loadItems();
+    },
+
+    updateItemMeta: (id, updates) => {
+        set((state) => ({
+            items: state.items.map((item) =>
+                item.id === id ? { ...item, ...updates } : item
+            )
+        }));
     }
 }));

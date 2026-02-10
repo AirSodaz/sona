@@ -43,6 +43,7 @@ function SegmentItemComponent({
     const isActive = useStore(uiStore, useCallback((state) => state.activeSegmentId === segment.id, [segment.id]));
     const isEditing = useStore(uiStore, useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
     const isNew = useStore(uiStore, useCallback((state) => state.newSegmentIds.has(segment.id), [segment.id]));
+    const isAligning = useStore(uiStore, useCallback((state) => state.aligningSegmentIds.has(segment.id), [segment.id]));
 
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
@@ -129,6 +130,13 @@ function SegmentItemComponent({
                         segment={segment}
                         isActive={isActive}
                         onSeek={onSeek}
+                    />
+                )}
+                {isAligning && (
+                    <span
+                        className="segment-aligning-indicator"
+                        data-tooltip={t('editor.aligning')}
+                        aria-label={t('editor.aligning')}
                     />
                 )}
             </div>

@@ -49,6 +49,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         setPunctuationModelPath,
         vadModelPath,
         setVadModelPath,
+        ctcModelPath,
+        setCtcModelPath,
 
         vadBufferSize,
         setVadBufferSize,
@@ -219,6 +221,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 setPunctuationModelPath={setPunctuationModelPath}
                                 vadModelPath={vadModelPath}
                                 setVadModelPath={setVadModelPath}
+                                ctcModelPath={ctcModelPath}
+                                setCtcModelPath={setCtcModelPath}
                                 handleBrowse={handleBrowse}
 
                                 itnRulesOrder={itnRulesOrder}

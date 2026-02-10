@@ -221,6 +221,45 @@ export const historyService = {
         }
     },
 
+    /**
+     * Updates an existing transcript file and its index metadata.
+     *
+     * @param historyId The ID of the history item to update.
+     * @param segments The updated transcript segments.
+     */
+    async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<void> {
+        try {
+            const items = await this.getAll();
+            const item = items.find(i => i.id === historyId);
+            if (!item) {
+                console.error('[History] updateTranscript: item not found:', historyId);
+                return;
+            }
+
+            // Overwrite transcript file
+            await writeTextFile(
+                `${HISTORY_DIR}/${item.transcriptPath}`,
+                JSON.stringify(segments, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            // Regenerate metadata
+            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
+            const searchContent = segments.map(s => s.text).join(' ');
+
+            // Update item in index
+            item.previewText = previewText;
+            item.searchContent = searchContent;
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(items, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+        } catch (error) {
+            console.error('[History] Failed to update transcript:', error);
+        }
+    },
+
     async getAudioUrl(filename: string): Promise<string | null> {
         try {
             const appDataDirPath = await appLocalDataDir();

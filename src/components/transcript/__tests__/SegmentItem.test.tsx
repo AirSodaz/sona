@@ -55,6 +55,7 @@ describe('SegmentItem Highlighting', () => {
             editingSegmentId: null,
             currentTime: 0,
             totalSegments: 1,
+            aligningSegmentIds: new Set(),
         }));
     });
 

@@ -59,4 +59,6 @@ export interface AppConfig {
   vadModelPath?: string;
   /** VAD buffer size in seconds. Default: 5. */
   vadBufferSize?: number;
+  /** Path to CTC model (e.g. sherpa-onnx CTC conformer). */
+  ctcModelPath?: string;
 }

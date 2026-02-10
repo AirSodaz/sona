@@ -16,6 +16,8 @@ export interface TranscriptUIState {
     currentTime: number;
     /** Total number of segments (for calculating hasNext). */
     totalSegments: number;
+    /** Set of segment IDs currently being re-aligned. */
+    aligningSegmentIds: Set<string>;
 }
 
 /**

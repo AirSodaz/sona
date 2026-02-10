@@ -75,6 +75,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             offlineModelPath: newConfig.offlineModelPath,
             punctuationModelPath: newConfig.punctuationModelPath,
             vadModelPath: newConfig.vadModelPath,
+            ctcModelPath: newConfig.ctcModelPath,
             vadBufferSize: newConfig.vadBufferSize,
             enabledITNModels: newConfig.enabledITNModels,
             itnRulesOrder: newConfig.itnRulesOrder,
@@ -90,6 +91,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
     const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
     const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
+    const setCtcModelPath = (path: string) => updateConfig({ ctcModelPath: path });
     const setVadBufferSize = (size: number) => updateConfig({ vadBufferSize: size });
 
     const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
@@ -125,7 +127,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const setFont = (font: string) => updateConfig({ font: font as any });
 
 
-    function getBrowseTitle(type: 'streaming' | 'offline' | 'punctuation' | 'vad'): string {
+    function getBrowseTitle(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
             case 'streaming':
                 return t('settings.streaming_path_label');
@@ -133,12 +135,14 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
                 return t('settings.offline_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
+            case 'ctc':
+                return t('settings.ctc_path_label');
             default:
                 return 'Select Punctuation Model Path';
         }
     }
 
-    async function handleBrowse(type: 'streaming' | 'offline' | 'punctuation' | 'vad') {
+    async function handleBrowse(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') {
         try {
             const selected = await open({
                 directory: true,
@@ -155,6 +159,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
                         setOfflineModelPath(path);
                     } else if (type === 'vad') {
                         setVadModelPath(path);
+                    } else if (type === 'ctc') {
+                        setCtcModelPath(path);
                     } else {
                         setPunctuationModelPath(path);
                     }
@@ -177,13 +183,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         }
     }
 
-    function setModelPathByType(type: 'streaming' | 'offline' | 'punctuation' | 'vad', path: string) {
+    function setModelPathByType(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
         if (type === 'streaming') {
             setStreamingModelPath(path);
         } else if (type === 'offline') {
             setOfflineModelPath(path);
         } else if (type === 'vad') {
             setVadModelPath(path);
+        } else if (type === 'ctc') {
+            setCtcModelPath(path);
         } else {
             setPunctuationModelPath(path);
         }
@@ -302,6 +310,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             if (config.vadModelPath === deletedPath) {
                 setVadModelPath('');
             }
+            if (config.ctcModelPath === deletedPath) {
+                setCtcModelPath('');
+            }
         } catch (error: any) {
             console.error('Delete failed:', error);
             await alert(`Failed to delete model: ${error.message}`, {
@@ -326,6 +337,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         if (model.type === 'vad') {
             return (config.vadModelPath || '').includes(model.filename || model.id);
         }
+        if (model.type === 'ctc') {
+            return (config.ctcModelPath || '').includes(model.filename || model.id);
+        }
         return false;
     }
 
@@ -349,6 +363,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         setPunctuationModelPath,
         vadModelPath: config.vadModelPath || '',
         setVadModelPath,
+        ctcModelPath: config.ctcModelPath || '',
+        setCtcModelPath,
 
         vadBufferSize: config.vadBufferSize || 5,
         setVadBufferSize,

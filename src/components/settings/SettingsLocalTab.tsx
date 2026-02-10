@@ -12,7 +12,9 @@ interface SettingsLocalTabProps {
     setPunctuationModelPath: (path: string) => void;
     vadModelPath: string;
     setVadModelPath: (path: string) => void;
-    handleBrowse: (type: 'streaming' | 'offline' | 'punctuation' | 'vad') => Promise<void>;
+    ctcModelPath: string;
+    setCtcModelPath: (path: string) => void;
+    handleBrowse: (type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
 
     // ITN Props
     itnRulesOrder: string[];
@@ -37,6 +39,8 @@ export function SettingsLocalTab({
     setPunctuationModelPath,
     vadModelPath,
     setVadModelPath,
+    ctcModelPath,
+    setCtcModelPath,
     handleBrowse,
 
     itnRulesOrder,
@@ -143,6 +147,29 @@ export function SettingsLocalTab({
                     <button
                         className="btn btn-secondary"
                         onClick={() => handleBrowse('vad')}
+                        aria-label={t('settings.browse')}
+                    >
+                        <FolderIcon />
+                    </button>
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 16 }}>
+                <label htmlFor="settings-ctc-path" className="settings-label">{t('settings.ctc_path_label', { defaultValue: 'CTC Model Path' })}</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                        id="settings-ctc-path"
+                        type="text"
+                        title={ctcModelPath}
+                        className="settings-input"
+                        value={ctcModelPath}
+                        onChange={(e) => setCtcModelPath(e.target.value)}
+                        placeholder={t('settings.path_placeholder')}
+                        style={{ flex: 1 }}
+                    />
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => handleBrowse('ctc')}
                         aria-label={t('settings.browse')}
                     >
                         <FolderIcon />

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { BatchImport } from '../BatchImport';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
@@ -34,6 +34,8 @@ vi.mock('../../services/transcriptionService', () => ({
         setPunctuationModelPath: vi.fn(),
         setVadModelPath: vi.fn(),
         setVadBufferSize: vi.fn(),
+        setCtcModelPath: vi.fn(),
+        setSourceFilePath: vi.fn(), // Added mock
         transcribeFile: vi.fn(),
     }
 }));
@@ -42,6 +44,12 @@ vi.mock('../../services/modelService', () => ({
     modelService: {
         isITNModelInstalled: vi.fn().mockResolvedValue(true),
         getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/itn/path']),
+    }
+}));
+
+vi.mock('../../services/historyService', () => ({
+    historyService: {
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id' }),
     }
 }));
 
@@ -108,12 +116,14 @@ describe('BatchImport Integration', () => {
 
         const { addFiles } = useBatchQueueStore.getState();
 
-        await waitFor(() => {
+        await act(async () => {
             addFiles(['/path/to/test.wav']);
         });
 
         // 1. Check if sidebar appears
-        expect(screen.getByText('Queue (1)')).toBeDefined();
+        await waitFor(() => {
+            expect(screen.getByText('Queue (1)')).toBeDefined();
+        });
 
         // 2. Check if processing view appears
         await waitFor(() => {
@@ -137,7 +147,10 @@ describe('BatchImport Integration', () => {
          render(<BatchImport />);
 
          const { addFiles } = useBatchQueueStore.getState();
-         addFiles(['/path/to/fail.wav']);
+
+         await act(async () => {
+            addFiles(['/path/to/fail.wav']);
+         });
 
          await waitFor(() => {
              expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
@@ -151,7 +164,10 @@ describe('BatchImport Integration', () => {
     it('can remove items from queue', async () => {
         render(<BatchImport />);
         const { addFiles } = useBatchQueueStore.getState();
-        addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
+
+        await act(async () => {
+            addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
+        });
 
         // Wait for list
         const sidebar = await screen.findByRole('list', { name: /Queue/ });
@@ -173,7 +189,10 @@ describe('BatchImport Integration', () => {
     it('allows clearing the queue', async () => {
         render(<BatchImport />);
         const { addFiles } = useBatchQueueStore.getState();
-        addFiles(['/path/to/file1.wav']);
+
+        await act(async () => {
+            addFiles(['/path/to/file1.wav']);
+        });
 
         await waitFor(() => {
             expect(screen.getByText('Queue (1)')).toBeDefined();

@@ -19,6 +19,7 @@ vi.mock('../services/transcriptionService', () => ({
         setPunctuationModelPath: vi.fn(),
         setVadModelPath: vi.fn(),
         setVadBufferSize: vi.fn(),
+        setSourceFilePath: vi.fn(), // Added mock
         transcribeFile: vi.fn()
     }
 }));

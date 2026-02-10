@@ -92,7 +92,9 @@
         "delete_confirm_message": "Are you sure you want to delete this segment?",
         "delete_confirm_title": "Confirm Delete",
         "merge_confirm_message": "Merge this segment with the next one?",
-        "merge_confirm_title": "Confirm Merge"
+        "merge_confirm_title": "Confirm Merge",
+        "aligning": "Re-aligning tokens...",
+        "alignment_failed": "Token alignment failed"
     },
     "export": {
         "button": "Export",
@@ -157,6 +159,8 @@
         "vad_models": "VAD Models",
         "vad_path_label": "VAD Model Path",
         "vad_buffer_size": "VAD Buffer Size (s)",
-        "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences."
+        "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
+        "ctc_models": "CTC Models",
+        "ctc_path_label": "CTC Model Path"
     }
 }

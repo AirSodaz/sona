@@ -25,4 +25,6 @@ export interface BatchQueueItem {
     errorMessage?: string;
     /** Asset URL for audio playback. */
     audioUrl?: string;
+    /** ID of the saved history item for this queue item. */
+    historyId?: string;
 }

@@ -148,6 +148,15 @@ function parseArgs() {
             case '--language':
                 options.language = args[++i];
                 break;
+            case '--ctc-model':
+                options.ctcModel = args[++i];
+                break;
+            case '--start-time':
+                options.startTime = parseFloat(args[++i]);
+                break;
+            case '--end-time':
+                options.endTime = parseFloat(args[++i]);
+                break;
         }
     }
 
@@ -856,6 +865,106 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
     }
 }
 
+/**
+ * Create a CTC OfflineRecognizer for forced alignment.
+ * @param {string} ctcModelPath - Path to the CTC model directory
+ * @param {number} numThreads - Number of threads to use
+ * @returns {object} The OfflineRecognizer instance
+ */
+async function createCtcRecognizer(ctcModelPath, numThreads) {
+    console.error(`[Sidecar] Initializing CTC Recognizer: ${ctcModelPath}`);
+    const sherpaModule = await import('sherpa-onnx-node');
+    const sherpa = sherpaModule.default || sherpaModule;
+
+    const files = readdirSync(ctcModelPath);
+    const tokens = files.find(f => f === 'tokens.txt');
+    if (!tokens) throw new Error('CTC model directory missing tokens.txt');
+
+    // Find model file, prefer int8
+    const onnxFiles = files.filter(f => f.endsWith('.onnx'));
+    if (onnxFiles.length === 0) throw new Error('CTC model directory has no .onnx files');
+    const int8 = onnxFiles.find(f => f.includes('int8'));
+    const modelFile = int8 || onnxFiles[0];
+
+    const config = {
+        featConfig: { sampleRate: 16000, featureDim: 80 },
+        modelConfig: {
+            tokens: join(ctcModelPath, tokens),
+            numThreads,
+            provider: 'cpu',
+            debug: false,
+            wenetCtc: {
+                model: join(ctcModelPath, modelFile),
+            },
+        },
+        decodingMethod: 'greedy_search',
+        maxActivePaths: 4,
+    };
+
+    return new sherpa.OfflineRecognizer(config);
+}
+
+/**
+ * Extract an audio slice via ffmpeg and run CTC recognition for alignment.
+ * Outputs JSON with tokens, timestamps, durations, and ctcText to stdout.
+ * @param {string} ctcModelPath - Path to the CTC model directory
+ * @param {string} filePath - Path to the audio file
+ * @param {number} startTime - Start time in seconds
+ * @param {number} endTime - End time in seconds
+ * @param {string} ffmpegPath - Path to ffmpeg binary
+ * @param {number} sampleRate - Sample rate (default 16000)
+ * @param {number} numThreads - Number of threads
+ */
+async function processAlign(ctcModelPath, filePath, startTime, endTime, ffmpegPath, sampleRate, numThreads) {
+    if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+
+    const duration = endTime - startTime;
+    if (duration <= 0) throw new Error('Invalid time range: end must be after start');
+
+    // Extract audio slice via ffmpeg
+    const pcmData = await new Promise((resolve, reject) => {
+        const chunks = [];
+        const ffmpeg = spawn(ffmpegPath, [
+            '-ss', startTime.toString(),
+            '-t', duration.toString(),
+            '-i', filePath,
+            '-f', 's16le', '-acodec', 'pcm_s16le', '-ar', sampleRate.toString(), '-ac', '1', '-'
+        ]);
+
+        ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
+        ffmpeg.stderr.on('data', () => { });
+        ffmpeg.on('close', (code) => {
+            if (code === 0) resolve(Buffer.concat(chunks));
+            else reject(new Error(`FFmpeg exited with code ${code}`));
+        });
+        ffmpeg.on('error', reject);
+    });
+
+    const samples = pcmInt16ToFloat32(pcmData);
+    if (samples.length === 0) throw new Error('No audio samples extracted');
+
+    // Run CTC recognition
+    const recognizer = await createCtcRecognizer(ctcModelPath, numThreads);
+    const stream = recognizer.createStream();
+    stream.acceptWaveform({ samples, sampleRate });
+    recognizer.decode(stream);
+    const result = recognizer.getResult(stream);
+
+    const tokens = result.tokens || [];
+    const rawTimestamps = result.timestamps || [];
+
+    // Offset timestamps by startTime to produce absolute timestamps
+    const timestamps = rawTimestamps.map(t => t + startTime);
+    const durations = synthesizeDurations(timestamps, endTime);
+
+    console.log(JSON.stringify({
+        tokens,
+        timestamps,
+        durations,
+        ctcText: result.text || '',
+    }));
+}
+
 // Get number of physical cores
 function getPhysicalCores() {
     const platform = process.platform;
@@ -994,6 +1103,23 @@ async function main() {
         }
     }
 
+
+    // Align mode: uses CTC model, does not require --model-path
+    if (options.mode === 'align') {
+        if (!options.file || options.startTime == null || options.endTime == null || !options.ctcModel) {
+            console.error(JSON.stringify({ error: '--file, --start-time, --end-time, and --ctc-model are required for align mode' }));
+            process.exit(1);
+        }
+        try {
+            const ffmpegPath = await getFFmpegPath();
+            const numThreads = calculateNumThreads(options.numThreads);
+            await processAlign(options.ctcModel, options.file, options.startTime, options.endTime, ffmpegPath, options.sampleRate, numThreads);
+            process.exit(0);
+        } catch (e) {
+            console.error(JSON.stringify({ error: e.message || String(e) }));
+            process.exit(1);
+        }
+    }
 
     if (!options.modelPath) {
         console.error(JSON.stringify({ error: 'Model path is required.' }));

@@ -13,6 +13,7 @@ vi.mock('../../services/transcriptionService', () => ({
         setEnableITN: vi.fn(),
         setITNModelPaths: vi.fn(),
         setPunctuationModelPath: vi.fn(),
+        setCtcModelPath: vi.fn(),
     }
 }));
 

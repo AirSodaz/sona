@@ -82,7 +82,8 @@ export function HistoryView() {
         try {
             // Load Transcript
             const segments = await historyService.loadTranscript(item.transcriptPath);
-            setSegments(segments);
+            // Use atomic load to prevent auto-save from seeing mixed state (new segments + old ID)
+            useTranscriptStore.getState().loadTranscript(segments, item.id);
 
             // Load Audio
             const url = await historyService.getAudioUrl(item.audioPath);

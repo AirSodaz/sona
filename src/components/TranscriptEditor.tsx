@@ -5,6 +5,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { transcriptionService } from '../services/transcriptionService';
 import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
@@ -60,6 +61,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         editingSegmentId: useTranscriptStore.getState().editingSegmentId,
         currentTime: useTranscriptStore.getState().currentTime,
         totalSegments: useTranscriptStore.getState().segments.length,
+        aligningSegmentIds: useTranscriptStore.getState().aligningSegmentIds,
     })), []);
 
     // Compute new segment IDs synchronously during render
@@ -114,7 +116,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         });
     }, [newSegmentIds, segments.length, uiStore]);
 
-    // Sync activeSegmentId and editingSegmentId from global store to local store
+    // Sync activeSegmentId, editingSegmentId, and aligningSegmentIds from global store to local store
     // This avoids this component re-rendering when they change
     useEffect(() => {
         return useTranscriptStore.subscribe((state, prevState) => {
@@ -134,6 +136,10 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
                 updates.currentTime = state.currentTime;
                 hasUpdates = true;
             }
+            if (state.aligningSegmentIds !== prevState.aligningSegmentIds) {
+                updates.aligningSegmentIds = state.aligningSegmentIds;
+                hasUpdates = true;
+            }
 
             if (hasUpdates) {
                 uiStore.setState(updates);
@@ -144,6 +150,61 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     // Keep a ref to segments to make callbacks stable
     const segmentsRef = useRef(segments);
     segmentsRef.current = segments;
+
+    // Debounced alignment timers per segment
+    const alignTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    // Cleanup alignment timers on unmount
+    useEffect(() => {
+        return () => {
+            for (const timer of alignTimersRef.current.values()) {
+                clearTimeout(timer);
+            }
+            alignTimersRef.current.clear();
+        };
+    }, []);
+
+    /**
+     * Requests CTC re-alignment for a segment after a debounce period.
+     * Spawns the sidecar to produce fresh tokens/timestamps/durations.
+     */
+    const requestAlignment = useCallback((segmentId: string) => {
+        // Cancel any pending alignment for this segment
+        const existing = alignTimersRef.current.get(segmentId);
+        if (existing) {
+            clearTimeout(existing);
+        }
+
+        const timer = setTimeout(async () => {
+            alignTimersRef.current.delete(segmentId);
+
+            // Re-read segment from store (may have been edited again or deleted)
+            const segment = useTranscriptStore.getState().segments.find(s => s.id === segmentId);
+            if (!segment) return;
+
+            const store = useTranscriptStore.getState();
+            store.addAligningSegmentId(segmentId);
+
+            try {
+                const result = await transcriptionService.alignSegment(segment);
+                // Verify segment still exists before applying
+                const current = useTranscriptStore.getState().segments.find(s => s.id === segmentId);
+                if (current && result) {
+                    useTranscriptStore.getState().updateSegment(segmentId, {
+                        tokens: result.tokens,
+                        timestamps: result.timestamps,
+                        durations: result.durations,
+                    });
+                }
+            } catch (error) {
+                console.error('[TranscriptEditor] Alignment failed:', error);
+            } finally {
+                useTranscriptStore.getState().removeAligningSegmentId(segmentId);
+            }
+        }, 1500);
+
+        alignTimersRef.current.set(segmentId, timer);
+    }, []);
 
     // Auto-scroll to active segment during playback
     useAutoScroll(virtuosoRef);
@@ -157,9 +218,21 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     }, [setEditingSegmentId]);
 
     const handleSave = useCallback((id: string, text: string) => {
+        // Check if text actually changed and alignment is possible
+        const segment = segmentsRef.current.find(s => s.id === id);
+        const textChanged = segment && segment.text !== text;
+
         updateSegment(id, { text });
         setEditingSegmentId(null);
-    }, [updateSegment, setEditingSegmentId]);
+
+        // Trigger re-alignment if text changed and segment has token data
+        if (textChanged && segment.tokens && segment.tokens.length > 0) {
+            const config = useTranscriptStore.getState().config;
+            if (config.ctcModelPath) {
+                requestAlignment(id);
+            }
+        }
+    }, [updateSegment, setEditingSegmentId, requestAlignment]);
 
     const handleDelete = useCallback(async (id: string) => {
         const confirmed = await confirm(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {

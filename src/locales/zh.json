@@ -92,7 +92,9 @@
         "delete_confirm_message": "您确定要删除此段落吗？",
         "delete_confirm_title": "确认删除",
         "merge_confirm_message": "确定要将此段落与下一段合并吗？",
-        "merge_confirm_title": "确认合并"
+        "merge_confirm_title": "确认合并",
+        "aligning": "正在重新对齐...",
+        "alignment_failed": "对齐失败"
     },
     "export": {
         "button": "导出",
@@ -157,6 +159,8 @@
         "vad_path_label": "VAD 模型路径",
         "toggle_model": "切换 {{name}}",
         "vad_buffer_size": "VAD 缓冲大小 (秒)",
-        "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。"
+        "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。",
+        "ctc_models": "CTC 模型",
+        "ctc_path_label": "CTC 模型路径"
     }
 }

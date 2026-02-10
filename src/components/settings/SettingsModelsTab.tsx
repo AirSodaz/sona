@@ -5,7 +5,7 @@ import { ModelCard } from './ModelCard';
 
 interface ModelSectionProps {
     title: string;
-    type: 'streaming' | 'offline' | 'punctuation' | 'vad';
+    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onLoad: (model: ModelInfo) => void;
@@ -99,6 +99,7 @@ export function SettingsModelsTab({
             <ModelSection title={t('settings.offline_models')} type="offline" {...sectionProps} />
             <ModelSection title={t('settings.punctuation_models')} type="punctuation" {...sectionProps} />
             <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />
+            <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
