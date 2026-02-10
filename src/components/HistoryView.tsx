@@ -21,7 +21,6 @@ export function HistoryView() {
     const deleteItem = useHistoryStore((state) => state.deleteItem);
 
     // Actions
-    const setSegments = useTranscriptStore((state) => state.setSegments);
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
     const confirm = useDialogStore((state) => state.confirm);
 

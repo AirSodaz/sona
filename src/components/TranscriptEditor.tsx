@@ -59,7 +59,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         newSegmentIds: new Set(),
         activeSegmentId: useTranscriptStore.getState().activeSegmentId,
         editingSegmentId: useTranscriptStore.getState().editingSegmentId,
-        currentTime: useTranscriptStore.getState().currentTime,
         totalSegments: useTranscriptStore.getState().segments.length,
         aligningSegmentIds: useTranscriptStore.getState().aligningSegmentIds,
     })), []);
@@ -129,11 +128,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
             }
             if (state.editingSegmentId !== prevState.editingSegmentId) {
                 updates.editingSegmentId = state.editingSegmentId;
-                hasUpdates = true;
-            }
-            // Only update current time if specific segment is active to avoid unnecessary renders
-            if (state.currentTime !== prevState.currentTime) {
-                updates.currentTime = state.currentTime;
                 hasUpdates = true;
             }
             if (state.aligningSegmentIds !== prevState.aligningSegmentIds) {
