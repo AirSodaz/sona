@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+// ... existing imports ...
 import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
@@ -75,11 +78,11 @@ function App(): React.JSX.Element {
 
           {/* Right Panel - Editor */}
           <div className="panel panel-right">
-            <div className="panel-header">
-              <h2>{t('panel.transcript')}</h2>
-            </div>
+
             <div className="panel-content">
-              <TranscriptEditor />
+              <ErrorBoundary>
+                <TranscriptEditor />
+              </ErrorBoundary>
             </div>
             {audioUrl && <AudioPlayer />}
           </div>

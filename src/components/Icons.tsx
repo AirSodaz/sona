@@ -152,6 +152,23 @@ export function ChevronDownIcon(props?: React.SVGProps<SVGSVGElement>): React.JS
     );
 }
 
+export function ChevronUpIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" {...props}>
+            <polyline points="18,15 12,9 6,15" />
+        </svg>
+    );
+}
+
+export function CloseIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" {...props}>
+            <line x1="18" x2="6" y1="6" y2="18" />
+            <line x1="6" x2="18" y1="6" y2="18" />
+        </svg>
+    );
+}
+
 export function FileTextIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
     return (
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" {...props}>
@@ -260,22 +277,22 @@ export function HistoryIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.El
 
 /** Icon for opening settings. */
 export function SettingsIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+    );
 }
 
 /** Icon for the application logo. */
 export function WaveformIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M2 12h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2z" />
-      <path d="M8 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8z" />
-      <path d="M14 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2z" />
-      <path d="M20 10h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2z" />
-    </svg>
-  );
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M2 12h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2z" />
+            <path d="M8 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8z" />
+            <path d="M14 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2z" />
+            <path d="M20 10h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2z" />
+        </svg>
+    );
 }

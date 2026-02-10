@@ -7,6 +7,7 @@ import { EditIcon, TrashIcon, MergeIcon } from '../Icons';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
+import { useSearchStore } from '../../stores/searchStore';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -47,6 +48,23 @@ function SegmentItemComponent({
 
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
+
+    // Search matches
+    // Optimize: Select only what we need to avoid re-renders on every store change
+    const searchMatches = useSearchStore(useCallback(state => state.matches, []));
+    const currentMatchIndex = useSearchStore(useCallback(state => state.currentMatchIndex, []));
+    const setActiveMatch = useSearchStore(useCallback(state => state.setActiveMatch, []));
+
+    // Memoize the derived data locally
+    const { matches, activeMatch } = React.useMemo(() => {
+        // Map to include global index before filtering so we can distinguish them later
+        const indexedMatches = searchMatches.map((m, i) => ({ ...m, globalIndex: i }));
+        const segMatches = indexedMatches.filter(m => m.segmentId === segment.id);
+        const currentActive = indexedMatches[currentMatchIndex];
+        const activeMatch = (currentActive && currentActive.segmentId === segment.id) ? currentActive : null;
+
+        return { matches: segMatches, activeMatch };
+    }, [searchMatches, currentMatchIndex, segment.id]);
 
     const [editText, setEditText] = useState(segment.text);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -130,6 +148,9 @@ function SegmentItemComponent({
                         segment={segment}
                         isActive={isActive}
                         onSeek={onSeek}
+                        matches={matches}
+                        activeMatch={activeMatch}
+                        onMatchClick={setActiveMatch}
                     />
                 )}
                 {isAligning && (

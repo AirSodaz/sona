@@ -10,6 +10,8 @@ import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from './transcript/TranscriptUIContext';
+import { SearchUI } from './SearchUI';
+import { useSearchStore } from '../stores/searchStore';
 
 
 /** Context passed to virtualized list items via Virtuoso. */
@@ -283,6 +285,42 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         />
     ), []);
 
+    // Search integration
+    const {
+        isOpen: isSearchOpen,
+        open: openSearch,
+        matches: searchMatches,
+        currentMatchIndex: searchMatchIndex
+    } = useSearchStore();
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                openSearch();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [openSearch]);
+
+    // Scroll to active match
+    useEffect(() => {
+        if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
+            const match = searchMatches[searchMatchIndex];
+            const segmentIndex = segmentsRef.current.findIndex(s => s.id === match.segmentId);
+
+            if (segmentIndex !== -1 && virtuosoRef.current) {
+                virtuosoRef.current.scrollToIndex({
+                    index: segmentIndex,
+                    align: 'center',
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [isSearchOpen, searchMatchIndex, searchMatches]);
+
     if (segments.length === 0) {
         return (
             <div className="empty-state">
@@ -301,8 +339,13 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
                     data={segments}
                     context={contextValue}
                     itemContent={itemContent}
+                    components={{
+                        Header: () => <div style={{ height: '60px' }} />,
+                        Footer: () => <div style={{ height: '50vh' }} />
+                    }}
                 />
             </TranscriptUIContext.Provider>
+            <SearchUI />
         </div>
     );
 }

@@ -162,5 +162,11 @@
         "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
         "ctc_models": "CTC Models",
         "ctc_path_label": "CTC Model Path"
+    },
+    "search": {
+        "placeholder": "Find in transcript...",
+        "previous": "Previous match",
+        "next": "Next match",
+        "close": "Close"
     }
 }

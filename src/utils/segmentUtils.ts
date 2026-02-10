@@ -456,17 +456,21 @@ export function alignTokensToText(
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
         if (!word.trim()) {
-            result.push({ text: word, timestamp: rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] });
+            const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
+            result.push({ text: word, timestamp: ts });
             continue;
         }
 
         const normWord = normalize(word);
         if (!normWord) {
-            result.push({ text: word, timestamp: rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] });
+            const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
+            result.push({ text: word, timestamp: ts });
             continue;
         }
 
-        const startTimestamp = rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)];
+        const startTimestamp = rawTimestamps.length > 0
+            ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)]
+            : 0;
         result.push({ text: word, timestamp: startTimestamp });
 
         // Try to match `normWord` against next N tokens.

@@ -162,5 +162,11 @@
         "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。",
         "ctc_models": "CTC 模型",
         "ctc_path_label": "CTC 模型路径"
+    },
+    "search": {
+        "placeholder": "在转录文本中查找...",
+        "previous": "上一个匹配项",
+        "next": "下一个匹配项",
+        "close": "关闭"
     }
 }
