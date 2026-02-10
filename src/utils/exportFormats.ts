@@ -100,7 +100,7 @@ export function toTXT(segments: TranscriptSegment[]): string {
  */
 export function toVTT(segments: TranscriptSegment[]): string {
     const header = 'WEBVTT\n\n';
-    const content = formatSegments(segments, '.', (index, start, end, text) => {
+    const content = formatSegments(segments, '.', (_, start, end, text) => {
         return `${start} --> ${end}\n${text}\n`;
     });
 
