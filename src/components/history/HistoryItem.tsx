@@ -4,11 +4,16 @@ import { Calendar, Clock } from 'lucide-react';
 import { HistoryItem as HistoryItemType } from '../../types/history';
 import { TrashIcon, MicIcon, FileTextIcon } from '../Icons';
 
+import { Checkbox } from '../Checkbox';
+
 interface HistoryItemProps {
     item: HistoryItemType;
     onLoad: (item: HistoryItemType) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
     searchQuery?: string;
+    isSelectionMode?: boolean;
+    isSelected?: boolean;
+    onToggleSelection?: (id: string) => void;
 }
 
 /**
@@ -42,20 +47,53 @@ function formatDate(timestamp: number): string {
     return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
 }
 
-const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: HistoryItemProps) => {
+const HistoryItemComponent = ({
+    item,
+    onLoad,
+    onDelete,
+    searchQuery = '',
+    isSelectionMode = false,
+    isSelected = false,
+    onToggleSelection
+}: HistoryItemProps) => {
     const { t } = useTranslation();
+
+    const handleClick = (e: React.MouseEvent) => {
+        if (isSelectionMode && onToggleSelection) {
+            e.preventDefault();
+            onToggleSelection(item.id);
+        } else {
+            onLoad(item);
+        }
+    };
 
     return (
         <div
-            className="history-item"
-            style={{ position: 'relative' }}
+            className={`history-item ${isSelected ? 'selected' : ''}`}
+            style={{
+                position: 'relative',
+                display: 'flex',
+                gap: 'var(--spacing-md)',
+                alignItems: 'flex-start',
+                paddingLeft: isSelectionMode ? 'var(--spacing-sm)' : undefined
+            }}
+            onClick={isSelectionMode ? handleClick : undefined}
         >
+            {isSelectionMode && (
+                <div style={{ paddingTop: 'var(--spacing-sm)' }}>
+                    <Checkbox
+                        checked={isSelected}
+                        onChange={() => onToggleSelection?.(item.id)}
+                    />
+                </div>
+            )}
+
             <button
                 className="history-item-content"
-                onClick={() => onLoad(item)}
+                onClick={handleClick}
                 aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
                 style={{
-                    width: '100%',
+                    flex: 1,
                     textAlign: 'left',
                     background: 'transparent',
                     border: 'none',
@@ -68,7 +106,7 @@ const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: Hist
                     color: 'inherit'
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: isSelectionMode ? 0 : '40px' }}>
                     {item.type === 'batch' ? (
                         <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
                             <FileTextIcon />
@@ -108,20 +146,22 @@ const HistoryItemComponent = ({ item, onLoad, onDelete, searchQuery = '' }: Hist
                 </p>
             </button>
 
-            <button
-                className="btn btn-icon delete-btn"
-                onClick={(e) => onDelete(e, item.id)}
-                aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                data-tooltip-pos="left"
-                style={{
-                    position: 'absolute',
-                    top: 'var(--spacing-md)',
-                    right: 'var(--spacing-md)'
-                }}
-            >
-                <TrashIcon />
-            </button>
+            {!isSelectionMode && (
+                <button
+                    className="btn btn-icon delete-btn"
+                    onClick={(e) => onDelete(e, item.id)}
+                    aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
+                    data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+                    data-tooltip-pos="left"
+                    style={{
+                        position: 'absolute',
+                        top: 'var(--spacing-md)',
+                        right: 'var(--spacing-md)'
+                    }}
+                >
+                    <TrashIcon />
+                </button>
+            )}
         </div>
     );
 };

@@ -11,6 +11,7 @@ interface HistoryState {
     loadItems: () => Promise<void>;
     addItem: (item: HistoryItem) => void;
     deleteItem: (id: string) => Promise<void>;
+    deleteItems: (ids: string[]) => Promise<void>;
     refresh: () => Promise<void>;
     /**
      * Updates metadata fields for a specific history item in the in-memory list.
@@ -58,6 +59,20 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             console.error('Failed to delete history item:', err);
             // Revert
             set({ items: originalItems, error: 'Failed to delete item' });
+        }
+    },
+
+    deleteItems: async (ids) => {
+        const originalItems = get().items;
+        set((state) => ({
+            items: state.items.filter((i) => !ids.includes(i.id))
+        }));
+
+        try {
+            await historyService.deleteRecordings(ids);
+        } catch (err: any) {
+            console.error('Failed to delete history items:', err);
+            set({ items: originalItems, error: 'Failed to delete items' });
         }
     },
 

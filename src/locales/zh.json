@@ -14,7 +14,10 @@
         "close": "关闭",
         "confirm": "确认",
         "ok": "确定",
-        "skip_to_content": "跳转到主要内容"
+        "skip_to_content": "跳转到主要内容",
+        "select": "选择",
+        "select_all": "全选",
+        "deselect_all": "取消全选"
     },
     "header": {
         "settings": "设置"
@@ -120,7 +123,9 @@
         "date_week": "最近 7 天",
         "date_month": "最近 30 天",
         "no_results": "未找到相关结果",
-        "delete_title": "删除历史记录"
+        "delete_title": "删除历史记录",
+        "selected_count": "已选择 {{count}} 项",
+        "delete_bulk_confirm": "您确定要删除这 {{count}} 个项目吗？"
     },
     "settings": {
         "title": "设置",

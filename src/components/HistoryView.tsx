@@ -19,6 +19,7 @@ export function HistoryView() {
     const items = useHistoryStore((state) => state.items);
     const isLoading = useHistoryStore((state) => state.isLoading);
     const deleteItem = useHistoryStore((state) => state.deleteItem);
+    const deleteItems = useHistoryStore((state) => state.deleteItems);
 
     // Actions
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
@@ -28,6 +29,8 @@ export function HistoryView() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<FilterType>('all');
     const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     useEffect(() => {
         useHistoryStore.getState().loadItems();
@@ -107,52 +110,129 @@ export function HistoryView() {
         }
     };
 
+    // Selection Logic
+    const toggleSelectionMode = () => {
+        setIsSelectionMode(!isSelectionMode);
+        setSelectedIds([]);
+    };
+
+    const toggleSelection = (id: string) => {
+        setSelectedIds(prev =>
+            prev.includes(id)
+                ? prev.filter(i => i !== id)
+                : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedIds.length === filteredItems.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(filteredItems.map(i => i.id));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+
+        const confirmed = await confirm(
+            t('history.delete_bulk_confirm', { count: selectedIds.length, defaultValue: `Are you sure you want to delete ${selectedIds.length} items?` }),
+            {
+                title: t('history.delete_title', { defaultValue: 'Delete History' }),
+                confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+                variant: 'error'
+            }
+        );
+
+        if (confirmed) {
+            await deleteItems(selectedIds);
+            setSelectedIds([]);
+            setIsSelectionMode(false);
+        }
+    };
+
     return (
         <div className="panel-container" style={{ height: '100%', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
             {/* Search and Filters Header */}
             <div style={{ padding: 'var(--spacing-md)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                    {/* Search Bar */}
-                    <div style={{ position: 'relative' }}>
-                        <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
-                        <input
-                            type="text"
-                            placeholder={t('history.search_placeholder', { defaultValue: 'Search history...' })}
-                            aria-label={t('history.search_placeholder', { defaultValue: 'Search history...' })}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ paddingLeft: '32px', width: '100%' }}
-                        />
+                    {/* Search Bar & Actions */}
+                    <div style={{ display: 'flex', gap: 'var(--spacing-md)', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                            <input
+                                type="text"
+                                placeholder={t('history.search_placeholder', { defaultValue: 'Search history...' })}
+                                aria-label={t('history.search_placeholder', { defaultValue: 'Search history...' })}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{ paddingLeft: '32px', width: '100%' }}
+                            />
+                        </div>
+                        <button
+                            className={`btn ${isSelectionMode ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={toggleSelectionMode}
+                            style={{ whiteSpace: 'nowrap' }}
+                        >
+                            {isSelectionMode ? t('common.cancel', { defaultValue: 'Cancel' }) : t('common.select', { defaultValue: 'Select' })}
+                        </button>
                     </div>
 
-                    {/* Filters */}
-                    <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-                        <div style={{ flex: 1 }}>
-                            <Dropdown
-                                value={filterType}
-                                onChange={(val) => setFilterType(val as FilterType)}
-                                options={[
-                                    { value: 'all', label: t('history.filter_all', { defaultValue: 'All Types' }) },
-                                    { value: 'recording', label: t('history.filter_recordings', { defaultValue: 'Recordings' }) },
-                                    { value: 'batch', label: t('history.filter_batch', { defaultValue: 'Batch Imports' }) }
-                                ]}
-                                style={{ width: '100%' }}
-                            />
+                    {/* Filters or Selection Actions */}
+                    {!isSelectionMode ? (
+                        <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
+                            <div style={{ flex: 1 }}>
+                                <Dropdown
+                                    value={filterType}
+                                    onChange={(val) => setFilterType(val as FilterType)}
+                                    options={[
+                                        { value: 'all', label: t('history.filter_all', { defaultValue: 'All Types' }) },
+                                        { value: 'recording', label: t('history.filter_recordings', { defaultValue: 'Recordings' }) },
+                                        { value: 'batch', label: t('history.filter_batch', { defaultValue: 'Batch Imports' }) }
+                                    ]}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <Dropdown
+                                    value={dateFilter}
+                                    onChange={(val) => setDateFilter(val as DateFilter)}
+                                    options={[
+                                        { value: 'all', label: t('history.date_all', { defaultValue: 'Any Time' }) },
+                                        { value: 'today', label: t('history.date_today', { defaultValue: 'Today' }) },
+                                        { value: 'week', label: t('history.date_week', { defaultValue: 'Last 7 Days' }) },
+                                        { value: 'month', label: t('history.date_month', { defaultValue: 'Last 30 Days' }) }
+                                    ]}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <Dropdown
-                                value={dateFilter}
-                                onChange={(val) => setDateFilter(val as DateFilter)}
-                                options={[
-                                    { value: 'all', label: t('history.date_all', { defaultValue: 'Any Time' }) },
-                                    { value: 'today', label: t('history.date_today', { defaultValue: 'Today' }) },
-                                    { value: 'week', label: t('history.date_week', { defaultValue: 'Last 7 Days' }) },
-                                    { value: 'month', label: t('history.date_month', { defaultValue: 'Last 30 Days' }) }
-                                ]}
-                                style={{ width: '100%' }}
-                            />
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-bg-elevated)', padding: 'var(--spacing-sm)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleSelectAll}
+                                    style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                                >
+                                    {selectedIds.length === filteredItems.length ? t('common.deselect_all', { defaultValue: 'Deselect All' }) : t('common.select_all', { defaultValue: 'Select All' })}
+                                </button>
+                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                                    {t('history.selected_count', { count: selectedIds.length, defaultValue: `${selectedIds.length} selected` })}
+                                </span>
+                            </div>
+
+                            {selectedIds.length > 0 && (
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={handleBulkDelete}
+                                    style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                                >
+                                    {t('common.delete', { defaultValue: 'Delete' })}
+                                </button>
+                            )}
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
@@ -176,6 +256,9 @@ export function HistoryView() {
                                 onLoad={handleLoad}
                                 onDelete={handleDelete}
                                 searchQuery={searchQuery}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedIds.includes(item.id)}
+                                onToggleSelection={toggleSelection}
                             />
                         )}
                         components={{

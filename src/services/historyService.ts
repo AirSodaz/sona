@@ -210,6 +210,40 @@ export const historyService = {
         }
     },
 
+    async deleteRecordings(ids: string[]): Promise<void> {
+        try {
+            const items = await this.getAll();
+            const itemsToDelete = items.filter(item => ids.includes(item.id));
+
+            for (const item of itemsToDelete) {
+                const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
+                const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
+
+                try {
+                    if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
+                        await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
+                    }
+                    if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
+                        await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
+                    }
+                } catch (e) {
+                    console.error(`Failed to delete files for item ${item.id}`, e);
+                    // Continue deleting others even if one fails
+                }
+            }
+
+            const newItems = items.filter(item => !ids.includes(item.id));
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(newItems, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+        } catch (error) {
+            console.error('Failed to delete recordings:', error);
+            throw error;
+        }
+    },
+
     async loadTranscript(filename: string): Promise<TranscriptSegment[]> {
         try {
             const path = `${HISTORY_DIR}/${filename}`;
