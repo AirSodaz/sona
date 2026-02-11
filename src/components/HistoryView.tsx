@@ -187,10 +187,11 @@ export function HistoryView() {
                                         ...props.style,
                                         paddingLeft: 'var(--spacing-md)',
                                         paddingRight: 'var(--spacing-md)',
-                                        paddingTop: 'var(--spacing-md)',
+                                        // paddingTop removed to avoid breaking virtualization
                                     }}
                                 />
                             )),
+                            Header: () => <div style={{ height: 'var(--spacing-md)' }} />,
                             Footer: () => <div style={{ height: 'var(--spacing-md)' }} />
                         }}
                     />

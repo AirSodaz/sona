@@ -385,7 +385,9 @@ async function processStream(recognizer, sampleRate, punctuation) {
     // Track token timestamps incrementally
     // Each entry: { token, endTime } - start time is derived from previous token's endTime
     let trackedTokens = [];
-    let lastTokenCount = 0;
+
+    // Audio buffer for handling split samples
+    let leftoverBuffer = null;
 
     process.stdin.on('data', (chunk) => {
         if (chunk.toString() === '__EOS__') {
@@ -393,7 +395,21 @@ async function processStream(recognizer, sampleRate, punctuation) {
             return;
         }
 
-        const samples = pcmInt16ToFloat32(chunk);
+        // Handle split samples (odd byte length)
+        let bufferToProcess = chunk;
+        if (leftoverBuffer) {
+            bufferToProcess = Buffer.concat([leftoverBuffer, chunk]);
+            leftoverBuffer = null;
+        }
+
+        if (bufferToProcess.length % 2 !== 0) {
+            leftoverBuffer = bufferToProcess.slice(bufferToProcess.length - 1);
+            bufferToProcess = bufferToProcess.slice(0, bufferToProcess.length - 1);
+        }
+
+        if (bufferToProcess.length === 0) return;
+
+        const samples = pcmInt16ToFloat32(bufferToProcess);
         stream.acceptWaveform({ samples, sampleRate });
         totalSamples += samples.length;
 
@@ -405,15 +421,29 @@ async function processStream(recognizer, sampleRate, punctuation) {
         const currentTime = totalSamples / sampleRate;
         const currentTokens = result.tokens || [];
 
-        // Track new tokens - if token count increased, record timestamps for new tokens
-        if (currentTokens.length > lastTokenCount) {
-            for (let i = lastTokenCount; i < currentTokens.length; i++) {
-                trackedTokens.push({
-                    token: currentTokens[i],
-                    endTime: currentTime
-                });
+        // Robust Token Tracking
+        // 1. Find the common prefix length between tracked tokens and current hypothesis
+        let matchLen = 0;
+        const minLen = Math.min(trackedTokens.length, currentTokens.length);
+        for (let i = 0; i < minLen; i++) {
+            if (trackedTokens[i].token === currentTokens[i]) {
+                matchLen++;
+            } else {
+                break;
             }
-            lastTokenCount = currentTokens.length;
+        }
+
+        // 2. Truncate tracked tokens to the matching prefix
+        if (matchLen < trackedTokens.length) {
+            trackedTokens.length = matchLen;
+        }
+
+        // 3. Append new tokens from current hypothesis
+        for (let i = matchLen; i < currentTokens.length; i++) {
+            trackedTokens.push({
+                token: currentTokens[i],
+                endTime: currentTime
+            });
         }
 
         // Partial result
@@ -430,11 +460,33 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
         // Endpoint detected
         if (recognizer.isEndpoint(stream)) {
+            // Flush decoder with silence to capture trailing characters
+            // Some models cut off too early without this padding at the endpoint
+            const tailPadding = new Float32Array(sampleRate * 0.8); // 0.8s silence
+            stream.acceptWaveform({ samples: tailPadding, sampleRate });
+            while (recognizer.isReady(stream)) {
+                recognizer.decode(stream);
+            }
+
             const finalResult = recognizer.getResult(stream);
 
-            // Update tracked tokens with any remaining new tokens
+            // Update tracked with final result
             const finalTokens = finalResult.tokens || [];
-            for (let i = lastTokenCount; i < finalTokens.length; i++) {
+
+            // Re-sync with final tokens (logic same as above)
+            let matchLen = 0;
+            const minLen = Math.min(trackedTokens.length, finalTokens.length);
+            for (let i = 0; i < minLen; i++) {
+                if (trackedTokens[i].token === finalTokens[i]) {
+                    matchLen++;
+                } else {
+                    break;
+                }
+            }
+            if (matchLen < trackedTokens.length) {
+                trackedTokens.length = matchLen;
+            }
+            for (let i = matchLen; i < finalTokens.length; i++) {
                 trackedTokens.push({
                     token: finalTokens[i],
                     endTime: currentTime
@@ -442,9 +494,10 @@ async function processStream(recognizer, sampleRate, punctuation) {
             }
 
             if (finalResult.text.trim()) {
-                const text = formatTranscript(finalResult.text, punctuation);
+                const rawText = finalResult.text;
+                const formattedText = formatTranscript(rawText, punctuation);
+                console.error(`[DEBUG] Raw: "${rawText}" | Formatted: "${formattedText}"`);
 
-                // Build timestamps and durations from tracked tokens
                 const timestamps = [];
                 const durations = [];
                 for (let i = 0; i < trackedTokens.length; i++) {
@@ -456,7 +509,7 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
                 console.log(JSON.stringify({
                     id: currentSegmentId,
-                    text,
+                    text: formattedText,
                     start: segmentStartTime,
                     end: currentTime,
                     isFinal: true,
@@ -471,7 +524,7 @@ async function processStream(recognizer, sampleRate, punctuation) {
             segmentStartTime = currentTime;
             currentSegmentId = randomUUID();
             trackedTokens = [];
-            lastTokenCount = 0;
+            leftoverBuffer = null; // Clear buffer on reset? Probably safe.
         }
     });
 
@@ -479,9 +532,21 @@ async function processStream(recognizer, sampleRate, punctuation) {
         const finalResult = recognizer.getResult(stream);
         const currentTime = totalSamples / sampleRate;
 
-        // Update tracked tokens with any remaining new tokens
+        // Final sync
         const finalTokens = finalResult.tokens || [];
-        for (let i = lastTokenCount; i < finalTokens.length; i++) {
+        let matchLen = 0;
+        const minLen = Math.min(trackedTokens.length, finalTokens.length);
+        for (let i = 0; i < minLen; i++) {
+            if (trackedTokens[i].token === finalTokens[i]) {
+                matchLen++;
+            } else {
+                break;
+            }
+        }
+        if (matchLen < trackedTokens.length) {
+            trackedTokens.length = matchLen;
+        }
+        for (let i = matchLen; i < finalTokens.length; i++) {
             trackedTokens.push({
                 token: finalTokens[i],
                 endTime: currentTime
@@ -490,8 +555,6 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
         if (finalResult.text.trim()) {
             const text = formatTranscript(finalResult.text, punctuation);
-
-            // Build timestamps and durations from tracked tokens
             const timestamps = [];
             const durations = [];
             for (let i = 0; i < trackedTokens.length; i++) {
