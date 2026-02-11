@@ -51,20 +51,21 @@ function SegmentItemComponent({
 
     // Search matches
     // Optimize: Select only what we need to avoid re-renders on every store change
-    const searchMatches = useSearchStore(useCallback(state => state.matches, []));
-    const currentMatchIndex = useSearchStore(useCallback(state => state.currentMatchIndex, []));
+    const allMatches = useSearchStore(useCallback(state => state.matches, []));
     const setActiveMatch = useSearchStore(useCallback(state => state.setActiveMatch, []));
 
-    // Memoize the derived data locally
-    const { matches, activeMatch } = React.useMemo(() => {
-        // Map to include global index before filtering so we can distinguish them later
-        const indexedMatches = searchMatches.map((m, i) => ({ ...m, globalIndex: i }));
-        const segMatches = indexedMatches.filter(m => m.segmentId === segment.id);
-        const currentActive = indexedMatches[currentMatchIndex];
-        const activeMatch = (currentActive && currentActive.segmentId === segment.id) ? currentActive : null;
+    // Filter matches for this segment
+    // Matches in store now include globalIndex, so we don't need to map/add it here
+    const matches = React.useMemo(() => {
+        return allMatches.filter(m => m.segmentId === segment.id);
+    }, [allMatches, segment.id]);
 
-        return { matches: segMatches, activeMatch };
-    }, [searchMatches, currentMatchIndex, segment.id]);
+    // Select active match only if it belongs to this segment
+    // This prevents re-renders when the active match changes but is in a different segment
+    const activeMatch = useSearchStore(useCallback((state) => {
+        const match = state.matches[state.currentMatchIndex];
+        return (match && match.segmentId === segment.id) ? match : null;
+    }, [segment.id]));
 
     const [editText, setEditText] = useState(segment.text);
     const inputRef = useRef<HTMLTextAreaElement>(null);

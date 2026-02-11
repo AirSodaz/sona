@@ -95,7 +95,8 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                     segmentId: segment.id,
                     startIndex: index,
                     length: query.length,
-                    text: text.substr(index, query.length)
+                    text: text.substr(index, query.length),
+                    globalIndex: matches.length
                 });
                 startIndex = index + 1;
                 index = lowerText.indexOf(lowerQuery, startIndex);
