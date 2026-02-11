@@ -183,9 +183,15 @@ export function HistoryView() {
                                 <div
                                     {...props}
                                     ref={ref}
-                                    style={{ ...props.style, padding: 'var(--spacing-md)' }}
+                                    style={{
+                                        ...props.style,
+                                        paddingLeft: 'var(--spacing-md)',
+                                        paddingRight: 'var(--spacing-md)',
+                                        paddingTop: 'var(--spacing-md)',
+                                    }}
                                 />
-                            ))
+                            )),
+                            Footer: () => <div style={{ height: 'var(--spacing-md)' }} />
                         }}
                     />
                 )}

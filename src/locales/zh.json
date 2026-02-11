@@ -77,7 +77,9 @@
         "mute": "静音",
         "unmute": "取消静音",
         "speed": "播放速度",
-        "error": "音频播放失败: {{error}}. 代码: {{code}}"
+        "error": "音频播放失败: {{error}}. 代码: {{code}}",
+        "error_decode": "音频解码失败。文件可能已损坏。",
+        "error_src_not_supported": "不支持的音频格式或文件丢失。"
     },
     "editor": {
         "empty_state": "暂无转录内容。<br />开始录音或导入文件。",

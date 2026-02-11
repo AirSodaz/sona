@@ -18,6 +18,7 @@
     "fs:allow-applocaldata-write-recursive",
     "fs:allow-remove",
     "fs:allow-exists",
+    "fs:allow-stat",
     "fs:allow-mkdir",
     "shell:default",
     "shell:allow-open",

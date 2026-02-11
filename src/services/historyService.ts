@@ -1,4 +1,4 @@
-import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir, copyFile } from '@tauri-apps/plugin-fs';
+import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir, copyFile, stat } from '@tauri-apps/plugin-fs';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { TranscriptSegment } from '../types/transcript';
@@ -264,6 +264,19 @@ export const historyService = {
         try {
             const appDataDirPath = await appLocalDataDir();
             const fullPath = await join(appDataDirPath, HISTORY_DIR, filename);
+
+            // Check if file exists and has content
+            try {
+                const fileStat = await stat(`${HISTORY_DIR}/${filename}`, { baseDir: BaseDirectory.AppLocalData });
+                if (fileStat.size === 0) {
+                    console.error('[History] Audio file is empty:', filename);
+                    return null;
+                }
+            } catch (e) {
+                console.error('[History] Audio file not found or inaccessible:', filename, e);
+                return null;
+            }
+
             return convertFileSrc(fullPath);
         } catch (e) {
             console.error('Failed to get audio URL:', e);

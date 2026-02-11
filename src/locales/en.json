@@ -77,7 +77,9 @@
         "mute": "Mute",
         "unmute": "Unmute",
         "speed": "Playback Speed",
-        "error": "Audio playback failed: {{error}}. Code: {{code}}"
+        "error": "Audio playback failed: {{error}}. Code: {{code}}",
+        "error_decode": "Audio decoding failed. The file may be corrupted.",
+        "error_src_not_supported": "Audio format not supported or file missing."
     },
     "editor": {
         "empty_state": "No transcript segments yet.<br />Start recording or import a file.",

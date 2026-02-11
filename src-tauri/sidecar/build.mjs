@@ -32,9 +32,9 @@ const __dirname = __pathDirname(__filename);
 `
     },
     external: [
-        'sherpa-onnx.node'
+        '*.node'
     ],
-    loader: { '.node': 'file' }
+    // loader: { '.node': 'file' }
 });
 
 // 2. Copy sherpa-onnx.node
