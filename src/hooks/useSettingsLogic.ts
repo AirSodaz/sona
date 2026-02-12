@@ -77,6 +77,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             vadModelPath: newConfig.vadModelPath,
             ctcModelPath: newConfig.ctcModelPath,
             vadBufferSize: newConfig.vadBufferSize,
+            maxConcurrent: newConfig.maxConcurrent,
             enabledITNModels: newConfig.enabledITNModels,
             itnRulesOrder: newConfig.itnRulesOrder,
             enableITN: (newConfig.enabledITNModels?.length ?? 0) > 0,
@@ -90,9 +91,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const setStreamingModelPath = (path: string) => updateConfig({ streamingModelPath: path });
     const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
     const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
-    const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
     const setCtcModelPath = (path: string) => updateConfig({ ctcModelPath: path });
+    const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
     const setVadBufferSize = (size: number) => updateConfig({ vadBufferSize: size });
+    const setMaxConcurrent = (size: number) => updateConfig({ maxConcurrent: size });
 
     const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
         const newOrder = typeof action === 'function'
@@ -368,6 +370,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
 
         vadBufferSize: config.vadBufferSize || 5,
         setVadBufferSize,
+
+        maxConcurrent: config.maxConcurrent || 2,
+        setMaxConcurrent,
 
         itnRulesOrder: config.itnRulesOrder || ['itn-zh-number'],
         setItnRulesOrder,

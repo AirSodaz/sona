@@ -61,4 +61,6 @@ export interface AppConfig {
   vadBufferSize?: number;
   /** Path to CTC model (e.g. sherpa-onnx CTC conformer). */
   ctcModelPath?: string;
+  /** Max concurrent transcription tasks. Default: 2. */
+  maxConcurrent?: number;
 }

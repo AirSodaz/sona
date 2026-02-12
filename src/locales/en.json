@@ -169,6 +169,8 @@
         "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
         "ctc_models": "CTC Models",
         "ctc_path_label": "CTC Model Path",
+        "max_concurrent_label": "Max Concurrent Transcriptions",
+        "max_concurrent_hint": "Number of files to transcribe in parallel (must be > 0).",
         "shortcuts": "Keyboard Shortcuts"
     },
     "shortcuts": {

@@ -40,6 +40,8 @@ vi.mock('../../hooks/useSettingsLogic', () => ({
         handleLoad: vi.fn(),
         handleDelete: vi.fn(),
         isModelSelected: vi.fn(),
+        maxConcurrent: 2,
+        setMaxConcurrent: vi.fn(),
     })
 }));
 

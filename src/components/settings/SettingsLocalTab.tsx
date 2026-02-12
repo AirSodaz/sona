@@ -16,6 +16,8 @@ interface SettingsLocalTabProps {
     setCtcModelPath: (path: string) => void;
     vadBufferSize: number;
     setVadBufferSize: (size: number) => void;
+    maxConcurrent: number;
+    setMaxConcurrent: (size: number) => void;
     handleBrowse: (type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
 
     // ITN Props
@@ -54,7 +56,9 @@ export function SettingsLocalTab({
     installedITNModels,
     downloads,
     onDownloadITN,
-    onCancelDownload
+    onCancelDownload,
+    maxConcurrent,
+    setMaxConcurrent
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -200,6 +204,30 @@ export function SettingsLocalTab({
                 </div>
                 <div className="settings-hint">
                     {t('settings.vad_buffer_hint')}
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 16 }}>
+                <label htmlFor="settings-max-concurrent" className="settings-label">{t('settings.max_concurrent_label', { defaultValue: 'Max Concurrent Transcriptions' })}</label>
+                <div style={{ maxWidth: 300 }}>
+                    <input
+                        id="settings-max-concurrent"
+                        type="number"
+                        className="settings-input"
+                        value={maxConcurrent}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            if (val > 0) {
+                                setMaxConcurrent(val);
+                            }
+                        }}
+                        min={1}
+                        step={1}
+                        style={{ width: '100%' }}
+                    />
+                </div>
+                <div className="settings-hint">
+                    {t('settings.max_concurrent_hint', { defaultValue: 'Number of files to transcribe in parallel (1-4).' })}
                 </div>
             </div>
 

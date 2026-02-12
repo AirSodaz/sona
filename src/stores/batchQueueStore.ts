@@ -89,6 +89,8 @@ interface BatchQueueState {
      * @param language Language code.
      */
     setLanguage: (language: string) => void;
+    /** internal helper */
+    _processItem: (itemId: string) => Promise<void>;
 }
 
 /**
@@ -131,27 +133,33 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         }
     },
 
+
     processQueue: async () => {
         const state = get();
-        if (state.isQueueProcessing) return;
+        // Derived from transcript store (default 2)
+        const maxConcurrent = useTranscriptStore.getState().config.maxConcurrent || 2;
 
-        set({ isQueueProcessing: true });
+        // Count how many are currently processing
+        const processingCount = state.queueItems.filter(i => i.status === 'processing').length;
+
+        // If we are already at capacity, do nothing
+        if (processingCount >= maxConcurrent) {
+            return;
+        }
 
         const config = useTranscriptStore.getState().config;
         // Don't error out if config is not yet loaded in tests
         if (!config.offlineModelPath && !process.env.VITEST) {
             console.error('[BatchQueue] No model path configured');
-            set({ isQueueProcessing: false });
             return;
         }
 
         // If testing without model path, just simulate processing or return
         if (!config.offlineModelPath) {
-            set({ isQueueProcessing: false });
             return;
         }
 
-        // Configure transcription service
+        // Configure transcription service (safe to call multiple times)
         transcriptionService.setModelPath(config.offlineModelPath);
         const enabledITNModels = new Set(config.enabledITNModels || []);
         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
@@ -180,91 +188,110 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         transcriptionService.setCtcModelPath(config.ctcModelPath || '');
 
-        // Process items sequentially
-        while (true) {
-            const currentState = get();
-            const pendingItem = currentState.queueItems.find((item) => item.status === 'pending');
+        // Find items to start
+        const pendingItems = state.queueItems.filter(item => item.status === 'pending');
+        const slotsAvailable = maxConcurrent - processingCount;
+        const itemsToStart = pendingItems.slice(0, slotsAvailable);
 
-            if (!pendingItem) {
-                break;
-            }
-
-            const { enableTimeline, language } = currentState;
-
-            // Update status to processing
-            get().updateItemStatus(pendingItem.id, 'processing', 0);
-
-            let segmentBuffer: TranscriptSegment[] = [];
-            let lastUpdateTime = 0;
-
-            try {
-                const segments = await transcriptionService.transcribeFile(
-                    pendingItem.filePath,
-                    (progress) => {
-                        get().updateItemStatus(pendingItem.id, 'processing', progress);
-                    },
-                    (segment) => {
-                        // Buffer segments to reduce render frequency and O(N) copy operations
-                        segmentBuffer.push(segment);
-                        const now = Date.now();
-
-                        // Flush buffer every 500ms or 50 segments
-                        if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
-                            const state = get();
-                            const item = state.queueItems.find((i) => i.id === pendingItem.id);
-
-                            if (item) {
-                                // Process the buffered segments
-                                const { enableTimeline } = state;
-                                const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
-
-                                // Append to existing segments
-                                const updatedSegments = [...item.segments, ...newSegments];
-                                get().updateItemSegments(pendingItem.id, updatedSegments);
-
-                                // Reset buffer
-                                segmentBuffer = [];
-                                lastUpdateTime = now;
-                            }
-                        }
-                    },
-                    language === 'auto' ? undefined : language
-                );
-
-                const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
-                get().updateItemSegments(pendingItem.id, finalSegments);
-
-                // Calculate duration from last segment
-                const duration = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : 0;
-
-                // Save to History
-                try {
-                    const historyItem = await historyService.saveImportedFile(pendingItem.filePath, finalSegments, duration);
-                    if (historyItem) {
-                        set((state) => ({
-                            queueItems: state.queueItems.map((item) =>
-                                item.id === pendingItem.id ? { ...item, historyId: historyItem.id } : item
-                            )
-                        }));
-                        // If this is the active item, propagate sourceHistoryId
-                        if (get().activeItemId === pendingItem.id) {
-                            useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[BatchQueue] Failed to save to history:', err);
-                }
-
-                get().updateItemStatus(pendingItem.id, 'complete', 100);
-
-            } catch (error) {
-                console.error(`[BatchQueue] Failed to transcribe ${pendingItem.filename}:`, error);
-                get().setItemError(pendingItem.id, String(error));
-            }
+        if (itemsToStart.length === 0 && processingCount === 0) {
+            set({ isQueueProcessing: false });
+            return;
         }
 
-        set({ isQueueProcessing: false });
+        set({ isQueueProcessing: true });
+
+        // Start processing for each new item
+        itemsToStart.forEach(item => {
+            get()._processItem(item.id);
+        });
     },
+
+    /**
+     * Internal helper to process a single item.
+     * @param itemId ID of the item to process.
+     */
+    _processItem: async (itemId: string) => {
+        const state = get();
+        const item = state.queueItems.find(i => i.id === itemId);
+        if (!item || item.status !== 'pending') return;
+
+        const { enableTimeline, language } = state;
+
+        // Update status to processing
+        get().updateItemStatus(itemId, 'processing', 0);
+
+        let segmentBuffer: TranscriptSegment[] = [];
+        let lastUpdateTime = 0;
+
+        try {
+            const segments = await transcriptionService.transcribeFile(
+                item.filePath,
+                (progress) => {
+                    get().updateItemStatus(itemId, 'processing', progress);
+                },
+                (segment) => {
+                    // Buffer segments to reduce render frequency and O(N) copy operations
+                    segmentBuffer.push(segment);
+                    const now = Date.now();
+
+                    // Flush buffer every 500ms or 50 segments
+                    if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
+                        const currentState = get(); // Re-fetch state
+                        const currentItem = currentState.queueItems.find((i) => i.id === itemId);
+
+                        if (currentItem) {
+                            // Process the buffered segments
+                            const { enableTimeline } = currentState;
+                            const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
+
+                            // Append to existing segments
+                            const updatedSegments = [...currentItem.segments, ...newSegments];
+                            get().updateItemSegments(itemId, updatedSegments);
+
+                            // Reset buffer
+                            segmentBuffer = [];
+                            lastUpdateTime = now;
+                        }
+                    }
+                },
+                language === 'auto' ? undefined : language
+            );
+
+            const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
+            get().updateItemSegments(itemId, finalSegments);
+
+            // Calculate duration from last segment
+            const duration = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : 0;
+
+            // Save to History
+            try {
+                const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration);
+                if (historyItem) {
+                    set((state) => ({
+                        queueItems: state.queueItems.map((i) =>
+                            i.id === itemId ? { ...i, historyId: historyItem.id } : i
+                        )
+                    }));
+                    // If this is the active item, propagate sourceHistoryId
+                    if (get().activeItemId === itemId) {
+                        useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                    }
+                }
+            } catch (err) {
+                console.error('[BatchQueue] Failed to save to history:', err);
+            }
+
+            get().updateItemStatus(itemId, 'complete', 100);
+
+        } catch (error) {
+            console.error(`[BatchQueue] Failed to transcribe ${item.filename}:`, error);
+            get().setItemError(itemId, String(error));
+        } finally {
+            // Trigger next items in queue
+            get().processQueue();
+        }
+    },
+
 
     setActiveItem: (id) => {
         set({ activeItemId: id });

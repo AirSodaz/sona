@@ -73,7 +73,9 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         handleCancelDownload,
         handleLoad,
         handleDelete,
-        isModelSelected
+        isModelSelected,
+        maxConcurrent,
+        setMaxConcurrent
     } = useSettingsLogic(isOpen, onClose);
 
     // Focus management
@@ -244,6 +246,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 downloads={downloads}
                                 onDownloadITN={handleDownloadITN}
                                 onCancelDownload={handleCancelDownload}
+                                maxConcurrent={maxConcurrent}
+                                setMaxConcurrent={setMaxConcurrent}
                             />
                         )}
 

@@ -169,6 +169,8 @@
         "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。",
         "ctc_models": "CTC 模型",
         "ctc_path_label": "CTC 模型路径",
+        "max_concurrent_label": "最大并发转录数",
+        "max_concurrent_hint": "并行转录的文件数量（必须大于 0）。",
         "shortcuts": "键盘快捷键"
     },
     "shortcuts": {

@@ -34,6 +34,7 @@ export function useAppInitialization() {
                         enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
                         itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
                         vadBufferSize: parsed.vadBufferSize || 5,
+                        maxConcurrent: parsed.maxConcurrent || 2,
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto',
                         font: parsed.font || 'system'

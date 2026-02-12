@@ -914,7 +914,6 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
                         start: startTime,
                         end: endTime,
                         isFinal: true,
-                        isFinal: true,
                         tokens: result.tokens || [],
                         timestamps: (result.timestamps || []).map(t => t + startTime)
                     };
@@ -1028,49 +1027,26 @@ async function processAlign(ctcModelPath, filePath, startTime, endTime, ffmpegPa
     }));
 }
 
-// Get number of physical cores
-function getPhysicalCores() {
-    const platform = process.platform;
-    try {
-        if (platform === 'linux') {
-            const output = execSync("lscpu -p | grep -E -v '^#' | sort -u -t, -k 2,4 | wc -l").toString().trim();
-            const cores = parseInt(output, 10);
-            if (!isNaN(cores) && cores > 0) return cores;
-        } else if (platform === 'darwin') {
-            const output = execSync("sysctl -n hw.physicalcpu").toString().trim();
-            const cores = parseInt(output, 10);
-            if (!isNaN(cores) && cores > 0) return cores;
-        } else if (platform === 'win32') {
-            const output = execSync("wmic cpu get NumberOfCores").toString().trim();
-            const lines = output.split('\n');
-            let total = 0;
-            for (const line of lines) {
-                const val = parseInt(line.trim(), 10);
-                if (!isNaN(val)) total += val;
-            }
-            if (total > 0) return total;
-        }
-    } catch (e) {
-    }
-
-    return Math.ceil(os.cpus().length / 2);
+// Get number of logical cores
+function getLogicalCores() {
+    return os.cpus().length;
 }
 
-// Calculate optimal thread count based on physical cores
+// Calculate optimal thread count based on logical cores
 function calculateNumThreads(providedValue) {
     if (providedValue) return providedValue;
 
-    const physicalCores = getPhysicalCores();
-    console.error(`[Sidecar] Physical cores detected: ${physicalCores}`);
+    const logicalCores = getLogicalCores();
+    console.error(`[Sidecar] Logical cores detected: ${logicalCores}`);
 
     let numThreads;
-    if (physicalCores <= 4) {
-        numThreads = physicalCores - 1;
+    if (logicalCores > 4) {
+        numThreads = 2;
     } else {
-        numThreads = physicalCores - 2;
+        numThreads = 1;
     }
 
-    return Math.max(1, numThreads);
+    return numThreads;
 }
 
 // Ensure Library Path is set (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)

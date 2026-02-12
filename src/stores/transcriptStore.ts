@@ -196,6 +196,7 @@ const DEFAULT_CONFIG: AppConfig = {
     theme: 'auto',
     font: 'system',
     vadBufferSize: 5,
+    maxConcurrent: 2,
 };
 
 /**
