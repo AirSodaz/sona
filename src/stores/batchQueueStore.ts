@@ -8,6 +8,8 @@ import { historyService } from '../services/historyService';
 import { modelService } from '../services/modelService';
 import { useTranscriptStore } from './transcriptStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
+import { tempDir, join } from '@tauri-apps/api/path';
+import { remove } from '@tauri-apps/plugin-fs';
 
 /** State interface for the batch queue store. */
 interface BatchQueueState {
@@ -222,8 +224,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         let segmentBuffer: TranscriptSegment[] = [];
         let lastUpdateTime = 0;
+        let tempWavPath: string | undefined;
 
         try {
+            const tempD = await tempDir();
+            tempWavPath = await join(tempD, `${uuidv4()}.wav`);
+
             const segments = await transcriptionService.transcribeFile(
                 item.filePath,
                 (progress) => {
@@ -254,7 +260,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         }
                     }
                 },
-                language === 'auto' ? undefined : language
+                language === 'auto' ? undefined : language,
+                tempWavPath
             );
 
             const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
@@ -265,7 +272,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
             // Save to History
             try {
-                const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration);
+                const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration, tempWavPath);
                 if (historyItem) {
                     set((state) => ({
                         queueItems: state.queueItems.map((i) =>
@@ -279,6 +286,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 }
             } catch (err) {
                 console.error('[BatchQueue] Failed to save to history:', err);
+            }
+
+            // Cleanup temp file
+            if (tempWavPath) {
+                try {
+                    await remove(tempWavPath);
+                } catch (e) {
+                    console.warn('[BatchQueue] Failed to remove temp file:', e);
+                }
             }
 
             get().updateItemStatus(itemId, 'complete', 100);

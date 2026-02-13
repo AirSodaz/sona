@@ -12,12 +12,13 @@
 
 import { spawn, execSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import { createReadStream, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { createReadStream, existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import os from 'os';
 import { dirname, join } from 'path';
 import { Readable, Transform } from 'stream';
 import { fileURLToPath } from 'url';
 import Seven from 'node-7z';
+import { WaveFile } from 'wavefile';
 
 const __scriptFile = fileURLToPath(import.meta.url);
 const __scriptDir = dirname(__scriptFile);
@@ -102,6 +103,7 @@ function parseArgs() {
         punctuationModel: null,
         vadBuffer: 5, // Default 5s
         language: '', // Default auto
+        saveWav: null,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -156,6 +158,9 @@ function parseArgs() {
                 break;
             case '--end-time':
                 options.endTime = parseFloat(args[++i]);
+                break;
+            case '--save-wav':
+                options.saveWav = args[++i];
                 break;
         }
     }
@@ -581,12 +586,26 @@ async function processStream(recognizer, sampleRate, punctuation) {
 }
 
 // Process Batch
-async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctuation) {
+async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctuation, options = {}) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
     try {
         console.error('Converting audio file...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
+
+        if (options.saveWav) {
+            try {
+                const wav = new WaveFile();
+                // Create Int16Array view of the buffer
+                const int16Samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.length / 2);
+                wav.fromScratch(1, 16000, '16', int16Samples);
+                writeFileSync(options.saveWav, wav.toBuffer());
+                console.error(`[Sidecar] Saved converted WAV to ${options.saveWav}`);
+            } catch (e) {
+                console.error(`[Sidecar] Failed to save WAV: ${e.message}`);
+            }
+        }
+
         const samples = pcmInt16ToFloat32(pcmData);
 
         console.error(`Processing ${samples.length} samples...`);
@@ -856,6 +875,20 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
     try {
         console.error('Converting audio file (Offline VAD)...');
         const pcmData = await convertToWav(filePath, ffmpegPath);
+
+        if (options && options.saveWav) {
+            try {
+                const wav = new WaveFile();
+                // Create Int16Array view of the buffer
+                const int16Samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.length / 2);
+                wav.fromScratch(1, 16000, '16', int16Samples);
+                writeFileSync(options.saveWav, wav.toBuffer());
+                console.error(`[Sidecar] Saved converted WAV to ${options.saveWav}`);
+            } catch (e) {
+                console.error(`[Sidecar] Failed to save WAV: ${e.message}`);
+            }
+        }
+
         const samples = pcmInt16ToFloat32(pcmData);
 
         let vad = null;
@@ -1199,7 +1232,7 @@ async function main() {
             if (type === 'offline') {
                 await processBatchOffline(recognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options.vadModel, options);
             } else {
-                await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, punctuation);
+                await processBatch(recognizer, options.file, ffmpegPath, options.sampleRate, punctuation, options);
             }
         } else {
             if (type === 'offline') {

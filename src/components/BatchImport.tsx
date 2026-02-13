@@ -12,7 +12,12 @@ import { Dropdown } from './Dropdown';
 
 
 
-const ACCEPTED_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.mp4'];
+const SUPPORTED_EXTENSIONS = [
+    // Audio
+    '.wav', '.mp3', '.m4a', '.aiff', '.flac', '.ogg', '.wma', '.aac', '.opus', '.amr',
+    // Video
+    '.mp4', '.webm', '.mov', '.mkv', '.avi', '.wmv', '.flv', '.3gp'
+];
 
 /** Props for BatchImportOptions component. */
 interface BatchImportOptionsProps {
@@ -242,7 +247,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
             files.forEach((filePath) => {
                 const ext = filePath.split('.').pop()?.toLowerCase();
-                const isSupported = ACCEPTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+                const isSupported = SUPPORTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
                 if (isSupported) {
                     validFiles.push(filePath);
                 } else {
@@ -251,7 +256,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             });
 
             if (invalidFiles.length > 0) {
-                alert(t('batch.unsupported_format', { formats: ACCEPTED_EXTENSIONS.join(', ') }), { variant: 'error' });
+                alert(t('batch.unsupported_format', { formats: SUPPORTED_EXTENSIONS.join(', ') }), { variant: 'error' });
             }
 
             if (validFiles.length > 0) {
@@ -294,7 +299,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 multiple: true,
                 filters: [{
                     name: 'Audio',
-                    extensions: ACCEPTED_EXTENSIONS.map(ext => ext.replace('.', ''))
+                    extensions: SUPPORTED_EXTENSIONS.map(ext => ext.replace('.', ''))
                 }]
             });
 
@@ -383,7 +388,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </div>
 
                 <p className="supported-formats" style={{ marginTop: '8px' }}>
-                    {t('batch.supports', { formats: ACCEPTED_EXTENSIONS.join(', ') })}
+                    {t('batch.supports', { formats: SUPPORTED_EXTENSIONS.join(', ') })}
                 </p>
             </div>
 

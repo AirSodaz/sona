@@ -108,7 +108,7 @@ export const historyService = {
         }
     },
 
-    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0): Promise<HistoryItem | null> {
+    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string): Promise<HistoryItem | null> {
         console.log('[History] Saving imported file...', { filePath, segments: segments.length });
         try {
             await this.init();
@@ -117,20 +117,20 @@ export const historyService = {
 
             // Get filename from path
             const filename = filePath.split(/[/\\]/).pop() || 'Imported File';
-            const ext = filename.split('.').pop() || 'wav'; // Default fallback
 
             // Generate title with Batch prefix
             const title = `Batch ${filename}`;
 
             // Save Audio (Copy)
-            const audioFileName = `${id}.${ext}`;
+            // If convertedFilePath is present, we save as .wav
+            const targetExt = convertedFilePath ? 'wav' : (filename.split('.').pop() || 'wav');
+            const audioFileName = `${id}.${targetExt}`;
             const audioPathDisplay = `${HISTORY_DIR}/${audioFileName}`;
 
             console.log('[History] Copying audio file to:', audioPathDisplay);
             // Copy the file to the history directory
-            // We use copyFile from plugin-fs to copy from specific path to AppLocalData
             await copyFile(
-                filePath,
+                convertedFilePath || filePath,
                 audioPathDisplay,
                 { toPathBaseDir: BaseDirectory.AppLocalData }
             );

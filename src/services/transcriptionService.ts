@@ -286,13 +286,13 @@ class TranscriptionService {
      * @param language The language code (e.g., 'en', 'zh'). Defaults to 'auto'.
      * @return A promise that resolves to a list of all transcript segments.
      */
-    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string): Promise<TranscriptSegment[]> {
+    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
         try {
-            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language);
+            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language, saveToPath);
         } catch (error: any) {
             if (error.message === 'COREML_FAILURE') {
                 console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
-                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language);
+                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language, saveToPath);
             }
             throw error;
         }
@@ -308,7 +308,7 @@ class TranscriptionService {
      * @param language The language code.
      * @return A promise that resolves to the list of segments.
      */
-    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
@@ -328,6 +328,10 @@ class TranscriptionService {
 
         if (language && language !== 'auto') {
             args.push('--language', language);
+        }
+
+        if (saveToPath) {
+            args.push('--save-wav', saveToPath);
         }
 
         if (this.vadModelPath) {
