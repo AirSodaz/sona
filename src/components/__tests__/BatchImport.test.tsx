@@ -11,12 +11,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn().mockResolvedValue(() => {}),
+    listen: vi.fn().mockResolvedValue(() => { }),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
     getCurrentWindow: () => ({
-        listen: vi.fn().mockResolvedValue(() => {}),
+        listen: vi.fn().mockResolvedValue(() => { }),
     }),
 }));
 
@@ -68,7 +68,7 @@ describe('BatchImport Integration', () => {
         // Reset stores
         useTranscriptStore.setState({
             config: {
-                streamingModelPath: '',
+
                 offlineModelPath: '/mock/offline/model',
                 punctuationModelPath: '',
                 enableITN: false,
@@ -127,7 +127,7 @@ describe('BatchImport Integration', () => {
 
         // 2. Check if processing view appears
         await waitFor(() => {
-             expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
         });
 
         // 3. Check progress bar updates
@@ -142,23 +142,23 @@ describe('BatchImport Integration', () => {
     });
 
     it('shows error state when transcription fails', async () => {
-         vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Mock Error'));
+        vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Mock Error'));
 
-         render(<BatchImport />);
+        render(<BatchImport />);
 
-         const { addFiles } = useBatchQueueStore.getState();
+        const { addFiles } = useBatchQueueStore.getState();
 
-         await act(async () => {
+        await act(async () => {
             addFiles(['/path/to/fail.wav']);
-         });
+        });
 
-         await waitFor(() => {
-             expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
-         });
+        await waitFor(() => {
+            expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
+        });
 
-         // Error details
-         const sidebar = screen.getByRole('list', { name: /Queue/ });
-         expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+        // Error details
+        const sidebar = screen.getByRole('list', { name: /Queue/ });
+        expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
     });
 
     it('can remove items from queue', async () => {

@@ -127,7 +127,7 @@ describe('LiveRecord', () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         act(() => {
             useTranscriptStore.setState({
-                config: { ...useTranscriptStore.getState().config, streamingModelPath: '/path/to/model' }
+                config: { ...useTranscriptStore.getState().config, offlineModelPath: '/path/to/model' }
             });
         });
     });

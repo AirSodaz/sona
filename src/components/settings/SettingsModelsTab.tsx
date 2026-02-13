@@ -5,7 +5,7 @@ import { ModelCard } from './ModelCard';
 
 interface ModelSectionProps {
     title: string;
-    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc';
+    type: 'offline' | 'punctuation' | 'vad' | 'ctc';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onLoad: (model: ModelInfo) => void;
@@ -91,7 +91,7 @@ export function SettingsModelsTab({
             aria-labelledby="settings-tab-models"
             tabIndex={0}
         >
-            <ModelSection title={t('settings.streaming_models')} type="streaming" {...sectionProps} />
+            {/* Streaming models removed */}
             <ModelSection title={t('settings.offline_models')} type="offline" {...sectionProps} />
             <ModelSection title={t('settings.punctuation_models')} type="punctuation" {...sectionProps} />
             <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />

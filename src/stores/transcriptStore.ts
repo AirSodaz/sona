@@ -184,7 +184,7 @@ interface TranscriptState {
 
 
 const DEFAULT_CONFIG: AppConfig = {
-    streamingModelPath: '',
+    // streamingModelPath removed
     offlineModelPath: '',
     language: 'en',
     appLanguage: 'auto',

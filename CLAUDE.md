@@ -39,6 +39,7 @@ The frontend does NOT run AI models directly.
 2.  **Script**: Executes `src-tauri/sidecar/dist/index.mjs` (compiled from `sherpa-recognizer.js`).
 3.  **Communication**:
     *   **Audio Input**: Frontend sends `Int16Array` (converted from Float32 via `public/audio-processor.js` AudioWorklet) -> Tauri Command -> Sidecar Stdin.
+    *   **VAD & Buffering**: Sidecar implements a Ring Buffer (0.3s pre-speech context) to prevent clipped words at segment boundaries during pseudo-streaming.
     *   **Output**: Sidecar prints JSON lines to Stdout -> Captured by Tauri -> Parsed by `transcriptionService.ts`.
 
 ### 3.2. Critical Services & Stores

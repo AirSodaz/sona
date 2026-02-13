@@ -20,14 +20,10 @@ export function useAppInitialization() {
             try {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
-                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
-
-                    // Legacy support for 'modelPath'
-                    const legacyPath = parsed.modelPath || '';
+                if (parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
 
                     setConfig({
-                        streamingModelPath: parsed.streamingModelPath || legacyPath,
-                        offlineModelPath: parsed.offlineModelPath || '',
+                        offlineModelPath: parsed.offlineModelPath || parsed.modelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
                         vadModelPath: parsed.vadModelPath || '',
                         ctcModelPath: parsed.ctcModelPath || '',

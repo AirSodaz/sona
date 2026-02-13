@@ -35,8 +35,6 @@ export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 
  * Configuration for the application.
  */
 export interface AppConfig {
-  /** Path to streaming model (e.g. sherpa-onnx streaming zipformer). */
-  streamingModelPath: string;
   /** Path to offline model (e.g. sherpa-onnx offline paraformer/sensevoice). */
   offlineModelPath: string;
   /** Selected language for transcription. */

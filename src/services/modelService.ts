@@ -35,16 +35,6 @@ export interface ModelInfo {
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
     {
-        id: 'sherpa-onnx-streaming-paraformer-bilingual-zh-en',
-        name: 'Chinese/English - Paraformer',
-        description: 'Streaming Paraformer model for Chinese and English',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
-        type: 'streaming',
-        language: 'zh,en',
-        size: '~999 MB',
-        engine: 'onnx'
-    },
-    {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
         name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (optimized for Cantonese)',

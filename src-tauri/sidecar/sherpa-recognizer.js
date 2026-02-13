@@ -869,6 +869,244 @@ async function* yieldFixedChunks(samples, sampleRate, chunkDuration = 30) {
     }
 }
 
+/**
+ * Process Pseudo-Stream (Offline Model + Real-time VAD)
+ * 
+ * Strategy:
+ * 1. Monitor VAD on input stream.
+ * 2. Buffer speech audio.
+ * 3. Every 0.2s, re-recognize the ENTIRE buffer with the offline model.
+ *    - This updates the text "in-place" (simulated streaming).
+ * 4. On silence (endpoint), finalize the segment and clear buffer.
+ * 
+ * @param {object} recognizer - OfflineRecognizer
+ * @param {number} sampleRate 
+ * @param {object} punctuation 
+ * @param {string} vadModelPath 
+ * @param {object} options 
+ */
+async function processPseudoStream(recognizer, sampleRate, punctuation, vadModelPath, options) {
+    console.error(`[Sidecar] Starting Pseudo-Stream (VAD: ${vadModelPath})`);
+
+    // 1. Initialize VAD
+    let vad = null;
+    if (vadModelPath && existsSync(vadModelPath)) {
+        const sherpa = await import('sherpa-onnx-node');
+        const vadConfig = {
+            sileroVad: {
+                model: vadModelPath,
+                threshold: 0.35,
+                minSilenceDuration: 0.5,
+                minSpeechDuration: 0.25,
+            },
+            sampleRate,
+            debug: false,
+            numThreads: 1,
+        };
+        vad = new sherpa.default.Vad(vadConfig, 60);
+    } else {
+        throw new Error('VAD model required for pseudo-streaming offline models.');
+    }
+
+    // State
+    const PRE_SPEECH_CONTEXT_SEC = 0.3; // Amount of audio to prepend
+
+    let speechBuffer = []; // Array of Float32Array chunks
+    let speechBufferLength = 0;
+
+    // Ring buffer for pre-speech context
+    let ringBuffer = [];
+    let ringBufferLength = 0;
+
+    let isSpeaking = false;
+    let currentSegmentId = randomUUID();
+    let totalProcessedSamples = 0;
+    let lastInferenceTime = Date.now();
+    let utteranceStartSample = 0;
+
+    let audioBuffer = null; // for input stream Int16 splitting
+    const INFERENCE_INTERVAL_MS = 200;
+
+    // Helper to run inference
+    function runInference(isFinal) {
+        if (speechBufferLength === 0) return;
+
+        // Concatenate buffer
+        let fullAudioLength = speechBufferLength;
+
+        const fullAudio = new Float32Array(fullAudioLength);
+        let offset = 0;
+        for (const c of speechBuffer) {
+            fullAudio.set(c, offset);
+            offset += c.length;
+        }
+
+        // Fill padding with zeros (implicitly zero-initialized, but explicit is fine)
+        // new Float32Array is already zeroed.
+
+        const stream = recognizer.createStream();
+        stream.acceptWaveform({ samples: fullAudio, sampleRate });
+        recognizer.decode(stream);
+        const result = recognizer.getResult(stream);
+
+        if (result.text.trim()) {
+            const text = isFinal ? formatTranscript(result.text, punctuation) : result.text;
+
+            const globalStart = utteranceStartSample / sampleRate;
+            const globalEnd = (utteranceStartSample + fullAudioLength) / sampleRate;
+
+            console.log(JSON.stringify({
+                id: currentSegmentId,
+                text,
+                start: globalStart,
+                end: globalEnd,
+                isFinal: isFinal,
+                tokens: result.tokens || [],
+                timestamps: (result.timestamps || []).map(t => t + globalStart),
+                durations: synthesizeDurations((result.timestamps || []).map(t => t + globalStart), globalEnd)
+            }));
+        }
+    }
+
+    process.stdin.on('data', (chunk) => {
+        if (chunk.toString() === '__EOS__') {
+            process.stdin.emit('end');
+            return;
+        }
+
+        // 1. Handle Int16 Stream Fragmentation
+        let bufferToProcess = chunk;
+        if (audioBuffer) {
+            bufferToProcess = Buffer.concat([audioBuffer, chunk]);
+            audioBuffer = null;
+        }
+        if (bufferToProcess.length % 2 !== 0) {
+            audioBuffer = bufferToProcess.slice(bufferToProcess.length - 1);
+            bufferToProcess = bufferToProcess.slice(0, bufferToProcess.length - 1);
+        }
+        if (bufferToProcess.length === 0) return;
+
+        // 2. Convert to Float32
+        const samples = pcmInt16ToFloat32(bufferToProcess);
+
+        // 3. VAD
+        vad.acceptWaveform(samples);
+        const currentlySpeaking = vad.isDetected();
+
+        if (currentlySpeaking && !isSpeaking) {
+            // RISING EDGE: Silence -> Speech
+            isSpeaking = true;
+            console.error('[Sidecar] Speech Detected');
+
+            // Prepend Ring Buffer (Pre-speech context)
+            // Determine how much to keep
+            const samplesToKeep = Math.floor(sampleRate * PRE_SPEECH_CONTEXT_SEC);
+
+            // Adjust start time backwards by the amount of context we actually have
+            let contextLength = 0;
+
+            // We want the LAST N samples from ring buffer
+            // Since ringBuffer is chunks, we might need to slice
+
+            // Simplified: Just take all ring buffer if it's not huge, or slice logic?
+            // To be precise, let's reconstruct ring buffer
+
+            if (ringBufferLength > 0) {
+                // Flatten ring buffer temporarily to slice (active optimization possible but complexity higher)
+                const ringFlat = new Float32Array(ringBufferLength);
+                let off = 0;
+                for (const rb of ringBuffer) {
+                    ringFlat.set(rb, off);
+                    off += rb.length;
+                }
+
+                let keepStart = 0;
+                if (ringBufferLength > samplesToKeep) {
+                    keepStart = ringBufferLength - samplesToKeep;
+                }
+
+                const context = ringFlat.slice(keepStart);
+                speechBuffer.push(context);
+                speechBufferLength += context.length;
+                contextLength = context.length;
+            }
+
+            utteranceStartSample = totalProcessedSamples - contextLength; // Shift start time back
+            ringBuffer = [];
+            ringBufferLength = 0;
+        }
+
+        if (currentlySpeaking) {
+            // Buffer Audio
+            speechBuffer.push(samples);
+            speechBufferLength += samples.length;
+
+            const now = Date.now();
+            if (now - lastInferenceTime > INFERENCE_INTERVAL_MS) {
+                runInference(false);
+                lastInferenceTime = now;
+            }
+        }
+
+        // Update Ring Buffer (always, or only when not speaking?)
+        // Algorithm:
+        // When NOT speaking: Add to ring buffer.
+        // When SPEAKING: Do we need to maintain ring buffer?
+        // - If we pause briefly (less than VAD tolerance) -> VAD stays true.
+        // - If we stop speaking -> Falling edge. Next silence fills ring buffer.
+        // Yes, so only fill ring buffer when !currentlySpeaking.
+
+        if (!currentlySpeaking) {
+            if (isSpeaking) {
+                // FALLING EDGE: Speech -> Silence
+                isSpeaking = false;
+                console.error('[Sidecar] Speech Ended');
+
+                // Include last chunk
+                speechBuffer.push(samples);
+                speechBufferLength += samples.length;
+
+                runInference(true);
+
+                // Clean up
+                speechBuffer = [];
+                speechBufferLength = 0;
+                currentSegmentId = randomUUID();
+
+                // Important: This chunk (and subsequent) should also go into Ring Buffer 
+                // for the NEXT segment!
+                // So we fall through to ring buffer logic below.
+            }
+
+            // Add to Ring Buffer
+            ringBuffer.push(samples);
+            ringBufferLength += samples.length;
+
+            // Trim Ring Buffer
+            const maxRingSamples = Math.floor(sampleRate * PRE_SPEECH_CONTEXT_SEC);
+            while (ringBufferLength > maxRingSamples + 4000) { // lazy clean up with some margin
+                const first = ringBuffer[0];
+                if (ringBufferLength - first.length >= maxRingSamples) {
+                    ringBuffer.shift();
+                    ringBufferLength -= first.length;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        totalProcessedSamples += samples.length;
+    });
+
+    process.stdin.on('end', () => {
+        if (speechBufferLength > 0) {
+            runInference(true);
+        }
+        console.log(JSON.stringify({ done: true }));
+        process.exit(0);
+    });
+}
+
 async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate, punctuation, vadModelPath, options) {
     if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
 
@@ -1236,11 +1474,15 @@ async function main() {
             }
         } else {
             if (type === 'offline') {
-                console.error(JSON.stringify({ error: 'Streaming mode not supported for offline model.' }));
-                process.exit(1);
+                if (options.vadModel) {
+                    await processPseudoStream(recognizer, options.sampleRate, punctuation, options.vadModel, options);
+                } else {
+                    console.error(JSON.stringify({ error: 'Streaming mode for offline model requires --vad-model.' }));
+                    process.exit(1);
+                }
+            } else {
+                await processStream(recognizer, options.sampleRate, punctuation);
             }
-
-            await processStream(recognizer, options.sampleRate, punctuation);
         }
 
     } catch (error) {

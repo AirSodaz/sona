@@ -21,7 +21,7 @@ vi.mock('../../stores/transcriptStore', async () => {
     // Create a functional store for testing
     const useTranscriptStore = create((set) => ({
         config: {
-            streamingModelPath: '/test/streaming',
+
             offlineModelPath: '/test/offline',
             enableITN: true,
             enabledITNModels: ['itn-zh-number'],
@@ -76,7 +76,7 @@ describe('Settings', () => {
         // Reset store state
         useTranscriptStore.setState({
             config: {
-                streamingModelPath: '/test/streaming',
+
                 offlineModelPath: '/test/offline',
                 enableITN: true,
                 enabledITNModels: ['itn-zh-number'],
@@ -199,12 +199,12 @@ describe('Settings', () => {
         // The mock returns key as translation.
         // Label text in SettingsLocalTab is t('settings.streaming_path_label') which becomes "settings.streaming_path_label".
 
-        const input = screen.getByLabelText('settings.streaming_path_label');
-        fireEvent.change(input, { target: { value: '/new/streaming/path' } });
+        const input = screen.getByLabelText('settings.offline_path_label');
+        fireEvent.change(input, { target: { value: '/new/offline/path' } });
 
         // Verify setConfig was called with new value (by checking state update)
         expect(useTranscriptStore.getState().config).toMatchObject({
-            streamingModelPath: '/new/streaming/path'
+            offlineModelPath: '/new/offline/path'
         });
     });
 });

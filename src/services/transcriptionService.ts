@@ -499,6 +499,11 @@ class TranscriptionService {
             args.push('--allow-mock', 'true');
         }
 
+        if (this.vadModelPath) {
+            args.push('--vad-model', this.vadModelPath);
+            args.push('--vad-buffer', this.vadBufferSize.toString());
+        }
+
         return args;
     }
 

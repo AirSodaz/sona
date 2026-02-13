@@ -43,8 +43,6 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         font,
         setFont,
 
-        streamingModelPath,
-        setStreamingModelPath,
         offlineModelPath,
         setOfflineModelPath,
         punctuationModelPath,
@@ -224,8 +222,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
 
                         {activeTab === 'local' && (
                             <SettingsLocalTab
-                                streamingModelPath={streamingModelPath}
-                                setStreamingModelPath={setStreamingModelPath}
+
                                 offlineModelPath={offlineModelPath}
                                 setOfflineModelPath={setOfflineModelPath}
                                 punctuationModelPath={punctuationModelPath}

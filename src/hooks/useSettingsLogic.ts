@@ -71,7 +71,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
 
         // Persist to localStorage
         localStorage.setItem('sona-config', JSON.stringify({
-            streamingModelPath: newConfig.streamingModelPath,
             offlineModelPath: newConfig.offlineModelPath,
             punctuationModelPath: newConfig.punctuationModelPath,
             vadModelPath: newConfig.vadModelPath,
@@ -88,7 +87,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     };
 
     // Setters that update store immediately
-    const setStreamingModelPath = (path: string) => updateConfig({ streamingModelPath: path });
     const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
     const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
     const setCtcModelPath = (path: string) => updateConfig({ ctcModelPath: path });
@@ -129,10 +127,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const setFont = (font: string) => updateConfig({ font: font as any });
 
 
-    function getBrowseTitle(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
+    function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
-            case 'streaming':
-                return t('settings.streaming_path_label');
             case 'offline':
                 return t('settings.offline_path_label');
             case 'vad':
@@ -144,7 +140,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         }
     }
 
-    async function handleBrowse(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') {
+    async function handleBrowse(type: 'offline' | 'punctuation' | 'vad' | 'ctc') {
         try {
             const selected = await open({
                 directory: true,
@@ -155,9 +151,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'streaming') {
-                        setStreamingModelPath(path);
-                    } else if (type === 'offline') {
+                    if (type === 'offline') {
                         setOfflineModelPath(path);
                     } else if (type === 'vad') {
                         setVadModelPath(path);
@@ -185,10 +179,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         }
     }
 
-    function setModelPathByType(type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
-        if (type === 'streaming') {
-            setStreamingModelPath(path);
-        } else if (type === 'offline') {
+    function setModelPathByType(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
+        if (type === 'offline') {
             setOfflineModelPath(path);
         } else if (type === 'vad') {
             setVadModelPath(path);
@@ -259,7 +251,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         await executeDownload(
             model.id,
             (id, cb, sig) => modelService.downloadModel(id, cb, sig),
-            (path) => setModelPathByType(model.type, path)
+            (path) => setModelPathByType(model.type as any, path)
         );
     }
 
@@ -274,7 +266,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     async function handleLoad(model: ModelInfo) {
         try {
             const path = await modelService.getModelPath(model.id);
-            setModelPathByType(model.type, path);
+            setModelPathByType(model.type as any, path);
         } catch (error: any) {
             console.error('Load failed:', error);
         }
@@ -300,9 +292,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
-            if (config.streamingModelPath === deletedPath) {
-                setStreamingModelPath('');
-            }
+            // Streaming path removed
             if (config.offlineModelPath === deletedPath) {
                 setOfflineModelPath('');
             }
@@ -327,9 +317,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     }
 
     function isModelSelected(model: ModelInfo): boolean {
-        if (model.type === 'streaming') {
-            return (config.streamingModelPath || '').includes(model.filename || model.id);
-        }
+        // Streaming path removed
         if (model.type === 'offline') {
             return (config.offlineModelPath || '').includes(model.filename || model.id);
         }
@@ -357,8 +345,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         font: config.font || 'system',
         setFont,
 
-        streamingModelPath: config.streamingModelPath,
-        setStreamingModelPath,
+        // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,
         setOfflineModelPath,
         punctuationModelPath: config.punctuationModelPath || '',

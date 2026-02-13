@@ -48,7 +48,7 @@ describe('batchQueueStore History Integration', () => {
             config: {
                 offlineModelPath: '/path/to/model',
                 language: 'en',
-                streamingModelPath: '',
+
                 appLanguage: 'en'
             }
         });

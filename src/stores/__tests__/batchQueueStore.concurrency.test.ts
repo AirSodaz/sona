@@ -43,7 +43,7 @@ describe('batchQueueStore Concurrency', () => {
         });
         useTranscriptStore.setState({
             config: {
-                streamingModelPath: '',
+
                 offlineModelPath: '/mock/model',
                 language: 'en',
                 appLanguage: 'auto',

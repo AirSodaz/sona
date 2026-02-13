@@ -4,8 +4,6 @@ import { FolderIcon } from '../Icons';
 import { ItnModelList } from './ItnModelList';
 
 interface SettingsLocalTabProps {
-    streamingModelPath: string;
-    setStreamingModelPath: (path: string) => void;
     offlineModelPath: string;
     setOfflineModelPath: (path: string) => void;
     punctuationModelPath: string;
@@ -18,7 +16,7 @@ interface SettingsLocalTabProps {
     setVadBufferSize: (size: number) => void;
     maxConcurrent: number;
     setMaxConcurrent: (size: number) => void;
-    handleBrowse: (type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
+    handleBrowse: (type: 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
 
     // ITN Props
     itnRulesOrder: string[];
@@ -35,8 +33,6 @@ interface SettingsLocalTabProps {
 }
 
 export function SettingsLocalTab({
-    streamingModelPath,
-    setStreamingModelPath,
     offlineModelPath,
     setOfflineModelPath,
     punctuationModelPath,
@@ -70,28 +66,6 @@ export function SettingsLocalTab({
             aria-labelledby="settings-tab-local"
             tabIndex={0}
         >
-            <div className="settings-item">
-                <label htmlFor="settings-streaming-path" className="settings-label">{t('settings.streaming_path_label', { defaultValue: 'Streaming Model Path' })}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        id="settings-streaming-path"
-                        type="text"
-                        title={streamingModelPath}
-                        className="settings-input"
-                        value={streamingModelPath}
-                        onChange={(e) => setStreamingModelPath(e.target.value)}
-                        placeholder={t('settings.path_placeholder')}
-                        style={{ flex: 1 }}
-                    />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('streaming')}
-                        aria-label={t('settings.browse')}
-                    >
-                        <FolderIcon />
-                    </button>
-                </div>
-            </div>
 
             <div className="settings-item" style={{ marginTop: 16 }}>
                 <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>

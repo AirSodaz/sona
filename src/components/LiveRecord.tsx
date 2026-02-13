@@ -149,7 +149,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     async function startRecording(): Promise<void> {
         // Validation: Check if model is configured
         const config = useTranscriptStore.getState().config;
-        if (!config.streamingModelPath) {
+        if (!config.offlineModelPath) {
             alert(t('batch.no_model_error'), { variant: 'error' });
             return;
         }
@@ -289,8 +289,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         // Start transcription service
         const config = useTranscriptStore.getState().config;
-        console.log('[LiveRecord] Starting transcription with model path:', config.streamingModelPath);
-        transcriptionService.setModelPath(config.streamingModelPath);
+        console.log('[LiveRecord] Starting transcription with model path:', config.offlineModelPath);
+        transcriptionService.setModelPath(config.offlineModelPath);
 
 
         // ITN Configuration
@@ -312,6 +312,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
         transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+        transcriptionService.setVadModelPath(config.vadModelPath || '');
+        transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
 
         await transcriptionService.start(
             (segment) => {
