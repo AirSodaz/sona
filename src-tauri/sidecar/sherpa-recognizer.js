@@ -449,7 +449,7 @@ function logFinalResult(id, text, startTime, endTime, tokens) {
 
 // Process Stream
 async function processStream(recognizer, sampleRate, punctuation) {
-    const stream = recognizer.createStream();
+    let stream = recognizer.createStream();
     let totalSamples = 0;
     let segmentStartTime = 0;
     let currentSegmentId = randomUUID();
@@ -462,7 +462,43 @@ async function processStream(recognizer, sampleRate, punctuation) {
     let leftoverBuffer = null;
 
     process.stdin.on('data', (chunk) => {
-        if (chunk.toString() === '__EOS__') {
+        // Robust command detection using Buffer
+        // Check for __RESET__
+        if (chunk.includes('__RESET__')) {
+            // Handle any audio before reset if needed, but usually we can just reset
+            // Signal end of current session but keep process alive
+            const finalResult = recognizer.getResult(stream);
+            const currentTime = totalSamples / sampleRate;
+
+            // Final sync
+            const finalTokens = finalResult.tokens || [];
+            syncTokens(trackedTokens, finalTokens, currentTime);
+
+            if (finalResult.text.trim()) {
+                const text = formatTranscript(finalResult.text, punctuation);
+                logFinalResult(currentSegmentId, text, segmentStartTime, currentTime, trackedTokens);
+            }
+
+            // Reset state for next session
+            // Explicitly free the old stream if possible to avoid memory leak
+            if (stream.free) {
+                stream.free();
+            }
+            // Create a fresh stream for the new session
+            stream = recognizer.createStream();
+
+            totalSamples = 0;
+            segmentStartTime = 0;
+            currentSegmentId = randomUUID();
+            trackedTokens = [];
+            leftoverBuffer = null;
+
+            console.log(JSON.stringify({ reset: true }));
+            return;
+        }
+
+        // Check for __EOS__
+        if (chunk.includes('__EOS__')) {
             process.stdin.emit('end');
             return;
         }
@@ -937,8 +973,33 @@ async function processPseudoStream(recognizer, sampleRate, punctuation, vadModel
     }
 
     process.stdin.on('data', (chunk) => {
-        if (chunk.toString() === '__EOS__') {
+        // Robust command detection
+        if (chunk.includes('__EOS__')) {
             process.stdin.emit('end');
+            return;
+        }
+
+        if (chunk.includes('__RESET__')) {
+            if (speechBufferLength > 0) {
+                runInference(true);
+            }
+            // Reset state
+            speechBuffer = [];
+            speechBufferLength = 0;
+            ringBuffer = [];
+            ringBufferLength = 0;
+            isSpeaking = false;
+            currentSegmentId = randomUUID();
+            totalProcessedSamples = 0;
+            lastInferenceTime = Date.now();
+            utteranceStartSample = 0;
+            audioBuffer = null;
+
+            if (vad && typeof vad.reset === 'function') {
+                try { vad.reset(); } catch (e) { /* ignore */ }
+            }
+
+            console.log(JSON.stringify({ reset: true }));
             return;
         }
 

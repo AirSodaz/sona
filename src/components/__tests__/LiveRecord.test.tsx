@@ -16,6 +16,8 @@ vi.mock('../../services/transcriptionService', () => ({
         setCtcModelPath: vi.fn(),
         setVadModelPath: vi.fn(),
         setVadBufferSize: vi.fn(),
+        prepare: vi.fn().mockResolvedValue(undefined),
+        terminate: vi.fn().mockResolvedValue(undefined),
     }
 }));
 
@@ -106,6 +108,8 @@ describe('LiveRecord', () => {
                 addModule: vi.fn().mockResolvedValue(undefined),
             };
             close() { return Promise.resolve(); }
+            suspend() { return Promise.resolve(); }
+            resume() { return Promise.resolve(); }
         });
 
         vi.stubGlobal('AudioWorkletNode', class {
@@ -292,5 +296,61 @@ describe('LiveRecord', () => {
             expect.stringContaining('live.mic_permission_denied'),
             expect.anything()
         );
+    });
+
+    it('should toggle recording with Ctrl+Space', async () => {
+        render(<LiveRecord />);
+
+        // Start recording with Ctrl+Space
+        await act(async () => {
+            fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
+
+        // Stop recording with Ctrl+Space
+        await act(async () => {
+            fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+        });
+
+        expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
+    });
+
+    it('should toggle pause/resume with Space when recording', async () => {
+        render(<LiveRecord />);
+
+        // Start recording
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+        await act(async () => {
+            fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        // Pause with Space
+        await act(async () => {
+            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+        });
+
+        expect(screen.getByRole('button', { name: /live.resume/i })).toBeTruthy();
+
+        // Resume with Space
+        await act(async () => {
+            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+        });
+
+        expect(screen.getByRole('button', { name: /live.pause/i })).toBeTruthy();
+    });
+
+    it('should NOT toggle pause/resume with Space when NOT recording', async () => {
+        render(<LiveRecord />);
+
+        // Press Space while not recording
+        await act(async () => {
+            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+        });
+
+        // Should still be in start state (no crash, no change)
+        expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
     });
 });

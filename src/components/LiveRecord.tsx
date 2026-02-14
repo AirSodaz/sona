@@ -81,6 +81,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
+    const config = useTranscriptStore((state) => state.config);
     const { t } = useTranslation();
 
     // Draw visualizer
@@ -150,7 +151,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // Validation: Check if model is configured
         const config = useTranscriptStore.getState().config;
         if (!config.offlineModelPath) {
-            await alert(t('batch.no_model_error'), {variant: 'error'});
+            await alert(t('batch.no_model_error'), { variant: 'error' });
             return;
         }
 
@@ -228,7 +229,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         } catch (error) {
             console.error('Failed to start recording:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
-            await alert(`${t('live.mic_error')} (${errorMessage})`, {variant: 'error'});
+            await alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
         } finally {
             setIsInitializing(false);
         }
@@ -238,9 +239,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
 
     async function initializeRecordingSession(stream: MediaStream): Promise<void> {
-        // Set up audio context and analyzer if not already created (File mode creates it earlier)
+        // Set up audio context and analyzer if not already created
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+        } else if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
         }
 
         // If reusing context (file mode), we might need to be careful. 
@@ -382,40 +385,47 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Pause recording
     function pauseRecording(): void {
-        if (mediaRecorderRef.current && isRecordingRef.current && !isPausedRef.current) {
+        setIsPaused(true);
+        isPausedRef.current = true;
+
+        if (mediaRecorderRef.current && isRecordingRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.pause();
             if (audioRef.current) audioRef.current.pause();
-            setIsPaused(true);
-            isPausedRef.current = true;
         }
     }
 
     // Resume recording
     function resumeRecording(): void {
-        if (mediaRecorderRef.current && isRecordingRef.current && isPausedRef.current) {
+        setIsPaused(false);
+        isPausedRef.current = false;
+
+        // Prevent double loops if resume happens quickly
+        if (animationRef.current) {
+            window.cancelAnimationFrame(animationRef.current);
+        }
+        // Restart visualizer loop
+        drawVisualizer();
+
+        if (mediaRecorderRef.current && isRecordingRef.current && mediaRecorderRef.current.state === 'paused') {
             mediaRecorderRef.current.resume();
             if (audioRef.current) audioRef.current.play();
-            setIsPaused(false);
-            isPausedRef.current = false;
-
-            // Prevent double loops if resume happens quickly
-            if (animationRef.current) {
-                window.cancelAnimationFrame(animationRef.current);
-            }
-
-            // Restart visualizer loop
-            drawVisualizer();
         }
     }
 
     // Stop recording
     function stopRecording(): void {
+        // Immediate UI Update
+        setIsRecording(false);
+        setIsPaused(false);
+        isRecordingRef.current = false;
+        isPausedRef.current = false;
+
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current = null;
         }
 
-        if (mediaRecorderRef.current && isRecordingRef.current) {
+        if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
         }
@@ -425,9 +435,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
 
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close().catch(e => console.error('Error closing AudioContext:', e));
+            audioContextRef.current.suspend().catch(e => console.error('Error suspending AudioContext:', e));
+            // Don't close, just suspend to reuse or let it be closed by unmount
         }
-        audioContextRef.current = null;
 
         // Clear visualizer
         const canvas = canvasRef.current;
@@ -435,11 +445,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (canvas && ctx) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
-
-        setIsRecording(false);
-        setIsPaused(false);
-        isRecordingRef.current = false;
-        isPausedRef.current = false;
     }
 
     function getRecordingStatusText(): string {
@@ -449,9 +454,66 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         return t('live.start_hint');
     }
 
-
-    // Cleanup on unmount
+    // Keyboard shortcuts
     useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl+Space to toggle recording
+            if (e.ctrlKey && e.code === 'Space') {
+                e.preventDefault();
+                if (isRecordingRef.current) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            }
+            // Space to toggle pause/resume (only when recording)
+            else if (e.code === 'Space' && isRecordingRef.current) {
+                e.preventDefault();
+                if (isPausedRef.current) {
+                    resumeRecording();
+                } else {
+                    pauseRecording();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, []);
+
+    // Monitor config changes and prepare transcription service
+    useEffect(() => {
+        if (config.offlineModelPath) {
+            console.log('[LiveRecord] Config loaded, preparing transcription service:', config.offlineModelPath);
+            transcriptionService.setModelPath(config.offlineModelPath);
+            transcriptionService.setVadModelPath(config.vadModelPath || '');
+            transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+            transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+
+            // Pre-spawn sidecar now that we have the model path
+            transcriptionService.prepare().catch(e => console.warn('Failed to prepare transcription service:', e));
+        }
+    }, [config.offlineModelPath, config.vadModelPath, config.punctuationModelPath, config.ctcModelPath]);
+
+
+    // Init and cleanup
+    useEffect(() => {
+        // Pre-initialize AudioContext
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+                audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+                // Suspend immediately so it doesn't consume resources or start playback until needed
+                audioContextRef.current.suspend();
+            }
+        } catch (e) {
+            console.warn('Failed to pre-initialize AudioContext', e);
+        }
+
+
+
         return () => {
             if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
                 window.cancelAnimationFrame(animationRef.current);
@@ -464,7 +526,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 audioRef.current = null;
             }
             // Stop transcription service when component unmounts to prevent detached state
-            transcriptionService.stop().catch(e => console.error('Error stopping transcription service:', e));
+            transcriptionService.terminate().catch(e => console.error('Error stopping transcription service:', e));
         };
     }, []);
 

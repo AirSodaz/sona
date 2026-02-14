@@ -51,6 +51,8 @@ class TranscriptionService {
     private onSegment: TranscriptionCallback | null = null;
     /** Callback for error reporting. */
     private onError: ErrorCallback | null = null;
+    /** Promise to track active spawning to prevent race conditions. */
+    private spawningPromise: Promise<void> | null = null;
 
     /**
      * Initializes a new instance of the TranscriptionService.
@@ -136,11 +138,24 @@ class TranscriptionService {
      * @param onSegment A callback for when a new transcript segment is ready.
      * @param onError A callback for when an error occurs.
      */
+    async prepare(): Promise<void> {
+        if (this.isRunning) return;
+
+        if (!this.modelPath) {
+            console.warn('[TranscriptionService] Model path not configured, cannot prepare sidecar');
+            return;
+        }
+
+        console.log('[TranscriptionService] Pre-spawning sidecar...');
+        return this._spawnSidecar();
+    }
+
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
+        this.onSegment = onSegment;
+        this.onError = onError;
+
         if (this.isRunning) {
-            console.log('[TranscriptionService] Service already running, updating callbacks');
-            this.onSegment = onSegment;
-            this.onError = onError;
+            console.log('[TranscriptionService] Service already running, ready for audio');
             return;
         }
 
@@ -149,64 +164,76 @@ class TranscriptionService {
             return;
         }
 
-        this.onSegment = onSegment;
-        this.onError = onError;
-
-        console.log('Starting sidecar with model:', this.modelPath);
-
-        try {
-            const scriptPath = await resolveResource('sidecar/dist/index.mjs');
-
-            const commonArgs = this._getCommonArgs();
-            const args = [
-                scriptPath,
-                '--mode', 'stream',
-                ...commonArgs
-            ];
-
-            const command = Command.sidecar('binaries/node', args);
-
-            // Buffer for stdout stream
-            const stdoutBuffer = new StreamLineBuffer();
-
-            command.on('close', (data) => {
-                console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
-
-                // Process any remaining data
-                const remaining = stdoutBuffer.flush();
-                remaining.forEach(line => this.handleOutput(line));
-
-                this.isRunning = false;
-                this.child = null;
-            });
-
-            command.on('error', (error) => {
-                console.error(`Sidecar error: "${error}"`);
-                if (this.onError) this.onError(`Process error: ${error}`);
-                this.isRunning = false;
-            });
-
-            command.stdout.on('data', (chunk) => {
-                const lines = stdoutBuffer.process(chunk);
-                lines.forEach(line => this.handleOutput(line));
-            });
-
-            command.stderr.on('data', (chunk) => {
-                console.log(`[TranscriptionService] stderr: ${chunk}`);
-            });
-
-            this.child = await command.spawn();
-            this.isRunning = true;
-            console.log('[TranscriptionService] Sidecar started, PID:', this.child.pid);
-
-        } catch (error) {
-            console.error('Failed to spawn sidecar:', error);
-            if (this.onError) this.onError(`Failed to start: ${error}`);
-            this.isRunning = false;
-        }
+        await this._spawnSidecar();
     }
 
-    /**
+    private async _spawnSidecar(): Promise<void> {
+        if (this.spawningPromise) {
+            return this.spawningPromise;
+        }
+
+        this.spawningPromise = (async () => {
+            console.log('Starting sidecar with model:', this.modelPath);
+
+            try {
+                const scriptPath = await resolveResource('sidecar/dist/index.mjs');
+
+                const commonArgs = this._getCommonArgs();
+                const args = [
+                    scriptPath,
+                    '--mode', 'stream',
+                    ...commonArgs
+                ];
+
+                const command = Command.sidecar('binaries/node', args);
+
+                // Buffer for stdout stream
+                const stdoutBuffer = new StreamLineBuffer();
+
+                command.on('close', (data) => {
+                    console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
+
+                    // Process any remaining data
+                    const remaining = stdoutBuffer.flush();
+                    remaining.forEach(line => this.handleOutput(line));
+
+                    this.isRunning = false;
+                    this.child = null;
+                });
+
+                command.on('error', (error) => {
+                    console.error(`Sidecar error: "${error}"`);
+                    if (this.onError) this.onError(`Process error: ${error}`);
+                    this.isRunning = false;
+                });
+
+                command.stdout.on('data', (chunk) => {
+                    const lines = stdoutBuffer.process(chunk);
+                    lines.forEach(line => this.handleOutput(line));
+                });
+
+                command.stderr.on('data', (chunk) => {
+                    console.log(`[TranscriptionService] stderr: ${chunk}`);
+                });
+
+                this.child = await command.spawn();
+                this.isRunning = true;
+                console.log('[TranscriptionService] Sidecar started, PID:', this.child.pid);
+
+            } catch (error) {
+                console.error('Failed to spawn sidecar:', error);
+                if (this.onError) this.onError(`Failed to start: ${error}`);
+                this.isRunning = false;
+                throw error;
+            }
+        })();
+
+        try {
+            await this.spawningPromise;
+        } finally {
+            this.spawningPromise = null;
+        }
+    }    /**
      * Stops the transcription process.
      */
     async stop(): Promise<void> {
@@ -233,25 +260,31 @@ class TranscriptionService {
         if (!this.child || !this.isRunning) return;
 
         try {
-            await this.child.write('__EOS__');
+            console.log('[TranscriptionService] Sending __RESET__ command...');
+            // Send Reset instead of EOS to keep process alive
+            await this.child.write('__RESET__');
 
-            // Wait for sidecar to finish processing
-            // Ideally we wait for this.isRunning to become false.
-            let checks = 0;
-            while (this.isRunning && checks < 20) { // Wait up to 2 seconds
-                await new Promise(r => setTimeout(r, 100));
-                checks++;
-            }
+            // We don't wait for isRunning to become false anymore.
+            // We could wait for a "reset" confirmation from the sidecar if we wanted strict sync,
+            // but for now, sending the command is enough to trigger the flush and reset.
+            // The sidecar prints {"reset": true} when done. 
+            // We can optionally wait for that in handleOutput if we needed to block here.
 
-            if (this.isRunning) {
-                console.warn('[TranscriptionService] Soft stop timed out, forcing kill');
-                await this.child.kill();
-            }
+            // To be safe, wait a small amount of time for flush
+            await new Promise(r => setTimeout(r, 200));
 
         } catch (error) {
             console.error('Failed to soft stop sidecar:', error);
-            await this.stop(); // Fallback to hard kill
+            // Don't kill process here, just log error. 
+            // If it's truly stuck, the next start might fail or user can restart app.
         }
+    }
+
+    /**
+     * Completely terminates the sidecar process.
+     */
+    async terminate(): Promise<void> {
+        await this.stop();
     }
 
     /**
