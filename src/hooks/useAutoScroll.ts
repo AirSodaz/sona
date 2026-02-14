@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptStore } from '../stores/transcriptStore';
 

@@ -45,7 +45,7 @@ vi.mock('../../stores/transcriptStore', async () => {
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'streaming', size: '100MB', description: 'Test', engine: 'onnx', filename: 'test-model' }
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'offline', size: '100MB', description: 'Test', engine: 'onnx', filename: 'test-model' }
     ],
     ITN_MODELS: [
         { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst' }

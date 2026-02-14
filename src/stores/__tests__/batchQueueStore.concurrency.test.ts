@@ -5,7 +5,22 @@ import { useTranscriptStore } from '../transcriptStore';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
-    convertFileSrc: (path: string) => `asset://${path}`
+    convertFileSrc: (path: string) => `asset://${path}`,
+    invoke: vi.fn()
+}));
+
+vi.mock('@tauri-apps/api/path', () => ({
+    tempDir: vi.fn(() => Promise.resolve('/tmp')),
+    join: vi.fn((...args) => Promise.resolve(args.join('/'))),
+}));
+
+vi.mock('@tauri-apps/plugin-fs', () => ({
+    exists: vi.fn(() => Promise.resolve(false)),
+    remove: vi.fn(() => Promise.resolve()),
+    mkdir: vi.fn(() => Promise.resolve()),
+    writeTextFile: vi.fn(() => Promise.resolve()),
+    readTextFile: vi.fn(() => Promise.resolve('')),
+    BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
 vi.mock('../../services/transcriptionService', () => ({

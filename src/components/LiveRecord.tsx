@@ -150,7 +150,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // Validation: Check if model is configured
         const config = useTranscriptStore.getState().config;
         if (!config.offlineModelPath) {
-            alert(t('batch.no_model_error'), { variant: 'error' });
+            await alert(t('batch.no_model_error'), {variant: 'error'});
             return;
         }
 
@@ -228,7 +228,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         } catch (error) {
             console.error('Failed to start recording:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
-            alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
+            await alert(`${t('live.mic_error')} (${errorMessage})`, {variant: 'error'});
         } finally {
             setIsInitializing(false);
         }
@@ -238,7 +238,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
 
     async function initializeRecordingSession(stream: MediaStream): Promise<void> {
-        // Set up audio context and analyser if not already created (File mode creates it earlier)
+        // Set up audio context and analyzer if not already created (File mode creates it earlier)
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         }
@@ -250,7 +250,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         let source: MediaStreamAudioSourceNode;
         // Validating if source can be created from stream in existing context
         // If context was created for file, it already has the source connected to destination/stream.
-        // But we need 'source' variable for Analyser connection below.
+        // But we need 'source' variable for Analyzer connection below.
 
         source = audioContextRef.current.createMediaStreamSource(stream);
 
@@ -546,6 +546,4 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             </p>
         </div>
     );
-};
-
-export default LiveRecord;
+}

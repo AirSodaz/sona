@@ -108,31 +108,6 @@
   --color-accent-glow: rgba(255, 255, 255, 0.05);
 }
 
-/* Dark Theme - System Preference (unless forced light) */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    /* Warm Carbon Theme */
-    --color-bg-primary: #191919;
-    --color-bg-secondary: #202020;
-    --color-bg-tertiary: #2c2c2c;
-    --color-bg-elevated: #2f2f2f;
-    --color-bg-hover: #373737;
-
-    --color-text-primary: #d4d4d4;
-    --color-text-secondary: #9b9a97;
-    --color-text-muted: #707070;
-    --color-text-disabled: #4a4a4a;
-
-    --color-border: rgba(255, 255, 255, 0.08);
-    --color-border-hover: rgba(255, 255, 255, 0.14);
-
-    --color-accent-primary: #e0e0e0;
-    --color-accent-secondary: #474747;
-    --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
-    --color-accent-glow: rgba(255, 255, 255, 0.05);
-  }
-}
-
 /* ===========================
    Reset & Base Styles
    =========================== */
@@ -416,7 +391,8 @@ input[type="url"],
 input[type="tel"],
 textarea,
 select,
-.settings-input {
+.settings-input,
+.dropdown-trigger {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-bg-elevated);
@@ -1041,17 +1017,7 @@ input[type="radio"]:focus {
 }
 
 .dropdown-trigger {
-  width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  transition: all var(--transition-fast);
-  outline: none;
+
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1709,8 +1675,7 @@ input[type="radio"]:focus {
 }
 
 .source-select {
-  padding: 4px 8px;
-  padding-right: 24px;
+  padding: 4px 24px 4px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: transparent;

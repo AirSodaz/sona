@@ -108,7 +108,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
 
     const handleExport = async (format: ExportFormat) => {
         if (segments.length === 0) {
-            alert(t('export.no_segments'), { variant: 'info' });
+            await alert(t('export.no_segments'), {variant: 'info'});
             return;
         }
 
@@ -125,7 +125,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             });
         } catch (error) {
             console.error('Export failed:', error);
-            alert(t('export.failed'), { variant: 'error' });
+            await alert(t('export.failed'), {variant: 'error'});
         } finally {
             setIsExporting(false);
         }
@@ -192,6 +192,4 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             )}
         </div>
     );
-};
-
-export default ExportButton;
+}

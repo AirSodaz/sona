@@ -189,6 +189,4 @@ export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): Rea
             </div>
         </div>
     );
-};
-
-export default FileQueueSidebar;
+}

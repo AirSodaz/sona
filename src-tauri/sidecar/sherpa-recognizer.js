@@ -10,12 +10,11 @@
  * - sherpa-onnx-node: For CPU inference (ONNX models)
  */
 
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
-import { createReadStream, existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, unlinkSync, writeFileSync } from 'fs';
 import os from 'os';
 import { dirname, join } from 'path';
-import { Readable, Transform } from 'stream';
 import { fileURLToPath } from 'url';
 import Seven from 'node-7z';
 import { WaveFile } from 'wavefile';
@@ -25,7 +24,7 @@ const __scriptDir = dirname(__scriptFile);
 
 /**
  * Convert Int16 PCM buffer to Float32 audio samples.
- * @param {Buffer} buffer - Raw PCM data as Int16LE
+ * @param {any} buffer - Raw PCM data as Int16LE
  * @returns {Float32Array} Normalized audio samples
  */
 function pcmInt16ToFloat32(buffer) {
@@ -34,6 +33,25 @@ function pcmInt16ToFloat32(buffer) {
         samples[i] = buffer.readInt16LE(i * 2) / 32768.0;
     }
     return samples;
+}
+
+/**
+ * Save PCM data to a WAV file.
+ * @param {Buffer} pcmData - Raw PCM data
+ * @param {string} filePath - Path to save the WAV file
+ */
+function saveWavFile(pcmData, filePath) {
+    if (!filePath) return;
+    try {
+        const wav = new WaveFile();
+        // Create Int16Array view of the buffer
+        const int16Samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.length / 2);
+        wav.fromScratch(1, 16000, '16', int16Samples);
+        writeFileSync(filePath, wav.toBuffer());
+        console.error(`[Sidecar] Saved converted WAV to ${filePath}`);
+    } catch (e) {
+        console.error(`[Sidecar] Failed to save WAV: ${e.message}`);
+    }
 }
 
 /**
@@ -191,14 +209,24 @@ async function getFFmpegPath() {
     }
 }
 
-// Convert audio file to 16kHz mono WAV using ffmpeg
-async function convertToWav(inputPath, ffmpegPath) {
+// Convert audio file to mono WAV/PCM using ffmpeg
+async function convertToWav(inputPath, ffmpegPath, options = {}) {
+    const { sampleRate = 16000, startTime, duration } = options;
+
     return new Promise((resolve, reject) => {
         const chunks = [];
-        const ffmpeg = spawn(ffmpegPath, [
-            '-i', inputPath,
-            '-f', 's16le', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', '-'
-        ]);
+        const args = [];
+
+        // Add seeking arguments before input for fast seeking
+        if (startTime !== undefined) args.push('-ss', startTime.toString());
+        if (duration !== undefined) args.push('-t', duration.toString());
+
+        args.push('-i', inputPath);
+
+        // Output format arguments
+        args.push('-f', 's16le', '-acodec', 'pcm_s16le', '-ar', sampleRate.toString(), '-ac', '1', '-');
+
+        const ffmpeg = spawn(ffmpegPath, args);
 
         ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
         ffmpeg.stderr.on('data', () => { });
@@ -260,9 +288,6 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             console.error(`[Sidecar] Using ITN models: ${validItnPaths}`);
             config.ruleFsts = validItnPaths;
         }
-
-        const supportsInternalITN = !!config.ruleFsts || !!(modelConfig.senseVoice && modelConfig.senseVoice.useInverseTextNormalization);
-
         return {
             recognizer: new sherpa.OnlineRecognizer(config),
             type: 'online',
@@ -377,8 +402,50 @@ async function createPunctuation(modelPath) {
 }
 
 
+function syncTokens(trackedTokens, newTokens, currentTime) {
+    let matchLen = 0;
+    const minLen = Math.min(trackedTokens.length, newTokens.length);
+    for (let i = 0; i < minLen; i++) {
+        if (trackedTokens[i].token === newTokens[i]) {
+            matchLen++;
+        } else {
+            break;
+        }
+    }
 
+    if (matchLen < trackedTokens.length) {
+        trackedTokens.length = matchLen;
+    }
 
+    for (let i = matchLen; i < newTokens.length; i++) {
+        trackedTokens.push({
+            token: newTokens[i],
+            endTime: currentTime
+        });
+    }
+}
+
+function logFinalResult(id, text, startTime, endTime, tokens) {
+    const timestamps = [];
+    const durations = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const tStart = i === 0 ? startTime : tokens[i - 1].endTime;
+        const tEnd = tokens[i].endTime;
+        timestamps.push(tStart);
+        durations.push(tEnd - tStart);
+    }
+
+    console.log(JSON.stringify({
+        id: id,
+        text: text,
+        start: startTime,
+        end: endTime,
+        isFinal: true,
+        tokens: tokens.map(t => t.token),
+        timestamps,
+        durations
+    }));
+}
 
 // Process Stream
 async function processStream(recognizer, sampleRate, punctuation) {
@@ -428,28 +495,7 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
         // Robust Token Tracking
         // 1. Find the common prefix length between tracked tokens and current hypothesis
-        let matchLen = 0;
-        const minLen = Math.min(trackedTokens.length, currentTokens.length);
-        for (let i = 0; i < minLen; i++) {
-            if (trackedTokens[i].token === currentTokens[i]) {
-                matchLen++;
-            } else {
-                break;
-            }
-        }
-
-        // 2. Truncate tracked tokens to the matching prefix
-        if (matchLen < trackedTokens.length) {
-            trackedTokens.length = matchLen;
-        }
-
-        // 3. Append new tokens from current hypothesis
-        for (let i = matchLen; i < currentTokens.length; i++) {
-            trackedTokens.push({
-                token: currentTokens[i],
-                endTime: currentTime
-            });
-        }
+        syncTokens(trackedTokens, currentTokens, currentTime);
 
         // Partial result
         if (result.text.trim()) {
@@ -478,50 +524,15 @@ async function processStream(recognizer, sampleRate, punctuation) {
             // Update tracked with final result
             const finalTokens = finalResult.tokens || [];
 
-            // Re-sync with final tokens (logic same as above)
-            let matchLen = 0;
-            const minLen = Math.min(trackedTokens.length, finalTokens.length);
-            for (let i = 0; i < minLen; i++) {
-                if (trackedTokens[i].token === finalTokens[i]) {
-                    matchLen++;
-                } else {
-                    break;
-                }
-            }
-            if (matchLen < trackedTokens.length) {
-                trackedTokens.length = matchLen;
-            }
-            for (let i = matchLen; i < finalTokens.length; i++) {
-                trackedTokens.push({
-                    token: finalTokens[i],
-                    endTime: currentTime
-                });
-            }
+            // Re-sync with final tokens
+            syncTokens(trackedTokens, finalTokens, currentTime);
 
             if (finalResult.text.trim()) {
                 const rawText = finalResult.text;
                 const formattedText = formatTranscript(rawText, punctuation);
                 console.error(`[DEBUG] Raw: "${rawText}" | Formatted: "${formattedText}"`);
 
-                const timestamps = [];
-                const durations = [];
-                for (let i = 0; i < trackedTokens.length; i++) {
-                    const startTime = i === 0 ? segmentStartTime : trackedTokens[i - 1].endTime;
-                    const endTime = trackedTokens[i].endTime;
-                    timestamps.push(startTime);
-                    durations.push(endTime - startTime);
-                }
-
-                console.log(JSON.stringify({
-                    id: currentSegmentId,
-                    text: formattedText,
-                    start: segmentStartTime,
-                    end: currentTime,
-                    isFinal: true,
-                    tokens: trackedTokens.map(t => t.token),
-                    timestamps,
-                    durations
-                }));
+                logFinalResult(currentSegmentId, formattedText, segmentStartTime, currentTime, trackedTokens);
             }
 
             // Reset for next segment
@@ -539,46 +550,11 @@ async function processStream(recognizer, sampleRate, punctuation) {
 
         // Final sync
         const finalTokens = finalResult.tokens || [];
-        let matchLen = 0;
-        const minLen = Math.min(trackedTokens.length, finalTokens.length);
-        for (let i = 0; i < minLen; i++) {
-            if (trackedTokens[i].token === finalTokens[i]) {
-                matchLen++;
-            } else {
-                break;
-            }
-        }
-        if (matchLen < trackedTokens.length) {
-            trackedTokens.length = matchLen;
-        }
-        for (let i = matchLen; i < finalTokens.length; i++) {
-            trackedTokens.push({
-                token: finalTokens[i],
-                endTime: currentTime
-            });
-        }
+        syncTokens(trackedTokens, finalTokens, currentTime);
 
         if (finalResult.text.trim()) {
             const text = formatTranscript(finalResult.text, punctuation);
-            const timestamps = [];
-            const durations = [];
-            for (let i = 0; i < trackedTokens.length; i++) {
-                const startTime = i === 0 ? segmentStartTime : trackedTokens[i - 1].endTime;
-                const endTime = trackedTokens[i].endTime;
-                timestamps.push(startTime);
-                durations.push(endTime - startTime);
-            }
-
-            console.log(JSON.stringify({
-                id: currentSegmentId,
-                text,
-                start: segmentStartTime,
-                end: currentTime,
-                isFinal: true,
-                tokens: trackedTokens.map(t => t.token),
-                timestamps,
-                durations
-            }));
+            logFinalResult(currentSegmentId, text, segmentStartTime, currentTime, trackedTokens);
         }
         console.log(JSON.stringify({ done: true }));
         process.exit(0);
@@ -594,15 +570,8 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
         const pcmData = await convertToWav(filePath, ffmpegPath);
 
         if (options.saveWav) {
-            try {
-                const wav = new WaveFile();
-                // Create Int16Array view of the buffer
-                const int16Samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.length / 2);
-                wav.fromScratch(1, 16000, '16', int16Samples);
-                writeFileSync(options.saveWav, wav.toBuffer());
-                console.error(`[Sidecar] Saved converted WAV to ${options.saveWav}`);
-            } catch (e) {
-                console.error(`[Sidecar] Failed to save WAV: ${e.message}`);
+            if (options.saveWav) {
+                saveWavFile(pcmData, options.saveWav);
             }
         }
 
@@ -883,9 +852,8 @@ async function* yieldFixedChunks(samples, sampleRate, chunkDuration = 30) {
  * @param {number} sampleRate 
  * @param {object} punctuation 
  * @param {string} vadModelPath 
- * @param {object} options 
  */
-async function processPseudoStream(recognizer, sampleRate, punctuation, vadModelPath, options) {
+async function processPseudoStream(recognizer, sampleRate, punctuation, vadModelPath) {
     console.error(`[Sidecar] Starting Pseudo-Stream (VAD: ${vadModelPath})`);
 
     // 1. Initialize VAD
@@ -1115,16 +1083,7 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
         const pcmData = await convertToWav(filePath, ffmpegPath);
 
         if (options && options.saveWav) {
-            try {
-                const wav = new WaveFile();
-                // Create Int16Array view of the buffer
-                const int16Samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, pcmData.length / 2);
-                wav.fromScratch(1, 16000, '16', int16Samples);
-                writeFileSync(options.saveWav, wav.toBuffer());
-                console.error(`[Sidecar] Saved converted WAV to ${options.saveWav}`);
-            } catch (e) {
-                console.error(`[Sidecar] Failed to save WAV: ${e.message}`);
-            }
+            saveWavFile(pcmData, options.saveWav);
         }
 
         const samples = pcmInt16ToFloat32(pcmData);
@@ -1255,22 +1214,11 @@ async function processAlign(ctcModelPath, filePath, startTime, endTime, ffmpegPa
     if (duration <= 0) throw new Error('Invalid time range: end must be after start');
 
     // Extract audio slice via ffmpeg
-    const pcmData = await new Promise((resolve, reject) => {
-        const chunks = [];
-        const ffmpeg = spawn(ffmpegPath, [
-            '-ss', startTime.toString(),
-            '-t', duration.toString(),
-            '-i', filePath,
-            '-f', 's16le', '-acodec', 'pcm_s16le', '-ar', sampleRate.toString(), '-ac', '1', '-'
-        ]);
-
-        ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
-        ffmpeg.stderr.on('data', () => { });
-        ffmpeg.on('close', (code) => {
-            if (code === 0) resolve(Buffer.concat(chunks));
-            else reject(new Error(`FFmpeg exited with code ${code}`));
-        });
-        ffmpeg.on('error', reject);
+    // Extract audio slice via ffmpeg
+    const pcmData = await convertToWav(filePath, ffmpegPath, {
+        startTime,
+        duration,
+        sampleRate
     });
 
     const samples = pcmInt16ToFloat32(pcmData);
@@ -1475,7 +1423,7 @@ async function main() {
         } else {
             if (type === 'offline') {
                 if (options.vadModel) {
-                    await processPseudoStream(recognizer, options.sampleRate, punctuation, options.vadModel, options);
+                    await processPseudoStream(recognizer, options.sampleRate, punctuation, options.vadModel);
                 } else {
                     console.error(JSON.stringify({ error: 'Streaming mode for offline model requires --vad-model.' }));
                     process.exit(1);
@@ -1491,4 +1439,7 @@ async function main() {
     }
 }
 
-main();
+main().catch((error) => {
+    console.error(JSON.stringify({ error: error.message || String(error) }));
+    process.exit(1);
+});

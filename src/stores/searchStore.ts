@@ -42,9 +42,9 @@ export const useSearchStore = create<SearchState>((set, get) => ({
 
     setQuery: (query: string) => {
         set({ query });
-        // Note: performSearch needs to be called by the component with segments
+        // Note: performSearch needs to be called by the component with segments,
         // or we need a way to access segments here. 
-        // For now, we'll rely on the consuming component to trigger search 
+        // For now, we'll rely on the consuming component to trigger search,
         // or we can subscribe to transcriptStore if we want to couple them.
         // Decoupled is better for testing.
     },
@@ -95,7 +95,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                     segmentId: segment.id,
                     startIndex: index,
                     length: query.length,
-                    text: text.substr(index, query.length),
+                    text: text.substring(index, index + query.length),
                     globalIndex: matches.length
                 });
                 startIndex = index + 1;

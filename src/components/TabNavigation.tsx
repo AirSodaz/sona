@@ -63,5 +63,3 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         </div>
     );
 }
-
-export default TabNavigation;

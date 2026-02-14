@@ -395,18 +395,6 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 }));
 
-// Selector hooks for better performance
-/** Selector for accessing segments. */
-export const useSegments = () => useTranscriptStore((state) => state.segments);
-/** Selector for accessing the active segment ID. */
-export const useActiveSegmentId = () => useTranscriptStore((state) => state.activeSegmentId);
-/** Selector for accessing the current mode. */
-export const useMode = () => useTranscriptStore((state) => state.mode);
-/** Selector for accessing the processing status. */
-export const useProcessingStatus = () => useTranscriptStore((state) => state.processingStatus);
-/** Selector for accessing the current configuration. */
-export const useConfig = () => useTranscriptStore((state) => state.config);
-
 /**
  * Calculates the new segments array and the index of the updated/inserted segment.
  *

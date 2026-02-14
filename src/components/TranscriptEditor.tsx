@@ -35,8 +35,8 @@ interface TranscriptEditorProps {
  * Uses virtualization for performance with large transcripts.
  * Optimized to minimize re-renders during high-frequency updates.
  *
- * @param props Component props.
  * @return The transcript editor interface.
+ * @param _props
  */
 export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Element {
     const { t } = useTranslation();

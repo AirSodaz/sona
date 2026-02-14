@@ -194,4 +194,4 @@ export function GlobalDialog(): React.JSX.Element | null {
             </div>
         </div>
     );
-};
+}

@@ -1,7 +1,5 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-
-// ... existing imports ...
 import { useTranslation } from 'react-i18next';
 import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';

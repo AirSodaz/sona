@@ -14,6 +14,8 @@ vi.mock('../../services/transcriptionService', () => ({
         setITNModelPaths: vi.fn(),
         setPunctuationModelPath: vi.fn(),
         setCtcModelPath: vi.fn(),
+        setVadModelPath: vi.fn(),
+        setVadBufferSize: vi.fn(),
     }
 }));
 
@@ -24,6 +26,15 @@ vi.mock('../../services/modelService', () => ({
         getITNModelPath: vi.fn().mockResolvedValue('/path/to/itn'),
         getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/path/to/itn']),
     }
+}));
+
+vi.mock('@tauri-apps/plugin-fs', () => ({
+    exists: vi.fn(() => Promise.resolve(false)),
+    remove: vi.fn(() => Promise.resolve()),
+    mkdir: vi.fn(() => Promise.resolve()),
+    writeTextFile: vi.fn(() => Promise.resolve()),
+    readTextFile: vi.fn(() => Promise.resolve('')),
+    BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
 // Mock translation

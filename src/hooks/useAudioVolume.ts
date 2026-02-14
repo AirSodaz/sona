@@ -1,4 +1,4 @@
-import { useState, RefObject } from 'react';
+import React, { useState, RefObject } from 'react';
 
 interface UseAudioVolumeReturn {
     volume: number;

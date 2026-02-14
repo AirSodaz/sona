@@ -103,20 +103,30 @@ const HistoryItemComponent = ({
                     display: 'flex',
                     flexDirection: 'column',
                     fontFamily: 'inherit',
-                    color: 'inherit'
+                    color: 'inherit',
+                    minWidth: 0
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: isSelectionMode ? 0 : '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: isSelectionMode ? 0 : '40px', width: '100%' }}>
                     {item.type === 'batch' ? (
-                        <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)' }}>
+                        <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
                             <FileTextIcon />
                         </span>
                     ) : (
-                        <span title="Recording" style={{ color: 'var(--color-text-tertiary)' }}>
+                        <span title="Recording" style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
                             <MicIcon />
                         </span>
                     )}
-                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{highlightText(item.title, searchQuery)}</span>
+                    <span style={{
+                        fontWeight: 600,
+                        color: 'var(--color-text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        flex: 1,
+                        display: 'block',
+                        minWidth: 0
+                    }}>{highlightText(item.title, searchQuery)}</span>
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
@@ -140,7 +150,8 @@ const HistoryItemComponent = ({
                     overflow: 'hidden',
                     margin: 0,
                     textAlign: 'left',
-                    width: '100%'
+                    width: '100%',
+                    wordBreak: 'break-all'
                 }}>
                     {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
                 </p>

@@ -63,7 +63,7 @@ function ModelCardActions({
                 <button
                     className="btn btn-secondary"
                     onClick={() => onDelete(model)}
-                    disabled={false} // Allow delete even if something else is happening
+                    disabled={false} // Allow to delete even if something else is happening
                     aria-label={`${t('common.delete')} ${model.name}`}
                     data-tooltip={t('common.delete')}
                 >

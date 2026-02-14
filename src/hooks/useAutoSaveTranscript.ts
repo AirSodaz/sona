@@ -9,19 +9,11 @@ import { TranscriptSegment } from '../types/transcript';
  * Used to detect changes without deep comparison of every field.
  */
 function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
-    // Length + Concatenated ID|Text of first, middle, and last items (sampling) + Total text length
-    // Actually for accuracy we probably need to check all texts, but let's try a robust summary
-    // Since users edit text, we need to detect text changes.
-    // Concatenating all IDs and Texts might be heavy for very long transcripts.
-    // But given we want to save on ANY edit, we should be precise.
-
-    // JSON stringify is actually quite fast for reasonable sizes.
-    // Let's try a custom string builder to avoid full JSON overhead if possible,
-    // or just rely on the fact that we only run this when zustand notifies us.
-
-    // Let's stick to a simple strategy:
-    // We only care about ID (order/existence) and Text (content).
-    // Start/End times usually change with alignment or merge, which also changes ID/Text structure often.
+    // We need to detect any text or structural changes.
+    // A simple concatenation of fields works well here.
+    // It avoids the overhead of full JSON serialization.
+    // Since this runs on every update, efficiency is key.
+    // We verify ID, text, and timing for each segment.
     return segments.map(s => `${s.id}:${s.text}:${s.start}:${s.end}`).join('|');
 }
 
@@ -106,12 +98,13 @@ export function useAutoSaveTranscript() {
             await historyService.updateTranscript(historyId, segments);
 
             // 2. Update in-memory metadata (Preview Text & Search Content)
-            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
-            const searchContent = segments.map(s => s.text).join(' ');
+            // 2. Update in-memory metadata (Preview Text & Search Content)
+            const fullText = segments.map(s => s.text).join(' ');
+            const previewText = fullText.substring(0, 100) + (fullText.length > 100 ? '...' : '');
 
             updateItemMeta(historyId, {
                 previewText,
-                searchContent
+                searchContent: fullText
             });
 
         } catch (err) {

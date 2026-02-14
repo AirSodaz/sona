@@ -258,6 +258,4 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
             </div>
         </div >
     );
-};
-
-export default Settings;
+}

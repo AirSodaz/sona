@@ -7,7 +7,7 @@
 }
 
 :root {
-  font-family: var(--font-sans, Inter, Avenir, Helvetica, Arial, sans-serif);
+  font-family: var(--font-sans, sans-serif);
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
@@ -20,6 +20,10 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+
+  /* Defined locally to resolve errors */
+  --color-primary: #646cff;
+  --color-surface-hover: rgba(100, 108, 255, 0.1);
 }
 
 .container {

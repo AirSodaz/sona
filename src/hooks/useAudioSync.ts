@@ -17,7 +17,7 @@ interface UseAudioSyncProps {
     /** Function to set the duration. */
     setDuration: (duration: number) => void;
     /** Ref to track the last update time to throttle updates. */
-    lastUpdateTimeRef: React.MutableRefObject<number>;
+    lastUpdateTimeRef: { current: number };
 }
 
 /**

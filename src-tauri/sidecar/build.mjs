@@ -1,9 +1,9 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
-import { execSync } from 'child_process';
+import {copyFileSync, existsSync, mkdirSync, readdirSync} from 'fs';
+import {dirname, join} from 'path';
+import {fileURLToPath} from 'url';
+import {createRequire} from 'module';
+import {execSync} from 'child_process';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -45,12 +45,8 @@ const arch = process.arch;
 
 let platformName = platform;
 if (platform === 'win32') platformName = 'win';
-// linux is linux, darwin is darwin
 
-let archName = arch;
-// x64 is x64, arm64 is arm64
-
-const packageName = `sherpa-onnx-${platformName}-${archName}`;
+const packageName = `sherpa-onnx-${platformName}-${arch}`;
 const bindingDir = join(__dirname, 'node_modules', packageName);
 const nodeFileSrc = join(bindingDir, 'sherpa-onnx.node');
 

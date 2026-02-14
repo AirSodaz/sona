@@ -82,7 +82,6 @@ const BatchImportOptions = React.memo(function BatchImportOptions({ enableTimeli
  * Displays the status of the currently processing or selected item in the queue.
  *
  * Connected component that subscribes to the batch queue store directly.
- * Optimized with React.memo to prevent re-renders when other items update.
  *
  * @return The status display component.
  */
@@ -307,7 +306,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 const files = Array.isArray(selected) ? selected : [selected];
                 if (files.length > 0) {
                     if (!config.offlineModelPath) {
-                        alert(t('batch.no_model_error'), { variant: 'error' });
+                        await alert(t('batch.no_model_error'), {variant: 'error'});
                         return;
                     }
                     addFiles(files);
@@ -401,5 +400,3 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         </div>
     );
 }
-
-export default BatchImport;

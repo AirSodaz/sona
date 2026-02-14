@@ -10,9 +10,9 @@ import { open } from '@tauri-apps/plugin-dialog';
  *
  * Handles state for tabs, model paths, downloading, and saving configuration.
  *
- * @param isOpen Whether the settings dialog is open.
- * @param onClose Callback to close the dialog.
  * @return An object containing form state and action handlers.
+ * @param _isOpen
+ * @param _onClose
  */
 export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const config = useTranscriptStore((state) => state.config);

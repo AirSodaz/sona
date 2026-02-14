@@ -9,7 +9,22 @@ vi.mock('uuid', () => ({
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
-    convertFileSrc: (path: string) => `asset://${path}`
+    convertFileSrc: (path: string) => `asset://${path}`,
+    invoke: vi.fn()
+}));
+
+vi.mock('@tauri-apps/api/path', () => ({
+    tempDir: vi.fn(() => Promise.resolve('/tmp')),
+    join: vi.fn((...args) => Promise.resolve(args.join('/'))),
+}));
+
+vi.mock('@tauri-apps/plugin-fs', () => ({
+    exists: vi.fn(() => Promise.resolve(false)),
+    remove: vi.fn(() => Promise.resolve()),
+    mkdir: vi.fn(() => Promise.resolve()),
+    writeTextFile: vi.fn(() => Promise.resolve()),
+    readTextFile: vi.fn(() => Promise.resolve('')),
+    BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
 vi.mock('../../services/transcriptionService', () => ({
@@ -69,11 +84,11 @@ describe('batchQueueStore buffering', () => {
 
                 // Return full list as final result
                 const finalSegments = Array.from({ length: totalSegments }).map((_, i) => ({
-                     id: `seg-${i}`,
-                     text: `Segment ${i}`,
-                     start: i,
-                     end: i + 1,
-                     isFinal: true
+                    id: `seg-${i}`,
+                    text: `Segment ${i}`,
+                    start: i,
+                    end: i + 1,
+                    isFinal: true
                 }));
                 return finalSegments;
             }
@@ -81,15 +96,15 @@ describe('batchQueueStore buffering', () => {
 
         let updateCount = 0;
         const unsub = useBatchQueueStore.subscribe((state, prevState) => {
-             // We want to count updates to segments specifically
-             const prevSegs = prevState.queueItems[0]?.segments;
-             const currSegs = state.queueItems[0]?.segments;
+            // We want to count updates to segments specifically
+            const prevSegs = prevState.queueItems[0]?.segments;
+            const currSegs = state.queueItems[0]?.segments;
 
-             // Only count if segments reference changed and length increased
-             // (To filter out initial empty state or other updates)
-             if (currSegs && prevSegs && currSegs !== prevSegs) {
-                 updateCount++;
-             }
+            // Only count if segments reference changed and length increased
+            // (To filter out initial empty state or other updates)
+            if (currSegs && prevSegs && currSegs !== prevSegs) {
+                updateCount++;
+            }
         });
 
         // Action

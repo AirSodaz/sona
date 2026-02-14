@@ -187,10 +187,8 @@ class TranscriptionService {
             });
 
             command.stdout.on('data', (chunk) => {
-                if (typeof chunk === 'string') {
-                    const lines = stdoutBuffer.process(chunk);
-                    lines.forEach(line => this.handleOutput(line));
-                }
+                const lines = stdoutBuffer.process(chunk);
+                lines.forEach(line => this.handleOutput(line));
             });
 
             command.stderr.on('data', (chunk) => {
@@ -284,6 +282,7 @@ class TranscriptionService {
      * @param onProgress An optional callback for progress (0-100).
      * @param onSegment An optional callback for each transcribed segment.
      * @param language The language code (e.g., 'en', 'zh'). Defaults to 'auto'.
+     * @param saveToPath Optional path to save the processed audio file (WAV format).
      * @return A promise that resolves to a list of all transcript segments.
      */
     async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
@@ -306,6 +305,7 @@ class TranscriptionService {
      * @param onProgress A callback for progress updates.
      * @param onSegment A callback for new segments.
      * @param language The language code.
+     * @param saveToPath Optional path to save the processed audio file (WAV format).
      * @return A promise that resolves to the list of segments.
      */
     private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
@@ -404,44 +404,42 @@ class TranscriptionService {
             });
 
             command.stdout.on('data', (chunk) => {
-                if (typeof chunk === 'string') {
-                    const lines = stdoutStreamBuffer.process(chunk);
-                    lines.forEach(line => {
-                        try {
-                            const data = JSON.parse(line);
-                            if (Array.isArray(data)) {
-                                data.forEach((item: any) => {
-                                    const segment = this._createSegment(item, true);
-                                    if (segment) {
-                                        collectedSegments.push(segment);
-                                    }
-                                });
-                            } else {
-                                const segment = this._createSegment(data, true);
+                const lines = stdoutStreamBuffer.process(chunk);
+                lines.forEach(line => {
+                    try {
+                        const data = JSON.parse(line);
+                        if (Array.isArray(data)) {
+                            data.forEach((item: any) => {
+                                const segment = this._createSegment(item, true);
                                 if (segment) {
                                     collectedSegments.push(segment);
-                                    if (onSegment) onSegment(segment);
                                 }
+                            });
+                        } else {
+                            const segment = this._createSegment(data, true);
+                            if (segment) {
+                                collectedSegments.push(segment);
+                                if (onSegment) onSegment(segment);
                             }
-                        } catch (e) { }
-                    });
-                }
+                        }
+                    } catch (e) {
+                    }
+                });
             });
 
             command.stderr.on('data', (chunk) => {
-                if (typeof chunk === 'string') {
-                    stderrChunks.push(chunk);
-                    const lines = stderrStreamBuffer.process(chunk);
-                    lines.forEach(line => {
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.type === 'progress' && typeof data.percentage === 'number') {
-                                if (onProgress) onProgress(data.percentage);
-                            }
-                        } catch (e) { }
-                        console.log(`[Batch] stderr: ${line}`);
-                    });
-                }
+                stderrChunks.push(chunk);
+                const lines = stderrStreamBuffer.process(chunk);
+                lines.forEach(line => {
+                    try {
+                        const data = JSON.parse(line);
+                        if (data.type === 'progress' && typeof data.percentage === 'number') {
+                            if (onProgress) onProgress(data.percentage);
+                        }
+                    } catch (e) {
+                    }
+                    console.log(`[Batch] stderr: ${line}`);
+                });
             });
 
             try {
@@ -559,20 +557,19 @@ class TranscriptionService {
                 let result: AlignmentResult | null = null;
 
                 command.stdout.on('data', (chunk) => {
-                    if (typeof chunk === 'string') {
-                        const lines = stdoutBuffer.process(chunk);
-                        for (const line of lines) {
-                            try {
-                                const data = JSON.parse(line);
-                                if (data.tokens && Array.isArray(data.tokens)) {
-                                    result = {
-                                        tokens: data.tokens,
-                                        timestamps: data.timestamps || [],
-                                        durations: data.durations || [],
-                                        ctcText: data.ctcText || '',
-                                    };
-                                }
-                            } catch (e) { /* ignore non-JSON */ }
+                    const lines = stdoutBuffer.process(chunk);
+                    for (const line of lines) {
+                        try {
+                            const data = JSON.parse(line);
+                            if (data.tokens && Array.isArray(data.tokens)) {
+                                result = {
+                                    tokens: data.tokens,
+                                    timestamps: data.timestamps || [],
+                                    durations: data.durations || [],
+                                    ctcText: data.ctcText || '',
+                                };
+                            }
+                        } catch (e) { /* ignore non-JSON */
                         }
                     }
                 });

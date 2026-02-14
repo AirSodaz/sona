@@ -54,12 +54,31 @@ export function useAppInitialization() {
         const theme = config.theme || 'auto';
         const root = document.documentElement;
 
-        if (theme === 'dark') {
-            root.setAttribute('data-theme', 'dark');
-        } else if (theme === 'light') {
-            root.setAttribute('data-theme', 'light');
+        const applyTheme = (targetTheme: string) => {
+            if (targetTheme === 'dark') {
+                root.setAttribute('data-theme', 'dark');
+            } else if (targetTheme === 'light') {
+                root.setAttribute('data-theme', 'light');
+            } else {
+                root.removeAttribute('data-theme');
+            }
+        };
+
+        if (theme === 'auto') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+            // Initial check
+            applyTheme(mediaQuery.matches ? 'dark' : 'light');
+
+            // Listen for changes
+            const handleChange = (e: MediaQueryListEvent) => {
+                applyTheme(e.matches ? 'dark' : 'light');
+            };
+
+            mediaQuery.addEventListener('change', handleChange);
+            return () => mediaQuery.removeEventListener('change', handleChange);
         } else {
-            root.removeAttribute('data-theme');
+            applyTheme(theme);
         }
     }, [config.theme]);
 

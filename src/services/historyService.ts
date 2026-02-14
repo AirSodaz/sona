@@ -41,6 +41,24 @@ export const historyService = {
         }
     },
 
+    async saveTranscriptFile(id: string, segments: TranscriptSegment[]) {
+        // Save Transcript
+        const transcriptFileName = `${id}.json`;
+        const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
+        console.log('[History] Writing transcript file:', transcriptPathDisplay);
+        await writeTextFile(
+            transcriptPathDisplay,
+            JSON.stringify(segments, null, 2),
+            { baseDir: BaseDirectory.AppLocalData }
+        );
+
+        // Create metadata
+        const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
+        const searchContent = segments.map(s => s.text).join(' ');
+
+        return { transcriptFileName, previewText, searchContent };
+    },
+
     async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
         console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
         try {
@@ -64,19 +82,8 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            // Save Transcript
-            const transcriptFileName = `${id}.json`;
-            const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
-            console.log('[History] Writing transcript file:', transcriptPathDisplay);
-            await writeTextFile(
-                transcriptPathDisplay,
-                JSON.stringify(segments, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
-
-            // Create Item
-            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
-            const searchContent = segments.map(s => s.text).join(' ');
+            // Save Transcript and generate metadata
+            const { transcriptFileName, previewText, searchContent } = await this.saveTranscriptFile(id, segments);
 
             const newItem: HistoryItem = {
                 id,
@@ -135,19 +142,8 @@ export const historyService = {
                 { toPathBaseDir: BaseDirectory.AppLocalData }
             );
 
-            // Save Transcript
-            const transcriptFileName = `${id}.json`;
-            const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
-            console.log('[History] Writing transcript file:', transcriptPathDisplay);
-            await writeTextFile(
-                transcriptPathDisplay,
-                JSON.stringify(segments, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
-
-            // Create Item
-            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
-            const searchContent = segments.map(s => s.text).join(' ');
+            // Save Transcript and generate metadata
+            const { transcriptFileName, previewText, searchContent } = await this.saveTranscriptFile(id, segments);
 
             const newItem: HistoryItem = {
                 id,

@@ -158,7 +158,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     className="btn btn-icon"
                     onClick={toggleMute}
                     aria-label={isMuted ? t('player.unmute') : t('player.mute')}
-                    aria-pressed={!!isMuted}
+                    aria-pressed={isMuted}
                     data-tooltip={isMuted ? t('player.unmute') : t('player.mute')}
                     data-tooltip-pos="top"
                 >
@@ -184,5 +184,3 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         </div>
     );
 }
-
-export default AudioPlayer;

@@ -21,7 +21,7 @@ export function SearchUI(): React.JSX.Element | null {
     const segments = useTranscriptStore(state => state.segments);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Auto-focus input when opened
+    // Autofocus input when opened
     useEffect(() => {
         if (isOpen && inputRef.current) {
             inputRef.current.select();

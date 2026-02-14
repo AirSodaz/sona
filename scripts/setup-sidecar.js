@@ -112,7 +112,6 @@ async function setupNode() {
 
       console.log('Extracting Node binary...');
       // Extract specific file using tar
-      // bin/node is the path inside the tarball
       // The tarball structure is node-v.../bin/node
       // We use --strip-components to flatten or direct extraction?
       // Simpler: extract to temp dir then move
