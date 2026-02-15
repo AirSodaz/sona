@@ -205,41 +205,27 @@ async fn download_file<R: tauri::Runtime>(
     let mut downloaded: u64 = 0;
     let mut last_emit = std::time::Instant::now(); // Use std::time::Instant directly
 
-    let result = loop {
-        tokio::select! {
-             _ = notify.notified() => {
-                 break Err("Download cancelled".to_string());
-             }
-             item = stream.next() => {
-                 match item {
-                     Some(chunk_res) => {
-                         let chunk = match chunk_res {
-                             Ok(c) => c,
-                             Err(e) => break Err(e),
-                         };
-                         use tokio::io::AsyncWriteExt;
-                         if let Err(e) = writer.write_all(&chunk).await {
-                             break Err(e.to_string());
-                         }
-                         downloaded += chunk.len() as u64;
-
-                         if total_size > 0 {
-                             if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
-                                 let _ = app.emit("download-progress", (downloaded, total_size, &id));
-                                 last_emit = std::time::Instant::now();
-                             }
-                         }
-                     }
-                     None => {
-                        use tokio::io::AsyncWriteExt;
-                        if let Err(e) = writer.flush().await {
-                            break Err(e.to_string());
-                        }
-                        break Ok(());
-                     }
-                 }
-             }
+    let result = tokio::select! {
+        _ = notify.notified() => {
+            Err("Download cancelled".to_string())
         }
+        res = async {
+            use tokio::io::AsyncWriteExt;
+            while let Some(item) = stream.next().await {
+                let chunk = item?;
+                writer.write_all(&chunk).await.map_err(|e| e.to_string())?;
+                downloaded += chunk.len() as u64;
+
+                if total_size > 0 {
+                    if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
+                        let _ = app.emit("download-progress", (downloaded, total_size, &id));
+                        last_emit = std::time::Instant::now();
+                    }
+                }
+            }
+            writer.flush().await.map_err(|e| e.to_string())?;
+            Ok(())
+        } => res
     };
 
     // Cleanup
