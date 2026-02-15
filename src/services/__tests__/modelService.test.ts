@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { modelService, PRESET_MODELS } from '../modelService';
 import { invoke } from '@tauri-apps/api/core';
 import { exists, remove } from '@tauri-apps/plugin-fs';
-import { join } from '@tauri-apps/api/path';
 
 // Mock mocks
 vi.mock('@tauri-apps/api/core', () => ({
