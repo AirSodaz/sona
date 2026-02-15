@@ -186,11 +186,12 @@ interface TranscriptState {
 const DEFAULT_CONFIG: AppConfig = {
     // streamingModelPath removed
     offlineModelPath: '',
-    language: 'en',
+    language: 'auto',
     appLanguage: 'auto',
     enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
     itnRulesOrder: ['itn-zh-number'],
     enableITN: true, // Keep for legacy check
+    enableTimeline: true,
     punctuationModelPath: '',
     vadModelPath: '',
     theme: 'auto',

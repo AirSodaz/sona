@@ -47,6 +47,8 @@ export interface AppConfig {
   itnRulesOrder?: string[];
   /** Enable Inverse Text Normalization. */
   enableITN?: boolean;
+  /** Enable Timeline/Subtitle Mode (split by punctuation). */
+  enableTimeline?: boolean;
   /** Path to punctuation model. */
   punctuationModelPath?: string;
   /** Application theme preference. */

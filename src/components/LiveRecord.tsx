@@ -76,9 +76,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
-    const [enableTimeline, setEnableTimeline] = useState(true);
-    const [language, setLanguage] = useState('auto');
+
+    const config = useTranscriptStore((state) => state.config);
+    const setConfig = useTranscriptStore((state) => state.setConfig);
+
+    // Use config directly
+    const enableTimeline = config.enableTimeline ?? true;
+    const language = config.language;
     const enableTimelineRef = useRef(true);
+
+    const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
+    const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
 
     // Sync ref
     useEffect(() => {
@@ -91,7 +99,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
-    const config = useTranscriptStore((state) => state.config);
+    // config declaration moved up
     const { t } = useTranslation();
 
     // Draw visualizer
