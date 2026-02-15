@@ -826,7 +826,7 @@ input[type="radio"]:focus {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xl);
-  height: 100%;
+  flex: 1;
   min-height: 300px;
   border: 2px dashed var(--color-border-hover);
   border-radius: var(--radius-xl);
@@ -1587,9 +1587,18 @@ input[type="radio"]:focus {
 .live-record-container {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  gap: 16px;
+  padding: 16px;
+}
+
+.live-record-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 24px;
-  padding: 32px;
 }
 
 .visualizer-wrapper {

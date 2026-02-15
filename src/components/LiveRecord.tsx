@@ -7,8 +7,10 @@ import { modelService } from '../services/modelService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
+import { splitByPunctuation } from '../utils/segmentUtils';
 import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
+import { TranscriptionOptions } from './TranscriptionOptions';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -74,6 +76,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
+    const [enableTimeline, setEnableTimeline] = useState(true);
+    const [language, setLanguage] = useState('auto');
+    const enableTimelineRef = useRef(true);
+
+    // Sync ref
+    useEffect(() => {
+        enableTimelineRef.current = enableTimeline;
+    }, [enableTimeline]);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const startTimeRef = useRef<number>(0);
@@ -294,7 +304,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         const config = useTranscriptStore.getState().config;
         console.log('[LiveRecord] Starting transcription with model path:', config.offlineModelPath);
         transcriptionService.setModelPath(config.offlineModelPath);
-
+        transcriptionService.setLanguage(language);
 
         // ITN Configuration
         const enabledITNModels = new Set(config.enabledITNModels || []);
@@ -319,8 +329,26 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         await transcriptionService.start(
             (segment) => {
                 console.log('[LiveRecord] Received segment:', segment);
-                // Optimized update: Upsert and set active in one go to reduce re-renders
-                upsertSegmentAndSetActive(segment);
+
+                // If timeline mode is enabled and segment is final, we split it
+                if (enableTimelineRef.current && segment.isFinal) {
+                    const parts = splitByPunctuation([segment]);
+
+                    if (parts.length > 0) {
+                         // Remove the original ID which might have been upserted as partial
+                         useTranscriptStore.getState().deleteSegment(segment.id);
+
+                         // Add all parts
+                         parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
+
+                         // Set active to the last part
+                         useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                    } else {
+                        upsertSegmentAndSetActive(segment);
+                    }
+                } else {
+                    upsertSegmentAndSetActive(segment);
+                }
             },
             (error) => {
                 console.error('Transcription error:', error);
@@ -559,80 +587,90 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     return (
         <div className={`live-record-container ${className}`}>
-            <div className="visualizer-wrapper">
-                <canvas
-                    ref={canvasRef}
-                    width={600}
-                    height={120}
-                    className="visualizer-canvas"
-                    role="img"
-                    aria-label={t('live.visualizer_label')}
-                />
-            </div>
-
-            <RecordingTimer isRecording={isRecording} isPaused={isPaused} />
-
-            <div className="record-controls">
-                {!isRecording ? (
-                    <button
-                        className="control-button start"
-                        onClick={startRecording}
-                        disabled={isInitializing}
-                        aria-label={t('live.start_recording')}
-                        data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
-                        data-tooltip-pos="bottom"
-                        style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
-                    >
-                        <div className="control-button-inner" />
-                    </button>
-                ) : (
-                    <>
-                        <button
-                            className="control-button pause"
-                            onClick={isPaused ? resumeRecording : pauseRecording}
-                            disabled={isInitializing}
-                            aria-label={isPaused ? t('live.resume') : t('live.pause')}
-                            data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
-                            data-tooltip-pos="bottom"
-                        >
-                            {isPaused ? <Play size={24} fill="currentColor" aria-hidden="true" /> : <Pause size={24} fill="currentColor" aria-hidden="true" />}
-                        </button>
-
-                        <button
-                            className="control-button stop"
-                            onClick={stopRecording}
-                            disabled={isInitializing}
-                            aria-label={t('live.stop')}
-                            data-tooltip={t('live.stop')}
-                            data-tooltip-pos="bottom"
-                        >
-                            <Square size={28} fill="white" color="white" aria-hidden="true" />
-                        </button>
-                    </>
-                )}
-            </div>
-
-            {!isRecording && (
-                <div className="input-source-selector">
-                    <div className="source-select-wrapper">
-                        {getSourceIcon(inputSource)}
-                        <Dropdown
-                            value={inputSource}
-                            onChange={(value) => setInputSource(value as 'microphone' | 'desktop')}
-                            aria-label={t('live.source_select')}
-                            options={[
-                                { value: 'microphone', label: t('live.source_microphone') },
-                                { value: 'desktop', label: t('live.source_desktop') }
-                            ]}
-                            style={{ minWidth: '180px' }}
-                        />
-                    </div>
+            <div className="live-record-main-content">
+                <div className="visualizer-wrapper">
+                    <canvas
+                        ref={canvasRef}
+                        width={600}
+                        height={120}
+                        className="visualizer-canvas"
+                        role="img"
+                        aria-label={t('live.visualizer_label')}
+                    />
                 </div>
-            )}
 
-            <p className="recording-status-text" aria-live="polite">
-                {getRecordingStatusText()}
-            </p>
+                <RecordingTimer isRecording={isRecording} isPaused={isPaused} />
+
+                <div className="record-controls">
+                    {!isRecording ? (
+                        <button
+                            className="control-button start"
+                            onClick={startRecording}
+                            disabled={isInitializing}
+                            aria-label={t('live.start_recording')}
+                            data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
+                            data-tooltip-pos="bottom"
+                            style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
+                        >
+                            <div className="control-button-inner" />
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                className="control-button pause"
+                                onClick={isPaused ? resumeRecording : pauseRecording}
+                                disabled={isInitializing}
+                                aria-label={isPaused ? t('live.resume') : t('live.pause')}
+                                data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
+                                data-tooltip-pos="bottom"
+                            >
+                                {isPaused ? <Play size={24} fill="currentColor" aria-hidden="true" /> : <Pause size={24} fill="currentColor" aria-hidden="true" />}
+                            </button>
+
+                            <button
+                                className="control-button stop"
+                                onClick={stopRecording}
+                                disabled={isInitializing}
+                                aria-label={t('live.stop')}
+                                data-tooltip={t('live.stop')}
+                                data-tooltip-pos="bottom"
+                            >
+                                <Square size={28} fill="white" color="white" aria-hidden="true" />
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                {!isRecording && (
+                    <div className="input-source-selector">
+                        <div className="source-select-wrapper">
+                            {getSourceIcon(inputSource)}
+                            <Dropdown
+                                value={inputSource}
+                                onChange={(value) => setInputSource(value as 'microphone' | 'desktop')}
+                                aria-label={t('live.source_select')}
+                                options={[
+                                    { value: 'microphone', label: t('live.source_microphone') },
+                                    { value: 'desktop', label: t('live.source_desktop') }
+                                ]}
+                                style={{ minWidth: '180px' }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                <p className="recording-status-text" aria-live="polite">
+                    {getRecordingStatusText()}
+                </p>
+            </div>
+
+            <TranscriptionOptions
+                enableTimeline={enableTimeline}
+                setEnableTimeline={setEnableTimeline}
+                language={language}
+                setLanguage={setLanguage}
+                disabled={isRecording}
+            />
         </div>
     );
 }
