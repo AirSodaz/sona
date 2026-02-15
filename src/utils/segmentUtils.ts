@@ -10,6 +10,12 @@ const SPLIT_REGEX = /([.?!。？！]+)/;
 const PUNCTUATION_REGEX = /[\s\p{P}]/u;
 const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
+// Regex for alignTokensToText
+const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
+const RAW_WORDS_REGEX = /(\s+|[\p{sc=Han}]|[^\s\p{sc=Han}]+)/gu;
+const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
+const WHITESPACE_ONLY_REGEX = /^\s+$/;
+
 /**
  * Calculates the length of the text excluding punctuation and whitespace.
  */
@@ -429,39 +435,46 @@ export function alignTokensToText(
         return [{ text: text, timestamp: rawTimestamps?.[0] || 0 }];
     }
 
-    // Normalizing
-    const normalize = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    // Pre-normalize tokens to avoid repeated regex and toLowerCase calls
+    const normalizedTokens = rawTokens.map(t => t.toLowerCase().replace(NORMALIZE_REGEX, ''));
 
     // Tokenize text:
     // 1. Whitespace (kept to preserve spacing)
     // 2. Chinese characters (Han script) treated as individual words
     // 3. Everything else (English, numbers, punctuation) grouped until whitespace/Han/End
-    const rawWords = text.match(/(\s+|[\p{sc=Han}]|[^\s\p{sc=Han}]+)/gu) || [];
+    const rawWords = text.match(RAW_WORDS_REGEX) || [];
 
     // Merge standalone punctuation into the previous word
     const words: string[] = [];
+    const normalizedWords: string[] = [];
+
     for (const w of rawWords) {
         // Check if w is purely punctuation (and previous word exists and is not whitespace)
-        // We use a regex that matches only punctuation characters
-        if (words.length > 0 && /^[^\p{L}\p{N}]+$/u.test(w) && !/^\s+$/.test(w) && !/^\s+$/.test(words[words.length - 1])) {
+        if (words.length > 0 && PUNCTUATION_ONLY_REGEX.test(w) && !WHITESPACE_ONLY_REGEX.test(w) && !WHITESPACE_ONLY_REGEX.test(words[words.length - 1])) {
             // Append to previous word
             words[words.length - 1] += w;
+            // Update normalized cache for the merged word
+            normalizedWords[normalizedWords.length - 1] = words[words.length - 1].toLowerCase().replace(NORMALIZE_REGEX, '');
         } else {
             words.push(w);
+            normalizedWords.push(w.toLowerCase().replace(NORMALIZE_REGEX, ''));
         }
     }
 
     let currentRawIndex = 0;
+    const maxTokens = rawTokens.length;
 
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
+
+        // Skip whitespace words but preserve them in output
         if (!word.trim()) {
             const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
             result.push({ text: word, timestamp: ts });
             continue;
         }
 
-        const normWord = normalize(word);
+        const normWord = normalizedWords[i];
         if (!normWord) {
             const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
             result.push({ text: word, timestamp: ts });
@@ -478,9 +491,9 @@ export function alignTokensToText(
         let tokensConsumed = 0;
         let foundMatch = false;
 
-        for (let j = 0; j < 5 && (currentRawIndex + j) < rawTokens.length; j++) {
-            const t = rawTokens[currentRawIndex + j];
-            accumulatedTokenStr += normalize(t);
+        for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
+            const t = normalizedTokens[currentRawIndex + j];
+            accumulatedTokenStr += t;
             tokensConsumed++;
 
             if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
@@ -497,15 +510,15 @@ export function alignTokensToText(
             // Find the NEXT content word in `words`.
             let nextNorm = "";
             for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
-                nextNorm = normalize(words[nextIdx]);
+                nextNorm = normalizedWords[nextIdx];
                 if (nextNorm) break;
             }
 
             if (nextNorm) {
                 // distinct next word
                 // Scan ahead in tokens to find `nextNorm`.
-                for (let k = 1; k < 10 && (currentRawIndex + k) < rawTokens.length; k++) {
-                    const t = normalize(rawTokens[currentRawIndex + k]);
+                for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
+                    const t = normalizedTokens[currentRawIndex + k];
                     if (t && t.startsWith(nextNorm)) {
                         // Found next word at k offset.
                         // So current word consumes everything up to k.
@@ -517,8 +530,16 @@ export function alignTokensToText(
             } else {
                 // If there is no next word, we are at the end.
                 // Consume all remaining tokens if reasonable
-                if (i === words.length - 1 || (i > words.length - 3 && !words.slice(i + 1).some(w => normalize(w)))) {
-                    currentRawIndex = rawTokens.length;
+                let hasRemainingContent = false;
+                for (let r = i + 1; r < words.length; r++) {
+                    if (normalizedWords[r]) {
+                        hasRemainingContent = true;
+                        break;
+                    }
+                }
+
+                if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
+                    currentRawIndex = maxTokens;
                     foundMatch = true;
                 }
             }
@@ -529,7 +550,7 @@ export function alignTokensToText(
             }
         }
 
-        if (currentRawIndex >= rawTokens.length) currentRawIndex = rawTokens.length;
+        if (currentRawIndex >= maxTokens) currentRawIndex = maxTokens;
     }
 
     return result;
