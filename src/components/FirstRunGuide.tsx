@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { modelService, PRESET_MODELS } from '../services/modelService';
-import { DownloadIcon } from './Icons';
+import { DownloadIcon, CheckIcon } from './Icons';
 
 export function FirstRunGuide() {
     const { t } = useTranslation();
@@ -31,26 +31,31 @@ export function FirstRunGuide() {
             { id: 'silero-vad', type: 'vad' }
         ];
 
+        // Initialize progress
+        const initialProgress: Record<string, { pct: number, status: string }> = {};
+        for (const model of modelsToDownload) {
+            initialProgress[model.id] = { pct: 0, status: 'Starting...' };
+        }
+        setProgress(initialProgress);
+
         try {
-            const paths: Record<string, string> = {};
-
-            for (const model of modelsToDownload) {
-                // Initialize progress
-                setProgress(prev => ({
-                    ...prev,
-                    [model.id]: { pct: 0, status: 'Starting...' }
-                }));
-
-                // Download
+            // Concurrent downloads
+            const downloadPromises = modelsToDownload.map(async (model) => {
                 const path = await modelService.downloadModel(model.id, (pct, statusText) => {
                     setProgress(prev => ({
                         ...prev,
                         [model.id]: { pct, status: statusText }
                     }));
                 });
+                return { type: model.type, path };
+            });
 
-                paths[model.type] = path;
-            }
+            const results = await Promise.all(downloadPromises);
+
+            const paths: Record<string, string> = {};
+            results.forEach(r => {
+                paths[r.type] = r.path;
+            });
 
             // Update Config
             const newConfig = {
@@ -65,9 +70,6 @@ export function FirstRunGuide() {
             setConfig(newConfig);
 
             // Persist to localStorage (replicating logic from useSettingsLogic/useAppInitialization)
-            // We need to merge with existing config or create new.
-            // Since it's first run, we likely overwrite or merge with default.
-            // But let's read current localStorage to be safe.
             const saved = localStorage.getItem('sona-config');
             let currentSavedConfig = {};
             if (saved) {
@@ -128,30 +130,41 @@ export function FirstRunGuide() {
                     )}
 
                     {status === 'downloading' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
-                            <div style={{ textAlign: 'center', marginBottom: '8px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'left' }}>
+                            <div style={{ textAlign: 'center', fontWeight: 500 }}>
                                 {t('first_run.downloading')}
                             </div>
-                            {Object.entries(progress).map(([id, info]) => {
-                                const modelDef = PRESET_MODELS.find(m => m.id === id);
-                                return (
-                                    <div key={id}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                                            <span style={{ fontWeight: 500 }}>{modelDef?.name || id}</span>
-                                            <span style={{ color: 'var(--color-text-muted)' }}>{info.pct}%</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {Object.entries(progress).map(([id, info]) => {
+                                    const modelDef = PRESET_MODELS.find(m => m.id === id);
+                                    const isComplete = info.pct === 100;
+                                    return (
+                                        <div key={id}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px', alignItems: 'center' }}>
+                                                <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    {modelDef?.name || id}
+                                                    {isComplete && <CheckIcon style={{ width: 14, height: 14, color: 'var(--color-success)' }} />}
+                                                </span>
+                                                <span style={{ color: isComplete ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                                                    {isComplete ? 'Done' : `${info.pct}%`}
+                                                </span>
+                                            </div>
+                                            <div className="progress-bar-mini">
+                                                <div
+                                                    className="progress-fill"
+                                                    style={{
+                                                        width: `${info.pct}%`,
+                                                        backgroundColor: isComplete ? 'var(--color-success)' : undefined
+                                                    }}
+                                                />
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {info.status}
+                                            </div>
                                         </div>
-                                        <div className="progress-bar-mini">
-                                            <div
-                                                className="progress-fill"
-                                                style={{ width: `${info.pct}%` }}
-                                            />
-                                        </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {info.status}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
 
