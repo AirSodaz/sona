@@ -197,5 +197,14 @@
         "previous": "上一个匹配项",
         "next": "下一个匹配项",
         "close": "关闭"
+    },
+    "first_run": {
+        "title": "欢迎使用 Sona",
+        "description": "首次使用需下载必要模型。",
+        "one_click_download": "一键下载",
+        "skip": "跳过",
+        "downloading": "下载中...",
+        "success": "下载完成",
+        "error": "下载失败"
     }
 }
