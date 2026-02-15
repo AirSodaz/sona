@@ -75,7 +75,12 @@ describe('batchQueueStore History Integration', () => {
     });
 
     it('should save to history after successful transcription', async () => {
-        useBatchQueueStore.setState({ enableTimeline: false });
+        useTranscriptStore.setState({
+            config: {
+                ...useTranscriptStore.getState().config,
+                enableTimeline: false
+            }
+        });
         const file = '/path/to/test.wav';
         const mockSegments = [
             { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },

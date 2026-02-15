@@ -101,8 +101,6 @@ describe('BatchImport Integration', () => {
             queueItems: [],
             activeItemId: null,
             isQueueProcessing: false,
-            enableTimeline: true,
-            language: 'auto'
         });
 
         vi.clearAllMocks();
