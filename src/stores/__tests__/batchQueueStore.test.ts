@@ -64,9 +64,7 @@ describe('batchQueueStore', () => {
         expect(queueState.queueItems).toHaveLength(1);
         expect(queueState.activeItemId).toBe('test-uuid-123');
 
-        // Assert Transcript Store State (The Bug)
-        // This is expected to fail currently because addFiles updates local state 
-        // but doesn't sync to transcriptStore
+        // Assert Transcript Store State
         const transcriptState = useTranscriptStore.getState();
         expect(transcriptState.audioUrl).toBe('asset:///path/to/test.wav');
     });
