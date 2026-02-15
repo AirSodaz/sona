@@ -91,7 +91,8 @@ describe('BatchImport Integration', () => {
                 theme: 'auto',
                 font: 'system',
                 language: 'en',
-                appLanguage: 'auto'
+                appLanguage: 'auto',
+                enableTimeline: true
             },
             segments: [],
             audioUrl: null
@@ -100,9 +101,7 @@ describe('BatchImport Integration', () => {
         useBatchQueueStore.setState({
             queueItems: [],
             activeItemId: null,
-            isQueueProcessing: false,
-            enableTimeline: true,
-            language: 'auto'
+            isQueueProcessing: false
         });
 
         vi.clearAllMocks();
