@@ -123,13 +123,13 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     const hasQueueItems = useBatchQueueStore((state) => state.queueItems.length > 0);
     const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
     const addFiles = useBatchQueueStore((state) => state.addFiles);
-    const enableTimeline = useBatchQueueStore((state) => state.enableTimeline);
-    const setEnableTimeline = useBatchQueueStore((state) => state.setEnableTimeline);
-    const language = useBatchQueueStore((state) => state.language);
-    const setLanguage = useBatchQueueStore((state) => state.setLanguage);
 
     // Transcript store
     const config = useTranscriptStore((state) => state.config);
+    const enableTimeline = config.enableTimeline ?? true;
+    const language = config.language || 'auto';
+    const setEnableTimeline = (val: boolean) => useTranscriptStore.getState().setConfig({ enableTimeline: val });
+    const setLanguage = (val: string) => useTranscriptStore.getState().setConfig({ language: val });
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
