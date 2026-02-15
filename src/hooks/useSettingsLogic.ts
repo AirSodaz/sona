@@ -53,8 +53,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     }
 
     useEffect(() => {
-        checkInstalledModels();
-    }, []);
+        if (_isOpen) {
+            checkInstalledModels();
+        }
+    }, [_isOpen]);
 
     // Helper to update config and persist immediately
     const updateConfig = (updates: Partial<typeof config>) => {
