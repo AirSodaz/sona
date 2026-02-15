@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { TranscriptSegment } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { EditIcon, TrashIcon, MergeIcon } from '../Icons';
@@ -51,14 +52,10 @@ function SegmentItemComponent({
 
     // Search matches
     // Optimize: Select only what we need to avoid re-renders on every store change
-    const allMatches = useSearchStore(useCallback(state => state.matches, []));
+    const matches = useSearchStore(useShallow(state =>
+        state.matches.filter(m => m.segmentId === segment.id)
+    ));
     const setActiveMatch = useSearchStore(useCallback(state => state.setActiveMatch, []));
-
-    // Filter matches for this segment
-    // Matches in store now include globalIndex, so we don't need to map/add it here
-    const matches = React.useMemo(() => {
-        return allMatches.filter(m => m.segmentId === segment.id);
-    }, [allMatches, segment.id]);
 
     // Select active match only if it belongs to this segment
     // This prevents re-renders when the active match changes but is in a different segment
