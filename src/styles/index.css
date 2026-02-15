@@ -1597,7 +1597,7 @@ input[type="radio"]:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* justify-content: center; Removed to align to top */
   gap: 24px;
 }
 
@@ -1946,7 +1946,7 @@ input[type="radio"]:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* justify-content: center; Removed to align to top */
   gap: var(--spacing-md);
   min-height: 150px;
 }

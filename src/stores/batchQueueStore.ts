@@ -19,11 +19,6 @@ interface BatchQueueState {
     activeItemId: string | null;
     /** Whether the queue is currently processing. */
     isQueueProcessing: boolean;
-    /** Whether to enable timeline mode (split by punctuation). */
-    enableTimeline: boolean;
-    /** Language setting for transcription. */
-    language: string;
-
     /**
      * Adds files to the queue.
      *
@@ -78,19 +73,6 @@ interface BatchQueueState {
     /** Clears all items from the queue. */
     clearQueue: () => void;
 
-    /**
-     * Sets the timeline mode setting.
-     *
-     * @param enabled Whether to enable timeline mode.
-     */
-    setEnableTimeline: (enabled: boolean) => void;
-
-    /**
-     * Sets the language setting.
-     *
-     * @param language Language code.
-     */
-    setLanguage: (language: string) => void;
     /** internal helper */
     _processItem: (itemId: string) => Promise<void>;
 }
@@ -102,8 +84,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     queueItems: [],
     activeItemId: null,
     isQueueProcessing: false,
-    enableTimeline: true,
-    language: 'auto',
 
     addFiles: (filePaths) => {
         const newItems: BatchQueueItem[] = filePaths.map((filePath) => {
@@ -220,7 +200,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const item = state.queueItems.find(i => i.id === itemId);
         if (!item || item.status !== 'pending') return;
 
-        const { enableTimeline, language } = state;
+        const config = useTranscriptStore.getState().config;
+        const enableTimeline = config.enableTimeline ?? true;
+        const language = config.language;
 
         // Update status to processing
         get().updateItemStatus(itemId, 'processing', 0);
@@ -250,7 +232,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
                         if (currentItem) {
                             // Process the buffered segments
-                            const { enableTimeline } = currentState;
+                            const config = useTranscriptStore.getState().config;
+                            const enableTimeline = config.enableTimeline ?? true;
                             const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
 
                             // Append to existing segments
@@ -392,13 +375,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         useTranscriptStore.getState().setAudioUrl(null);
     },
 
-    setEnableTimeline: (enabled) => {
-        set({ enableTimeline: enabled });
-    },
-
-    setLanguage: (language) => {
-        set({ language });
-    },
 }));
 
 /** Selector for queue items. */
