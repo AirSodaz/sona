@@ -17,7 +17,8 @@
         "skip_to_content": "跳转到主要内容",
         "select": "选择",
         "select_all": "全选",
-        "deselect_all": "取消全选"
+        "deselect_all": "取消全选",
+        "clear_search": "清空搜索"
     },
     "header": {
         "settings": "设置"

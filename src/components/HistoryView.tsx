@@ -5,6 +5,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { Search } from 'lucide-react';
 import { Dropdown } from './Dropdown';
+import { CloseIcon } from './Icons';
 import { Virtuoso } from 'react-virtuoso';
 import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
@@ -166,8 +167,40 @@ export function HistoryView() {
                                 aria-label={t('history.search_placeholder', { defaultValue: 'Search history...' })}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                style={{ paddingLeft: '32px', width: '100%' }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                        setSearchQuery('');
+                                    }
+                                }}
+                                style={{
+                                    paddingLeft: '32px',
+                                    paddingRight: searchQuery ? '32px' : 'var(--spacing-sm)',
+                                    width: '100%'
+                                }}
                             />
+                            {searchQuery && (
+                                <button
+                                    className="btn btn-icon btn-text"
+                                    onClick={() => setSearchQuery('')}
+                                    aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '4px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        height: '24px',
+                                        width: '24px',
+                                        padding: 0,
+                                        minWidth: 0,
+                                        color: 'var(--color-text-muted)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <CloseIcon width={14} height={14} />
+                                </button>
+                            )}
                         </div>
                         <button
                             className={`btn ${isSelectionMode ? 'btn-primary' : 'btn-secondary'}`}
