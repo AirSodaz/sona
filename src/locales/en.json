@@ -17,7 +17,8 @@
         "skip_to_content": "Skip to Content",
         "select": "Select",
         "select_all": "Select All",
-        "deselect_all": "Deselect All"
+        "deselect_all": "Deselect All",
+        "clear_search": "Clear Search"
     },
     "header": {
         "settings": "Settings"
