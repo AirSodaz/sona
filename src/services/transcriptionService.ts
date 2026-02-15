@@ -22,6 +22,16 @@ export interface AlignmentResult {
     ctcText: string;
 }
 
+/** Configuration used to spawn the sidecar process. */
+interface ServiceConfig {
+    modelPath: string;
+    itnModelPaths: string[];
+    punctuationModelPath: string;
+    vadModelPath: string;
+    vadBufferSize: number;
+    enableITN: boolean;
+}
+
 /**
  * Service to manage the transcription process via a sidecar.
  *
@@ -53,6 +63,8 @@ class TranscriptionService {
     private onError: ErrorCallback | null = null;
     /** Promise to track active spawning to prevent race conditions. */
     private spawningPromise: Promise<void> | null = null;
+    /** Configuration of the currently running process. */
+    private runningConfig: ServiceConfig | null = null;
 
     /**
      * Initializes a new instance of the TranscriptionService.
@@ -139,7 +151,14 @@ class TranscriptionService {
      * @param onError A callback for when an error occurs.
      */
     async prepare(): Promise<void> {
-        if (this.isRunning) return;
+        // If running, check if config changed.
+        if (this.isRunning) {
+            if (this._isConfigMatch()) {
+                return;
+            }
+            console.log('[TranscriptionService] Configuration changed, restarting sidecar...');
+            await this.stop();
+        }
 
         if (!this.modelPath) {
             console.warn('[TranscriptionService] Model path not configured, cannot prepare sidecar');
@@ -154,9 +173,14 @@ class TranscriptionService {
         this.onSegment = onSegment;
         this.onError = onError;
 
+        // If running, check if config changed.
         if (this.isRunning) {
-            console.log('[TranscriptionService] Service already running, ready for audio');
-            return;
+            if (this._isConfigMatch()) {
+                console.log('[TranscriptionService] Service already running with matching config, ready for audio');
+                return;
+            }
+            console.log('[TranscriptionService] Configuration changed, restarting sidecar for start...');
+            await this.stop();
         }
 
         if (!this.modelPath) {
@@ -174,6 +198,16 @@ class TranscriptionService {
 
         this.spawningPromise = (async () => {
             console.log('Starting sidecar with model:', this.modelPath);
+
+            // Capture the config we are about to use
+            const configToUse: ServiceConfig = {
+                modelPath: this.modelPath,
+                itnModelPaths: [...this.itnModelPaths],
+                punctuationModelPath: this.punctuationModelPath,
+                vadModelPath: this.vadModelPath,
+                vadBufferSize: this.vadBufferSize,
+                enableITN: this.enableITN
+            };
 
             try {
                 const scriptPath = await resolveResource('sidecar/dist/index.mjs');
@@ -218,12 +252,14 @@ class TranscriptionService {
 
                 this.child = await command.spawn();
                 this.isRunning = true;
+                this.runningConfig = configToUse;
                 console.log('[TranscriptionService] Sidecar started, PID:', this.child.pid);
 
             } catch (error) {
                 console.error('Failed to spawn sidecar:', error);
                 if (this.onError) this.onError(`Failed to start: ${error}`);
                 this.isRunning = false;
+                this.runningConfig = null;
                 throw error;
             }
         })();
@@ -233,7 +269,31 @@ class TranscriptionService {
         } finally {
             this.spawningPromise = null;
         }
-    }    /**
+    }
+
+    /**
+     * Checks if the current configuration matches the running configuration.
+     */
+    private _isConfigMatch(): boolean {
+        if (!this.runningConfig) return false;
+
+        if (this.modelPath !== this.runningConfig.modelPath) return false;
+        if (this.enableITN !== this.runningConfig.enableITN) return false;
+        if (this.punctuationModelPath !== this.runningConfig.punctuationModelPath) return false;
+        if (this.vadModelPath !== this.runningConfig.vadModelPath) return false;
+        if (this.vadBufferSize !== this.runningConfig.vadBufferSize) return false;
+
+        // Compare ITN model paths (array)
+        if (this.itnModelPaths.length !== this.runningConfig.itnModelPaths.length) return false;
+        // Assuming order matters as it affects rule application order
+        for (let i = 0; i < this.itnModelPaths.length; i++) {
+            if (this.itnModelPaths[i] !== this.runningConfig.itnModelPaths[i]) return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Stops the transcription process.
      */
     async stop(): Promise<void> {
@@ -247,6 +307,7 @@ class TranscriptionService {
             console.log('[TranscriptionService] Sidecar stopped');
             this.child = null;
             this.isRunning = false;
+            this.runningConfig = null;
         }
     }
 

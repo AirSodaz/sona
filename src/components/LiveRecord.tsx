@@ -483,17 +483,46 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Monitor config changes and prepare transcription service
     useEffect(() => {
-        if (config.offlineModelPath) {
-            console.log('[LiveRecord] Config loaded, preparing transcription service:', config.offlineModelPath);
-            transcriptionService.setModelPath(config.offlineModelPath);
-            transcriptionService.setVadModelPath(config.vadModelPath || '');
-            transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-            transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+        const prepareService = async () => {
+            if (config.offlineModelPath) {
+                console.log('[LiveRecord] Config loaded, preparing transcription service:', config.offlineModelPath);
+                transcriptionService.setModelPath(config.offlineModelPath);
+                transcriptionService.setVadModelPath(config.vadModelPath || '');
+                transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+                transcriptionService.setCtcModelPath(config.ctcModelPath || '');
 
-            // Pre-spawn sidecar now that we have the model path
-            transcriptionService.prepare().catch(e => console.warn('Failed to prepare transcription service:', e));
-        }
-    }, [config.offlineModelPath, config.vadModelPath, config.punctuationModelPath, config.ctcModelPath]);
+                // ITN Setup
+                transcriptionService.setEnableITN(config.enableITN ?? false);
+                const enabledITNModels = new Set(config.enabledITNModels || []);
+                const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
+
+                if (enabledITNModels.size > 0) {
+                    try {
+                        const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
+                        transcriptionService.setITNModelPaths(paths);
+                    } catch (e) {
+                        console.warn('[LiveRecord] Failed to setup ITN paths:', e);
+                        transcriptionService.setITNModelPaths([]);
+                    }
+                } else {
+                    transcriptionService.setITNModelPaths([]);
+                }
+
+                // Pre-spawn sidecar now that we have the model path
+                await transcriptionService.prepare();
+            }
+        };
+
+        prepareService().catch(e => console.warn('Failed to prepare transcription service:', e));
+    }, [
+        config.offlineModelPath,
+        config.vadModelPath,
+        config.punctuationModelPath,
+        config.ctcModelPath,
+        config.enableITN,
+        config.enabledITNModels,
+        config.itnRulesOrder
+    ]);
 
 
     // Init and cleanup
