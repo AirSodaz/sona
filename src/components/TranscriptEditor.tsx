@@ -53,7 +53,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     // Track which segment IDs have been seen (for animation)
     const knownSegmentIdsRef = useRef<Set<string>>(new Set());
     const prevNewSegmentIdsRef = useRef<Set<string>>(new Set());
-    const [animationVersion, setAnimationVersion] = useState(0);
 
     // Create a local store for UI state (newSegmentIds) to prevent Context updates
     // from re-rendering the entire list.
@@ -107,7 +106,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
 
         prevNewSegmentIdsRef.current = newIds;
         return newIds;
-    }, [segments, animationVersion]);
+    }, [segments]);
 
     // Sync newSegmentIds and totalSegments to local store
     useLayoutEffect(() => {
@@ -258,8 +257,16 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
 
     const handleAnimationEnd = useCallback((id: string) => {
         knownSegmentIdsRef.current.add(id);
-        setAnimationVersion(v => v + 1); // Trigger useMemo recomputation
-    }, []);
+
+        // Update store directly to remove from newSegmentIds without triggering full re-render
+        uiStore.setState(state => {
+            if (!state.newSegmentIds.has(id)) return state;
+
+            const next = new Set(state.newSegmentIds);
+            next.delete(id);
+            return { newSegmentIds: next };
+        });
+    }, [uiStore]);
 
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({
