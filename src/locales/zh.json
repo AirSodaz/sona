@@ -145,6 +145,7 @@
         "invalid_path": "路径无效或未找到",
         "path_hint": "选择包含 encoder.onnx, decoder.onnx 等文件的文件夹。",
         "itn_title": "逆文本标准化 (ITN)",
+        "enable_itn": "启用 ITN",
         "itn_desc": "自动将中文数字转换为阿拉伯数字（例如 “一百二十三” → “123”）。",
         "itn_note": "提示：加载外部的 FST (Finite State Transducer) 规则文件来实现 ITN",
         "delete_confirm_title": "删除模型",

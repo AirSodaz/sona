@@ -29,6 +29,7 @@ export function useAppInitialization() {
                         ctcModelPath: parsed.ctcModelPath || '',
                         enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
                         itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
+                        enableITN: parsed.enableITN ?? ((parsed.enabledITNModels?.length ?? 0) > 0),
                         vadBufferSize: parsed.vadBufferSize || 5,
                         maxConcurrent: parsed.maxConcurrent || 2,
                         appLanguage: parsed.appLanguage || 'auto',

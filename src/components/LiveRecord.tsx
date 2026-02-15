@@ -299,10 +299,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // ITN Configuration
         const enabledITNModels = new Set(config.enabledITNModels || []);
         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-        // Legacy support or fallback: if order doesn't cover all enabled models, append them?
-        // Actually, let's assume order covers all models or at least we check enabled.
 
-        transcriptionService.setEnableITN(enabledITNModels.size > 0);
+        transcriptionService.setEnableITN(config.enableITN ?? false);
 
         if (enabledITNModels.size > 0) {
             try {

@@ -45,7 +45,7 @@ export interface AppConfig {
   enabledITNModels?: string[];
   /** Order of ITN models (IDs) for sorting. */
   itnRulesOrder?: string[];
-  /** DEPRECATED: Enable Inverse Text Normalization. */
+  /** Enable Inverse Text Normalization. */
   enableITN?: boolean;
   /** Path to punctuation model. */
   punctuationModelPath?: string;

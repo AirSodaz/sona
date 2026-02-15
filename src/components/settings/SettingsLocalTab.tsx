@@ -4,7 +4,7 @@ import { Switch } from '../Switch';
 import { Dropdown } from '../Dropdown';
 import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
-import { PRESET_MODELS, modelService } from '../../services/modelService';
+import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 
 interface SettingsLocalTabProps {
     offlineModelPath: string;
@@ -26,12 +26,14 @@ interface SettingsLocalTabProps {
     setItnRulesOrder: Dispatch<SetStateAction<string[]>>;
     enabledITNModels: Set<string>;
     setEnabledITNModels: Dispatch<SetStateAction<Set<string>>>;
+    enableITN: boolean;
+    setEnableITN: (enabled: boolean) => void;
     installedITNModels: Set<string>;
 
     // downloadingId: string | null;
     // progress: number;
     downloads: Record<string, { progress: number; status: string }>;
-    onDownloadITN: (id: string) => void;
+    onDownloadITN: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
     installedModels: Set<string>;
 }
@@ -51,6 +53,8 @@ export function SettingsLocalTab({
     setItnRulesOrder,
     enabledITNModels,
     setEnabledITNModels,
+    enableITN,
+    setEnableITN,
     installedITNModels,
     downloads,
     onDownloadITN,
@@ -227,6 +231,19 @@ export function SettingsLocalTab({
                 </div>
                 <div className="settings-hint">
                     {t('settings.max_concurrent_hint', { defaultValue: 'Number of files to transcribe in parallel (1-4).' })}
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.enable_itn', { defaultValue: 'Enable ITN' })}</div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t('settings.itn_title')}</div>
+                    </div>
+                    <Switch
+                        checked={enableITN}
+                        onChange={(c) => setEnableITN(c)}
+                    />
                 </div>
             </div>
 
