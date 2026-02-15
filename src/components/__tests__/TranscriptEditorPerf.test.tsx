@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
@@ -19,10 +18,10 @@ vi.mock('../../hooks/useAutoScroll', () => ({
 vi.mock('react-virtuoso', async () => {
     const React = await import('react');
     return {
-        Virtuoso: React.forwardRef((props: any, ref: any) => {
+        Virtuoso: React.forwardRef((props: any, _ref: any) => {
             return (
                 <div data-testid="virtuoso-list">
-                    {props.data?.map((item: any, index: number) => {
+                    {props.data?.map((item: any) => {
                         return (
                             <div key={item.id} data-testid={`segment-${item.id}`}>
                                 <button
@@ -68,8 +67,11 @@ describe('TranscriptEditor Performance', () => {
             isPlaying: false,
             editingSegmentId: null,
             config: {
-                enableTimeline: true
-            }
+                enableTimeline: true,
+                offlineModelPath: '',
+                language: 'en',
+                appLanguage: 'en',
+            } as any
         });
     });
 
@@ -116,7 +118,6 @@ describe('TranscriptEditor Performance', () => {
         const countAfterThird = autoScrollSpy.mock.calls.length;
         console.log('Count after third animation:', countAfterThird);
 
-        const extraRenders = countAfterThird - countAfterFirst;
         // Note: countAfterFirst includes the re-render from the first animation if unoptimized.
         // Actually, let's just check if count increases after EACH click.
 

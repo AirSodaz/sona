@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo, useState, useLayoutEffect, useEffect } from 'react';
+import React, { useRef, useCallback, useMemo, useLayoutEffect, useEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
