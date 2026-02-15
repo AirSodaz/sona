@@ -19,7 +19,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., streaming, offline). */
-    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc';
+    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc' | 'itn';
     /** Languages supported by the model (comma-separated). */
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
@@ -85,18 +85,18 @@ export const PRESET_MODELS: ModelInfo[] = [
         isArchive: false,
         filename: 'silero_vad.onnx',
         engine: 'onnx'
-    }
-];
-
-/** List of pre-defined Inverse Text Normalization (ITN) models. */
-export const ITN_MODELS = [
+    },
     {
         id: 'itn-zh-number',
         name: 'Chinese Number ITN',
         description: 'Inverse Text Normalization for Chinese Numbers',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
+        type: 'itn',
+        language: 'zh',
         filename: 'itn_zh_number.fst',
-        size: '< 1 MB'
+        size: '< 1 MB',
+        engine: 'onnx',
+        isArchive: false
     }
 ];
 
@@ -395,19 +395,6 @@ class ModelService {
     }
 
     /**
-     * Gets the path for an Inverse Text Normalization (ITN) model.
-     *
-     * @param modelId The ID of the ITN model.
-     * @return A promise resolving to the path, or empty string if not found.
-     */
-    async getITNModelPath(modelId: string): Promise<string> {
-        const model = ITN_MODELS.find(m => m.id === modelId);
-        if (!model) return '';
-        const modelsDir = await this.getModelsDir();
-        return await join(modelsDir, model.filename);
-    }
-
-    /**
      * Efficiently resolves paths for all enabled ITN models in parallel, respecting preference order.
      *
      * @param enabledModels A set of enabled model IDs.
@@ -427,11 +414,11 @@ class ModelService {
 
         // Parallelize file system checks
         const results = await Promise.all(allModelsToCheck.map(async (id) => {
-            const model = ITN_MODELS.find(m => m.id === id);
+            const model = PRESET_MODELS.find(m => m.id === id);
             if (!model) return null;
 
             // Construct path manually to avoid re-calling getModelsDir
-            const path = await join(modelsDir, model.filename);
+            const path = await join(modelsDir, model.filename || id);
             if (await exists(path)) {
                 return path;
             }
@@ -439,40 +426,6 @@ class ModelService {
         }));
 
         return results.filter((p): p is string => p !== null);
-    }
-
-    /**
-     * Checks if an ITN model is installed.
-     *
-     * @param modelId The ID of the ITN model.
-     * @return A promise resolving to true if installed.
-     */
-    async isITNModelInstalled(modelId: string): Promise<boolean> {
-        const path = await this.getITNModelPath(modelId);
-        return await exists(path);
-    }
-
-    /**
-     * Downloads an ITN model.
-     *
-     * @param modelId The ID of the ITN model.
-     * @param onProgress Optional callback for progress updates.
-     * @param signal Optional AbortSignal for cancellation.
-     * @return A promise resolving to the path of the downloaded model.
-     * @throws {Error} If download fails.
-     */
-    async downloadITNModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const model = ITN_MODELS.find(m => m.id === modelId);
-        if (!model) throw new Error('ITN Model not found');
-
-        const modelsDir = await this.getModelsDir();
-        const targetPath = await join(modelsDir, model.filename);
-
-        if (await exists(targetPath)) return targetPath;
-
-        await this.downloadFile(model.url, targetPath, onProgress, signal, 'Downloading ITN Model');
-
-        return targetPath;
     }
 
     /**

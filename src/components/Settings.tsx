@@ -59,6 +59,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         setItnRulesOrder,
         enabledITNModels,
         setEnabledITNModels,
+        enableITN,
+        setEnableITN,
         installedITNModels,
 
         downloads,
@@ -67,7 +69,6 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
 
         handleBrowse,
         handleDownload,
-        handleDownloadITN,
         handleCancelDownload,
         handleLoad,
         handleDelete,
@@ -239,9 +240,11 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 setItnRulesOrder={setItnRulesOrder}
                                 enabledITNModels={enabledITNModels}
                                 setEnabledITNModels={setEnabledITNModels}
+                                enableITN={enableITN}
+                                setEnableITN={setEnableITN}
                                 installedITNModels={installedITNModels}
                                 downloads={downloads}
-                                onDownloadITN={handleDownloadITN}
+                                onDownloadITN={handleDownload}
                                 onCancelDownload={handleCancelDownload}
                                 maxConcurrent={maxConcurrent}
                                 setMaxConcurrent={setMaxConcurrent}

@@ -1,4 +1,4 @@
-import React, { Dispatch, SetStateAction } from 'react';
+import React, { Dispatch, SetStateAction, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     DndContext,
@@ -17,7 +17,7 @@ import {
     useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ITN_MODELS } from '../../services/modelService';
+import { PRESET_MODELS, ModelInfo } from '../../services/modelService';
 import { DragHandleIcon, DownloadIcon, XIcon } from '../Icons';
 
 // --- Helper Component: SortableItem ---
@@ -69,7 +69,7 @@ interface ItnModelListProps {
     // downloadingId: string | null;
     // progress: number;
     downloads: Record<string, { progress: number; status: string }>;
-    onDownload: (id: string) => void;
+    onDownload: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
 }
 
@@ -92,15 +92,29 @@ export function ItnModelList({
         })
     );
 
+    // Compute display order ensuring all ITN models are present
+    const displayIds = useMemo(() => {
+        const allItnModels = PRESET_MODELS.filter(m => m.type === 'itn');
+        const allItnIds = new Set(allItnModels.map(m => m.id));
+
+        // Filter out obsolete IDs from order
+        const validOrder = itnRulesOrder.filter(id => allItnIds.has(id));
+
+        // Add missing IDs
+        const missingIds = allItnModels.filter(m => !validOrder.includes(m.id)).map(m => m.id);
+
+        return [...validOrder, ...missingIds];
+    }, [itnRulesOrder]);
+
+
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
 
         if (over && active.id !== over.id) {
-            setItnRulesOrder((items) => {
-                const oldIndex = items.indexOf(String(active.id));
-                const newIndex = items.indexOf(String(over.id));
-                return arrayMove(items, oldIndex, newIndex);
-            });
+            const oldIndex = displayIds.indexOf(String(active.id));
+            const newIndex = displayIds.indexOf(String(over.id));
+            const newOrder = arrayMove(displayIds, oldIndex, newIndex);
+            setItnRulesOrder(newOrder);
         }
     }
 
@@ -112,14 +126,7 @@ export function ItnModelList({
     }
 
     return (
-        <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
-            <div style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.itn_title')}</div>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                    {t('settings.itn_desc')}
-                </div>
-            </div>
-
+        <div className="settings-item" style={{ marginTop: 16 }}>
             <div className="settings-list">
                 <DndContext
                     sensors={sensors}
@@ -127,11 +134,11 @@ export function ItnModelList({
                     onDragEnd={handleDragEnd}
                 >
                     <SortableContext
-                        items={itnRulesOrder}
+                        items={displayIds}
                         strategy={verticalListSortingStrategy}
                     >
-                        {itnRulesOrder.map(modelId => {
-                            const model = ITN_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '' };
+                        {displayIds.map(modelId => {
+                            const model = PRESET_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '', type: 'itn', engine: 'onnx', language: '', size: '', url: '' };
                             const isInstalled = installedITNModels.has(model.id);
                             const isEnabled = enabledITNModels.has(model.id);
 
@@ -156,7 +163,7 @@ export function ItnModelList({
                                                     ) : (
                                                         <button
                                                             className="btn btn-sm btn-secondary"
-                                                            onClick={() => onDownload(model.id)}
+                                                            onClick={() => onDownload(model)}
                                                         // disabled={!!downloadingId} // Allow parallel
                                                         >
                                                             <DownloadIcon />

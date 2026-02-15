@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { PRESET_MODELS, ITN_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
+import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { open } from '@tauri-apps/plugin-dialog';
 
 /**
@@ -23,8 +23,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts'>('general');
 
     // We read directly from the config store
-    // Local state for ITN set is derived from config for easier UI handling, but we will sync it back immediately on change.
-    const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
+    const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || []));
+    const [enableITN, setEnableITNState] = useState<boolean>(config.enableITN ?? true);
 
     // Download state
     type DownloadState = {
@@ -35,11 +35,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
 
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
-    const [installedITNModels, setInstalledITNModels] = useState<Set<string>>(new Set());
 
-    // Sync ITN state when config changes externally (though we update config immediately now)
+    // Sync ITN state when config changes externally
     useEffect(() => {
-        setEnabledITNModels(new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : [])));
+        setEnabledITNModels(new Set(config.enabledITNModels || []));
+        setEnableITNState(config.enableITN ?? true);
     }, [config.enabledITNModels, config.enableITN]);
 
     async function checkInstalledModels() {
@@ -50,14 +50,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             }
         }
         setInstalledModels(installed);
-
-        const installedITN = new Set<string>();
-        for (const model of ITN_MODELS) {
-            if (await modelService.isITNModelInstalled(model.id)) {
-                installedITN.add(model.id);
-            }
-        }
-        setInstalledITNModels(installedITN);
     }
 
     useEffect(() => {
@@ -79,7 +71,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
             maxConcurrent: newConfig.maxConcurrent,
             enabledITNModels: newConfig.enabledITNModels,
             itnRulesOrder: newConfig.itnRulesOrder,
-            enableITN: (newConfig.enabledITNModels?.length ?? 0) > 0,
+            enableITN: newConfig.enableITN,
             appLanguage: newConfig.appLanguage,
             theme: newConfig.theme,
             font: newConfig.font as any
@@ -102,16 +94,20 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     };
 
     const handleSetEnabledITNModels = (action: React.SetStateAction<Set<string>>) => {
-        const currentSet = new Set(config.enabledITNModels || (config.enableITN ? ['itn-zh-number'] : []));
+        const currentSet = new Set(config.enabledITNModels || []);
         const newSet = typeof action === 'function'
             ? (action as (prev: Set<string>) => Set<string>)(currentSet)
             : action;
 
         setEnabledITNModels(newSet);
         updateConfig({
-            enabledITNModels: Array.from(newSet),
-            enableITN: newSet.size > 0
+            enabledITNModels: Array.from(newSet)
         });
+    };
+
+    const setEnableITN = (enabled: boolean) => {
+        setEnableITNState(enabled);
+        updateConfig({ enableITN: enabled });
     };
 
     const setAppLanguage = (lang: 'auto' | 'en' | 'zh') => {
@@ -251,15 +247,14 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         await executeDownload(
             model.id,
             (id, cb, sig) => modelService.downloadModel(id, cb, sig),
-            (path) => setModelPathByType(model.type as any, path)
-        );
-    }
-
-    async function handleDownloadITN(modelId: string) {
-        await executeDownload(
-            modelId,
-            (id, cb, sig) => modelService.downloadITNModel(id, cb, sig),
-            () => setEnabledITNModels(prev => new Set(prev).add(modelId))
+            (path) => {
+                if (model.type === 'itn') {
+                    setEnabledITNModels(prev => new Set(prev).add(model.id));
+                    // Also enable ITN if not enabled? No, keep user choice.
+                } else {
+                    setModelPathByType(model.type as any, path);
+                }
+            }
         );
     }
 
@@ -366,7 +361,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
 
         enabledITNModels,
         setEnabledITNModels: handleSetEnabledITNModels,
-        installedITNModels,
+        enableITN,
+        setEnableITN,
+
+        installedITNModels: installedModels, // Use installedModels instead
 
         deletingId,
         downloads,
@@ -374,7 +372,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
 
         handleBrowse,
         handleDownload,
-        handleDownloadITN,
         handleCancelDownload,
         handleLoad,
         handleDelete,
