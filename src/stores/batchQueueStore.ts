@@ -166,7 +166,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const enabledITNModels = new Set(config.enabledITNModels || []);
         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
 
-        transcriptionService.setEnableITN(enabledITNModels.size > 0);
+        transcriptionService.setEnableITN(config.enableITN ?? false);
 
         if (enabledITNModels.size > 0) {
             try {
@@ -174,7 +174,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 transcriptionService.setITNModelPaths(paths);
             } catch (e) {
                 console.error('[BatchQueue] Failed to set ITN paths:', e);
+                transcriptionService.setITNModelPaths([]);
             }
+        } else {
+            transcriptionService.setITNModelPaths([]);
         }
 
         if (config.punctuationModelPath) {
