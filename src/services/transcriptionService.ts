@@ -30,6 +30,7 @@ interface ServiceConfig {
     vadModelPath: string;
     vadBufferSize: number;
     enableITN: boolean;
+    language: string;
 }
 
 /**
@@ -65,6 +66,8 @@ class TranscriptionService {
     private spawningPromise: Promise<void> | null = null;
     /** Configuration of the currently running process. */
     private runningConfig: ServiceConfig | null = null;
+    /** Language code for transcription. */
+    private language: string = 'auto';
 
     /**
      * Initializes a new instance of the TranscriptionService.
@@ -79,6 +82,15 @@ class TranscriptionService {
     setModelPath(path: string): void {
         console.log('[TranscriptionService] Setting model path:', path);
         this.modelPath = path;
+    }
+
+    /**
+     * Sets the language for transcription.
+     *
+     * @param language The language code (e.g., 'en', 'zh', 'auto').
+     */
+    setLanguage(language: string): void {
+        this.language = language;
     }
 
     /**
@@ -206,7 +218,8 @@ class TranscriptionService {
                 punctuationModelPath: this.punctuationModelPath,
                 vadModelPath: this.vadModelPath,
                 vadBufferSize: this.vadBufferSize,
-                enableITN: this.enableITN
+                enableITN: this.enableITN,
+                language: this.language
             };
 
             try {
@@ -282,6 +295,7 @@ class TranscriptionService {
         if (this.punctuationModelPath !== this.runningConfig.punctuationModelPath) return false;
         if (this.vadModelPath !== this.runningConfig.vadModelPath) return false;
         if (this.vadBufferSize !== this.runningConfig.vadBufferSize) return false;
+        if (this.language !== this.runningConfig.language) return false;
 
         // Compare ITN model paths (array)
         if (this.itnModelPaths.length !== this.runningConfig.itnModelPaths.length) return false;
@@ -578,6 +592,10 @@ class TranscriptionService {
             '--model-path', this.modelPath,
             '--enable-itn', this.enableITN.toString()
         ];
+
+        if (this.language && this.language !== 'auto') {
+            args.push('--language', this.language);
+        }
 
         if (this.enableITN && this.itnModelPaths.length > 0) {
             args.push('--itn-model', this.itnModelPaths.join(','));

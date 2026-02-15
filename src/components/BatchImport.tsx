@@ -8,7 +8,7 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { FileQueueSidebar } from './FileQueueSidebar';
 import { UploadIcon } from './Icons';
-import { Dropdown } from './Dropdown';
+import { TranscriptionOptions } from './TranscriptionOptions';
 
 
 
@@ -18,65 +18,6 @@ const SUPPORTED_EXTENSIONS = [
     // Video
     '.mp4', '.webm', '.mov', '.mkv', '.avi', '.wmv', '.flv', '.3gp'
 ];
-
-/** Props for BatchImportOptions component. */
-interface BatchImportOptionsProps {
-    enableTimeline: boolean;
-    setEnableTimeline: (value: boolean) => void;
-    language: string;
-    setLanguage: (value: string) => void;
-}
-
-/**
- * Component for configuring batch import options (timeline, language).
- *
- * @param props Component props.
- * @return The rendered options component.
- */
-const BatchImportOptions = React.memo(function BatchImportOptions({ enableTimeline, setEnableTimeline, language, setLanguage }: BatchImportOptionsProps): React.JSX.Element {
-    const { t } = useTranslation();
-    return (
-        <div className="options-container">
-            <div className="options-row">
-                <div className="options-label">
-                    <span>{t('batch.timeline_mode')}</span>
-                    <span className="options-hint">{t('batch.timeline_hint')}</span>
-                </div>
-                <button
-                    className="toggle-switch"
-                    onClick={() => setEnableTimeline(!enableTimeline)}
-                    role="switch"
-                    aria-checked={enableTimeline}
-                    aria-label={t('batch.timeline_mode')}
-                    data-tooltip={t('batch.timeline_mode_tooltip')}
-                    data-tooltip-pos="left"
-                >
-                    <div className="toggle-switch-handle" />
-                </button>
-            </div>
-
-            <div className="options-row">
-                <div className="options-label">
-                    <span>{t('batch.language')}</span>
-                    <span className="options-hint">{t('batch.language_hint')}</span>
-                </div>
-                <Dropdown
-                    value={language}
-                    onChange={setLanguage}
-                    options={[
-                        { value: 'auto', label: 'Auto' },
-                        { value: 'zh', label: 'Chinese' },
-                        { value: 'en', label: 'English' },
-                        { value: 'ja', label: 'Japanese' },
-                        { value: 'ko', label: 'Korean' },
-                        { value: 'yue', label: 'Cantonese' }
-                    ]}
-                    style={{ width: '180px' }}
-                />
-            </div>
-        </div>
-    );
-});
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -348,7 +289,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </div>
 
                 {/* Options */}
-                <BatchImportOptions
+                <TranscriptionOptions
                     enableTimeline={enableTimeline}
                     setEnableTimeline={setEnableTimeline}
                     language={language}
@@ -391,7 +332,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </p>
             </div>
 
-            <BatchImportOptions
+            <TranscriptionOptions
                 enableTimeline={enableTimeline}
                 setEnableTimeline={setEnableTimeline}
                 language={language}
