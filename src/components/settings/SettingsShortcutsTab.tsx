@@ -25,6 +25,13 @@ export function SettingsShortcutsTab(): React.JSX.Element {
             ]
         },
         {
+            title: t('shortcuts.section_live'),
+            items: [
+                { key: 'Ctrl + Space', description: t('shortcuts.record_start_stop') },
+                { key: 'Space', description: t('shortcuts.record_pause_resume') },
+            ]
+        },
+        {
             title: t('shortcuts.section_search'),
             items: [
                 { key: 'Ctrl + F', description: t('shortcuts.find') },

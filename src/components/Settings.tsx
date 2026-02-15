@@ -245,6 +245,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 onCancelDownload={handleCancelDownload}
                                 maxConcurrent={maxConcurrent}
                                 setMaxConcurrent={setMaxConcurrent}
+                                installedModels={installedModels}
                             />
                         )}
 

@@ -517,6 +517,68 @@ input[type="radio"]:focus {
 }
 
 /* ===========================
+   Switch Component
+   =========================== */
+
+.switch-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity var(--transition-fast);
+}
+
+.switch-container.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: 10px;
+  transition: background-color var(--transition-fast);
+  border: 1px solid var(--color-border);
+}
+
+.switch-container.checked .switch-track {
+  background-color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: left var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.switch-container.checked .switch-thumb {
+  left: 17px;
+}
+
+.switch-label {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.switch-container:focus-visible {
+  outline: none;
+}
+
+.switch-container:focus-visible .switch-track {
+  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+}
+
+/* ===========================
    Record Button (Special)
    =========================== */
 

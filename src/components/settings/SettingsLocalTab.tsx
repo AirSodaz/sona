@@ -1,7 +1,10 @@
 import React, { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderIcon } from '../Icons';
+import { Switch } from '../Switch';
+import { Dropdown } from '../Dropdown';
+import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
+import { PRESET_MODELS, modelService } from '../../services/modelService';
 
 interface SettingsLocalTabProps {
     offlineModelPath: string;
@@ -30,6 +33,7 @@ interface SettingsLocalTabProps {
     downloads: Record<string, { progress: number; status: string }>;
     onDownloadITN: (id: string) => void;
     onCancelDownload: (modelId: string) => void;
+    installedModels: Set<string>;
 }
 
 export function SettingsLocalTab({
@@ -43,8 +47,6 @@ export function SettingsLocalTab({
     setCtcModelPath,
     vadBufferSize,
     setVadBufferSize,
-    handleBrowse,
-
     itnRulesOrder,
     setItnRulesOrder,
     enabledITNModels,
@@ -54,9 +56,76 @@ export function SettingsLocalTab({
     onDownloadITN,
     onCancelDownload,
     maxConcurrent,
-    setMaxConcurrent
+    setMaxConcurrent,
+    installedModels
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
+    const { alert } = useDialogStore();
+
+    const handleToggle = async (type: 'punctuation' | 'vad' | 'ctc', checked: boolean) => {
+        if (!checked) {
+            if (type === 'punctuation') setPunctuationModelPath('');
+            else if (type === 'vad') setVadModelPath('');
+            else if (type === 'ctc') setCtcModelPath('');
+            return;
+        }
+
+        const model = PRESET_MODELS.find(m => m.type === type);
+        if (model) {
+            if (!installedModels.has(model.id)) {
+                await alert(t('settings.model_not_installed', { defaultValue: 'Please download the model first from the Model Hub.' }));
+                return;
+            }
+
+            try {
+                const path = await modelService.getModelPath(model.id);
+                if (type === 'punctuation') setPunctuationModelPath(path);
+                else if (type === 'vad') setVadModelPath(path);
+                else if (type === 'ctc') setCtcModelPath(path);
+            } catch (e) {
+                console.error(`Failed to get path for ${type} model`, e);
+            }
+        }
+    };
+
+    const [selectedOfflineModelId, setSelectedOfflineModelId] = React.useState<string>('');
+
+    // Sync offlineModelPath with selected model ID
+    React.useEffect(() => {
+        const findModel = async () => {
+            if (!offlineModelPath) {
+                setSelectedOfflineModelId('');
+                return;
+            }
+
+            // Try to find which model ID corresponds to this path
+            for (const model of PRESET_MODELS) {
+                if (model.type === 'offline') {
+                    const path = await modelService.getModelPath(model.id);
+                    // Simple check if paths match (might need normalization in real world, but strict equality for now)
+                    // On Windows, paths might differ by slashes, but usually consistency is maintained if set via the same service.
+                    if (path === offlineModelPath) {
+                        setSelectedOfflineModelId(model.id);
+                        return;
+                    }
+                }
+            }
+            // If no match found (e.g. custom path), set to empty or handle gracefully
+            // For now, we leave it empty which will show "Select a model..." or we could add a "Custom" option logic later.
+            setSelectedOfflineModelId('');
+        };
+        findModel();
+    }, [offlineModelPath]);
+
+    const handleOfflineModelChange = async (modelId: string) => {
+        setSelectedOfflineModelId(modelId);
+        try {
+            const path = await modelService.getModelPath(modelId);
+            setOfflineModelPath(path);
+        } catch (e) {
+            console.error('Failed to get offline model path', e);
+        }
+    };
 
     return (
         <div
@@ -68,96 +137,52 @@ export function SettingsLocalTab({
         >
 
             <div className="settings-item" style={{ marginTop: 16 }}>
-                <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Offline Model Path' })}</label>
+                <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Recognition Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <input
+                    <Dropdown
                         id="settings-offline-path"
-                        type="text"
-                        title={offlineModelPath}
-                        className="settings-input"
-                        value={offlineModelPath}
-                        onChange={(e) => setOfflineModelPath(e.target.value)}
-                        placeholder={t('settings.path_placeholder')}
+                        value={selectedOfflineModelId}
+                        onChange={(value) => handleOfflineModelChange(value)}
+                        placeholder={t('settings.select_model', { defaultValue: 'Select a model...' })}
+                        options={PRESET_MODELS.filter(m => m.type === 'offline').map(model => ({
+                            value: model.id,
+                            label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+                            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
+                        }))}
                         style={{ flex: 1 }}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('offline')}
-                        aria-label={t('settings.browse')}
-                    >
-                        <FolderIcon />
-                    </button>
                 </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 16 }}>
-                <label htmlFor="settings-punctuation-path" className="settings-label">{t('settings.punctuation_path_label')}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        id="settings-punctuation-path"
-                        type="text"
-                        title={punctuationModelPath}
-                        className="settings-input"
-                        value={punctuationModelPath}
-                        onChange={(e) => setPunctuationModelPath(e.target.value)}
-                        placeholder={t('settings.path_placeholder')}
-                        style={{ flex: 1 }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.punctuation_path_label')}</label>
+                    <Switch
+                        checked={!!punctuationModelPath}
+                        onChange={(c) => handleToggle('punctuation', c)}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('punctuation')}
-                        aria-label={t('settings.browse')}
-                    >
-                        <FolderIcon />
-                    </button>
                 </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 16 }}>
-                <label htmlFor="settings-vad-path" className="settings-label">{t('settings.vad_path_label', { defaultValue: 'VAD Model Path' })}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        id="settings-vad-path"
-                        type="text"
-                        title={vadModelPath}
-                        className="settings-input"
-                        value={vadModelPath}
-                        onChange={(e) => setVadModelPath(e.target.value)}
-                        placeholder={t('settings.path_placeholder')}
-                        style={{ flex: 1 }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.vad_path_label', { defaultValue: 'VAD Model' })}</label>
+                    <Switch
+                        checked={!!vadModelPath}
+                        onChange={(c) => handleToggle('vad', c)}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('vad')}
-                        aria-label={t('settings.browse')}
-                    >
-                        <FolderIcon />
-                    </button>
                 </div>
             </div>
 
 
 
             <div className="settings-item" style={{ marginTop: 16 }}>
-                <label htmlFor="settings-ctc-path" className="settings-label">{t('settings.ctc_path_label', { defaultValue: 'CTC Model Path' })}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        id="settings-ctc-path"
-                        type="text"
-                        title={ctcModelPath}
-                        className="settings-input"
-                        value={ctcModelPath}
-                        onChange={(e) => setCtcModelPath(e.target.value)}
-                        placeholder={t('settings.path_placeholder')}
-                        style={{ flex: 1 }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ctc_path_label', { defaultValue: 'CTC Model' })}</label>
+                    <Switch
+                        checked={!!ctcModelPath}
+                        onChange={(c) => handleToggle('ctc', c)}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('ctc')}
-                        aria-label={t('settings.browse')}
-                    >
-                        <FolderIcon />
-                    </button>
                 </div>
             </div>
 
@@ -217,6 +242,6 @@ export function SettingsLocalTab({
                 onDownload={onDownloadITN}
                 onCancelDownload={onCancelDownload}
             />
-        </div>
+        </div >
     );
 }
