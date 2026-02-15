@@ -11,6 +11,7 @@ import { LiveRecord } from './components/LiveRecord';
 import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
+import { FirstRunGuide } from './components/FirstRunGuide';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -90,6 +91,7 @@ function App(): React.JSX.Element {
       {/* Settings Modal */}
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <GlobalDialog />
+      <FirstRunGuide />
     </div>
   );
 }

@@ -197,5 +197,14 @@
         "previous": "Previous match",
         "next": "Next match",
         "close": "Close"
+    },
+    "first_run": {
+        "title": "Welcome to Sona",
+        "description": "To get started, we need to download some models.",
+        "one_click_download": "One-Click Download",
+        "skip": "Skip",
+        "downloading": "Downloading...",
+        "success": "Download Complete",
+        "error": "Download Failed"
     }
 }
