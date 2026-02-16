@@ -16,7 +16,9 @@ const NODE_VERSION = 'v22.22.0';
  */
 const TARGETS = {
   'win32-x64': 'x86_64-pc-windows-msvc',
+  'win32-arm64': 'aarch64-pc-windows-msvc',
   'linux-x64': 'x86_64-unknown-linux-gnu',
+  'linux-arm64': 'aarch64-unknown-linux-gnu',
   'darwin-x64': 'x86_64-apple-darwin',
   'darwin-arm64': 'aarch64-apple-darwin',
 };
@@ -91,7 +93,13 @@ async function setupNode(targetTriple) {
 
   if (targetTriple.includes('windows') || targetTriple.includes('win32')) {
     nodePlatform = 'win32';
-    nodeArch = (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) ? 'arm64' : 'x64';
+    // Force x64 for Windows ARM64 because native modules (sherpa-onnx) are missing for arm64
+    if (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) {
+      console.warn('Windows ARM64 target detected. Forcing x64 Node.js sidecar due to missing native dependencies.');
+      nodeArch = 'x64';
+    } else {
+      nodeArch = 'x64';
+    }
   } else if (targetTriple.includes('apple-darwin') || targetTriple.includes('darwin')) {
     nodePlatform = 'darwin';
     nodeArch = (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) ? 'arm64' : 'x64';

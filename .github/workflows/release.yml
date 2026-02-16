@@ -21,14 +21,22 @@ jobs:
         include:
           - platform: "macos-latest"
             args: "--target aarch64-apple-darwin"
+            target: "aarch64-apple-darwin"
           - platform: "macos-latest"
             args: "--target x86_64-apple-darwin"
+            target: "x86_64-apple-darwin"
           - platform: "macos-latest"
             args: "--target universal-apple-darwin"
+            target: "universal-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
+            target: ""
           - platform: "windows-latest"
             args: ""
+            target: ""
+          - platform: "windows-latest"
+            args: "--target aarch64-pc-windows-msvc"
+            target: "aarch64-pc-windows-msvc"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -45,7 +53,7 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '') }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && matrix.platform != 'windows-latest' && 'aarch64-unknown-linux-gnu' || (contains(matrix.args, 'aarch64') && matrix.platform == 'windows-latest' && 'aarch64-pc-windows-msvc' || '') ) }}
 
       - name: Node.js setup
         uses: actions/setup-node@v4
@@ -55,6 +63,10 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install --legacy-peer-deps
+
+      - name: Setup Sidecar (Cross-compilation)
+        if: matrix.target != ''
+        run: node scripts/setup-sidecar.js ${{ matrix.target }}
 
       - name: Build the app
         env:
@@ -117,8 +129,45 @@ jobs:
             src-tauri/target/**/release/bundle/rpm/*.sig
           if-no-files-found: warn
 
+  build-tauri-arm64-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build in ARM64 container
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: aarch64
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+          run: |
+            source $HOME/.cargo/env
+            npm install --legacy-peer-deps
+            npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-linux-arm64
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.sig
+            src-tauri/target/release/bundle/appimage/*.sig
+          if-no-files-found: warn
+
   publish-release:
-    needs: build-tauri
+    needs: [build-tauri, build-tauri-arm64-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -186,24 +235,31 @@ jobs:
           WINDOWS_NSIS_SIG=$(read_sig "*_x64-setup.exe.sig")
           LINUX_AMD64_SIG=$(read_sig "*_amd64.AppImage.sig")
           LINUX_AARCH64_SIG=$(read_sig "*_aarch64.AppImage.sig")
+          WINDOWS_ARM64_SIG=$(read_sig "*_aarch64-setup.exe.sig")
 
           echo "Signatures found:"
           [ -n "$MACOS_AARCH64_SIG" ] && echo "  macOS aarch64: YES" || echo "  macOS aarch64: NO"
           [ -n "$MACOS_X64_SIG" ] && echo "  macOS x64: YES" || echo "  macOS x64: NO"
           [ -n "$WINDOWS_NSIS_SIG" ] && echo "  Windows x64: YES" || echo "  Windows x64: NO"
           [ -n "$LINUX_AMD64_SIG" ] && echo "  Linux amd64: YES" || echo "  Linux amd64: NO"
+          [ -n "$LINUX_AARCH64_SIG" ] && echo "  Linux aarch64: YES" || echo "  Linux aarch64: NO"
+          [ -n "$WINDOWS_ARM64_SIG" ] && echo "  Windows arm64: YES" || echo "  Windows arm64: NO"
 
           # Find filenames to construct URLs accurately
           MACOS_AARCH64_FILE=$(find_filename "*_aarch64.app.tar.gz")
           MACOS_X64_FILE=$(find_filename "*_x64.app.tar.gz")
           WINDOWS_NSIS_FILE=$(find_filename "*_x64-setup.exe")
           LINUX_AMD64_FILE=$(find_filename "*_amd64.AppImage")
+          LINUX_AARCH64_FILE=$(find_filename "*_aarch64.AppImage")
+          WINDOWS_ARM64_FILE=$(find_filename "*_aarch64-setup.exe")
 
           # Fallback if find fails but sig exists (unlikely)
           [ -z "$MACOS_AARCH64_FILE" ] && MACOS_AARCH64_FILE="${APP_NAME}_aarch64.app.tar.gz"
           [ -z "$MACOS_X64_FILE" ] && MACOS_X64_FILE="${APP_NAME}_x64.app.tar.gz"
           [ -z "$WINDOWS_NSIS_FILE" ] && WINDOWS_NSIS_FILE="${APP_NAME}_${VER}_x64-setup.exe"
           [ -z "$LINUX_AMD64_FILE" ] && LINUX_AMD64_FILE="${APP_NAME}_${VER}_amd64.AppImage"
+          [ -z "$LINUX_AARCH64_FILE" ] && LINUX_AARCH64_FILE="${APP_NAME}_${VER}_aarch64.AppImage"
+          [ -z "$WINDOWS_ARM64_FILE" ] && WINDOWS_ARM64_FILE="${APP_NAME}_${VER}_aarch64-setup.exe"
 
           # Build updater.json
           jq -n \
@@ -215,10 +271,14 @@ jobs:
             --arg mac_x64_sig "$MACOS_X64_SIG" \
             --arg win_nsis_sig "$WINDOWS_NSIS_SIG" \
             --arg linux_amd64_sig "$LINUX_AMD64_SIG" \
+            --arg linux_a64_sig "$LINUX_AARCH64_SIG" \
+            --arg win_arm64_sig "$WINDOWS_ARM64_SIG" \
             --arg mac_a64_file "$MACOS_AARCH64_FILE" \
             --arg mac_x64_file "$MACOS_X64_FILE" \
             --arg win_nsis_file "$WINDOWS_NSIS_FILE" \
             --arg linux_amd64_file "$LINUX_AMD64_FILE" \
+            --arg linux_a64_file "$LINUX_AARCH64_FILE" \
+            --arg win_arm64_file "$WINDOWS_ARM64_FILE" \
             '{
               version: $version,
               notes: $notes,
@@ -239,6 +299,14 @@ jobs:
                 "linux-x86_64": {
                   url: "\($dl)/\($linux_amd64_file)",
                   signature: $linux_amd64_sig
+                },
+                "linux-aarch64": {
+                  url: "\($dl)/\($linux_a64_file)",
+                  signature: $linux_a64_sig
+                },
+                "windows-aarch64": {
+                  url: "\($dl)/\($win_arm64_file)",
+                  signature: $win_arm64_sig
                 }
               }
             }' > updater.json
