@@ -174,7 +174,12 @@
         "model_not_installed": "Please download the model first from the Model Hub.",
         "restore_defaults": "Restore Default Settings",
         "restore_defaults_confirm": "Are you sure you want to restore all model settings to their defaults?",
-        "shortcuts": "Keyboard Shortcuts"
+        "shortcuts": "Keyboard Shortcuts",
+        "about": "About",
+        "about_desc": "Sona is a powerful, offline transcript editor providing fast, accurate, and private speech-to-text capabilities.",
+        "about_homepage": "Project Homepage",
+        "about_version": "Version",
+        "about_check_updates": "Check for Updates"
     },
     "shortcuts": {
         "title": "Keyboard Shortcuts",
