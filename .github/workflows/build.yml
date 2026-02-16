@@ -73,7 +73,7 @@ jobs:
           releaseName: "Sona v__VERSION__"
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }} --config '{"bundle": {"createUpdaterArtifacts": true}}'
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }} --config "{\"bundle\": {\"createUpdaterArtifacts\": true}}"
 
   updater-json:
     needs: build-tauri
