@@ -83,7 +83,7 @@ async function downloadFile(url, dest) {
  * Checks if the binary already exists; if not, downloads and extracts it.
  *
  * @param {string} targetTriple - The Rust target triple (e.g., 'x86_64-apple-darwin').
- * @return {Promise<void>} A promise that resolves when Node.js is set up.
+ * @return {Promise<string>} The path to the setup binary.
  */
 async function setupNode(targetTriple) {
   // Determine Node platform and arch from targetTriple
@@ -111,7 +111,7 @@ async function setupNode(targetTriple) {
 
   if (fs.existsSync(binaryPath)) {
     console.log(`Node binary already exists at ${binaryPath}`);
-    return;
+    return binaryPath;
   }
 
   console.log(`Downloading Node.js binary for ${targetTriple} (${nodePlatform}-${nodeArch}) to ${binaryPath}...`);
@@ -170,6 +170,7 @@ async function setupNode(targetTriple) {
     }
   }
   console.log(`Node binary setup complete for ${targetTriple}.`);
+  return binaryPath;
 }
 
 /**
@@ -210,8 +211,23 @@ async function main() {
   if (process.platform === 'darwin') {
     // On macOS, download both architectures to support Universal builds
     console.log('Detected macOS platform. Setting up both x86_64 and aarch64 binaries for Universal build support.');
-    await setupNode('x86_64-apple-darwin');
-    await setupNode('aarch64-apple-darwin');
+    const x64Path = await setupNode('x86_64-apple-darwin');
+    const arm64Path = await setupNode('aarch64-apple-darwin');
+
+    // Create a universal binary using lipo
+    const universalPath = path.join(binariesDir, 'node-universal-apple-darwin');
+    if (fs.existsSync(universalPath)) {
+        console.log(`Universal binary already exists at ${universalPath}`);
+    } else {
+        console.log(`Creating universal binary at ${universalPath}...`);
+        try {
+            execSync(`lipo -create -output "${universalPath}" "${x64Path}" "${arm64Path}"`);
+            console.log('Universal binary created successfully.');
+        } catch (e) {
+            console.error('Failed to create universal binary with lipo:', e);
+            process.exit(1);
+        }
+    }
   } else {
     // Other platforms: setup only the requested/detected target
     await setupNode(currentTarget);
