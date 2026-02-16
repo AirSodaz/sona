@@ -67,5 +67,13 @@
     "resources": [
       "sidecar/dist/*"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4NDAwOThEMTZDQjRFMTYKUldRV1Rzc1dqUWxBU05XK3FmR2tyLzlteEw2VGpZdmFYQU1abHVrTFQxUjNLdmFKRjVtVVFnUlQK",
+      "endpoints": [
+        "https://github.com/AirSodaz/sona/releases/latest/download/updater.json"
+      ]
+    }
   }
 }
