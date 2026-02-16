@@ -2,7 +2,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import packageJson from '../../../package.json';
-import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon } from '../Icons';
+import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, ErrorIcon, DownloadIcon } from '../Icons';
+import { useAppUpdater } from '../../hooks/useAppUpdater';
 
 /**
  * Redesigned About page with centered card-based layout.
@@ -10,6 +11,7 @@ import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon } from '../Icons'
  */
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
+    const { status, error, updateInfo, checkUpdate, installUpdate, progress } = useAppUpdater();
 
     const handleOpenHomepage = async () => {
         try {
@@ -19,11 +21,90 @@ export function SettingsAboutTab(): React.JSX.Element {
         }
     };
 
-    const handleCheckUpdates = async () => {
-        try {
-            await openUrl('https://github.com/AirSodaz/sona/releases');
-        } catch (error) {
-            console.error('Failed to open releases page:', error);
+    const renderUpdateContent = () => {
+        switch (status) {
+            case 'idle':
+                return (
+                    <button
+                        className="btn btn-primary"
+                        onClick={checkUpdate}
+                    >
+                        {t('settings.about_check_updates')}
+                    </button>
+                );
+            case 'checking':
+                return (
+                    <div className="update-status">
+                        <ProcessingIcon className="w-5 h-5 text-primary queue-icon-spin" />
+                        <span>{t('settings.update_checking')}</span>
+                    </div>
+                );
+            case 'available':
+                return (
+                    <div className="update-available-container">
+                        <div className="update-info">
+                            <DownloadIcon className="w-5 h-5 text-primary" />
+                            <span>{t('settings.update_available', { version: updateInfo?.version })}</span>
+                        </div>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={installUpdate}
+                        >
+                            {t('settings.update_btn_install')}
+                        </button>
+                    </div>
+                );
+            case 'uptodate':
+                return (
+                    <div className="update-status success">
+                        <CheckIcon className="w-5 h-5 text-green-500" style={{ color: 'var(--color-success)' }} />
+                        <span>{t('settings.update_not_available')}</span>
+                    </div>
+                );
+            case 'downloading':
+            case 'installing':
+                return (
+                    <div className="update-progress-container">
+                        <div className="update-progress-header">
+                            <span>{status === 'downloading' ? t('settings.update_downloading') : t('settings.update_installing')}</span>
+                            <span>{progress}%</span>
+                        </div>
+                        <div className="progress-bar">
+                            <div
+                                className="progress-bar-fill"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                    </div>
+                );
+            case 'downloaded':
+                return (
+                    <div className="update-status success">
+                        <CheckIcon className="w-5 h-5 text-green-500" style={{ color: 'var(--color-success)' }} />
+                        <span>{t('settings.update_relaunch')}</span>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => window.location.reload()} // Fallback, usually app restarts itself
+                        >
+                            {t('settings.update_btn_relaunch')}
+                        </button>
+                    </div>
+                );
+            case 'error':
+                return (
+                    <div className="update-status error">
+                        <ErrorIcon className="w-5 h-5 text-red-500" style={{ color: 'var(--color-error)' }} />
+                        <span className="error-text">{t('settings.update_error', { error })}</span>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={checkUpdate}
+                        >
+                            {t('common.retry', { defaultValue: 'Retry' })}
+                        </button>
+                    </div>
+                );
+            default:
+                return null;
         }
     };
 
@@ -81,12 +162,7 @@ export function SettingsAboutTab(): React.JSX.Element {
 
             {/* Actions */}
             <div className="about-actions">
-                <button
-                    className="btn btn-primary"
-                    onClick={handleCheckUpdates}
-                >
-                    {t('settings.about_check_updates')}
-                </button>
+                {renderUpdateContent()}
             </div>
 
             {/* Footer */}
