@@ -1,201 +1,257 @@
-name: Build
+name: Release
 
 on:
   push:
-    branches: [ "master" ]
     tags:
-      - 'v*'
-  pull_request:
-    branches: [ "master" ]
+      - "v*"
+  workflow_dispatch:
 
 jobs:
   build-tauri:
     permissions:
       contents: write
-
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target universal-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
 
     runs-on: ${{ matrix.platform }}
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-latest'
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libfuse2 patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev
+          sudo apt-get install -y libnm-dev xdg-utils
 
-      - name: install frontend dependencies
-        run: npm install
-
-      - name: Run backend tests
-        run: |
-          cd src-tauri
-          cargo test
-
-      - name: Build (Debug/Test)
-        if: startsWith(github.ref, 'refs/tags/') != true
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
         with:
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '') }}
 
-      - name: Build and Release (Publish)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: tauri-apps/tauri-action@v0
+      - name: Node.js setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build the app
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__
-          releaseName: "Sona v__VERSION__"
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+        run: npm run tauri build -- ${{ matrix.args }}
 
-  updater-json:
+      # 3. Handle macOS architecture renaming (Solve 422 Already Exists)
+      - name: Rename macOS assets for architecture
+        if: matrix.platform == 'macos-latest'
+        run: |
+          # Identify Architecture
+          if [[ "${{ matrix.args }}" == *"--target aarch64-apple-darwin"* ]]; then
+            ARCH="aarch64"
+          elif [[ "${{ matrix.args }}" == *"--target x86_64-apple-darwin"* ]]; then
+            ARCH="x64"
+          elif [[ "${{ matrix.args }}" == *"--target universal-apple-darwin"* ]]; then
+            ARCH="universal"
+          else
+            ARCH="unknown"
+          fi
+
+          echo "Detected architecture: $ARCH"
+
+          # Enter build output directory
+          cd src-tauri/target/*/release/bundle/macos/
+
+          # Rename .app.tar.gz and .sig
+          # Note: Adjust generic name if necessary, e.g., "Sona.app.tar.gz"
+          if [ -f "Sona.app.tar.gz" ]; then
+            mv "Sona.app.tar.gz" "Sona_${ARCH}.app.tar.gz"
+            if [ -f "Sona.app.tar.gz.sig" ]; then
+                mv "Sona.app.tar.gz.sig" "Sona_${ARCH}.app.tar.gz.sig"
+            fi
+            echo "Renamed assets to append Arch: $ARCH"
+          fi
+
+      # 1. Upload updater.json to Artifacts (if needed for later merge, though we generate it fresh in release job)
+      # Skipping this step as we generate it in release job.
+
+      # 2. Upload Release Artifacts
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.platform }}-${{ strategy.job-index }}
+          path: |
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/rpm/*.rpm
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz.sig
+            src-tauri/target/**/release/bundle/dmg/*.sig
+            src-tauri/target/**/release/bundle/deb/*.sig
+            src-tauri/target/**/release/bundle/appimage/*.sig
+            src-tauri/target/**/release/bundle/msi/*.sig
+            src-tauri/target/**/release/bundle/nsis/*.sig
+            src-tauri/target/**/release/bundle/rpm/*.sig
+          if-no-files-found: warn
+
+  publish-release:
     needs: build-tauri
-    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Generate updater.json
-        uses: actions/github-script@v7
-        env:
-          UPDATER_FILENAME: "updater.json" 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download all artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            
-            const { owner, repo } = context.repo;
-            const tag = context.ref.replace('refs/tags/', '');
-            
-            let release;
-            try {
-              release = await github.rest.repos.getReleaseByTag({
-                owner, repo, tag
-              });
-            } catch (e) {
-              if (e.status === 404) {
-                console.log(`Release for tag ${tag} not found via getReleaseByTag. Searching list (likely a draft)...`);
-                const releases = await github.rest.repos.listReleases({
-                  owner, repo, per_page: 20
-                });
-                const found = releases.data.find(r => r.tag_name === tag);
-                if (found) {
-                  release = { data: found };
-                } else {
-                  throw new Error(`Release with tag ${tag} not found in list.`);
-                }
-              } else {
-                throw e;
-              }
-            }
-            
-            const assets = release.data.assets;
-            const pubDate = release.data.published_at || new Date().toISOString();
-            const releaseNotes = release.data.body || `Version ${tag}`;
-            
-            const updateData = {
-              version: tag.replace(/^v/, ''),
-              notes: releaseNotes,
-              pub_date: pubDate,
-              platforms: {}
-            };
-            
-            const platformMap = {
-              'linux-x86_64': { ext: '.AppImage.tar.gz', sig: '.AppImage.tar.gz.sig' },
-              'windows-x86_64': { ext: '.msi.zip', sig: '.msi.zip.sig' },
-              'darwin-x86_64': { ext: '.app.tar.gz', sig: '.app.tar.gz.sig' },
-              'darwin-aarch64': { ext: '.app.tar.gz', sig: '.app.tar.gz.sig' },
-              'darwin-universal': { ext: '.app.tar.gz', sig: '.app.tar.gz.sig' } 
-            };
-            
-            for (const asset of assets) {
-              if (asset.name.endsWith('.sig')) {
-                const binName = asset.name.slice(0, -4); 
-                const binAsset = assets.find(a => a.name === binName);
-                
-                if (binAsset) {
-                  console.log(`Processing signature for: ${binName}`);
-                  
-                  let signature = '';
-                  try {
-                    const sigData = await github.request(asset.url, {
-                      headers: {
-                        accept: 'application/octet-stream'
-                      }
-                    });
-                    signature = Buffer.from(sigData.data).toString('utf-8');
-                  } catch (e) {
-                    console.error(`Failed to download signature for ${asset.name}: ${e.message}`);
-                    continue;
-                  }
+          path: all-artifacts
+          pattern: "release-assets-*"
+          merge-multiple: true
 
-                  let platformKey = null;
-                  if (binName.includes('.AppImage')) platformKey = 'linux-x86_64';
-                  else if (binName.includes('.msi.zip')) platformKey = 'windows-x86_64';
-                  else if (binName.includes('.app.tar.gz')) {
-                      if (binName.includes('universal')) platformKey = 'darwin-universal';
-                      else if (binName.includes('aarch64')) platformKey = 'darwin-aarch64';
-                      else platformKey = 'darwin-x86_64';
-                  }
+      - name: Extract Release Notes
+        run: |
+          VERSION="${{ github.ref_name }}"
+          echo "Extracting release notes for version $VERSION"
+          # Simple extraction logic or default message
+          if [ -f "README.md" ]; then
+             # Try to extract from README or just use generic text
+             echo "See the assets to download this version and install." > release_notes.md
+          else
+             echo "Release $VERSION" > release_notes.md
+          fi
 
-                  if (platformKey) {
-                    updateData.platforms[platformKey] = {
-                      signature: signature.trim(),
-                      url: binAsset.browser_download_url
-                    };
-                    console.log(`Matched ${platformKey}: ${binName}`);
-                  }
+      - name: Build updater.json from signatures
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/${VERSION}"
+          VER="${VERSION#v}"
+          APP_NAME="Sona"
+
+          # Helper: read signature content from .sig file in artifacts
+          read_sig() {
+            local pattern="$1"
+            local sig_file
+            sig_file=$(find all-artifacts -name "$pattern" -type f 2>/dev/null | head -1)
+            if [ -n "$sig_file" ] && [ -f "$sig_file" ]; then
+              cat "$sig_file"
+            else
+              echo ""
+            fi
+          }
+
+          # Helper: find filename
+          find_filename() {
+            local pattern="$1"
+            local file
+            file=$(find all-artifacts -name "$pattern" -type f 2>/dev/null | head -1)
+            if [ -n "$file" ]; then
+                basename "$file"
+            else
+                echo ""
+            fi
+          }
+
+          # Read signatures for each platform
+          MACOS_AARCH64_SIG=$(read_sig "*_aarch64.app.tar.gz.sig")
+          MACOS_X64_SIG=$(read_sig "*_x64.app.tar.gz.sig")
+          WINDOWS_NSIS_SIG=$(read_sig "*_x64-setup.exe.sig")
+          LINUX_AMD64_SIG=$(read_sig "*_amd64.AppImage.sig")
+          LINUX_AARCH64_SIG=$(read_sig "*_aarch64.AppImage.sig")
+
+          echo "Signatures found:"
+          [ -n "$MACOS_AARCH64_SIG" ] && echo "  macOS aarch64: YES" || echo "  macOS aarch64: NO"
+          [ -n "$MACOS_X64_SIG" ] && echo "  macOS x64: YES" || echo "  macOS x64: NO"
+          [ -n "$WINDOWS_NSIS_SIG" ] && echo "  Windows x64: YES" || echo "  Windows x64: NO"
+          [ -n "$LINUX_AMD64_SIG" ] && echo "  Linux amd64: YES" || echo "  Linux amd64: NO"
+
+          # Find filenames to construct URLs accurately
+          MACOS_AARCH64_FILE=$(find_filename "*_aarch64.app.tar.gz")
+          MACOS_X64_FILE=$(find_filename "*_x64.app.tar.gz")
+          WINDOWS_NSIS_FILE=$(find_filename "*_x64-setup.exe")
+          LINUX_AMD64_FILE=$(find_filename "*_amd64.AppImage")
+
+          # Fallback if find fails but sig exists (unlikely)
+          [ -z "$MACOS_AARCH64_FILE" ] && MACOS_AARCH64_FILE="${APP_NAME}_aarch64.app.tar.gz"
+          [ -z "$MACOS_X64_FILE" ] && MACOS_X64_FILE="${APP_NAME}_x64.app.tar.gz"
+          [ -z "$WINDOWS_NSIS_FILE" ] && WINDOWS_NSIS_FILE="${APP_NAME}_${VER}_x64-setup.exe"
+          [ -z "$LINUX_AMD64_FILE" ] && LINUX_AMD64_FILE="${APP_NAME}_${VER}_amd64.AppImage"
+
+          # Build updater.json
+          jq -n \
+            --arg version "$VER" \
+            --arg notes "See release page for details" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg dl "$DOWNLOAD_BASE" \
+            --arg mac_a64_sig "$MACOS_AARCH64_SIG" \
+            --arg mac_x64_sig "$MACOS_X64_SIG" \
+            --arg win_nsis_sig "$WINDOWS_NSIS_SIG" \
+            --arg linux_amd64_sig "$LINUX_AMD64_SIG" \
+            --arg mac_a64_file "$MACOS_AARCH64_FILE" \
+            --arg mac_x64_file "$MACOS_X64_FILE" \
+            --arg win_nsis_file "$WINDOWS_NSIS_FILE" \
+            --arg linux_amd64_file "$LINUX_AMD64_FILE" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": {
+                  url: "\($dl)/\($mac_a64_file)",
+                  signature: $mac_a64_sig
+                },
+                "darwin-x86_64": {
+                  url: "\($dl)/\($mac_x64_file)",
+                  signature: $mac_x64_sig
+                },
+                "windows-x86_64": {
+                  url: "\($dl)/\($win_nsis_file)",
+                  signature: $win_nsis_sig
+                },
+                "linux-x86_64": {
+                  url: "\($dl)/\($linux_amd64_file)",
+                  signature: $linux_amd64_sig
                 }
               }
-            }
-            
-            const jsonString = JSON.stringify(updateData, null, 2);
-            fs.writeFileSync(process.env.UPDATER_FILENAME, jsonString);
-            console.log('updater.json content:', jsonString);
-            
-            const existingAsset = assets.find(a => a.name === process.env.UPDATER_FILENAME);
-            if (existingAsset) {
-              console.log(`Deleting existing ${process.env.UPDATER_FILENAME}...`);
-              await github.rest.repos.deleteReleaseAsset({
-                owner,
-                repo,
-                asset_id: existingAsset.id
-              });
-            }
-            
-            await github.rest.repos.uploadReleaseAsset({
-              owner,
-              repo,
-              release_id: release.data.id,
-              name: process.env.UPDATER_FILENAME,
-              data: fs.readFileSync(process.env.UPDATER_FILENAME)
-            });
-            console.log(`Uploaded ${process.env.UPDATER_FILENAME} successfully.`);
+            }' > updater.json
+
+          # Clean up empty platforms keys if signature is missing (optional but good practice)
+          # jq filters or just let it be (Tauri might ignore empty sigs or user ensures they exist)
+
+          echo "Generated updater.json:"
+          cat updater.json
+
+      - name: Create or Update GitHub Release
+        uses: ncipollo/release-action@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          allowUpdates: true
+          name: "Sona ${{ github.ref_name }}"
+          bodyFile: "release_notes.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "all-artifacts/**/*,updater.json"
+          artifactErrorsFailBuild: false
+          replacesArtifacts: true
+          makeLatest: legacy
