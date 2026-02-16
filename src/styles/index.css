@@ -2515,3 +2515,82 @@ input[type="radio"]:focus {
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--color-warning);
 }
+/* ===========================
+   Update UI
+   =========================== */
+
+.update-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  justify-content: center;
+}
+
+.update-status.success {
+  color: var(--color-success);
+}
+
+.update-status.error {
+  color: var(--color-error);
+  flex-wrap: wrap;
+}
+
+.update-available-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+  background: var(--color-bg-secondary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  margin-top: var(--spacing-sm);
+}
+
+.update-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.update-progress-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.update-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.update-progress-container .progress-bar {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.update-progress-container .progress-bar-fill {
+  height: 100%;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
+  transition: width 0.2s ease-out;
+}
+
+.error-text {
+  flex: 1;
+  text-align: left;
+  word-break: break-word;
+}
