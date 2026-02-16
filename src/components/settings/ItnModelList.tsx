@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { PRESET_MODELS, ModelInfo } from '../../services/modelService';
 import { DragHandleIcon, DownloadIcon, XIcon } from '../Icons';
+import { Switch } from '../Switch';
 
 // --- Helper Component: SortableItem ---
 
@@ -172,17 +173,12 @@ export function ItnModelList({
                                                     )}
                                                 </>
                                             ) : (
-                                                <button
-                                                    className="toggle-switch"
-                                                    onClick={() => toggleModel(model.id)}
-                                                    role="switch"
-                                                    aria-checked={isEnabled}
-                                                    aria-label={t('settings.toggle_model', { name: model.name })}
-                                                    style={{ opacity: 1, cursor: 'pointer' }}
-                                                    onPointerDown={(e) => e.stopPropagation()}
-                                                >
-                                                    <div className="toggle-switch-handle" />
-                                                </button>
+                                                <div onPointerDown={(e) => e.stopPropagation()}>
+                                                    <Switch
+                                                        checked={isEnabled}
+                                                        onChange={() => toggleModel(model.id)}
+                                                    />
+                                                </div>
                                             )}
                                         </div>
                                     </div>
