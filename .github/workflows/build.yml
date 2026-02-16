@@ -160,6 +160,7 @@ jobs:
                   let platformKey = null;
                   if (binName.includes('.AppImage')) platformKey = 'linux-x86_64';
                   else if (binName.includes('.msi.zip')) platformKey = 'windows-x86_64';
+                  else if (binName.includes('.nsis.zip')) platformKey = 'windows-x86_64';
                   else if (binName.includes('.app.tar.gz')) {
                       if (binName.includes('universal')) platformKey = 'darwin-universal';
                       else if (binName.includes('aarch64')) platformKey = 'darwin-aarch64';
