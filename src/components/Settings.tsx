@@ -6,12 +6,14 @@ import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
+import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
     ModelIcon,
     LocalIcon,
     KeyboardIcon,
+    InfoIcon,
     XIcon
 } from './Icons';
 
@@ -82,7 +84,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'models', 'local', 'shortcuts'] as const;
+        const tabs = ['general', 'models', 'local', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -169,6 +171,14 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                             setActiveTab={setActiveTab}
                             tabIndex={activeTab === 'shortcuts' ? 0 : -1}
                         />
+                        <SettingsTabButton
+                            id="about"
+                            label={t('settings.about')}
+                            Icon={InfoIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'about' ? 0 : -1}
+                        />
                     </div>
                 </div>
 
@@ -195,6 +205,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
                                 {activeTab === 'shortcuts' && t('shortcuts.title')}
+                                {activeTab === 'about' && t('settings.about')}
                             </h3>
                             <div className="settings-divider" />
                         </div>
@@ -256,6 +267,10 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
 
                         {activeTab === 'shortcuts' && (
                             <SettingsShortcutsTab />
+                        )}
+
+                        {activeTab === 'about' && (
+                            <SettingsAboutTab />
                         )}
 
                     </div>

@@ -20,7 +20,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
 
     // We read directly from the config store
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || []));
