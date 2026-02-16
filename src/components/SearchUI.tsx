@@ -57,32 +57,48 @@ export function SearchUI(): React.JSX.Element | null {
     };
 
     return (
-        <div className="search-ui-container">
+        <div className="search-ui-container" role="search" aria-label={t('search.label', 'Search transcript')}>
             <div className="search-bar">
                 <input
                     ref={inputRef}
                     type="text"
                     className="search-input"
                     placeholder={t('search.placeholder', 'Find in transcript...')}
+                    aria-label={t('search.placeholder', 'Find in transcript...')}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
                 />
 
                 <div className="search-actions">
-                    <span className="search-count">
+                    <span className="search-count" aria-live="polite">
                         {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : (query ? '0/0' : '')}
                     </span>
 
                     <div className="search-divider" />
 
-                    <button className="btn-icon-sm" onClick={prevMatch} title={t('search.previous', 'Previous match')}>
+                    <button
+                        className="btn-icon-sm"
+                        onClick={prevMatch}
+                        title={`${t('search.previous', 'Previous match')} (Shift+Enter)`}
+                        aria-label={t('search.previous', 'Previous match')}
+                    >
                         <ChevronUpIcon />
                     </button>
-                    <button className="btn-icon-sm" onClick={nextMatch} title={t('search.next', 'Next match')}>
+                    <button
+                        className="btn-icon-sm"
+                        onClick={nextMatch}
+                        title={`${t('search.next', 'Next match')} (Enter)`}
+                        aria-label={t('search.next', 'Next match')}
+                    >
                         <ChevronDownIcon />
                     </button>
-                    <button className="btn-icon-sm" onClick={close} title={t('search.close', 'Close')}>
+                    <button
+                        className="btn-icon-sm"
+                        onClick={close}
+                        title={`${t('search.close', 'Close')} (Esc)`}
+                        aria-label={t('search.close', 'Close')}
+                    >
                         <CloseIcon />
                     </button>
                 </div>
