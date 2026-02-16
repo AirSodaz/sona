@@ -179,7 +179,11 @@
         "about_desc": "Sona 是一个强大的离线转录编辑器，提供快速、准确且私密的语音转文字功能。",
         "about_homepage": "项目主页",
         "about_version": "版本",
-        "about_check_updates": "检查更新"
+        "about_check_updates": "检查更新",
+        "about_built_with": "技术栈",
+        "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
+        "about_license": "MIT 开源协议",
+        "about_source_code": "源代码"
     },
     "shortcuts": {
         "title": "键盘快捷键",

@@ -179,7 +179,11 @@
         "about_desc": "Sona is a powerful, offline transcript editor providing fast, accurate, and private speech-to-text capabilities.",
         "about_homepage": "Project Homepage",
         "about_version": "Version",
-        "about_check_updates": "Check for Updates"
+        "about_check_updates": "Check for Updates",
+        "about_built_with": "Built with",
+        "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
+        "about_license": "MIT License",
+        "about_source_code": "Source Code"
     },
     "shortcuts": {
         "title": "Keyboard Shortcuts",
