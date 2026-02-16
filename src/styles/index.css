@@ -378,6 +378,24 @@ body {
   height: 18px;
 }
 
+.btn-restore-defaults {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+}
+
+.btn-restore-defaults:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+.btn-restore-defaults svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ===========================
    Forms & Inputs
    =========================== */

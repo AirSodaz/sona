@@ -10,6 +10,7 @@ vi.mock('../../services/transcriptionService', () => ({
         softStop: vi.fn().mockResolvedValue(undefined),
         sendAudioInt16: vi.fn(),
         setModelPath: vi.fn(),
+        setLanguage: vi.fn(),
         setEnableITN: vi.fn(),
         setITNModelPaths: vi.fn(),
         setPunctuationModelPath: vi.fn(),

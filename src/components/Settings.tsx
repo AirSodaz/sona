@@ -74,7 +74,8 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         handleDelete,
         isModelSelected,
         maxConcurrent,
-        setMaxConcurrent
+        setMaxConcurrent,
+        restoreDefaultModelSettings
     } = useSettingsLogic(isOpen, onClose);
 
     // Focus management
@@ -249,6 +250,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
                                 maxConcurrent={maxConcurrent}
                                 setMaxConcurrent={setMaxConcurrent}
                                 installedModels={installedModels}
+                                onRestoreDefaults={restoreDefaultModelSettings}
                             />
                         )}
 

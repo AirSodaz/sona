@@ -172,6 +172,8 @@
         "max_concurrent_label": "Max Concurrent Transcriptions",
         "max_concurrent_hint": "Number of files to transcribe in parallel.",
         "model_not_installed": "Please download the model first from the Model Hub.",
+        "restore_defaults": "Restore Default Settings",
+        "restore_defaults_confirm": "Are you sure you want to restore all model settings to their defaults?",
         "shortcuts": "Keyboard Shortcuts"
     },
     "shortcuts": {

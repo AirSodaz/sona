@@ -172,6 +172,8 @@
         "max_concurrent_label": "最大并发转录数",
         "max_concurrent_hint": "并行转录的文件数量。",
         "model_not_installed": "请先从模型中心下载该模型。",
+        "restore_defaults": "恢复默认设置",
+        "restore_defaults_confirm": "确定要将所有模型设置恢复为默认值吗？",
         "shortcuts": "键盘快捷键"
     },
     "shortcuts": {

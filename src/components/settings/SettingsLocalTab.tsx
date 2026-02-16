@@ -5,6 +5,7 @@ import { Dropdown } from '../Dropdown';
 import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
+import { RestoreIcon } from '../Icons';
 
 interface SettingsLocalTabProps {
     offlineModelPath: string;
@@ -36,6 +37,7 @@ interface SettingsLocalTabProps {
     onDownloadITN: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
     installedModels: Set<string>;
+    onRestoreDefaults: () => void;
 }
 
 export function SettingsLocalTab({
@@ -61,7 +63,8 @@ export function SettingsLocalTab({
     onCancelDownload,
     maxConcurrent,
     setMaxConcurrent,
-    installedModels
+    installedModels,
+    onRestoreDefaults
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const { alert } = useDialogStore();
@@ -259,6 +262,17 @@ export function SettingsLocalTab({
                 onDownload={onDownloadITN}
                 onCancelDownload={onCancelDownload}
             />
+
+            <div style={{ marginTop: 32, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
+                <button
+                    className="btn btn-restore-defaults"
+                    onClick={onRestoreDefaults}
+                    aria-label={t('settings.restore_defaults')}
+                >
+                    <RestoreIcon />
+                    {t('settings.restore_defaults')}
+                </button>
+            </div>
         </div >
     );
 }

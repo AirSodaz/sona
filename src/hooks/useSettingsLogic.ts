@@ -330,6 +330,53 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         return false;
     }
 
+    /**
+     * Restores all model settings to their default values after user confirmation.
+     */
+    async function restoreDefaultModelSettings() {
+        const confirmed = await confirm(t('settings.restore_defaults_confirm'), {
+            title: t('settings.restore_defaults'),
+            variant: 'warning'
+        });
+        if (!confirmed) return;
+
+        // Default model IDs
+        const defaultOfflineModelId = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
+        const defaultVadModelId = 'silero-vad';
+
+        let offlinePath = '';
+        let vadPath = '';
+
+        try {
+            offlinePath = await modelService.getModelPath(defaultOfflineModelId);
+        } catch (e) {
+            console.warn('Failed to resolve default offline model path', e);
+        }
+
+        try {
+            vadPath = await modelService.getModelPath(defaultVadModelId);
+        } catch (e) {
+            console.warn('Failed to resolve default VAD model path', e);
+        }
+
+        // Apply all defaults at once
+        updateConfig({
+            offlineModelPath: offlinePath,
+            punctuationModelPath: '',
+            vadModelPath: vadPath,
+            ctcModelPath: '',
+            vadBufferSize: 5,
+            maxConcurrent: 2,
+            enableITN: true,
+            enabledITNModels: [],
+            itnRulesOrder: [],
+        });
+
+        // Sync local state
+        setEnabledITNModels(new Set());
+        setEnableITNState(true);
+    }
+
     return {
         activeTab,
         setActiveTab,
@@ -377,6 +424,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
         handleCancelDownload,
         handleLoad,
         handleDelete,
-        isModelSelected
+        isModelSelected,
+        restoreDefaultModelSettings
     };
 }
