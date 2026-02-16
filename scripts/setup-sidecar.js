@@ -33,7 +33,6 @@ function getTarget() {
   return TARGETS[key] || key;
 }
 
-const targetTriple = process.argv[2] || getTarget();
 const binariesDir = path.resolve(__dirname, '../src-tauri/binaries');
 const sidecarDir = path.resolve(__dirname, '../src-tauri/sidecar');
 
@@ -41,7 +40,6 @@ console.log(`Setup Sidecar:
   Node Version: ${NODE_VERSION}
   Platform: ${process.platform}
   Arch: ${process.arch}
-  Target Triple: ${targetTriple}
 `);
 
 if (!fs.existsSync(binariesDir)) {
@@ -84,80 +82,95 @@ async function downloadFile(url, dest) {
  * Sets up the Node.js binary for the sidecar.
  * Checks if the binary already exists; if not, downloads and extracts it.
  *
- * @return {Promise<void>} A promise that resolves when Node.js is set up.
+ * @param {string} targetTriple - The Rust target triple (e.g., 'x86_64-apple-darwin').
+ * @return {Promise<string>} The path to the setup binary.
  */
-async function setupNode() {
-  const ext = process.platform === 'win32' ? '.exe' : '';
+async function setupNode(targetTriple) {
+  // Determine Node platform and arch from targetTriple
+  let nodePlatform, nodeArch;
+
+  if (targetTriple.includes('windows') || targetTriple.includes('win32')) {
+    nodePlatform = 'win32';
+    nodeArch = (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) ? 'arm64' : 'x64';
+  } else if (targetTriple.includes('apple-darwin') || targetTriple.includes('darwin')) {
+    nodePlatform = 'darwin';
+    nodeArch = (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) ? 'arm64' : 'x64';
+  } else if (targetTriple.includes('linux')) {
+    nodePlatform = 'linux';
+    nodeArch = (targetTriple.includes('aarch64') || targetTriple.includes('arm64')) ? 'arm64' : 'x64';
+  } else {
+    // Fallback to host platform if unknown target
+    console.warn(`Unknown target triple pattern: ${targetTriple}, falling back to host defaults.`);
+    nodePlatform = process.platform;
+    nodeArch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  }
+
+  const ext = nodePlatform === 'win32' ? '.exe' : '';
   const binaryName = `node-${targetTriple}${ext}`;
   const binaryPath = path.join(binariesDir, binaryName);
 
   if (fs.existsSync(binaryPath)) {
     console.log(`Node binary already exists at ${binaryPath}`);
-  } else {
-    console.log(`Downloading Node.js binary to ${binaryPath}...`);
-
-    if (process.platform === 'win32') {
-      // Windows: Download node.exe directly
-      const url = `https://nodejs.org/dist/${NODE_VERSION}/win-x64/node.exe`;
-      await downloadFile(url, binaryPath);
-    } else {
-      // Unix: Download tar.gz and extract
-      const platform = process.platform === 'darwin' ? 'darwin' : 'linux';
-      const arch = process.arch === 'arm64' ? 'arm64' : 'x64'; // Node uses x64, not x86_64
-      const archiveName = `node-${NODE_VERSION}-${platform}-${arch}.tar.gz`;
-      const url = `https://nodejs.org/dist/${NODE_VERSION}/${archiveName}`;
-      const tarPath = path.join(binariesDir, archiveName);
-
-      await downloadFile(url, tarPath);
-
-      console.log('Extracting Node binary...');
-      // Extract specific file using tar
-      // The tarball structure is node-v.../bin/node
-      // We use --strip-components to flatten or direct extraction?
-      // Simpler: extract to temp dir then move
-
-      try {
-        // Create temp dir
-        const tmpDir = path.join(binariesDir, 'tmp_node');
-        if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
-        fs.mkdirSync(tmpDir);
-
-        execSync(`tar -xf "${tarPath}" -C "${tmpDir}"`);
-
-        // Find the node binary in tmpDir
-        // Structure: tmpDir/node-v.../bin/node
-        const findNode = (dir) => {
-          const entries = fs.readdirSync(dir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              const found = findNode(path.join(dir, entry.name));
-              if (found) return found;
-            } else if (entry.name === 'node') {
-              return path.join(dir, entry.name);
-            }
-          }
-          return null;
-        };
-
-        const extractedNode = findNode(tmpDir);
-        if (extractedNode) {
-          fs.copyFileSync(extractedNode, binaryPath);
-          fs.chmodSync(binaryPath, 0o755); // Make executable
-        } else {
-          throw new Error('Could not find node binary in extracted archive');
-        }
-
-        // Cleanup
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-        fs.unlinkSync(tarPath);
-
-      } catch (e) {
-        console.error('Error extracting node:', e);
-        process.exit(1);
-      }
-    }
-    console.log('Node binary setup complete.');
+    return binaryPath;
   }
+
+  console.log(`Downloading Node.js binary for ${targetTriple} (${nodePlatform}-${nodeArch}) to ${binaryPath}...`);
+
+  if (nodePlatform === 'win32') {
+    // Windows: Download node.exe directly
+    const url = `https://nodejs.org/dist/${NODE_VERSION}/win-x64/node.exe`;
+    await downloadFile(url, binaryPath);
+  } else {
+    // Unix: Download tar.gz and extract
+    const archiveName = `node-${NODE_VERSION}-${nodePlatform}-${nodeArch}.tar.gz`;
+    const url = `https://nodejs.org/dist/${NODE_VERSION}/${archiveName}`;
+    const tarPath = path.join(binariesDir, archiveName);
+
+    await downloadFile(url, tarPath);
+
+    console.log(`Extracting Node binary (${archiveName})...`);
+
+    try {
+      // Create unique temp dir for this target to avoid conflicts
+      const tmpDir = path.join(binariesDir, `tmp_${targetTriple}`);
+      if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.mkdirSync(tmpDir);
+
+      execSync(`tar -xf "${tarPath}" -C "${tmpDir}"`);
+
+      // Find the node binary in tmpDir
+      const findNode = (dir) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const found = findNode(path.join(dir, entry.name));
+            if (found) return found;
+          } else if (entry.name === 'node') {
+            return path.join(dir, entry.name);
+          }
+        }
+        return null;
+      };
+
+      const extractedNode = findNode(tmpDir);
+      if (extractedNode) {
+        fs.copyFileSync(extractedNode, binaryPath);
+        fs.chmodSync(binaryPath, 0o755); // Make executable
+      } else {
+        throw new Error(`Could not find node binary in extracted archive for ${targetTriple}`);
+      }
+
+      // Cleanup
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.unlinkSync(tarPath);
+
+    } catch (e) {
+      console.error(`Error extracting node for ${targetTriple}:`, e);
+      process.exit(1);
+    }
+  }
+  console.log(`Node binary setup complete for ${targetTriple}.`);
+  return binaryPath;
 }
 
 /**
@@ -193,7 +206,33 @@ async function installSidecarDeps() {
  * Main execution function.
  */
 async function main() {
-  await setupNode();
+  const currentTarget = process.argv[2] || getTarget();
+
+  if (process.platform === 'darwin') {
+    // On macOS, download both architectures to support Universal builds
+    console.log('Detected macOS platform. Setting up both x86_64 and aarch64 binaries for Universal build support.');
+    const x64Path = await setupNode('x86_64-apple-darwin');
+    const arm64Path = await setupNode('aarch64-apple-darwin');
+
+    // Create a universal binary using lipo
+    const universalPath = path.join(binariesDir, 'node-universal-apple-darwin');
+    if (fs.existsSync(universalPath)) {
+        console.log(`Universal binary already exists at ${universalPath}`);
+    } else {
+        console.log(`Creating universal binary at ${universalPath}...`);
+        try {
+            execSync(`lipo -create -output "${universalPath}" "${x64Path}" "${arm64Path}"`);
+            console.log('Universal binary created successfully.');
+        } catch (e) {
+            console.error('Failed to create universal binary with lipo:', e);
+            process.exit(1);
+        }
+    }
+  } else {
+    // Other platforms: setup only the requested/detected target
+    await setupNode(currentTarget);
+  }
+
   await installSidecarDeps();
 }
 
