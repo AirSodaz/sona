@@ -95,9 +95,27 @@ jobs:
             const { owner, repo } = context.repo;
             const tag = context.ref.replace('refs/tags/', '');
             
-            const release = await github.rest.repos.getReleaseByTag({
-              owner, repo, tag
-            });
+            let release;
+            try {
+              release = await github.rest.repos.getReleaseByTag({
+                owner, repo, tag
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                console.log(`Release for tag ${tag} not found via getReleaseByTag. Searching list (likely a draft)...`);
+                const releases = await github.rest.repos.listReleases({
+                  owner, repo, per_page: 20
+                });
+                const found = releases.data.find(r => r.tag_name === tag);
+                if (found) {
+                  release = { data: found };
+                } else {
+                  throw new Error(`Release with tag ${tag} not found in list.`);
+                }
+              } else {
+                throw e;
+              }
+            }
             
             const assets = release.data.assets;
             const pubDate = release.data.published_at || new Date().toISOString();
