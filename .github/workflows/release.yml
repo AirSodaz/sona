@@ -2,8 +2,13 @@ name: Release
 
 on:
   push:
+    branches:
+      - master
     tags:
       - "v*"
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -115,6 +120,7 @@ jobs:
   publish-release:
     needs: build-tauri
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
