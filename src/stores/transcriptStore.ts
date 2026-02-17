@@ -34,6 +34,10 @@ interface TranscriptState {
     currentTime: number;
     /** Whether audio is currently playing. */
     isPlaying: boolean;
+    /** Whether recording is currently active. */
+    isRecording: boolean;
+    /** Whether recording is currently paused. */
+    isPaused: boolean;
     /** Timestamp of the last user-initiated seek. */
     lastSeekTimestamp: number;
     /** Current seek request. */
@@ -165,6 +169,10 @@ interface TranscriptState {
     setCurrentTime: (time: number) => void;
     /** Sets the playing state. */
     setIsPlaying: (isPlaying: boolean) => void;
+    /** Sets the recording state. */
+    setIsRecording: (isRecording: boolean) => void;
+    /** Sets the recording paused state. */
+    setIsPaused: (isPaused: boolean) => void;
     /**
      * Requests a seek to a specific time.
      * Updates current time and triggers a seek request for the audio player.
@@ -217,6 +225,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     audioUrl: null,
     currentTime: 0,
     isPlaying: false,
+    isRecording: false,
+    isPaused: false,
     lastSeekTimestamp: 0,
     seekRequest: null,
     sourceHistoryId: null,
@@ -377,6 +387,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         }
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
+    setIsRecording: (isRecording) => set({ isRecording }),
+    setIsPaused: (isPaused) => set({ isPaused }),
     requestSeek: (time) => {
         const state = get();
         // Optimistically update current time and active segment

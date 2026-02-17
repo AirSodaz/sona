@@ -2,6 +2,7 @@ mod hardware;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::{Mutex, Notify};
 
 /// State managed by Tauri to track active downloads and allow cancellation.
@@ -41,6 +42,17 @@ async fn cancel_download(state: tauri::State<'_, DownloadState>, id: String) -> 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+    app.exit(0);
+}
+
+#[tauri::command]
+async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {
+    let downloads = state.downloads.lock().await;
+    Ok(!downloads.is_empty())
 }
 
 /// Extracts a `.tar.bz2` archive to a target directory.
@@ -250,6 +262,91 @@ async fn download_file<R: tauri::Runtime>(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::TrayIconBuilder;
+
+                let show_i =
+                    MenuItem::with_id(app, "show", "Show Main Window", true, None::<&str>)?;
+                let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+                let updates_i =
+                    MenuItem::with_id(app, "check_updates", "Check for Updates", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+                let menu = Menu::with_items(
+                    app,
+                    &[
+                        &show_i,
+                        &settings_i,
+                        &updates_i,
+                        &tauri::menu::PredefinedMenuItem::separator(app)?,
+                        &quit_i,
+                    ],
+                )?;
+
+                let _tray = TrayIconBuilder::with_id("main-tray")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(move |app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "settings" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.emit("open-settings", ());
+                            }
+                        }
+                        "check_updates" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.emit("check-updates", ());
+                            }
+                        }
+                        "quit" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.emit("request-quit", ());
+                            }
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        use tauri::tray::{MouseButton, TrayIconEvent};
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                if window.is_visible().unwrap_or(false) {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                    })
+                    .build(app)?;
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .manage(DownloadState {
@@ -265,7 +362,9 @@ pub fn run() {
             extract_tar_bz2,
             download_file,
             cancel_download,
-            hardware::check_gpu_availability
+            hardware::check_gpu_availability,
+            force_exit,
+            has_active_downloads
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

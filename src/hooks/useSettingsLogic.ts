@@ -13,14 +13,21 @@ import { open } from '@tauri-apps/plugin-dialog';
  * @return An object containing form state and action handlers.
  * @param _isOpen
  * @param _onClose
+ * @param initialTab
  */
-export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
+export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initialTab?: string) {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
+
+    useEffect(() => {
+        if (_isOpen && initialTab) {
+            setActiveTab(initialTab as any);
+        }
+    }, [initialTab, _isOpen]);
 
     // We read directly from the config store
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || []));

@@ -21,6 +21,7 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
+    initialTab?: 'general' | 'models' | 'local' | 'shortcuts' | 'about';
 }
 
 /**
@@ -31,7 +32,7 @@ interface SettingsProps {
  * @param props Component props.
  * @return The settings modal or null if not closed.
  */
-export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element | null {
+export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
 
@@ -78,7 +79,7 @@ export function Settings({ isOpen, onClose }: SettingsProps): React.JSX.Element 
         maxConcurrent,
         setMaxConcurrent,
         restoreDefaultModelSettings
-    } = useSettingsLogic(isOpen, onClose);
+    } = useSettingsLogic(isOpen, onClose, initialTab);
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);

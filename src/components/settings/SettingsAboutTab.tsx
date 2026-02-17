@@ -13,6 +13,15 @@ export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
     const { status, error, updateInfo, checkUpdate, installUpdate, progress } = useAppUpdater();
 
+    React.useEffect(() => {
+        const handleTrigger = () => {
+            checkUpdate();
+        };
+
+        window.addEventListener('trigger-update-check', handleTrigger);
+        return () => window.removeEventListener('trigger-update-check', handleTrigger);
+    }, [checkUpdate]);
+
     const handleOpenHomepage = async () => {
         try {
             await openUrl('https://github.com/AirSodaz/sona');
