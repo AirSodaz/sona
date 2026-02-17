@@ -1919,11 +1919,12 @@ input[type="radio"]:focus {
 }
 
 .drop-zone-wrapper {
-  flex: 0 0 auto;
+  flex: 1;
   height: auto;
   min-height: 200px;
   padding: 32px 16px;
   gap: 16px;
+  justify-content: center;
 }
 
 .options-container {
