@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import i18n from '../i18n';
 
@@ -12,6 +12,7 @@ import i18n from '../i18n';
 export function useAppInitialization() {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const [isLoaded, setIsLoaded] = useState(false);
 
     // Initialize config from localStorage
     useEffect(() => {
@@ -20,8 +21,7 @@ export function useAppInitialization() {
             try {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
-                if (parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage) {
-
+                if (parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage || parsed.language) {
                     setConfig({
                         offlineModelPath: parsed.offlineModelPath || parsed.modelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
@@ -34,7 +34,9 @@ export function useAppInitialization() {
                         maxConcurrent: parsed.maxConcurrent || 2,
                         appLanguage: parsed.appLanguage || 'auto',
                         theme: parsed.theme || 'auto',
-                        font: parsed.font || 'system'
+                        font: parsed.font || 'system',
+                        language: parsed.language || 'auto',
+                        enableTimeline: parsed.enableTimeline ?? true
                     });
 
                     // Apply language immediately
@@ -48,6 +50,7 @@ export function useAppInitialization() {
                 console.error('Failed to parse saved config:', e);
             }
         }
+        setIsLoaded(true);
     }, [setConfig]);
 
     // Apply theme
@@ -82,6 +85,30 @@ export function useAppInitialization() {
             applyTheme(theme);
         }
     }, [config.theme]);
+
+    // Persist config changes
+    useEffect(() => {
+        if (!isLoaded) return;
+
+        // Debounce could be added here if needed, but config changes are infrequent.
+        const configToSave = {
+            offlineModelPath: config.offlineModelPath,
+            punctuationModelPath: config.punctuationModelPath,
+            vadModelPath: config.vadModelPath,
+            ctcModelPath: config.ctcModelPath,
+            vadBufferSize: config.vadBufferSize,
+            maxConcurrent: config.maxConcurrent,
+            enabledITNModels: config.enabledITNModels,
+            itnRulesOrder: config.itnRulesOrder,
+            enableITN: config.enableITN,
+            appLanguage: config.appLanguage,
+            theme: config.theme,
+            font: config.font,
+            language: config.language,
+            enableTimeline: config.enableTimeline
+        };
+        localStorage.setItem('sona-config', JSON.stringify(configToSave));
+    }, [config, isLoaded]);
 
     // Apply font
     useEffect(() => {
