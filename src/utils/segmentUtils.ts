@@ -1,12 +1,19 @@
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
 
-/**
- * Split segments by punctuation, using token timestamps if available for better accuracy.
- */
+// Constants
+const MAX_SEGMENT_LENGTH = 100;
+
+// Common abbreviations that shouldn't trigger a sentence split
+const ABBREVIATIONS = new Set([
+    'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st', 'vs', 'etc',
+    'no', 'op', 'vol', 'fig', 'inc', 'ltd', 'co', 'dept'
+]);
+
 // Regular expressions for text processing
 // Hoisted to module scope to avoid reallocation in loops
 const SPLIT_REGEX = /([.?!。？！]+)/;
+const COMMA_SPLIT_REGEX = /([,，;；:：]+)/;
 const PUNCTUATION_REGEX = /[\s\p{P}]/u;
 const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
@@ -36,165 +43,170 @@ function getEffectiveLength(text: string): number {
 }
 
 /**
+ * Checks if the given text ends with a known abbreviation.
+ */
+function endsWithAbbreviation(text: string): boolean {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    // Get last word (simplistic split by space is usually sufficient for this check)
+    const words = trimmed.split(/\s+/);
+    const lastWord = words[words.length - 1].toLowerCase();
+    return ABBREVIATIONS.has(lastWord);
+}
+
+/**
  * Splits transcript segments based on punctuation marks.
- *
- * Uses token timestamps for precise splitting if available.
+ * Uses a two-pass approach:
+ * 1. Split by sentence-ending punctuation (handling abbreviations).
+ * 2. Split long segments (> 100 chars) by weaker punctuation (commas).
  *
  * @param segments The array of transcript segments to split.
  * @return A new array of split transcript segments.
  */
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
+    // Pass 1: Sentence Splitting (Strong Punctuation)
+    let intermediateSegments: TranscriptSegment[] = [];
+
+    for (const segment of segments) {
+        const parts = splitSegmentByRegex(segment, SPLIT_REGEX, { checkAbbreviations: true });
+        intermediateSegments.push(...parts);
+    }
+
+    // Pass 2: Length Constraints (Weak Punctuation)
+    const finalSegments: TranscriptSegment[] = [];
+
+    for (const segment of intermediateSegments) {
+        // If segment is too long, try to split by commas
+        if (segment.text.length > MAX_SEGMENT_LENGTH) {
+            const subSegments = splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
+            // If splitting happened (length > 1), we use the sub-segments.
+            // Even if length is 1 (no comma found), we push that 1 segment.
+            finalSegments.push(...subSegments);
+        } else {
+            finalSegments.push(segment);
+        }
+    }
+
+    return finalSegments;
+}
+
+interface SplitOptions {
+    checkAbbreviations: boolean;
+}
+
+/**
+ * Helper to split a single segment by a given regex pattern.
+ * Handles token/timestamp interpolation and abbreviation checks.
+ */
+function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options: SplitOptions): TranscriptSegment[] {
     const newSegments: TranscriptSegment[] = [];
+    const text = segment.text;
+    const parts = text.split(regex);
 
-    segments.forEach(segment => {
-        const text = segment.text;
-        const parts = text.split(SPLIT_REGEX);
+    // Optimization: If no split happened, return original (cloned with new ID if needed, or just original?)
+    // To be safe and consistent, we'll process it. But if parts.length === 1, it's just one segment.
+    if (parts.length <= 1) {
+        return [{...segment, id: uuidv4()}]; // Return copy with new ID for consistency? Or keep original ID?
+        // Actually, best to just return the segment itself to avoid unnecessary ID churn if no change?
+        // But `splitByPunctuation` usually generates new IDs.
+        // Let's assume consistent ID generation is safer.
+    }
 
-        // If we have token timestamps, we can be very precise
-        // Otherwise we fall back to character length interpolation
-        const hasTimestamps = segment.tokens && segment.timestamps &&
-            segment.tokens.length === segment.timestamps.length;
+    const hasTimestamps = segment.tokens && segment.timestamps &&
+        segment.tokens.length === segment.timestamps.length;
 
-        let tokenMap: TokenMap | null = null;
-        if (hasTimestamps) {
-            tokenMap = buildTokenMap(segment);
-        }
+    let tokenMap: TokenMap | null = null;
+    if (hasTimestamps) {
+        tokenMap = buildTokenMap(segment);
+    }
 
-        let currentStart = segment.start;
-        const totalDuration = segment.end - segment.start;
-        const totalLength = text.length;
+    let currentStart = segment.start;
+    const totalDuration = segment.end - segment.start;
+    const totalLength = text.length;
 
-        let charIndex = 0; // Current character index in the original text
-        let effectiveCharIndex = 0; // Current effective character index (ignoring punctuation/spaces)
+    let charIndex = 0; // Current character index in the original text
+    let effectiveCharIndex = 0; // Current effective character index (ignoring punctuation/spaces)
 
-        let currentText = "";
-        let currentSegmentStart = currentStart;
+    let currentText = "";
+    let currentSegmentStart = currentStart;
 
-        // Fix: Use the first token's timestamp as the true start time if available
-        if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
-            currentSegmentStart = tokenMap.timestamps[0];
-        }
+    // Fix: Use the first token's timestamp as the true start time if available
+    if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
+        currentSegmentStart = tokenMap.timestamps[0];
+    }
 
-        let lastTokenIndex = 0; // Hint for the next search
-        let nextTokenSliceStart = 0; // Track token slicing
+    let lastTokenIndex = 0; // Hint for the next search
+    let nextTokenSliceStart = 0; // Track token slicing
 
-        for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            const partEffectiveLen = getEffectiveLength(part);
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const partEffectiveLen = getEffectiveLength(part);
 
-            if (SPLIT_REGEX.test(part)) {
-                // It's punctuation
-                currentText += part;
+        if (regex.test(part)) {
+            // It's a delimiter (punctuation)
 
-                // Advance effective index first to capture the punctuation's place in the map 
-                // (though for punctuation len is 0, so it stays same, but conceptually we are "after" it)
-                charIndex += part.length;
-                effectiveCharIndex += partEffectiveLen;
-
-                let segmentEnd: number;
-                let currentTokens: string[] | undefined;
-                let currentTimestamps: number[] | undefined;
-
-                if (hasTimestamps && tokenMap) {
-                    // Find the token at the current boundary
-                    const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
-
-                    // End index for slicing: if found, slice up to found.index (exclusive? no, see prior logic).
-                    // findTimestampFromMap returns the token matching effectiveCharIndex.
-                    // If effectiveCharIndex is 10, and "How" starts at 10, it returns "How".
-                    // We want to slice UP TO "How" (exclusive).
-
-                    let sliceEnd = tokenMap.timestamps.length; // Default to all remaining
-
-                    if (found) {
-                        sliceEnd = found.index;
-
-                        // Calculate time
-                        const effectiveLen = tokenMap.endIndices[found.index] - tokenMap.startIndices[found.index];
-                        const duration = Math.max(0.2, effectiveLen * 0.1);
-                        segmentEnd = found.timestamp + duration; // Approximate end time based on next start? No that's weird.
-
-                        // Actually better: use found timestamp as start of NEXT.
-                        // End of CURRENT is found.timestamp.
-                        segmentEnd = found.timestamp;
-
-                        lastTokenIndex = found.index;
-                    } else {
-                        // End of stream or drift
-                        segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
-                    }
-
-                    // Extract tokens
-                    if (sliceEnd > nextTokenSliceStart) {
-                        currentTokens = segment.tokens!.slice(nextTokenSliceStart, sliceEnd);
-                        currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart, sliceEnd);
-                        nextTokenSliceStart = sliceEnd;
-                    }
-
-                    // Fix start time if we have tokens
-                    if (currentTimestamps && currentTimestamps.length > 0) {
-                        currentSegmentStart = currentTimestamps[0];
-                    }
-
-                } else {
-                    segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
-                }
-
-                newSegments.push({
-                    id: uuidv4(),
-                    text: currentText.trim(),
-                    start: currentSegmentStart,
-                    end: segmentEnd,
-                    isFinal: true,
-                    tokens: currentTokens,
-                    timestamps: currentTimestamps
-                });
-
-                currentStart = segmentEnd;
-                currentSegmentStart = segmentEnd; // Default for next
-
-                // If found valid next token start, use it
-                if (hasTimestamps && tokenMap && lastTokenIndex < tokenMap.timestamps.length) {
-                    // Verify if lastTokenIndex (which is `found.index` i.e. "How") is indeed the start
-                    // sliceEnd was found.index. So next starts at found.index.
-                    // The token at found.index is the start of next segment.
-                    // Its timestamp is in tokenMap.timestamps[found.index].
-                    if (lastTokenIndex === nextTokenSliceStart) { // Use slice tracker as truth
-                        if (nextTokenSliceStart < tokenMap.timestamps.length) {
-                            currentSegmentStart = tokenMap.timestamps[nextTokenSliceStart];
-                            currentStart = currentSegmentStart;
-                        }
-                    }
-                }
-
-                currentText = "";
-            } else {
-                // It's content, tokenize logic handled at split
-                currentText += part;
-                charIndex += part.length;
-                effectiveCharIndex += partEffectiveLen;
+            // Check for abbreviation if enabled
+            // Only relevant if the delimiter starts with '.' (e.g. SPLIT_REGEX)
+            // But we can just check `options.checkAbbreviations`
+            let shouldMerge = false;
+            if (options.checkAbbreviations && part.includes('.')) {
+                 if (endsWithAbbreviation(currentText)) {
+                     shouldMerge = true;
+                 }
             }
-        }
 
-        // Leftover text
-        if (currentText.trim()) {
-            let segmentEnd = segment.end;
+            if (shouldMerge) {
+                // Treat delimiter as content
+                currentText += part;
+                charIndex += part.length;
+                effectiveCharIndex += partEffectiveLen;
+                // Continue to next part
+                continue;
+            }
+
+            // Normal split
+            currentText += part;
+            charIndex += part.length;
+            effectiveCharIndex += partEffectiveLen;
+
+            let segmentEnd: number;
             let currentTokens: string[] | undefined;
             let currentTimestamps: number[] | undefined;
 
             if (hasTimestamps && tokenMap) {
-                // Slice everything remaining
-                currentTokens = segment.tokens!.slice(nextTokenSliceStart);
-                currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart);
+                // Find the token at the current boundary
+                const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
 
-                if (currentTimestamps.length > 0) {
-                    currentSegmentStart = currentTimestamps[0];
+                let sliceEnd = tokenMap.timestamps.length;
 
-                    // Try to refine end time based on last token?
-                    // Not critical.
+                if (found) {
+                    sliceEnd = found.index;
+                    // End of CURRENT segment is the start of the token FOLLOWING this text block.
+                    // Wait, `found` is the token that *starts* at or after effectiveCharIndex.
+                    // So yes, found.timestamp is the split point.
+                    segmentEnd = found.timestamp;
+                    lastTokenIndex = found.index;
+                } else {
+                    // End of stream or drift
+                    segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
                 }
+
+                // Extract tokens
+                if (sliceEnd > nextTokenSliceStart) {
+                    currentTokens = segment.tokens!.slice(nextTokenSliceStart, sliceEnd);
+                    currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart, sliceEnd);
+                    nextTokenSliceStart = sliceEnd;
+                }
+
+                if (currentTimestamps && currentTimestamps.length > 0) {
+                    currentSegmentStart = currentTimestamps[0];
+                }
+
+            } else {
+                segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
             }
 
+            // Push the segment
             newSegments.push({
                 id: uuidv4(),
                 text: currentText.trim(),
@@ -204,8 +216,56 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
                 tokens: currentTokens,
                 timestamps: currentTimestamps
             });
+
+            // Prepare for next segment
+            currentStart = segmentEnd;
+            currentSegmentStart = segmentEnd; // Default
+
+            // If found valid next token start, use it
+            if (hasTimestamps && tokenMap && lastTokenIndex < tokenMap.timestamps.length) {
+                if (lastTokenIndex === nextTokenSliceStart) {
+                    if (nextTokenSliceStart < tokenMap.timestamps.length) {
+                        currentSegmentStart = tokenMap.timestamps[nextTokenSliceStart];
+                        currentStart = currentSegmentStart;
+                    }
+                }
+            }
+
+            currentText = "";
+
+        } else {
+            // Content
+            currentText += part;
+            charIndex += part.length;
+            effectiveCharIndex += partEffectiveLen;
         }
-    });
+    }
+
+    // Leftover text
+    if (currentText.trim()) {
+        let segmentEnd = segment.end;
+        let currentTokens: string[] | undefined;
+        let currentTimestamps: number[] | undefined;
+
+        if (hasTimestamps && tokenMap) {
+            currentTokens = segment.tokens!.slice(nextTokenSliceStart);
+            currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart);
+
+            if (currentTimestamps.length > 0) {
+                currentSegmentStart = currentTimestamps[0];
+            }
+        }
+
+        newSegments.push({
+            id: uuidv4(),
+            text: currentText.trim(),
+            start: currentSegmentStart,
+            end: segmentEnd,
+            isFinal: true,
+            tokens: currentTokens,
+            timestamps: currentTimestamps
+        });
+    }
 
     return newSegments;
 }
