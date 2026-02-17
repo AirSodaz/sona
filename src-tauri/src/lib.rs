@@ -292,12 +292,14 @@ pub fn run() {
                     .on_menu_event(move |app, event| match event.id.as_ref() {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
                         }
                         "settings" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = window.emit("open-settings", ());
@@ -305,6 +307,7 @@ pub fn run() {
                         }
                         "check_updates" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = window.emit("check-updates", ());
@@ -312,6 +315,7 @@ pub fn run() {
                         }
                         "quit" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = window.emit("request-quit", ());
@@ -328,9 +332,11 @@ pub fn run() {
                         {
                             let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
-                                if window.is_visible().unwrap_or(false) {
+                                let is_visible = window.is_visible().unwrap_or(false);
+                                if is_visible {
                                     let _ = window.hide();
                                 } else {
+                                    let _ = window.unminimize();
                                     let _ = window.show();
                                     let _ = window.set_focus();
                                 }
