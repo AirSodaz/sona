@@ -62,22 +62,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void) {
     const updateConfig = (updates: Partial<typeof config>) => {
         const newConfig = { ...config, ...updates };
         setConfig(newConfig);
-
-        // Persist to localStorage
-        localStorage.setItem('sona-config', JSON.stringify({
-            offlineModelPath: newConfig.offlineModelPath,
-            punctuationModelPath: newConfig.punctuationModelPath,
-            vadModelPath: newConfig.vadModelPath,
-            ctcModelPath: newConfig.ctcModelPath,
-            vadBufferSize: newConfig.vadBufferSize,
-            maxConcurrent: newConfig.maxConcurrent,
-            enabledITNModels: newConfig.enabledITNModels,
-            itnRulesOrder: newConfig.itnRulesOrder,
-            enableITN: newConfig.enableITN,
-            appLanguage: newConfig.appLanguage,
-            theme: newConfig.theme,
-            font: newConfig.font as any
-        }));
+        // Persistence is now handled by useAppInitialization
     };
 
     // Setters that update store immediately
