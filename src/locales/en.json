@@ -18,7 +18,8 @@
         "select": "Select",
         "select_all": "Select All",
         "deselect_all": "Deselect All",
-        "clear_search": "Clear Search"
+        "clear_search": "Clear Search",
+        "parameter_settings": "Parameter Settings"
     },
     "header": {
         "settings": "Settings"
