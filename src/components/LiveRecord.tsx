@@ -4,13 +4,14 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
-import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
+import { Pause, Play, Square, Mic, Monitor, MessageSquare, Lock, Unlock } from 'lucide-react';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
 import { TranscriptionOptions } from './TranscriptionOptions';
+import { Window, getCurrentWindow } from '@tauri-apps/api/window';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -76,6 +77,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
+
+    // Live Caption Mode State
+    const isLiveCaptionMode = useRef(false);
+    const [isLiveCaptionActive, setIsLiveCaptionActive] = useState(false);
+    const [isCaptionLocked, setIsCaptionLocked] = useState(true);
+    const liveCaptionWindowRef = useRef<Window | null>(null);
 
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
@@ -164,6 +171,70 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         draw();
     }, []);
 
+    // Toggle Live Caption Mode
+    async function startLiveCaption() {
+        if (isInitializing) return;
+
+        isLiveCaptionMode.current = true;
+        setIsLiveCaptionActive(true);
+        setIsCaptionLocked(true); // Reset to locked
+        setIsInitializing(true);
+
+        try {
+            // Get handle to caption window
+            // In browser dev mode, Window might be undefined or getByLabel might throw
+            try {
+                if (Window) {
+                    const win = await Window.getByLabel('live-caption');
+                    if (win) {
+                        liveCaptionWindowRef.current = win;
+                        await win.show();
+                        await win.setIgnoreCursorEvents(true); // Lock by default
+                        await win.emit('caption-lock-state', { locked: true });
+                    }
+                }
+            } catch (e) {
+                console.warn('Live Caption Window not available (likely in browser mode)', e);
+            }
+
+            // Minimize main window if in Tauri
+            try {
+                if (getCurrentWindow) {
+                    await getCurrentWindow().minimize();
+                }
+            } catch (e) {
+                console.warn('Could not minimize window', e);
+            }
+
+            // Start recording (this will prompt for screen selection)
+            // We pass control to startRecording, but we need to reset isInitializing there
+            // Actually startRecording sets isInitializing=true inside.
+            // So we set it to false here before calling to allow startRecording to proceed?
+            // No, startRecording checks nothing about isInitializing but sets it.
+            // But we set it here to prevent double clicks.
+            // Let's just call startRecording.
+            setIsInitializing(false); // Reset so startRecording can set it
+            await startRecording();
+        } catch (e) {
+            console.error('Failed to start live caption:', e);
+            stopRecording(); // Cleanup
+        }
+    }
+
+    async function toggleCaptionLock() {
+        const newLocked = !isCaptionLocked;
+        setIsCaptionLocked(newLocked);
+
+        if (liveCaptionWindowRef.current) {
+            try {
+                await liveCaptionWindowRef.current.setIgnoreCursorEvents(newLocked);
+                await liveCaptionWindowRef.current.emit('caption-lock-state', { locked: newLocked });
+            } catch (e) {
+                console.error('Failed to toggle lock', e);
+            }
+        }
+    }
+
     // Start recording
     async function startRecording(): Promise<void> {
         // Validation: Check if model is configured
@@ -183,7 +254,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         try {
             let stream: MediaStream;
 
-            if (inputSource === 'desktop') {
+            // In Live Caption mode, force desktop audio
+            const currentSource = isLiveCaptionMode.current ? 'desktop' : inputSource;
+
+            if (currentSource === 'desktop') {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
                     throw new Error(t('live.mic_error') + ': Display media not supported');
                 }
@@ -248,6 +322,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             console.error('Failed to start recording:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             await alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
+
+            // Clean up if we failed
+            if (isLiveCaptionMode.current) {
+                isLiveCaptionMode.current = false;
+                setIsLiveCaptionActive(false);
+            }
         } finally {
             setIsInitializing(false);
         }
@@ -338,6 +418,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (segment) => {
                 console.log('[LiveRecord] Received segment:', segment);
 
+                // Live Caption Emission
+                if (isLiveCaptionMode.current && liveCaptionWindowRef.current) {
+                    liveCaptionWindowRef.current.emit('caption-update', {
+                        text: segment.text,
+                        isFinal: segment.isFinal
+                    }).catch(e => console.warn('Failed to emit caption update', e));
+                }
+
                 // If timeline mode is enabled and segment is final, we split it
                 if (enableTimelineRef.current && segment.isFinal) {
                     const parts = splitByPunctuation([segment]);
@@ -361,6 +449,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (error) => {
                 console.error('Transcription error:', error);
                 alert(`${t('live.mic_error')} (${error})`, { variant: 'error' });
+                if (isLiveCaptionMode.current) {
+                    stopRecording();
+                }
             }
         );
 
@@ -385,6 +476,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
             // Wait for sidecar to finalize the last segment before saving
             await transcriptionService.softStop();
+
+            // Skip saving to history if in Live Caption mode
+            if (isLiveCaptionMode.current) {
+                console.log('[LiveRecord] Live Caption mode: skipping history save (ephemeral).');
+                isLiveCaptionMode.current = false; // Reset for next session
+                return;
+            }
 
             // Save to History (after softStop so final segment is included)
             const segments = useTranscriptStore.getState().segments;
@@ -459,6 +557,29 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             audioRef.current = null;
         }
 
+        // Stop and Hide Live Caption Window if active
+        if (isLiveCaptionMode.current) {
+            if (liveCaptionWindowRef.current) {
+                liveCaptionWindowRef.current.hide().catch(console.warn);
+            }
+            // We reset refs here or after?
+            // Better to reset after to ensure onstop has access if needed, but onstop logic is synchronous in execution order regarding ref?
+            // Actually onstop runs when mediaRecorder.stop() is called below.
+            // We need isLiveCaptionMode.current to be true during onstop execution.
+            // So we reset it AFTER mediaRecorder stop triggers.
+
+            // But mediaRecorder.stop() is async in event dispatch.
+            // However, we can just reset it after a small delay or trust that onstop runs immediately?
+            // Actually onstop is an event.
+            // Let's reset setIsLiveCaptionActive(false) for UI, but keep ref true until we are sure?
+            // No, safely reset state for next time is key.
+            // But if we reset ref now, onstop will see false and save history.
+            // FIX: We can set a flag `wasLiveCaption` or simply delay resetting the ref.
+            // Or easier: inside onstop, we check a local variable if we captured it? No, closure.
+            // Best approach: reset `isLiveCaptionMode.current = false` inside `onstop`.
+            setIsLiveCaptionActive(false);
+        }
+
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -482,6 +603,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
     function getRecordingStatusText(): string {
+        if (isLiveCaptionActive) {
+            return t('Live Caption Mode Active');
+        }
         if (isRecording) {
             return isPaused ? t('live.recording_paused') : t('live.recording_active');
         }
@@ -613,19 +737,39 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
                 <div className="record-controls">
                     {!isRecording ? (
-                        <button
-                            className="control-button start"
-                            onClick={startRecording}
-                            disabled={isInitializing}
-                            aria-label={t('live.start_recording')}
-                            data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
-                            data-tooltip-pos="bottom"
-                            style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
-                        >
-                            <div className="control-button-inner" />
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            {/* Standard Recording Button */}
+                            <button
+                                className="control-button start"
+                                onClick={startRecording}
+                                disabled={isInitializing}
+                                aria-label={t('live.start_recording')}
+                                data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
+                                data-tooltip-pos="bottom"
+                                style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
+                            >
+                                <div className="control-button-inner" />
+                            </button>
+
+                            {/* Live Caption Button */}
+                             <button
+                                className="control-button"
+                                onClick={startLiveCaption}
+                                disabled={isInitializing}
+                                aria-label="Start Live Caption"
+                                data-tooltip="Start Live Caption (Overlay)"
+                                data-tooltip-pos="bottom"
+                                style={{
+                                    backgroundColor: '#3b82f6', // distinct blue color
+                                    ...((isInitializing) ? { opacity: 0.7, cursor: 'wait' } : {})
+                                }}
+                            >
+                                <MessageSquare size={24} fill="white" color="white" aria-hidden="true" />
+                            </button>
+                        </div>
                     ) : (
-                        <>
+                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                             {/* Pause/Resume */}
                             <button
                                 className="control-button pause"
                                 onClick={isPaused ? resumeRecording : pauseRecording}
@@ -637,9 +781,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                                 {isPaused ? <Play size={24} fill="currentColor" aria-hidden="true" /> : <Pause size={24} fill="currentColor" aria-hidden="true" />}
                             </button>
 
+                            {/* Stop */}
                             <button
                                 className="control-button stop"
-                                onClick={stopRecording}
+                                onClick={stopRecording} // Using stopRecording directly, ref reset handled in onstop or needs fix
                                 disabled={isInitializing}
                                 aria-label={t('live.stop')}
                                 data-tooltip={t('live.stop')}
@@ -647,7 +792,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             >
                                 <Square size={28} fill="white" color="white" aria-hidden="true" />
                             </button>
-                        </>
+
+                            {/* Unlock/Lock Toggle (Only for Live Caption) */}
+                            {isLiveCaptionActive && (
+                                <button
+                                    className="control-button"
+                                    onClick={toggleCaptionLock}
+                                    aria-label={isCaptionLocked ? "Unlock Caption Window" : "Lock Caption Window"}
+                                    data-tooltip={isCaptionLocked ? "Unlock Window (Make Draggable)" : "Lock Window (Click-through)"}
+                                    data-tooltip-pos="bottom"
+                                    style={{ backgroundColor: isCaptionLocked ? '#4b5563' : '#eab308' }} // Gray if locked, Yellow if unlocked
+                                >
+                                    {isCaptionLocked ?
+                                        <Lock size={20} color="white" /> :
+                                        <Unlock size={20} color="white" />
+                                    }
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
 

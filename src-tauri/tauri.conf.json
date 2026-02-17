@@ -19,6 +19,24 @@
         "minWidth": 900,
         "minHeight": 600,
         "dragDropEnabled": true
+      },
+      {
+        "label": "live-caption",
+        "url": "index.html",
+        "title": "Sona Live Caption",
+        "width": 800,
+        "height": 200,
+        "minWidth": 300,
+        "minHeight": 100,
+        "x": 100,
+        "y": 100,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "decorations": false,
+        "visible": false,
+        "resizable": false,
+        "skipTaskbar": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

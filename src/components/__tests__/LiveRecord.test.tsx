@@ -55,6 +55,24 @@ vi.mock('lucide-react', () => ({
     Mic: () => 'Mic',
     Monitor: () => 'Monitor',
     FileAudio: () => 'FileAudio',
+    MessageSquare: () => 'MessageSquare',
+    Lock: () => 'Lock',
+    Unlock: () => 'Unlock',
+}));
+
+// Mock window API
+vi.mock('@tauri-apps/api/window', () => ({
+    getCurrentWindow: () => ({
+        minimize: vi.fn(),
+    }),
+    Window: {
+        getByLabel: vi.fn().mockResolvedValue({
+            show: vi.fn(),
+            hide: vi.fn(),
+            setIgnoreCursorEvents: vi.fn(),
+            emit: vi.fn(),
+        }),
+    }
 }));
 
 describe('LiveRecord', () => {
