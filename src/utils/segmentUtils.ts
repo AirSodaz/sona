@@ -2,7 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment } from '../types/transcript';
 
 // Constants
-const MAX_SEGMENT_LENGTH = 100;
+const MAX_SEGMENT_LENGTH_CJK = 36;
+const MAX_SEGMENT_LENGTH_WESTERN = 84;
 
 // Common abbreviations that shouldn't trigger a sentence split
 const ABBREVIATIONS = new Set([
@@ -16,6 +17,9 @@ const SPLIT_REGEX = /([.?!。？！]+)/;
 const COMMA_SPLIT_REGEX = /([,，;；:：]+)/;
 const PUNCTUATION_REGEX = /[\s\p{P}]/u;
 const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
+
+// Regex for detection
+const CJK_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]/u;
 
 // Regex for alignTokensToText
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
@@ -55,10 +59,19 @@ function endsWithAbbreviation(text: string): boolean {
 }
 
 /**
+ * Determines if text contains CJK characters to decide on segment length limit.
+ */
+function isCJK(text: string): boolean {
+    return CJK_REGEX.test(text);
+}
+
+/**
  * Splits transcript segments based on punctuation marks.
  * Uses a two-pass approach:
  * 1. Split by sentence-ending punctuation (handling abbreviations).
- * 2. Split long segments (> 100 chars) by weaker punctuation (commas).
+ * 2. Split long segments by weaker punctuation (commas) based on language constraints.
+ *    - CJK: 36 characters
+ *    - Western: 84 characters
  *
  * @param segments The array of transcript segments to split.
  * @return A new array of split transcript segments.
@@ -76,8 +89,10 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
     const finalSegments: TranscriptSegment[] = [];
 
     for (const segment of intermediateSegments) {
+        const limit = isCJK(segment.text) ? MAX_SEGMENT_LENGTH_CJK : MAX_SEGMENT_LENGTH_WESTERN;
+
         // If segment is too long, try to split by commas
-        if (segment.text.length > MAX_SEGMENT_LENGTH) {
+        if (segment.text.length > limit) {
             const subSegments = splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
             // If splitting happened (length > 1), we use the sub-segments.
             // Even if length is 1 (no comma found), we push that 1 segment.
