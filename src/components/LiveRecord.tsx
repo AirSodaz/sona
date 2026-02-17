@@ -526,6 +526,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 transcriptionService.setVadModelPath(config.vadModelPath || '');
                 transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
                 transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+                transcriptionService.setLanguage(config.language);
 
                 // ITN Setup
                 transcriptionService.setEnableITN(config.enableITN ?? false);
@@ -557,7 +558,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         config.ctcModelPath,
         config.enableITN,
         config.enabledITNModels,
-        config.itnRulesOrder
+        config.itnRulesOrder,
+        config.language
     ]);
 
 
