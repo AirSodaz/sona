@@ -2,7 +2,7 @@ mod hardware;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, Notify};
 
 /// State managed by Tauri to track active downloads and allow cancellation.
