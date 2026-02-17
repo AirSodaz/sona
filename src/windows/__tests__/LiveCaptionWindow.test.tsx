@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@tauri-apps/api/window', () => ({
     getCurrentWindow: () => ({
-        listen: vi.fn().mockImplementation((event, cb) => {
+        listen: vi.fn().mockImplementation((_event, _cb) => {
             return Promise.resolve(() => {});
         }),
         setIgnoreCursorEvents: vi.fn(),
