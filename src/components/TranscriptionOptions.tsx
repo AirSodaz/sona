@@ -32,15 +32,23 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
-        <div className={`options-container ${className}`} style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+        <div
+            className={`options-container ${className}`}
+            style={{
+                marginTop: 'auto', // Push to bottom of flex container
+                width: '100%',
+                padding: '16px 0 0 0', // Top padding only
+                display: 'flex',
+                justifyContent: 'center'
+            }}
+        >
             <button
-                className="btn btn-secondary"
+                className="btn btn-parameter-settings"
                 onClick={() => setIsModalOpen(true)}
                 disabled={disabled}
                 aria-label={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
-                style={{ minWidth: '200px' }}
             >
-                <SettingsIcon />
+                <SettingsIcon width={16} height={16} />
                 <span>{t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}</span>
             </button>
 

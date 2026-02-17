@@ -2594,3 +2594,32 @@ input[type="radio"]:focus {
   text-align: left;
   word-break: break-word;
 }
+
+/* ===========================
+   Parameter Settings Button
+   =========================== */
+
+.btn-parameter-settings {
+  width: 100%;
+  justify-content: center;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-parameter-settings:hover:not(:disabled) {
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-parameter-settings:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
