@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dropdown } from './Dropdown';
+import { SettingsIcon } from './Icons';
+import { ParameterSettingsModal } from './ParameterSettingsModal';
 
 /** Props for TranscriptionOptions component. */
 interface TranscriptionOptionsProps {
@@ -13,11 +14,11 @@ interface TranscriptionOptionsProps {
 }
 
 /**
- * Component for configuring transcription options (Subtitle Mode, Language).
- * Shared between Batch Import and Live Recording.
+ * Component that renders a button to open parameter settings modal.
+ * Replaces the inline controls for Subtitle Mode and Language.
  *
  * @param props Component props.
- * @return The rendered options component.
+ * @return The rendered component.
  */
 export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     enableTimeline,
@@ -28,47 +29,30 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     disabled = false
 }: TranscriptionOptionsProps): React.JSX.Element {
     const { t } = useTranslation();
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     return (
-        <div className={`options-container ${className}`}>
-            <div className="options-row">
-                <div className="options-label">
-                    <span>{t('batch.timeline_mode')}</span>
-                    <span className="options-hint">{t('batch.timeline_hint')}</span>
-                </div>
-                <button
-                    className={`toggle-switch ${disabled ? 'disabled' : ''}`}
-                    onClick={() => !disabled && setEnableTimeline(!enableTimeline)}
-                    role="switch"
-                    aria-checked={enableTimeline}
-                    aria-label={t('batch.timeline_mode')}
-                    data-tooltip={t('batch.timeline_mode_tooltip')}
-                    data-tooltip-pos="left"
-                    disabled={disabled}
-                >
-                    <div className="toggle-switch-handle" />
-                </button>
-            </div>
+        <div className={`options-container ${className}`} style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+            <button
+                className="btn btn-secondary"
+                onClick={() => setIsModalOpen(true)}
+                disabled={disabled}
+                aria-label={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
+                style={{ minWidth: '200px' }}
+            >
+                <SettingsIcon />
+                <span>{t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}</span>
+            </button>
 
-            <div className="options-row">
-                <div className="options-label">
-                    <span>{t('batch.language')}</span>
-                    <span className="options-hint">{t('batch.language_hint')}</span>
-                </div>
-                <Dropdown
-                    value={language}
-                    onChange={(val) => !disabled && setLanguage(val)}
-                    options={[
-                        { value: 'auto', label: 'Auto' },
-                        { value: 'zh', label: 'Chinese' },
-                        { value: 'en', label: 'English' },
-                        { value: 'ja', label: 'Japanese' },
-                        { value: 'ko', label: 'Korean' },
-                        { value: 'yue', label: 'Cantonese' }
-                    ]}
-                    style={{ width: '180px', opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? 'none' : 'auto' }}
-                />
-            </div>
+            <ParameterSettingsModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                enableTimeline={enableTimeline}
+                setEnableTimeline={setEnableTimeline}
+                language={language}
+                setLanguage={setLanguage}
+                disabled={disabled}
+            />
         </div>
     );
 });
