@@ -53,11 +53,42 @@ class CaptionWindowService {
     /**
      * Closes the caption window if it exists.
      */
+    /**
+     * Closes the caption window if it exists.
+     */
+    /**
+     * Closes the caption window if it exists.
+     */
     async close() {
-        const w = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-        if (w) {
-            await w.close();
+        console.log('[CaptionWindowService] Requested to close caption window');
+
+        // Ensure instance is closed if we have it
+        if (this.windowInstance) {
+            try {
+                console.log('[CaptionWindowService] Closing cached window instance');
+                await this.windowInstance.close();
+            } catch (e) {
+                console.error('[CaptionWindowService] Error closing cached window instance:', e);
+            }
             this.windowInstance = null;
+        }
+
+        // Always try to find by label and close, just in case our instance reference was stale or lost
+        try {
+            const w = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
+            if (w) {
+                console.log('[CaptionWindowService] Found window by label, closing it');
+                await w.close();
+            } else {
+                console.log('[CaptionWindowService] No window found by label to close');
+            }
+        } catch (e) {
+            // Ignore error if window not found or already closed (common in Tauri)
+            // But log if it's something else
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!msg.includes('window not found')) {
+                console.error('[CaptionWindowService] Error finding/closing caption window by label:', e);
+            }
         }
     }
 

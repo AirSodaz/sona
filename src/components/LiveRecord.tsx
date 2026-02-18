@@ -70,6 +70,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const animationRef = useRef<number>(0);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
+    // Track the active media stream to share between Capture (Transcription) and Recording (File)
+    const activeStreamRef = useRef<MediaStream | null>(null);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -121,7 +123,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
-    const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
+
     // config declaration moved up
     const { t } = useTranslation();
 
@@ -188,21 +190,18 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, []);
 
     // Start recording
-    async function startRecording(): Promise<void> {
-        // Validation: Check if model is configured
+
+    // Start capture (audio context + visualizer + transcription)
+    const startCapture = useCallback(async (forceSource?: 'microphone' | 'desktop', isCaption: boolean = false) => {
         const config = useTranscriptStore.getState().config;
         if (!config.offlineModelPath) {
             await alert(t('batch.no_model_error'), { variant: 'error' });
-            return;
+            return false;
         }
-
-        // Reset player state
-        setAudioFile(null);
 
         setIsInitializing(true);
 
-        // Caption mode always uses desktop audio
-        const effectiveSource = isCaptionMode ? 'desktop' : inputSource;
+        const effectiveSource = forceSource || inputSource;
 
         try {
             let stream: MediaStream;
@@ -213,7 +212,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 }
 
                 try {
-                    // Capture system audio
                     stream = await navigator.mediaDevices.getDisplayMedia({
                         video: {
                             width: 1,
@@ -227,86 +225,63 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         }
                     });
 
-                    // We only need the audio track
                     const audioTracks = stream.getAudioTracks();
                     if (audioTracks.length === 0) {
                         throw new Error('No audio track found in display media');
                     }
-
-                    // Stop video tracks immediately as we don't need them
                     stream.getVideoTracks().forEach(track => track.stop());
-
-                    // Create a new stream with only the audio track
                     stream = new MediaStream([audioTracks[0]]);
-
                 } catch (err) {
                     console.error('Error getting display media:', err);
                     throw err;
                 }
             } else {
-                // Check support
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Media devices API not supported in this environment');
+                    throw new Error('Media devices API not supported');
                 }
-
-                try {
-                    // Default microphone
-                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                } catch (err: any) {
-                    console.error('GetUserMedia Error:', err);
-                    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                        throw new Error(t('live.mic_permission_denied') || 'Microphone permission denied');
-                    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                        throw new Error(t('live.mic_not_found') || 'No microphone found');
-                    } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-                        throw new Error(t('live.mic_busy') || 'Microphone is busy or not readable');
-                    } else {
-                        throw err;
-                    }
-                }
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream = micStream;
             }
 
-            await initializeRecordingSession(stream);
+            activeStreamRef.current = stream;
+            await initializeAudioSession(stream);
+
+            // Use the explicit flag if provided, otherwise fallback to store
+            // We check store state as a fallback because sometimes we just start capture (e.g. for recording) 
+            // and we want to know if caption should also be open.
+            // But if called from handleCaptionToggle(true), we pass isCaption=true.
+            if (isCaption || useTranscriptStore.getState().isCaptionMode) {
+                captionWindowService.open().catch(console.error);
+            }
+
+            return true;
 
         } catch (error) {
-            console.error('Failed to start recording:', error);
+            console.error('Failed to start capture:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             await alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
+            return false;
         } finally {
             setIsInitializing(false);
         }
-    }
+    }, [inputSource, t, alert]);
 
-
-
-
-    async function initializeRecordingSession(stream: MediaStream): Promise<void> {
-        // Set up audio context and analyzer if not already created
+    // Initialize AudioContext, Visualizer, and Transcription
+    async function initializeAudioSession(stream: MediaStream): Promise<void> {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         } else if (audioContextRef.current.state === 'suspended') {
             await audioContextRef.current.resume();
         }
 
-        // If reusing context (file mode), we might need to be careful. 
-        // Actually in file mode we create context above. In mic/desktop we create here.
+        const source = audioContextRef.current.createMediaStreamSource(stream);
 
-        // Source
-        let source: MediaStreamAudioSourceNode;
-        // Validating if source can be created from stream in existing context
-        // If context was created for file, it already has the source connected to destination/stream.
-        // But we need 'source' variable for Analyzer connection below.
-
-        source = audioContextRef.current.createMediaStreamSource(stream);
-
-
-        // Analyser for visualizer
+        // Visualizer
         analyserRef.current = audioContextRef.current.createAnalyser();
         analyserRef.current.fftSize = 256;
         source.connect(analyserRef.current);
 
-        // Processor for transcription streaming (16kHz requirement)
-        // Use AudioWorklet for better performance (off-main-thread processing)
+        // Processor
         try {
             await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
         } catch (err) {
@@ -315,35 +290,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
 
         const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-
         processor.port.onmessage = (e) => {
-            if (!isRecordingRef.current || isPausedRef.current) return;
-
-            // e.data is Int16Array transferred from the worklet
+            // Always send audio if we are "capturing" (which means either recording OR captioning)
+            // We'll filter what to do with the text in the callback
             transcriptionService.sendAudioInt16(e.data);
         };
 
         source.connect(processor);
-
-        // Only connect processor to destination if NOT file simulation (to avoid double audio or feedback loop if we were doing pass-through)
-        // Actually processor output is usually silence/empty, it's a tap.
-        // But in original code: processor.connect(audioContextRef.current.destination);
-        // This is required for AudioWorklet to run in some browsers/contexts (needs to be connected to destination).
-        // Since we don't output audio from processor (we just send data to socket), this is fine.
         processor.connect(audioContextRef.current.destination);
 
-        // Start transcription service
+        // Prepare proper config
         const config = useTranscriptStore.getState().config;
-        console.log('[LiveRecord] Starting transcription with model path:', config.offlineModelPath);
         transcriptionService.setModelPath(config.offlineModelPath);
         transcriptionService.setLanguage(language);
-
-        // ITN Configuration
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-
         transcriptionService.setEnableITN(config.enableITN ?? false);
 
+        // ITN Setup
+        const enabledITNModels = new Set(config.enabledITNModels || []);
+        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
         if (enabledITNModels.size > 0) {
             try {
                 const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
@@ -360,174 +324,219 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         await transcriptionService.start(
             (segment) => {
-                console.log('[LiveRecord] Received segment:', segment);
+                // Logic for handling segments based on active modes
 
-                // Caption mode: skip timeline split, just upsert directly (ephemeral)
+                // 1. Caption Mode: Send to window
                 if (isCaptionModeRef.current) {
-                    upsertSegmentAndSetActive(segment);
-                    return;
+                    captionWindowService.sendSegments([segment]).catch(console.error);
                 }
 
-                // If timeline mode is enabled and segment is final, we split it
-                if (enableTimelineRef.current && segment.isFinal) {
-                    const parts = splitByPunctuation([segment]);
-
-                    if (parts.length > 0) {
-                        // Remove the original ID which might have been upserted as partial
-                        useTranscriptStore.getState().deleteSegment(segment.id);
-
-                        // Add all parts
-                        parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
-
-                        // Set active to the last part
-                        useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                // 2. Recording Mode: Save to store (Main Window)
+                if (isRecordingRef.current) {
+                    if (enableTimelineRef.current && segment.isFinal) {
+                        const parts = splitByPunctuation([segment]);
+                        if (parts.length > 0) {
+                            useTranscriptStore.getState().deleteSegment(segment.id);
+                            parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
+                            useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                        } else {
+                            upsertSegmentAndSetActive(segment);
+                        }
                     } else {
                         upsertSegmentAndSetActive(segment);
                     }
-                } else {
-                    upsertSegmentAndSetActive(segment);
                 }
             },
             (error) => {
                 console.error('Transcription error:', error);
-                alert(`${t('live.mic_error')} (${error})`, { variant: 'error' });
             }
         );
 
-        // Caption mode: skip MediaRecorder and history (ephemeral)
-        if (!isCaptionModeRef.current) {
-            // Set up media recorder for full file save
-            const mimeType = getSupportedMimeType();
-            mimeTypeRef.current = mimeType;
-            console.log('[LiveRecord] Using mimeType:', mimeType);
+        // Also setup MediaRecorder if we are recording (or if we need it ready?)
+        // Actually, we should separate MediaRecorder start. 
+        // We need to keep the stream reference to start recording later if needed.
+        // Let's store stream in a ref
+        // (We need a new ref for the stream)
+        // For now, let's assume this initializes "Capture" which allows Captioning.
+        // Recording needs to piggyback on this stream.
 
-            const options = mimeType ? { mimeType } : undefined;
-            mediaRecorderRef.current = new MediaRecorder(stream, options);
-            const chunks: Blob[] = [];
+        // We'll assign it to a ref to be used by startFileRecording
+        (window as any).currentStream = stream; // Temporary hack to pass stream, or use a ref
 
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                chunks.push(e.data);
-            };
+        drawVisualizer();
+    }
 
-            mediaRecorderRef.current.onstop = async () => {
-                const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
-                const blob = new Blob(chunks, { type });
-                const url = URL.createObjectURL(blob);
-                useTranscriptStore.getState().setAudioUrl(url);
 
-                // Wait for sidecar to finalize the last segment before saving
-                await transcriptionService.softStop();
 
-                // Save to History (after softStop so final segment is included)
-                const segments = useTranscriptStore.getState().segments;
-                const duration = (Date.now() - startTimeRef.current) / 1000;
+    // Start file recording (MediaRecorder)
+    const startFileRecording = useCallback(async () => {
+        const stream = activeStreamRef.current;
+        if (!stream) {
+            console.error("No active stream to record");
+            return;
+        }
 
-                // Only save if we have data (segments or substantial audio)
-                if (segments.length > 0 || duration > 1.0) {
-                    try {
-                        const newItem = await historyService.saveRecording(blob, segments, duration);
-                        if (newItem) {
-                            useHistoryStore.getState().addItem(newItem);
-                            useTranscriptStore.getState().setSourceHistoryId(newItem.id);
-                        }
-                    } catch (err) {
-                        console.error('Failed to save history:', err);
-                    }
+        const mimeType = getSupportedMimeType();
+        mimeTypeRef.current = mimeType;
+        const options = mimeType ? { mimeType } : undefined;
+
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+        const chunks: Blob[] = [];
+
+        mediaRecorderRef.current.ondataavailable = (e) => {
+            chunks.push(e.data);
+        };
+
+        mediaRecorderRef.current.onstop = async () => {
+            const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
+            const blob = new Blob(chunks, { type });
+            const url = URL.createObjectURL(blob);
+            useTranscriptStore.getState().setAudioUrl(url);
+
+            // Wait for sidecar to finalize?
+            // If we are still captioning, we shouldn't stop the sidecar.
+            // But valid file recording usually expects the "Final" segment.
+            // We'll do a soft stop ONLY if we are also stopping capture.
+            // If we are just stopping recording but keeping caption, we just save what we have.
+
+            // Actually, softStop sends __RESET__ which might interrupt captioning flow?
+            // If we are captioning, we might just want to save current state.
+
+            // For now, let's assume we don't softStop if caption is active, 
+            // implying the last segment might remain "partial" in the saved file transcript 
+            // if silence didn't trigger final.
+
+            const segments = useTranscriptStore.getState().segments;
+            const duration = (Date.now() - startTimeRef.current) / 1000;
+
+            if (segments.length > 0 || duration > 1.0) {
+                const newItem = await historyService.saveRecording(blob, segments, duration);
+                if (newItem) {
+                    useHistoryStore.getState().addItem(newItem);
+                    useTranscriptStore.getState().setSourceHistoryId(newItem.id);
                 }
-            };
+            }
+        };
 
-            mediaRecorderRef.current.start();
-        } else {
-            console.log('[LiveRecord] Caption mode: skipping MediaRecorder (ephemeral)');
-        }
-
-        if (isCaptionModeRef.current) {
-            captionWindowService.open().catch(e => console.error('Failed to open caption window:', e));
-        }
-
+        mediaRecorderRef.current.start();
         setIsRecording(true);
         setIsPaused(false);
-        isRecordingRef.current = true;
-        isPausedRef.current = false;
         startTimeRef.current = Date.now();
         clearSegments();
-
-        // Start visualizer
-        drawVisualizer();
-    }
+    }, [setIsRecording, setIsPaused, clearSegments]);
 
 
-    // Pause recording
-    function pauseRecording(): void {
-        setIsPaused(true);
-        isPausedRef.current = true;
 
-        if (mediaRecorderRef.current && isRecordingRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.pause();
-            if (audioRef.current) audioRef.current.pause();
-        }
-    }
 
-    // Resume recording
-    function resumeRecording(): void {
-        setIsPaused(false);
-        isPausedRef.current = false;
 
-        // Prevent double loops if resume happens quickly
+
+
+
+    const stopCapture = useCallback(async () => {
+        console.log('[LiveRecord] Stopping capture...');
+
         if (animationRef.current) {
             window.cancelAnimationFrame(animationRef.current);
-        }
-        // Restart visualizer loop
-        drawVisualizer();
-
-        if (mediaRecorderRef.current && isRecordingRef.current && mediaRecorderRef.current.state === 'paused') {
-            mediaRecorderRef.current.resume();
-            if (audioRef.current) audioRef.current.play();
-        }
-    }
-
-    // Stop recording
-    async function stopRecording(): Promise<void> {
-        const wasCaptionMode = isCaptionModeRef.current;
-
-        // Immediate UI Update
-        setIsRecording(false);
-        setIsPaused(false);
-        isRecordingRef.current = false;
-        isPausedRef.current = false;
-
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
+            animationRef.current = 0;
         }
 
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        if (audioContextRef.current) {
+            activeStreamRef.current?.getTracks().forEach(t => t.stop());
+            activeStreamRef.current = null;
+
+            if (audioContextRef.current.state !== 'closed') {
+                await audioContextRef.current.suspend();
+            }
         }
 
-        if (animationRef.current && typeof window.cancelAnimationFrame === 'function') {
-            window.cancelAnimationFrame(animationRef.current);
-        }
+        await transcriptionService.softStop();
+        captionWindowService.close().catch(e => console.error('Failed to close caption window:', e));
 
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.suspend().catch(e => console.error('Error suspending AudioContext:', e));
-        }
-
-        // Clear visualizer
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (canvas && ctx) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
+    }, []);
 
-        // Caption mode: finalize and clear ephemeral data
-        if (wasCaptionMode) {
-            await transcriptionService.softStop();
-            clearSegments();
-            captionWindowService.close().catch(e => console.error('Failed to close caption window:', e));
+    const stopFileRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
         }
-    }
+        setIsRecording(false);
+        setIsPaused(false);
+
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+    }, [setIsRecording, setIsPaused]);
+
+    const pauseRecording = useCallback(() => {
+        setIsPaused(true);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.pause();
+        }
+    }, [setIsPaused]);
+
+    const resumeRecording = useCallback(() => {
+        setIsPaused(false);
+        drawVisualizer();
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+            mediaRecorderRef.current.resume();
+        }
+    }, [setIsPaused, drawVisualizer]);
+
+    const stopRecording = useCallback(async () => {
+        stopFileRecording();
+        if (!isCaptionModeRef.current) {
+            await stopCapture();
+        }
+    }, [stopFileRecording, stopCapture]);
+
+    const handleToggleRecording = useCallback(async () => {
+        if (isRecordingRef.current) {
+            await stopRecording();
+        } else {
+            if (activeStreamRef.current) {
+                startFileRecording();
+            } else {
+                const success = await startCapture();
+                if (success) {
+                    startFileRecording();
+                }
+            }
+        }
+    }, [startCapture, stopRecording, startFileRecording]);
+
+    const handleTogglePause = useCallback(() => {
+        if (isPausedRef.current) {
+            resumeRecording();
+        } else {
+            pauseRecording();
+        }
+    }, [pauseRecording, resumeRecording]);
+
+    const handleCaptionToggle = useCallback(async (checked: boolean) => {
+        setIsCaptionMode(checked);
+
+        if (checked) {
+            // Always try to open the caption window
+            captionWindowService.open().catch(console.error);
+
+            // If not recording, we need to start capture solely for captioning
+            if (!isRecordingRef.current) {
+                await startCapture('desktop', true);
+            }
+        } else {
+            captionWindowService.close().catch(e => console.error(e));
+            // Only stop capture if we are NOT recording
+            if (!isRecordingRef.current) {
+                await stopCapture();
+            }
+        }
+    }, [setIsCaptionMode, startCapture, stopCapture]);
 
     function getRecordingStatusText(): string {
         if (isRecording) {
@@ -545,20 +554,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             // Ctrl+Space to toggle recording
             if (e.ctrlKey && e.code === 'Space') {
                 e.preventDefault();
-                if (isRecordingRef.current) {
-                    stopRecording();
-                } else {
-                    startRecording();
-                }
+                handleToggleRecording();
             }
             // Space to toggle pause/resume (only when recording)
             else if (e.code === 'Space' && isRecordingRef.current) {
                 e.preventDefault();
-                if (isPausedRef.current) {
-                    resumeRecording();
-                } else {
-                    pauseRecording();
-                }
+                handleTogglePause();
             }
         };
 
@@ -566,7 +567,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, []);
+    }, [handleToggleRecording, handleTogglePause]);
 
     // Monitor config changes and prepare transcription service
     useEffect(() => {
@@ -666,7 +667,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     {!isRecording ? (
                         <button
                             className="control-button start"
-                            onClick={startRecording}
+                            onClick={handleToggleRecording}
                             disabled={isInitializing}
                             aria-label={t('live.start_recording')}
                             data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
@@ -679,7 +680,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         <>
                             <button
                                 className="control-button pause"
-                                onClick={isPaused ? resumeRecording : pauseRecording}
+                                onClick={handleTogglePause}
                                 disabled={isInitializing}
                                 aria-label={isPaused ? t('live.resume') : t('live.pause')}
                                 data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
@@ -690,7 +691,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
                             <button
                                 className="control-button stop"
-                                onClick={stopRecording}
+                                onClick={handleToggleRecording}
                                 disabled={isInitializing}
                                 aria-label={t('live.stop')}
                                 data-tooltip={t('live.stop')}
@@ -728,9 +729,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             <div className="live-caption-toggle">
                 <Switch
                     checked={isCaptionMode}
-                    onChange={setIsCaptionMode}
+                    onChange={handleCaptionToggle}
                     label={t('live.caption_mode')}
-                    disabled={isRecording}
+                    disabled={false}
                 />
                 <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
             </div>

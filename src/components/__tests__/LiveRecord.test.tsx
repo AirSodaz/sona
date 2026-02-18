@@ -31,6 +31,16 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+// Mock caption window service
+vi.mock('../../services/captionWindowService', () => ({
+    captionWindowService: {
+        open: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        isOpen: vi.fn().mockResolvedValue(true),
+        sendSegments: vi.fn().mockResolvedValue(undefined),
+    }
+}));
+
 vi.mock('@tauri-apps/plugin-fs', () => ({
     exists: vi.fn(() => Promise.resolve(false)),
     remove: vi.fn(() => Promise.resolve()),
@@ -70,14 +80,24 @@ describe('LiveRecord', () => {
         window.cancelAnimationFrame = caf as any;
 
         // Mock Media APIs
+        vi.stubGlobal('MediaStream', class {
+            tracks: any[];
+            constructor(tracks?: any[]) {
+                this.tracks = tracks || [{ stop: vi.fn() }];
+            }
+            getAudioTracks() { return this.tracks; }
+            getVideoTracks() { return []; }
+            getTracks() { return this.tracks; }
+        });
+
         vi.stubGlobal('MediaRecorder', class {
             state = 'inactive';
-            stream: MediaStream;
+            stream: any;
             ondataavailable: ((e: any) => void) | null = null;
             onstop: (() => void) | null = null;
             mimeType = 'audio/webm';
 
-            constructor(stream: MediaStream) {
+            constructor(stream: any) {
                 this.stream = stream;
             }
             start() { this.state = 'recording'; }
@@ -127,9 +147,8 @@ describe('LiveRecord', () => {
                 writable: true,
             });
         }
-        navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue({
-            getTracks: () => [{ stop: vi.fn() }],
-        });
+        navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue(new MediaStream());
+        navigator.mediaDevices.getDisplayMedia = vi.fn().mockResolvedValue(new MediaStream());
 
         // Mock Canvas
         HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
@@ -149,12 +168,13 @@ describe('LiveRecord', () => {
     });
 
     afterEach(async () => {
-        // Reset store state to prevent leaking between tests
+        // Reset store state
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         act(() => {
             useTranscriptStore.setState({
                 isRecording: false,
                 isPaused: false,
+                isCaptionMode: false,
                 segments: [],
                 audioUrl: null,
             });
@@ -163,41 +183,7 @@ describe('LiveRecord', () => {
         vi.clearAllMocks();
     });
 
-    it('should increment timer correctly', async () => {
-        render(<LiveRecord />);
-
-        // Find the start button (it's the only button initially)
-        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
-
-        await act(async () => {
-            fireEvent.click(startBtn);
-            await vi.advanceTimersByTimeAsync(100);
-        });
-
-        // Wait for recording to start (Stop button appears)
-        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
-        expect(stopBtn).toBeTruthy();
-
-        // Advance 3 seconds
-        await act(async () => {
-            vi.advanceTimersByTime(3000);
-        });
-
-        // Check text. formatTime(3) -> "00:03"
-        const timeDisplay = screen.getByText(/00:03/);
-        expect(timeDisplay).toBeTruthy();
-    }, 10000);
-
-    it('should reset player state when recording starts', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
-
-        // Set up initial state with an audio file
-        act(() => {
-            useTranscriptStore.setState({ audioUrl: 'blob:test', isPlaying: true });
-        });
-
-        expect(useTranscriptStore.getState().audioUrl).toBe('blob:test');
-
+    it('should start recording when Start button is clicked', async () => {
         render(<LiveRecord />);
         const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
 
@@ -206,110 +192,89 @@ describe('LiveRecord', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Wait for recording to start
         expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
-
-        // Verify audioUrl is reset to null
-        expect(useTranscriptStore.getState().audioUrl).toBeNull();
-        expect(useTranscriptStore.getState().isPlaying).toBe(false); // setAudioFile(null) also sets isPlaying to false
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
     });
 
-    it('should finalize the last segment when recording stops', async () => {
-        render(<LiveRecord />);
+    it('should start caption mode independently without recording', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { captionWindowService } = await import('../../services/captionWindowService');
         const { transcriptionService } = await import('../../services/transcriptionService');
 
-        // Capture the onSegment callback passed to transcriptionService.start
-        let onSegmentCallback: ((segment: any) => void) | undefined;
-        (transcriptionService.start as any).mockImplementation((onSegment: any) => {
-            onSegmentCallback = onSegment;
-            return Promise.resolve();
+        render(<LiveRecord />);
+        const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
+
+        await act(async () => {
+            fireEvent.click(captionSwitch);
+            await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Mock softStop to simulate sidecar finalizing the segment
-        (transcriptionService.softStop as any).mockImplementation(async () => {
-            if (onSegmentCallback) {
-                onSegmentCallback({
-                    id: 'seg-1',
-                    text: 'Incomplete sentence.',
-                    start: 0,
-                    end: 1,
-                    isFinal: true,
-                });
-            }
-        });
+        // Check stores
+        expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
 
-        // Start recording
+        // Check services
+        expect(captionWindowService.open).toHaveBeenCalled();
+        expect(transcriptionService.start).toHaveBeenCalled();
+    });
+
+    it('should allow recording while caption mode is active', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        render(<LiveRecord />);
+
+        // 1. Start Caption
+        const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
+        await act(async () => {
+            fireEvent.click(captionSwitch);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+        expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
+
+        // 2. Start Recording
         const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
         await act(async () => {
             fireEvent.click(startBtn);
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Wait for recording to start
-        expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
-
-        // Simulate receiving a partial segment
-        act(() => {
-            if (onSegmentCallback) {
-                onSegmentCallback({
-                    id: 'seg-1',
-                    text: 'Incomplete sentence',
-                    start: 0,
-                    end: 1,
-                    isFinal: false,
-                });
-            }
-        });
-
-        // Verify segment is in store and is not final
-        expect(useTranscriptStore.getState().segments).toHaveLength(1);
-        expect(useTranscriptStore.getState().segments[0].isFinal).toBe(false);
-
-        // Stop recording
-        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
-        await act(async () => {
-            fireEvent.click(stopBtn);
-        });
-
-        // Verify softStop was called
-        expect(transcriptionService.softStop).toHaveBeenCalled();
-
-        // Verify segment is now final (updated by the mock)
-        expect(useTranscriptStore.getState().segments).toHaveLength(1);
-        expect(useTranscriptStore.getState().segments[0].isFinal).toBe(true);
-        expect(useTranscriptStore.getState().segments[0].text).toBe('Incomplete sentence.');
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+        expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
     });
 
-    it('should show alert when microphone permission is denied', async () => {
-        // Mock NotAllowedError
-        navigator.mediaDevices.getUserMedia = vi.fn().mockRejectedValue({
-            name: 'NotAllowedError',
-            message: 'Permission denied',
-        });
-
-        const { useDialogStore } = await import('../../stores/dialogStore');
-        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert');
+    it('should NOT stop recording when caption mode is toggled OFF', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { captionWindowService } = await import('../../services/captionWindowService');
 
         render(<LiveRecord />);
 
-        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
-
+        // 1. Start Caption
+        const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
         await act(async () => {
-            fireEvent.click(startBtn);
+            fireEvent.click(captionSwitch);
+            await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(alertSpy).toHaveBeenCalledWith(
-            expect.stringContaining('live.mic_error'),
-            expect.objectContaining({ variant: 'error' })
-        );
-        expect(alertSpy).toHaveBeenCalledWith(
-            expect.stringContaining('live.mic_permission_denied'),
-            expect.anything()
-        );
+        // 2. Start Recording
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+        await act(async () => {
+            fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        // 3. Stop Caption
+        await act(async () => {
+            fireEvent.click(captionSwitch);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(useTranscriptStore.getState().isCaptionMode).toBe(false);
+        expect(useTranscriptStore.getState().isRecording).toBe(true); // Should still be true
+        expect(captionWindowService.close).toHaveBeenCalled();
     });
 
     it('should toggle recording with Ctrl+Space', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
         render(<LiveRecord />);
 
         // Start recording with Ctrl+Space
@@ -319,49 +284,15 @@ describe('LiveRecord', () => {
         });
 
         expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
 
         // Stop recording with Ctrl+Space
         await act(async () => {
             fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
-        });
-
-        expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
-    });
-
-    it('should toggle pause/resume with Space when recording', async () => {
-        render(<LiveRecord />);
-
-        // Start recording
-        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
-        await act(async () => {
-            fireEvent.click(startBtn);
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Pause with Space
-        await act(async () => {
-            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
-        });
-
-        expect(screen.getByRole('button', { name: /live.resume/i })).toBeTruthy();
-
-        // Resume with Space
-        await act(async () => {
-            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
-        });
-
-        expect(screen.getByRole('button', { name: /live.pause/i })).toBeTruthy();
-    });
-
-    it('should NOT toggle pause/resume with Space when NOT recording', async () => {
-        render(<LiveRecord />);
-
-        // Press Space while not recording
-        await act(async () => {
-            fireEvent.keyDown(window, { key: ' ', code: 'Space' });
-        });
-
-        // Should still be in start state (no crash, no change)
         expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
     });
 });

@@ -328,7 +328,19 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         }
     }, [isSearchOpen, searchMatchIndex, searchMatches]);
 
+    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+
     if (segments.length === 0) {
+        if (isCaptionMode) {
+            return (
+                <div className="empty-state">
+                    <div style={{ opacity: 0.5 }}>
+                        <p>{t('live.captions_running_external', { defaultValue: 'Captions are running in a floating window.' })}</p>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="empty-state">
                 <PlusCircleIcon />
