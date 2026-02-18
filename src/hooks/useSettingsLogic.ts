@@ -116,6 +116,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setTheme = (theme: 'auto' | 'light' | 'dark') => updateConfig({ theme: theme });
     const setFont = (font: string) => updateConfig({ font: font as any });
 
+    const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
+
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
@@ -380,6 +382,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setTheme,
         font: config.font || 'system',
         setFont,
+        minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
+        setMinimizeToTrayOnExit,
 
         // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,

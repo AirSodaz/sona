@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
+import { Switch } from '../Switch';
 
 interface SettingsGeneralTabProps {
     appLanguage: string;
@@ -9,6 +10,8 @@ interface SettingsGeneralTabProps {
     setTheme: (theme: 'auto' | 'light' | 'dark') => void;
     font: string;
     setFont: (font: string) => void;
+    minimizeToTrayOnExit: boolean;
+    setMinimizeToTrayOnExit: (enabled: boolean) => void;
 }
 
 function getFontFamily(fontValue: string): string {
@@ -25,7 +28,9 @@ export function SettingsGeneralTab({
     theme,
     setTheme,
     font,
-    setFont
+    setFont,
+    minimizeToTrayOnExit,
+    setMinimizeToTrayOnExit
 }: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -134,6 +139,19 @@ export function SettingsGeneralTab({
                         ]}
                         style={{ fontFamily: getFontFamily(font) }}
                     />
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span className="settings-label" style={{ marginBottom: 0 }}>{t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}</span>
+                    <Switch
+                        checked={minimizeToTrayOnExit}
+                        onChange={setMinimizeToTrayOnExit}
+                    />
+                </div>
+                <div className="settings-hint">
+                    {t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
                 </div>
             </div>
         </div>

@@ -11,6 +11,18 @@ struct DownloadState {
     downloads: Mutex<HashMap<String, Arc<Notify>>>,
 }
 
+/// App settings state
+struct AppSettings {
+    minimize_to_tray: std::sync::Mutex<bool>,
+}
+
+#[tauri::command]
+fn set_minimize_to_tray(state: tauri::State<'_, AppSettings>, enabled: bool) {
+    if let Ok(mut minimize) = state.minimize_to_tray.lock() {
+        *minimize = enabled;
+    }
+}
+
 /// Cancels an active download by its ID.
 ///
 /// # Arguments
@@ -390,14 +402,26 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+                let app = window.app_handle();
+                let state = app.state::<AppSettings>();
+                // Default to true if lock fails (safe fallback)
+                let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
+
+                if minimize {
+                    let _ = window.hide();
+                    api.prevent_close();
+                } else {
+                    app.exit(0);
+                }
             }
         })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .manage(DownloadState {
             downloads: Mutex::new(std::collections::HashMap::new()),
+        })
+        .manage(AppSettings {
+            minimize_to_tray: std::sync::Mutex::new(true),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -412,7 +436,8 @@ pub fn run() {
             hardware::check_gpu_availability,
             force_exit,
             has_active_downloads,
-            update_tray_menu
+            update_tray_menu,
+            set_minimize_to_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import i18n from '../i18n';
 
@@ -36,7 +37,8 @@ export function useAppInitialization() {
                         theme: parsed.theme || 'auto',
                         font: parsed.font || 'system',
                         language: parsed.language || 'auto',
-                        enableTimeline: parsed.enableTimeline ?? true
+                        enableTimeline: parsed.enableTimeline ?? true,
+                        minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true
                     });
 
                     // Apply language immediately
@@ -105,10 +107,18 @@ export function useAppInitialization() {
             theme: config.theme,
             font: config.font,
             language: config.language,
-            enableTimeline: config.enableTimeline
+            enableTimeline: config.enableTimeline,
+            minimizeToTrayOnExit: config.minimizeToTrayOnExit
         };
         localStorage.setItem('sona-config', JSON.stringify(configToSave));
     }, [config, isLoaded]);
+
+    // Sync minimize to tray setting with backend
+    useEffect(() => {
+        if (!isLoaded) return;
+        invoke('set_minimize_to_tray', { enabled: config.minimizeToTrayOnExit ?? true })
+            .catch(e => console.error('Failed to set minimize to tray:', e));
+    }, [config.minimizeToTrayOnExit, isLoaded]);
 
     // Apply font
     useEffect(() => {

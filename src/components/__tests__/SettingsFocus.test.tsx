@@ -60,6 +60,7 @@ vi.mock('../Icons', () => ({
     ModelIcon: () => <span>Icon</span>,
     LocalIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
+    InfoIcon: () => <span>Icon</span>,
     XIcon: () => <span>X</span>
 }));
 
@@ -124,16 +125,16 @@ describe('Settings Focus Trap & Navigation', () => {
         // Reset mock
         setActiveTabMock.mockClear();
 
-        // Arrow Up -> Should switch to 'shortcuts' (loops around from general)
+        // Arrow Up -> Should switch to 'about' (loops around from general)
         fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-        expect(setActiveTabMock).toHaveBeenCalledWith('shortcuts');
+        expect(setActiveTabMock).toHaveBeenCalledWith('about');
 
         // Reset mock
         setActiveTabMock.mockClear();
 
-        // End -> Should switch to 'shortcuts' (last)
+        // End -> Should switch to 'about' (last)
         fireEvent.keyDown(tablist, { key: 'End' });
-        expect(setActiveTabMock).toHaveBeenCalledWith('shortcuts');
+        expect(setActiveTabMock).toHaveBeenCalledWith('about');
 
         // Reset mock
         setActiveTabMock.mockClear();
