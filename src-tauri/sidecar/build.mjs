@@ -6,7 +6,8 @@ import {createRequire} from 'module';
 import {execSync} from 'child_process';
 
 const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const distDir = join(__dirname, 'dist');
 if (!existsSync(distDir)) {
@@ -37,62 +38,18 @@ const __dirname = __pathDirname(__filename);
     // loader: { '.node': 'file' }
 });
 
-// 2. Copy sherpa-onnx.node
-console.log('Copying native bindings...');
+// 2. Copy sherpa-onnx WASM
+console.log('Copying sherpa-onnx WASM...');
 
-const platform = process.platform;
-const arch = process.arch;
-
-let platformName = platform;
-if (platform === 'win32') platformName = 'win';
-
-const packageName = `sherpa-onnx-${platformName}-${arch}`;
-const bindingDir = join(__dirname, 'node_modules', packageName);
-const nodeFileSrc = join(bindingDir, 'sherpa-onnx.node');
-
-console.log(`Looking for binding at: ${nodeFileSrc}`);
-
-if (existsSync(nodeFileSrc)) {
-    const files = readdirSync(bindingDir);
-    for (const file of files) {
-        if (file.endsWith('.node') || file.endsWith('.dll') || file.endsWith('.dylib') || file.endsWith('.so')) {
-            copyFileSync(join(bindingDir, file), join(distDir, file));
-            console.log(`Copied ${file} to dist/`);
-        }
-    }
-
-    if (platform === 'linux') {
-        const runPatchelf = (file) => {
-            try {
-                execSync(`patchelf --set-rpath '$ORIGIN' "${file}"`);
-                console.log(`Patched RPATH for ${file}`);
-            } catch (e) {
-                console.warn(`Failed to patch RPATH for ${file}. If this is a local build, it might be fine. In CI, install patchelf.`);
-            }
-        };
-
-        const distFiles = readdirSync(distDir);
-        for (const file of distFiles) {
-            if (file.endsWith('.node') || file.endsWith('.so') || (file.endsWith('.so') && file.includes('.so.'))) {
-                runPatchelf(join(distDir, file));
-            }
-        }
-
-        // ffmpeg is static, so we can't patch RPATH.
-        // linuxdeploy might complain, but it should be non-fatal if dependencies are found for other files.
-        console.log('Skipping RPATH patch for ffmpeg (static binary).');
-    }
+const wasmFileSrc = join(__dirname, 'node_modules/sherpa-onnx/sherpa-onnx-wasm-nodejs.wasm');
+if (existsSync(wasmFileSrc)) {
+    copyFileSync(wasmFileSrc, join(distDir, 'sherpa-onnx-wasm-nodejs.wasm'));
+    console.log(`Copied sherpa-onnx-wasm-nodejs.wasm to dist/`);
 } else {
-    console.error(`Could not find sherpa-onnx.node at ${nodeFileSrc}`);
-    // List available modules to debug
-    try {
-        const fs = require('fs');
-        const modulesDir = join(__dirname, 'node_modules');
-        const dirs = fs.readdirSync(modulesDir).filter(d => d.startsWith('sherpa-onnx-'));
-        console.log('Available sherpa-onnx modules:', dirs);
-    } catch (e) { }
+    console.error(`Could not find sherpa-onnx-wasm-nodejs.wasm at ${wasmFileSrc}`);
     process.exit(1);
 }
+
 
 // 3. Copy ffmpeg
 console.log('Copying ffmpeg...');
@@ -104,6 +61,7 @@ try {
 }
 
 if (ffmpegSrc && existsSync(ffmpegSrc)) {
+    const platform = process.platform;
     const destName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
     copyFileSync(ffmpegSrc, join(distDir, destName));
     console.log(`Copied ffmpeg to dist/${destName}`);
@@ -112,10 +70,7 @@ if (ffmpegSrc && existsSync(ffmpegSrc)) {
     process.exit(1);
 }
 
-
-
-
-// 5. Copy 7zip
+// 4. Copy 7zip
 console.log('Copying 7zip...');
 let sevenZipSrc;
 try {
@@ -125,6 +80,7 @@ try {
 }
 
 if (sevenZipSrc && existsSync(sevenZipSrc)) {
+    const platform = process.platform;
     const destName = platform === 'win32' ? '7za.exe' : '7za';
     copyFileSync(sevenZipSrc, join(distDir, destName));
     console.log(`Copied 7zip to dist/${destName}`);
@@ -133,4 +89,3 @@ if (sevenZipSrc && existsSync(sevenZipSrc)) {
 }
 
 console.log('Build complete.');
-

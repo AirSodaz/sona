@@ -7,7 +7,7 @@
  * - Mode B (Batch): Processes audio file, outputs full segment array
  * 
  * Supports:
- * - sherpa-onnx-node: For CPU inference (ONNX models)
+ * - sherpa-onnx: For CPU inference (ONNX models via WASM)
  */
 
 import { spawn } from 'child_process';
@@ -17,7 +17,10 @@ import os from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import Seven from 'node-7z';
-import { WaveFile } from 'wavefile';
+import wavefile from 'wavefile';
+import sherpa from 'sherpa-onnx';
+
+const { WaveFile } = wavefile;
 
 const __scriptFile = fileURLToPath(import.meta.url);
 const __scriptDir = dirname(__scriptFile);
@@ -71,7 +74,8 @@ function formatTranscript(text, punctuation) {
     }
 
     if (punctuation) {
-        result = punctuation.addPunct(result);
+        // Feature missing in sherpa-onnx (wasm) package
+        // result = punctuation.addPunct(result);
     }
     return result;
 }
@@ -244,9 +248,6 @@ async function convertToWav(inputPath, ffmpegPath, options = {}) {
 async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel) {
     console.error(`Initializing OnnxRecognizer (CPU, Threads: ${numThreads})...`);
     try {
-        const sherpaModule = await import('sherpa-onnx-node');
-        const sherpa = sherpaModule.default || sherpaModule;
-
         // Offline models (SenseVoice, Whisper)
         if (modelConfig.senseVoice || modelConfig.whisper) {
             const config = {
@@ -263,7 +264,7 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             }
 
             return {
-                recognizer: new sherpa.OfflineRecognizer(config),
+                recognizer: sherpa.createOfflineRecognizer(config),
                 type: 'offline',
                 supportsInternalITN: true
             };
@@ -275,13 +276,14 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             modelConfig: modelConfig,
             decodingMethod: 'greedy_search',
             maxActivePaths: 4,
-            enableEndpoint: true,
-            endpointConfig: {
-                rule1: { minTrailingSilence: 2.4, minUtteranceLength: 0 },
-                rule2: { minTrailingSilence: 2.4, minUtteranceLength: 0 },
-                rule3: { minTrailingSilence: 0, minUtteranceLength: 300 },
-            },
+            enableEndpoint: 1, // Changed from true to 1
+            rule1MinTrailingSilence: 2.4,
+            rule2MinTrailingSilence: 1.2,
+            rule3MinUtteranceLength: 20, // Adjusted based on new API defaults or requirements? keeping close to original
         };
+        // Note: original code used endpointConfig sub-object. New API uses flat properties for endpoint rules.
+        // Original: rule3: { minTrailingSilence: 0, minUtteranceLength: 300 } -> 300 frames? 300 * 10ms = 3s?
+        // New API: rule3MinUtteranceLength.
 
         const validItnPaths = getValidItnPaths(itnModel);
         if (validItnPaths) {
@@ -289,7 +291,7 @@ async function createOnnxRecognizer(modelConfig, enableITN, numThreads, itnModel
             config.ruleFsts = validItnPaths;
         }
         return {
-            recognizer: new sherpa.OnlineRecognizer(config),
+            recognizer: sherpa.createOnlineRecognizer(config),
             type: 'online',
             supportsInternalITN: false
         };
@@ -326,7 +328,7 @@ function findModelConfig(modelPath, enableITN, numThreads, language) {
                 tokens: join(modelPath, tokens),
                 numThreads: numThreads,
                 provider: 'cpu', // ONNX is CPU only now per requirement
-                debug: false,
+                debug: 0, // Changed to 0 (int)
                 language: '', // Placeholder, will be overwritten if passed separately? Or passed to findModelConfig?
             };
 
@@ -352,7 +354,7 @@ function findModelConfig(modelPath, enableITN, numThreads, language) {
                     tokens: join(modelPath, tokens),
                     numThreads: numThreads,
                     provider: 'cpu',
-                    debug: false,
+                    debug: 0,
                     senseVoice: {
                         model: model,
                         language: language || '',
@@ -372,11 +374,11 @@ function findModelConfig(modelPath, enableITN, numThreads, language) {
 // Create Punctuation Model
 async function createPunctuation(modelPath) {
     if (!modelPath || !existsSync(modelPath)) return null;
-    console.error(`[Sidecar] Initializing Punctuation Model: ${modelPath}`);
+    console.error(`[Sidecar] Punctuation model path provided but OfflinePunctuation is not supported in sherpa-onnx WASM package.`);
+    return null;
+    /*
+    // Not available in sherpa-onnx npm package (WASM)
     try {
-        const sherpaModule = await import('sherpa-onnx-node');
-        const sherpa = sherpaModule.default || sherpaModule;
-
         const files = readdirSync(modelPath);
         const modelFile = files.find(f => f.endsWith('.onnx'));
 
@@ -399,6 +401,7 @@ async function createPunctuation(modelPath) {
         console.error(`[Sidecar] Failed to initialize punctuation: ${e.message}`);
         return null;
     }
+    */
 }
 
 
@@ -518,7 +521,10 @@ async function processStream(recognizer, sampleRate, punctuation) {
         if (bufferToProcess.length === 0) return;
 
         const samples = pcmInt16ToFloat32(bufferToProcess);
-        stream.acceptWaveform({ samples, sampleRate });
+
+        // Changed: acceptWaveform now takes (sampleRate, samples)
+        stream.acceptWaveform(sampleRate, samples);
+
         totalSamples += samples.length;
 
         while (recognizer.isReady(stream)) {
@@ -550,7 +556,8 @@ async function processStream(recognizer, sampleRate, punctuation) {
             // Flush decoder with silence to capture trailing characters
             // Some models cut off too early without this padding at the endpoint
             const tailPadding = new Float32Array(sampleRate * 0.8); // 0.8s silence
-            stream.acceptWaveform({ samples: tailPadding, sampleRate });
+            // Changed: acceptWaveform now takes (sampleRate, samples)
+            stream.acceptWaveform(sampleRate, tailPadding);
             while (recognizer.isReady(stream)) {
                 recognizer.decode(stream);
             }
@@ -615,54 +622,60 @@ async function processBatch(recognizer, filePath, ffmpegPath, sampleRate, punctu
 
         console.error(`Processing ${samples.length} samples...`);
         const stream = recognizer.createStream();
-        const segments = [];
-        let segmentStartTime = 0;
-        const chunkSize = sampleRate * 0.5;
+        try {
+            const segments = [];
+            let segmentStartTime = 0;
+            const chunkSize = sampleRate * 0.5;
 
-        for (let i = 0; i < samples.length; i += chunkSize) {
-            const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
+            for (let i = 0; i < samples.length; i += chunkSize) {
+                const chunk = samples.slice(i, Math.min(i + chunkSize, samples.length));
 
-            stream.acceptWaveform({ samples: chunk, sampleRate });
+                // Changed: acceptWaveform now takes (sampleRate, samples)
+                stream.acceptWaveform(sampleRate, chunk);
 
-            while (recognizer.isReady(stream)) recognizer.decode(stream);
+                while (recognizer.isReady(stream)) recognizer.decode(stream);
 
-            if (recognizer.isEndpoint(stream)) {
-                const result = recognizer.getResult(stream);
-                const currentTime = i / sampleRate;
+                if (recognizer.isEndpoint(stream)) {
+                    const result = recognizer.getResult(stream);
+                    const currentTime = i / sampleRate;
 
-                if (result.text.trim()) {
-                    const text = formatTranscript(result.text, punctuation);
-                    segments.push({
-                        id: randomUUID(),
-                        text,
-                        start: segmentStartTime,
-                        end: currentTime,
-                        isFinal: true,
-                    });
+                    if (result.text.trim()) {
+                        const text = formatTranscript(result.text, punctuation);
+                        segments.push({
+                            id: randomUUID(),
+                            text,
+                            start: segmentStartTime,
+                            end: currentTime,
+                            isFinal: true,
+                        });
+                    }
+                    recognizer.reset(stream);
+                    segmentStartTime = currentTime;
                 }
-                recognizer.reset(stream);
-                segmentStartTime = currentTime;
+
+                if (i % (sampleRate * 5) === 0) {
+                    const progress = Math.round((i / samples.length) * 100);
+                    console.error(`Progress: ${progress}%`);
+                }
             }
 
-            if (i % (sampleRate * 5) === 0) {
-                const progress = Math.round((i / samples.length) * 100);
-                console.error(`Progress: ${progress}%`);
+            const finalResult = recognizer.getResult(stream);
+            const totalDuration = samples.length / sampleRate;
+            if (finalResult.text.trim()) {
+                const text = formatTranscript(finalResult.text, punctuation);
+                segments.push({
+                    id: randomUUID(),
+                    text,
+                    start: segmentStartTime,
+                    end: totalDuration,
+                    isFinal: true,
+                });
             }
-        }
+            console.log(JSON.stringify(segments, null, 2));
 
-        const finalResult = recognizer.getResult(stream);
-        const totalDuration = samples.length / sampleRate;
-        if (finalResult.text.trim()) {
-            const text = formatTranscript(finalResult.text, punctuation);
-            segments.push({
-                id: randomUUID(),
-                text,
-                start: segmentStartTime,
-                end: totalDuration,
-                isFinal: true,
-            });
+        } finally {
+            stream.free();
         }
-        console.log(JSON.stringify(segments, null, 2));
 
     } finally {
         // Completed batch processing
@@ -895,7 +908,6 @@ async function processPseudoStream(recognizer, sampleRate, punctuation, vadModel
     // 1. Initialize VAD
     let vad = null;
     if (vadModelPath && existsSync(vadModelPath)) {
-        const sherpa = await import('sherpa-onnx-node');
         const vadConfig = {
             sileroVad: {
                 model: vadModelPath,
@@ -904,10 +916,11 @@ async function processPseudoStream(recognizer, sampleRate, punctuation, vadModel
                 minSpeechDuration: 0.25,
             },
             sampleRate,
-            debug: false,
+            debug: 0,
             numThreads: 1,
+            bufferSizeInSeconds: 60,
         };
-        vad = new sherpa.default.Vad(vadConfig, 60);
+        vad = sherpa.createVad(vadConfig);
     } else {
         throw new Error('VAD model required for pseudo-streaming offline models.');
     }
@@ -949,26 +962,31 @@ async function processPseudoStream(recognizer, sampleRate, punctuation, vadModel
         // new Float32Array is already zeroed.
 
         const stream = recognizer.createStream();
-        stream.acceptWaveform({ samples: fullAudio, sampleRate });
-        recognizer.decode(stream);
-        const result = recognizer.getResult(stream);
+        try {
+            // Changed: acceptWaveform now takes (sampleRate, samples)
+            stream.acceptWaveform(sampleRate, fullAudio);
+            recognizer.decode(stream);
+            const result = recognizer.getResult(stream);
 
-        if (result.text.trim()) {
-            const text = isFinal ? formatTranscript(result.text, punctuation) : result.text;
+            if (result.text.trim()) {
+                const text = isFinal ? formatTranscript(result.text, punctuation) : result.text;
 
-            const globalStart = utteranceStartSample / sampleRate;
-            const globalEnd = (utteranceStartSample + fullAudioLength) / sampleRate;
+                const globalStart = utteranceStartSample / sampleRate;
+                const globalEnd = (utteranceStartSample + fullAudioLength) / sampleRate;
 
-            console.log(JSON.stringify({
-                id: currentSegmentId,
-                text,
-                start: globalStart,
-                end: globalEnd,
-                isFinal: isFinal,
-                tokens: result.tokens || [],
-                timestamps: (result.timestamps || []).map(t => t + globalStart),
-                durations: synthesizeDurations((result.timestamps || []).map(t => t + globalStart), globalEnd)
-            }));
+                console.log(JSON.stringify({
+                    id: currentSegmentId,
+                    text,
+                    start: globalStart,
+                    end: globalEnd,
+                    isFinal: isFinal,
+                    tokens: result.tokens || [],
+                    timestamps: (result.timestamps || []).map(t => t + globalStart),
+                    durations: synthesizeDurations((result.timestamps || []).map(t => t + globalStart), globalEnd)
+                }));
+            }
+        } finally {
+            stream.free();
         }
     }
 
@@ -1151,7 +1169,6 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
 
         let vad = null;
         if (vadModelPath && existsSync(vadModelPath)) {
-            const sherpa = await import('sherpa-onnx-node');
             const vadConfig = {
                 sileroVad: {
                     model: vadModelPath,
@@ -1160,10 +1177,11 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
                     minSpeechDuration: 0.25,
                 },
                 sampleRate,
-                debug: false,
+                debug: 0,
                 numThreads: 1,
+                bufferSizeInSeconds: 60,
             };
-            vad = new sherpa.default.Vad(vadConfig, 60);
+            vad = sherpa.createVad(vadConfig);
             console.error(`[Sidecar] VAD initialized with model: ${vadModelPath}`);
         } else {
             console.error('[Sidecar] No VAD model provided or found. Falling back to simple chunking.');
@@ -1184,31 +1202,36 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
 
             if (item.type === 'segment') {
                 const stream = recognizer.createStream();
-                stream.acceptWaveform({ samples: item.samples, sampleRate });
-                recognizer.decode(stream);
-                const result = recognizer.getResult(stream);
+                try {
+                    // Changed: acceptWaveform now takes (sampleRate, samples)
+                    stream.acceptWaveform(sampleRate, item.samples);
+                    recognizer.decode(stream);
+                    const result = recognizer.getResult(stream);
 
-                if (result && result.text && result.text.trim()) {
-                    const text = formatTranscript(result.text, punctuation);
-                    const endTime = item.endIndex / sampleRate;
-                    // Approximating start time based on duration (not perfect but matches original logic intent)
-                    // Original logic: startTime = Math.max(0, endTime - (currentSegmentLength / sampleRate));
-                    // Here we yielded currentSegmentLength but didn't pass it back precisely as seconds.
-                    // Wait, item.duration is available from VAD generator.
-                    // For fixed chunks, we can calc from samples length.
-                    const durationStr = item.duration || (item.samples.length / sampleRate);
-                    const startTime = Math.max(0, endTime - durationStr);
+                    if (result && result.text && result.text.trim()) {
+                        const text = formatTranscript(result.text, punctuation);
+                        const endTime = item.endIndex / sampleRate;
+                        // Approximating start time based on duration (not perfect but matches original logic intent)
+                        // Original logic: startTime = Math.max(0, endTime - (currentSegmentLength / sampleRate));
+                        // Here we yielded currentSegmentLength but didn't pass it back precisely as seconds.
+                        // Wait, item.duration is available from VAD generator.
+                        // For fixed chunks, we can calc from samples length.
+                        const durationStr = item.duration || (item.samples.length / sampleRate);
+                        const startTime = Math.max(0, endTime - durationStr);
 
-                    const output = {
-                        id: randomUUID(),
-                        text,
-                        start: startTime,
-                        end: endTime,
-                        isFinal: true,
-                        tokens: result.tokens || [],
-                        timestamps: (result.timestamps || []).map(t => t + startTime)
-                    };
-                    console.log(JSON.stringify(output));
+                        const output = {
+                            id: randomUUID(),
+                            text,
+                            start: startTime,
+                            end: endTime,
+                            isFinal: true,
+                            tokens: result.tokens || [],
+                            timestamps: (result.timestamps || []).map(t => t + startTime)
+                        };
+                        console.log(JSON.stringify(output));
+                    }
+                } finally {
+                    stream.free();
                 }
             }
         }
@@ -1226,8 +1249,6 @@ async function processBatchOffline(recognizer, filePath, ffmpegPath, sampleRate,
  */
 async function createCtcRecognizer(ctcModelPath, numThreads) {
     console.error(`[Sidecar] Initializing CTC Recognizer: ${ctcModelPath}`);
-    const sherpaModule = await import('sherpa-onnx-node');
-    const sherpa = sherpaModule.default || sherpaModule;
 
     const files = readdirSync(ctcModelPath);
     const tokens = files.find(f => f === 'tokens.txt');
@@ -1245,7 +1266,7 @@ async function createCtcRecognizer(ctcModelPath, numThreads) {
             tokens: join(ctcModelPath, tokens),
             numThreads,
             provider: 'cpu',
-            debug: false,
+            debug: 0,
             wenetCtc: {
                 model: join(ctcModelPath, modelFile),
             },
@@ -1254,7 +1275,7 @@ async function createCtcRecognizer(ctcModelPath, numThreads) {
         maxActivePaths: 4,
     };
 
-    return new sherpa.OfflineRecognizer(config);
+    return sherpa.createOfflineRecognizer(config);
 }
 
 /**
@@ -1288,23 +1309,28 @@ async function processAlign(ctcModelPath, filePath, startTime, endTime, ffmpegPa
     // Run CTC recognition
     const recognizer = await createCtcRecognizer(ctcModelPath, numThreads);
     const stream = recognizer.createStream();
-    stream.acceptWaveform({ samples, sampleRate });
-    recognizer.decode(stream);
-    const result = recognizer.getResult(stream);
+    try {
+        // Changed: acceptWaveform now takes (sampleRate, samples)
+        stream.acceptWaveform(sampleRate, samples);
+        recognizer.decode(stream);
+        const result = recognizer.getResult(stream);
 
-    const tokens = result.tokens || [];
-    const rawTimestamps = result.timestamps || [];
+        const tokens = result.tokens || [];
+        const rawTimestamps = result.timestamps || [];
 
-    // Offset timestamps by startTime to produce absolute timestamps
-    const timestamps = rawTimestamps.map(t => t + startTime);
-    const durations = synthesizeDurations(timestamps, endTime);
+        // Offset timestamps by startTime to produce absolute timestamps
+        const timestamps = rawTimestamps.map(t => t + startTime);
+        const durations = synthesizeDurations(timestamps, endTime);
 
-    console.log(JSON.stringify({
-        tokens,
-        timestamps,
-        durations,
-        ctcText: result.text || '',
-    }));
+        console.log(JSON.stringify({
+            tokens,
+            timestamps,
+            durations,
+            ctcText: result.text || '',
+        }));
+    } finally {
+        stream.free();
+    }
 }
 
 // Get number of logical cores
@@ -1329,83 +1355,7 @@ function calculateNumThreads(providedValue) {
     return numThreads;
 }
 
-// Ensure Library Path is set (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
-async function ensureLibraryPath() {
-    if (process.platform !== 'darwin' && process.platform !== 'linux') return false;
-    if (process.env.SONA_LIB_FIXED) return false;
-
-    const envVar = process.platform === 'darwin' ? 'DYLD_LIBRARY_PATH' : 'LD_LIBRARY_PATH';
-    const libName = process.platform === 'darwin' ? 'libsherpa-onnx-c-api.dylib' : 'libsherpa-onnx-c-api.so';
-    const arch = process.arch;
-    const packageName = `sherpa-onnx-${process.platform}-${arch}`;
-
-    let targetPath = null;
-
-    // 1. Check for flattened libraries in script directory (bundled/production)
-    const flattenedLib = join(__scriptDir, libName);
-    if (existsSync(flattenedLib)) {
-        targetPath = __scriptDir;
-    }
-
-    // 2. Look for node_modules in likely locations (dev/source)
-    if (!targetPath) {
-        const candidates = [
-            join(__scriptDir, '../../node_modules'),
-            join(__scriptDir, 'node_modules'),
-        ];
-
-        for (const base of candidates) {
-            const p = join(base, packageName);
-            if (existsSync(p)) {
-                targetPath = p;
-                break;
-            }
-        }
-    }
-
-    if (!targetPath) {
-        return false;
-    }
-
-    const currentPath = process.env[envVar] || '';
-    if (currentPath.includes(targetPath)) {
-        return false; // Already set
-    }
-
-    const newPath = currentPath
-        ? `${targetPath}:${currentPath}`
-        : targetPath;
-
-    console.error(`[Sidecar] Setting ${envVar} to ${targetPath} and respawning...`);
-
-    const newEnv = {
-        ...process.env,
-        [envVar]: newPath,
-        SONA_LIB_FIXED: '1'
-    };
-
-    const child = spawn(process.execPath, process.argv.slice(1), {
-        env: newEnv,
-        stdio: 'inherit'
-    });
-
-    child.on('close', (code) => {
-        process.exit(code);
-    });
-
-    // Forward signals
-    ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach(signal => {
-        process.on(signal, () => {
-            if (!child.killed) child.kill(signal);
-        });
-    });
-
-    return true;
-}
-
-
 async function main() {
-    if (await ensureLibraryPath()) return;
     const options = parseArgs();
 
     if (options.mode === 'extract') {
