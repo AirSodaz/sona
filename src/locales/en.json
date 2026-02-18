@@ -193,7 +193,9 @@
         "about_built_with": "Built with",
         "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
         "about_license": "MIT License",
-        "about_source_code": "Source Code"
+        "about_source_code": "Source Code",
+        "minimize_to_tray": "Minimize to tray on exit",
+        "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting."
     },
     "shortcuts": {
         "title": "Keyboard Shortcuts",

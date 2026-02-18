@@ -193,7 +193,9 @@
         "about_built_with": "技术栈",
         "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
         "about_license": "MIT 开源协议",
-        "about_source_code": "源代码"
+        "about_source_code": "源代码",
+        "minimize_to_tray": "退出时最小化到托盘",
+        "minimize_to_tray_hint": "启用后，关闭窗口会将应用最小化到系统托盘，而不是退出程序。"
     },
     "shortcuts": {
         "title": "键盘快捷键",

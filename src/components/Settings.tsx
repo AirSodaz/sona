@@ -45,6 +45,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setTheme,
         font,
         setFont,
+        minimizeToTrayOnExit,
+        setMinimizeToTrayOnExit,
 
         offlineModelPath,
         setOfflineModelPath,
@@ -219,6 +221,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setTheme={setTheme}
                                 font={font}
                                 setFont={setFont}
+                                minimizeToTrayOnExit={minimizeToTrayOnExit}
+                                setMinimizeToTrayOnExit={setMinimizeToTrayOnExit}
                             />
                         )}
 

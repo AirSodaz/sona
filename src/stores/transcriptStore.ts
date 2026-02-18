@@ -206,6 +206,7 @@ const DEFAULT_CONFIG: AppConfig = {
     font: 'system',
     vadBufferSize: 5,
     maxConcurrent: 2,
+    minimizeToTrayOnExit: true,
 };
 
 /**

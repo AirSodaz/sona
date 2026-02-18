@@ -63,4 +63,6 @@ export interface AppConfig {
   ctcModelPath?: string;
   /** Max concurrent transcription tasks. Default: 2. */
   maxConcurrent?: number;
+  /** Whether to minimize to tray on exit. Default: true. */
+  minimizeToTrayOnExit?: boolean;
 }
