@@ -43,7 +43,10 @@
         "source_desktop": "桌面音频",
         "source_select": "选择输入源",
         "visualizer_label": "音频可视化",
-        "timer_label": "录音时长"
+        "timer_label": "录音时长",
+        "caption_mode": "实时字幕",
+        "caption_mode_hint": "悬浮字幕（系统音频）",
+        "caption_active": "实时字幕进行中..."
     },
     "batch": {
         "processing_title": "处理音频中",

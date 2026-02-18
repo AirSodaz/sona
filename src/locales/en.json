@@ -43,7 +43,10 @@
         "source_desktop": "Desktop Audio",
         "source_select": "Select Input Source",
         "visualizer_label": "Audio Visualizer",
-        "timer_label": "Recording duration"
+        "timer_label": "Recording duration",
+        "caption_mode": "Live Caption",
+        "caption_mode_hint": "Floating subtitles from system audio",
+        "caption_active": "Live Caption active..."
     },
     "batch": {
         "processing_title": "Processing Audio",

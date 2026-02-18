@@ -11,6 +11,8 @@ import { splitByPunctuation } from '../utils/segmentUtils';
 import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
 import { TranscriptionOptions } from './TranscriptionOptions';
+import { Switch } from './Switch';
+import { LiveCaptionOverlay } from './LiveCaptionOverlay';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -89,6 +91,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
+    const [isCaptionMode, setIsCaptionMode] = useState(false);
+    const isCaptionModeRef = useRef(false);
+
+    // Sync caption mode ref
+    useEffect(() => {
+        isCaptionModeRef.current = isCaptionMode;
+    }, [isCaptionMode]);
 
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
@@ -189,14 +198,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // Reset player state
         setAudioFile(null);
 
-
-
         setIsInitializing(true);
+
+        // Caption mode always uses desktop audio
+        const effectiveSource = isCaptionMode ? 'desktop' : inputSource;
 
         try {
             let stream: MediaStream;
 
-            if (inputSource === 'desktop') {
+            if (effectiveSource === 'desktop') {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
                     throw new Error(t('live.mic_error') + ': Display media not supported');
                 }
@@ -356,14 +366,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     const parts = splitByPunctuation([segment]);
 
                     if (parts.length > 0) {
-                         // Remove the original ID which might have been upserted as partial
-                         useTranscriptStore.getState().deleteSegment(segment.id);
+                        // Remove the original ID which might have been upserted as partial
+                        useTranscriptStore.getState().deleteSegment(segment.id);
 
-                         // Add all parts
-                         parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
+                        // Add all parts
+                        parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
 
-                         // Set active to the last part
-                         useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                        // Set active to the last part
+                        useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
                     } else {
                         upsertSegmentAndSetActive(segment);
                     }
@@ -377,47 +387,53 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
         );
 
-        // Set up media recorder for full file save
-        const mimeType = getSupportedMimeType();
-        mimeTypeRef.current = mimeType;
-        console.log('[LiveRecord] Using mimeType:', mimeType);
+        // Caption mode: skip MediaRecorder and history (ephemeral)
+        if (!isCaptionModeRef.current) {
+            // Set up media recorder for full file save
+            const mimeType = getSupportedMimeType();
+            mimeTypeRef.current = mimeType;
+            console.log('[LiveRecord] Using mimeType:', mimeType);
 
-        const options = mimeType ? { mimeType } : undefined;
-        mediaRecorderRef.current = new MediaRecorder(stream, options);
-        const chunks: Blob[] = [];
+            const options = mimeType ? { mimeType } : undefined;
+            mediaRecorderRef.current = new MediaRecorder(stream, options);
+            const chunks: Blob[] = [];
 
-        mediaRecorderRef.current.ondataavailable = (e) => {
-            chunks.push(e.data);
-        };
+            mediaRecorderRef.current.ondataavailable = (e) => {
+                chunks.push(e.data);
+            };
 
-        mediaRecorderRef.current.onstop = async () => {
-            const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
-            const blob = new Blob(chunks, { type });
-            const url = URL.createObjectURL(blob);
-            useTranscriptStore.getState().setAudioUrl(url);
+            mediaRecorderRef.current.onstop = async () => {
+                const type = mimeTypeRef.current || mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const blob = new Blob(chunks, { type });
+                const url = URL.createObjectURL(blob);
+                useTranscriptStore.getState().setAudioUrl(url);
 
-            // Wait for sidecar to finalize the last segment before saving
-            await transcriptionService.softStop();
+                // Wait for sidecar to finalize the last segment before saving
+                await transcriptionService.softStop();
 
-            // Save to History (after softStop so final segment is included)
-            const segments = useTranscriptStore.getState().segments;
-            const duration = (Date.now() - startTimeRef.current) / 1000;
+                // Save to History (after softStop so final segment is included)
+                const segments = useTranscriptStore.getState().segments;
+                const duration = (Date.now() - startTimeRef.current) / 1000;
 
-            // Only save if we have data (segments or substantial audio)
-            if (segments.length > 0 || duration > 1.0) {
-                try {
-                    const newItem = await historyService.saveRecording(blob, segments, duration);
-                    if (newItem) {
-                        useHistoryStore.getState().addItem(newItem);
-                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                // Only save if we have data (segments or substantial audio)
+                if (segments.length > 0 || duration > 1.0) {
+                    try {
+                        const newItem = await historyService.saveRecording(blob, segments, duration);
+                        if (newItem) {
+                            useHistoryStore.getState().addItem(newItem);
+                            useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                        }
+                    } catch (err) {
+                        console.error('Failed to save history:', err);
                     }
-                } catch (err) {
-                    console.error('Failed to save history:', err);
                 }
-            }
-        };
+            };
 
-        mediaRecorderRef.current.start();
+            mediaRecorderRef.current.start();
+        } else {
+            console.log('[LiveRecord] Caption mode: skipping MediaRecorder (ephemeral)');
+        }
+
         setIsRecording(true);
         setIsPaused(false);
         isRecordingRef.current = true;
@@ -460,7 +476,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
 
     // Stop recording
-    function stopRecording(): void {
+    async function stopRecording(): Promise<void> {
+        const wasCaptionMode = isCaptionModeRef.current;
+
         // Immediate UI Update
         setIsRecording(false);
         setIsPaused(false);
@@ -483,7 +501,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.suspend().catch(e => console.error('Error suspending AudioContext:', e));
-            // Don't close, just suspend to reuse or let it be closed by unmount
         }
 
         // Clear visualizer
@@ -492,10 +509,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (canvas && ctx) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
+
+        // Caption mode: finalize and clear ephemeral data
+        if (wasCaptionMode) {
+            await transcriptionService.softStop();
+            clearSegments();
+        }
     }
 
     function getRecordingStatusText(): string {
         if (isRecording) {
+            if (isCaptionMode) {
+                return isPaused ? t('live.recording_paused') : t('live.caption_active');
+            }
             return isPaused ? t('live.recording_paused') : t('live.recording_active');
         }
         return t('live.start_hint');
@@ -664,7 +690,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     )}
                 </div>
 
-                {!isRecording && (
+                {!isRecording && !isCaptionMode && (
                     <div className="input-source-selector">
                         <div className="source-select-wrapper">
                             {getSourceIcon(inputSource)}
@@ -687,6 +713,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 </p>
             </div>
 
+            <div className="live-caption-toggle">
+                <Switch
+                    checked={isCaptionMode}
+                    onChange={setIsCaptionMode}
+                    label={t('live.caption_mode')}
+                    disabled={isRecording}
+                />
+                <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
+            </div>
+
             <TranscriptionOptions
                 enableTimeline={enableTimeline}
                 setEnableTimeline={setEnableTimeline}
@@ -694,6 +730,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 setLanguage={setLanguage}
                 disabled={isRecording}
             />
+
+            {isCaptionMode && isRecording && <LiveCaptionOverlay />}
         </div>
     );
 }

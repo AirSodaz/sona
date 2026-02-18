@@ -148,7 +148,17 @@ describe('LiveRecord', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        // Reset store state to prevent leaking between tests
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        act(() => {
+            useTranscriptStore.setState({
+                isRecording: false,
+                isPaused: false,
+                segments: [],
+                audioUrl: null,
+            });
+        });
         vi.useRealTimers();
         vi.clearAllMocks();
     });
