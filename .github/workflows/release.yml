@@ -29,6 +29,8 @@ jobs:
             args: ""
           - platform: "windows-latest"
             args: ""
+          - platform: "windows-latest"
+            args: "--target aarch64-pc-windows-msvc"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -45,7 +47,7 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '') }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && (startsWith(matrix.platform, 'windows') && 'aarch64-pc-windows-msvc' || 'aarch64-unknown-linux-gnu') || '') }}
 
       - name: Node.js setup
         uses: actions/setup-node@v4
@@ -55,6 +57,18 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install --legacy-peer-deps
+
+      - name: Setup Sidecar for Target
+        if: contains(matrix.args, '--target')
+        shell: bash
+        run: |
+          ARGS="${{ matrix.args }}"
+          # Extract target: remove everything before '--target '
+          TARGET_TEMP="${ARGS#*--target }"
+          # Remove everything after the first space (if any)
+          TARGET="${TARGET_TEMP%% *}"
+          echo "Detected target: $TARGET"
+          node scripts/setup-sidecar.js "$TARGET"
 
       - name: Build the app
         env:
@@ -184,6 +198,7 @@ jobs:
           MACOS_AARCH64_SIG=$(read_sig "*_aarch64.app.tar.gz.sig")
           MACOS_X64_SIG=$(read_sig "*_x64.app.tar.gz.sig")
           WINDOWS_NSIS_SIG=$(read_sig "*_x64-setup.exe.sig")
+          WINDOWS_ARM64_SIG=$(read_sig "*_aarch64-setup.exe.sig")
           LINUX_AMD64_SIG=$(read_sig "*_amd64.AppImage.sig")
           LINUX_AARCH64_SIG=$(read_sig "*_aarch64.AppImage.sig")
 
@@ -191,18 +206,21 @@ jobs:
           [ -n "$MACOS_AARCH64_SIG" ] && echo "  macOS aarch64: YES" || echo "  macOS aarch64: NO"
           [ -n "$MACOS_X64_SIG" ] && echo "  macOS x64: YES" || echo "  macOS x64: NO"
           [ -n "$WINDOWS_NSIS_SIG" ] && echo "  Windows x64: YES" || echo "  Windows x64: NO"
+          [ -n "$WINDOWS_ARM64_SIG" ] && echo "  Windows arm64: YES" || echo "  Windows arm64: NO"
           [ -n "$LINUX_AMD64_SIG" ] && echo "  Linux amd64: YES" || echo "  Linux amd64: NO"
 
           # Find filenames to construct URLs accurately
           MACOS_AARCH64_FILE=$(find_filename "*_aarch64.app.tar.gz")
           MACOS_X64_FILE=$(find_filename "*_x64.app.tar.gz")
           WINDOWS_NSIS_FILE=$(find_filename "*_x64-setup.exe")
+          WINDOWS_ARM64_FILE=$(find_filename "*_aarch64-setup.exe")
           LINUX_AMD64_FILE=$(find_filename "*_amd64.AppImage")
 
           # Fallback if find fails but sig exists (unlikely)
           [ -z "$MACOS_AARCH64_FILE" ] && MACOS_AARCH64_FILE="${APP_NAME}_aarch64.app.tar.gz"
           [ -z "$MACOS_X64_FILE" ] && MACOS_X64_FILE="${APP_NAME}_x64.app.tar.gz"
           [ -z "$WINDOWS_NSIS_FILE" ] && WINDOWS_NSIS_FILE="${APP_NAME}_${VER}_x64-setup.exe"
+          [ -z "$WINDOWS_ARM64_FILE" ] && WINDOWS_ARM64_FILE="${APP_NAME}_${VER}_aarch64-setup.exe"
           [ -z "$LINUX_AMD64_FILE" ] && LINUX_AMD64_FILE="${APP_NAME}_${VER}_amd64.AppImage"
 
           # Build updater.json
@@ -214,10 +232,12 @@ jobs:
             --arg mac_a64_sig "$MACOS_AARCH64_SIG" \
             --arg mac_x64_sig "$MACOS_X64_SIG" \
             --arg win_nsis_sig "$WINDOWS_NSIS_SIG" \
+            --arg win_arm64_sig "$WINDOWS_ARM64_SIG" \
             --arg linux_amd64_sig "$LINUX_AMD64_SIG" \
             --arg mac_a64_file "$MACOS_AARCH64_FILE" \
             --arg mac_x64_file "$MACOS_X64_FILE" \
             --arg win_nsis_file "$WINDOWS_NSIS_FILE" \
+            --arg win_arm64_file "$WINDOWS_ARM64_FILE" \
             --arg linux_amd64_file "$LINUX_AMD64_FILE" \
             '{
               version: $version,
@@ -235,6 +255,10 @@ jobs:
                 "windows-x86_64": {
                   url: "\($dl)/\($win_nsis_file)",
                   signature: $win_nsis_sig
+                },
+                "windows-aarch64": {
+                  url: "\($dl)/\($win_arm64_file)",
+                  signature: $win_arm64_sig
                 },
                 "linux-x86_64": {
                   url: "\($dl)/\($linux_amd64_file)",

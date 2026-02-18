@@ -16,6 +16,7 @@ const NODE_VERSION = 'v22.22.0';
  */
 const TARGETS = {
   'win32-x64': 'x86_64-pc-windows-msvc',
+  'win32-arm64': 'aarch64-pc-windows-msvc',
   'linux-x64': 'x86_64-unknown-linux-gnu',
   'darwin-x64': 'x86_64-apple-darwin',
   'darwin-arm64': 'aarch64-apple-darwin',
@@ -118,7 +119,9 @@ async function setupNode(targetTriple) {
 
   if (nodePlatform === 'win32') {
     // Windows: Download node.exe directly
-    const url = `https://nodejs.org/dist/${NODE_VERSION}/win-x64/node.exe`;
+    // Force x64 for Windows ARM64 because we rely on x64 emulation for native dependencies (sherpa-onnx)
+    const nodeWinArch = 'x64';
+    const url = `https://nodejs.org/dist/${NODE_VERSION}/win-${nodeWinArch}/node.exe`;
     await downloadFile(url, binaryPath);
   } else {
     // Unix: Download tar.gz and extract
