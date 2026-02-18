@@ -12,7 +12,7 @@ import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
 import { TranscriptionOptions } from './TranscriptionOptions';
 import { Switch } from './Switch';
-import { LiveCaptionOverlay } from './LiveCaptionOverlay';
+import { captionWindowService } from '../services/captionWindowService';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -91,7 +91,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
-    const [isCaptionMode, setIsCaptionMode] = useState(false);
+    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+    const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const isCaptionModeRef = useRef(false);
 
     // Sync caption mode ref
@@ -361,6 +362,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             (segment) => {
                 console.log('[LiveRecord] Received segment:', segment);
 
+                // Caption mode: skip timeline split, just upsert directly (ephemeral)
+                if (isCaptionModeRef.current) {
+                    upsertSegmentAndSetActive(segment);
+                    return;
+                }
+
                 // If timeline mode is enabled and segment is final, we split it
                 if (enableTimelineRef.current && segment.isFinal) {
                     const parts = splitByPunctuation([segment]);
@@ -432,6 +439,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             mediaRecorderRef.current.start();
         } else {
             console.log('[LiveRecord] Caption mode: skipping MediaRecorder (ephemeral)');
+        }
+
+        if (isCaptionModeRef.current) {
+            captionWindowService.open().catch(e => console.error('Failed to open caption window:', e));
         }
 
         setIsRecording(true);
@@ -514,6 +525,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (wasCaptionMode) {
             await transcriptionService.softStop();
             clearSegments();
+            captionWindowService.close().catch(e => console.error('Failed to close caption window:', e));
         }
     }
 
@@ -730,8 +742,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 setLanguage={setLanguage}
                 disabled={isRecording}
             />
-
-            {isCaptionMode && isRecording && <LiveCaptionOverlay />}
         </div>
     );
 }

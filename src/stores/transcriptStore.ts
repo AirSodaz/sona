@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
+import { captionWindowService } from '../services/captionWindowService';
 
 /** State interface for the transcript store. */
 interface TranscriptState {
@@ -36,6 +37,8 @@ interface TranscriptState {
     isPlaying: boolean;
     /** Whether recording is currently active. */
     isRecording: boolean;
+    /** Whether caption mode is active. */
+    isCaptionMode: boolean;
     /** Whether recording is currently paused. */
     isPaused: boolean;
     /** Timestamp of the last user-initiated seek. */
@@ -171,6 +174,8 @@ interface TranscriptState {
     setIsPlaying: (isPlaying: boolean) => void;
     /** Sets the recording state. */
     setIsRecording: (isRecording: boolean) => void;
+    /** Sets the caption mode state. */
+    setIsCaptionMode: (isCaptionMode: boolean) => void;
     /** Sets the recording paused state. */
     setIsPaused: (isPaused: boolean) => void;
     /**
@@ -227,6 +232,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     currentTime: 0,
     isPlaying: false,
     isRecording: false,
+    isCaptionMode: false,
     isPaused: false,
     lastSeekTimestamp: 0,
     seekRequest: null,
@@ -256,10 +262,24 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     upsertSegmentAndSetActive: (segment) => {
         set((state) => {
             const result = calculateSegmentUpdate(state.segments, segment);
+            // In caption mode, trim old segments to prevent unbounded growth
+            const MAX_CAPTION_SEGMENTS = 50;
+            const needsTrim = state.isCaptionMode && result.segments.length > MAX_CAPTION_SEGMENTS;
+            const segments = needsTrim
+                ? result.segments.slice(-MAX_CAPTION_SEGMENTS)
+                : result.segments;
+
+            // Broadcast to caption window if active
+            if (state.isCaptionMode) {
+                // Send only the last few for display efficiency, though window handles it
+                const displaySegments = segments.slice(-3);
+                captionWindowService.sendSegments(displaySegments).catch(console.error);
+            }
+
             return {
-                segments: result.segments,
+                segments,
                 activeSegmentId: segment.id,
-                activeSegmentIndex: result.index
+                activeSegmentIndex: needsTrim ? segments.length - 1 : result.index
             };
         });
     },
@@ -389,6 +409,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
     setIsRecording: (isRecording) => set({ isRecording }),
+    setIsCaptionMode: (isCaptionMode) => set({ isCaptionMode }),
     setIsPaused: (isPaused) => set({ isPaused }),
     requestSeek: (time) => {
         const state = get();

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useShallow } from 'zustand/react/shallow';
 
 /** Props for the LiveCaptionOverlay component. */
 interface LiveCaptionOverlayProps {
@@ -17,7 +18,11 @@ interface LiveCaptionOverlayProps {
  * @return The rendered overlay, or null if no segments exist.
  */
 export function LiveCaptionOverlay({ maxLines = 3 }: LiveCaptionOverlayProps): React.ReactElement | null {
-    const segments = useTranscriptStore((state) => state.segments);
+    // Subscribe only to the visible slice; useShallow prevents re-renders
+    // when the slice content hasn't changed (shallow comparison).
+    const visibleSegments = useTranscriptStore(
+        useShallow((state) => state.segments.slice(-maxLines))
+    );
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom when new segments arrive
@@ -25,9 +30,7 @@ export function LiveCaptionOverlay({ maxLines = 3 }: LiveCaptionOverlayProps): R
         if (containerRef.current) {
             containerRef.current.scrollTop = containerRef.current.scrollHeight;
         }
-    }, [segments]);
-
-    const visibleSegments = segments.slice(-maxLines);
+    }, [visibleSegments]);
 
     if (visibleSegments.length === 0) {
         return null;

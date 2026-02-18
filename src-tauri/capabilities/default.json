@@ -3,12 +3,16 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main"
+    "main",
+    "caption"
   ],
   "permissions": [
     "core:default",
     "opener:default",
     "dialog:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-start-dragging",
+    "core:event:default",
     "dialog:allow-save",
     "dialog:allow-open",
     "fs:default",

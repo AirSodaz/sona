@@ -12,6 +12,7 @@ import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
+// import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -30,6 +31,8 @@ function App(): React.JSX.Element {
   const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'models' | 'local' | 'shortcuts' | 'about'>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
+  // const isRecording = useTranscriptStore((state) => state.isRecording);
+  // const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
   const { t } = useTranslation();
 
   // Run application initialization logic
@@ -76,7 +79,11 @@ function App(): React.JSX.Element {
               <h2>{mode === 'live' ? t('panel.live_record') : mode === 'history' ? t('history.title') : t('panel.batch_import')}</h2>
             </div>
             <div className="panel-content">
-              {mode === 'live' ? <LiveRecord /> : mode === 'history' ? <HistoryView /> : <BatchImport />}
+              <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
+                <LiveRecord />
+              </div>
+              {mode === 'history' && <HistoryView />}
+              {mode === 'batch' && <BatchImport />}
             </div>
           </div>
 
@@ -92,6 +99,9 @@ function App(): React.JSX.Element {
           </div>
         </div>
       </main>
+
+      {/* Live Caption Overlay - rendered at app level to survive tab switches */}
+      {/* {isCaptionMode && isRecording && <LiveCaptionOverlay />} */}
 
       {/* Settings Modal */}
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />
