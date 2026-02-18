@@ -69,10 +69,23 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
 
-    const [isRecording, setIsRecording] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
+    const isRecording = useTranscriptStore((state) => state.isRecording);
+    const isPaused = useTranscriptStore((state) => state.isPaused);
+    const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
+    const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
+
     const isRecordingRef = useRef(false); // Use ref to track recording state for closure
     const isPausedRef = useRef(false);
+
+    // Sync refs with store state
+    useEffect(() => {
+        isRecordingRef.current = isRecording;
+    }, [isRecording]);
+
+    useEffect(() => {
+        isPausedRef.current = isPaused;
+    }, [isPaused]);
+
     const mimeTypeRef = useRef<string>('');
     const [isInitializing, setIsInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');

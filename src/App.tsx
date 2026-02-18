@@ -16,6 +16,7 @@ import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
+import { useTrayHandling } from './hooks/useTrayHandling';
 
 /**
  * Main application component.
@@ -26,6 +27,7 @@ import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
  */
 function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'models' | 'local' | 'shortcuts' | 'about'>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const { t } = useTranslation();
@@ -35,6 +37,9 @@ function App(): React.JSX.Element {
 
   // Initialize auto-save hook
   useAutoSaveTranscript();
+
+  // Handle tray events
+  useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
 
   return (
     <div className="app">
@@ -89,7 +94,7 @@ function App(): React.JSX.Element {
       </main>
 
       {/* Settings Modal */}
-      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />
       <GlobalDialog />
       <FirstRunGuide />
     </div>
