@@ -228,5 +228,14 @@
         "downloading": "下载中...",
         "success": "下载完成",
         "error": "下载失败"
+    },
+    "tray": {
+        "show": "显示主窗口",
+        "settings": "设置",
+        "check_updates": "检查更新",
+        "quit": "退出",
+        "quit_warning_title": "有正在进行的任务",
+        "quit_warning_message": "您有正在进行的任务（录音、下载或处理中）。现在退出将终止它们。\n\n确定要退出吗？",
+        "quit_confirm": "仍要退出"
     }
 }

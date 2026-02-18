@@ -363,24 +363,24 @@ pub fn run() {
                     })
                     .on_tray_icon_event(|tray, event| {
                         use tauri::tray::{MouseButton, TrayIconEvent};
-                        if let TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            ..
-                        } = event
-                        {
+                        let should_show = match event {
+                            TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                ..
+                            } => true,
+                            TrayIconEvent::DoubleClick {
+                                button: MouseButton::Left,
+                                ..
+                            } => true,
+                            _ => false,
+                        };
+
+                        if should_show {
                             let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
-                                let is_visible = window.is_visible().unwrap_or(false);
-                                let is_minimized = window.is_minimized().unwrap_or(false);
-                                let is_focused = window.is_focused().unwrap_or(false);
-
-                                if is_visible && !is_minimized && is_focused {
-                                    let _ = window.hide();
-                                } else {
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                }
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
                             }
                         }
                     })
