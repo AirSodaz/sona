@@ -55,6 +55,40 @@ async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<
     Ok(!downloads.is_empty())
 }
 
+#[tauri::command]
+async fn update_tray_menu<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    show_text: String,
+    settings_text: String,
+    updates_text: String,
+    quit_text: String,
+) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        use tauri::menu::{Menu, MenuItem};
+        let show_i = MenuItem::with_id(&app, "show", &show_text, true, None::<&str>).map_err(|e| e.to_string())?;
+        let settings_i = MenuItem::with_id(&app, "settings", &settings_text, true, None::<&str>).map_err(|e| e.to_string())?;
+        let updates_i = MenuItem::with_id(&app, "check_updates", &updates_text, true, None::<&str>).map_err(|e| e.to_string())?;
+        let quit_i = MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>).map_err(|e| e.to_string())?;
+
+        let menu = Menu::with_items(
+            &app,
+            &[
+                &show_i,
+                &settings_i,
+                &updates_i,
+                &tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?,
+                &quit_i,
+            ],
+        ).map_err(|e| e.to_string())?;
+
+        if let Some(tray) = app.tray_by_id("main-tray") {
+            tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 /// Extracts a `.tar.bz2` archive to a target directory.
 ///
 /// Runs in a blocking thread to avoid stalling the async runtime.
@@ -265,6 +299,7 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
+                use tauri::image::Image;
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
@@ -286,7 +321,10 @@ pub fn run() {
                     ],
                 )?;
 
+                let icon = Image::from_bytes(include_bytes!("../icons/128x128.png"))?;
+
                 let _tray = TrayIconBuilder::with_id("main-tray")
+                    .icon(icon)
                     .menu(&menu)
                     .show_menu_on_left_click(false)
                     .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -333,7 +371,10 @@ pub fn run() {
                             let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
                                 let is_visible = window.is_visible().unwrap_or(false);
-                                if is_visible {
+                                let is_minimized = window.is_minimized().unwrap_or(false);
+                                let is_focused = window.is_focused().unwrap_or(false);
+
+                                if is_visible && !is_minimized && is_focused {
                                     let _ = window.hide();
                                 } else {
                                     let _ = window.unminimize();
@@ -370,7 +411,8 @@ pub fn run() {
             cancel_download,
             hardware::check_gpu_availability,
             force_exit,
-            has_active_downloads
+            has_active_downloads,
+            update_tray_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

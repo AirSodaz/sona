@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 
@@ -17,6 +18,24 @@ export function useTrayHandling(
     setSettingsInitialTab: (tab: 'general' | 'about') => void
 ) {
     const { confirm } = useDialogStore();
+    const { t, i18n } = useTranslation();
+
+    // Update tray menu language when locale changes
+    useEffect(() => {
+        const updateTray = async () => {
+            try {
+                await invoke('update_tray_menu', {
+                    showText: t('tray.show'),
+                    settingsText: t('tray.settings'),
+                    updatesText: t('tray.check_updates'),
+                    quitText: t('tray.quit')
+                });
+            } catch (err) {
+                console.warn('Failed to update tray menu language:', err);
+            }
+        };
+        updateTray();
+    }, [i18n.language, t]);
 
     useEffect(() => {
         let isMounted = true;
@@ -60,12 +79,12 @@ export function useTrayHandling(
 
                     if (isRecording || isProcessing || hasDownloads) {
                         const confirmed = await confirm(
-                            'You have active tasks running (recording, downloading, or processing). Quitting now will terminate them.\n\nAre you sure you want to quit?',
+                            t('tray.quit_warning_message'),
                             {
-                                title: 'Active Tasks Running',
+                                title: t('tray.quit_warning_title'),
                                 variant: 'warning',
-                                confirmLabel: 'Quit Anyway',
-                                cancelLabel: 'Cancel'
+                                confirmLabel: t('tray.quit_confirm'),
+                                cancelLabel: t('common.cancel')
                             }
                         );
 
