@@ -2,25 +2,76 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 
-// Mock transcription service
-vi.mock('../../services/transcriptionService', () => ({
-    transcriptionService: {
-        start: vi.fn().mockResolvedValue(undefined),
-        stop: vi.fn().mockResolvedValue(undefined),
-        softStop: vi.fn().mockResolvedValue(undefined),
-        sendAudioInt16: vi.fn(),
-        setModelPath: vi.fn(),
-        setLanguage: vi.fn(),
-        setEnableITN: vi.fn(),
-        setITNModelPaths: vi.fn(),
-        setPunctuationModelPath: vi.fn(),
-        setCtcModelPath: vi.fn(),
-        setVadModelPath: vi.fn(),
-        setVadBufferSize: vi.fn(),
-        prepare: vi.fn().mockResolvedValue(undefined),
-        terminate: vi.fn().mockResolvedValue(undefined),
-    }
+// Hoist mocks to share between singleton and class instances
+const {
+    mockStart,
+    mockStop,
+    mockSoftStop,
+    mockPrepare,
+    mockSendAudioInt16,
+    mockSetModelPath,
+    mockSetLanguage,
+    mockSetEnableITN,
+    mockSetITNModelPaths,
+    mockSetPunctuationModelPath,
+    mockSetCtcModelPath,
+    mockSetVadModelPath,
+    mockSetVadBufferSize,
+    mockTerminate
+} = vi.hoisted(() => ({
+    mockStart: vi.fn().mockResolvedValue(undefined),
+    mockStop: vi.fn().mockResolvedValue(undefined),
+    mockSoftStop: vi.fn().mockResolvedValue(undefined),
+    mockPrepare: vi.fn().mockResolvedValue(undefined),
+    mockSendAudioInt16: vi.fn(),
+    mockSetModelPath: vi.fn(),
+    mockSetLanguage: vi.fn(),
+    mockSetEnableITN: vi.fn(),
+    mockSetITNModelPaths: vi.fn(),
+    mockSetPunctuationModelPath: vi.fn(),
+    mockSetCtcModelPath: vi.fn(),
+    mockSetVadModelPath: vi.fn(),
+    mockSetVadBufferSize: vi.fn(),
+    mockTerminate: vi.fn().mockResolvedValue(undefined),
 }));
+
+// Mock transcription service
+vi.mock('../../services/transcriptionService', () => {
+    return {
+        transcriptionService: {
+            start: mockStart,
+            stop: mockStop,
+            softStop: mockSoftStop,
+            sendAudioInt16: mockSendAudioInt16,
+            setModelPath: mockSetModelPath,
+            setLanguage: mockSetLanguage,
+            setEnableITN: mockSetEnableITN,
+            setITNModelPaths: mockSetITNModelPaths,
+            setPunctuationModelPath: mockSetPunctuationModelPath,
+            setCtcModelPath: mockSetCtcModelPath,
+            setVadModelPath: mockSetVadModelPath,
+            setVadBufferSize: mockSetVadBufferSize,
+            prepare: mockPrepare,
+            terminate: mockTerminate,
+        },
+        TranscriptionService: class {
+            start = mockStart;
+            stop = mockStop;
+            softStop = mockSoftStop;
+            sendAudioInt16 = mockSendAudioInt16;
+            setModelPath = mockSetModelPath;
+            setLanguage = mockSetLanguage;
+            setEnableITN = mockSetEnableITN;
+            setITNModelPaths = mockSetITNModelPaths;
+            setPunctuationModelPath = mockSetPunctuationModelPath;
+            setCtcModelPath = mockSetCtcModelPath;
+            setVadModelPath = mockSetVadModelPath;
+            setVadBufferSize = mockSetVadBufferSize;
+            prepare = mockPrepare;
+            terminate = mockTerminate;
+        }
+    };
+});
 
 // Mock model service
 vi.mock('../../services/modelService', () => ({
@@ -168,6 +219,12 @@ describe('LiveRecord', () => {
                 config: { ...useTranscriptStore.getState().config, offlineModelPath: '/path/to/model' }
             });
         });
+
+        // Reset mocks
+        mockStart.mockClear();
+        mockStop.mockClear();
+        mockSoftStop.mockClear();
+        mockPrepare.mockClear();
     });
 
     afterEach(async () => {
@@ -203,7 +260,7 @@ describe('LiveRecord', () => {
     it('should start caption mode independently without recording', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         const { captionWindowService } = await import('../../services/captionWindowService');
-        const { transcriptionService } = await import('../../services/transcriptionService');
+        // We use mockStart which intercepts calls to any TranscriptionService instance (singleton or new)
 
         render(<LiveRecord />);
         const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
@@ -219,7 +276,7 @@ describe('LiveRecord', () => {
 
         // Check services
         expect(captionWindowService.open).toHaveBeenCalled();
-        expect(transcriptionService.start).toHaveBeenCalled();
+        expect(mockStart).toHaveBeenCalled();
     });
 
     it('should allow recording while caption mode is active', async () => {
