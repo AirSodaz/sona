@@ -15,6 +15,13 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const processorRef = useRef<AudioWorkletNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+    // Track active state to handle race conditions
+    const activeRef = useRef(isCaptionMode);
+
+    useEffect(() => {
+        activeRef.current = isCaptionMode;
+    }, [isCaptionMode]);
+
     // Helper to update service config from AppConfig
     const updateServiceConfig = useCallback(async (service: TranscriptionService) => {
         service.setModelPath(config.offlineModelPath);
@@ -88,6 +95,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             setIsInitializing(true);
             console.log('[CaptionSession] Starting caption session...');
 
+            if (!activeRef.current) return;
+
             // 1. Get Desktop Stream
             if (!streamRef.current) {
                 let stream: MediaStream;
@@ -105,6 +114,12 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         }
                     });
 
+                    // Check active again after async
+                    if (!activeRef.current) {
+                        stream.getTracks().forEach(t => t.stop());
+                        return;
+                    }
+
                     const audioTracks = stream.getAudioTracks();
                     if (audioTracks.length === 0) {
                         throw new Error('No audio track selected in screen share.');
@@ -121,23 +136,45 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         // Ideally we'd accept setIsCaptionMode as a prop.
                     };
                 } catch (err) {
+                    if (!activeRef.current) return;
                     console.error('[CaptionSession] Failed to get display media:', err);
                     throw err;
                 }
             }
 
+            if (!activeRef.current) return;
+
             // 2. Initialize Audio Context
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
                 const audioContext = new AudioContext({ sampleRate: 16000 });
                 audioContextRef.current = audioContext;
-                await audioContext.audioWorklet.addModule('/audio-processor.js');
+                try {
+                    await audioContext.audioWorklet.addModule('/audio-processor.js');
+                } catch (e) {
+                     if (!activeRef.current) {
+                         await audioContext.close();
+                         audioContextRef.current = null;
+                         return;
+                     }
+                     throw e;
+                }
             } else if (audioContextRef.current.state === 'suspended') {
                 await audioContextRef.current.resume();
+            }
+
+            if (!activeRef.current) {
+                if (audioContextRef.current) {
+                    await audioContextRef.current.close();
+                    audioContextRef.current = null;
+                }
+                return;
             }
 
             // 3. Configure Service
             const service = serviceRef.current;
             await updateServiceConfig(service);
+
+            if (!activeRef.current) return;
 
             // 4. Start Service
             await service.start(
@@ -148,6 +185,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     console.error('[CaptionSession] Service error:', error);
                 }
             );
+
+            if (!activeRef.current) {
+                await service.stop();
+                return;
+            }
 
             // 5. Connect Audio Pipeline
             if (!processorRef.current && audioContextRef.current && streamRef.current) {
@@ -164,6 +206,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 source.connect(processor);
                 processor.connect(audioContextRef.current.destination);
             }
+
+            if (!activeRef.current) return;
 
             // 6. Open Window
             await captionWindowService.open();

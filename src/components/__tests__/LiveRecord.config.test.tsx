@@ -10,24 +10,40 @@ const { mockSetLanguage, mockPrepare } = vi.hoisted(() => {
 });
 
 // Mock transcription service
-vi.mock('../../services/transcriptionService', () => ({
-    transcriptionService: {
-        start: vi.fn().mockResolvedValue(undefined),
-        stop: vi.fn().mockResolvedValue(undefined),
-        softStop: vi.fn().mockResolvedValue(undefined),
-        sendAudioInt16: vi.fn(),
-        setModelPath: vi.fn(),
-        setLanguage: mockSetLanguage,
-        setEnableITN: vi.fn(),
-        setITNModelPaths: vi.fn(),
-        setPunctuationModelPath: vi.fn(),
-        setCtcModelPath: vi.fn(),
-        setVadModelPath: vi.fn(),
-        setVadBufferSize: vi.fn(),
-        prepare: mockPrepare,
-        terminate: vi.fn().mockResolvedValue(undefined),
-    }
-}));
+vi.mock('../../services/transcriptionService', () => {
+    return {
+        transcriptionService: {
+            start: vi.fn().mockResolvedValue(undefined),
+            stop: vi.fn().mockResolvedValue(undefined),
+            softStop: vi.fn().mockResolvedValue(undefined),
+            sendAudioInt16: vi.fn(),
+            setModelPath: vi.fn(),
+            setLanguage: mockSetLanguage,
+            setEnableITN: vi.fn(),
+            setITNModelPaths: vi.fn(),
+            setPunctuationModelPath: vi.fn(),
+            setCtcModelPath: vi.fn(),
+            setVadModelPath: vi.fn(),
+            setVadBufferSize: vi.fn(),
+            prepare: mockPrepare,
+            terminate: vi.fn().mockResolvedValue(undefined),
+        },
+        TranscriptionService: class {
+            start = vi.fn().mockResolvedValue(undefined);
+            stop = vi.fn().mockResolvedValue(undefined);
+            setModelPath = vi.fn();
+            setLanguage = vi.fn();
+            setEnableITN = vi.fn();
+            setITNModelPaths = vi.fn();
+            setPunctuationModelPath = vi.fn();
+            setCtcModelPath = vi.fn();
+            setVadModelPath = vi.fn();
+            setVadBufferSize = vi.fn();
+            prepare = vi.fn().mockResolvedValue(undefined);
+            terminate = vi.fn().mockResolvedValue(undefined);
+        }
+    };
+});
 
 // Mock model service
 vi.mock('../../services/modelService', () => ({
