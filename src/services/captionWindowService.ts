@@ -4,6 +4,7 @@ import { TranscriptSegment } from '../types/transcript';
 
 const CAPTION_WINDOW_LABEL = 'caption';
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
+const CAPTION_EVENT_CLOSE = 'caption:close';
 
 class CaptionWindowService {
     private windowInstance: WebviewWindow | null = null;
@@ -53,14 +54,16 @@ class CaptionWindowService {
     /**
      * Closes the caption window if it exists.
      */
-    /**
-     * Closes the caption window if it exists.
-     */
-    /**
-     * Closes the caption window if it exists.
-     */
     async close() {
         console.log('[CaptionWindowService] Requested to close caption window');
+
+        // Robust close: Emit event first to ensure internal listener triggers close
+        try {
+            console.log('[CaptionWindowService] Emitting close event to window');
+            await emit(CAPTION_EVENT_CLOSE);
+        } catch (e) {
+            console.error('[CaptionWindowService] Error emitting close event:', e);
+        }
 
         // Ensure instance is closed if we have it
         if (this.windowInstance) {
