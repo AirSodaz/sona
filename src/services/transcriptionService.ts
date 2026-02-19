@@ -38,7 +38,7 @@ interface ServiceConfig {
  *
  * Handles spawning, communication (stdin/stdout), and lifecycle of the external process.
  */
-class TranscriptionService {
+export class TranscriptionService {
     private child: Child | null = null;
     /** Indicates if the sidecar process is currently running. */
     private isRunning: boolean = false;

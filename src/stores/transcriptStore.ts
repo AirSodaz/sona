@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
-import { captionWindowService } from '../services/captionWindowService';
 
 /** State interface for the transcript store. */
 interface TranscriptState {
@@ -270,13 +269,6 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             const segments = needsTrim
                 ? result.segments.slice(-MAX_CAPTION_SEGMENTS)
                 : result.segments;
-
-            // Broadcast to caption window if active
-            if (state.isCaptionMode) {
-                // Send only the last few for display efficiency, though window handles it
-                const displaySegments = segments.slice(-3);
-                captionWindowService.sendSegments(displaySegments).catch(console.error);
-            }
 
             return {
                 segments,
