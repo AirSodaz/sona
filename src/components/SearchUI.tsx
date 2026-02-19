@@ -56,23 +56,33 @@ export function SearchUI(): React.JSX.Element | null {
         }
     };
 
+    const noResults = query.length > 0 && matches.length === 0;
+
     return (
         <div className="search-ui-container" role="search" aria-label={t('search.label', 'Search transcript')}>
-            <div className="search-bar">
+            <div
+                className="search-bar"
+                style={noResults ? { borderColor: 'var(--color-error)' } : undefined}
+            >
                 <input
                     ref={inputRef}
                     type="text"
                     className="search-input"
                     placeholder={t('search.placeholder', 'Find in transcript...')}
                     aria-label={t('search.placeholder', 'Find in transcript...')}
+                    aria-invalid={noResults}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
                 />
 
                 <div className="search-actions">
-                    <span className="search-count" aria-live="polite">
-                        {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : (query ? '0/0' : '')}
+                    <span
+                        className="search-count"
+                        aria-live="polite"
+                        style={noResults ? { color: 'var(--color-error)' } : undefined}
+                    >
+                        {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : (noResults ? t('search.no_results', 'No results') : '')}
                     </span>
 
                     <div className="search-divider" />
