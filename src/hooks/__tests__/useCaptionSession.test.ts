@@ -1,7 +1,7 @@
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useCaptionSession } from '../useCaptionSession';
 import { captionWindowService } from '../../services/captionWindowService';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppConfig } from '../../types/transcript';
 
 // Mock dependencies
@@ -86,7 +86,6 @@ vi.stubGlobal('MediaStream', class {
 });
 
 describe('useCaptionSession', () => {
-    let mockGetDisplayMedia: any;
     let mockStream: any;
 
     beforeEach(() => {
@@ -143,7 +142,7 @@ describe('useCaptionSession', () => {
 
              // Also resolve addModule and service.start
              audioContextMocks.addModule.mockResolvedValue(undefined);
-             transcriptionMocks.start.mockImplementation((onSegment: any, onError: any) => Promise.resolve());
+             transcriptionMocks.start.mockImplementation((_onSegment: any, _onError: any) => Promise.resolve());
         });
 
         // Wait a bit for async operations to proceed

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { TranscriptSegment } from '../../types/transcript';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { alignTokensToText } from '../../utils/segmentUtils';
@@ -133,14 +133,18 @@ function ActiveSegmentWrapper({
     alignedTokens: { text: string; timestamp: number }[] | null,
     renderTokenList: (timestamp: number) => React.JSX.Element
 }) {
-    const currentTime = useTranscriptStore(state => state.currentTime);
-
-    const activeTokenTimestamp = useMemo(() => {
+    // Selector to compute active timestamp directly from store state
+    // This avoids re-renders when currentTime changes but the active token remains the same
+    const activeTokenTimestamp = useTranscriptStore(useCallback((state) => {
+        const currentTime = state.currentTime;
         if (!alignedTokens || currentTime < 0) return -1;
+
+        // Find the token that is currently active (timestamp <= currentTime < nextTokenTimestamp)
         const nextTokenIndex = alignedTokens.findIndex(t => t.timestamp > currentTime);
         const activeIdx = nextTokenIndex === -1 ? alignedTokens.length - 1 : nextTokenIndex - 1;
+
         return activeIdx >= 0 ? alignedTokens[activeIdx].timestamp : -1;
-    }, [alignedTokens, currentTime]);
+    }, [alignedTokens]));
 
     return renderTokenList(activeTokenTimestamp);
 }
