@@ -403,15 +403,18 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
-                let state = app.state::<AppSettings>();
-                // Default to true if lock fails (safe fallback)
-                let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
+                // Check if this is the main window - we only want to intercept close for the main window
+                if window.label() == "main" {
+                    let state = app.state::<AppSettings>();
+                    // Default to true if lock fails (safe fallback)
+                    let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
 
-                if minimize {
-                    let _ = window.hide();
-                    api.prevent_close();
-                } else {
-                    app.exit(0);
+                    if minimize {
+                        let _ = window.hide();
+                        api.prevent_close();
+                    } else {
+                        app.exit(0);
+                    }
                 }
             }
         })
