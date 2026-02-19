@@ -202,7 +202,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Start recording
 
     // Start capture (audio context + visualizer + transcription)
-    const startCapture = useCallback(async (forceSource?: 'microphone' | 'desktop', isCaption: boolean = false) => {
+    const startCapture = useCallback(async (forceSource?: 'microphone' | 'desktop') => {
         const config = useTranscriptStore.getState().config;
         if (!config.offlineModelPath) {
             await alert(t('batch.no_model_error'), { variant: 'error' });
@@ -255,14 +255,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
             activeStreamRef.current = stream;
             await initializeAudioSession(stream);
-
-            // Use the explicit flag if provided, otherwise fallback to store
-            // We check store state as a fallback because sometimes we just start capture (e.g. for recording) 
-            // and we want to know if caption should also be open.
-            // But if called from handleCaptionToggle(true), we pass isCaption=true.
-            if (isCaption || useTranscriptStore.getState().isCaptionMode) {
-                captionWindowService.open().catch(console.error);
-            }
 
             return true;
 
@@ -529,25 +521,25 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
     }, [pauseRecording, resumeRecording]);
 
-    const handleCaptionToggle = useCallback(async (checked: boolean) => {
+    const handleCaptionToggle = useCallback((checked: boolean) => {
         setIsCaptionMode(checked);
+    }, [setIsCaptionMode]);
 
-        if (checked) {
-            // Always try to open the caption window
+    // Reactively manage caption window visibility and capture state
+    useEffect(() => {
+        if (isCaptionMode) {
             captionWindowService.open().catch(console.error);
-
-            // If not recording, we need to start capture solely for captioning
             if (!isRecordingRef.current) {
-                await startCapture('desktop', true);
+                // Force desktop capture for standalone caption mode
+                startCapture('desktop').catch(console.error);
             }
         } else {
-            captionWindowService.close().catch(e => console.error(e));
-            // Only stop capture if we are NOT recording
+            captionWindowService.close().catch(console.error);
             if (!isRecordingRef.current) {
-                await stopCapture();
+                stopCapture().catch(console.error);
             }
         }
-    }, [setIsCaptionMode, startCapture, stopCapture]);
+    }, [isCaptionMode, startCapture, stopCapture]);
 
     function getRecordingStatusText(): string {
         if (isRecording) {

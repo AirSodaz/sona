@@ -53,9 +53,10 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 }));
 
 // Mock translation
+const mockT = (key: string) => key;
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
-        t: (key: string) => key,
+        t: mockT,
     }),
 }));
 
