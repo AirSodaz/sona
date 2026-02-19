@@ -65,4 +65,8 @@ export interface AppConfig {
   maxConcurrent?: number;
   /** Whether to minimize to tray on exit. Default: true. */
   minimizeToTrayOnExit?: boolean;
+  /** Whether the caption window is locked (click-through). Default: false. */
+  lockWindow?: boolean;
+  /** Whether the caption window is always on top. Default: true. */
+  alwaysOnTop?: boolean;
 }

@@ -109,6 +109,28 @@ class CaptionWindowService {
         // This is more reliable than targeting a specific window instance that might be stale.
         await emit(CAPTION_EVENT_SEGMENTS, segments);
     }
+
+    /**
+     * Sets whether the caption window should be always on top.
+     * @param enabled True to enable always on top.
+     */
+    async setAlwaysOnTop(enabled: boolean) {
+        const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
+        if (win) {
+            await win.setAlwaysOnTop(enabled);
+        }
+    }
+
+    /**
+     * Sets whether the caption window should be click-through (ignore mouse events).
+     * @param enabled True to enable click-through (lock window).
+     */
+    async setClickThrough(enabled: boolean) {
+        const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
+        if (win) {
+            await win.setIgnoreCursorEvents(enabled);
+        }
+    }
 }
 
 export const captionWindowService = new CaptionWindowService();

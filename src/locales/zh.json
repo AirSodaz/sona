@@ -46,7 +46,11 @@
         "timer_label": "录音时长",
         "caption_mode": "实时字幕",
         "caption_mode_hint": "悬浮字幕（系统音频）",
-        "caption_active": "实时字幕进行中..."
+        "caption_active": "实时字幕进行中...",
+        "lock_window": "锁定窗口",
+        "lock_window_hint": "鼠标穿透（点击穿过窗口）",
+        "always_on_top": "窗口置顶",
+        "always_on_top_hint": "保持窗口在最上层"
     },
     "batch": {
         "processing_title": "处理音频中",
