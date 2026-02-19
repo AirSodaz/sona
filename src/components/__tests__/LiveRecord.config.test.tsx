@@ -38,6 +38,18 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+// Mock caption window service
+vi.mock('../../services/captionWindowService', () => ({
+    captionWindowService: {
+        open: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        isOpen: vi.fn().mockResolvedValue(true),
+        sendSegments: vi.fn().mockResolvedValue(undefined),
+        setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
+        setClickThrough: vi.fn().mockResolvedValue(undefined),
+    }
+}));
+
 // Mock translation
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({

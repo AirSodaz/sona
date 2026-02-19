@@ -108,15 +108,25 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Use config directly
     const enableTimeline = config.enableTimeline ?? true;
     const language = config.language;
+    const lockWindow = config.lockWindow ?? false;
+    const alwaysOnTop = config.alwaysOnTop ?? true;
     const enableTimelineRef = useRef(true);
 
     const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
     const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
+    const setLockWindow = useCallback((val: boolean) => setConfig({ lockWindow: val }), [setConfig]);
+    const setAlwaysOnTop = useCallback((val: boolean) => setConfig({ alwaysOnTop: val }), [setConfig]);
 
     // Sync ref
     useEffect(() => {
         enableTimelineRef.current = enableTimeline;
     }, [enableTimeline]);
+
+    // Sync window settings
+    useEffect(() => {
+        captionWindowService.setClickThrough(lockWindow).catch(console.error);
+        captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(console.error);
+    }, [lockWindow, alwaysOnTop]);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const startTimeRef = useRef<number>(0);
@@ -445,8 +455,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             activeStreamRef.current = null;
 
             if (audioContextRef.current.state !== 'closed') {
-                await audioContextRef.current.suspend();
+                await audioContextRef.current.close();
             }
+            audioContextRef.current = null;
         }
 
         await transcriptionService.softStop();
@@ -742,6 +753,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 language={language}
                 setLanguage={setLanguage}
                 disabled={isRecording}
+                lockWindow={lockWindow}
+                setLockWindow={setLockWindow}
+                alwaysOnTop={alwaysOnTop}
+                setAlwaysOnTop={setAlwaysOnTop}
             />
         </div>
     );

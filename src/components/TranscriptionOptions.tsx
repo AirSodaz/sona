@@ -11,6 +11,10 @@ interface TranscriptionOptionsProps {
     setLanguage: (value: string) => void;
     className?: string;
     disabled?: boolean;
+    lockWindow?: boolean;
+    setLockWindow?: (value: boolean) => void;
+    alwaysOnTop?: boolean;
+    setAlwaysOnTop?: (value: boolean) => void;
 }
 
 /**
@@ -26,7 +30,11 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     language,
     setLanguage,
     className = '',
-    disabled = false
+    disabled = false,
+    lockWindow,
+    setLockWindow,
+    alwaysOnTop,
+    setAlwaysOnTop
 }: TranscriptionOptionsProps): React.JSX.Element {
     const { t } = useTranslation();
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,6 +68,10 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
                 language={language}
                 setLanguage={setLanguage}
                 disabled={disabled}
+                lockWindow={lockWindow}
+                setLockWindow={setLockWindow}
+                alwaysOnTop={alwaysOnTop}
+                setAlwaysOnTop={setAlwaysOnTop}
             />
         </div>
     );

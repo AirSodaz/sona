@@ -212,6 +212,8 @@ const DEFAULT_CONFIG: AppConfig = {
     vadBufferSize: 5,
     maxConcurrent: 2,
     minimizeToTrayOnExit: true,
+    lockWindow: false,
+    alwaysOnTop: true,
 };
 
 /**

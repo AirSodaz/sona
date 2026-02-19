@@ -46,7 +46,11 @@
         "timer_label": "Recording duration",
         "caption_mode": "Live Caption",
         "caption_mode_hint": "Floating subtitles from system audio",
-        "caption_active": "Live Caption active..."
+        "caption_active": "Live Caption active...",
+        "lock_window": "Lock Window",
+        "lock_window_hint": "Make window click-through",
+        "always_on_top": "Always on Top",
+        "always_on_top_hint": "Keep window above others"
     },
     "batch": {
         "processing_title": "Processing Audio",
