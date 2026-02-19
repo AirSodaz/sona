@@ -5,6 +5,7 @@ import { TranscriptSegment } from '../types/transcript';
 import '../styles/index.css'; // Import styles to ensure variables are available
 
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
+const CAPTION_EVENT_CLOSE = 'caption:close';
 
 /**
  * Root component for the always-on-top caption window.
@@ -18,6 +19,18 @@ export function CaptionWindow() {
         // Listen for segment updates from the main window
         const unlistenPromise = listen<TranscriptSegment[]>(CAPTION_EVENT_SEGMENTS, (event) => {
             setSegments(event.payload);
+        });
+
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten());
+        };
+    }, []);
+
+    // Listen for close command
+    useEffect(() => {
+        const unlistenPromise = listen(CAPTION_EVENT_CLOSE, () => {
+            console.log('[CaptionWindow] Received close command, closing window');
+            getCurrentWindow().close();
         });
 
         return () => {
