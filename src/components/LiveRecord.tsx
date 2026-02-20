@@ -473,10 +473,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             // If recording, show recording status
             return isPaused ? t('live.recording_paused') : t('live.recording_active');
         }
-        // If not recording, but caption mode is on, we can show that
-        if (isCaptionMode) {
-             return t('live.caption_active');
-        }
         return t('live.start_hint');
     }
 

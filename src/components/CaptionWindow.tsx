@@ -15,6 +15,7 @@ const CAPTION_EVENT_CLOSE = 'caption:close';
 export function CaptionWindow() {
     const [segments, setSegments] = useState<TranscriptSegment[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
+    const rootRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // Listen for segment updates from the main window
@@ -71,15 +72,9 @@ export function CaptionWindow() {
     // Dynamic height: The height of the window must change to fit the number of lines.
     useLayoutEffect(() => {
         const updateHeight = async () => {
-            if (containerRef.current) {
-                // Measure content height
-                const contentHeight = containerRef.current.scrollHeight;
-
-                // Calculate total height needed:
-                // Drag handle height (32px) + content height
-                // Note: contentHeight includes padding due to box-sizing if padding is set on container
-                // containerRef is .live-caption-content which has padding.
-                const totalHeight = contentHeight + 32;
+            if (rootRef.current) {
+                // Measure total height of the component root (includes drag handle + content + padding/borders)
+                const totalHeight = rootRef.current.offsetHeight;
 
                 // Get current window scale factor and size to preserve width
                 const currentWindow = getCurrentWindow();
@@ -88,8 +83,6 @@ export function CaptionWindow() {
                 const logicalWidth = size.width / factor;
 
                 // Set new size
-                // We add a small buffer (e.g. 10px) to prevent scrollbars or tight fits if necessary,
-                // but scrollHeight usually covers it.
                 await currentWindow.setSize(new LogicalSize(logicalWidth, totalHeight));
             }
         };
@@ -102,7 +95,16 @@ export function CaptionWindow() {
     };
 
     return (
-        <div className="caption-window-body" style={{ height: 'auto', minHeight: 'auto' }}>
+        <div
+            className="caption-window-body"
+            ref={rootRef}
+            style={{
+                height: 'auto',
+                minHeight: 'auto',
+                userSelect: 'none',
+                cursor: 'default'
+            }}
+        >
             {/* Drag region for moving the window */}
             <div
                 className="caption-drag-handle"
@@ -117,9 +119,7 @@ export function CaptionWindow() {
                 ref={containerRef}
                 style={{ maxHeight: 'none', height: 'auto' }}
             >
-                {segments.length === 0 ? (
-                    <div className="caption-placeholder">Waiting for speech...</div>
-                ) : (
+                {segments.length === 0 ? null : (
                     segments.map((seg) => (
                         <p
                             key={seg.id}
