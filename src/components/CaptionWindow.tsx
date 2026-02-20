@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useLayoutEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { LogicalSize } from '@tauri-apps/api/dpi';
+
 import { TranscriptSegment } from '../types/transcript';
 import '../styles/index.css'; // Import styles to ensure variables are available
 
@@ -69,26 +69,51 @@ export function CaptionWindow() {
         }
     }, [segments]);
 
-    // Dynamic height: The height of the window must change to fit the number of lines.
-    useLayoutEffect(() => {
-        const updateHeight = async () => {
-            if (rootRef.current) {
-                // Measure total height of the component root (includes drag handle + content + padding/borders)
-                const totalHeight = rootRef.current.offsetHeight;
+    // Dynamic height: Use ResizeObserver to ensure window always matches content height accurately
+    useEffect(() => {
+        if (!rootRef.current) return;
 
-                // Get current window scale factor and size to preserve width
-                const currentWindow = getCurrentWindow();
-                const factor = await currentWindow.scaleFactor();
-                const size = await currentWindow.innerSize();
-                const logicalWidth = size.width / factor;
+        let resizeTimeout: NodeJS.Timeout;
 
-                // Set new size
-                await currentWindow.setSize(new LogicalSize(logicalWidth, totalHeight));
-            }
+        const observer = new ResizeObserver(() => {
+            // Debounce the resize to prevent spamming IPC calls and ensure final size applies
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(async () => {
+                if (!rootRef.current) return;
+                try {
+                    // Measure total height of the component root (using getBoundingClientRect for subpixel accuracy)
+                    const totalHeight = Math.ceil(rootRef.current.getBoundingClientRect().height);
+
+                    // Get current window scale factor and size to preserve width and accurately set height
+                    const currentWindow = getCurrentWindow();
+                    const factor = await currentWindow.scaleFactor();
+                    const size = await currentWindow.innerSize();
+
+                    const targetPhysicalHeight = Math.ceil(totalHeight * factor);
+
+                    // Avoid unnecessary resize calls if the physical height matches
+                    if (Math.abs(size.height - targetPhysicalHeight) > 1) {
+                        const { PhysicalSize } = await import('@tauri-apps/api/dpi');
+                        const targetSize = new PhysicalSize(size.width, targetPhysicalHeight);
+
+                        // Use Min/Max Size Lock trick to prevent manual dragging by the user
+                        await currentWindow.setMinSize(targetSize);
+                        await currentWindow.setMaxSize(targetSize);
+                        await currentWindow.setSize(targetSize);
+                    }
+                } catch (e) {
+                    console.error("[CaptionWindow] Failed to resize window:", e);
+                }
+            }, 50);
+        });
+
+        observer.observe(rootRef.current);
+
+        return () => {
+            observer.disconnect();
+            clearTimeout(resizeTimeout);
         };
-
-        updateHeight();
-    }, [segments]);
+    }, []);
 
     const startDragging = () => {
         getCurrentWindow().startDragging();
