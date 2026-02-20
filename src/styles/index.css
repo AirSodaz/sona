@@ -2702,8 +2702,8 @@ input[type="radio"]:focus {
 }
 
 .live-caption-line.partial {
-  color: rgba(255, 255, 255, 0.6);
-  font-style: italic;
+  color: #ffffff;
+  font-style: normal;
 }
 
 
@@ -2755,24 +2755,13 @@ input[type="radio"]:focus {
 
 .live-caption-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0 var(--spacing-lg) var(--spacing-md);
-}
-
-.live-caption-content::-webkit-scrollbar {
-  width: 4px;
-  display: none;
-  /* Hide scrollbar for cleaner look in floating window, optional */
-}
-
-/* Show scrollbar on hover if needed, or keep hidden */
-.live-caption-content:hover::-webkit-scrollbar {
-  display: block;
-}
-
-.live-caption-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* 2 lines: 1.6em * 2 = 3.2em. Add padding-bottom: 16px. */
+  max-height: calc(3.2rem + var(--spacing-md));
 }
 
 .caption-placeholder {

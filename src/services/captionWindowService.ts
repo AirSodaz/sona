@@ -31,7 +31,7 @@ class CaptionWindowService {
             transparent: true,
             skipTaskbar: true,
             width: 800,
-            height: 200,
+            height: 120,
             center: false,
             focus: false,
             resizable: true,

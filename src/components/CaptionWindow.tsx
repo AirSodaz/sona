@@ -38,13 +38,6 @@ export function CaptionWindow() {
         };
     }, []);
 
-    // Auto-scroll to bottom
-    useEffect(() => {
-        if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
-        }
-    }, [segments]);
-
     // Set transparent background for the window
     useEffect(() => {
         document.documentElement.style.background = 'transparent';
