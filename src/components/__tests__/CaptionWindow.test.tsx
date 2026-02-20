@@ -55,8 +55,8 @@ describe('CaptionWindow', () => {
         vi.useFakeTimers();
         mocks.mockSetSize.mockClear();
 
-        // Mock scrollHeight
-        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 50 });
+        // Mock offsetHeight
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 50 });
     });
 
     afterEach(() => {
@@ -64,9 +64,9 @@ describe('CaptionWindow', () => {
         vi.clearAllMocks();
     });
 
-    it('renders waiting message initially', () => {
+    it('renders empty initially', () => {
         render(<CaptionWindow />);
-        expect(screen.getByText('Waiting for speech...')).toBeTruthy();
+        expect(screen.queryByText('Waiting for speech...')).toBeNull();
     });
 
     it('updates to show the last segment', async () => {
@@ -107,9 +107,8 @@ describe('CaptionWindow', () => {
             vi.advanceTimersByTime(3000);
         });
 
-        // Should be cleared (back to waiting or empty?)
-        // The code renders "Waiting for speech..." if segments is empty.
-        expect(screen.getByText('Waiting for speech...')).toBeTruthy();
+        // Should be cleared
+        expect(screen.queryByText('Waiting for speech...')).toBeNull();
         expect(screen.queryByText('Hello')).toBeNull();
     });
 
@@ -117,9 +116,9 @@ describe('CaptionWindow', () => {
         render(<CaptionWindow />);
 
         // Initial render triggers layout effect with "Waiting for speech..."
-        // scrollHeight mocked to 50. Total height = 50 + 32 = 82.
+        // offsetHeight mocked to 50. Total height = 50.
         // innerSize width 1600 / scale 2 = 800.
-        // So setSize(800, 82).
+        // So setSize(800, 50).
 
         // We need to wait for async calls in useLayoutEffect
         await act(async () => {
@@ -130,13 +129,13 @@ describe('CaptionWindow', () => {
         expect(mocks.mockSetSize).toHaveBeenCalled();
         const call = mocks.mockSetSize.mock.calls[0][0];
         expect(call.width).toBe(800);
-        expect(call.height).toBe(82);
+        expect(call.height).toBe(50); // mocked offsetHeight
 
         // Update content
         mocks.mockSetSize.mockClear();
-        // Change scrollHeight for next render
+        // Change offsetHeight for next render
         // Note: Defining property on prototype changes it for all elements.
-        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, value: 100 });
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 100 });
 
         await act(async () => {
             if (mocks.listenCallbacks['caption:segments']) {
@@ -152,10 +151,9 @@ describe('CaptionWindow', () => {
             await Promise.resolve();
         });
 
-        // Should resize again
-        // 100 + 32 = 132
+        // Should resize again to new offsetHeight
         expect(mocks.mockSetSize).toHaveBeenCalled();
         const call2 = mocks.mockSetSize.mock.calls[0][0];
-        expect(call2.height).toBe(132);
+        expect(call2.height).toBe(100);
     });
 });
