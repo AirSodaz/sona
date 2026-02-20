@@ -34,7 +34,9 @@ class CaptionWindowService {
             height: 120,
             center: false,
             focus: false,
-            resizable: true,
+            resizable: false,
+            maximizable: false,
+            minimizable: false,
             shadow: false,
         });
 
