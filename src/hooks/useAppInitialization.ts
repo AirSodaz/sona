@@ -38,7 +38,8 @@ export function useAppInitialization() {
                         font: parsed.font || 'system',
                         language: parsed.language || 'auto',
                         enableTimeline: parsed.enableTimeline ?? true,
-                        minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true
+                        minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
+                        muteDuringRecording: parsed.muteDuringRecording ?? false
                     });
 
                     // Apply language immediately
@@ -108,7 +109,8 @@ export function useAppInitialization() {
             font: config.font,
             language: config.language,
             enableTimeline: config.enableTimeline,
-            minimizeToTrayOnExit: config.minimizeToTrayOnExit
+            minimizeToTrayOnExit: config.minimizeToTrayOnExit,
+            muteDuringRecording: config.muteDuringRecording
         };
         localStorage.setItem('sona-config', JSON.stringify(configToSave));
     }, [config, isLoaded]);

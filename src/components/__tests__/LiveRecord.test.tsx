@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 
+// Mock Tauri invoke
+const mockInvoke = vi.fn().mockResolvedValue(undefined);
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
+}));
+
 // Hoist mocks to share between singleton and class instances
 const {
     mockStart,
@@ -354,5 +360,39 @@ describe('LiveRecord', () => {
 
         expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
         expect(useTranscriptStore.getState().isRecording).toBe(false);
+    });
+
+    it('should mute system audio when recording starts if configured', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        // Enable mute setting
+        act(() => {
+            useTranscriptStore.setState({
+                config: {
+                    ...useTranscriptStore.getState().config,
+                    offlineModelPath: '/path/to/model',
+                    muteDuringRecording: true
+                }
+            });
+        });
+
+        render(<LiveRecord />);
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+        await act(async () => {
+            fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('set_system_audio_mute', { mute: true });
+
+        // Stop recording
+        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+        await act(async () => {
+            fireEvent.click(stopBtn);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('set_system_audio_mute', { mute: false });
     });
 });
