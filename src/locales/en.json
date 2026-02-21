@@ -134,7 +134,8 @@
         "no_results": "No results found",
         "delete_title": "Delete History",
         "selected_count": "{{count}} selected",
-        "delete_bulk_confirm": "Are you sure you want to delete {{count}} items?"
+        "delete_bulk_confirm": "Are you sure you want to delete {{count}} items?",
+        "open_folder": "Open File Directory"
     },
     "settings": {
         "title": "Settings",

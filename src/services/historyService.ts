@@ -1,5 +1,6 @@
 import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir, copyFile, stat } from '@tauri-apps/plugin-fs';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { TranscriptSegment } from '../types/transcript';
 import { HistoryItem } from '../types/history';
@@ -311,6 +312,17 @@ export const historyService = {
         } catch (e) {
             console.error('Failed to get audio URL:', e);
             return null;
+        }
+    },
+
+    async openHistoryFolder(): Promise<void> {
+        try {
+            const appDataDirPath = await appLocalDataDir();
+            const historyPath = await join(appDataDirPath, HISTORY_DIR);
+            console.log('[History] Opening folder:', historyPath);
+            await openPath(historyPath);
+        } catch (error) {
+            console.error('[History] Failed to open history folder:', error);
         }
     }
 };

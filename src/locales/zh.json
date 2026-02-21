@@ -134,7 +134,8 @@
         "no_results": "未找到相关结果",
         "delete_title": "删除历史记录",
         "selected_count": "已选择 {{count}} 项",
-        "delete_bulk_confirm": "您确定要删除这 {{count}} 个项目吗？"
+        "delete_bulk_confirm": "您确定要删除这 {{count}} 个项目吗？",
+        "open_folder": "打开文件目录"
     },
     "settings": {
         "title": "设置",

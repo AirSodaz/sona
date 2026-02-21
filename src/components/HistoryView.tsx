@@ -5,7 +5,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { Search } from 'lucide-react';
 import { Dropdown } from './Dropdown';
-import { CloseIcon } from './Icons';
+import { CloseIcon, FolderIcon } from './Icons';
 import { Virtuoso } from 'react-virtuoso';
 import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
@@ -312,6 +312,19 @@ export function HistoryView() {
                         }}
                     />
                 )}
+            </div>
+
+            {/* Footer - Open History Folder */}
+            <div style={{ padding: 'var(--spacing-md)', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
+                <button
+                    className="btn btn-parameter-settings"
+                    onClick={() => historyService.openHistoryFolder()}
+                    aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                    style={{ width: '100%', justifyContent: 'center' }}
+                >
+                    <FolderIcon width={16} height={16} />
+                    <span>{t('history.open_folder', { defaultValue: 'Open File Directory' })}</span>
+                </button>
             </div>
         </div>
     );
