@@ -213,6 +213,7 @@ const DEFAULT_CONFIG: AppConfig = {
     minimizeToTrayOnExit: true,
     lockWindow: false,
     alwaysOnTop: true,
+    microphoneId: 'default',
 };
 
 /**

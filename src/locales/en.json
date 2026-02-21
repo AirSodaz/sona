@@ -182,7 +182,11 @@
         "model_not_installed": "Please download the model first from the Model Hub.",
         "restore_defaults": "Restore Default Settings",
         "restore_defaults_confirm": "Are you sure you want to restore all model settings to their defaults?",
-        "shortcuts": "Keyboard Shortcuts",
+        "microphone": "Microphone",
+        "microphone_selection": "Microphone Selection",
+        "mic_auto": "Auto (Follow system)",
+        "mic_auto_hint": "Select the microphone input device.",
+        "shortcuts": "Shortcuts",
         "about": "About",
         "about_desc": "Sona is a powerful, offline transcript editor providing fast, accurate, and private speech-to-text capabilities.",
         "about_homepage": "Project Homepage",
@@ -205,7 +209,7 @@
         "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting."
     },
     "shortcuts": {
-        "title": "Keyboard Shortcuts",
+        "title": "Shortcuts",
         "section_playback": "Playback",
         "section_search": "Search",
         "section_general": "General",
