@@ -210,7 +210,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             if (!activeRef.current) return;
 
             // 6. Open Window
-            await captionWindowService.open();
+            await captionWindowService.open({
+                alwaysOnTop: config.alwaysOnTop ?? true,
+                lockWindow: config.lockWindow ?? false
+            });
 
         } catch (error) {
             console.error('[CaptionSession] Error starting session:', error);

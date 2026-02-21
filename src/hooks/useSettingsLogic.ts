@@ -21,7 +21,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
 
     useEffect(() => {
         if (_isOpen && initialTab) {
@@ -120,6 +120,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setMuteDuringRecording = (enabled: boolean) => updateConfig({ muteDuringRecording: enabled });
 
     const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
+
+    const setLockWindow = (enabled: boolean) => updateConfig({ lockWindow: enabled });
+    const setAlwaysOnTop = (enabled: boolean) => updateConfig({ alwaysOnTop: enabled });
 
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
@@ -391,6 +394,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setMuteDuringRecording,
         minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
         setMinimizeToTrayOnExit,
+
+        lockWindow: config.lockWindow ?? false,
+        setLockWindow,
+        alwaysOnTop: config.alwaysOnTop ?? true,
+        setAlwaysOnTop,
 
         // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,

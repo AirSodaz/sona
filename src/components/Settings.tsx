@@ -4,6 +4,7 @@ import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
+import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
@@ -12,6 +13,7 @@ import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
     MicIcon,
+    SubtitleIcon,
     ModelIcon,
     LocalIcon,
     KeyboardIcon,
@@ -23,7 +25,7 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTab?: 'general' | 'microphone' | 'models' | 'local' | 'shortcuts' | 'about';
+    initialTab?: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'shortcuts' | 'about';
 }
 
 /**
@@ -53,6 +55,11 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setMuteDuringRecording,
         minimizeToTrayOnExit,
         setMinimizeToTrayOnExit,
+
+        lockWindow,
+        setLockWindow,
+        alwaysOnTop,
+        setAlwaysOnTop,
 
         offlineModelPath,
         setOfflineModelPath,
@@ -93,7 +100,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'models', 'local', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -165,6 +172,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'microphone' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="subtitle"
+                            label={t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
+                            Icon={SubtitleIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'subtitle' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="models"
                             label={t('settings.model_hub')}
                             Icon={ModelIcon}
@@ -220,6 +235,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <h3 className="settings-section-title">
                                 {activeTab === 'general' && t('settings.general')}
                                 {activeTab === 'microphone' && t('settings.microphone')}
+                                {activeTab === 'subtitle' && t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
                                 {activeTab === 'shortcuts' && t('shortcuts.title')}
@@ -247,6 +263,15 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setMicrophoneId={setMicrophoneId}
                                 muteDuringRecording={muteDuringRecording}
                                 setMuteDuringRecording={setMuteDuringRecording}
+                            />
+                        )}
+
+                        {activeTab === 'subtitle' && (
+                            <SettingsSubtitleTab
+                                lockWindow={lockWindow}
+                                setLockWindow={setLockWindow}
+                                alwaysOnTop={alwaysOnTop}
+                                setAlwaysOnTop={setAlwaysOnTop}
                             />
                         )}
 

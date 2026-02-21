@@ -13,12 +13,19 @@ class CaptionWindowService {
      * Opens the always-on-top caption window.
      * If it already exists, it focuses it.
      */
-    async open() {
+    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean }) {
         // Check if window already exists
         const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
         if (existingWindow) {
             await existingWindow.setFocus();
             this.windowInstance = existingWindow;
+            // Apply settings if provided
+            if (options?.alwaysOnTop !== undefined) {
+                await this.setAlwaysOnTop(options.alwaysOnTop);
+            }
+            if (options?.lockWindow !== undefined) {
+                await this.setClickThrough(options.lockWindow);
+            }
             return;
         }
 
@@ -26,7 +33,7 @@ class CaptionWindowService {
         this.windowInstance = new WebviewWindow(CAPTION_WINDOW_LABEL, {
             url: '/index.html?window=caption',
             title: 'Sona Live Caption',
-            alwaysOnTop: true,
+            alwaysOnTop: options?.alwaysOnTop ?? true,
             decorations: false,
             transparent: true,
             skipTaskbar: true,
@@ -47,6 +54,11 @@ class CaptionWindowService {
             console.log('Caption window created successfully');
             // Position at bottom center (manual calculation or let OS handle initial place)
             // For now we let it float, user can drag it.
+
+            // Apply click-through if requested (cannot be set in constructor)
+            if (options?.lockWindow) {
+                await this.setClickThrough(true);
+            }
         });
 
         this.windowInstance.once('tauri://error', (e) => {

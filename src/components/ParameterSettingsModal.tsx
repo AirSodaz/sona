@@ -11,10 +11,6 @@ interface ParameterSettingsModalProps {
     language: string;
     setLanguage: (value: string) => void;
     disabled?: boolean;
-    lockWindow?: boolean;
-    setLockWindow?: (value: boolean) => void;
-    alwaysOnTop?: boolean;
-    setAlwaysOnTop?: (value: boolean) => void;
 }
 
 /**
@@ -27,11 +23,7 @@ export function ParameterSettingsModal({
     setEnableTimeline,
     language,
     setLanguage,
-    disabled = false,
-    lockWindow,
-    setLockWindow,
-    alwaysOnTop,
-    setAlwaysOnTop
+    disabled = false
 }: ParameterSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
@@ -125,46 +117,6 @@ export function ParameterSettingsModal({
                             <div className="toggle-switch-handle" />
                         </button>
                     </div>
-
-                    {/* Lock Window (Click-through) */}
-                    {typeof lockWindow !== 'undefined' && setLockWindow && (
-                        <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div className="options-label">
-                                <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('live.lock_window', { defaultValue: 'Lock Window' })}</span>
-                                <span className="options-hint">{t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}</span>
-                            </div>
-                            <button
-                                className={`toggle-switch ${disabled ? 'disabled' : ''}`}
-                                onClick={() => !disabled && setLockWindow(!lockWindow)}
-                                role="switch"
-                                aria-checked={lockWindow}
-                                aria-label={t('live.lock_window', { defaultValue: 'Lock Window' })}
-                                disabled={disabled}
-                            >
-                                <div className="toggle-switch-handle" />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Always on Top */}
-                    {typeof alwaysOnTop !== 'undefined' && setAlwaysOnTop && (
-                        <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div className="options-label">
-                                <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('live.always_on_top', { defaultValue: 'Always on Top' })}</span>
-                                <span className="options-hint">{t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}</span>
-                            </div>
-                            <button
-                                className={`toggle-switch ${disabled ? 'disabled' : ''}`}
-                                onClick={() => !disabled && setAlwaysOnTop(!alwaysOnTop)}
-                                role="switch"
-                                aria-checked={alwaysOnTop}
-                                aria-label={t('live.always_on_top', { defaultValue: 'Always on Top' })}
-                                disabled={disabled}
-                            >
-                                <div className="toggle-switch-handle" />
-                            </button>
-                        </div>
-                    )}
 
                     {/* Language */}
                     <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
