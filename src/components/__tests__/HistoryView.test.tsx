@@ -70,6 +70,7 @@ vi.mock('../../services/historyService', () => ({
     historyService: {
         loadTranscript: vi.fn(),
         getAudioUrl: vi.fn(),
+        openHistoryFolder: vi.fn(),
     }
 }));
 
@@ -161,5 +162,15 @@ describe('HistoryView', () => {
         // Ensure deleteItem was NOT called
         await new Promise(resolve => setTimeout(resolve, 100)); // wait a bit to be sure
         expect(deleteItemSpy).not.toHaveBeenCalled();
+    });
+
+    it('opens history folder when button clicked', async () => {
+        const { historyService } = await import('../../services/historyService');
+        render(<HistoryView />);
+
+        const openBtn = screen.getByRole('button', { name: /history.open_folder/i });
+        fireEvent.click(openBtn);
+
+        expect(historyService.openHistoryFolder).toHaveBeenCalled();
     });
 });
