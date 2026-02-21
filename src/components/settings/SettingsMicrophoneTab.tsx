@@ -177,7 +177,6 @@ export function SettingsMicrophoneTab({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const bufferLength = analyser.frequencyBinCount; // = fftSize / 2
         const dataArray = new Uint8Array(analyser.fftSize); // Use full time domain data buffer
 
         const barCount = 20; // Number of LED bars
