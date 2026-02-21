@@ -71,7 +71,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4NDAwOThEMTZDQjRFMTYKUldRV1Rzc1dqUWxBU05XK3FmR2tyLzlteEw2VGpZdmFYQU1abHVrTFQxUjNLdmFKRjVtVVFnUlQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJBRjZCREYyRkM4QUU4NEIKUldSTDZJcjg4cjMyS3ZDb3d0Ry9adnE5TWoyN1FMeSsyMEFTUDdObVNtQnZuR1dnV3EwSVNETy8K",
       "endpoints": [
         "https://github.com/AirSodaz/sona/releases/latest/download/updater.json"
       ]
