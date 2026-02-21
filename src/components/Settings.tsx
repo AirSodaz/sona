@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
+import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
@@ -10,6 +11,7 @@ import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
+    MicIcon,
     ModelIcon,
     LocalIcon,
     KeyboardIcon,
@@ -21,7 +23,7 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTab?: 'general' | 'models' | 'local' | 'shortcuts' | 'about';
+    initialTab?: 'general' | 'microphone' | 'models' | 'local' | 'shortcuts' | 'about';
 }
 
 /**
@@ -45,6 +47,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setTheme,
         font,
         setFont,
+        microphoneId,
+        setMicrophoneId,
         minimizeToTrayOnExit,
         setMinimizeToTrayOnExit,
 
@@ -87,7 +91,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'models', 'local', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'models', 'local', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -151,6 +155,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'general' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="microphone"
+                            label={t('settings.microphone')}
+                            Icon={MicIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'microphone' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="models"
                             label={t('settings.model_hub')}
                             Icon={ModelIcon}
@@ -205,6 +217,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                         <div className="settings-section-header">
                             <h3 className="settings-section-title">
                                 {activeTab === 'general' && t('settings.general')}
+                                {activeTab === 'microphone' && t('settings.microphone')}
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
                                 {activeTab === 'shortcuts' && t('shortcuts.title')}
@@ -223,6 +236,13 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setFont={setFont}
                                 minimizeToTrayOnExit={minimizeToTrayOnExit}
                                 setMinimizeToTrayOnExit={setMinimizeToTrayOnExit}
+                            />
+                        )}
+
+                        {activeTab === 'microphone' && (
+                            <SettingsMicrophoneTab
+                                microphoneId={microphoneId}
+                                setMicrophoneId={setMicrophoneId}
                             />
                         )}
 

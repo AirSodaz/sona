@@ -21,7 +21,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
 
     useEffect(() => {
         if (_isOpen && initialTab) {
@@ -115,6 +115,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     const setTheme = (theme: 'auto' | 'light' | 'dark') => updateConfig({ theme: theme });
     const setFont = (font: string) => updateConfig({ font: font as any });
+
+    const setMicrophoneId = (id: string) => updateConfig({ microphoneId: id });
 
     const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
 
@@ -382,6 +384,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setTheme,
         font: config.font || 'system',
         setFont,
+        microphoneId: config.microphoneId || 'default',
+        setMicrophoneId,
         minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
         setMinimizeToTrayOnExit,
 

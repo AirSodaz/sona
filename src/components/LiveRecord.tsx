@@ -236,7 +236,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error('Media devices API not supported');
                 }
-                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                const constraints: MediaStreamConstraints = {
+                    audio: config.microphoneId && config.microphoneId !== 'default'
+                        ? { deviceId: { exact: config.microphoneId } }
+                        : true
+                };
+
+                const micStream = await navigator.mediaDevices.getUserMedia(constraints);
                 stream = micStream;
             }
 

@@ -182,7 +182,11 @@
         "model_not_installed": "请先从模型中心下载该模型。",
         "restore_defaults": "恢复默认设置",
         "restore_defaults_confirm": "确定要将所有模型设置恢复为默认值吗？",
-        "shortcuts": "键盘快捷键",
+        "microphone": "麦克风",
+        "microphone_selection": "麦克风选择",
+        "mic_auto": "自动 (跟随系统)",
+        "mic_auto_hint": "选择麦克风输入设备。",
+        "shortcuts": "快捷键",
         "about": "关于",
         "about_desc": "Sona 是一个强大的离线转录编辑器，提供快速、准确且私密的语音转文字功能。",
         "about_homepage": "项目主页",
@@ -205,7 +209,7 @@
         "minimize_to_tray_hint": "启用后，关闭窗口会将应用最小化到系统托盘，而不是退出程序。"
     },
     "shortcuts": {
-        "title": "键盘快捷键",
+        "title": "快捷键",
         "section_playback": "播放控制",
         "section_search": "搜索",
         "section_general": "通用",

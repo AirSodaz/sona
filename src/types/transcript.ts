@@ -69,4 +69,6 @@ export interface AppConfig {
   lockWindow?: boolean;
   /** Whether the caption window is always on top. Default: true. */
   alwaysOnTop?: boolean;
+  /** ID of the selected microphone device. Default: 'default'. */
+  microphoneId?: string;
 }
