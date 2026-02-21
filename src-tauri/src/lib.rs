@@ -81,7 +81,7 @@ fn set_mute_windows(mute: bool) -> Result<(), String> {
         let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
             .map_err(|e| e.to_string())?;
 
-        volume.SetMute(mute, std::ptr::null()).map_err(|e| e.to_string())?;
+        volume.SetMute(mute, std::ptr::null()).map_err(|e: windows::core::Error| e.to_string())?;
     }
     Ok(())
 }
