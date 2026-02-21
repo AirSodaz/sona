@@ -116,8 +116,8 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 }
 
                 .shortcut-desc {
-                    color: var(--color-text-secondary);
-                    font-size: 0.9rem;
+                    color: var(--color-text-muted);
+                    font-size: 0.8rem;
                 }
 
                 .uppercase { text-transform: uppercase; }

@@ -240,8 +240,8 @@ export function SettingsLocalTab({
             <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('settings.enable_itn', { defaultValue: 'Enable ITN' })}</div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t('settings.itn_title')}</div>
+                        <div style={{ fontWeight: 500 }}>{t('settings.enable_itn', { defaultValue: 'Enable ITN' })}</div>
+                        <div className="settings-hint">{t('settings.itn_title')}</div>
                     </div>
                     <Switch
                         checked={enableITN}
