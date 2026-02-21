@@ -187,6 +187,8 @@
         "microphone_selection": "麦克风选择",
         "mic_auto": "自动 (跟随系统)",
         "mic_auto_hint": "选择麦克风输入设备。",
+        "mute_during_recording": "录音时静音",
+        "mute_during_recording_hint": "录音时自动将系统扬声器静音。这可以防止麦克风录入系统声音。",
         "shortcuts": "快捷键",
         "about": "关于",
         "about_desc": "Sona 是一个强大的离线转录编辑器，提供快速、准确且私密的语音转文字功能。",
