@@ -113,8 +113,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
     const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
-    const setLockWindow = useCallback((val: boolean) => setConfig({ lockWindow: val }), [setConfig]);
-    const setAlwaysOnTop = useCallback((val: boolean) => setConfig({ alwaysOnTop: val }), [setConfig]);
 
     // Sync ref
     useEffect(() => {
@@ -700,10 +698,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 language={language}
                 setLanguage={setLanguage}
                 disabled={isRecording}
-                lockWindow={lockWindow}
-                setLockWindow={setLockWindow}
-                alwaysOnTop={alwaysOnTop}
-                setAlwaysOnTop={setAlwaysOnTop}
             />
         </div>
     );
