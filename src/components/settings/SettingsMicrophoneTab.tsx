@@ -130,7 +130,9 @@ export function SettingsMicrophoneTab({
             audioContextRef.current = audioCtx;
 
             const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
+            // Use a larger FFT size for better time-domain resolution if needed,
+            // but for simple volume (RMS), 2048 is standard.
+            analyser.fftSize = 2048;
             analyserRef.current = analyser;
 
             const source = audioCtx.createMediaStreamSource(stream);
@@ -175,30 +177,58 @@ export function SettingsMicrophoneTab({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        const bufferLength = analyser.frequencyBinCount; // = fftSize / 2
+        const dataArray = new Uint8Array(analyser.fftSize); // Use full time domain data buffer
 
-        // Cache gradients if possible, or create on the fly (it's fast enough usually)
+        const barCount = 20; // Number of LED bars
+        const barGap = 2;
+        const totalGap = (barCount - 1) * barGap;
+        const barWidth = (canvas.width - totalGap) / barCount;
 
         const drawLoop = () => {
             animationRef.current = requestAnimationFrame(drawLoop);
 
-            analyser.getByteFrequencyData(dataArray);
+            // Get time-domain data for waveform/volume calculation
+            analyser.getByteTimeDomainData(dataArray);
+
+            // Calculate RMS
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                // Convert 8-bit unsigned (0-255) to centered -1 to 1 float
+                const value = (dataArray[i] - 128) / 128.0;
+                sum += value * value;
+            }
+            const rms = Math.sqrt(sum / dataArray.length);
+
+            // Normalize/Boost volume for display
+            // Typical speech RMS is often low, so we apply some gain or log scale
+            // Let's use a simple multiplier for sensitivity
+            const displayVolume = Math.min(1.0, rms * 5.0);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const barWidth = (canvas.width / bufferLength) * 2.5;
-            let x = 0;
+            const activeBars = Math.ceil(displayVolume * barCount);
 
-            for (let i = 0; i < bufferLength; i++) {
-                const value = dataArray[i];
-                const barHeight = (value / 255) * canvas.height;
+            for (let i = 0; i < barCount; i++) {
+                const x = i * (barWidth + barGap);
 
-                // Simple gray gradient
-                ctx.fillStyle = `rgb(${value + 50}, ${value + 50}, ${value + 50})`;
-                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                // Color logic
+                let color = '#e5e7eb'; // Default gray (off)
 
-                x += barWidth + 1;
+                if (i < activeBars) {
+                    // Color based on index position (0-100% of range)
+                    const percent = i / barCount;
+                    if (percent < 0.6) {
+                        color = '#22c55e'; // Green
+                    } else if (percent < 0.8) {
+                        color = '#eab308'; // Yellow
+                    } else {
+                        color = '#ef4444'; // Red
+                    }
+                }
+
+                ctx.fillStyle = color;
+                ctx.fillRect(x, 0, barWidth, canvas.height);
             }
         };
 
