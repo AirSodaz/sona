@@ -57,6 +57,7 @@ vi.mock('../settings/SettingsLocalTab', () => ({
 }));
 vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
+    MicIcon: () => <span>Icon</span>,
     ModelIcon: () => <span>Icon</span>,
     LocalIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
@@ -118,9 +119,9 @@ describe('Settings Focus Trap & Navigation', () => {
         // Focus the first tab
         generalTab.focus();
 
-        // Arrow Down -> Should switch to 'models'
+        // Arrow Down -> Should switch to 'microphone'
         fireEvent.keyDown(tablist, { key: 'ArrowDown' });
-        expect(setActiveTabMock).toHaveBeenCalledWith('models');
+        expect(setActiveTabMock).toHaveBeenCalledWith('microphone');
 
         // Reset mock
         setActiveTabMock.mockClear();

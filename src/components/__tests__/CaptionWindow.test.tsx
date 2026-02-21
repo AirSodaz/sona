@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => {
         mockInnerSize: vi.fn().mockResolvedValue({ width: 1600, height: 200 }),
         mockClose: vi.fn(),
         mockStartDragging: vi.fn(),
+        mockSetMinSize: vi.fn(),
+        mockSetMaxSize: vi.fn(),
+        resizeObserverInstance: null as any,
     };
 });
 
@@ -28,12 +31,22 @@ vi.mock('@tauri-apps/api/window', () => ({
         innerSize: mocks.mockInnerSize,
         close: mocks.mockClose,
         startDragging: mocks.mockStartDragging,
+        setMinSize: mocks.mockSetMinSize,
+        setMaxSize: mocks.mockSetMaxSize,
     }),
 }));
 
-// Mock LogicalSize class (usually imported from @tauri-apps/api/dpi)
+// Mock LogicalSize and PhysicalSize classes (usually imported from @tauri-apps/api/dpi)
 vi.mock('@tauri-apps/api/dpi', () => ({
     LogicalSize: class {
+        width: number;
+        height: number;
+        constructor(width: number, height: number) {
+            this.width = width;
+            this.height = height;
+        }
+    },
+    PhysicalSize: class {
         width: number;
         height: number;
         constructor(width: number, height: number) {
@@ -49,14 +62,39 @@ vi.mock('@tauri-apps/api/event', () => ({
 
 describe('CaptionWindow', () => {
     beforeEach(() => {
+        // Mock ResizeObserver
+        global.ResizeObserver = class {
+            callback: any;
+            target: any;
+            constructor(callback: any) {
+                this.callback = callback;
+                mocks.resizeObserverInstance = this;
+            }
+            observe(target: any) {
+                this.target = target;
+                // Trigger callback immediately to simulate initial size observation
+                this.callback([{ target, contentRect: { height: target.offsetHeight || 0 } }]);
+            }
+            unobserve() { }
+            disconnect() { }
+            triggerResize() {
+                 if (this.target) {
+                     this.callback([{ target: this.target, contentRect: { height: this.target.getBoundingClientRect().height } }]);
+                 }
+            }
+        };
+
         // Clear callbacks
         for (const key in mocks.listenCallbacks) delete mocks.listenCallbacks[key];
 
         vi.useFakeTimers();
         mocks.mockSetSize.mockClear();
 
-        // Mock offsetHeight
+        // Mock offsetHeight and getBoundingClientRect
         Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 50 });
+        HTMLElement.prototype.getBoundingClientRect = () => ({
+            width: 800, height: 50, top: 0, left: 0, bottom: 50, right: 800, x: 0, y: 0, toJSON: () => { }
+        });
     });
 
     afterEach(() => {
@@ -128,14 +166,15 @@ describe('CaptionWindow', () => {
 
         expect(mocks.mockSetSize).toHaveBeenCalled();
         const call = mocks.mockSetSize.mock.calls[0][0];
-        expect(call.width).toBe(800);
-        expect(call.height).toBe(50); // mocked offsetHeight
+        expect(call.width).toBe(1600); // Mocked innerSize
+        expect(call.height).toBe(100); // 50 (getBoundingClientRect) * 2 (scaleFactor)
 
         // Update content
         mocks.mockSetSize.mockClear();
-        // Change offsetHeight for next render
-        // Note: Defining property on prototype changes it for all elements.
-        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 100 });
+        // Change bounding client rect for next render
+        HTMLElement.prototype.getBoundingClientRect = () => ({
+            width: 800, height: 150, top: 0, left: 0, bottom: 150, right: 800, x: 0, y: 0, toJSON: () => { }
+        });
 
         await act(async () => {
             if (mocks.listenCallbacks['caption:segments']) {
@@ -145,8 +184,14 @@ describe('CaptionWindow', () => {
             }
         });
 
+        // Trigger resize manually
+        await act(async () => {
+             mocks.resizeObserverInstance.triggerResize();
+        });
+
         // Wait for async effect
         await act(async () => {
+            vi.advanceTimersByTime(100); // debounce timeout
             await Promise.resolve();
             await Promise.resolve();
         });
@@ -154,6 +199,6 @@ describe('CaptionWindow', () => {
         // Should resize again to new offsetHeight
         expect(mocks.mockSetSize).toHaveBeenCalled();
         const call2 = mocks.mockSetSize.mock.calls[0][0];
-        expect(call2.height).toBe(100);
+        expect(call2.height).toBe(300); // 150 * 2
     });
 });

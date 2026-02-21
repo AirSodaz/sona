@@ -27,11 +27,11 @@ describe('CaptionWindowService', () => {
         (WebviewWindow.getByLabel as any).mockResolvedValue(null);
     });
 
-    it('opens the window with locked resize properties', async () => {
+    it('opens the window with correct properties', async () => {
         await captionWindowService.open();
 
         expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
-            resizable: false,
+            resizable: true,
             maximizable: false,
             minimizable: false,
             transparent: true,

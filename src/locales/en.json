@@ -187,6 +187,8 @@
         "microphone_selection": "Microphone Selection",
         "mic_auto": "Auto (Follow system)",
         "mic_auto_hint": "Select the microphone input device.",
+        "mute_during_recording": "Mute during recording",
+        "mute_during_recording_hint": "Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.",
         "shortcuts": "Shortcuts",
         "about": "About",
         "about_desc": "Sona is a powerful, offline transcript editor providing fast, accurate, and private speech-to-text capabilities.",
