@@ -112,7 +112,7 @@ export function ParameterSettingsModal({
                     <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div className="options-label">
                             <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.timeline_mode')}</span>
-                            <span className="options-hint" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{t('batch.timeline_hint')}</span>
+                            <span className="options-hint">{t('batch.timeline_hint')}</span>
                         </div>
                         <button
                             className={`toggle-switch ${disabled ? 'disabled' : ''}`}
@@ -131,7 +131,7 @@ export function ParameterSettingsModal({
                         <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div className="options-label">
                                 <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('live.lock_window', { defaultValue: 'Lock Window' })}</span>
-                                <span className="options-hint" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}</span>
+                                <span className="options-hint">{t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}</span>
                             </div>
                             <button
                                 className={`toggle-switch ${disabled ? 'disabled' : ''}`}
@@ -151,7 +151,7 @@ export function ParameterSettingsModal({
                         <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div className="options-label">
                                 <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('live.always_on_top', { defaultValue: 'Always on Top' })}</span>
-                                <span className="options-hint" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}</span>
+                                <span className="options-hint">{t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}</span>
                             </div>
                             <button
                                 className={`toggle-switch ${disabled ? 'disabled' : ''}`}
@@ -170,7 +170,7 @@ export function ParameterSettingsModal({
                     <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div className="options-label">
                             <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.language')}</span>
-                            <span className="options-hint" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{t('batch.language_hint')}</span>
+                            <span className="options-hint">{t('batch.language_hint')}</span>
                         </div>
                         <Dropdown
                             value={language}

@@ -1259,6 +1259,12 @@ input[type="radio"]:focus {
   color: var(--color-text-primary);
 }
 
+.settings-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
 .settings-divider {
   height: 1px;
   background: var(--color-border);
@@ -1285,7 +1291,7 @@ input[type="radio"]:focus {
   padding: 12px;
   background: var(--color-bg-secondary);
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 
@@ -1312,7 +1318,7 @@ input[type="radio"]:focus {
 }
 
 .model-description {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
   margin-top: 4px;
 }
@@ -1684,8 +1690,8 @@ input[type="radio"]:focus {
 }
 
 .about-description {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
   line-height: 1.6;
   text-align: center;
   max-width: 380px;
