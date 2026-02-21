@@ -222,6 +222,8 @@ body {
   justify-content: center;
   gap: var(--spacing-sm);
   padding: 4px 12px;
+  height: 32px;
+  /* Fixed height for consistency */
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -1206,6 +1208,8 @@ input[type="radio"]:focus {
   gap: 12px;
   width: 100%;
   padding: 8px 12px;
+  height: 40px;
+  /* Fixed height for consistency */
   border: none;
   background: transparent;
   color: var(--color-text-secondary);

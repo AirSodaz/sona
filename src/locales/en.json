@@ -25,7 +25,7 @@
         "settings": "Settings"
     },
     "panel": {
-        "live_record": "Live Recording",
+        "live_record": "Live Record",
         "batch_import": "Batch Import",
         "transcript": "Transcript",
         "mode_selection": "Mode Selection"
@@ -45,7 +45,7 @@
         "visualizer_label": "Audio Visualizer",
         "timer_label": "Recording duration",
         "caption_mode": "Live Caption",
-        "caption_mode_hint": "Floating subtitles from system audio",
+        "caption_mode_hint": "System Audio Captions",
         "caption_active": "Live Caption active...",
         "lock_window": "Lock Window",
         "lock_window_hint": "Make window click-through",
