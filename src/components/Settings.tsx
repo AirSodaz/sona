@@ -49,6 +49,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setFont,
         microphoneId,
         setMicrophoneId,
+        muteDuringRecording,
+        setMuteDuringRecording,
         minimizeToTrayOnExit,
         setMinimizeToTrayOnExit,
 
@@ -243,6 +245,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <SettingsMicrophoneTab
                                 microphoneId={microphoneId}
                                 setMicrophoneId={setMicrophoneId}
+                                muteDuringRecording={muteDuringRecording}
+                                setMuteDuringRecording={setMuteDuringRecording}
                             />
                         )}
 

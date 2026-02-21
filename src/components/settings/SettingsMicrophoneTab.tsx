@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
+import { Switch } from '../Switch';
 
 interface SettingsMicrophoneTabProps {
     microphoneId: string;
     setMicrophoneId: (id: string) => void;
+    muteDuringRecording: boolean;
+    setMuteDuringRecording: (enabled: boolean) => void;
 }
 
 export function SettingsMicrophoneTab({
     microphoneId,
-    setMicrophoneId
+    setMicrophoneId,
+    muteDuringRecording,
+    setMuteDuringRecording
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
@@ -278,6 +283,19 @@ export function SettingsMicrophoneTab({
              <div className="settings-hint">
                  {t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
              </div>
+
+            <div className="settings-divider" />
+
+            <div className="settings-item">
+                <Switch
+                    checked={muteDuringRecording}
+                    onChange={setMuteDuringRecording}
+                    label={t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
+                />
+            </div>
+            <div className="settings-hint">
+                {t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
+            </div>
 
         </div>
     );

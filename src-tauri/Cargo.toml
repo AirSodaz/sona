@@ -38,3 +38,8 @@ tokio = { version = "1.49.0", features = ["full"] }
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+] }

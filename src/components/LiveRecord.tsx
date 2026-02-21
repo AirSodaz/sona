@@ -14,6 +14,7 @@ import { TranscriptionOptions } from './TranscriptionOptions';
 import { Switch } from './Switch';
 import { captionWindowService } from '../services/captionWindowService';
 import { useCaptionSession } from '../hooks/useCaptionSession';
+import { invoke } from '@tauri-apps/api/core';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -250,6 +251,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             activeStreamRef.current = stream;
             await initializeAudioSession(stream);
 
+            // Mute system audio if configured and using microphone
+            if (config.muteDuringRecording && inputSource === 'microphone') {
+                invoke('set_system_audio_mute', { mute: true })
+                    .catch(err => console.error('Failed to mute system audio:', err));
+            }
+
             return true;
 
         } catch (error) {
@@ -409,6 +416,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // Soft stop the recording service
         await transcriptionService.softStop();
 
+        // Unmute system audio if configured
+        const config = useTranscriptStore.getState().config;
+        if (config.muteDuringRecording) {
+            invoke('set_system_audio_mute', { mute: false })
+                .catch(err => console.error('Failed to unmute system audio:', err));
+        }
+
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (canvas && ctx) {
@@ -434,6 +448,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.pause();
         }
+        // Unmute when paused so user can hear
+        const config = useTranscriptStore.getState().config;
+        if (config.muteDuringRecording) {
+            invoke('set_system_audio_mute', { mute: false })
+                .catch(err => console.error('Failed to unmute system audio on pause:', err));
+        }
     }, [setIsPaused]);
 
     const resumeRecording = useCallback(() => {
@@ -443,7 +463,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
             mediaRecorderRef.current.resume();
         }
-    }, [setIsPaused, drawVisualizer]);
+        // Mute again when resuming
+        const config = useTranscriptStore.getState().config;
+        if (config.muteDuringRecording && inputSource === 'microphone') {
+            invoke('set_system_audio_mute', { mute: true })
+                .catch(err => console.error('Failed to mute system audio on resume:', err));
+        }
+    }, [setIsPaused, drawVisualizer, inputSource]);
 
     const stopRecording = useCallback(async () => {
         stopFileRecording();

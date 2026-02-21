@@ -214,6 +214,7 @@ const DEFAULT_CONFIG: AppConfig = {
     lockWindow: false,
     alwaysOnTop: true,
     microphoneId: 'default',
+    muteDuringRecording: false,
 };
 
 /**

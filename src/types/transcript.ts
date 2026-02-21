@@ -71,4 +71,6 @@ export interface AppConfig {
   alwaysOnTop?: boolean;
   /** ID of the selected microphone device. Default: 'default'. */
   microphoneId?: string;
+  /** Whether to mute system audio during recording. Default: false. */
+  muteDuringRecording?: boolean;
 }
