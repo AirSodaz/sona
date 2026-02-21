@@ -64,8 +64,9 @@ fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
 #[cfg(target_os = "windows")]
 fn set_mute_windows(mute: bool) -> Result<(), String> {
     use windows::Win32::Media::Audio::{
-        IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eConsole, IAudioEndpointVolume,
+        IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eConsole,
     };
+    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::System::Com::{CoInitialize, CoCreateInstance, CLSCTX_ALL};
 
     unsafe {
