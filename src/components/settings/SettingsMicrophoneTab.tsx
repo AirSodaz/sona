@@ -13,7 +13,6 @@ export function SettingsMicrophoneTab({
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
-    const [permissionGranted, setPermissionGranted] = useState(false);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -47,7 +46,6 @@ export function SettingsMicrophoneTab({
                          const newAudioInputs = newDevs.filter(d => d.kind === 'audioinput');
                          if (isMounted) {
                              formatAndSetDevices(newAudioInputs);
-                             setPermissionGranted(true);
                          }
                     } catch (err) {
                         console.warn('Microphone permission denied or error', err);
@@ -55,7 +53,6 @@ export function SettingsMicrophoneTab({
                 } else {
                      if (isMounted) {
                          formatAndSetDevices(audioInputs);
-                         setPermissionGranted(true);
                      }
                 }
 
