@@ -1366,38 +1366,6 @@ input[type="radio"]:focus {
   overflow: hidden;
 }
 
-/* Toggle Switch */
-.toggle-switch {
-  width: 44px;
-  height: 24px;
-  border-radius: 12px;
-  background: var(--color-border);
-  position: relative;
-  transition: background 0.2s;
-  border: none;
-  cursor: pointer;
-}
-
-.toggle-switch[aria-checked="true"] {
-  background: var(--color-text-primary);
-}
-
-.toggle-switch-handle {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--color-bg-primary);
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: left 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.toggle-switch[aria-checked="true"] .toggle-switch-handle {
-  left: 22px;
-}
-
 /* Spinner */
 .spinner {
   width: 14px;
