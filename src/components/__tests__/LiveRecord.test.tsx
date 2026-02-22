@@ -139,7 +139,7 @@ describe('LiveRecord', () => {
         vi.useFakeTimers();
         capturedOnSegment = null;
 
-        mockStart.mockImplementation((onSeg: any, onError: any) => {
+        mockStart.mockImplementation((onSeg: any, _onError: any) => {
             capturedOnSegment = onSeg;
             return Promise.resolve();
         });
