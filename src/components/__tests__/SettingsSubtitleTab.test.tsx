@@ -36,45 +36,43 @@ describe('SettingsSubtitleTab', () => {
         expect(screen.getByText('live.font_color')).toBeDefined();
     });
 
-    it('renders width inputs with correct values and classes', () => {
+    it('renders width input with correct values and classes', () => {
         render(<SettingsSubtitleTab {...defaultProps} />);
 
-        const inputs = screen.getAllByDisplayValue('1000');
-        const numberInput = inputs.find(input => input.getAttribute('type') === 'number');
+        const numberInput = screen.getByDisplayValue('1000');
 
         expect(numberInput).toBeDefined();
-        expect(numberInput?.classList.contains('settings-input')).toBe(true);
+        expect(numberInput.tagName).toBe('INPUT');
+        expect(numberInput.getAttribute('type')).toBe('number');
+        expect(numberInput.classList.contains('settings-input')).toBe(true);
 
-        const rangeInputs = screen.getAllByRole('slider');
-        const widthRange = rangeInputs.find(input => input.getAttribute('value') === '1000');
-        expect(widthRange).toBeDefined();
-        expect(widthRange?.classList.contains('audio-slider')).toBe(true);
+        // Ensure range slider is removed
+        const widthRange = document.querySelector('input[type="range"][value="1000"]');
+        expect(widthRange).toBeNull();
     });
 
     it('calls setCaptionWindowWidth when inputs change', () => {
         render(<SettingsSubtitleTab {...defaultProps} />);
 
-        const inputs = screen.getAllByDisplayValue('1000');
-        const numberInput = inputs.find(input => input.getAttribute('type') === 'number');
-
-        if (!numberInput) throw new Error('Number input not found');
+        const numberInput = screen.getByDisplayValue('1000');
 
         fireEvent.change(numberInput, { target: { value: '1200' } });
         expect(defaultProps.setCaptionWindowWidth).toHaveBeenCalledWith(1200);
     });
 
-    it('renders font size inputs with correct classes', () => {
+    it('renders font size input with correct classes', () => {
         render(<SettingsSubtitleTab {...defaultProps} />);
 
-        const inputs = screen.getAllByDisplayValue('24');
-        const numberInput = inputs.find(input => input.getAttribute('type') === 'number');
+        const numberInput = screen.getByDisplayValue('24');
 
         expect(numberInput).toBeDefined();
-        expect(numberInput?.classList.contains('settings-input')).toBe(true);
+        expect(numberInput.tagName).toBe('INPUT');
+        expect(numberInput.getAttribute('type')).toBe('number');
+        expect(numberInput.classList.contains('settings-input')).toBe(true);
 
-        const rangeInputs = screen.getAllByRole('slider');
-        const fontRange = rangeInputs.find(input => input.getAttribute('value') === '24');
-        expect(fontRange?.classList.contains('audio-slider')).toBe(true);
+        // Ensure range slider is removed
+        const fontRange = document.querySelector('input[type="range"][value="24"]');
+        expect(fontRange).toBeNull();
     });
 
     it('renders color picker with correct structure and labels', () => {

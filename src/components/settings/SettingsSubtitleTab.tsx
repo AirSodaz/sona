@@ -94,17 +94,7 @@ export function SettingsSubtitleTab({
                             value={captionWindowWidth}
                             onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
                             className="settings-input"
-                            style={{ width: '80px' }}
-                        />
-                        <input
-                            type="range"
-                            min="300"
-                            max="1600"
-                            step="50"
-                            value={captionWindowWidth}
-                            onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
-                            className="audio-slider"
-                            style={{ width: '120px', flex: 'none' }}
+                            style={{ width: '100px' }}
                         />
                     </div>
                 </div>
@@ -124,17 +114,7 @@ export function SettingsSubtitleTab({
                             value={captionFontSize}
                             onChange={(e) => setCaptionFontSize(Number(e.target.value))}
                             className="settings-input"
-                            style={{ width: '80px' }}
-                        />
-                        <input
-                            type="range"
-                            min="12"
-                            max="72"
-                            step="1"
-                            value={captionFontSize}
-                            onChange={(e) => setCaptionFontSize(Number(e.target.value))}
-                            className="audio-slider"
-                            style={{ width: '120px', flex: 'none' }}
+                            style={{ width: '100px' }}
                         />
                     </div>
                 </div>
