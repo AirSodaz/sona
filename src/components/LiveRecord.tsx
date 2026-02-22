@@ -466,54 +466,69 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const stopRecordingSession = useCallback(async () => {
         console.log('[LiveRecord] Stopping recording session...');
 
-        // Native Cleanup
+        // 1. Stop feeding audio to transcription
+        // For Native Capture
         if (usingNativeCaptureRef.current) {
+            if (systemAudioUnlistenRef.current) {
+                systemAudioUnlistenRef.current();
+                systemAudioUnlistenRef.current = null;
+            }
+            // Stop at source
             try {
                 await invoke('stop_system_audio_capture');
             } catch (e) { console.error(e); }
-
-            // If using native capture, finish the file recording logic here manually
-            // since we don't have a MediaRecorder onstop event.
-            // Construct the full buffer
-            const chunks = audioChunksRef.current;
-            if (chunks.length > 0) {
-                 const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                 const fullBuffer = new Int16Array(totalLength);
-                 let offset = 0;
-                 for (const chunk of chunks) {
-                     fullBuffer.set(chunk, offset);
-                     offset += chunk.length;
-                 }
-
-                 // Encode to WAV
-                 // 16kHz, 1 channel, 16 bit
-                 const blob = encodeWAV(fullBuffer, 16000, 1, 16);
-                 const url = URL.createObjectURL(blob);
-                 useTranscriptStore.getState().setAudioUrl(url);
-
-                 const segments = useTranscriptStore.getState().segments;
-                 const duration = (Date.now() - startTimeRef.current) / 1000;
-
-                 if (segments.length > 0) {
-                     const newItem = await historyService.saveRecording(blob, segments, duration);
-                     if (newItem) {
-                         useHistoryStore.getState().addItem(newItem);
-                         useTranscriptStore.getState().setSourceHistoryId(newItem.id);
-                     }
-                 }
-            }
-            audioChunksRef.current = [];
-            usingNativeCaptureRef.current = false;
         }
-
-        if (systemAudioUnlistenRef.current) {
-            systemAudioUnlistenRef.current();
-            systemAudioUnlistenRef.current = null;
+        // For Web API
+        else if (audioContextRef.current && audioContextRef.current.state === 'running') {
+            try {
+                await audioContextRef.current.suspend();
+            } catch (e) { console.error('Failed to suspend audio context:', e); }
         }
 
         if (animationRef.current) {
             window.cancelAnimationFrame(animationRef.current);
             animationRef.current = 0;
+        }
+
+        // 2. Soft stop the recording service (waits for final segments)
+        await transcriptionService.softStop();
+
+        // 3. Finalize and Cleanup
+
+        // Native Cleanup & Saving
+        if (usingNativeCaptureRef.current) {
+            // If using native capture, finish the file recording logic here manually
+            // since we don't have a MediaRecorder onstop event.
+            // Construct the full buffer
+            const chunks = audioChunksRef.current;
+            if (chunks.length > 0) {
+                const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                const fullBuffer = new Int16Array(totalLength);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    fullBuffer.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                // Encode to WAV
+                // 16kHz, 1 channel, 16 bit
+                const blob = encodeWAV(fullBuffer, 16000, 1, 16);
+                const url = URL.createObjectURL(blob);
+                useTranscriptStore.getState().setAudioUrl(url);
+
+                const segments = useTranscriptStore.getState().segments;
+                const duration = (Date.now() - startTimeRef.current) / 1000;
+
+                if (segments.length > 0) {
+                    const newItem = await historyService.saveRecording(blob, segments, duration);
+                    if (newItem) {
+                        useHistoryStore.getState().addItem(newItem);
+                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                    }
+                }
+            }
+            audioChunksRef.current = [];
+            usingNativeCaptureRef.current = false;
         }
 
         if (audioContextRef.current) {
@@ -525,9 +540,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
             audioContextRef.current = null;
         }
-
-        // Soft stop the recording service
-        await transcriptionService.softStop();
 
         // Unmute system audio if configured
         const config = useTranscriptStore.getState().config;
@@ -585,8 +597,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [setIsPaused, drawVisualizer, inputSource]);
 
     const stopRecording = useCallback(async () => {
-        stopFileRecording();
         await stopRecordingSession();
+        stopFileRecording();
     }, [stopFileRecording, stopRecordingSession]);
 
     const handleToggleRecording = useCallback(async () => {
