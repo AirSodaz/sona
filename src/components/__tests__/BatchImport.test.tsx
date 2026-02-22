@@ -219,4 +219,34 @@ describe('BatchImport Integration', () => {
             expect(screen.getByText('batch.drop_title')).toBeDefined();
         });
     });
+
+    it('allows adding more files while queue is processing', async () => {
+        // Setup initial state with processing item
+        useBatchQueueStore.setState({
+            queueItems: [{
+                id: '1',
+                filename: 'processing.wav',
+                filePath: '/path/to/processing.wav',
+                status: 'processing',
+                progress: 50,
+                segments: [],
+                audioUrl: 'asset:///path/to/processing.wav'
+            }],
+            activeItemId: '1',
+            isQueueProcessing: true
+        });
+
+        render(<BatchImport />);
+
+        // Check if processing view is shown
+        expect(screen.getByText('batch.processing_title')).toBeDefined();
+
+        // Check if "Add more files" button is present and NOT disabled
+        const addButton = screen.getByRole('button', { name: 'batch.add_more_files' }) as HTMLButtonElement;
+        expect(addButton).toBeDefined();
+        expect(addButton.disabled).toBe(false);
+
+        // Verify clicking it triggers file dialog
+        fireEvent.click(addButton);
+    });
 });
