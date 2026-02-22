@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from './Dropdown';
+import { Switch } from './Switch';
 import { XIcon } from './Icons';
 
 interface ParameterSettingsModalProps {
@@ -106,16 +107,11 @@ export function ParameterSettingsModal({
                             <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.timeline_mode')}</span>
                             <span className="options-hint">{t('batch.timeline_hint')}</span>
                         </div>
-                        <button
-                            className={`toggle-switch ${disabled ? 'disabled' : ''}`}
-                            onClick={() => !disabled && setEnableTimeline(!enableTimeline)}
-                            role="switch"
-                            aria-checked={enableTimeline}
-                            aria-label={t('batch.timeline_mode')}
+                        <Switch
+                            checked={enableTimeline}
+                            onChange={(val) => !disabled && setEnableTimeline(val)}
                             disabled={disabled}
-                        >
-                            <div className="toggle-switch-handle" />
-                        </button>
+                        />
                     </div>
 
                     {/* Language */}
