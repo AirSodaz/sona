@@ -93,7 +93,8 @@ export function SettingsSubtitleTab({
                             step="50"
                             value={captionWindowWidth}
                             onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
-                            style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)' }}
+                            className="settings-input"
+                            style={{ width: '80px' }}
                         />
                         <input
                             type="range"
@@ -102,7 +103,8 @@ export function SettingsSubtitleTab({
                             step="50"
                             value={captionWindowWidth}
                             onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
-                            style={{ width: '120px' }}
+                            className="audio-slider"
+                            style={{ width: '120px', flex: 'none' }}
                         />
                     </div>
                 </div>
@@ -121,7 +123,8 @@ export function SettingsSubtitleTab({
                             step="1"
                             value={captionFontSize}
                             onChange={(e) => setCaptionFontSize(Number(e.target.value))}
-                            style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)' }}
+                            className="settings-input"
+                            style={{ width: '80px' }}
                         />
                         <input
                             type="range"
@@ -130,7 +133,8 @@ export function SettingsSubtitleTab({
                             step="1"
                             value={captionFontSize}
                             onChange={(e) => setCaptionFontSize(Number(e.target.value))}
-                            style={{ width: '120px' }}
+                            className="audio-slider"
+                            style={{ width: '120px', flex: 'none' }}
                         />
                     </div>
                 </div>
@@ -142,19 +146,41 @@ export function SettingsSubtitleTab({
                         {t('live.font_color', { defaultValue: 'Font Color' })}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <input
-                            type="color"
-                            value={captionFontColor}
-                            onChange={(e) => setCaptionFontColor(e.target.value)}
-                            style={{ width: '40px', height: '40px', padding: '0', border: 'none', background: 'none', cursor: 'pointer' }}
-                        />
+                        <div
+                            style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--color-border)',
+                                overflow: 'hidden',
+                                flexShrink: 0
+                            }}
+                        >
+                            <input
+                                type="color"
+                                value={captionFontColor}
+                                onChange={(e) => setCaptionFontColor(e.target.value)}
+                                aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
+                                style={{
+                                    width: '150%',
+                                    height: '150%',
+                                    padding: 0,
+                                    margin: '-25%',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    background: 'none'
+                                }}
+                            />
+                        </div>
                         <input
                             type="text"
                             value={captionFontColor}
                             onChange={(e) => setCaptionFontColor(e.target.value)}
                             placeholder="#RRGGBB"
                             maxLength={7}
-                            style={{ width: '100px', padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', fontFamily: 'monospace' }}
+                            aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}
+                            className="settings-input"
+                            style={{ width: '100px', fontFamily: 'monospace' }}
                         />
                     </div>
                 </div>
