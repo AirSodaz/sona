@@ -179,6 +179,7 @@ describe('LiveRecord Native Capture', () => {
         vi.stubGlobal('AudioContext', class {
             state = 'running';
             destination = {};
+            currentTime = 0;
             createMediaStreamSource() {
                 return { connect: vi.fn() };
             }
@@ -188,6 +189,20 @@ describe('LiveRecord Native Capture', () => {
                     frequencyBinCount: 1024,
                     getByteFrequencyData: vi.fn(),
                     connect: vi.fn(),
+                };
+            }
+            createBuffer(_channels: number, length: number, sampleRate: number) {
+                return {
+                    copyToChannel: vi.fn(),
+                    duration: length / sampleRate,
+                };
+            }
+            createBufferSource() {
+                return {
+                    buffer: null,
+                    connect: vi.fn(),
+                    start: vi.fn(),
+                    stop: vi.fn(),
                 };
             }
             audioWorklet = {
@@ -323,6 +338,8 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('should save recording if duration > 1s', async () => {
+        await import('../../stores/transcriptStore');
+
         render(<LiveRecord />);
 
         // 1. Select "Desktop" source
