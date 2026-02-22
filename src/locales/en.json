@@ -50,7 +50,13 @@
         "lock_window": "Lock Window",
         "lock_window_hint": "Make window click-through",
         "always_on_top": "Always on Top",
-        "always_on_top_hint": "Keep window above others"
+        "always_on_top_hint": "Keep window above others",
+        "start_on_launch": "Start on Launch",
+        "start_on_launch_hint": "Automatically start Live Caption when the program opens",
+        "window_width": "Floating Window Width",
+        "font_size": "Font Size",
+        "font_color": "Font Color",
+        "subtitle_settings": "Subtitle Settings"
     },
     "batch": {
         "processing_title": "Processing Audio",

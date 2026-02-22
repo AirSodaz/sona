@@ -10,6 +10,7 @@ vi.mock('../../services/captionWindowService', () => ({
         open: vi.fn(),
         close: vi.fn(),
         sendSegments: vi.fn(),
+        updateStyle: vi.fn().mockResolvedValue(undefined),
     }
 }));
 

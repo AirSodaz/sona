@@ -5,6 +5,7 @@ import { TranscriptSegment } from '../types/transcript';
 const CAPTION_WINDOW_LABEL = 'caption';
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
 const CAPTION_EVENT_CLOSE = 'caption:close';
+const CAPTION_EVENT_STYLE = 'caption:style';
 
 class CaptionWindowService {
     private windowInstance: WebviewWindow | null = null;
@@ -13,7 +14,7 @@ class CaptionWindowService {
      * Opens the always-on-top caption window.
      * If it already exists, it focuses it.
      */
-    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean }) {
+    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number, color?: string }) {
         // Check if window already exists
         const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
         if (existingWindow) {
@@ -26,18 +27,25 @@ class CaptionWindowService {
             if (options?.lockWindow !== undefined) {
                 await this.setClickThrough(options.lockWindow);
             }
+            if (options?.width || options?.fontSize || options?.color) {
+                await this.updateStyle({ width: options.width, fontSize: options.fontSize, color: options.color });
+            }
             return;
         }
 
+        const width = options?.width || 800;
+        const fontSize = options?.fontSize || 24;
+        const color = options?.color ? encodeURIComponent(options.color) : 'white';
+
         // specific creation options for caption window
         this.windowInstance = new WebviewWindow(CAPTION_WINDOW_LABEL, {
-            url: '/index.html?window=caption',
+            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}&color=${color}`,
             title: 'Sona Live Caption',
             alwaysOnTop: options?.alwaysOnTop ?? true,
             decorations: false,
             transparent: true,
             skipTaskbar: true,
-            width: 800,
+            width: width,
             height: 120,
             minWidth: 200,
             minHeight: 32,
@@ -148,6 +156,35 @@ class CaptionWindowService {
         const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
         if (win) {
             await win.setIgnoreCursorEvents(enabled);
+        }
+    }
+
+    /**
+     * Updates the caption window style (width and font size).
+     * @param style Style object containing width and fontSize.
+     */
+    async updateStyle(style: { width?: number, fontSize?: number, color?: string }) {
+        await emit(CAPTION_EVENT_STYLE, style);
+
+        // Also update window size if width is provided
+        if (style.width) {
+            const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
+            if (win) {
+                try {
+                    const { PhysicalSize } = await import('@tauri-apps/api/dpi');
+                    const factor = await win.scaleFactor();
+                    const size = await win.innerSize();
+
+                    // We only change width, keeping current height (or letting React handle it)
+                    // But resizing window width is important for the text wrapping
+                    const targetWidth = Math.ceil(style.width * factor);
+                    const newSize = new PhysicalSize(targetWidth, size.height);
+
+                    await win.setSize(newSize);
+                } catch (e) {
+                    console.error('[CaptionWindowService] Failed to resize window:', e);
+                }
+            }
         }
     }
 }

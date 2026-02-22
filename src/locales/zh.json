@@ -50,7 +50,13 @@
         "lock_window": "锁定窗口",
         "lock_window_hint": "鼠标穿透（点击穿过窗口）",
         "always_on_top": "窗口置顶",
-        "always_on_top_hint": "保持窗口在最上层"
+        "always_on_top_hint": "保持窗口在最上层",
+        "start_on_launch": "启动时开启",
+        "start_on_launch_hint": "程序启动时自动开启实时字幕",
+        "window_width": "悬浮窗宽度",
+        "font_size": "字体大小",
+        "font_color": "字体颜色",
+        "subtitle_settings": "字幕设置"
     },
     "batch": {
         "processing_title": "处理音频中",

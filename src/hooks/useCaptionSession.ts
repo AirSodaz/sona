@@ -23,18 +23,18 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, [isCaptionMode]);
 
     // Helper to update service config from AppConfig
-    const updateServiceConfig = useCallback(async (service: TranscriptionService) => {
-        service.setModelPath(config.offlineModelPath);
-        service.setLanguage(config.language);
-        service.setEnableITN(config.enableITN ?? false);
-        service.setPunctuationModelPath(config.punctuationModelPath || '');
-        service.setCtcModelPath(config.ctcModelPath || '');
-        service.setVadModelPath(config.vadModelPath || '');
-        service.setVadBufferSize(config.vadBufferSize || 5);
+    const updateServiceConfig = useCallback(async (service: TranscriptionService, cfg: AppConfig) => {
+        service.setModelPath(cfg.offlineModelPath);
+        service.setLanguage(cfg.language);
+        service.setEnableITN(cfg.enableITN ?? false);
+        service.setPunctuationModelPath(cfg.punctuationModelPath || '');
+        service.setCtcModelPath(cfg.ctcModelPath || '');
+        service.setVadModelPath(cfg.vadModelPath || '');
+        service.setVadBufferSize(cfg.vadBufferSize || 5);
 
         // ITN Setup
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
+        const enabledITNModels = new Set(cfg.enabledITNModels || []);
+        const itnRulesOrder = cfg.itnRulesOrder || ['itn-zh-number'];
         if (enabledITNModels.size > 0) {
             try {
                 const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
@@ -46,7 +46,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         } else {
             service.setITNModelPaths([]);
         }
-    }, [config]);
+    }, []); // Stable callback
 
     const stopCaptionSession = useCallback(async () => {
         console.log('[CaptionSession] Stopping session...');
@@ -172,7 +172,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             // 3. Configure Service
             const service = serviceRef.current;
-            await updateServiceConfig(service);
+            await updateServiceConfig(service, config);
 
             if (!activeRef.current) return;
 
@@ -212,7 +212,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             // 6. Open Window
             await captionWindowService.open({
                 alwaysOnTop: config.alwaysOnTop ?? true,
-                lockWindow: config.lockWindow ?? false
+                lockWindow: config.lockWindow ?? false,
+                width: config.captionWindowWidth,
+                fontSize: config.captionFontSize,
+                color: config.captionFontColor
             });
 
         } catch (error) {
@@ -236,12 +239,12 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
 
 
-    // Effect: Handle Config Changes while Active
+    // Effect: Handle Service Config Changes while Active (Restart Service)
     useEffect(() => {
         const update = async () => {
             if (isCaptionMode && serviceRef.current && !isInitializing) {
                 // Update service config and restart sidecar only
-                await updateServiceConfig(serviceRef.current);
+                await updateServiceConfig(serviceRef.current, config);
 
                 // Triggers internal restart check
                 await serviceRef.current.start(
@@ -251,7 +254,33 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             }
         };
         update();
-    }, [config, isCaptionMode, isInitializing, updateServiceConfig]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        config.offlineModelPath,
+        config.language,
+        config.enableITN,
+        config.punctuationModelPath,
+        config.ctcModelPath,
+        config.vadModelPath,
+        config.vadBufferSize,
+        // Use JSON stringify for deep comparison of arrays/sets
+        JSON.stringify(config.enabledITNModels),
+        JSON.stringify(config.itnRulesOrder),
+        isCaptionMode,
+        isInitializing,
+        updateServiceConfig
+    ]);
+
+    // Effect: Handle Style Changes (No Restart)
+    useEffect(() => {
+        if (isCaptionMode && !isInitializing) {
+            captionWindowService.updateStyle({
+                width: config.captionWindowWidth,
+                fontSize: config.captionFontSize,
+                color: config.captionFontColor
+            }).catch(console.error);
+        }
+    }, [config.captionWindowWidth, config.captionFontSize, config.captionFontColor, isCaptionMode, isInitializing]);
 
     // Cleanup on unmount
     useEffect(() => {

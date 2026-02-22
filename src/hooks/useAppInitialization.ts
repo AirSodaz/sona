@@ -13,6 +13,7 @@ import i18n from '../i18n';
 export function useAppInitialization() {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Initialize config from localStorage
@@ -23,7 +24,7 @@ export function useAppInitialization() {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
                 if (parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage || parsed.language) {
-                    setConfig({
+                    const loadedConfig = {
                         offlineModelPath: parsed.offlineModelPath || parsed.modelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
                         vadModelPath: parsed.vadModelPath || '',
@@ -39,8 +40,19 @@ export function useAppInitialization() {
                         language: parsed.language || 'auto',
                         enableTimeline: parsed.enableTimeline ?? true,
                         minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
-                        muteDuringRecording: parsed.muteDuringRecording ?? false
-                    });
+                        muteDuringRecording: parsed.muteDuringRecording ?? false,
+                        startOnLaunch: parsed.startOnLaunch ?? false,
+                        captionWindowWidth: parsed.captionWindowWidth || 800,
+                        captionFontSize: parsed.captionFontSize || 24,
+                        captionFontColor: parsed.captionFontColor || '#ffffff',
+                    };
+
+                    setConfig(loadedConfig);
+
+                    // Auto-start caption mode if configured
+                    if (loadedConfig.startOnLaunch) {
+                        setIsCaptionMode(true);
+                    }
 
                     // Apply language immediately
                     if (parsed.appLanguage && parsed.appLanguage !== 'auto') {
@@ -110,7 +122,11 @@ export function useAppInitialization() {
             language: config.language,
             enableTimeline: config.enableTimeline,
             minimizeToTrayOnExit: config.minimizeToTrayOnExit,
-            muteDuringRecording: config.muteDuringRecording
+            muteDuringRecording: config.muteDuringRecording,
+            startOnLaunch: config.startOnLaunch,
+            captionWindowWidth: config.captionWindowWidth,
+            captionFontSize: config.captionFontSize,
+            captionFontColor: config.captionFontColor,
         };
         localStorage.setItem('sona-config', JSON.stringify(configToSave));
     }, [config, isLoaded]);
