@@ -133,8 +133,16 @@ vi.mock('lucide-react', () => ({
 }));
 
 describe('LiveRecord', () => {
+    let capturedOnSegment: any = null;
+
     beforeEach(async () => {
         vi.useFakeTimers();
+        capturedOnSegment = null;
+
+        mockStart.mockImplementation((onSeg: any, _onError: any) => {
+            capturedOnSegment = onSeg;
+            return Promise.resolve();
+        });
 
         const raf = vi.fn((cb) => setTimeout(cb, 16));
         const caf = vi.fn((id) => clearTimeout(id));
@@ -399,5 +407,63 @@ describe('LiveRecord', () => {
         });
 
         expect(mockInvoke).toHaveBeenCalledWith('set_system_audio_mute', { mute: false });
+    });
+
+    it('should process final segment emitted during softStop', async () => {
+        // Mock softStop to emit a final segment
+        mockSoftStop.mockImplementation(async () => {
+            if (capturedOnSegment) {
+                // Simulate waiting time
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Emit final segment
+                capturedOnSegment({
+                    id: 'final-seg',
+                    text: 'Final segment text',
+                    start: 0,
+                    end: 1,
+                    isFinal: true
+                });
+            }
+        });
+
+        render(<LiveRecord />);
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+        await act(async () => {
+            fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(capturedOnSegment).toBeTruthy();
+
+        // Emit an initial segment
+        await act(async () => {
+            capturedOnSegment({
+                id: 'seg1',
+                text: 'Hello',
+                start: 0,
+                end: 0.5,
+                isFinal: false
+            });
+        });
+
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        expect(useTranscriptStore.getState().segments).toHaveLength(1);
+
+        // Stop recording
+        const stopBtn = screen.getByRole('button', { name: /live.stop/i });
+        await act(async () => {
+            fireEvent.click(stopBtn);
+            // softStop will wait 100ms then emit final segment
+            await vi.advanceTimersByTimeAsync(200);
+        });
+
+        // Verify final segment is present
+        const segments = useTranscriptStore.getState().segments;
+        const lastSegment = segments[segments.length - 1];
+
+        expect(mockSoftStop).toHaveBeenCalled();
+        expect(lastSegment.text).toBe('Final segment text');
     });
 });
