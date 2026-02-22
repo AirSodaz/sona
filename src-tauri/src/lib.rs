@@ -174,11 +174,13 @@ async fn update_tray_menu<R: tauri::Runtime>(
     settings_text: String,
     updates_text: String,
     quit_text: String,
+    caption_text: String,
 ) -> Result<(), String> {
     #[cfg(desktop)]
     {
         use tauri::menu::{Menu, MenuItem};
         let show_i = MenuItem::with_id(&app, "show", &show_text, true, None::<&str>).map_err(|e| e.to_string())?;
+        let caption_i = MenuItem::with_id(&app, "toggle_caption", &caption_text, true, None::<&str>).map_err(|e| e.to_string())?;
         let settings_i = MenuItem::with_id(&app, "settings", &settings_text, true, None::<&str>).map_err(|e| e.to_string())?;
         let updates_i = MenuItem::with_id(&app, "check_updates", &updates_text, true, None::<&str>).map_err(|e| e.to_string())?;
         let quit_i = MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>).map_err(|e| e.to_string())?;
@@ -187,6 +189,7 @@ async fn update_tray_menu<R: tauri::Runtime>(
             &app,
             &[
                 &show_i,
+                &caption_i,
                 &settings_i,
                 &updates_i,
                 &tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?,
@@ -417,6 +420,7 @@ pub fn run() {
 
                 let show_i =
                     MenuItem::with_id(app, "show", "Show Main Window", true, None::<&str>)?;
+                let caption_i = MenuItem::with_id(app, "toggle_caption", "Start Live Caption", true, None::<&str>)?;
                 let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
                 let updates_i =
                     MenuItem::with_id(app, "check_updates", "Check for Updates", true, None::<&str>)?;
@@ -426,6 +430,7 @@ pub fn run() {
                     app,
                     &[
                         &show_i,
+                        &caption_i,
                         &settings_i,
                         &updates_i,
                         &tauri::menu::PredefinedMenuItem::separator(app)?,
@@ -445,6 +450,11 @@ pub fn run() {
                                 let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
+                            }
+                        }
+                        "toggle_caption" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.emit("toggle-caption", ());
                             }
                         }
                         "settings" => {
