@@ -39,6 +39,7 @@ interface ServiceConfig {
  * Handles spawning, communication (stdin/stdout), and lifecycle of the external process.
  */
 export class TranscriptionService {
+    private static readonly JSON_START_REGEX = /^[\s]*[\{\[]/;
     private child: Child | null = null;
     /** Indicates if the sidecar process is currently running. */
     private isRunning: boolean = false;
@@ -482,6 +483,7 @@ export class TranscriptionService {
                     // Flush remaining buffer
                     const lines = stdoutStreamBuffer.flush();
                     lines.forEach(line => {
+                        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
                         try {
                             const data = JSON.parse(line);
                             if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
@@ -514,6 +516,7 @@ export class TranscriptionService {
             command.stdout.on('data', (chunk) => {
                 const lines = stdoutStreamBuffer.process(chunk);
                 lines.forEach(line => {
+                    if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
                     try {
                         const data = JSON.parse(line);
                         if (Array.isArray(data)) {
@@ -539,6 +542,7 @@ export class TranscriptionService {
                 stderrChunks.push(chunk);
                 const lines = stderrStreamBuffer.process(chunk);
                 lines.forEach(line => {
+                    if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
                     try {
                         const data = JSON.parse(line);
                         if (data.type === 'progress' && typeof data.percentage === 'number') {
@@ -564,6 +568,7 @@ export class TranscriptionService {
      * @param line A string containing the JSON output.
      */
     private handleOutput(line: string): void {
+        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
         try {
             const data = JSON.parse(line);
 
@@ -671,6 +676,7 @@ export class TranscriptionService {
                 command.stdout.on('data', (chunk) => {
                     const lines = stdoutBuffer.process(chunk);
                     for (const line of lines) {
+                        if (!TranscriptionService.JSON_START_REGEX.test(line)) continue;
                         try {
                             const data = JSON.parse(line);
                             if (data.tokens && Array.isArray(data.tokens)) {
@@ -694,6 +700,7 @@ export class TranscriptionService {
                     // Flush remaining buffer
                     const remaining = stdoutBuffer.flush();
                     for (const line of remaining) {
+                        if (!TranscriptionService.JSON_START_REGEX.test(line)) continue;
                         try {
                             const data = JSON.parse(line);
                             if (data.tokens && Array.isArray(data.tokens)) {
