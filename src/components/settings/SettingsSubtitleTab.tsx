@@ -37,46 +37,52 @@ export function SettingsSubtitleTab({
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
-                    </span>
+                    <div>
+                        <div className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
+                        </div>
+                        <div className="settings-hint">
+                            {t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={startOnLaunch}
                         onChange={setStartOnLaunch}
                     />
                 </div>
-                <div className="settings-hint">
-                    {t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
-                </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.lock_window', { defaultValue: 'Lock Window' })}
-                    </span>
+                    <div>
+                        <div className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.lock_window', { defaultValue: 'Lock Window' })}
+                        </div>
+                        <div className="settings-hint">
+                            {t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={lockWindow}
                         onChange={setLockWindow}
                     />
                 </div>
-                <div className="settings-hint">
-                    {t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
-                </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.always_on_top', { defaultValue: 'Always on Top' })}
-                    </span>
+                    <div>
+                        <div className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.always_on_top', { defaultValue: 'Always on Top' })}
+                        </div>
+                        <div className="settings-hint">
+                            {t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={alwaysOnTop}
                         onChange={setAlwaysOnTop}
                     />
-                </div>
-                <div className="settings-hint">
-                    {t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
                 </div>
             </div>
 

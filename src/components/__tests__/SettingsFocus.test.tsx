@@ -58,6 +58,7 @@ vi.mock('../settings/SettingsLocalTab', () => ({
 vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
     MicIcon: () => <span>Icon</span>,
+    SubtitleIcon: () => <span>Icon</span>,
     ModelIcon: () => <span>Icon</span>,
     LocalIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
