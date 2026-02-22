@@ -285,16 +285,18 @@ export function SettingsMicrophoneTab({
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
-                    </span>
+                    <div>
+                        <div className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
+                        </div>
+                        <div className="settings-hint">
+                            {t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={muteDuringRecording}
                         onChange={setMuteDuringRecording}
                     />
-                </div>
-                <div className="settings-hint">
-                    {t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
                 </div>
             </div>
 

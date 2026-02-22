@@ -144,14 +144,16 @@ export function SettingsGeneralTab({
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="settings-label" style={{ marginBottom: 0 }}>{t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}</span>
+                    <div>
+                        <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}</div>
+                        <div className="settings-hint">
+                            {t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={minimizeToTrayOnExit}
                         onChange={setMinimizeToTrayOnExit}
                     />
-                </div>
-                <div className="settings-hint">
-                    {t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
                 </div>
             </div>
         </div>
