@@ -253,6 +253,7 @@
     },
     "tray": {
         "show": "显示主窗口",
+        "live_caption": "实时字幕",
         "settings": "设置",
         "check_updates": "检查更新",
         "quit": "退出",

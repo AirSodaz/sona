@@ -253,6 +253,7 @@
     },
     "tray": {
         "show": "Show Main Window",
+        "live_caption": "Live Caption",
         "settings": "Settings",
         "check_updates": "Check for Updates",
         "quit": "Quit",

@@ -19,8 +19,9 @@ export function useTrayHandling(
 ) {
     const { confirm } = useDialogStore();
     const { t, i18n } = useTranslation();
+    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
 
-    // Update tray menu language when locale changes
+    // Update tray menu language when locale changes or caption state changes
     useEffect(() => {
         const updateTray = async () => {
             try {
@@ -28,14 +29,16 @@ export function useTrayHandling(
                     showText: t('tray.show'),
                     settingsText: t('tray.settings'),
                     updatesText: t('tray.check_updates'),
-                    quitText: t('tray.quit')
+                    quitText: t('tray.quit'),
+                    captionText: t('tray.live_caption'),
+                    captionChecked: isCaptionMode
                 });
             } catch (err) {
                 console.warn('Failed to update tray menu language:', err);
             }
         };
         updateTray();
-    }, [i18n.language, t]);
+    }, [i18n.language, t, isCaptionMode]);
 
     useEffect(() => {
         let isMounted = true;
@@ -50,6 +53,14 @@ export function useTrayHandling(
                 });
                 if (isMounted) unlistenFunctions.push(unlistenOpenSettings);
                 else unlistenOpenSettings();
+
+                const unlistenToggleCaption = await listen('toggle-caption', () => {
+                    if (!isMounted) return;
+                    const currentMode = useTranscriptStore.getState().isCaptionMode;
+                    useTranscriptStore.getState().setIsCaptionMode(!currentMode);
+                });
+                if (isMounted) unlistenFunctions.push(unlistenToggleCaption);
+                else unlistenToggleCaption();
 
                 const unlistenCheckUpdates = await listen('check-updates', () => {
                     if (!isMounted) return;
