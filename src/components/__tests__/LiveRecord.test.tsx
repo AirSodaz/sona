@@ -97,6 +97,7 @@ vi.mock('../../services/captionWindowService', () => ({
         sendSegments: vi.fn().mockResolvedValue(undefined),
         setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
         setClickThrough: vi.fn().mockResolvedValue(undefined),
+        updateStyle: vi.fn().mockResolvedValue(undefined),
     }
 }));
 

@@ -72,7 +72,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const animationRef = useRef<number>(0);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
-    const activeStreamRef = useRef<MediaStream | null>(null); // Recording stream
+    const activeStreamRef = useRef<MediaStream | null>(null); // Managed stream for recording and visualization
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -133,6 +133,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Draw visualizer
     const drawVisualizer = useCallback(() => {
+        if (animationRef.current) {
+            window.cancelAnimationFrame(animationRef.current);
+        }
+
         const canvas = canvasRef.current;
         const analyser = analyserRef.current;
         if (!canvas || !analyser) return;
@@ -345,7 +349,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
         );
 
-        (window as any).currentStream = stream; // Temporary hack to pass stream
         drawVisualizer();
     }
 
