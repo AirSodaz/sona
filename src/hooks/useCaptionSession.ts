@@ -3,6 +3,8 @@ import { TranscriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
 import { modelService } from '../services/modelService';
 import { AppConfig } from '../types/transcript';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -14,6 +16,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const streamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<AudioWorkletNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+
+    // Native capture refs
+    const usingNativeCaptureRef = useRef(false);
+    const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
 
     // Track active state to handle race conditions
     const activeRef = useRef(isCaptionMode);
@@ -56,7 +62,20 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             await captionWindowService.close();
         } catch (e) { console.error(e); }
 
-        // Stop Audio Context
+        // Stop Native Capture
+        if (usingNativeCaptureRef.current) {
+            try {
+                await invoke('stop_system_audio_capture');
+            } catch (e) { console.error(e); }
+            usingNativeCaptureRef.current = false;
+        }
+
+        if (systemAudioUnlistenRef.current) {
+            systemAudioUnlistenRef.current();
+            systemAudioUnlistenRef.current = null;
+        }
+
+        // Stop Audio Context (Web API fallback)
         if (audioContextRef.current) {
             try {
                 await audioContextRef.current.close();
@@ -64,7 +83,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             audioContextRef.current = null;
         }
 
-        // Stop Stream
+        // Stop Stream (Web API fallback)
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(t => t.stop());
             streamRef.current = null;
@@ -86,7 +105,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             return;
         }
 
-        if (streamRef.current && audioContextRef.current && audioContextRef.current.state === 'running') {
+        if (
+            (streamRef.current && audioContextRef.current && audioContextRef.current.state === 'running') ||
+            (usingNativeCaptureRef.current)
+        ) {
              // Already running
              return;
         }
@@ -97,77 +119,96 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             if (!activeRef.current) return;
 
-            // 1. Get Desktop Stream
-            if (!streamRef.current) {
-                let stream: MediaStream;
+            // 1. Get Audio Source (Try Native -> Fallback to Web API)
+            if (!streamRef.current && !usingNativeCaptureRef.current) {
+                let nativeSuccess = false;
                 try {
-                    stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            width: 1,
-                            height: 1,
-                            frameRate: 1,
-                        },
-                        audio: {
-                            echoCancellation: false,
-                            noiseSuppression: false,
-                            autoGainControl: false,
-                        }
+                    console.log('[CaptionSession] Attempting native system audio capture...');
+                    await invoke('start_system_audio_capture');
+                    const unlisten = await listen<number[]>('system-audio', (event) => {
+                        const samples = new Int16Array(event.payload);
+                        serviceRef.current.sendAudioInt16(samples);
                     });
+                    systemAudioUnlistenRef.current = unlisten;
+                    usingNativeCaptureRef.current = true;
+                    nativeSuccess = true;
+                    console.log('[CaptionSession] Native capture started.');
+                } catch (e) {
+                    console.warn('[CaptionSession] Native capture failed, falling back to Web API:', e);
+                }
 
-                    // Check active again after async
-                    if (!activeRef.current) {
-                        stream.getTracks().forEach(t => t.stop());
-                        return;
+                if (!nativeSuccess) {
+                    // Fallback to Web API
+                    let stream: MediaStream;
+                    try {
+                        stream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                width: 1,
+                                height: 1,
+                                frameRate: 1,
+                            },
+                            audio: {
+                                echoCancellation: false,
+                                noiseSuppression: false,
+                                autoGainControl: false,
+                            }
+                        });
+
+                        // Check active again after async
+                        if (!activeRef.current) {
+                            stream.getTracks().forEach(t => t.stop());
+                            return;
+                        }
+
+                        const audioTracks = stream.getAudioTracks();
+                        if (audioTracks.length === 0) {
+                            throw new Error('No audio track selected in screen share.');
+                        }
+
+                        stream.getVideoTracks().forEach(t => t.stop());
+                        stream = new MediaStream([audioTracks[0]]);
+                        streamRef.current = stream;
+
+                        stream.getAudioTracks()[0].onended = () => {
+                            console.log('[CaptionSession] Stream ended by user.');
+                            stopCaptionSession();
+                        };
+                    } catch (err) {
+                        if (!activeRef.current) return;
+                        console.error('[CaptionSession] Failed to get display media:', err);
+                        throw err;
                     }
-
-                    const audioTracks = stream.getAudioTracks();
-                    if (audioTracks.length === 0) {
-                        throw new Error('No audio track selected in screen share.');
-                    }
-
-                    stream.getVideoTracks().forEach(t => t.stop());
-                    stream = new MediaStream([audioTracks[0]]);
-                    streamRef.current = stream;
-
-                    stream.getAudioTracks()[0].onended = () => {
-                        console.log('[CaptionSession] Stream ended by user.');
-                        stopCaptionSession();
-                        // Note: We cannot easily update external state (isCaptionMode) here without a setter.
-                        // Ideally we'd accept setIsCaptionMode as a prop.
-                    };
-                } catch (err) {
-                    if (!activeRef.current) return;
-                    console.error('[CaptionSession] Failed to get display media:', err);
-                    throw err;
                 }
             }
 
             if (!activeRef.current) return;
 
-            // 2. Initialize Audio Context
-            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                const audioContext = new AudioContext({ sampleRate: 16000 });
-                audioContextRef.current = audioContext;
-                try {
-                    await audioContext.audioWorklet.addModule('/audio-processor.js');
-                } catch (e) {
-                     if (!activeRef.current) {
-                         await audioContext.close();
-                         audioContextRef.current = null;
-                         return;
-                     }
-                     throw e;
+            // 2. Initialize Audio Context (ONLY for Web API fallback)
+            if (!usingNativeCaptureRef.current) {
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                    const audioContext = new AudioContext({ sampleRate: 16000 });
+                    audioContextRef.current = audioContext;
+                    try {
+                        await audioContext.audioWorklet.addModule('/audio-processor.js');
+                    } catch (e) {
+                         if (!activeRef.current) {
+                             await audioContext.close();
+                             audioContextRef.current = null;
+                             return;
+                         }
+                         throw e;
+                    }
+                } else if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
                 }
-            } else if (audioContextRef.current.state === 'suspended') {
-                await audioContextRef.current.resume();
-            }
 
-            if (!activeRef.current) {
-                if (audioContextRef.current) {
-                    await audioContextRef.current.close();
-                    audioContextRef.current = null;
+                if (!activeRef.current) {
+                    if (audioContextRef.current) {
+                        await audioContextRef.current.close();
+                        audioContextRef.current = null;
+                    }
+                    return;
                 }
-                return;
             }
 
             // 3. Configure Service
@@ -191,8 +232,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 return;
             }
 
-            // 5. Connect Audio Pipeline
-            if (!processorRef.current && audioContextRef.current && streamRef.current) {
+            // 5. Connect Audio Pipeline (ONLY for Web API fallback)
+            if (!usingNativeCaptureRef.current && !processorRef.current && audioContextRef.current && streamRef.current) {
                 const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
                 sourceRef.current = source;
 
