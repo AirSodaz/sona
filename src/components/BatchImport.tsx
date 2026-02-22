@@ -121,7 +121,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     // Queue store
     // Optimization: Only subscribe to queue length to avoid re-renders on progress updates
     const hasQueueItems = useBatchQueueStore((state) => state.queueItems.length > 0);
-    const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
     const addFiles = useBatchQueueStore((state) => state.addFiles);
 
     // Transcript store
