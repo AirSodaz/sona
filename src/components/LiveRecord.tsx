@@ -108,10 +108,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 console.log('[LiveRecord] Discovered system audio devices:', devices);
                 setSystemDevices(devices);
                 if (devices.length > 0) {
-                    // Try to preserve selection or pick first
+                    // Try to preserve selection or find a likely loopback device
                     setSelectedSystemDevice(prev => {
                         if (devices.find(d => d.id === prev)) return prev;
-                        return devices[0].id;
+
+                        // Heuristic: Prefer "Stereo Mix", "Virtual", "Monitor", "Loopback"
+                        const likelyLoopback = devices.find(d => {
+                            const label = d.label.toLowerCase();
+                            return label.includes('stereo mix') ||
+                                   label.includes('virtual') ||
+                                   label.includes('monitor') ||
+                                   label.includes('loopback');
+                        });
+
+                        if (likelyLoopback) return likelyLoopback.id;
+
+                        // Default to Web API (empty string) if no clear loopback device is found
+                        // to avoid accidentally recording microphone when user wants system audio.
+                        return '';
                     });
                 } else {
                     console.warn('[LiveRecord] No FFmpeg audio devices found.');
