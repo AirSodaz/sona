@@ -466,12 +466,30 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const stopRecordingSession = useCallback(async () => {
         console.log('[LiveRecord] Stopping recording session...');
 
-        // Native Cleanup
+        // 1. Stop Data Flow (Service)
         if (usingNativeCaptureRef.current) {
             try {
                 await invoke('stop_system_audio_capture');
             } catch (e) { console.error(e); }
 
+            if (systemAudioUnlistenRef.current) {
+                systemAudioUnlistenRef.current();
+                systemAudioUnlistenRef.current = null;
+            }
+        }
+
+        // Suspend AudioContext to stop processor from sending data
+        if (audioContextRef.current && audioContextRef.current.state === 'running') {
+            try { await audioContextRef.current.suspend(); } catch (e) { console.error(e); }
+        }
+
+        // 2. Soft Stop (Flush final segment)
+        await transcriptionService.softStop();
+
+        // 3. Cleanup & Finalize
+
+        // Native Cleanup
+        if (usingNativeCaptureRef.current) {
             // If using native capture, finish the file recording logic here manually
             // since we don't have a MediaRecorder onstop event.
             // Construct the full buffer
@@ -506,11 +524,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             usingNativeCaptureRef.current = false;
         }
 
-        if (systemAudioUnlistenRef.current) {
-            systemAudioUnlistenRef.current();
-            systemAudioUnlistenRef.current = null;
-        }
-
         if (animationRef.current) {
             window.cancelAnimationFrame(animationRef.current);
             animationRef.current = 0;
@@ -525,9 +538,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
             audioContextRef.current = null;
         }
-
-        // Soft stop the recording service
-        await transcriptionService.softStop();
 
         // Unmute system audio if configured
         const config = useTranscriptStore.getState().config;
@@ -585,8 +595,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [setIsPaused, drawVisualizer, inputSource]);
 
     const stopRecording = useCallback(async () => {
-        stopFileRecording();
         await stopRecordingSession();
+        stopFileRecording();
     }, [stopFileRecording, stopRecordingSession]);
 
     const handleToggleRecording = useCallback(async () => {
