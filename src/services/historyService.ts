@@ -62,6 +62,12 @@ export const historyService = {
 
     async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
         console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
+
+        if (!segments || segments.length === 0) {
+            console.log('[History] Empty transcript, skipping save.');
+            return null;
+        }
+
         try {
             await this.init();
             const id = uuidv4();
@@ -118,6 +124,12 @@ export const historyService = {
 
     async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string): Promise<HistoryItem | null> {
         console.log('[History] Saving imported file...', { filePath, segments: segments.length });
+
+        if (!segments || segments.length === 0) {
+            console.log('[History] Empty transcript, skipping save.');
+            return null;
+        }
+
         try {
             await this.init();
             const id = uuidv4();
@@ -241,14 +253,14 @@ export const historyService = {
         }
     },
 
-    async loadTranscript(filename: string): Promise<TranscriptSegment[]> {
+    async loadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
         try {
             const path = `${HISTORY_DIR}/${filename}`;
             const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
             return JSON.parse(content);
         } catch (error) {
             console.error('Failed to load transcript:', error);
-            return [];
+            return null;
         }
     },
 

@@ -258,16 +258,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
             // Save to History
             try {
-                const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration, tempWavPath);
-                if (historyItem) {
-                    set((state) => ({
-                        queueItems: state.queueItems.map((i) =>
-                            i.id === itemId ? { ...i, historyId: historyItem.id } : i
-                        )
-                    }));
-                    // If this is the active item, propagate sourceHistoryId
-                    if (get().activeItemId === itemId) {
-                        useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                if (finalSegments.length > 0) {
+                    const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration, tempWavPath);
+                    if (historyItem) {
+                        set((state) => ({
+                            queueItems: state.queueItems.map((i) =>
+                                i.id === itemId ? { ...i, historyId: historyItem.id } : i
+                            )
+                        }));
+                        // If this is the active item, propagate sourceHistoryId
+                        if (get().activeItemId === itemId) {
+                            useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                        }
                     }
                 }
             } catch (err) {

@@ -447,7 +447,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             const segments = useTranscriptStore.getState().segments;
             const duration = (Date.now() - startTimeRef.current) / 1000;
 
-            if (segments.length > 0 || duration > 1.0) {
+            if (segments.length > 0) {
                 const newItem = await historyService.saveRecording(blob, segments, duration);
                 if (newItem) {
                     useHistoryStore.getState().addItem(newItem);
@@ -494,7 +494,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                  const segments = useTranscriptStore.getState().segments;
                  const duration = (Date.now() - startTimeRef.current) / 1000;
 
-                 if (segments.length > 0 || duration > 1.0) {
+                 if (segments.length > 0) {
                      const newItem = await historyService.saveRecording(blob, segments, duration);
                      if (newItem) {
                          useHistoryStore.getState().addItem(newItem);

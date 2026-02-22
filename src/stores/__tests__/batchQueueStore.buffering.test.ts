@@ -23,7 +23,10 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     remove: vi.fn(() => Promise.resolve()),
     mkdir: vi.fn(() => Promise.resolve()),
     writeTextFile: vi.fn(() => Promise.resolve()),
+    writeFile: vi.fn(() => Promise.resolve()),
     readTextFile: vi.fn(() => Promise.resolve('')),
+    copyFile: vi.fn(() => Promise.resolve()),
+    stat: vi.fn(() => Promise.resolve({ size: 100 })),
     BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
