@@ -30,7 +30,8 @@ export function useTrayHandling(
                     settingsText: t('tray.settings'),
                     updatesText: t('tray.check_updates'),
                     quitText: t('tray.quit'),
-                    captionText: isCaptionMode ? t('tray.stop_caption') : t('tray.start_caption')
+                    captionText: t('tray.live_caption'),
+                    captionChecked: isCaptionMode
                 });
             } catch (err) {
                 console.warn('Failed to update tray menu language:', err);
