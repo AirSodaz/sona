@@ -3,6 +3,7 @@ import { TranscriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
 import { modelService } from '../services/modelService';
 import { AppConfig } from '../types/transcript';
+import { audioCaptureService } from '../services/audioCaptureService';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -17,6 +18,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
     // Track active state to handle race conditions
     const activeRef = useRef(isCaptionMode);
+
+    // FFmpeg state
+    const isFFmpegRef = useRef(false);
+    const audioCaptureUnsubRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         activeRef.current = isCaptionMode;
@@ -56,6 +61,16 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             await captionWindowService.close();
         } catch (e) { console.error(e); }
 
+        // Stop FFmpeg
+        if (isFFmpegRef.current) {
+            await audioCaptureService.stopCapture();
+            isFFmpegRef.current = false;
+        }
+        if (audioCaptureUnsubRef.current) {
+            audioCaptureUnsubRef.current();
+            audioCaptureUnsubRef.current = null;
+        }
+
         // Stop Audio Context
         if (audioContextRef.current) {
             try {
@@ -90,6 +105,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
              // Already running
              return;
         }
+        if (isFFmpegRef.current && audioCaptureService.isActive()) {
+            return;
+        }
 
         try {
             setIsInitializing(true);
@@ -97,8 +115,29 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             if (!activeRef.current) return;
 
-            // 1. Get Desktop Stream
-            if (!streamRef.current) {
+            // 1. Get Audio Source
+            // Priority: FFmpeg Capture -> Web API Fallback
+            let ffmpegSuccess = false;
+            try {
+                const devices = await audioCaptureService.getDevices();
+                if (devices.length > 0) {
+                    // Try to use the first device as default system audio
+                    console.log(`[CaptionSession] Attempting FFmpeg capture with device: ${devices[0].id}`);
+                    await audioCaptureService.startCapture(devices[0].id);
+                    ffmpegSuccess = true;
+                    isFFmpegRef.current = true;
+                }
+            } catch (e) {
+                console.warn('[CaptionSession] FFmpeg capture failed, falling back to Web API:', e);
+            }
+
+            if (!activeRef.current) {
+                if (ffmpegSuccess) await audioCaptureService.stopCapture();
+                return;
+            }
+
+            // Fallback to getDisplayMedia if FFmpeg failed
+            if (!ffmpegSuccess && !streamRef.current) {
                 let stream: MediaStream;
                 try {
                     stream = await navigator.mediaDevices.getDisplayMedia({
@@ -114,7 +153,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         }
                     });
 
-                    // Check active again after async
                     if (!activeRef.current) {
                         stream.getTracks().forEach(t => t.stop());
                         return;
@@ -132,8 +170,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     stream.getAudioTracks()[0].onended = () => {
                         console.log('[CaptionSession] Stream ended by user.');
                         stopCaptionSession();
-                        // Note: We cannot easily update external state (isCaptionMode) here without a setter.
-                        // Ideally we'd accept setIsCaptionMode as a prop.
                     };
                 } catch (err) {
                     if (!activeRef.current) return;
@@ -144,22 +180,24 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             if (!activeRef.current) return;
 
-            // 2. Initialize Audio Context
-            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                const audioContext = new AudioContext({ sampleRate: 16000 });
-                audioContextRef.current = audioContext;
-                try {
-                    await audioContext.audioWorklet.addModule('/audio-processor.js');
-                } catch (e) {
-                     if (!activeRef.current) {
-                         await audioContext.close();
-                         audioContextRef.current = null;
-                         return;
-                     }
-                     throw e;
+            // 2. Initialize Audio Context (Only if using Web API)
+            if (!isFFmpegRef.current) {
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                    const audioContext = new AudioContext({ sampleRate: 16000 });
+                    audioContextRef.current = audioContext;
+                    try {
+                        await audioContext.audioWorklet.addModule('/audio-processor.js');
+                    } catch (e) {
+                         if (!activeRef.current) {
+                             await audioContext.close();
+                             audioContextRef.current = null;
+                             return;
+                         }
+                         throw e;
+                    }
+                } else if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
                 }
-            } else if (audioContextRef.current.state === 'suspended') {
-                await audioContextRef.current.resume();
             }
 
             if (!activeRef.current) {
@@ -192,7 +230,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             }
 
             // 5. Connect Audio Pipeline
-            if (!processorRef.current && audioContextRef.current && streamRef.current) {
+            if (isFFmpegRef.current) {
+                 audioCaptureUnsubRef.current = audioCaptureService.onAudio((data) => {
+                     service.sendAudioInt16(data);
+                 });
+            } else if (!processorRef.current && audioContextRef.current && streamRef.current) {
                 const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
                 sourceRef.current = source;
 

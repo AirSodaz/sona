@@ -4,6 +4,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
+import { audioCaptureService, AudioDevice } from '../services/audioCaptureService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
@@ -73,6 +74,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const activeStreamRef = useRef<MediaStream | null>(null); // Recording stream
+    const audioCaptureUnsubRef = useRef<(() => void) | null>(null);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -94,6 +96,29 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mimeTypeRef = useRef<string>('');
     const [isRecordingInitializing, setIsRecordingInitializing] = useState(false);
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
+
+    // System Audio Selection State
+    const [systemDevices, setSystemDevices] = useState<AudioDevice[]>([]);
+    const [selectedSystemDevice, setSelectedSystemDevice] = useState<string>('');
+
+    // Fetch system devices when switching to desktop
+    useEffect(() => {
+        if (inputSource === 'desktop') {
+            audioCaptureService.getDevices().then(devices => {
+                setSystemDevices(devices);
+                if (devices.length > 0) {
+                    // Try to preserve selection or pick first
+                    setSelectedSystemDevice(prev => {
+                        if (devices.find(d => d.id === prev)) return prev;
+                        return devices[0].id;
+                    });
+                } else {
+                    setSelectedSystemDevice('');
+                }
+            });
+        }
+    }, [inputSource]);
+
 
     // Caption Mode
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
@@ -200,15 +225,27 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         setIsRecordingInitializing(true);
 
         try {
-            let stream: MediaStream;
-
             if (inputSource === 'desktop') {
+                // Try FFmpeg capture first if device selected
+                if (selectedSystemDevice) {
+                    try {
+                        await audioCaptureService.startCapture(selectedSystemDevice);
+                        // Initialize custom FFmpeg session
+                        await initializeAudioSessionWithFFmpeg();
+                        return true;
+                    } catch (e) {
+                        console.error('FFmpeg capture failed, falling back to Web API:', e);
+                        // Fallthrough to getDisplayMedia
+                    }
+                }
+
+                // Fallback: getDisplayMedia
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
                     throw new Error(t('live.mic_error') + ': Display media not supported');
                 }
 
                 try {
-                    stream = await navigator.mediaDevices.getDisplayMedia({
+                    let stream = await navigator.mediaDevices.getDisplayMedia({
                         video: {
                             width: 1,
                             height: 1,
@@ -227,6 +264,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     }
                     stream.getVideoTracks().forEach(track => track.stop());
                     stream = new MediaStream([audioTracks[0]]);
+
+                    activeStreamRef.current = stream;
+                    await initializeAudioSession(stream);
+                    return true;
+
                 } catch (err) {
                     console.error('Error getting display media:', err);
                     throw err;
@@ -243,19 +285,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 };
 
                 const micStream = await navigator.mediaDevices.getUserMedia(constraints);
-                stream = micStream;
+                activeStreamRef.current = micStream;
+                await initializeAudioSession(micStream);
+
+                // Mute system audio if configured and using microphone
+                if (config.muteDuringRecording && inputSource === 'microphone') {
+                    invoke('set_system_audio_mute', { mute: true })
+                        .catch(err => console.error('Failed to mute system audio:', err));
+                }
+                return true;
             }
-
-            activeStreamRef.current = stream;
-            await initializeAudioSession(stream);
-
-            // Mute system audio if configured and using microphone
-            if (config.muteDuringRecording && inputSource === 'microphone') {
-                invoke('set_system_audio_mute', { mute: true })
-                    .catch(err => console.error('Failed to mute system audio:', err));
-            }
-
-            return true;
 
         } catch (error) {
             console.error('Failed to start capture:', error);
@@ -265,9 +304,95 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         } finally {
             setIsRecordingInitializing(false);
         }
-    }, [inputSource, t, alert]);
+    }, [inputSource, selectedSystemDevice, t, alert]);
 
-    // Initialize AudioContext, Visualizer, and Transcription for Recording
+    // Common setup for transcription service
+    const setupTranscriptionService = async () => {
+         const config = useTranscriptStore.getState().config;
+         transcriptionService.setModelPath(config.offlineModelPath);
+         transcriptionService.setLanguage(language);
+         transcriptionService.setEnableITN(config.enableITN ?? false);
+
+         const enabledITNModels = new Set(config.enabledITNModels || []);
+         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
+         if (enabledITNModels.size > 0) {
+             try {
+                 const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
+                 transcriptionService.setITNModelPaths(paths);
+             } catch (e) {
+                 console.warn('[LiveRecord] Failed to setup ITN paths:', e);
+             }
+         }
+
+         transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+         transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+         transcriptionService.setVadModelPath(config.vadModelPath || '');
+         transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
+
+         await transcriptionService.start(
+            (segment) => {
+                if (isRecordingRef.current) {
+                    if (enableTimelineRef.current && segment.isFinal) {
+                        const parts = splitByPunctuation([segment]);
+                        if (parts.length > 0) {
+                            useTranscriptStore.getState().deleteSegment(segment.id);
+                            parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
+                            useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                        } else {
+                            upsertSegmentAndSetActive(segment);
+                        }
+                    } else {
+                        upsertSegmentAndSetActive(segment);
+                    }
+                }
+            },
+            (error) => {
+                console.error('Transcription error:', error);
+            }
+        );
+    };
+
+    // Initialize using FFmpeg source (reconstruct stream for visualizer/recorder)
+    async function initializeAudioSessionWithFFmpeg(): Promise<void> {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+        } else if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+        }
+
+        try {
+            await audioContextRef.current.audioWorklet.addModule('/pcm-player.js');
+        } catch (err) {
+            console.error('Failed to load pcm-player module:', err);
+            // Non-fatal? Visualizer might fail.
+        }
+
+        const pcmPlayer = new AudioWorkletNode(audioContextRef.current, 'pcm-player');
+
+        // Feed data from service to worklet and transcription service
+        audioCaptureUnsubRef.current = audioCaptureService.onAudio((data) => {
+             pcmPlayer.port.postMessage(data);
+             transcriptionService.sendAudioInt16(data);
+        });
+
+        const destination = audioContextRef.current.createMediaStreamDestination();
+        pcmPlayer.connect(destination);
+        // Do NOT connect to hardware destination to avoid loopback feedback
+
+        const stream = destination.stream;
+        activeStreamRef.current = stream;
+
+        // Visualizer
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        pcmPlayer.connect(analyserRef.current);
+
+        await setupTranscriptionService();
+        drawVisualizer();
+    }
+
+
+    // Initialize AudioContext, Visualizer, and Transcription for Recording (Standard Stream)
     async function initializeAudioSession(stream: MediaStream): Promise<void> {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -299,52 +424,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         source.connect(processor);
         processor.connect(audioContextRef.current.destination);
 
-        // Prepare proper config for main service
-        const config = useTranscriptStore.getState().config;
-        transcriptionService.setModelPath(config.offlineModelPath);
-        transcriptionService.setLanguage(language);
-        transcriptionService.setEnableITN(config.enableITN ?? false);
-
-        // ITN Setup
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-        if (enabledITNModels.size > 0) {
-            try {
-                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                transcriptionService.setITNModelPaths(paths);
-            } catch (e) {
-                console.warn('[LiveRecord] Failed to setup ITN paths:', e);
-            }
-        }
-
-        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
-        transcriptionService.setVadModelPath(config.vadModelPath || '');
-        transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
-
-        await transcriptionService.start(
-            (segment) => {
-                // Recording Mode: Save to store (Main Window)
-                if (isRecordingRef.current) {
-                    if (enableTimelineRef.current && segment.isFinal) {
-                        const parts = splitByPunctuation([segment]);
-                        if (parts.length > 0) {
-                            useTranscriptStore.getState().deleteSegment(segment.id);
-                            parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
-                            useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
-                        } else {
-                            upsertSegmentAndSetActive(segment);
-                        }
-                    } else {
-                        upsertSegmentAndSetActive(segment);
-                    }
-                }
-            },
-            (error) => {
-                console.error('Transcription error:', error);
-            }
-        );
-
+        await setupTranscriptionService();
         (window as any).currentStream = stream; // Temporary hack to pass stream
         drawVisualizer();
     }
@@ -399,6 +479,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (animationRef.current) {
             window.cancelAnimationFrame(animationRef.current);
             animationRef.current = 0;
+        }
+
+        // Stop FFmpeg capture if active
+        if (audioCaptureService.isActive()) {
+            await audioCaptureService.stopCapture();
+        }
+
+        // Unsubscribe from audio capture
+        if (audioCaptureUnsubRef.current) {
+            audioCaptureUnsubRef.current();
+            audioCaptureUnsubRef.current = null;
         }
 
         if (audioContextRef.current) {
@@ -674,6 +765,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                                 style={{ minWidth: '180px' }}
                             />
                         </div>
+                        {inputSource === 'desktop' && systemDevices.length > 0 && (
+                            <div className="device-select-wrapper" style={{ marginTop: '0.5rem' }}>
+                                <Dropdown
+                                    value={selectedSystemDevice}
+                                    onChange={(value) => setSelectedSystemDevice(value)}
+                                    options={[
+                                        ...systemDevices.map(d => ({ value: d.id, label: d.label })),
+                                        { value: '', label: t('live.source_desktop_screen_share') || 'Screen Share' }
+                                    ]}
+                                    style={{ minWidth: '180px' }}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
 
