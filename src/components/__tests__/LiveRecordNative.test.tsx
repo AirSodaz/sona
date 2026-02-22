@@ -181,7 +181,7 @@ describe('LiveRecord Native Capture', () => {
             mimeType = 'audio/webm';
             ondataavailable: ((e: any) => void) | null = null;
             onstop: (() => void) | null = null;
-            constructor(stream: any, options: any) {}
+            constructor(_stream: any, _options: any) {}
             start() { this.state = 'recording'; }
             stop() {
                 this.state = 'inactive';
@@ -228,7 +228,7 @@ describe('LiveRecord Native Capture', () => {
                     connect: vi.fn(),
                 };
             }
-            createBuffer(channels: number, length: number, sampleRate: number) {
+            createBuffer(_channels: number, length: number, sampleRate: number) {
                 // @ts-ignore
                 return new AudioBuffer({ length, sampleRate });
             }
