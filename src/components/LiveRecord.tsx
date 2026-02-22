@@ -14,6 +14,7 @@ import { TranscriptionOptions } from './TranscriptionOptions';
 import { Switch } from './Switch';
 import { captionWindowService } from '../services/captionWindowService';
 import { useCaptionSession } from '../hooks/useCaptionSession';
+import { encodeWAV } from '../utils/wavUtils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
@@ -78,6 +79,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Native capture refs
     const usingNativeCaptureRef = useRef(false);
     const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
+    const audioChunksRef = useRef<Int16Array[]>([]);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -272,12 +274,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     const unlisten = await listen<number[]>('system-audio', (event) => {
                         const samples = new Int16Array(event.payload);
                         transcriptionService.sendAudioInt16(samples);
+                        // If recording and not paused, accumulate samples
+                        if (isRecordingRef.current && !isPausedRef.current) {
+                             audioChunksRef.current.push(samples);
+                        }
                     });
 
                     systemAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
                     console.log('[LiveRecord] Native capture started.');
+
+                    // Clear chunks when starting new session
+                    audioChunksRef.current = [];
 
                     // Initialize service without AudioContext
                     await initializeNativeSession();
@@ -415,8 +424,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         // The existing code for file recording relies on `activeStreamRef`.
 
         if (usingNativeCaptureRef.current) {
-            console.warn("File recording not supported with native system audio capture yet.");
-            // We still need to set isRecording/isPaused to update UI
+            // For native capture, we rely on the system-audio event listener to accumulate data
+            audioChunksRef.current = [];
             setIsRecording(true);
             setIsPaused(false);
             startTimeRef.current = Date.now();
@@ -474,6 +483,38 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             try {
                 await invoke('stop_system_audio_capture');
             } catch (e) { console.error(e); }
+
+            // If using native capture, finish the file recording logic here manually
+            // since we don't have a MediaRecorder onstop event.
+            // Construct the full buffer
+            const chunks = audioChunksRef.current;
+            if (chunks.length > 0) {
+                 const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                 const fullBuffer = new Int16Array(totalLength);
+                 let offset = 0;
+                 for (const chunk of chunks) {
+                     fullBuffer.set(chunk, offset);
+                     offset += chunk.length;
+                 }
+
+                 // Encode to WAV
+                 // 16kHz, 1 channel, 16 bit
+                 const blob = encodeWAV(fullBuffer, 16000, 1, 16);
+                 const url = URL.createObjectURL(blob);
+                 useTranscriptStore.getState().setAudioUrl(url);
+
+                 const segments = useTranscriptStore.getState().segments;
+                 const duration = (Date.now() - startTimeRef.current) / 1000;
+
+                 if (segments.length > 0 || duration > 1.0) {
+                     const newItem = await historyService.saveRecording(blob, segments, duration);
+                     if (newItem) {
+                         useHistoryStore.getState().addItem(newItem);
+                         useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                     }
+                 }
+            }
+            audioChunksRef.current = [];
             usingNativeCaptureRef.current = false;
         }
 
