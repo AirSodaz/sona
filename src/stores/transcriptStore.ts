@@ -215,6 +215,9 @@ const DEFAULT_CONFIG: AppConfig = {
     alwaysOnTop: true,
     microphoneId: 'default',
     muteDuringRecording: false,
+    startOnLaunch: false,
+    captionWindowWidth: 800,
+    captionFontSize: 24,
 };
 
 /**

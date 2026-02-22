@@ -1,36 +1,55 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { emit } from '@tauri-apps/api/event';
 
-// Define mocks before importing the service
-vi.mock('@tauri-apps/api/webviewWindow', () => {
-    const MockWebviewWindow = vi.fn();
-    MockWebviewWindow.prototype.once = vi.fn();
-    MockWebviewWindow.prototype.close = vi.fn();
-    MockWebviewWindow.prototype.setFocus = vi.fn();
-    MockWebviewWindow.prototype.setAlwaysOnTop = vi.fn();
-    MockWebviewWindow.prototype.setIgnoreCursorEvents = vi.fn();
-    (MockWebviewWindow as any).getByLabel = vi.fn();
-    return { WebviewWindow: MockWebviewWindow };
-});
-
+// Mock emit
 vi.mock('@tauri-apps/api/event', () => ({
     emit: vi.fn(),
 }));
 
-// Import service after mocks
+// Mock DPI
+vi.mock('@tauri-apps/api/dpi', () => ({
+    PhysicalSize: vi.fn(),
+}));
+
+// Mock WebviewWindow
+vi.mock('@tauri-apps/api/webviewWindow', () => {
+    const MockWebviewWindow = vi.fn();
+    (MockWebviewWindow as any).getByLabel = vi.fn();
+    return { WebviewWindow: MockWebviewWindow };
+});
+
 import { captionWindowService } from '../captionWindowService';
 
 describe('CaptionWindowService', () => {
+    let mockWindowInstance: any;
+
     beforeEach(() => {
         vi.clearAllMocks();
+
+        mockWindowInstance = {
+            once: vi.fn(),
+            close: vi.fn(),
+            setFocus: vi.fn(),
+            setAlwaysOnTop: vi.fn(),
+            setIgnoreCursorEvents: vi.fn(),
+            scaleFactor: vi.fn().mockResolvedValue(1),
+            innerSize: vi.fn().mockResolvedValue({ width: 800, height: 120 }),
+            setSize: vi.fn(),
+        };
+
+        // When constructor is called, return mock instance
+        (WebviewWindow as unknown as Mock).mockImplementation(function() { return mockWindowInstance; });
+
         // Default behavior: window does not exist
         (WebviewWindow.getByLabel as any).mockResolvedValue(null);
     });
 
-    it('opens the window with correct properties', async () => {
+    it('opens the window with correct default properties', async () => {
         await captionWindowService.open();
 
         expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
+            url: '/index.html?window=caption&width=800&fontSize=24',
             resizable: true,
             maximizable: false,
             minimizable: false,
@@ -40,31 +59,30 @@ describe('CaptionWindowService', () => {
         }));
     });
 
-    it('reuses existing window if open', async () => {
-        const mockExistingWindow = {
-            setFocus: vi.fn(),
-        };
-        (WebviewWindow.getByLabel as any).mockResolvedValue(mockExistingWindow);
+    it('opens the window with custom style properties', async () => {
+        await captionWindowService.open({ width: 1000, fontSize: 32 });
 
-        // We need to ensure we don't use the cached instance from previous tests
-        // Since captionWindowService is a singleton, verifying state isolation is tricky without resetting it.
-        // However, `open` calls `getByLabel` first. If `getByLabel` returns something, it uses it.
+        expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
+            url: '/index.html?window=caption&width=1000&fontSize=32',
+            width: 1000,
+        }));
+    });
 
-        await captionWindowService.open();
+    it('reuses existing window and updates style', async () => {
+        (WebviewWindow.getByLabel as any).mockResolvedValue(mockWindowInstance);
 
-        // The constructor should NOT be called again if it finds an existing one
-        // Wait, if the previous test ran, `captionWindowService` might have `this.windowInstance` set?
-        // Let's check the code:
-        /*
-        async open() {
-            const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-            if (existingWindow) { ... return; }
-            this.windowInstance = new WebviewWindow(...)
-        */
-        // Even if `this.windowInstance` is set, `open` checks `getByLabel`.
-        // So checking `WebviewWindow` constructor calls is safe.
+        await captionWindowService.open({ width: 1200, fontSize: 40 });
 
+        // Constructor not called
         expect(WebviewWindow).toHaveBeenCalledTimes(0);
-        expect(mockExistingWindow.setFocus).toHaveBeenCalled();
+
+        // Focus called
+        expect(mockWindowInstance.setFocus).toHaveBeenCalled();
+
+        // Should update style
+        expect(emit).toHaveBeenCalledWith('caption:style', { width: 1200, fontSize: 40 });
+
+        // Should resize window
+        expect(mockWindowInstance.setSize).toHaveBeenCalled();
     });
 });

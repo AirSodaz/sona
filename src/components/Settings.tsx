@@ -60,6 +60,12 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setLockWindow,
         alwaysOnTop,
         setAlwaysOnTop,
+        startOnLaunch,
+        setStartOnLaunch,
+        captionWindowWidth,
+        setCaptionWindowWidth,
+        captionFontSize,
+        setCaptionFontSize,
 
         offlineModelPath,
         setOfflineModelPath,
@@ -272,6 +278,12 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setLockWindow={setLockWindow}
                                 alwaysOnTop={alwaysOnTop}
                                 setAlwaysOnTop={setAlwaysOnTop}
+                                startOnLaunch={startOnLaunch}
+                                setStartOnLaunch={setStartOnLaunch}
+                                captionWindowWidth={captionWindowWidth}
+                                setCaptionWindowWidth={setCaptionWindowWidth}
+                                captionFontSize={captionFontSize}
+                                setCaptionFontSize={setCaptionFontSize}
                             />
                         )}
 

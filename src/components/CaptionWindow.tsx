@@ -7,6 +7,7 @@ import '../styles/index.css'; // Import styles to ensure variables are available
 
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
 const CAPTION_EVENT_CLOSE = 'caption:close';
+const CAPTION_EVENT_STYLE = 'caption:style';
 
 /**
  * Root component for the always-on-top caption window.
@@ -14,8 +15,31 @@ const CAPTION_EVENT_CLOSE = 'caption:close';
  */
 export function CaptionWindow() {
     const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+    const [fontSize, setFontSize] = useState(24);
+    // Track target width to enforce it during height resizing
+    const [targetWidth, setTargetWidth] = useState(800);
+
     const containerRef = useRef<HTMLDivElement>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+
+    // Initialize style from URL params
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const w = params.get('width');
+        const fs = params.get('fontSize');
+        if (w) setTargetWidth(parseInt(w, 10));
+        if (fs) setFontSize(parseInt(fs, 10));
+
+        // Listen for style updates
+        const unlistenPromise = listen<{ width?: number, fontSize?: number }>(CAPTION_EVENT_STYLE, (event) => {
+            if (event.payload.width) setTargetWidth(event.payload.width);
+            if (event.payload.fontSize) setFontSize(event.payload.fontSize);
+        });
+
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten());
+        };
+    }, []);
 
     useEffect(() => {
         // Listen for segment updates from the main window
@@ -91,10 +115,13 @@ export function CaptionWindow() {
 
                     const targetPhysicalHeight = Math.ceil(totalHeight * factor);
 
-                    // Avoid unnecessary resize calls if the physical height matches
-                    if (Math.abs(size.height - targetPhysicalHeight) > 1) {
+                    // We enforce the configured width if available, otherwise use current
+                    const widthToUse = targetWidth ? Math.ceil(targetWidth * factor) : size.width;
+
+                    // Avoid unnecessary resize calls if the physical height/width matches
+                    if (Math.abs(size.height - targetPhysicalHeight) > 1 || Math.abs(size.width - widthToUse) > 1) {
                         const { PhysicalSize } = await import('@tauri-apps/api/dpi');
-                        const targetSize = new PhysicalSize(size.width, targetPhysicalHeight);
+                        const targetSize = new PhysicalSize(widthToUse, targetPhysicalHeight);
 
                         // Use Min/Max Size Lock trick to prevent manual dragging by the user
                         await currentWindow.setMinSize(targetSize);
@@ -113,7 +140,7 @@ export function CaptionWindow() {
             observer.disconnect();
             clearTimeout(resizeTimeout);
         };
-    }, []);
+    }, [targetWidth]);
 
     const startDragging = () => {
         getCurrentWindow().startDragging();
@@ -142,7 +169,7 @@ export function CaptionWindow() {
             <div
                 className="live-caption-content"
                 ref={containerRef}
-                style={{ maxHeight: 'none', height: 'auto' }}
+                style={{ maxHeight: 'none', height: 'auto', fontSize: `${fontSize}px`, lineHeight: 1.5 }}
             >
                 {segments.length === 0 ? null : (
                     segments.map((seg) => (

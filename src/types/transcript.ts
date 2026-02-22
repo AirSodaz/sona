@@ -73,4 +73,10 @@ export interface AppConfig {
   microphoneId?: string;
   /** Whether to mute system audio during recording. Default: false. */
   muteDuringRecording?: boolean;
+  /** Whether to start captioning on launch. Default: false. */
+  startOnLaunch?: boolean;
+  /** Width of the caption window in pixels. Default: 800. */
+  captionWindowWidth?: number;
+  /** Font size of the caption text in pixels. Default: 24. */
+  captionFontSize?: number;
 }
