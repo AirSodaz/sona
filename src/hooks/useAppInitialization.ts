@@ -105,30 +105,33 @@ export function useAppInitialization() {
     useEffect(() => {
         if (!isLoaded) return;
 
-        // Debounce could be added here if needed, but config changes are infrequent.
-        const configToSave = {
-            offlineModelPath: config.offlineModelPath,
-            punctuationModelPath: config.punctuationModelPath,
-            vadModelPath: config.vadModelPath,
-            ctcModelPath: config.ctcModelPath,
-            vadBufferSize: config.vadBufferSize,
-            maxConcurrent: config.maxConcurrent,
-            enabledITNModels: config.enabledITNModels,
-            itnRulesOrder: config.itnRulesOrder,
-            enableITN: config.enableITN,
-            appLanguage: config.appLanguage,
-            theme: config.theme,
-            font: config.font,
-            language: config.language,
-            enableTimeline: config.enableTimeline,
-            minimizeToTrayOnExit: config.minimizeToTrayOnExit,
-            muteDuringRecording: config.muteDuringRecording,
-            startOnLaunch: config.startOnLaunch,
-            captionWindowWidth: config.captionWindowWidth,
-            captionFontSize: config.captionFontSize,
-            captionFontColor: config.captionFontColor,
-        };
-        localStorage.setItem('sona-config', JSON.stringify(configToSave));
+        const timeoutId = setTimeout(() => {
+            const configToSave = {
+                offlineModelPath: config.offlineModelPath,
+                punctuationModelPath: config.punctuationModelPath,
+                vadModelPath: config.vadModelPath,
+                ctcModelPath: config.ctcModelPath,
+                vadBufferSize: config.vadBufferSize,
+                maxConcurrent: config.maxConcurrent,
+                enabledITNModels: config.enabledITNModels,
+                itnRulesOrder: config.itnRulesOrder,
+                enableITN: config.enableITN,
+                appLanguage: config.appLanguage,
+                theme: config.theme,
+                font: config.font,
+                language: config.language,
+                enableTimeline: config.enableTimeline,
+                minimizeToTrayOnExit: config.minimizeToTrayOnExit,
+                muteDuringRecording: config.muteDuringRecording,
+                startOnLaunch: config.startOnLaunch,
+                captionWindowWidth: config.captionWindowWidth,
+                captionFontSize: config.captionFontSize,
+                captionFontColor: config.captionFontColor,
+            };
+            localStorage.setItem('sona-config', JSON.stringify(configToSave));
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
     }, [config, isLoaded]);
 
     // Sync minimize to tray setting with backend

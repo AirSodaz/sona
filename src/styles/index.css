@@ -2657,7 +2657,6 @@ input[type="radio"]:focus {
 .live-caption-line {
   color: #ffffff;
   font-family: var(--font-sans);
-  font-size: 1rem;
   line-height: 1.6;
   margin: 0;
   padding: 2px 0;
