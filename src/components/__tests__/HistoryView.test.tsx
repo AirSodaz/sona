@@ -173,4 +173,32 @@ describe('HistoryView', () => {
 
         expect(historyService.openHistoryFolder).toHaveBeenCalled();
     });
+
+    it('handles missing files by deleting the record', async () => {
+        // Mock loadTranscript and getAudioUrl to return null
+        const { historyService } = await import('../../services/historyService');
+        (historyService.loadTranscript as any).mockResolvedValue(null);
+        (historyService.getAudioUrl as any).mockResolvedValue(null);
+
+        const deleteItemSpy = vi.fn();
+        useHistoryStore.setState({ deleteItem: deleteItemSpy });
+
+        // Spy on alert
+        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValue();
+
+        render(<HistoryView />);
+
+        const loadBtn = screen.getByRole('button', { name: /common.load Test Recording 1/i });
+        fireEvent.click(loadBtn);
+
+        await waitFor(() => {
+            expect(historyService.loadTranscript).toHaveBeenCalled();
+            expect(historyService.getAudioUrl).toHaveBeenCalled();
+            expect(alertSpy).toHaveBeenCalledWith(
+                expect.stringContaining('history.error_missing_files_delete'),
+                expect.objectContaining({ variant: 'error' })
+            );
+            expect(deleteItemSpy).toHaveBeenCalledWith('item-1');
+        });
+    });
 });

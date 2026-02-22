@@ -25,6 +25,7 @@ export function HistoryView() {
     // Actions
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
     const confirm = useDialogStore((state) => state.confirm);
+    const alert = useDialogStore((state) => state.alert);
 
     // Local UI State
     const [searchQuery, setSearchQuery] = useState('');
@@ -83,17 +84,38 @@ export function HistoryView() {
 
     const handleLoad = async (item: any) => {
         try {
-            // Load Transcript
-            const segments = await historyService.loadTranscript(item.transcriptPath);
+            // Try to load Transcript
+            let segments = await historyService.loadTranscript(item.transcriptPath);
+
+            // Try to load Audio
+            const url = await historyService.getAudioUrl(item.audioPath);
+
+            // Check if both are missing
+            if (!segments && !url) {
+                console.warn('[History] Both transcript and audio are missing for item:', item.id);
+                await alert(t('history.error_missing_files_delete', { defaultValue: 'Both audio and transcript files are missing. This record will be deleted.' }), { variant: 'error' });
+                await deleteItem(item.id);
+                return;
+            }
+
+            // If transcript missing but audio exists, initialize empty segments (load audio only)
+            if (!segments) {
+                console.warn('[History] Transcript missing, loading audio only.');
+                segments = [];
+            }
+
+            // If audio missing but transcript exists, url is null (load text only)
+            if (!url) {
+                console.warn('[History] Audio missing, loading text only.');
+            }
+
             // Use atomic load to prevent auto-save from seeing mixed state (new segments + old ID)
             useTranscriptStore.getState().loadTranscript(segments, item.id);
-
-            // Load Audio
-            const url = await historyService.getAudioUrl(item.audioPath);
             setAudioUrl(url);
 
         } catch (error) {
             console.error('Failed to load item:', error);
+            await alert(t('history.error_load_failed', { defaultValue: 'Failed to load history item.' }), { variant: 'error' });
         }
     };
 

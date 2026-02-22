@@ -179,7 +179,6 @@ describe('LiveRecord Native Capture', () => {
         vi.stubGlobal('AudioContext', class {
             state = 'running';
             destination = {};
-            currentTime = 0;
             createMediaStreamSource() {
                 return { connect: vi.fn() };
             }
@@ -189,20 +188,6 @@ describe('LiveRecord Native Capture', () => {
                     frequencyBinCount: 1024,
                     getByteFrequencyData: vi.fn(),
                     connect: vi.fn(),
-                };
-            }
-            createBuffer(_channels: number, length: number, sampleRate: number) {
-                return {
-                    copyToChannel: vi.fn(),
-                    duration: length / sampleRate,
-                };
-            }
-            createBufferSource() {
-                return {
-                    buffer: null,
-                    connect: vi.fn(),
-                    start: vi.fn(),
-                    stop: vi.fn(),
                 };
             }
             audioWorklet = {
@@ -337,8 +322,8 @@ describe('LiveRecord Native Capture', () => {
         // We can simulate time passing > 1.0s.
     });
 
-    it('should save recording if duration > 1s', async () => {
-        await import('../../stores/transcriptStore');
+    it('should save recording if segments exist', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
 
         render(<LiveRecord />);
 
@@ -357,7 +342,7 @@ describe('LiveRecord Native Capture', () => {
 
         expect(systemAudioCallback).toBeDefined();
 
-        // 3. Simulate audio data and time passing
+        // 3. Simulate audio data
         const mockAudioPayload = Array.from({ length: 1024 }, () => 100);
         if (systemAudioCallback) {
             await act(async () => {
@@ -365,9 +350,11 @@ describe('LiveRecord Native Capture', () => {
             });
         }
 
-        // Advance time by 1.5 seconds
-        await act(async () => {
-            vi.advanceTimersByTime(1500);
+        // Simulate segments being added
+        act(() => {
+            useTranscriptStore.setState({
+                segments: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }]
+            });
         });
 
         // 4. Stop Recording
@@ -381,7 +368,7 @@ describe('LiveRecord Native Capture', () => {
         const callArgs = mockSaveRecording.mock.calls[0];
         // 1st arg: Blob
         expect(callArgs[0]).toBeInstanceOf(Blob);
-        // 3rd arg: duration (approx 1.5s)
-        expect(callArgs[2]).toBeGreaterThan(1.0);
+        // 2nd arg: segments
+        expect(callArgs[1]).toHaveLength(1);
     });
 });
