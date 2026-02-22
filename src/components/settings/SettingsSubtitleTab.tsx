@@ -36,55 +36,61 @@ export function SettingsSubtitleTab({
     return (
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
-                <span className="settings-label">
-                    {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
-                </span>
-                <div style={{ marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
+                        </span>
+                        <div className="settings-hint" style={{ marginTop: 0 }}>
+                            {t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={startOnLaunch}
                         onChange={setStartOnLaunch}
                     />
                 </div>
-                <div className="settings-hint">
-                    {t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
-                </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <span className="settings-label">
-                    {t('live.lock_window', { defaultValue: 'Lock Window' })}
-                </span>
-                <div style={{ marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.lock_window', { defaultValue: 'Lock Window' })}
+                        </span>
+                        <div className="settings-hint" style={{ marginTop: 0 }}>
+                            {t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={lockWindow}
                         onChange={setLockWindow}
                     />
                 </div>
-                <div className="settings-hint">
-                    {t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
-                </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <span className="settings-label">
-                    {t('live.always_on_top', { defaultValue: 'Always on Top' })}
-                </span>
-                <div style={{ marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="settings-label" style={{ marginBottom: 0 }}>
+                            {t('live.always_on_top', { defaultValue: 'Always on Top' })}
+                        </span>
+                        <div className="settings-hint" style={{ marginTop: 0 }}>
+                            {t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
+                        </div>
+                    </div>
                     <Switch
                         checked={alwaysOnTop}
                         onChange={setAlwaysOnTop}
                     />
                 </div>
-                <div className="settings-hint">
-                    {t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
-                </div>
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <span className="settings-label">
-                    {t('live.window_width', { defaultValue: 'Floating Window Width' })}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span className="settings-label" style={{ marginBottom: 0 }}>
+                        {t('live.window_width', { defaultValue: 'Floating Window Width' })}
+                    </span>
                     <input
                         type="number"
                         min="300"
@@ -99,10 +105,10 @@ export function SettingsSubtitleTab({
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <span className="settings-label">
-                    {t('live.font_size', { defaultValue: 'Font Size' })}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span className="settings-label" style={{ marginBottom: 0 }}>
+                        {t('live.font_size', { defaultValue: 'Font Size' })}
+                    </span>
                     <input
                         type="number"
                         min="12"
@@ -117,46 +123,48 @@ export function SettingsSubtitleTab({
             </div>
 
             <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <span className="settings-label">
-                    {t('live.font_color', { defaultValue: 'Font Color' })}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div
-                        style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border)',
-                            overflow: 'hidden',
-                            flexShrink: 0
-                        }}
-                    >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span className="settings-label" style={{ marginBottom: 0 }}>
+                        {t('live.font_color', { defaultValue: 'Font Color' })}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                            style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--color-border)',
+                                overflow: 'hidden',
+                                flexShrink: 0
+                            }}
+                        >
+                            <input
+                                type="color"
+                                value={captionFontColor}
+                                onChange={(e) => setCaptionFontColor(e.target.value)}
+                                aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
+                                style={{
+                                    width: '150%',
+                                    height: '150%',
+                                    padding: 0,
+                                    margin: '-25%',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    background: 'none'
+                                }}
+                            />
+                        </div>
                         <input
-                            type="color"
+                            type="text"
                             value={captionFontColor}
                             onChange={(e) => setCaptionFontColor(e.target.value)}
-                            aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
-                            style={{
-                                width: '150%',
-                                height: '150%',
-                                padding: 0,
-                                margin: '-25%',
-                                border: 'none',
-                                cursor: 'pointer',
-                                background: 'none'
-                            }}
+                            placeholder="#RRGGBB"
+                            maxLength={7}
+                            aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}
+                            className="settings-input"
+                            style={{ width: '100px', fontFamily: 'monospace' }}
                         />
                     </div>
-                    <input
-                        type="text"
-                        value={captionFontColor}
-                        onChange={(e) => setCaptionFontColor(e.target.value)}
-                        placeholder="#RRGGBB"
-                        maxLength={7}
-                        aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}
-                        className="settings-input"
-                        style={{ width: '100px', fontFamily: 'monospace' }}
-                    />
                 </div>
             </div>
         </div>
