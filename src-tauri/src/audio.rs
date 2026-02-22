@@ -6,6 +6,9 @@ use tokio::process::{Command, Child};
 use tokio::sync::Mutex;
 use serde::{Serialize, Deserialize};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioDevice {
     pub id: String,
@@ -77,21 +80,10 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
         let combined = format!("{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
         println!("[Audio] Device list output:\n{}", combined);
 
-        let mut in_audio_section = false;
-
         for line in combined.lines() {
-            if line.contains("DirectShow audio devices") {
-                in_audio_section = true;
-                continue;
-            }
-            if line.contains("DirectShow video devices") {
-                in_audio_section = false;
-                continue;
-            }
-
-            if in_audio_section {
-                // Line format: [dshow @ ...]  "Device Name"
-                // Alternative: [dshow @ ...]  "Microphone (Realtek Audio)"
+            // Check for "[dshow @" prefix and "(audio)" suffix
+            // Example: [dshow @ ...] "Mic Name" (audio)
+            if line.contains("[dshow @") && line.contains("(audio)") {
                 if let Some(start_quote) = line.find('"') {
                     if let Some(end_quote) = line[start_quote+1..].find('"') {
                         let name = &line[start_quote+1..start_quote+1+end_quote];
@@ -183,8 +175,6 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
 
         if !pactl_success {
              println!("[Audio] pactl failed or not found. Falling back to default.");
-             // If pactl is missing, we can try to guess or just return default
-             // FFmpeg on linux usually defaults to 'default' pulse device
              devices.push(AudioDevice {
                 id: "default".to_string(),
                 label: "Default (PulseAudio)".to_string(),
@@ -230,9 +220,6 @@ pub async fn start_audio_capture(
         args.push("dshow".to_string());
         args.push("-i".to_string());
         if device_id == "default" {
-             // On Windows dshow needs a name. If we fell back to "default", we can't really do much
-             // without a real device name. But we can try "audio=Microphone" as a hail mary?
-             // Or better, let it fail so frontend falls back to Web API.
              return Err("Cannot capture default dshow device without name".to_string());
         }
         args.push(format!("audio={}", device_id)); // device_id is name
@@ -243,9 +230,6 @@ pub async fn start_audio_capture(
         args.push("-f".to_string());
         args.push("avfoundation".to_string());
         args.push("-i".to_string());
-        // device_id is index (":0") or ":default"?
-        // If it comes from our list it is ":0", ":1" etc.
-        // If fallback, it is ":0".
         if !device_id.starts_with(":") {
              args.push(format!(":{}", device_id));
         } else {
@@ -280,7 +264,6 @@ pub async fn start_audio_capture(
 
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
