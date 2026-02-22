@@ -1,3 +1,4 @@
+mod audio;
 mod hardware;
 
 use std::collections::HashMap;
@@ -537,6 +538,7 @@ pub fn run() {
         .manage(AppSettings {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
+        .manage(audio::AudioState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -552,7 +554,9 @@ pub fn run() {
             has_active_downloads,
             update_tray_menu,
             set_minimize_to_tray,
-            set_system_audio_mute
+            set_system_audio_mute,
+            audio::start_system_audio_capture,
+            audio::stop_system_audio_capture
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

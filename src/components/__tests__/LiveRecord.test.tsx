@@ -8,6 +8,10 @@ vi.mock('@tauri-apps/api/core', () => ({
     invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
 }));
 
+vi.mock('@tauri-apps/api/event', () => ({
+    listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
 // Hoist mocks to share between singleton and class instances
 const {
     mockStart,
@@ -97,6 +101,7 @@ vi.mock('../../services/captionWindowService', () => ({
         sendSegments: vi.fn().mockResolvedValue(undefined),
         setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
         setClickThrough: vi.fn().mockResolvedValue(undefined),
+        updateStyle: vi.fn().mockResolvedValue(undefined),
     }
 }));
 

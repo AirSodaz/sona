@@ -1,10 +1,18 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCaptionSession } from '../useCaptionSession';
 import { captionWindowService } from '../../services/captionWindowService';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppConfig } from '../../types/transcript';
 
 // Mock dependencies
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: vi.fn().mockRejectedValue(new Error('Native capture not supported')),
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+    listen: vi.fn(),
+}));
+
 vi.mock('../../services/captionWindowService', () => ({
     captionWindowService: {
         open: vi.fn(),
@@ -129,7 +137,7 @@ describe('useCaptionSession', () => {
         );
 
         // Expect getDisplayMedia to be called
-        expect(mockGetDisplayMedia).toHaveBeenCalled();
+        await waitFor(() => expect(mockGetDisplayMedia).toHaveBeenCalled());
 
         // 2. Toggle OFF immediately (while awaiting getDisplayMedia)
         rerender({ config: defaultConfig, isCaptionMode: false });

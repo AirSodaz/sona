@@ -15,6 +15,7 @@ import { Switch } from './Switch';
 import { captionWindowService } from '../services/captionWindowService';
 import { useCaptionSession } from '../hooks/useCaptionSession';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -73,6 +74,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const activeStreamRef = useRef<MediaStream | null>(null); // Recording stream
+
+    // Native capture refs
+    const usingNativeCaptureRef = useRef(false);
+    const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -189,6 +194,57 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         draw();
     }, []);
 
+    // Helper to configure service (shared logic)
+    const configureService = async () => {
+        const config = useTranscriptStore.getState().config;
+        transcriptionService.setModelPath(config.offlineModelPath);
+        transcriptionService.setLanguage(language);
+        transcriptionService.setEnableITN(config.enableITN ?? false);
+
+        const enabledITNModels = new Set(config.enabledITNModels || []);
+        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
+        if (enabledITNModels.size > 0) {
+            try {
+                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
+                transcriptionService.setITNModelPaths(paths);
+            } catch (e) {
+                console.warn('[LiveRecord] Failed to setup ITN paths:', e);
+            }
+        }
+
+        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+        transcriptionService.setVadModelPath(config.vadModelPath || '');
+        transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
+    };
+
+    // Callback for service segments
+    const onSegment = (segment: any) => {
+        if (isRecordingRef.current) {
+            if (enableTimelineRef.current && segment.isFinal) {
+                const parts = splitByPunctuation([segment]);
+                if (parts.length > 0) {
+                    useTranscriptStore.getState().deleteSegment(segment.id);
+                    parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
+                    useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                } else {
+                    upsertSegmentAndSetActive(segment);
+                }
+            } else {
+                upsertSegmentAndSetActive(segment);
+            }
+        }
+    };
+
+    // Initialize Native Session (No AudioContext)
+    async function initializeNativeSession(): Promise<void> {
+        await configureService();
+        await transcriptionService.start(
+            onSegment,
+            (error) => { console.error('Transcription error:', error); }
+        );
+    }
+
     // Start Recording Capture (Audio Context + Visualizer + Main Transcription)
     const startRecordingSession = useCallback(async () => {
         const config = useTranscriptStore.getState().config;
@@ -200,38 +256,65 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         setIsRecordingInitializing(true);
 
         try {
-            let stream: MediaStream;
+            let stream: MediaStream | undefined;
 
             if (inputSource === 'desktop') {
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                    throw new Error(t('live.mic_error') + ': Display media not supported');
-                }
-
+                // Try Native Capture first
+                let nativeSuccess = false;
                 try {
-                    stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            width: 1,
-                            height: 1,
-                            frameRate: 1,
-                        },
-                        audio: {
-                            echoCancellation: false,
-                            noiseSuppression: false,
-                            autoGainControl: false,
-                        }
+                    console.log('[LiveRecord] Attempting native system audio capture...');
+                    await invoke('start_system_audio_capture');
+
+                    const unlisten = await listen<number[]>('system-audio', (event) => {
+                        const samples = new Int16Array(event.payload);
+                        transcriptionService.sendAudioInt16(samples);
                     });
 
-                    const audioTracks = stream.getAudioTracks();
-                    if (audioTracks.length === 0) {
-                        throw new Error('No audio track found in display media');
+                    systemAudioUnlistenRef.current = unlisten;
+                    usingNativeCaptureRef.current = true;
+                    nativeSuccess = true;
+                    console.log('[LiveRecord] Native capture started.');
+
+                    // Initialize service without AudioContext
+                    await initializeNativeSession();
+
+                } catch (e) {
+                    console.warn('[LiveRecord] Native capture failed, fallback to Web API:', e);
+                }
+
+                if (!nativeSuccess) {
+                    // Fallback to Web API (getDisplayMedia)
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                        throw new Error(t('live.mic_error') + ': Display media not supported');
                     }
-                    stream.getVideoTracks().forEach(track => track.stop());
-                    stream = new MediaStream([audioTracks[0]]);
-                } catch (err) {
-                    console.error('Error getting display media:', err);
-                    throw err;
+
+                    try {
+                        stream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                width: 1,
+                                height: 1,
+                                frameRate: 1,
+                            },
+                            audio: {
+                                echoCancellation: false,
+                                noiseSuppression: false,
+                                autoGainControl: false,
+                            }
+                        });
+
+                        const audioTracks = stream.getAudioTracks();
+                        if (audioTracks.length === 0) {
+                            throw new Error('No audio track found in display media');
+                        }
+                        stream.getVideoTracks().forEach(track => track.stop());
+                        stream = new MediaStream([audioTracks[0]]);
+                    } catch (err) {
+                        console.error('Error getting display media:', err);
+                        throw err;
+                    }
                 }
             } else {
+                // Microphone
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error('Media devices API not supported');
                 }
@@ -246,13 +329,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 stream = micStream;
             }
 
-            activeStreamRef.current = stream;
-            await initializeAudioSession(stream);
+            if (!usingNativeCaptureRef.current && stream) {
+                activeStreamRef.current = stream;
+                await initializeAudioSession(stream);
 
-            // Mute system audio if configured and using microphone
-            if (config.muteDuringRecording && inputSource === 'microphone') {
-                invoke('set_system_audio_mute', { mute: true })
-                    .catch(err => console.error('Failed to mute system audio:', err));
+                // Mute system audio if configured and using microphone
+                if (config.muteDuringRecording && inputSource === 'microphone') {
+                    invoke('set_system_audio_mute', { mute: true })
+                        .catch(err => console.error('Failed to mute system audio:', err));
+                }
             }
 
             return true;
@@ -265,7 +350,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         } finally {
             setIsRecordingInitializing(false);
         }
-    }, [inputSource, t, alert]);
+    }, [inputSource, t, alert, language]); // Added language to deps
 
     // Initialize AudioContext, Visualizer, and Transcription for Recording
     async function initializeAudioSession(stream: MediaStream): Promise<void> {
@@ -299,47 +384,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         source.connect(processor);
         processor.connect(audioContextRef.current.destination);
 
-        // Prepare proper config for main service
-        const config = useTranscriptStore.getState().config;
-        transcriptionService.setModelPath(config.offlineModelPath);
-        transcriptionService.setLanguage(language);
-        transcriptionService.setEnableITN(config.enableITN ?? false);
-
-        // ITN Setup
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-        if (enabledITNModels.size > 0) {
-            try {
-                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                transcriptionService.setITNModelPaths(paths);
-            } catch (e) {
-                console.warn('[LiveRecord] Failed to setup ITN paths:', e);
-            }
-        }
-
-        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
-        transcriptionService.setVadModelPath(config.vadModelPath || '');
-        transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
+        await configureService();
 
         await transcriptionService.start(
-            (segment) => {
-                // Recording Mode: Save to store (Main Window)
-                if (isRecordingRef.current) {
-                    if (enableTimelineRef.current && segment.isFinal) {
-                        const parts = splitByPunctuation([segment]);
-                        if (parts.length > 0) {
-                            useTranscriptStore.getState().deleteSegment(segment.id);
-                            parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
-                            useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
-                        } else {
-                            upsertSegmentAndSetActive(segment);
-                        }
-                    } else {
-                        upsertSegmentAndSetActive(segment);
-                    }
-                }
-            },
+            onSegment,
             (error) => {
                 console.error('Transcription error:', error);
             }
@@ -351,6 +399,28 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Start file recording (MediaRecorder)
     const startFileRecording = useCallback(async () => {
+        // If using native capture, we don't support file recording in this version (no stream to record)
+        // Or we could construct a stream, but user said "Do not worry about waveform display".
+        // What about file recording?
+        // MediaRecorder needs a MediaStream.
+        // If native capture, we don't have a MediaStream unless we create one via AudioContext destination...
+        // But we skipped AudioContext.
+        // So file recording won't work with native capture in this implementation.
+        // This is a trade-off.
+
+        // Wait, if inputSource is desktop, and we use native capture, `activeStreamRef` is null.
+        // The existing code for file recording relies on `activeStreamRef`.
+
+        if (usingNativeCaptureRef.current) {
+            console.warn("File recording not supported with native system audio capture yet.");
+            // We still need to set isRecording/isPaused to update UI
+            setIsRecording(true);
+            setIsPaused(false);
+            startTimeRef.current = Date.now();
+            clearSegments();
+            return;
+        }
+
         const stream = activeStreamRef.current;
         if (!stream) {
             console.error("No active stream to record");
@@ -395,6 +465,19 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     const stopRecordingSession = useCallback(async () => {
         console.log('[LiveRecord] Stopping recording session...');
+
+        // Native Cleanup
+        if (usingNativeCaptureRef.current) {
+            try {
+                await invoke('stop_system_audio_capture');
+            } catch (e) { console.error(e); }
+            usingNativeCaptureRef.current = false;
+        }
+
+        if (systemAudioUnlistenRef.current) {
+            systemAudioUnlistenRef.current();
+            systemAudioUnlistenRef.current = null;
+        }
 
         if (animationRef.current) {
             window.cancelAnimationFrame(animationRef.current);
