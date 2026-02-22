@@ -411,18 +411,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Start file recording (MediaRecorder)
     const startFileRecording = useCallback(async () => {
-        // If using native capture, we don't support file recording in this version (no stream to record)
-        // Or we could construct a stream, but user said "Do not worry about waveform display".
-        // What about file recording?
-        // MediaRecorder needs a MediaStream.
-        // If native capture, we don't have a MediaStream unless we create one via AudioContext destination...
-        // But we skipped AudioContext.
-        // So file recording won't work with native capture in this implementation.
-        // This is a trade-off.
-
-        // Wait, if inputSource is desktop, and we use native capture, `activeStreamRef` is null.
-        // The existing code for file recording relies on `activeStreamRef`.
-
         if (usingNativeCaptureRef.current) {
             // For native capture, we rely on the system-audio event listener to accumulate data
             audioChunksRef.current = [];
