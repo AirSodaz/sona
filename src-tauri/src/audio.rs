@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncReadExt, BufReader, AsyncBufReadExt};
 use tokio::process::{Command, Child};
@@ -199,45 +198,43 @@ pub async fn start_audio_capture(
 
     let ffmpeg_path = get_ffmpeg_path(&app)?;
 
-    let mut args = Vec::new();
+    // Use Vec<String> to own arguments and avoid lifetime issues with format!
+    let mut args: Vec<String> = Vec::new();
 
     #[cfg(target_os = "windows")]
     {
-        args.push("-f");
-        args.push("dshow");
-        args.push("-i");
-        args.push(&format!("audio={}", device_id)); // device_id is name
+        args.push("-f".to_string());
+        args.push("dshow".to_string());
+        args.push("-i".to_string());
+        args.push(format!("audio={}", device_id)); // device_id is name
     }
 
     #[cfg(target_os = "macos")]
     {
-        args.push("-f");
-        args.push("avfoundation");
-        args.push("-i");
-        args.push(&format!(":{}", device_id)); // device_id is index
+        args.push("-f".to_string());
+        args.push("avfoundation".to_string());
+        args.push("-i".to_string());
+        args.push(format!(":{}", device_id)); // device_id is index
     }
 
     #[cfg(target_os = "linux")]
     {
-        args.push("-f");
-        args.push("pulse");
-        args.push("-i");
-        args.push(&device_id); // device_id is source name
+        args.push("-f".to_string());
+        args.push("pulse".to_string());
+        args.push("-i".to_string());
+        args.push(device_id); // device_id is source name
     }
 
     // Common output args: raw PCM s16le 16kHz mono to stdout
-    args.extend_from_slice(&[
-        "-ac", "1",
-        "-ar", "16000",
-        "-f", "s16le",
-        "-"
-    ]);
+    args.push("-ac".to_string());
+    args.push("1".to_string());
+    args.push("-ar".to_string());
+    args.push("16000".to_string());
+    args.push("-f".to_string());
+    args.push("s16le".to_string());
+    args.push("-".to_string());
 
     // Spawn process
-    // Use unsafe block for windows-specific flag if needed to hide window?
-    // Tauri Command usually handles this.
-    // We are using tokio::process::Command directly.
-
     let mut cmd = Command::new(ffmpeg_path);
     cmd.args(&args);
     cmd.stdout(Stdio::piped());
@@ -245,7 +242,7 @@ pub async fn start_audio_capture(
 
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
+        // tokio::process::Command on Windows has creation_flags inherent method
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
@@ -286,7 +283,7 @@ pub async fn start_audio_capture(
     tokio::spawn(async move {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
-        while let Ok(Some(line)) = lines.next_line().await {
+        while let Ok(Some(_)) = lines.next_line().await {
             // eprintln!("[FFmpeg] {}", line); // Log only if debug?
         }
     });
