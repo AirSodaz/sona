@@ -205,6 +205,12 @@ describe('LiveRecord Native Capture', () => {
                     stop: vi.fn(),
                 };
             }
+            createGain() {
+                return {
+                    gain: { value: 1 },
+                    connect: vi.fn(),
+                };
+            }
             audioWorklet = {
                 addModule: vi.fn().mockResolvedValue(undefined),
             };
@@ -218,6 +224,19 @@ describe('LiveRecord Native Capture', () => {
                 onmessage: null,
             };
             connect = vi.fn();
+        });
+
+        vi.stubGlobal('MediaRecorder', class {
+            state = 'inactive';
+            mimeType = 'audio/webm';
+            constructor(_stream: any, _options: any) {}
+            start() { this.state = 'recording'; }
+            stop() { this.state = 'inactive'; if (this.onstop) this.onstop(new Event('stop')); }
+            pause() { this.state = 'paused'; }
+            resume() { this.state = 'recording'; }
+            ondataavailable = null;
+            onstop: ((e: Event) => void) | null = null;
+            static isTypeSupported(_type: string) { return true; }
         });
 
         // Mock getUserMedia

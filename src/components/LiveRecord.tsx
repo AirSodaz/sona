@@ -263,6 +263,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (!analyserRef.current && audioContextRef.current) {
             analyserRef.current = audioContextRef.current.createAnalyser();
             analyserRef.current.fftSize = 256;
+
+            // Connect to destination via a mute gain node to ensure graph is active
+            // This is required for some browsers/AudioContext implementations to process the audio
+            const gain = audioContextRef.current.createGain();
+            gain.gain.value = 0;
+            analyserRef.current.connect(gain);
+            gain.connect(audioContextRef.current.destination);
         }
     }, []);
 
@@ -585,6 +592,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 await audioContextRef.current.close();
             }
             audioContextRef.current = null;
+            analyserRef.current = null;
         }
 
         // Unmute system audio if configured
