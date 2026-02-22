@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 
 // Mock Tauri invoke
@@ -191,7 +191,7 @@ describe('LiveRecord Native Capture', () => {
                     connect: vi.fn(),
                 };
             }
-            createBuffer(channels: number, length: number, sampleRate: number) {
+            createBuffer(_channels: number, length: number, sampleRate: number) {
                 return {
                     copyToChannel: vi.fn(),
                     duration: length / sampleRate,
@@ -338,7 +338,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('should save recording if duration > 1s', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        await import('../../stores/transcriptStore');
 
         render(<LiveRecord />);
 
