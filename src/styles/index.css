@@ -2198,7 +2198,7 @@ input[type="radio"]:focus {
 }
 
 .batch-queue-processing .progress-bar {
-  width: 300px;
+  width: 200px;
 }
 
 .batch-queue-error .drop-zone-text h3 {
