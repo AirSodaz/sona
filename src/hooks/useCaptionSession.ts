@@ -214,7 +214,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 alwaysOnTop: config.alwaysOnTop ?? true,
                 lockWindow: config.lockWindow ?? false,
                 width: config.captionWindowWidth,
-                fontSize: config.captionFontSize
+                fontSize: config.captionFontSize,
+                color: config.captionFontColor
             });
 
         } catch (error) {
@@ -275,10 +276,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         if (isCaptionMode && !isInitializing) {
             captionWindowService.updateStyle({
                 width: config.captionWindowWidth,
-                fontSize: config.captionFontSize
+                fontSize: config.captionFontSize,
+                color: config.captionFontColor
             }).catch(console.error);
         }
-    }, [config.captionWindowWidth, config.captionFontSize, isCaptionMode, isInitializing]);
+    }, [config.captionWindowWidth, config.captionFontSize, config.captionFontColor, isCaptionMode, isInitializing]);
 
     // Cleanup on unmount
     useEffect(() => {

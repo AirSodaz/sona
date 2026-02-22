@@ -44,6 +44,7 @@ export function useAppInitialization() {
                         startOnLaunch: parsed.startOnLaunch ?? false,
                         captionWindowWidth: parsed.captionWindowWidth || 800,
                         captionFontSize: parsed.captionFontSize || 24,
+                        captionFontColor: parsed.captionFontColor || '#ffffff',
                     };
 
                     setConfig(loadedConfig);
@@ -125,6 +126,7 @@ export function useAppInitialization() {
             startOnLaunch: config.startOnLaunch,
             captionWindowWidth: config.captionWindowWidth,
             captionFontSize: config.captionFontSize,
+            captionFontColor: config.captionFontColor,
         };
         localStorage.setItem('sona-config', JSON.stringify(configToSave));
     }, [config, isLoaded]);

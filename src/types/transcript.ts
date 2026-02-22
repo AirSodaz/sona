@@ -79,4 +79,6 @@ export interface AppConfig {
   captionWindowWidth?: number;
   /** Font size of the caption text in pixels. Default: 24. */
   captionFontSize?: number;
+  /** Font color of the caption text (HEX). Default: '#ffffff'. */
+  captionFontColor?: string;
 }

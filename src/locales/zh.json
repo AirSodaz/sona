@@ -55,6 +55,7 @@
         "start_on_launch_hint": "程序启动时自动开启实时字幕",
         "window_width": "悬浮窗宽度",
         "font_size": "字体大小",
+        "font_color": "字体颜色",
         "subtitle_settings": "字幕设置"
     },
     "batch": {

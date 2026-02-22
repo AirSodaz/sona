@@ -13,6 +13,8 @@ interface SettingsSubtitleTabProps {
     setCaptionWindowWidth: (width: number) => void;
     captionFontSize: number;
     setCaptionFontSize: (size: number) => void;
+    captionFontColor: string;
+    setCaptionFontColor: (color: string) => void;
 }
 
 export function SettingsSubtitleTab({
@@ -25,7 +27,9 @@ export function SettingsSubtitleTab({
     captionWindowWidth,
     setCaptionWindowWidth,
     captionFontSize,
-    setCaptionFontSize
+    setCaptionFontSize,
+    captionFontColor,
+    setCaptionFontColor
 }: SettingsSubtitleTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -82,7 +86,15 @@ export function SettingsSubtitleTab({
                         {t('live.window_width', { defaultValue: 'Floating Window Width' })}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '0.9rem', minWidth: '40px', textAlign: 'right' }}>{captionWindowWidth}px</span>
+                        <input
+                            type="number"
+                            min="300"
+                            max="1600"
+                            step="50"
+                            value={captionWindowWidth}
+                            onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
+                            style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)' }}
+                        />
                         <input
                             type="range"
                             min="300"
@@ -102,7 +114,15 @@ export function SettingsSubtitleTab({
                         {t('live.font_size', { defaultValue: 'Font Size' })}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '0.9rem', minWidth: '40px', textAlign: 'right' }}>{captionFontSize}px</span>
+                        <input
+                            type="number"
+                            min="12"
+                            max="72"
+                            step="1"
+                            value={captionFontSize}
+                            onChange={(e) => setCaptionFontSize(Number(e.target.value))}
+                            style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)' }}
+                        />
                         <input
                             type="range"
                             min="12"
@@ -111,6 +131,30 @@ export function SettingsSubtitleTab({
                             value={captionFontSize}
                             onChange={(e) => setCaptionFontSize(Number(e.target.value))}
                             style={{ width: '120px' }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <span className="settings-label" style={{ marginBottom: 0 }}>
+                        {t('live.font_color', { defaultValue: 'Font Color' })}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input
+                            type="color"
+                            value={captionFontColor}
+                            onChange={(e) => setCaptionFontColor(e.target.value)}
+                            style={{ width: '40px', height: '40px', padding: '0', border: 'none', background: 'none', cursor: 'pointer' }}
+                        />
+                        <input
+                            type="text"
+                            value={captionFontColor}
+                            onChange={(e) => setCaptionFontColor(e.target.value)}
+                            placeholder="#RRGGBB"
+                            maxLength={7}
+                            style={{ width: '100px', padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', fontFamily: 'monospace' }}
                         />
                     </div>
                 </div>

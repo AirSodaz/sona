@@ -16,6 +16,7 @@ const CAPTION_EVENT_STYLE = 'caption:style';
 export function CaptionWindow() {
     const [segments, setSegments] = useState<TranscriptSegment[]>([]);
     const [fontSize, setFontSize] = useState(24);
+    const [fontColor, setFontColor] = useState('#ffffff');
     // Track target width to enforce it during height resizing
     const [targetWidth, setTargetWidth] = useState(800);
 
@@ -27,13 +28,16 @@ export function CaptionWindow() {
         const params = new URLSearchParams(window.location.search);
         const w = params.get('width');
         const fs = params.get('fontSize');
+        const c = params.get('color');
         if (w) setTargetWidth(parseInt(w, 10));
         if (fs) setFontSize(parseInt(fs, 10));
+        if (c) setFontColor(c);
 
         // Listen for style updates
-        const unlistenPromise = listen<{ width?: number, fontSize?: number }>(CAPTION_EVENT_STYLE, (event) => {
+        const unlistenPromise = listen<{ width?: number, fontSize?: number, color?: string }>(CAPTION_EVENT_STYLE, (event) => {
             if (event.payload.width) setTargetWidth(event.payload.width);
             if (event.payload.fontSize) setFontSize(event.payload.fontSize);
+            if (event.payload.color) setFontColor(event.payload.color);
         });
 
         return () => {
@@ -169,13 +173,20 @@ export function CaptionWindow() {
             <div
                 className="live-caption-content"
                 ref={containerRef}
-                style={{ maxHeight: 'none', height: 'auto', fontSize: `${fontSize}px`, lineHeight: 1.5 }}
+                style={{
+                    maxHeight: 'none',
+                    height: 'auto',
+                    fontSize: `${fontSize}px`,
+                    lineHeight: 1.5,
+                    color: fontColor
+                }}
             >
                 {segments.length === 0 ? null : (
                     segments.map((seg) => (
                         <p
                             key={seg.id}
                             className={`live-caption-line ${seg.isFinal ? '' : 'partial'}`}
+                            style={{ color: fontColor }}
                         >
                             {seg.text}
                         </p>

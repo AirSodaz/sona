@@ -14,7 +14,7 @@ class CaptionWindowService {
      * Opens the always-on-top caption window.
      * If it already exists, it focuses it.
      */
-    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number }) {
+    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number, color?: string }) {
         // Check if window already exists
         const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
         if (existingWindow) {
@@ -27,18 +27,19 @@ class CaptionWindowService {
             if (options?.lockWindow !== undefined) {
                 await this.setClickThrough(options.lockWindow);
             }
-            if (options?.width || options?.fontSize) {
-                await this.updateStyle({ width: options.width, fontSize: options.fontSize });
+            if (options?.width || options?.fontSize || options?.color) {
+                await this.updateStyle({ width: options.width, fontSize: options.fontSize, color: options.color });
             }
             return;
         }
 
         const width = options?.width || 800;
         const fontSize = options?.fontSize || 24;
+        const color = options?.color ? encodeURIComponent(options.color) : 'white';
 
         // specific creation options for caption window
         this.windowInstance = new WebviewWindow(CAPTION_WINDOW_LABEL, {
-            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}`,
+            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}&color=${color}`,
             title: 'Sona Live Caption',
             alwaysOnTop: options?.alwaysOnTop ?? true,
             decorations: false,
@@ -162,7 +163,7 @@ class CaptionWindowService {
      * Updates the caption window style (width and font size).
      * @param style Style object containing width and fontSize.
      */
-    async updateStyle(style: { width?: number, fontSize?: number }) {
+    async updateStyle(style: { width?: number, fontSize?: number, color?: string }) {
         await emit(CAPTION_EVENT_STYLE, style);
 
         // Also update window size if width is provided

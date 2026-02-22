@@ -127,6 +127,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setStartOnLaunch = (enabled: boolean) => updateConfig({ startOnLaunch: enabled });
     const setCaptionWindowWidth = (width: number) => updateConfig({ captionWindowWidth: width });
     const setCaptionFontSize = (size: number) => updateConfig({ captionFontSize: size });
+    const setCaptionFontColor = (color: string) => updateConfig({ captionFontColor: color });
 
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
@@ -410,6 +411,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setCaptionWindowWidth,
         captionFontSize: config.captionFontSize ?? 24,
         setCaptionFontSize,
+        captionFontColor: config.captionFontColor || '#ffffff',
+        setCaptionFontColor,
 
         // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,

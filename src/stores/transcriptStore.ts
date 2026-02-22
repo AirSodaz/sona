@@ -218,6 +218,7 @@ const DEFAULT_CONFIG: AppConfig = {
     startOnLaunch: false,
     captionWindowWidth: 800,
     captionFontSize: 24,
+    captionFontColor: '#ffffff',
 };
 
 /**

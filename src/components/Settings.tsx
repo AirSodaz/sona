@@ -66,6 +66,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setCaptionWindowWidth,
         captionFontSize,
         setCaptionFontSize,
+        captionFontColor,
+        setCaptionFontColor,
 
         offlineModelPath,
         setOfflineModelPath,
@@ -284,6 +286,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setCaptionWindowWidth={setCaptionWindowWidth}
                                 captionFontSize={captionFontSize}
                                 setCaptionFontSize={setCaptionFontSize}
+                                captionFontColor={captionFontColor}
+                                setCaptionFontColor={setCaptionFontColor}
                             />
                         )}
 
