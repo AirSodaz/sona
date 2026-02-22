@@ -274,16 +274,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
                     {/* Add more files button */}
                     <div className="batch-add-more">
-                        <div
-                            data-tooltip={isQueueProcessing ? t('batch.processing_wait') : undefined}
-                            data-tooltip-pos="top"
-                            style={{ display: 'inline-block' }}
-                        >
+                        <div style={{ display: 'inline-block' }}>
                             <button
                                 className="btn btn-secondary"
                                 onClick={handleClick}
-                                disabled={isQueueProcessing}
-                                style={isQueueProcessing ? { pointerEvents: 'none' } : undefined}
                             >
                                 {t('batch.add_more_files')}
                             </button>
