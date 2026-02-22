@@ -95,7 +95,10 @@ class CaptionWindowService {
                 console.log('[CaptionWindowService] Closing cached window instance');
                 await this.windowInstance.close();
             } catch (e) {
-                console.error('[CaptionWindowService] Error closing cached window instance:', e);
+                const msg = e instanceof Error ? e.message : String(e);
+                if (!msg.includes('window not found')) {
+                    console.error('[CaptionWindowService] Error closing cached window instance:', e);
+                }
             }
             this.windowInstance = null;
         }
