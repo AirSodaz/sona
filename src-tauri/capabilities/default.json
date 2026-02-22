@@ -29,6 +29,8 @@
     "core:window:allow-set-size",
     "core:window:allow-set-min-size",
     "core:window:allow-set-max-size",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-always-on-top",
     "core:event:default",
     "dialog:allow-save",
     "dialog:allow-open",
