@@ -214,10 +214,11 @@ fn process_audio<R: Runtime>(
         let chunk_slice = &mut input_buffer[0];
         let _read = consumer.pop_slice(chunk_slice);
 
-        // input_buffer is &mut [Vec<f32>], output_buffer is &mut [Vec<f32>]
-        // process_into takes &[Vec], &mut [Vec].
-        // &mut [T] coerces to &[T] for first arg.
-        let result = resampler.process_into(input_buffer, output_buffer, None);
+        // Use process_into_buffer
+        // Note: process_into_buffer takes &[Vec<T>], &mut [Vec<T>], Option...
+        // input_buffer is [Vec<T>; 1]. We need to pass it as slice.
+        // It returns Result<(usize, usize), ...>
+        let result = resampler.process_into_buffer(input_buffer, output_buffer, None);
 
         if let Ok((_in_len, out_len)) = result {
             if out_len > 0 {
