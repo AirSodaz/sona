@@ -105,6 +105,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     useEffect(() => {
         if (inputSource === 'desktop') {
             audioCaptureService.getDevices().then(devices => {
+                console.log('[LiveRecord] Discovered system audio devices:', devices);
                 setSystemDevices(devices);
                 if (devices.length > 0) {
                     // Try to preserve selection or pick first
@@ -113,6 +114,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         return devices[0].id;
                     });
                 } else {
+                    console.warn('[LiveRecord] No FFmpeg audio devices found.');
                     setSelectedSystemDevice('');
                 }
             });

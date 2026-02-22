@@ -26,21 +26,32 @@ impl AudioCaptureState {
 
 /// Resolves the path to the bundled FFmpeg binary.
 fn get_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> {
-    // In Tauri v2, resources are resolved relative to the resource directory.
-    // The sidecar build puts ffmpeg in `sidecar/dist/ffmpeg(.exe)`.
-    // This path must match what is in tauri.conf.json resources.
-
     // Attempt to resolve "sidecar/dist/ffmpeg" (or with .exe on Windows)
     let mut path_str = "sidecar/dist/ffmpeg".to_string();
     if cfg!(target_os = "windows") {
         path_str.push_str(".exe");
     }
 
+    // Debug logging for path resolution
+    println!("[Audio] Resolving FFmpeg path: {}", path_str);
+
     let resource_path = app.path().resolve(&path_str, tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to resolve ffmpeg path: {}", e))?;
 
+    println!("[Audio] Resolved path: {:?}", resource_path);
+
     if !resource_path.exists() {
-        return Err(format!("FFmpeg binary not found at: {:?}", resource_path));
+        // Fallback check: maybe it's flattened?
+        let flat_name = if cfg!(target_os = "windows") { "ffmpeg.exe" } else { "ffmpeg" };
+        let flat_path = app.path().resolve(flat_name, tauri::path::BaseDirectory::Resource)
+            .map_err(|e| format!("Failed to resolve flat path: {}", e))?;
+
+        if flat_path.exists() {
+            println!("[Audio] Found FFmpeg at flat path: {:?}", flat_path);
+            return Ok(flat_path);
+        }
+
+        return Err(format!("FFmpeg binary not found at: {:?} or {:?}", resource_path, flat_path));
     }
 
     Ok(resource_path)
@@ -50,6 +61,8 @@ fn get_ffmpeg_path(app: &AppHandle) -> Result<PathBuf, String> {
 pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, String> {
     let ffmpeg_path = get_ffmpeg_path(&app)?;
     let mut devices = Vec::new();
+
+    println!("[Audio] Listing devices using FFmpeg at: {:?}", ffmpeg_path);
 
     #[cfg(target_os = "windows")]
     {
@@ -61,6 +74,8 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
             .map_err(|e| e.to_string())?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("[Audio] Device list output:\n{}", stderr);
+
         let mut in_audio_section = false;
 
         for line in stderr.lines() {
@@ -75,11 +90,9 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
 
             if in_audio_section {
                 // Line format: [dshow @ ...]  "Device Name"
-                // We verify it starts with [dshow
                 if let Some(start_quote) = line.find('"') {
                     if let Some(end_quote) = line[start_quote+1..].find('"') {
                         let name = &line[start_quote+1..start_quote+1+end_quote];
-                        // Skip if name is empty or looks like alternative name
                         if !name.trim().is_empty() {
                             devices.push(AudioDevice {
                                 id: name.to_string(), // For dshow, id is the name
@@ -102,6 +115,8 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
             .map_err(|e| e.to_string())?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("[Audio] Device list output:\n{}", stderr);
+
         let mut in_audio_section = false;
 
         for line in stderr.lines() {
@@ -116,15 +131,9 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
 
             if in_audio_section {
                 // Line format: [AVFoundation indev @ ...] [INDEX] Name
-                // Example: [AVFoundation indev @ 0x...] [0] MacBook Pro Microphone
-                // We need to find [INDEX]
                 if let Some(bracket_start) = line.find('[') {
-                    // There might be multiple brackets (log prefix). The index is usually the last one before name?
-                    // Actually, standard format is `... [Index] Name`
-                    // Let's look for `] ` pattern
                     if let Some(bracket_end) = line.rfind(']') {
                         if bracket_end > bracket_start && bracket_end + 2 < line.len() {
-                            // Extract index
                             let slice = &line[..bracket_end];
                             if let Some(last_open) = slice.rfind('[') {
                                 let index_str = &slice[last_open+1..];
@@ -145,9 +154,8 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
 
     #[cfg(target_os = "linux")]
     {
-        // Linux: Try pulse first using pactl if available, otherwise just return Default
-        // Parsing ffmpeg output for pulse is hard.
-        // Let's try to run `pactl list short sources`
+        // Linux: Try pulse first using pactl if available
+        println!("[Audio] Listing PulseAudio sources via pactl...");
         match Command::new("pactl")
             .args(&["list", "short", "sources"])
             .output()
@@ -155,15 +163,11 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
         {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
+                println!("[Audio] pactl output:\n{}", stdout);
                 for line in stdout.lines() {
-                    // Format: ID Name Module SampleSpec State
-                    // 0	alsa_output.pci...	module-alsa-card.c	s16le 2ch 44100Hz	SUSPENDED
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 2 {
                         let name = parts[1];
-                        // Filter out monitors if we only want inputs?
-                        // "monitor" usually means system audio loopback!
-                        // If user wants system audio, we SHOULD include monitors.
                         devices.push(AudioDevice {
                             id: name.to_string(),
                             label: name.to_string(),
@@ -171,7 +175,8 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
                     }
                 }
             },
-            Err(_) => {
+            Err(e) => {
+                println!("[Audio] pactl failed: {}", e);
                 // Fallback: just add "default"
                 devices.push(AudioDevice {
                     id: "default".to_string(),
@@ -181,6 +186,7 @@ pub async fn get_audio_devices(app: AppHandle) -> Result<Vec<AudioDevice>, Strin
         }
     }
 
+    println!("[Audio] Found devices: {:?}", devices);
     Ok(devices)
 }
 
@@ -198,7 +204,7 @@ pub async fn start_audio_capture(
 
     let ffmpeg_path = get_ffmpeg_path(&app)?;
 
-    // Use Vec<String> to own arguments and avoid lifetime issues with format!
+    // Use Vec<String> to own arguments
     let mut args: Vec<String> = Vec::new();
 
     #[cfg(target_os = "windows")]
@@ -234,6 +240,8 @@ pub async fn start_audio_capture(
     args.push("s16le".to_string());
     args.push("-".to_string());
 
+    println!("[Audio] Spawning FFmpeg: {:?} {:?}", ffmpeg_path, args);
+
     // Spawn process
     let mut cmd = Command::new(ffmpeg_path);
     cmd.args(&args);
@@ -242,7 +250,7 @@ pub async fn start_audio_capture(
 
     #[cfg(windows)]
     {
-        // tokio::process::Command on Windows has creation_flags inherent method
+        use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
@@ -250,7 +258,7 @@ pub async fn start_audio_capture(
     let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
 
     let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
-    let stderr = child.stderr.take().ok_or("Failed to open stderr")?; // Capture stderr to log errors if needed
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
 
     // Spawn a task to read stdout and emit events
     let app_handle = app.clone();
@@ -260,7 +268,10 @@ pub async fn start_audio_capture(
 
         loop {
             match reader.read(&mut buffer).await {
-                Ok(0) => break, // EOF
+                Ok(0) => {
+                    println!("[Audio] FFmpeg stdout EOF");
+                    break;
+                },
                 Ok(n) => {
                     let chunk = buffer[0..n].to_vec();
                     // Emit to frontend
@@ -275,16 +286,15 @@ pub async fn start_audio_capture(
                 }
             }
         }
-        // Process finished
         let _ = app_handle.emit("audio-capture-stopped", ());
     });
 
-    // Spawn a task to read stderr (optional logging)
+    // Spawn a task to read stderr
     tokio::spawn(async move {
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
-        while let Ok(Some(_)) = lines.next_line().await {
-            // eprintln!("[FFmpeg] {}", line); // Log only if debug?
+        while let Ok(Some(line)) = lines.next_line().await {
+            println!("[FFmpeg] {}", line);
         }
     });
 
@@ -297,6 +307,7 @@ pub async fn stop_audio_capture(state: State<'_, AudioCaptureState>) -> Result<(
     let mut process_guard = state.process.lock().await;
 
     if let Some(mut child) = process_guard.take() {
+        println!("[Audio] Stopping capture process...");
         let _ = child.kill().await;
         return Ok(());
     }
