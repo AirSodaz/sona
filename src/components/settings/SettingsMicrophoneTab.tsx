@@ -324,7 +324,7 @@ export function SettingsMicrophoneTab({
 
             <div className="settings-item">
                 <label htmlFor="settings-system-audio-select" className="settings-label">
-                    {t('settings.system_audio_selection', { defaultValue: 'System Audio' })}
+                    {t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
                 </label>
                 <div style={{ maxWidth: 300 }}>
                     <Dropdown
@@ -335,7 +335,7 @@ export function SettingsMicrophoneTab({
                     />
                 </div>
                 <div className="settings-hint">
-                    {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture (Rust/cpal).' })}
+                    {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
                 </div>
             </div>
 
