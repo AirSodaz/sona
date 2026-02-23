@@ -630,3 +630,16 @@ export function alignTokensToText(
 
     return result;
 }
+
+/**
+ * Computes a lightweight fingerprint for a list of segments.
+ * Used to detect changes without deep comparison of every field.
+ */
+export function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
+    // We need to detect any text or structural changes.
+    // A simple concatenation of fields works well here.
+    // It avoids the overhead of full JSON serialization.
+    // Since this runs on every update, efficiency is key.
+    // We verify ID, text, and timing for each segment.
+    return segments.map(s => `${s.id}:${s.text}:${s.start}:${s.end}`).join('|');
+}

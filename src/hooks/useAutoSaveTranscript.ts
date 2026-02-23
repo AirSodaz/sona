@@ -3,19 +3,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
 import { TranscriptSegment } from '../types/transcript';
-
-/**
- * Computes a lightweight fingerprint for a list of segments.
- * Used to detect changes without deep comparison of every field.
- */
-function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
-    // We need to detect any text or structural changes.
-    // A simple concatenation of fields works well here.
-    // It avoids the overhead of full JSON serialization.
-    // Since this runs on every update, efficiency is key.
-    // We verify ID, text, and timing for each segment.
-    return segments.map(s => `${s.id}:${s.text}:${s.start}:${s.end}`).join('|');
-}
+import { computeSegmentsFingerprint } from '../utils/segmentUtils';
 
 /**
  * Hook to auto-save transcript changes to the history file.
@@ -39,6 +27,11 @@ export function useAutoSaveTranscript() {
             (state, prevState) => {
                 const currentId = state.sourceHistoryId;
                 const prevId = prevState.sourceHistoryId;
+
+                // Optimization: Skip check if nothing relevant changed
+                if (state.segments === prevState.segments && currentId === prevId) {
+                    return;
+                }
 
                 // 1. Handle Switching History Items (Flush pending save for previous item)
                 if (prevId && prevId !== currentId) {
