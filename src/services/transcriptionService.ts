@@ -747,12 +747,23 @@ export class TranscriptionService {
      */
     private _createSegment(data: any, defaultIsFinal: boolean): TranscriptSegment | null {
         if (data && typeof data.text === 'string' && typeof data.start === 'number' && typeof data.end === 'number') {
+            const isFinal = data.isFinal ?? defaultIsFinal;
+            const text = data.text;
+
+            // Filter out single period segments when final
+            if (isFinal) {
+                const trimmedText = text.trim();
+                if (trimmedText === '.' || trimmedText === '。') {
+                    return null;
+                }
+            }
+
             return {
                 id: data.id || uuidv4(),
-                text: data.text,
+                text: text,
                 start: data.start,
                 end: data.end,
-                isFinal: data.isFinal ?? defaultIsFinal,
+                isFinal: isFinal,
                 tokens: data.tokens,
                 timestamps: data.timestamps,
                 durations: data.durations
