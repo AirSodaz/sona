@@ -668,6 +668,7 @@ input[type="radio"]:focus {
 .transcript-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--spacing-xl) var(--spacing-md);
 }
 
