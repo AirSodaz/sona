@@ -559,7 +559,8 @@ pub fn run() {
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,
-            ai::call_ai_model
+            ai::call_ai_model,
+            ai::get_ai_models
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

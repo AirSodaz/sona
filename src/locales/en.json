@@ -229,6 +229,9 @@
             "testing": "Testing...",
             "connection_success": "Connection successful! Response: ",
             "connection_failed": "Connection failed: ",
+            "loading_models": "Loading models...",
+            "type_manually": "Type manually...",
+            "back_to_list": "Back to list",
             "services": {
                 "openai": "OpenAI Compatible",
                 "anthropic": "Anthropic",

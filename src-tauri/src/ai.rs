@@ -24,6 +24,28 @@ struct OpenAIChoice {
     message: OpenAIMessage,
 }
 
+#[derive(Deserialize)]
+struct OpenAIModel {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct OpenAIModelsResponse {
+    data: Vec<OpenAIModel>,
+}
+
+// --- Ollama Tags Types ---
+#[derive(Deserialize)]
+struct OllamaModel {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+
 // --- Anthropic Types ---
 #[derive(Serialize, Deserialize)]
 pub struct AnthropicMessage {
@@ -77,6 +99,16 @@ struct GeminiCandidate {
 #[derive(Deserialize)]
 struct GeminiCandidateContent {
     parts: Vec<GeminiPart>,
+}
+
+#[derive(Deserialize)]
+struct GeminiModel {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct GeminiModelsResponse {
+    models: Option<Vec<GeminiModel>>,
 }
 
 #[tauri::command]
@@ -223,5 +255,92 @@ pub async fn call_ai_model(
         } else {
             Err("No choices in OpenAI response".to_string())
         }
+    }
+}
+
+#[tauri::command]
+pub async fn get_ai_models(
+    api_key: String,
+    base_url: String,
+    api_format: String,
+) -> Result<Vec<String>, String> {
+    let client = Client::new();
+    let base = base_url.trim_end_matches('/');
+
+    if api_format == "anthropic" {
+        return Ok(vec![]);
+    } else if api_format == "gemini" {
+        let url = if base.contains("models") {
+            format!("{}?key={}", base, api_key)
+        } else {
+            format!("{}/v1beta/models?key={}", base, api_key)
+        };
+
+        let res = client
+            .get(&url)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+         if !res.status().is_success() {
+             return Err(format!("Gemini API Error: {}", res.status()));
+        }
+
+        let response_body: GeminiModelsResponse = res.json().await.map_err(|e| e.to_string())?;
+
+        if let Some(models) = response_body.models {
+            let names = models.into_iter().map(|m| {
+                m.name.trim_start_matches("models/").to_string()
+            }).collect();
+            return Ok(names);
+        } else {
+             return Ok(vec![]);
+        }
+
+    } else {
+        // OpenAI / Ollama
+        let mut urls_to_try = Vec::new();
+
+        if api_format == "ollama" {
+             urls_to_try.push(format!("{}/api/tags", base));
+             urls_to_try.push(format!("{}/v1/models", base));
+        } else {
+             if base.ends_with("/v1") {
+                 urls_to_try.push(format!("{}/models", base));
+             } else {
+                 urls_to_try.push(format!("{}/v1/models", base));
+                 urls_to_try.push(format!("{}/models", base));
+             }
+        }
+
+        for url in urls_to_try {
+            let mut req = client.get(&url).header("Content-Type", "application/json");
+
+            if !api_key.is_empty() {
+                req = req.header("Authorization", format!("Bearer {}", api_key));
+            }
+
+            match req.send().await {
+                Ok(res) => {
+                    if res.status().is_success() {
+                        let text = res.text().await.unwrap_or_default();
+
+                        // Try OpenAI format
+                        if let Ok(response_body) = serde_json::from_str::<OpenAIModelsResponse>(&text) {
+                            return Ok(response_body.data.into_iter().map(|m| m.id).collect());
+                        }
+
+                        // Try Ollama format
+                         if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
+                            return Ok(response_body.models.into_iter().map(|m| m.name).collect());
+                        }
+                    }
+                },
+                Err(_) => continue,
+            }
+        }
+
+        return Err("Failed to fetch models from any known endpoint".to_string());
     }
 }
