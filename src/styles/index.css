@@ -1454,12 +1454,12 @@ input[type="radio"]:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-bg-elevated);
+  background: var(--color-text-disabled);
   border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-text-muted);
 }
 
 /* ===========================
