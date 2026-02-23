@@ -270,7 +270,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 let nativeSuccess = false;
                 try {
                     console.log('[LiveRecord] Attempting native system audio capture...');
-                    await invoke('start_system_audio_capture');
+                    await invoke('start_system_audio_capture', {
+                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId
+                    });
 
                     // Initialize AudioContext for visualization if needed
                     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {

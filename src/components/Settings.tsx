@@ -51,6 +51,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setFont,
         microphoneId,
         setMicrophoneId,
+        systemAudioDeviceId,
+        setSystemAudioDeviceId,
         muteDuringRecording,
         setMuteDuringRecording,
         minimizeToTrayOnExit,
@@ -173,7 +175,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                         />
                         <SettingsTabButton
                             id="microphone"
-                            label={t('settings.microphone')}
+                            label={t('settings.input_device', { defaultValue: 'Input Device' })}
                             Icon={MicIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
@@ -242,7 +244,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                         <div className="settings-section-header">
                             <h3 className="settings-section-title">
                                 {activeTab === 'general' && t('settings.general')}
-                                {activeTab === 'microphone' && t('settings.microphone')}
+                                {activeTab === 'microphone' && t('settings.input_device', { defaultValue: 'Input Device' })}
                                 {activeTab === 'subtitle' && t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                                 {activeTab === 'models' && t('settings.model_hub')}
                                 {activeTab === 'local' && t('settings.local_path')}
@@ -269,6 +271,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <SettingsMicrophoneTab
                                 microphoneId={microphoneId}
                                 setMicrophoneId={setMicrophoneId}
+                                systemAudioDeviceId={systemAudioDeviceId}
+                                setSystemAudioDeviceId={setSystemAudioDeviceId}
                                 muteDuringRecording={muteDuringRecording}
                                 setMuteDuringRecording={setMuteDuringRecording}
                             />

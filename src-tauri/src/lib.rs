@@ -555,6 +555,7 @@ pub fn run() {
             update_tray_menu,
             set_minimize_to_tray,
             set_system_audio_mute,
+            audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture
         ])

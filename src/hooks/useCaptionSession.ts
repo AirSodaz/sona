@@ -124,7 +124,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 let nativeSuccess = false;
                 try {
                     console.log('[CaptionSession] Attempting native system audio capture...');
-                    await invoke('start_system_audio_capture');
+                    await invoke('start_system_audio_capture', {
+                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId
+                    });
                     const unlisten = await listen<number[]>('system-audio', (event) => {
                         const samples = new Int16Array(event.payload);
                         serviceRef.current.sendAudioInt16(samples);

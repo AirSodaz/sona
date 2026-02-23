@@ -2,10 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { useTranscriptStore } from '../../stores/transcriptStore';
+
+interface AudioDevice {
+    name: string;
+}
 
 interface SettingsMicrophoneTabProps {
     microphoneId: string;
     setMicrophoneId: (id: string) => void;
+    systemAudioDeviceId: string;
+    setSystemAudioDeviceId: (id: string) => void;
     muteDuringRecording: boolean;
     setMuteDuringRecording: (enabled: boolean) => void;
 }
@@ -13,11 +22,14 @@ interface SettingsMicrophoneTabProps {
 export function SettingsMicrophoneTab({
     microphoneId,
     setMicrophoneId,
+    systemAudioDeviceId,
+    setSystemAudioDeviceId,
     muteDuringRecording,
     setMuteDuringRecording
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
+    const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -25,6 +37,20 @@ export function SettingsMicrophoneTab({
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const animationRef = useRef<number>(0);
     const streamRef = useRef<MediaStream | null>(null);
+
+    // System Audio Visualizer Refs
+    const systemCanvasRef = useRef<HTMLCanvasElement>(null);
+    const systemAudioContextRef = useRef<AudioContext | null>(null);
+    const systemAnalyserRef = useRef<AnalyserNode | null>(null);
+    const systemAnimationRef = useRef<number>(0);
+    const systemUnlistenRef = useRef<UnlistenFn | null>(null);
+    const nextAudioTimeRef = useRef<number>(0);
+
+    const isRecording = useTranscriptStore((state) => state.isRecording);
+    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+
+    // We only control the system capture if it's not already running for recording/captioning
+    const isActiveSession = isRecording || isCaptionMode;
 
     // Enumerate devices
     useEffect(() => {
@@ -96,8 +122,197 @@ export function SettingsMicrophoneTab({
         };
     }, [t]);
 
+    // Enumerate system audio devices
+    useEffect(() => {
+        let isMounted = true;
 
-    // Visualizer Logic
+        async function getSystemDevices() {
+            try {
+                const devs = await invoke<AudioDevice[]>('get_system_audio_devices');
+                if (isMounted) {
+                    const options = [
+                        { label: t('settings.mic_auto'), value: 'default' },
+                        ...devs.map(d => ({
+                            label: d.name,
+                            value: d.name
+                        }))
+                    ];
+                    setSystemDevices(options);
+                }
+            } catch (err) {
+                console.error('Error getting system audio devices:', err);
+            }
+        }
+
+        getSystemDevices();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [t]);
+
+    // System Audio Visualizer Logic
+    useEffect(() => {
+        let isMounted = true;
+
+        async function startSystemVisualizer() {
+            try {
+                // Initialize Audio Context
+                if (!systemAudioContextRef.current || systemAudioContextRef.current.state === 'closed') {
+                    systemAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
+                } else if (systemAudioContextRef.current.state === 'suspended') {
+                    await systemAudioContextRef.current.resume();
+                }
+
+                // Initialize Analyser
+                if (!systemAnalyserRef.current && systemAudioContextRef.current) {
+                    systemAnalyserRef.current = systemAudioContextRef.current.createAnalyser();
+                    systemAnalyserRef.current.fftSize = 2048;
+                    // Connect to mute gain to keep graph active
+                    const gainNode = systemAudioContextRef.current.createGain();
+                    gainNode.gain.value = 0;
+                    systemAnalyserRef.current.connect(gainNode);
+                    gainNode.connect(systemAudioContextRef.current.destination);
+                }
+
+                if (systemAudioContextRef.current) {
+                    nextAudioTimeRef.current = systemAudioContextRef.current.currentTime;
+                }
+
+                // If no active session, we start the capture
+                if (!isActiveSession) {
+                    await invoke('start_system_audio_capture', {
+                        deviceName: systemAudioDeviceId === 'default' ? null : systemAudioDeviceId
+                    });
+                }
+
+                const unlisten = await listen<number[]>('system-audio', (event) => {
+                    if (!isMounted || !systemAudioContextRef.current || !systemAnalyserRef.current) return;
+
+                    const samples = new Int16Array(event.payload);
+                    const float32Data = new Float32Array(samples.length);
+                    for (let i = 0; i < samples.length; i++) {
+                        const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
+                        float32Data[i] = float;
+                    }
+
+                    const buffer = systemAudioContextRef.current.createBuffer(1, samples.length, 16000);
+                    buffer.copyToChannel(float32Data, 0);
+
+                    const source = systemAudioContextRef.current.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(systemAnalyserRef.current);
+
+                    const currentTime = systemAudioContextRef.current.currentTime;
+                    let startTime = nextAudioTimeRef.current;
+                    if (startTime < currentTime) {
+                        startTime = currentTime;
+                    }
+                    source.start(startTime);
+                    nextAudioTimeRef.current = startTime + buffer.duration;
+                });
+
+                systemUnlistenRef.current = unlisten;
+
+                drawSystem();
+            } catch (err) {
+                console.error('Error starting system visualizer:', err);
+            }
+        }
+
+        function drawSystem() {
+            const canvas = systemCanvasRef.current;
+            const analyser = systemAnalyserRef.current;
+
+            if (!canvas || !analyser) return;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const dataArray = new Uint8Array(analyser.fftSize);
+
+            const barCount = 20;
+            const barGap = 2;
+            const totalGap = (barCount - 1) * barGap;
+            const barWidth = (canvas.width - totalGap) / barCount;
+
+            const drawLoop = () => {
+                systemAnimationRef.current = requestAnimationFrame(drawLoop);
+
+                analyser.getByteTimeDomainData(dataArray);
+
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const value = (dataArray[i] - 128) / 128.0;
+                    sum += value * value;
+                }
+                const rms = Math.sqrt(sum / dataArray.length);
+                const displayVolume = Math.min(1.0, rms * 5.0);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const activeBars = Math.ceil(displayVolume * barCount);
+
+                for (let i = 0; i < barCount; i++) {
+                    const x = i * (barWidth + barGap);
+
+                    let color = '#e5e7eb';
+
+                    if (i < activeBars) {
+                        const percent = i / barCount;
+                        if (percent < 0.6) {
+                            color = '#22c55e';
+                        } else if (percent < 0.8) {
+                            color = '#eab308';
+                        } else {
+                            color = '#ef4444';
+                        }
+                    }
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x, 0, barWidth, canvas.height);
+                }
+            };
+
+            drawLoop();
+        }
+
+        startSystemVisualizer();
+
+        return () => {
+            isMounted = false;
+
+            if (systemAnimationRef.current) {
+                cancelAnimationFrame(systemAnimationRef.current);
+            }
+
+            if (systemUnlistenRef.current) {
+                systemUnlistenRef.current();
+            }
+
+            if (systemAudioContextRef.current) {
+                systemAudioContextRef.current.close();
+                systemAudioContextRef.current = null;
+                systemAnalyserRef.current = null;
+            }
+
+            // Only stop capture if we started it (i.e., no active session was running)
+            // However, this check uses the initial value of isActiveSession from closure.
+            // But since this effect re-runs if systemAudioDeviceId changes, we need to be careful.
+            // Actually, we can just check the store state via a ref or rely on the fact that
+            // stop_system_audio_capture is safe to call? No, it kills the stream for everyone.
+
+            // To be safe: We check the store via the prop or fresh check if possible.
+            // But hooks can't access updated state in cleanup easily without refs.
+            // We use isActiveSession from the scope. If it was false when we mounted, we stop it.
+            if (!isActiveSession) {
+                invoke('stop_system_audio_capture').catch(console.error);
+            }
+        };
+    }, [systemAudioDeviceId, isActiveSession]); // Re-run if device changes or active session state changes
+
+
+    // Mic Visualizer Logic
     useEffect(() => {
         let isMounted = true;
         // Start visualization for the selected microphone
@@ -280,6 +495,40 @@ export function SettingsMicrophoneTab({
                 </div>
                 <div className="settings-hint">
                     {t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
+                </div>
+            </div>
+
+            <div className="settings-item">
+                <label htmlFor="settings-system-audio-select" className="settings-label">
+                    {t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+                    <div style={{ flex: 1, maxWidth: 300 }}>
+                        <Dropdown
+                            id="settings-system-audio-select"
+                            value={systemAudioDeviceId}
+                            onChange={setSystemAudioDeviceId}
+                            options={systemDevices}
+                        />
+                    </div>
+                    <div style={{
+                        width: '120px',
+                        height: '36px',
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                        border: '1px solid var(--color-border)'
+                    }}>
+                        <canvas
+                            ref={systemCanvasRef}
+                            width={120}
+                            height={36}
+                            style={{ display: 'block', width: '100%', height: '100%' }}
+                        />
+                    </div>
+                </div>
+                <div className="settings-hint">
+                    {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
                 </div>
             </div>
 
