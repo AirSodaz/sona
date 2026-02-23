@@ -260,4 +260,90 @@ describe('TranscriptionService', () => {
             expect(result).toEqual(resultData);
         });
     });
+
+    describe('Filtering', () => {
+        it('filters out segments with only a single period "." and isFinal: true', async () => {
+            const onSegment = vi.fn();
+            const onError = vi.fn();
+            await transcriptionService.start(onSegment, onError);
+
+            const mockCommandInstance = vi.mocked(Command.sidecar).mock.results[0].value;
+
+            const segmentData = {
+                id: 'seg-1',
+                text: '.',
+                start: 0,
+                end: 1.5,
+                isFinal: true
+            };
+
+            mockCommandInstance.stdout.emit('data', JSON.stringify(segmentData) + '\n');
+
+            // Should NOT be called
+            expect(onSegment).not.toHaveBeenCalled();
+        });
+
+        it('filters out segments with only a single Chinese period "。" and isFinal: true', async () => {
+            const onSegment = vi.fn();
+            const onError = vi.fn();
+            await transcriptionService.start(onSegment, onError);
+
+            const mockCommandInstance = vi.mocked(Command.sidecar).mock.results[0].value;
+
+            const segmentData = {
+                id: 'seg-1',
+                text: '。',
+                start: 0,
+                end: 1.5,
+                isFinal: true
+            };
+
+            mockCommandInstance.stdout.emit('data', JSON.stringify(segmentData) + '\n');
+
+            expect(onSegment).not.toHaveBeenCalled();
+        });
+
+        it('filters out segments with only a single period "." and isFinal: true, even with whitespace', async () => {
+            const onSegment = vi.fn();
+            const onError = vi.fn();
+            await transcriptionService.start(onSegment, onError);
+
+            const mockCommandInstance = vi.mocked(Command.sidecar).mock.results[0].value;
+
+            const segmentData = {
+                id: 'seg-1',
+                text: ' . ',
+                start: 0,
+                end: 1.5,
+                isFinal: true
+            };
+
+            mockCommandInstance.stdout.emit('data', JSON.stringify(segmentData) + '\n');
+
+            expect(onSegment).not.toHaveBeenCalled();
+        });
+
+        it('does NOT filter out segments with only a single period "." if isFinal: false', async () => {
+            const onSegment = vi.fn();
+            const onError = vi.fn();
+            await transcriptionService.start(onSegment, onError);
+
+            const mockCommandInstance = vi.mocked(Command.sidecar).mock.results[0].value;
+
+            const segmentData = {
+                id: 'seg-1',
+                text: '.',
+                start: 0,
+                end: 1.5,
+                isFinal: false
+            };
+
+            mockCommandInstance.stdout.emit('data', JSON.stringify(segmentData) + '\n');
+
+            expect(onSegment).toHaveBeenCalledWith(expect.objectContaining({
+                text: '.',
+                isFinal: false
+            }));
+        });
+    });
 });
