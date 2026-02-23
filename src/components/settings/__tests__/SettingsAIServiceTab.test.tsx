@@ -31,8 +31,7 @@ describe('SettingsAIServiceTab', () => {
 
         expect(screen.getByText('settings.ai.service_type')).toBeDefined();
         // Dropdown value (selected option label)
-        // Since t returns key, the label is settings.ai.services.openai
-        expect(screen.getByText('settings.ai.services.openai')).toBeDefined();
+        expect(screen.getByText('OpenAI')).toBeDefined();
 
         expect(screen.getByText('settings.ai.base_url')).toBeDefined();
         expect(screen.getByDisplayValue('https://api.openai.com/v1')).toBeDefined();
@@ -60,11 +59,11 @@ describe('SettingsAIServiceTab', () => {
         );
 
         // Open Dropdown
-        const trigger = screen.getByText('settings.ai.services.openai');
+        const trigger = screen.getByText('OpenAI');
         fireEvent.click(trigger);
 
         // Find Anthropic option
-        const anthropicOption = screen.getByText('settings.ai.services.anthropic');
+        const anthropicOption = screen.getByText('Anthropic');
         fireEvent.click(anthropicOption);
 
         expect(setAiServiceType).toHaveBeenCalledWith('anthropic');
@@ -85,11 +84,11 @@ describe('SettingsAIServiceTab', () => {
         );
 
         // Open Dropdown
-        const trigger = screen.getByText('settings.ai.services.openai');
+        const trigger = screen.getByText('OpenAI');
         fireEvent.click(trigger);
 
         // Find Ollama option
-        const ollamaOption = screen.getByText('settings.ai.services.ollama');
+        const ollamaOption = screen.getByText('Ollama');
         fireEvent.click(ollamaOption);
 
         expect(setAiServiceType).toHaveBeenCalledWith('ollama');

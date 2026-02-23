@@ -138,10 +138,10 @@ export function SettingsAIServiceTab({
                         value={aiServiceType}
                         onChange={handleServiceTypeChange}
                         options={[
-                            { value: 'openai', label: t('settings.ai.services.openai') },
-                            { value: 'anthropic', label: t('settings.ai.services.anthropic') },
-                            { value: 'ollama', label: t('settings.ai.services.ollama') },
-                            { value: 'gemini', label: t('settings.ai.services.gemini') }
+                            { value: 'openai', label: 'OpenAI' },
+                            { value: 'anthropic', label: 'Anthropic' },
+                            { value: 'ollama', label: 'Ollama' },
+                            { value: 'gemini', label: 'Google Gemini' }
                         ]}
                     />
                 </div>
