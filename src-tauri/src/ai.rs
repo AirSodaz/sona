@@ -117,8 +117,9 @@ pub async fn call_ai_model(
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
+             let status = res.status();
              let error_text = res.text().await.unwrap_or_default();
-            return Err(format!("Anthropic API Error: {} - {}", res.status(), error_text));
+            return Err(format!("Anthropic API Error: {} - {}", status, error_text));
         }
 
         let response_body: AnthropicResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -161,8 +162,9 @@ pub async fn call_ai_model(
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
+             let status = res.status();
              let error_text = res.text().await.unwrap_or_default();
-            return Err(format!("Gemini API Error: {} - {}", res.status(), error_text));
+            return Err(format!("Gemini API Error: {} - {}", status, error_text));
         }
 
         let response_body: GeminiResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -210,8 +212,9 @@ pub async fn call_ai_model(
         let res = req.send().await.map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
+             let status = res.status();
              let error_text = res.text().await.unwrap_or_default();
-            return Err(format!("OpenAI API Error: {} - {}", res.status(), error_text));
+            return Err(format!("OpenAI API Error: {} - {}", status, error_text));
         }
 
         let response_body: OpenAIResponse = res.json().await.map_err(|e| e.to_string())?;
