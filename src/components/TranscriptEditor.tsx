@@ -77,6 +77,13 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
                 newIds.add(segment.id);
                 hasNew = true;
                 consecutiveKnowns = 0;
+
+                // Optimization: If there are too many new segments (e.g. bulk load),
+                // prevent O(N) calculations on subsequent renders by marking all as known immediately.
+                if (newIds.size > 50) {
+                    knownSegmentIdsRef.current = new Set(segments.map(s => s.id));
+                    return new Set<string>();
+                }
             } else {
                 consecutiveKnowns++;
                 if (consecutiveKnowns >= 50) {
