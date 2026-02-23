@@ -121,7 +121,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'ai_service', 'local', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'ai_service', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -209,20 +209,20 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'models' ? 0 : -1}
                         />
                         <SettingsTabButton
-                            id="ai_service"
-                            label={t('settings.ai.title')}
-                            Icon={RobotIcon}
-                            activeTab={activeTab}
-                            setActiveTab={setActiveTab}
-                            tabIndex={activeTab === 'ai_service' ? 0 : -1}
-                        />
-                        <SettingsTabButton
                             id="local"
                             label={t('settings.local_path')}
                             Icon={LocalIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
                             tabIndex={activeTab === 'local' ? 0 : -1}
+                        />
+                        <SettingsTabButton
+                            id="ai_service"
+                            label={t('settings.ai.title')}
+                            Icon={RobotIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'ai_service' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="shortcuts"
@@ -327,19 +327,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             />
                         )}
 
-                        {activeTab === 'ai_service' && (
-                            <SettingsAIServiceTab
-                                aiServiceType={aiServiceType}
-                                setAiServiceType={setAiServiceType}
-                                aiBaseUrl={aiBaseUrl}
-                                setAiBaseUrl={setAiBaseUrl}
-                                aiApiKey={aiApiKey}
-                                setAiApiKey={setAiApiKey}
-                                aiModel={aiModel}
-                                setAiModel={setAiModel}
-                            />
-                        )}
-
                         {activeTab === 'local' && (
                             <SettingsLocalTab
 
@@ -369,6 +356,19 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setMaxConcurrent={setMaxConcurrent}
                                 installedModels={installedModels}
                                 onRestoreDefaults={restoreDefaultModelSettings}
+                            />
+                        )}
+
+                        {activeTab === 'ai_service' && (
+                            <SettingsAIServiceTab
+                                aiServiceType={aiServiceType}
+                                setAiServiceType={setAiServiceType}
+                                aiBaseUrl={aiBaseUrl}
+                                setAiBaseUrl={setAiBaseUrl}
+                                aiApiKey={aiApiKey}
+                                setAiApiKey={setAiApiKey}
+                                aiModel={aiModel}
+                                setAiModel={setAiModel}
                             />
                         )}
 

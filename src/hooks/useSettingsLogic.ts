@@ -67,8 +67,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     // Helper to update config and persist immediately
     const updateConfig = (updates: Partial<typeof config>) => {
-        const newConfig = { ...config, ...updates };
-        setConfig(newConfig);
+        setConfig(updates);
         // Persistence is now handled by useAppInitialization
     };
 
