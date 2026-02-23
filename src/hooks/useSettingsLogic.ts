@@ -21,7 +21,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'ai_service'>('general');
 
     useEffect(() => {
         if (_isOpen && initialTab) {
@@ -129,6 +129,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setCaptionWindowWidth = (width: number) => updateConfig({ captionWindowWidth: width });
     const setCaptionFontSize = (size: number) => updateConfig({ captionFontSize: size });
     const setCaptionFontColor = (color: string) => updateConfig({ captionFontColor: color });
+
+    const setAiServiceType = (type: string) => updateConfig({ aiServiceType: type });
+    const setAiBaseUrl = (url: string) => updateConfig({ aiBaseUrl: url });
+    const setAiApiKey = (key: string) => updateConfig({ aiApiKey: key });
+    const setAiModel = (model: string) => updateConfig({ aiModel: model });
 
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
@@ -416,6 +421,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setCaptionFontSize,
         captionFontColor: config.captionFontColor || '#ffffff',
         setCaptionFontColor,
+
+        aiServiceType: config.aiServiceType || 'openai',
+        setAiServiceType,
+        aiBaseUrl: config.aiBaseUrl || '',
+        setAiBaseUrl,
+        aiApiKey: config.aiApiKey || '',
+        setAiApiKey,
+        aiModel: config.aiModel || '',
+        setAiModel,
 
         // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,

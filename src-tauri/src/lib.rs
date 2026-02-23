@@ -1,5 +1,6 @@
 mod audio;
 mod hardware;
+mod ai;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -557,7 +558,8 @@ pub fn run() {
             set_system_audio_mute,
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
-            audio::stop_system_audio_capture
+            audio::stop_system_audio_capture,
+            ai::call_ai_model
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
