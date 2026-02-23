@@ -218,7 +218,24 @@
         "about_license": "MIT License",
         "about_source_code": "Source Code",
         "minimize_to_tray": "Minimize to tray on exit",
-        "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting."
+        "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting.",
+        "ai": {
+            "title": "AI Service",
+            "service_type": "AI Service Type",
+            "base_url": "Base URL",
+            "api_key": "API Key",
+            "model_name": "Model Name",
+            "test_connection": "Test Connection",
+            "testing": "Testing...",
+            "connection_success": "Connection successful! Response: ",
+            "connection_failed": "Connection failed: ",
+            "services": {
+                "openai": "OpenAI Compatible",
+                "anthropic": "Anthropic",
+                "ollama": "Ollama",
+                "gemini": "Google Gemini"
+            }
+        }
     },
     "shortcuts": {
         "title": "Shortcuts",
