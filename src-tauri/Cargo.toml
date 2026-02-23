@@ -29,7 +29,7 @@ tauri-plugin-shell = "2.3.4"
 tauri-plugin-http = "2"
 tar = "0.4"
 bzip2 = "0.4"
-reqwest = { version = "0.12", features = ["stream", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"] }
 futures-util = "0.3"
 bytes = "1"
 tokio = { version = "1.49.0", features = ["full"] }

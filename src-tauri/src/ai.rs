@@ -181,7 +181,12 @@ pub async fn call_ai_model(
         let url = if base_url.contains("chat/completions") {
              base_url
         } else {
-             format!("{}/v1/chat/completions", base_url.trim_end_matches('/'))
+             let base = base_url.trim_end_matches('/');
+             if base.ends_with("/v1") {
+                 format!("{}/chat/completions", base)
+             } else {
+                 format!("{}/v1/chat/completions", base)
+             }
         };
 
         let request_body = OpenAIRequest {

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -24,7 +23,6 @@ export function SettingsAIServiceTab({
     aiModel,
     setAiModel
 }: SettingsAIServiceTabProps): React.JSX.Element {
-    const { t } = useTranslation();
     const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
 

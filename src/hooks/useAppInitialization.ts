@@ -45,6 +45,10 @@ export function useAppInitialization() {
                         captionWindowWidth: parsed.captionWindowWidth || 800,
                         captionFontSize: parsed.captionFontSize || 24,
                         captionFontColor: parsed.captionFontColor || '#ffffff',
+                        aiServiceType: parsed.aiServiceType || 'openai',
+                        aiBaseUrl: parsed.aiBaseUrl || '',
+                        aiApiKey: parsed.aiApiKey || '',
+                        aiModel: parsed.aiModel || '',
                     };
 
                     setConfig(loadedConfig);
@@ -127,6 +131,10 @@ export function useAppInitialization() {
                 captionWindowWidth: config.captionWindowWidth,
                 captionFontSize: config.captionFontSize,
                 captionFontColor: config.captionFontColor,
+                aiServiceType: config.aiServiceType,
+                aiBaseUrl: config.aiBaseUrl,
+                aiApiKey: config.aiApiKey,
+                aiModel: config.aiModel,
             };
             localStorage.setItem('sona-config', JSON.stringify(configToSave));
         }, 500);
