@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Database from '@tauri-apps/plugin-sql';
 import { exists, readTextFile, writeTextFile, remove, rename } from '@tauri-apps/plugin-fs';
 
