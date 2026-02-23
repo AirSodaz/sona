@@ -2,10 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
+import { invoke } from '@tauri-apps/api/core';
+
+interface AudioDevice {
+    name: string;
+}
 
 interface SettingsMicrophoneTabProps {
     microphoneId: string;
     setMicrophoneId: (id: string) => void;
+    systemAudioDeviceId: string;
+    setSystemAudioDeviceId: (id: string) => void;
     muteDuringRecording: boolean;
     setMuteDuringRecording: (enabled: boolean) => void;
 }
@@ -13,11 +20,14 @@ interface SettingsMicrophoneTabProps {
 export function SettingsMicrophoneTab({
     microphoneId,
     setMicrophoneId,
+    systemAudioDeviceId,
+    setSystemAudioDeviceId,
     muteDuringRecording,
     setMuteDuringRecording
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
+    const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -90,6 +100,35 @@ export function SettingsMicrophoneTab({
         }
 
         getDevices();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [t]);
+
+    // Enumerate system audio devices
+    useEffect(() => {
+        let isMounted = true;
+
+        async function getSystemDevices() {
+            try {
+                const devs = await invoke<AudioDevice[]>('get_system_audio_devices');
+                if (isMounted) {
+                    const options = [
+                        { label: t('settings.mic_auto'), value: 'default' },
+                        ...devs.map(d => ({
+                            label: d.name,
+                            value: d.name
+                        }))
+                    ];
+                    setSystemDevices(options);
+                }
+            } catch (err) {
+                console.error('Error getting system audio devices:', err);
+            }
+        }
+
+        getSystemDevices();
 
         return () => {
             isMounted = false;
@@ -280,6 +319,23 @@ export function SettingsMicrophoneTab({
                 </div>
                 <div className="settings-hint">
                     {t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
+                </div>
+            </div>
+
+            <div className="settings-item">
+                <label htmlFor="settings-system-audio-select" className="settings-label">
+                    {t('settings.system_audio_selection', { defaultValue: 'System Audio' })}
+                </label>
+                <div style={{ maxWidth: 300 }}>
+                    <Dropdown
+                        id="settings-system-audio-select"
+                        value={systemAudioDeviceId}
+                        onChange={setSystemAudioDeviceId}
+                        options={systemDevices}
+                    />
+                </div>
+                <div className="settings-hint">
+                    {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture (Rust/cpal).' })}
                 </div>
             </div>
 

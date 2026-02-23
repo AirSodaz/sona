@@ -20,10 +20,29 @@ impl AudioState {
     }
 }
 
+#[derive(serde::Serialize)]
+pub struct AudioDevice {
+    name: String,
+}
+
+#[tauri::command]
+pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
+    let host = cpal::default_host();
+    let devices = host.output_devices().map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for device in devices {
+        if let Ok(name) = device.name() {
+            result.push(AudioDevice { name });
+        }
+    }
+    Ok(result)
+}
+
 #[tauri::command]
 pub fn start_system_audio_capture<R: Runtime>(
     window: Window<R>,
     state: tauri::State<'_, AudioState>,
+    device_name: Option<String>,
 ) -> Result<(), String> {
     let mut stop_signal_guard = state.stop_signal.lock().unwrap();
     if stop_signal_guard.is_some() {
@@ -42,10 +61,21 @@ pub fn start_system_audio_capture<R: Runtime>(
         let err_fn = |err| eprintln!("[Audio] Stream error: {}", err);
 
         let host = cpal::default_host();
-        let device = match host.default_output_device() {
+        let device = if let Some(ref name) = device_name {
+            match host.output_devices() {
+                Ok(mut devices) => devices
+                    .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+                    .or_else(|| host.default_output_device()),
+                Err(_) => host.default_output_device(),
+            }
+        } else {
+            host.default_output_device()
+        };
+
+        let device = match device {
             Some(d) => d,
             None => {
-                eprintln!("[Audio] No default output device found");
+                eprintln!("[Audio] No output device found");
                 return;
             }
         };

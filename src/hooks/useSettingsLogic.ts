@@ -117,6 +117,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setFont = (font: string) => updateConfig({ font: font as any });
 
     const setMicrophoneId = (id: string) => updateConfig({ microphoneId: id });
+    const setSystemAudioDeviceId = (id: string) => updateConfig({ systemAudioDeviceId: id });
     const setMuteDuringRecording = (enabled: boolean) => updateConfig({ muteDuringRecording: enabled });
 
     const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
@@ -395,6 +396,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setFont,
         microphoneId: config.microphoneId || 'default',
         setMicrophoneId,
+        systemAudioDeviceId: config.systemAudioDeviceId || 'default',
+        setSystemAudioDeviceId,
         muteDuringRecording: config.muteDuringRecording || false,
         setMuteDuringRecording,
         minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,

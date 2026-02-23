@@ -71,6 +71,8 @@ export interface AppConfig {
   alwaysOnTop?: boolean;
   /** ID of the selected microphone device. Default: 'default'. */
   microphoneId?: string;
+  /** ID of the selected system audio device. Default: 'default'. */
+  systemAudioDeviceId?: string;
   /** Whether to mute system audio during recording. Default: false. */
   muteDuringRecording?: boolean;
   /** Whether to start captioning on launch. Default: false. */
