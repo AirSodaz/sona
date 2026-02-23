@@ -32,6 +32,7 @@
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-set-always-on-top",
     "core:event:default",
+    "sql:default",
     "dialog:allow-save",
     "dialog:allow-open",
     "fs:default",

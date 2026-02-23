@@ -50,6 +50,12 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+vi.mock('../../services/historyService', () => ({
+    historyService: {
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1' })
+    }
+}));
+
 describe('batchQueueStore buffering', () => {
     beforeEach(() => {
         vi.useFakeTimers();
