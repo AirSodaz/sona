@@ -4,6 +4,16 @@ import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { ChevronUpIcon, ChevronDownIcon, CloseIcon } from './Icons';
 
+function getMatchCountText(matchCount: number, currentIndex: number, query: string): string {
+    if (matchCount > 0) {
+        return `${currentIndex + 1}/${matchCount}`;
+    }
+    if (query) {
+        return '0/0';
+    }
+    return '';
+}
+
 export function SearchUI(): React.JSX.Element | null {
     const { t } = useTranslation();
     const {
@@ -56,6 +66,8 @@ export function SearchUI(): React.JSX.Element | null {
         }
     };
 
+    const matchCountText = getMatchCountText(matches.length, currentMatchIndex, query);
+
     return (
         <div className="search-ui-container" role="search" aria-label={t('search.label', 'Search transcript')}>
             <div className="search-bar">
@@ -72,7 +84,7 @@ export function SearchUI(): React.JSX.Element | null {
 
                 <div className="search-actions">
                     <span className="search-count" aria-live="polite">
-                        {matches.length > 0 ? `${currentMatchIndex + 1}/${matches.length}` : (query ? '0/0' : '')}
+                        {matchCountText}
                     </span>
 
                     <div className="search-divider" />

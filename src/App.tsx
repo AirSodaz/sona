@@ -20,6 +20,21 @@ import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useTrayHandling } from './hooks/useTrayHandling';
 
 /**
+ * Helper to determine the title of the left panel based on the current mode.
+ */
+function getPanelTitle(mode: string, t: (key: string) => string): string {
+  switch (mode) {
+    case 'live':
+      return t('panel.live_record');
+    case 'history':
+      return t('history.title');
+    case 'batch':
+    default:
+      return t('panel.batch_import');
+  }
+}
+
+/**
  * Main application component.
  *
  * Handles layout, initialization of config, theme, and language.
@@ -43,6 +58,8 @@ function App(): React.JSX.Element {
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
+
+  const panelTitle = getPanelTitle(mode, t);
 
   return (
     <div className="app">
@@ -76,7 +93,7 @@ function App(): React.JSX.Element {
           {/* Left Panel - Input */}
           <div className="panel panel-left">
             <div className="panel-header">
-              <h2>{mode === 'live' ? t('panel.live_record') : mode === 'history' ? t('history.title') : t('panel.batch_import')}</h2>
+              <h2>{panelTitle}</h2>
             </div>
             <div className="panel-content">
               <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>

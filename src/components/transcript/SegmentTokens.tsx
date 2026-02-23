@@ -27,10 +27,69 @@ interface TokenListProps {
 }
 
 /**
+ * Helper to determine if a token overlaps with any search matches.
+ *
+ * @param tokenStart Start index of the token in the segment text.
+ * @param tokenEnd End index of the token in the segment text.
+ * @param matches List of matches in this segment.
+ * @param activeMatch The currently active match (globally).
+ * @returns Object containing match status and index.
+ */
+function checkTokenMatch(
+    tokenStart: number,
+    tokenEnd: number,
+    matches: Match[] | undefined,
+    activeMatch: Match | null | undefined
+): { isMatch: boolean; isActiveMatch: boolean; matchIndex: number } {
+    let isMatch = false;
+    let isActiveMatch = false;
+    let matchIndex = -1;
+
+    if (!matches || matches.length === 0) {
+        return { isMatch, isActiveMatch, matchIndex };
+    }
+
+    // Check active match first
+    if (activeMatch) {
+        const matchEnd = activeMatch.startIndex + activeMatch.length;
+        if (activeMatch.startIndex < tokenEnd && matchEnd > tokenStart) {
+            return {
+                isMatch: true,
+                isActiveMatch: true,
+                matchIndex: activeMatch.globalIndex ?? -1
+            };
+        }
+    }
+
+    // Check other matches
+    for (const m of matches) {
+        const mEnd = m.startIndex + m.length;
+        if (m.startIndex < tokenEnd && mEnd > tokenStart) {
+            isMatch = true;
+            if (m.globalIndex !== undefined) {
+                matchIndex = m.globalIndex;
+            }
+            break;
+        }
+    }
+
+    return { isMatch, isActiveMatch, matchIndex };
+}
+
+/**
  * Pure component to render the list of tokens.
  * Only re-renders when the active token changes.
  */
-const TokenList = React.memo(({ segmentText, isFinal, alignedTokens, activeTokenTimestamp, onSeek, onMatchClick, matches, activeMatch }: TokenListProps) => {
+function TokenListComponent({
+    segmentText,
+    isFinal,
+    alignedTokens,
+    activeTokenTimestamp,
+    onSeek,
+    onMatchClick,
+    matches,
+    activeMatch
+}: TokenListProps): React.JSX.Element {
     // Calculate token indices for highlighting
     // This is cheap enough to do in render for a single segment, but could be memoized if needed.
     // Since this is inside a React.memo, it runs only when props change.
@@ -51,49 +110,24 @@ const TokenList = React.memo(({ segmentText, isFinal, alignedTokens, activeToken
                 tokensWithIndices.map((tokenObj, i) => {
                     const isTimeActive = tokenObj.timestamp === activeTokenTimestamp;
 
-                    // Check search matches
-                    let isMatch = false;
-                    let isActiveMatch = false;
-                    let matchIndex = -1;
+                    const { isMatch, isActiveMatch, matchIndex } = checkTokenMatch(
+                        tokenObj.start,
+                        tokenObj.end,
+                        matches,
+                        activeMatch
+                    );
 
-                    if (matches && matches.length > 0) {
-                        // Check if this token overlaps with any match
-                        // Use a loose check: if match overlaps with token
-                        // match.startIndex < token.end && (match.startIndex + match.length) > token.start
-
-                        // Check active match first
-                        if (activeMatch) {
-                            const matchEnd = activeMatch.startIndex + activeMatch.length;
-                            if (activeMatch.startIndex < tokenObj.end && matchEnd > tokenObj.start) {
-                                isActiveMatch = true;
-                                isMatch = true;
-                                if (activeMatch.globalIndex !== undefined) {
-                                    matchIndex = activeMatch.globalIndex;
-                                }
-                            }
-                        }
-
-                        if (!isActiveMatch) {
-                            // Check other matches
-                            // Optimization: matches are sorted? Not necessarily by segment logic, but searchStore puts them in order.
-                            // Simple iteration is O(M) where M is matches in segment. usually small.
-                            for (const m of matches) {
-                                const mEnd = m.startIndex + m.length;
-                                if (m.startIndex < tokenObj.end && mEnd > tokenObj.start) {
-                                    isMatch = true;
-                                    if (m.globalIndex !== undefined) {
-                                        matchIndex = m.globalIndex;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
+                    let searchClass = '';
+                    if (isActiveMatch) {
+                        searchClass = 'search-match-active';
+                    } else if (isMatch) {
+                        searchClass = 'search-match';
                     }
 
                     const className = [
                         'token-hover',
                         isTimeActive ? 'active-token' : '',
-                        isActiveMatch ? 'search-match-active' : (isMatch ? 'search-match' : '')
+                        searchClass
                     ].filter(Boolean).join(' ');
 
                     return (
@@ -118,8 +152,9 @@ const TokenList = React.memo(({ segmentText, isFinal, alignedTokens, activeToken
             )}
         </p>
     );
-});
+}
 
+const TokenList = React.memo(TokenListComponent);
 TokenList.displayName = 'TokenList';
 
 /**
