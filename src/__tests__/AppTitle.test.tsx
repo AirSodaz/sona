@@ -2,7 +2,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from '../App';
-import React from 'react';
 
 // Mock all subcomponents to isolate App logic
 vi.mock('../components/ErrorBoundary', () => ({ ErrorBoundary: ({ children }: any) => <div>{children}</div> }));

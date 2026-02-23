@@ -11,7 +11,7 @@ vi.mock('../../../utils/exportFormats', () => ({
 }));
 
 vi.mock('../../../utils/segmentUtils', () => ({
-  alignTokensToText: (text: string, tokens: string[], timestamps: number[]) => {
+  alignTokensToText: (_text: string, tokens: string[], timestamps: number[]) => {
     // Simple mock alignment
     return tokens.map((token, index) => ({
       text: token,
@@ -22,7 +22,7 @@ vi.mock('../../../utils/segmentUtils', () => ({
 
 // Mock transcript store to avoid provider errors
 vi.mock('../../../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => {
+  useTranscriptStore: (_selector: any) => {
     // Return mock active token timestamp or other values as needed
     // Default to -1 (no active token) unless specifically set
     return -1;
@@ -89,7 +89,7 @@ describe('SegmentTokens', () => {
 
   it('highlights search matches correctly', () => {
     const matches: Match[] = [
-      { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1' } // Matches "Hello"
+      { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1', text: 'Hello' } // Matches "Hello"
     ];
 
     render(
@@ -109,7 +109,7 @@ describe('SegmentTokens', () => {
   });
 
   it('highlights active match correctly', () => {
-    const activeMatch: Match = { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1' }; // Matches "Hello"
+    const activeMatch: Match = { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1', text: 'Hello' }; // Matches "Hello"
     const matches: Match[] = [activeMatch];
 
     render(
@@ -129,7 +129,7 @@ describe('SegmentTokens', () => {
 
   it('handles match click', () => {
     const matches: Match[] = [
-      { startIndex: 0, length: 5, globalIndex: 1, segmentId: 'seg-1' } // Matches "Hello"
+      { startIndex: 0, length: 5, globalIndex: 1, segmentId: 'seg-1', text: 'Hello' } // Matches "Hello"
     ];
 
     render(
