@@ -83,4 +83,12 @@ export interface AppConfig {
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
+  /** AI Service Type (e.g. 'openai', 'anthropic', 'ollama', 'gemini'). */
+  aiServiceType?: string;
+  /** AI Base URL. */
+  aiBaseUrl?: string;
+  /** AI API Key. */
+  aiApiKey?: string;
+  /** AI Model Name. */
+  aiModel?: string;
 }

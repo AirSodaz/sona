@@ -6,6 +6,7 @@ import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
 import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
+import { SettingsAIServiceTab } from './settings/SettingsAIServiceTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
@@ -15,6 +16,7 @@ import {
     MicIcon,
     SubtitleIcon,
     ModelIcon,
+    RobotIcon,
     LocalIcon,
     KeyboardIcon,
     InfoIcon,
@@ -71,6 +73,15 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         captionFontColor,
         setCaptionFontColor,
 
+        aiServiceType,
+        setAiServiceType,
+        aiBaseUrl,
+        setAiBaseUrl,
+        aiApiKey,
+        setAiApiKey,
+        aiModel,
+        setAiModel,
+
         offlineModelPath,
         setOfflineModelPath,
         punctuationModelPath,
@@ -110,7 +121,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'ai_service', 'local', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -198,6 +209,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'models' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="ai_service"
+                            label={t('settings.ai_service', { defaultValue: 'AI Service' })}
+                            Icon={RobotIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'ai_service' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="local"
                             label={t('settings.local_path')}
                             Icon={LocalIcon}
@@ -247,6 +266,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 {activeTab === 'microphone' && t('settings.input_device', { defaultValue: 'Input Device' })}
                                 {activeTab === 'subtitle' && t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                                 {activeTab === 'models' && t('settings.model_hub')}
+                                {activeTab === 'ai_service' && t('settings.ai_service', { defaultValue: 'AI Service' })}
                                 {activeTab === 'local' && t('settings.local_path')}
                                 {activeTab === 'shortcuts' && t('shortcuts.title')}
                                 {activeTab === 'about' && t('settings.about')}
@@ -304,6 +324,19 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 onDownload={handleDownload}
                                 onCancelDownload={handleCancelDownload}
                                 isModelSelected={isModelSelected}
+                            />
+                        )}
+
+                        {activeTab === 'ai_service' && (
+                            <SettingsAIServiceTab
+                                aiServiceType={aiServiceType}
+                                setAiServiceType={setAiServiceType}
+                                aiBaseUrl={aiBaseUrl}
+                                setAiBaseUrl={setAiBaseUrl}
+                                aiApiKey={aiApiKey}
+                                setAiApiKey={setAiApiKey}
+                                aiModel={aiModel}
+                                setAiModel={setAiModel}
                             />
                         )}
 
