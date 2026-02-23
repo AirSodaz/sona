@@ -175,10 +175,42 @@ describe('LiveRecord Native Capture', () => {
             getTracks() { return this.tracks; }
         });
 
+        // Mock MediaRecorder
+        vi.stubGlobal('MediaRecorder', class {
+            state = 'inactive';
+            mimeType = 'audio/webm';
+            ondataavailable: ((e: any) => void) | null = null;
+            onstop: (() => void) | null = null;
+            constructor(_stream: any, _options: any) {}
+            start() { this.state = 'recording'; }
+            stop() {
+                this.state = 'inactive';
+                if(this.onstop) this.onstop();
+            }
+            pause() { this.state = 'paused'; }
+            resume() { this.state = 'recording'; }
+            requestData() {}
+            static isTypeSupported() { return true; }
+        });
+
+        // Mock AudioBuffer
+        vi.stubGlobal('AudioBuffer', class {
+            length: number;
+            sampleRate: number;
+            duration: number;
+            constructor(options: any) {
+                this.length = options.length;
+                this.sampleRate = options.sampleRate;
+                this.duration = this.length / this.sampleRate;
+            }
+            copyToChannel = vi.fn();
+        });
+
         // Mock AudioContext
         vi.stubGlobal('AudioContext', class {
             state = 'running';
             destination = {};
+            currentTime = 0;
             createMediaStreamSource() {
                 return { connect: vi.fn() };
             }
@@ -188,6 +220,24 @@ describe('LiveRecord Native Capture', () => {
                     frequencyBinCount: 1024,
                     getByteFrequencyData: vi.fn(),
                     connect: vi.fn(),
+                };
+            }
+            createGain() {
+                return {
+                    gain: { value: 1 },
+                    connect: vi.fn(),
+                };
+            }
+            createBuffer(_channels: number, length: number, sampleRate: number) {
+                // @ts-ignore
+                return new AudioBuffer({ length, sampleRate });
+            }
+            createBufferSource() {
+                return {
+                    buffer: null,
+                    connect: vi.fn(),
+                    start: vi.fn(),
+                    stop: vi.fn(),
                 };
             }
             audioWorklet = {
