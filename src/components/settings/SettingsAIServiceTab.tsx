@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -23,8 +24,30 @@ export function SettingsAIServiceTab({
     aiModel,
     setAiModel
 }: SettingsAIServiceTabProps): React.JSX.Element {
+    const { t } = useTranslation();
     const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
+
+    const handleServiceTypeChange = (type: string) => {
+        setAiServiceType(type);
+        // Auto-fill Base URL based on selection
+        switch (type) {
+            case 'openai':
+                setAiBaseUrl('https://api.openai.com/v1');
+                break;
+            case 'anthropic':
+                setAiBaseUrl('https://api.anthropic.com');
+                break;
+            case 'ollama':
+                setAiBaseUrl('http://localhost:11434/v1');
+                break;
+            case 'gemini':
+                setAiBaseUrl('https://generativelanguage.googleapis.com');
+                break;
+            default:
+                break;
+        }
+    };
 
     const handleTestConnection = async () => {
         setTestStatus('loading');
@@ -38,34 +61,34 @@ export function SettingsAIServiceTab({
                 apiFormat: aiServiceType
             });
             setTestStatus('success');
-            setTestMessage('Connection successful! Response: ' + response);
+            setTestMessage(t('settings.ai.connection_success') + response);
         } catch (error: any) {
             setTestStatus('error');
-            setTestMessage('Connection failed: ' + error);
+            setTestMessage(t('settings.ai.connection_failed') + error);
         }
     };
 
     return (
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
-                <label className="settings-label">AI Service Type</label>
+                <label className="settings-label">{t('settings.ai.service_type')}</label>
                 <div style={{ maxWidth: 300 }}>
                     <Dropdown
                         id="ai-service-type"
                         value={aiServiceType}
-                        onChange={setAiServiceType}
+                        onChange={handleServiceTypeChange}
                         options={[
-                            { value: 'openai', label: 'OpenAI Compatible' },
-                            { value: 'anthropic', label: 'Anthropic' },
-                            { value: 'ollama', label: 'Ollama' },
-                            { value: 'gemini', label: 'Google Gemini' }
+                            { value: 'openai', label: t('settings.ai.services.openai') },
+                            { value: 'anthropic', label: t('settings.ai.services.anthropic') },
+                            { value: 'ollama', label: t('settings.ai.services.ollama') },
+                            { value: 'gemini', label: t('settings.ai.services.gemini') }
                         ]}
                     />
                 </div>
             </div>
 
             <div className="settings-item">
-                <label className="settings-label">Base URL</label>
+                <label className="settings-label">{t('settings.ai.base_url')}</label>
                 <input
                     type="text"
                     className="settings-input"
@@ -77,7 +100,7 @@ export function SettingsAIServiceTab({
             </div>
 
             <div className="settings-item">
-                <label className="settings-label">API Key</label>
+                <label className="settings-label">{t('settings.ai.api_key')}</label>
                 <input
                     type="password"
                     className="settings-input"
@@ -89,7 +112,7 @@ export function SettingsAIServiceTab({
             </div>
 
             <div className="settings-item">
-                <label className="settings-label">Model Name</label>
+                <label className="settings-label">{t('settings.ai.model_name')}</label>
                 <input
                     type="text"
                     className="settings-input"
@@ -107,7 +130,7 @@ export function SettingsAIServiceTab({
                     disabled={testStatus === 'loading'}
                     style={{ padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
                 >
-                    {testStatus === 'loading' ? 'Testing...' : 'Test Connection'}
+                    {testStatus === 'loading' ? t('settings.ai.testing') : t('settings.ai.test_connection')}
                 </button>
                 {testMessage && (
                     <div style={{ marginTop: 10, color: testStatus === 'error' ? 'red' : 'green', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}>

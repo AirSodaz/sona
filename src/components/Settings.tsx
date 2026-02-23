@@ -210,7 +210,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                         />
                         <SettingsTabButton
                             id="ai_service"
-                            label={t('settings.ai_service', { defaultValue: 'AI Service' })}
+                            label={t('settings.ai.title')}
                             Icon={RobotIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
@@ -266,7 +266,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 {activeTab === 'microphone' && t('settings.input_device', { defaultValue: 'Input Device' })}
                                 {activeTab === 'subtitle' && t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                                 {activeTab === 'models' && t('settings.model_hub')}
-                                {activeTab === 'ai_service' && t('settings.ai_service', { defaultValue: 'AI Service' })}
+                                {activeTab === 'ai_service' && t('settings.ai.title')}
                                 {activeTab === 'local' && t('settings.local_path')}
                                 {activeTab === 'shortcuts' && t('shortcuts.title')}
                                 {activeTab === 'about' && t('settings.about')}
