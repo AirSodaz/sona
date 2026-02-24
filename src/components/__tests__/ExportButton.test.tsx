@@ -47,11 +47,11 @@ describe('ExportButton', () => {
         expect(screen.getByLabelText('export.mode_original')).toBeDefined();
     });
 
-    it('disables button when no segments', () => {
+    it('hides button when no segments', () => {
         useTranscriptStore.setState({ segments: [] });
         render(<ExportButton />);
-        const button = screen.getByRole('button', { name: /export.button/i });
-        expect(button.hasAttribute('disabled')).toBe(true);
+        const button = screen.queryByRole('button', { name: /export.button/i });
+        expect(button).toBeNull();
     });
 
     it('calls saveTranscript with SRT format and default mode', async () => {

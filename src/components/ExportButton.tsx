@@ -20,7 +20,7 @@ interface ExportButtonProps {
  * @param props - Component props.
  * @return The export button component.
  */
-export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.Element {
+export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const { alert } = useDialogStore();
     const [isOpen, setIsOpen] = useState(false);
@@ -121,6 +121,11 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             }
         }
     };
+
+    // Only show if there's transcript content
+    if (segments.length === 0) {
+        return null;
+    }
 
     const handleExport = async (format: ExportFormat) => {
         if (segments.length === 0) {
