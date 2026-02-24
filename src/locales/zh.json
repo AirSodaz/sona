@@ -304,5 +304,14 @@
             "de": "德语",
             "es": "西班牙语"
         }
+    },
+    "polish": {
+        "title": "润色文本",
+        "start": "开始润色",
+        "polishing": "正在润色...",
+        "undo": "撤销润色",
+        "redo": "重做润色",
+        "error_config_missing": "请先在设置中配置 AI 服务。",
+        "error_failed": "润色失败："
     }
 }
