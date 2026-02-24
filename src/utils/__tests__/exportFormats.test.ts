@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { exportSegments, ExportMode } from '../exportFormats';
+import { exportSegments } from '../exportFormats';
 import { TranscriptSegment } from '../../types/transcript';
 
 describe('exportFormats', () => {

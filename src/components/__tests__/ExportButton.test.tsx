@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ExportButton } from '../ExportButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { saveTranscript } from '../../utils/fileExport';
-import { useDialogStore } from '../../stores/dialogStore';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
