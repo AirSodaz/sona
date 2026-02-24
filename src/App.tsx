@@ -7,6 +7,7 @@ import { TranscriptEditor } from './components/TranscriptEditor';
 import { AudioPlayer } from './components/AudioPlayer';
 import { ExportButton } from './components/ExportButton';
 import { TranslateButton } from './components/TranslateButton';
+import { PolishButton } from './components/PolishButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { HistoryView } from './components/HistoryView';
@@ -75,6 +76,7 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
+          <PolishButton />
           <TranslateButton />
           <ExportButton />
           <button
