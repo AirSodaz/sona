@@ -57,6 +57,12 @@ interface TranscriptState {
     /** Progress of translation (0-100). */
     translationProgress: number;
 
+    // Polishing state
+    /** Whether a polishing job is currently running. */
+    isPolishing: boolean;
+    /** Progress of polishing (0-100). */
+    polishProgress: number;
+
     // Config
     /** Application configuration. */
     config: AppConfig;
@@ -166,6 +172,12 @@ interface TranscriptState {
     /** Sets translating progress (0-100). */
     setTranslationProgress: (progress: number) => void;
 
+    // Polishing actions
+    /** Sets polishing status. */
+    setIsPolishing: (polishing: boolean) => void;
+    /** Sets polishing progress (0-100). */
+    setPolishProgress: (progress: number) => void;
+
     // Audio actions
     /**
      * Sets the current audio file and generates a URL.
@@ -265,6 +277,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     isTranslationVisible: false,
     isTranslating: false,
     translationProgress: 0,
+    isPolishing: false,
+    polishProgress: 0,
     config: DEFAULT_CONFIG,
 
     // History tracking
@@ -397,6 +411,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     setIsTranslationVisible: (visible) => set({ isTranslationVisible: visible }),
     setIsTranslating: (translating) => set({ isTranslating: translating }),
     setTranslationProgress: (progress) => set({ translationProgress: progress }),
+
+    // Polishing actions
+    setIsPolishing: (polishing) => set({ isPolishing: polishing }),
+    setPolishProgress: (progress) => set({ polishProgress: progress }),
 
     // Audio actions
     setAudioFile: (file) => {
