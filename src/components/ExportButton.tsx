@@ -163,23 +163,23 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             onBlur={handleBlur}
         >
             <div
-                data-tooltip={segments.length === 0 ? t('export.no_segments') : undefined}
+                data-tooltip={segments.length === 0 ? t('export.no_segments') : (isExporting ? t('export.exporting') : t('export.button'))}
                 data-tooltip-pos="bottom"
                 style={{ display: 'inline-block' }}
             >
                 <button
                     ref={triggerRef}
                     id="export-menu-button"
-                    className="btn btn-secondary"
+                    className="btn btn-icon"
                     onClick={() => setIsOpen(!isOpen)}
                     disabled={isExporting || segments.length === 0}
                     style={isExporting || segments.length === 0 ? { pointerEvents: 'none' } : undefined}
                     aria-haspopup="true"
                     aria-expanded={isOpen}
                     aria-controls="export-menu-dropdown"
+                    aria-label={t('export.button')}
                 >
                     <DownloadIcon />
-                    <span>{isExporting ? t('export.exporting') : t('export.button')}</span>
                     <ChevronDownIcon />
                 </button>
             </div>

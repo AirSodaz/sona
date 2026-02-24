@@ -161,23 +161,21 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
             <button
                 ref={triggerRef}
                 id="translate-menu-button"
-                className={`btn ${isTranslating ? 'btn-secondary' : 'btn-primary'}`}
+                className="btn btn-icon"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="translate-menu-dropdown"
-                title={t('translation.translate_all', { defaultValue: 'Translate Transcript' })}
+                data-tooltip={isTranslating ? t('translation.translating') : t('translation.translate_all', { defaultValue: 'Translate Transcript' })}
+                data-tooltip-pos="bottom"
             >
                 {isTranslating ? (
                     <>
                         <ProcessingIcon />
-                        <span>{translationProgress}%</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{translationProgress}%</span>
                     </>
                 ) : (
-                    <>
-                        <LanguagesIcon />
-                        <span>{t('translation.translate', { defaultValue: 'Translate' })}</span>
-                    </>
+                    <LanguagesIcon />
                 )}
                 <ChevronDownIcon />
             </button>

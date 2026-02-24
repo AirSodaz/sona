@@ -31,7 +31,7 @@ describe('ExportButton', () => {
 
     it('renders the export button', () => {
         render(<ExportButton />);
-        expect(screen.getByText('export.button')).toBeDefined();
+        expect(screen.getByRole('button', { name: /export.button/i })).toBeDefined();
     });
 
     it('opens menu when clicked', () => {
@@ -39,6 +39,7 @@ describe('ExportButton', () => {
         const button = screen.getByRole('button', { name: /export.button/i });
         fireEvent.click(button);
 
+        // Wait for menu to appear if transition is involved, though current impl is synchronous state
         expect(screen.getByRole('menu')).toBeDefined();
         expect(screen.getByText('SubRip (.srt)')).toBeDefined();
         // Check for mode selection

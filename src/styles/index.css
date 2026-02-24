@@ -1488,6 +1488,8 @@ input[type="radio"]:focus {
   transition: all var(--transition-fast);
   pointer-events: none;
   z-index: 1000;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
 }
 
 [data-tooltip]:hover::after,
