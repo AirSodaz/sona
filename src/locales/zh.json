@@ -280,5 +280,26 @@
         "quit_warning_title": "有正在进行的任务",
         "quit_warning_message": "您有正在进行的任务（录音、下载或处理中）。现在退出将终止它们。\n\n确定要退出吗？",
         "quit_confirm": "仍要退出"
+    },
+    "translation": {
+        "translate": "翻译",
+        "translate_all": "翻译转录",
+        "translating": "翻译中...",
+        "retranslate": "重新翻译",
+        "start": "开始翻译",
+        "hide_bilingual": "隐藏双语",
+        "show_bilingual": "显示双语",
+        "error_config_missing": "请先在设置中配置 AI 服务。",
+        "error_failed": "翻译失败：",
+        "target_language": "目标语言",
+        "languages": {
+            "zh": "简体中文",
+            "en": "英语",
+            "ja": "日语",
+            "ko": "韩语",
+            "fr": "法语",
+            "de": "德语",
+            "es": "西班牙语"
+        }
     }
 }

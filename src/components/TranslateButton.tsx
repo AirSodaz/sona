@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { translationService } from '../services/translationService';
-import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon } from './Icons';
+import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
+
+const LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 
 /** Props for TranslateButton. */
 interface TranslateButtonProps {
@@ -32,6 +34,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const isTranslationVisible = useTranscriptStore((state) => state.isTranslationVisible);
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
     const config = useTranscriptStore((state) => state.config);
+    const setConfig = useTranscriptStore((state) => state.setConfig);
     const segments = useTranscriptStore((state) => state.segments);
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
@@ -134,6 +137,14 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
         triggerRef.current?.focus();
     };
 
+    const handleLanguageSelect = (langCode: string) => {
+        setConfig({ translationLanguage: langCode });
+        // Don't close menu to allow quick translation start after selection?
+        // Or close it to indicate selection made. Let's close it.
+        setIsOpen(false);
+        triggerRef.current?.focus();
+    };
+
     // Only show if there's transcript content
     if (segmentsLength === 0) {
         return null;
@@ -210,6 +221,27 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                                 : t('translation.show_bilingual', { defaultValue: 'Show Translations' })}
                         </span>
                     </button>
+
+                    <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
+                    <div style={{ padding: '8px 12px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                        {t('translation.target_language', { defaultValue: 'Target Language' })}
+                    </div>
+
+                    {LANGUAGES.map((lang) => (
+                        <button
+                            key={lang}
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleLanguageSelect(lang)}
+                            role="menuitem"
+                            tabIndex={-1}
+                        >
+                            <span style={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {(config.translationLanguage || 'zh') === lang && <CheckIcon />}
+                            </span>
+                            <span>{t(`translation.languages.${lang}`)}</span>
+                        </button>
+                    ))}
                 </div>
             )}
         </div>
