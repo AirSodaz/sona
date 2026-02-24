@@ -120,7 +120,10 @@
         "button": "导出",
         "exporting": "导出中...",
         "no_segments": "没有可导出的段落",
-        "failed": "导出转录失败"
+        "failed": "导出转录失败",
+        "mode_original": "原文",
+        "mode_translation": "译文",
+        "mode_bilingual": "双语"
     },
     "history": {
         "title": "历史记录",

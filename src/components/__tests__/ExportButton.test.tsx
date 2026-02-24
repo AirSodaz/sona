@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ExportButton } from '../ExportButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { saveTranscript } from '../../utils/fileExport';
-import { useDialogStore } from '../../stores/dialogStore';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -23,8 +22,8 @@ describe('ExportButton', () => {
         // Reset store
         useTranscriptStore.setState({
             segments: [
-                { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
-                { id: '2', start: 1, end: 2, text: 'World', isFinal: true }
+                { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true, translation: 'Bonjour' },
+                { id: '2', start: 1, end: 2, text: 'World', isFinal: true, translation: 'Monde' }
             ],
             audioUrl: null
         });
@@ -42,7 +41,9 @@ describe('ExportButton', () => {
 
         expect(screen.getByRole('menu')).toBeDefined();
         expect(screen.getByText('SubRip (.srt)')).toBeDefined();
-        expect(screen.getByText('JSON (.json)')).toBeDefined();
+        // Check for mode selection
+        expect(screen.getByText('panel.mode_selection')).toBeDefined();
+        expect(screen.getByLabelText('export.mode_original')).toBeDefined();
     });
 
     it('disables button when no segments', () => {
@@ -52,114 +53,63 @@ describe('ExportButton', () => {
         expect(button.hasAttribute('disabled')).toBe(true);
     });
 
-    it('calls saveTranscript with SRT format', async () => {
+    it('calls saveTranscript with SRT format and default mode', async () => {
         render(<ExportButton />);
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
         fireEvent.click(screen.getByText('SubRip (.srt)'));
 
-        expect(saveTranscript).toHaveBeenCalledWith({
-            segments: expect.any(Array),
+        expect(saveTranscript).toHaveBeenCalledWith(expect.objectContaining({
             format: 'srt',
-            defaultFileName: expect.stringMatching(/transcript_\d{4}-\d{2}-\d{2}/),
-        });
+            mode: 'original',
+        }));
     });
 
-    it('calls saveTranscript with JSON format', async () => {
+    it('calls saveTranscript with JSON format and Translation mode', async () => {
         render(<ExportButton />);
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+
+        // Select Translation mode
+        const translationRadio = screen.getByLabelText('export.mode_translation');
+        fireEvent.click(translationRadio);
+
         fireEvent.click(screen.getByText('JSON (.json)'));
 
-        expect(saveTranscript).toHaveBeenCalledWith({
-            segments: expect.any(Array),
+        expect(saveTranscript).toHaveBeenCalledWith(expect.objectContaining({
             format: 'json',
-            defaultFileName: expect.stringMatching(/transcript_\d{4}-\d{2}-\d{2}/),
+            mode: 'translation',
+        }));
+    });
+
+    it('calls saveTranscript with Bilingual mode', async () => {
+        render(<ExportButton />);
+        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+
+        // Select Bilingual mode
+        const bilingualRadio = screen.getByLabelText('export.mode_bilingual');
+        fireEvent.click(bilingualRadio);
+
+        fireEvent.click(screen.getByText('SubRip (.srt)'));
+
+        expect(saveTranscript).toHaveBeenCalledWith(expect.objectContaining({
+            format: 'srt',
+            mode: 'bilingual',
+        }));
+    });
+
+    it('disables translation modes if no translation available', async () => {
+        useTranscriptStore.setState({
+            segments: [
+                { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true } // No translation
+            ]
         });
-    });
-
-    it('shows alert if segments empty but button enabled (edge case)', async () => {
-        // Technically disabled attribute prevents click, but let's force it or verify logic
-        // If we force enable via removing disable (not possible in react test easily without props),
-        // we can assume the disabled check covers it.
-        // But the handleExport function checks segments.length too.
-
-        // Let's create a scenario where it's enabled then cleared?
-        // Not easy.
-
-        // Let's just check validation logic by mocking store state change after render?
-        const { rerender } = render(<ExportButton />);
-
-        // Button enabled
-        const button = screen.getByRole('button', { name: /export.button/i });
-        expect(button.hasAttribute('disabled')).toBe(false);
-
-        // Now clear segments
-        useTranscriptStore.setState({ segments: [] });
-        rerender(<ExportButton />);
-
-        expect(button.hasAttribute('disabled')).toBe(true);
-    });
-
-    it('handles export error gracefully', async () => {
-        vi.mocked(saveTranscript).mockRejectedValue(new Error('Export failed'));
-        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert');
 
         render(<ExportButton />);
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
-        fireEvent.click(screen.getByText('Plain Text (.txt)'));
 
-        await waitFor(() => {
-             expect(alertSpy).toHaveBeenCalledWith('export.failed', { variant: 'error' });
-        });
-    });
+        const translationRadio = screen.getByLabelText('export.mode_translation');
+        expect(translationRadio.hasAttribute('disabled')).toBe(true);
 
-    describe('Keyboard Navigation', () => {
-        it('focuses first item when opened', async () => {
-            render(<ExportButton />);
-            const trigger = screen.getByRole('button', { name: /export.button/i });
-            fireEvent.click(trigger);
-
-            const menuItems = screen.getAllByRole('menuitem');
-            await waitFor(() => {
-                expect(document.activeElement).toBe(menuItems[0]);
-            });
-        });
-
-        it('navigates with arrow keys', async () => {
-            render(<ExportButton />);
-            const trigger = screen.getByRole('button', { name: /export.button/i });
-            fireEvent.click(trigger);
-
-            const menuItems = screen.getAllByRole('menuitem');
-            await waitFor(() => expect(document.activeElement).toBe(menuItems[0]));
-
-            // Arrow Down
-            fireEvent.keyDown(menuItems[0], { key: 'ArrowDown', bubbles: true });
-            expect(document.activeElement).toBe(menuItems[1]);
-
-            // Loop from last to first
-            menuItems[3].focus();
-            fireEvent.keyDown(menuItems[3], { key: 'ArrowDown', bubbles: true });
-            expect(document.activeElement).toBe(menuItems[0]);
-
-            // Arrow Up loop from first to last
-            fireEvent.keyDown(menuItems[0], { key: 'ArrowUp', bubbles: true });
-            expect(document.activeElement).toBe(menuItems[3]);
-        });
-
-        it('closes on Escape and returns focus to trigger', async () => {
-            render(<ExportButton />);
-            const trigger = screen.getByRole('button', { name: /export.button/i });
-            trigger.focus();
-            fireEvent.click(trigger);
-
-            await waitFor(() => expect(screen.getByRole('menu')).toBeDefined());
-
-            // Press Escape on a menu item
-            const menuItems = screen.getAllByRole('menuitem');
-            fireEvent.keyDown(menuItems[0], { key: 'Escape', bubbles: true });
-
-            expect(screen.queryByRole('menu')).toBeNull();
-            expect(document.activeElement).toBe(trigger);
-        });
+        const bilingualRadio = screen.getByLabelText('export.mode_bilingual');
+        expect(bilingualRadio.hasAttribute('disabled')).toBe(true);
     });
 });

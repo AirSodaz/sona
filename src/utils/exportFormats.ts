@@ -1,5 +1,7 @@
 import { TranscriptSegment } from '../types/transcript';
 
+export type ExportMode = 'original' | 'translation' | 'bilingual';
+
 /**
  * Formats seconds to timestamp format (HH:MM:SS<separator>mmm).
  *
@@ -34,15 +36,31 @@ export function formatDisplayTime(seconds: number): string {
  * Converts TranscriptSegment array to SRT (SubRip Subtitle) format.
  *
  * @param segments The array of transcript segments to convert.
+ * @param mode The export mode.
  * @return The SRT formatted string.
  */
-export function toSRT(segments: TranscriptSegment[]): string {
+export function toSRT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
     return segments
-        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
+        .filter((seg) => seg.isFinal)
+        .map((segment) => {
+            const original = segment.text.trim();
+            const translation = (segment.translation || '').trim();
+            let text = original;
+
+            if (mode === 'translation') {
+                text = translation;
+            } else if (mode === 'bilingual') {
+                // Translation first (main), Original second (secondary)
+                text = `${translation}\n${original}`;
+            }
+
+            return { ...segment, text };
+        })
+        .filter((seg) => seg.text.trim().length > 0)
         .map((segment, index) => {
             const startTime = formatTimestamp(segment.start);
             const endTime = formatTimestamp(segment.end);
-            return `${index + 1}\n${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
+            return `${index + 1}\n${startTime} --> ${endTime}\n${segment.text}\n`;
         })
         .join('\n');
 }
@@ -51,16 +69,38 @@ export function toSRT(segments: TranscriptSegment[]): string {
  * Converts TranscriptSegment array to JSON format.
  *
  * @param segments The array of transcript segments to convert.
+ * @param mode The export mode.
  * @return The JSON formatted string.
  */
-export function toJSON(segments: TranscriptSegment[]): string {
+export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
     const exportData = segments
         .filter((seg) => seg.isFinal)
-        .map((segment) => ({
-            start: segment.start,
-            end: segment.end,
-            text: segment.text.trim(),
-        }));
+        .map((segment) => {
+            const original = segment.text.trim();
+            const translation = (segment.translation || '').trim();
+
+            if (mode === 'translation') {
+                return {
+                    start: segment.start,
+                    end: segment.end,
+                    text: translation,
+                };
+            } else if (mode === 'bilingual') {
+                return {
+                    start: segment.start,
+                    end: segment.end,
+                    text: original,
+                    translation: translation || undefined,
+                };
+            }
+
+            // Original
+            return {
+                start: segment.start,
+                end: segment.end,
+                text: original,
+            };
+        });
 
     return JSON.stringify(exportData, null, 2);
 }
@@ -69,12 +109,27 @@ export function toJSON(segments: TranscriptSegment[]): string {
  * Converts TranscriptSegment array to plain text format.
  *
  * @param segments The array of transcript segments to convert.
+ * @param mode The export mode.
  * @return The plain text string.
  */
-export function toTXT(segments: TranscriptSegment[]): string {
+export function toTXT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
     return segments
-        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
-        .map((segment) => segment.text.trim())
+        .filter((seg) => seg.isFinal)
+        .map((segment) => {
+            const original = segment.text.trim();
+            const translation = (segment.translation || '').trim();
+            let text = original;
+
+            if (mode === 'translation') {
+                text = translation;
+            } else if (mode === 'bilingual') {
+                // Original first, Translation second
+                text = `${original}\n${translation}`;
+            }
+
+            return text;
+        })
+        .filter((text) => text.trim().length > 0)
         .join('\n\n');
 }
 
@@ -82,17 +137,33 @@ export function toTXT(segments: TranscriptSegment[]): string {
  * Converts TranscriptSegment array to VTT (WebVTT) format.
  *
  * @param segments The array of transcript segments to convert.
+ * @param mode The export mode.
  * @return The VTT formatted string.
  */
-export function toVTT(segments: TranscriptSegment[]): string {
+export function toVTT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
     const header = 'WEBVTT\n\n';
     const content = segments
-        .filter((seg) => seg.isFinal && seg.text.trim().length > 0)
+        .filter((seg) => seg.isFinal)
+        .map((segment) => {
+            const original = segment.text.trim();
+            const translation = (segment.translation || '').trim();
+            let text = original;
+
+            if (mode === 'translation') {
+                text = translation;
+            } else if (mode === 'bilingual') {
+                // Translation first (main), Original second (secondary)
+                text = `${translation}\n${original}`;
+            }
+
+            return { ...segment, text };
+        })
+        .filter((seg) => seg.text.trim().length > 0)
         .map((segment) => {
             // VTT uses dot separator for milliseconds
             const startTime = formatTimestamp(segment.start, '.');
             const endTime = formatTimestamp(segment.end, '.');
-            return `${startTime} --> ${endTime}\n${segment.text.trim()}\n`;
+            return `${startTime} --> ${endTime}\n${segment.text}\n`;
         })
         .join('\n');
 
@@ -106,19 +177,20 @@ export type ExportFormat = 'srt' | 'json' | 'txt' | 'vtt';
  *
  * @param segments The transcript segments to export.
  * @param format The target export format.
+ * @param mode The export mode (original, translation, bilingual).
  * @return The formatted string content.
  * @throws {Error} If the format is unknown.
  */
-export function exportSegments(segments: TranscriptSegment[], format: ExportFormat): string {
+export function exportSegments(segments: TranscriptSegment[], format: ExportFormat, mode: ExportMode = 'original'): string {
     switch (format) {
         case 'srt':
-            return toSRT(segments);
+            return toSRT(segments, mode);
         case 'json':
-            return toJSON(segments);
+            return toJSON(segments, mode);
         case 'txt':
-            return toTXT(segments);
+            return toTXT(segments, mode);
         case 'vtt':
-            return toVTT(segments);
+            return toVTT(segments, mode);
         default:
             throw new Error(`Unknown export format: ${format}`);
     }
