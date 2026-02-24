@@ -500,6 +500,19 @@ export function findSegmentForTime(segments: TranscriptSegment[], time: number):
  * @param rawTimestamps The timestamps corresponding to rawTokens.
  * @return Array of objects with text chunk and its start timestamp.
  */
+/**
+ * Computes a lightweight fingerprint for a list of segments.
+ * Used to detect changes without deep comparison of every field.
+ *
+ * Includes ID, text, timing, finality status, and translation.
+ */
+export function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
+    // We verify ID, text, timing, finality, and translation for each segment.
+    return segments.map(s =>
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}`
+    ).join('|');
+}
+
 export function alignTokensToText(
     text: string,
     rawTokens: string[],
