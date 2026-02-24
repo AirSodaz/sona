@@ -330,6 +330,7 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   transition: all var(--transition-fast);
 }
 
@@ -1026,11 +1027,16 @@ input[type="radio"]:focus {
   }
 }
 
-.export-menu,
 .dropdown-container {
   position: relative;
   display: inline-block;
   width: 100%;
+}
+
+.export-menu {
+  position: relative;
+  display: inline-block;
+  width: auto;
 }
 
 .export-dropdown,
