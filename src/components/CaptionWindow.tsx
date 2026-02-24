@@ -188,7 +188,7 @@ export function CaptionWindow() {
                             className={`live-caption-line ${seg.isFinal ? '' : 'partial'}`}
                             style={{ color: fontColor }}
                         >
-                            {seg.text}
+                            {typeof seg.text === 'string' ? seg.text : ''}
                         </p>
                     ))
                 )}

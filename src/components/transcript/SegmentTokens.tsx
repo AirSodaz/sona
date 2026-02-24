@@ -148,7 +148,7 @@ function TokenListComponent({
                     );
                 })
             ) : (
-                segmentText || '(empty)'
+                typeof segmentText === 'string' && segmentText ? segmentText : '(empty)'
             )}
         </p>
     );

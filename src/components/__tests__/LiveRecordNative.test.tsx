@@ -9,7 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 // Mock Tauri listen
-const mockListen = vi.fn().mockResolvedValue(() => {});
+const mockListen = vi.fn().mockResolvedValue(() => { });
 let systemAudioCallback: ((event: any) => void) | null = null;
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -181,15 +181,15 @@ describe('LiveRecord Native Capture', () => {
             mimeType = 'audio/webm';
             ondataavailable: ((e: any) => void) | null = null;
             onstop: (() => void) | null = null;
-            constructor(_stream: any, _options: any) {}
+            constructor(_stream: any, _options: any) { }
             start() { this.state = 'recording'; }
             stop() {
                 this.state = 'inactive';
-                if(this.onstop) this.onstop();
+                if (this.onstop) this.onstop();
             }
             pause() { this.state = 'paused'; }
             resume() { this.state = 'recording'; }
-            requestData() {}
+            requestData() { }
             static isTypeSupported() { return true; }
         });
 
@@ -334,7 +334,7 @@ describe('LiveRecord Native Capture', () => {
         });
 
         // Check invoke called
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', undefined);
+        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null });
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(systemAudioCallback).toBeDefined();
 
@@ -346,13 +346,20 @@ describe('LiveRecord Native Capture', () => {
                 systemAudioCallback!({ payload: mockAudioPayload });
                 await vi.advanceTimersByTimeAsync(100);
             });
-             await act(async () => {
+            await act(async () => {
                 systemAudioCallback!({ payload: mockAudioPayload });
                 await vi.advanceTimersByTimeAsync(100);
             });
         }
 
         // 4. Stop Recording
+        // Mock segments so the recording saves instead of thinking it was too short/empty
+        act(() => {
+            useTranscriptStore.setState({
+                segments: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }]
+            });
+        });
+
         const stopBtn = screen.getByRole('button', { name: /live.stop/i });
         await act(async () => {
             fireEvent.click(stopBtn);

@@ -9,6 +9,7 @@ import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
 import { useSearchStore } from '../../stores/searchStore';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -46,6 +47,9 @@ function SegmentItemComponent({
     const isEditing = useStore(uiStore, useCallback((state) => state.editingSegmentId === segment.id, [segment.id]));
     const isNew = useStore(uiStore, useCallback((state) => state.newSegmentIds.has(segment.id), [segment.id]));
     const isAligning = useStore(uiStore, useCallback((state) => state.aligningSegmentIds.has(segment.id), [segment.id]));
+
+    // Translation visibility
+    const isTranslationVisible = useTranscriptStore(state => state.isTranslationVisible);
 
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
@@ -157,6 +161,11 @@ function SegmentItemComponent({
                         data-tooltip={t('editor.aligning')}
                         aria-label={t('editor.aligning')}
                     />
+                )}
+                {isTranslationVisible && typeof segment.translation === 'string' && segment.translation && !isEditing && (
+                    <div className="segment-translation" style={{ marginTop: '4px', color: 'var(--color-text-secondary)', fontSize: '0.9em' }}>
+                        {segment.translation}
+                    </div>
                 )}
             </div>
 

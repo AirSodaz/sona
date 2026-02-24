@@ -121,7 +121,7 @@ function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options:
     // Optimization: If no split happened, return original (cloned with new ID if needed, or just original?)
     // To be safe and consistent, we'll process it. But if parts.length === 1, it's just one segment.
     if (parts.length <= 1) {
-        return [{...segment, id: uuidv4()}]; // Return copy with new ID for consistency? Or keep original ID?
+        return [{ ...segment, id: uuidv4() }]; // Return copy with new ID for consistency? Or keep original ID?
         // Actually, best to just return the segment itself to avoid unnecessary ID churn if no change?
         // But `splitByPunctuation` usually generates new IDs.
         // Let's assume consistent ID generation is safer.
@@ -165,9 +165,9 @@ function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options:
             // But we can just check `options.checkAbbreviations`
             let shouldMerge = false;
             if (options.checkAbbreviations && part.includes('.')) {
-                 if (endsWithAbbreviation(currentText)) {
-                     shouldMerge = true;
-                 }
+                if (endsWithAbbreviation(currentText)) {
+                    shouldMerge = true;
+                }
             }
 
             if (shouldMerge) {
@@ -507,7 +507,7 @@ export function alignTokensToText(
     const result: { text: string; timestamp: number }[] = [];
 
     if (!text || !rawTokens || !rawTimestamps || rawTokens.length !== rawTimestamps.length) {
-        return [{ text: text, timestamp: rawTimestamps?.[0] || 0 }];
+        return [{ text: text || '', timestamp: rawTimestamps?.[0] || 0 }];
     }
 
     // Pre-normalize tokens to avoid repeated regex and toLowerCase calls

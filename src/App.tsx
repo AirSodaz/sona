@@ -6,6 +6,7 @@ import { TabNavigation } from './components/TabNavigation';
 import { TranscriptEditor } from './components/TranscriptEditor';
 import { AudioPlayer } from './components/AudioPlayer';
 import { ExportButton } from './components/ExportButton';
+import { TranslateButton } from './components/TranslateButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { HistoryView } from './components/HistoryView';
@@ -74,6 +75,7 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
+          <TranslateButton />
           <ExportButton />
           <button
             className="btn btn-icon"

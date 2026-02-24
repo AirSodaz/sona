@@ -49,6 +49,14 @@ interface TranscriptState {
     /** ID of the history item the current segments originate from. */
     sourceHistoryId: string | null;
 
+    // Translation state
+    /** Whether bilingual translations are currently visible. */
+    isTranslationVisible: boolean;
+    /** Whether a translation job is currently running. */
+    isTranslating: boolean;
+    /** Progress of translation (0-100). */
+    translationProgress: number;
+
     // Config
     /** Application configuration. */
     config: AppConfig;
@@ -150,6 +158,14 @@ interface TranscriptState {
      */
     removeAligningSegmentId: (id: string) => void;
 
+    // Translation actions
+    /** Sets translation visibility toggle. */
+    setIsTranslationVisible: (visible: boolean) => void;
+    /** Sets translating status. */
+    setIsTranslating: (translating: boolean) => void;
+    /** Sets translating progress (0-100). */
+    setTranslationProgress: (progress: number) => void;
+
     // Audio actions
     /**
      * Sets the current audio file and generates a URL.
@@ -220,6 +236,7 @@ const DEFAULT_CONFIG: AppConfig = {
     captionWindowWidth: 800,
     captionFontSize: 24,
     captionFontColor: '#ffffff',
+    translationLanguage: 'zh',
 };
 
 /**
@@ -245,6 +262,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     lastSeekTimestamp: 0,
     seekRequest: null,
     sourceHistoryId: null,
+    isTranslationVisible: false,
+    isTranslating: false,
+    translationProgress: 0,
     config: DEFAULT_CONFIG,
 
     // History tracking
@@ -372,6 +392,11 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         next.delete(id);
         return { aligningSegmentIds: next };
     }),
+
+    // Translation actions
+    setIsTranslationVisible: (visible) => set({ isTranslationVisible: visible }),
+    setIsTranslating: (translating) => set({ isTranslating: translating }),
+    setTranslationProgress: (progress) => set({ translationProgress: progress }),
 
     // Audio actions
     setAudioFile: (file) => {

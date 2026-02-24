@@ -24,6 +24,7 @@ vi.mock('../../hooks/useSettingsLogic', () => ({
         punctuationModelPath: '',
         vadModelPath: '',
         vadBufferSize: 5,
+        translationLanguage: 'zh',
         itnRulesOrder: [],
         enabledITNModels: new Set(),
         installedITNModels: new Set(),
@@ -63,6 +64,7 @@ vi.mock('../Icons', () => ({
     LocalIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
     InfoIcon: () => <span>Icon</span>,
+    RobotIcon: () => <span>Icon</span>,
     XIcon: () => <span>X</span>
 }));
 

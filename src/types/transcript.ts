@@ -19,6 +19,8 @@ export interface TranscriptSegment {
   timestamps?: number[];
   /** Duration of each token. */
   durations?: number[];
+  /** Translated text content. */
+  translation?: string;
 }
 
 /**
@@ -91,4 +93,6 @@ export interface AppConfig {
   aiApiKey?: string;
   /** AI Model Name. */
   aiModel?: string;
+  /** Target translation language. Default: 'zh'. */
+  translationLanguage?: string;
 }

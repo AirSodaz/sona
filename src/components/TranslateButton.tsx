@@ -1,0 +1,217 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
+import { translationService } from '../services/translationService';
+import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon } from './Icons';
+
+/** Props for TranslateButton. */
+interface TranslateButtonProps {
+    /** Optional CSS class name. */
+    className?: string;
+}
+
+/**
+ * Dropdown button component for translating transcript segments.
+ *
+ * @param props - Component props.
+ * @return The translate button component.
+ */
+export function TranslateButton({ className = '' }: TranslateButtonProps): React.JSX.Element | null {
+    const { t } = useTranslation();
+    const { alert } = useDialogStore();
+    const [isOpen, setIsOpen] = useState(false);
+    const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    const segmentsLength = useTranscriptStore((state) => state.segments.length);
+    const isTranslating = useTranscriptStore((state) => state.isTranslating);
+    const translationProgress = useTranscriptStore((state) => state.translationProgress);
+    const isTranslationVisible = useTranscriptStore((state) => state.isTranslationVisible);
+    const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
+    const config = useTranscriptStore((state) => state.config);
+    const segments = useTranscriptStore((state) => state.segments);
+
+    const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
+
+    // Only show if there's transcript content
+    if (segmentsLength === 0) {
+        return null;
+    }
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        if (isOpen && dropdownRef.current) {
+            const rect = dropdownRef.current.getBoundingClientRect();
+            // Estimate dropdown height
+            const estimatedHeight = 150;
+            const spaceBelow = window.innerHeight - rect.bottom;
+
+            if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
+                setPosition('top');
+            } else {
+                setPosition('bottom');
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    // Focus management when opening
+    useEffect(() => {
+        if (isOpen && menuRef.current) {
+            const firstButton = menuRef.current.querySelector('button');
+            if (firstButton) {
+                requestAnimationFrame(() => firstButton.focus());
+            }
+        }
+    }, [isOpen]);
+
+    const handleBlur = (e: React.FocusEvent) => {
+        // Close menu if focus leaves the component
+        if (!dropdownRef.current?.contains(e.relatedTarget as Node)) {
+            setIsOpen(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (!isOpen) return;
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setIsOpen(false);
+            triggerRef.current?.focus();
+            return;
+        }
+
+        if (menuRef.current) {
+            const buttons = Array.from(menuRef.current.querySelectorAll('button'));
+            const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = (currentIndex + 1) % buttons.length;
+                buttons[nextIndex].focus();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+                buttons[prevIndex].focus();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                buttons[0].focus();
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                buttons[buttons.length - 1].focus();
+            }
+        }
+    };
+
+    const handleStartTranslation = async () => {
+        if (isTranslating) return;
+
+        if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel) {
+            await alert(t('translation.error_config_missing', { defaultValue: 'Please configure AI service in Settings before translating.' }), { variant: 'error' });
+            return;
+        }
+
+        setIsOpen(false);
+        triggerRef.current?.focus();
+
+        try {
+            await translationService.translateCurrentTranscript();
+        } catch (error: any) {
+            await alert(t('translation.error_failed', { defaultValue: 'Translation failed: ' }) + (error.message || 'Unknown error'), { variant: 'error' });
+        }
+    };
+
+    const handleToggleVisibility = () => {
+        toggleTranslationVisible(!isTranslationVisible);
+        setIsOpen(false);
+        triggerRef.current?.focus();
+    };
+
+    return (
+        <div
+            className={`export-menu ${className}`} // Reuse export-menu styles for consistency
+            ref={dropdownRef}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+            style={{ display: 'inline-block' }}
+        >
+            <button
+                ref={triggerRef}
+                id="translate-menu-button"
+                className={`btn ${isTranslating ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => setIsOpen(!isOpen)}
+                aria-haspopup="true"
+                aria-expanded={isOpen}
+                aria-controls="translate-menu-dropdown"
+                title={t('translation.translate_all', { defaultValue: 'Translate Transcript' })}
+            >
+                {isTranslating ? (
+                    <>
+                        <ProcessingIcon />
+                        <span>{translationProgress}%</span>
+                    </>
+                ) : (
+                    <>
+                        <LanguagesIcon />
+                        <span>{t('translation.translate', { defaultValue: 'Translate' })}</span>
+                    </>
+                )}
+                <ChevronDownIcon />
+            </button>
+
+            {isOpen && (
+                <div
+                    ref={menuRef}
+                    id="translate-menu-dropdown"
+                    className={`export-dropdown position-${position}`} // Reuse export-dropdown styles
+                    role="menu"
+                    aria-labelledby="translate-menu-button"
+                >
+                    <button
+                        type="button"
+                        className="export-dropdown-item"
+                        onClick={handleStartTranslation}
+                        disabled={isTranslating}
+                        role="menuitem"
+                        tabIndex={-1}
+                    >
+                        {hasTranslation ? <EditIcon /> : <PlayIcon />}
+                        <span>
+                            {isTranslating
+                                ? t('translation.translating', { defaultValue: 'Translating...' })
+                                : hasTranslation
+                                    ? t('translation.retranslate', { defaultValue: 'Retranslate' })
+                                    : t('translation.start', { defaultValue: 'Start Translation' })}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        className="export-dropdown-item"
+                        onClick={handleToggleVisibility}
+                        role="menuitem"
+                        tabIndex={-1}
+                    >
+                        {isTranslationVisible ? <ViewOffIcon /> : <ViewIcon />}
+                        <span>
+                            {isTranslationVisible
+                                ? t('translation.hide_bilingual', { defaultValue: 'Hide Translations' })
+                                : t('translation.show_bilingual', { defaultValue: 'Show Translations' })}
+                        </span>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
