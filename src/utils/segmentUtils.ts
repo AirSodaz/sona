@@ -89,10 +89,11 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
     const finalSegments: TranscriptSegment[] = [];
 
     for (const segment of intermediateSegments) {
-        const limit = isCJK(segment.text) ? MAX_SEGMENT_LENGTH_CJK : MAX_SEGMENT_LENGTH_WESTERN;
+        const segmentText = typeof segment.text === 'string' ? segment.text : String(segment.text || '');
+        const limit = isCJK(segmentText) ? MAX_SEGMENT_LENGTH_CJK : MAX_SEGMENT_LENGTH_WESTERN;
 
         // If segment is too long, try to split by commas
-        if (segment.text.length > limit) {
+        if (segmentText.length > limit) {
             const subSegments = splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
             // If splitting happened (length > 1), we use the sub-segments.
             // Even if length is 1 (no comma found), we push that 1 segment.
@@ -115,7 +116,7 @@ interface SplitOptions {
  */
 function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options: SplitOptions): TranscriptSegment[] {
     const newSegments: TranscriptSegment[] = [];
-    const text = segment.text;
+    const text = typeof segment.text === 'string' ? segment.text : String(segment.text || '');
     const parts = text.split(regex);
 
     // Optimization: If no split happened, return original (cloned with new ID if needed, or just original?)
@@ -313,7 +314,7 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
         // Strip punctuation and whitespace
-        const tokenLen = getEffectiveLength(token);
+        const tokenLen = getEffectiveLength(typeof token === 'string' ? token : '');
 
         // Include all tokens, even whitespace/punctuation, to maintain alignment
         startIndices.push(currentLen);
@@ -506,18 +507,23 @@ export function alignTokensToText(
 ): { text: string; timestamp: number }[] {
     const result: { text: string; timestamp: number }[] = [];
 
-    if (!text || !rawTokens || !rawTimestamps || rawTokens.length !== rawTimestamps.length) {
-        return [{ text: text || '', timestamp: rawTimestamps?.[0] || 0 }];
+    // Validations for input types
+    const safeText = typeof text === 'string' ? text : String(text || '');
+    if (!safeText || !Array.isArray(rawTokens) || !Array.isArray(rawTimestamps) || rawTokens.length !== rawTimestamps.length) {
+        return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
     }
 
     // Pre-normalize tokens to avoid repeated regex and toLowerCase calls
-    const normalizedTokens = rawTokens.map(t => t.toLowerCase().replace(NORMALIZE_REGEX, ''));
+    const normalizedTokens = rawTokens.map(t => {
+        if (typeof t !== 'string') return '';
+        return t.toLowerCase().replace(NORMALIZE_REGEX, '');
+    });
 
     // Tokenize text:
     // 1. Whitespace (kept to preserve spacing)
     // 2. Chinese characters (Han script) treated as individual words
     // 3. Everything else (English, numbers, punctuation) grouped until whitespace/Han/End
-    const rawWords = text.match(RAW_WORDS_REGEX) || [];
+    const rawWords = safeText.match(RAW_WORDS_REGEX) || [];
 
     // Merge standalone punctuation into the previous word
     const words: string[] = [];
