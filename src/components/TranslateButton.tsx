@@ -36,11 +36,6 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
 
-    // Only show if there's transcript content
-    if (segmentsLength === 0) {
-        return null;
-    }
-
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -138,6 +133,11 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
         setIsOpen(false);
         triggerRef.current?.focus();
     };
+
+    // Only show if there's transcript content
+    if (segmentsLength === 0) {
+        return null;
+    }
 
     return (
         <div
