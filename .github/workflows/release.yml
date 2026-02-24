@@ -79,6 +79,10 @@ jobs:
 
           echo "Detected architecture: $ARCH"
 
+          # Extract version from tauri.conf.json
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          echo "Detected version: $VERSION"
+
           # Enter build output directory
           cd src-tauri/target/*/release/bundle/macos/
 
@@ -90,6 +94,26 @@ jobs:
                 mv "Sona.app.tar.gz.sig" "Sona_${ARCH}.app.tar.gz.sig"
             fi
             echo "Renamed assets to append Arch: $ARCH"
+          fi
+
+          # Rename DMG
+          cd ../dmg/
+          DMG_FILE=$(ls *.dmg | head -n 1)
+          if [ -n "$DMG_FILE" ]; then
+            NEW_NAME="Sona_${VERSION}_${ARCH}.dmg"
+            if [ "$DMG_FILE" != "$NEW_NAME" ]; then
+              mv "$DMG_FILE" "$NEW_NAME"
+              echo "Renamed DMG to $NEW_NAME"
+            else
+              echo "DMG already named correctly: $DMG_FILE"
+            fi
+
+            if [ -f "${DMG_FILE}.sig" ]; then
+               mv "${DMG_FILE}.sig" "${NEW_NAME}.sig"
+            fi
+          else
+            echo "No DMG file found in $(pwd)"
+            ls -la
           fi
 
       # 1. Upload updater.json to Artifacts (if needed for later merge, though we generate it fresh in release job)
