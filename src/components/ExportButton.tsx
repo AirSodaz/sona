@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { saveTranscript } from '../utils/fileExport';
-import { ExportFormat } from '../utils/exportFormats';
+import { ExportFormat, ExportMode } from '../utils/exportFormats';
 import { DownloadIcon, ChevronDownIcon, FileTextIcon, CodeIcon } from './Icons';
 
 
@@ -26,11 +26,21 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [isExporting, setIsExporting] = useState(false);
+    const [exportMode, setExportMode] = useState<ExportMode>('original');
+
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const segments = useTranscriptStore((state) => state.segments);
+    const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
+
+    // Reset export mode if no translations available
+    useEffect(() => {
+        if (!hasTranslation && exportMode !== 'original') {
+            setExportMode('original');
+        }
+    }, [hasTranslation, exportMode]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -42,8 +52,8 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
 
         if (isOpen && dropdownRef.current) {
             const rect = dropdownRef.current.getBoundingClientRect();
-            // Estimate dropdown height
-            const estimatedHeight = 200;
+            // Estimate dropdown height (increased for mode selection)
+            const estimatedHeight = 350;
             const spaceBelow = window.innerHeight - rect.bottom;
 
             if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
@@ -60,9 +70,15 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
     // Focus management when opening
     useEffect(() => {
         if (isOpen && menuRef.current) {
-            const firstButton = menuRef.current.querySelector('button');
-            if (firstButton) {
-                requestAnimationFrame(() => firstButton.focus());
+            // Focus the selected mode radio or the first button
+            const selectedRadio = menuRef.current.querySelector('input[type="radio"]:checked') as HTMLElement;
+            if (selectedRadio) {
+                requestAnimationFrame(() => selectedRadio.focus());
+            } else {
+                const firstButton = menuRef.current.querySelector('button');
+                if (firstButton) {
+                    requestAnimationFrame(() => firstButton.focus());
+                }
             }
         }
     }, [isOpen]);
@@ -85,23 +101,23 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
         }
 
         if (menuRef.current) {
-            const buttons = Array.from(menuRef.current.querySelectorAll('button'));
-            const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            const items = Array.from(menuRef.current.querySelectorAll('button, input[type="radio"]')) as HTMLElement[];
+            const currentIndex = items.indexOf(document.activeElement as HTMLElement);
 
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                const nextIndex = (currentIndex + 1) % buttons.length;
-                buttons[nextIndex].focus();
+                const nextIndex = (currentIndex + 1) % items.length;
+                items[nextIndex].focus();
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-                buttons[prevIndex].focus();
+                const prevIndex = (currentIndex - 1 + items.length) % items.length;
+                items[prevIndex].focus();
             } else if (e.key === 'Home') {
                 e.preventDefault();
-                buttons[0].focus();
+                items[0].focus();
             } else if (e.key === 'End') {
                 e.preventDefault();
-                buttons[buttons.length - 1].focus();
+                items[items.length - 1].focus();
             }
         }
     };
@@ -121,6 +137,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             await saveTranscript({
                 segments,
                 format,
+                mode: exportMode,
                 defaultFileName: `transcript_${new Date().toISOString().slice(0, 10)}`,
             });
         } catch (error) {
@@ -175,6 +192,62 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
                     role="menu"
                     aria-labelledby="export-menu-button"
                 >
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', marginBottom: '4px' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
+                            {t('panel.mode_selection', 'Mode Selection')}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.875rem' }}>
+                                <input
+                                    type="radio"
+                                    name="exportMode"
+                                    value="original"
+                                    checked={exportMode === 'original'}
+                                    onChange={() => setExportMode('original')}
+                                />
+                                <span style={{ marginLeft: '8px' }}>{t('export.mode_original', 'Original')}</span>
+                            </label>
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    cursor: hasTranslation ? 'pointer' : 'not-allowed',
+                                    fontSize: '0.875rem',
+                                    opacity: hasTranslation ? 1 : 0.5
+                                }}
+                            >
+                                <input
+                                    type="radio"
+                                    name="exportMode"
+                                    value="translation"
+                                    checked={exportMode === 'translation'}
+                                    onChange={() => hasTranslation && setExportMode('translation')}
+                                    disabled={!hasTranslation}
+                                />
+                                <span style={{ marginLeft: '8px' }}>{t('export.mode_translation', 'Translation')}</span>
+                            </label>
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    cursor: hasTranslation ? 'pointer' : 'not-allowed',
+                                    fontSize: '0.875rem',
+                                    opacity: hasTranslation ? 1 : 0.5
+                                }}
+                            >
+                                <input
+                                    type="radio"
+                                    name="exportMode"
+                                    value="bilingual"
+                                    checked={exportMode === 'bilingual'}
+                                    onChange={() => hasTranslation && setExportMode('bilingual')}
+                                    disabled={!hasTranslation}
+                                />
+                                <span style={{ marginLeft: '8px' }}>{t('export.mode_bilingual', 'Bilingual')}</span>
+                            </label>
+                        </div>
+                    </div>
+
                     {exportOptions.map((option) => (
                         <button
                             type="button"

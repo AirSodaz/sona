@@ -120,7 +120,10 @@
         "button": "Export",
         "exporting": "Exporting...",
         "no_segments": "No segments to export",
-        "failed": "Failed to export transcript"
+        "failed": "Failed to export transcript",
+        "mode_original": "Original",
+        "mode_translation": "Translation",
+        "mode_bilingual": "Bilingual"
     },
     "history": {
         "title": "History",
