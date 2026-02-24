@@ -162,21 +162,26 @@ pub async fn call_ai_model(
         }
 
     } else if api_format == "gemini" {
-        // Handle Google Gemini
-        // Base URL expectation: https://generativelanguage.googleapis.com/v1beta/models
-        // Or full URL provided?
-        // Let's assume user provides base like https://generativelanguage.googleapis.com
+        if model_name.trim().is_empty() {
+            return Err("Model name cannot be empty for Gemini API".to_string());
+        }
 
-        // Construct URL: {base_url}/v1beta/models/{model_name}:generateContent?key={api_key}
-        // But if user puts full path, we need to be careful.
-        // Let's assume standard base_url is "https://generativelanguage.googleapis.com"
-
-        let url = if base_url.contains("generateContent") {
-             // User provided full URL, just append key if missing?
-             // Safer to construct it properly if we can.
-             format!("{}?key={}", base_url, api_key)
+        let base = base_url.trim_end_matches('/');
+        let url = if base.contains("generateContent") {
+             format!("{}?key={}", base, api_key)
         } else {
-             format!("{}/v1beta/models/{}:generateContent?key={}", base_url.trim_end_matches('/'), model_name, api_key)
+             let cleaned_base = if base.ends_with("/v1beta/models") {
+                 base.strip_suffix("/v1beta/models").unwrap_or(base)
+             } else if base.ends_with("/models") {
+                 base.strip_suffix("/models").unwrap_or(base)
+             } else if base.ends_with("/v1beta") {
+                 base.strip_suffix("/v1beta").unwrap_or(base)
+             } else if base.ends_with("/v1") {
+                 base.strip_suffix("/v1").unwrap_or(base)
+             } else {
+                 base
+             };
+             format!("{}/v1beta/models/{}:generateContent?key={}", cleaned_base, model_name, api_key)
         };
 
         let request_body = GeminiRequest {
@@ -270,11 +275,18 @@ pub async fn get_ai_models(
     if api_format == "anthropic" {
         return Ok(vec![]);
     } else if api_format == "gemini" {
-        let url = if base.contains("models") {
-            format!("{}?key={}", base, api_key)
+        let cleaned_base = if base.ends_with("/v1beta/models") {
+            base.strip_suffix("/v1beta/models").unwrap_or(base)
+        } else if base.ends_with("/models") {
+            base.strip_suffix("/models").unwrap_or(base)
+        } else if base.ends_with("/v1beta") {
+            base.strip_suffix("/v1beta").unwrap_or(base)
+        } else if base.ends_with("/v1") {
+            base.strip_suffix("/v1").unwrap_or(base)
         } else {
-            format!("{}/v1beta/models?key={}", base, api_key)
+            base
         };
+        let url = format!("{}/v1beta/models?key={}", cleaned_base, api_key);
 
         let res = client
             .get(&url)
