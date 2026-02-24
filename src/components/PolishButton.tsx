@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { polishService } from '../services/polishService';
-import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon } from './Icons';
+import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
 
 /** Props for PolishButton. */
@@ -27,8 +27,9 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Undo state
+    // Undo/Redo state
     const [undoSegments, setUndoSegments] = useState<TranscriptSegment[] | null>(null);
+    const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
     const isPolishing = useTranscriptStore((state) => state.isPolishing);
@@ -113,12 +114,13 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         if (isPolishing) return;
 
         if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel) {
-            await alert(t('polish.error_config_missing', { defaultValue: 'Please configure AI service in Settings before polishing.' }), { variant: 'error' });
+            await alert(t('polish.error_config_missing'), { variant: 'error' });
             return;
         }
 
         // Save current segments for undo
         setUndoSegments(JSON.parse(JSON.stringify(segments)));
+        setRedoSegments(null);
 
         setIsOpen(false);
         triggerRef.current?.focus();
@@ -126,14 +128,29 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         try {
             await polishService.polishTranscript();
         } catch (error: any) {
-            await alert(t('polish.error_failed', { defaultValue: 'Polishing failed: ' }) + (error.message || 'Unknown error'), { variant: 'error' });
+            await alert(t('polish.error_failed') + (error.message || 'Unknown error'), { variant: 'error' });
         }
     };
 
     const handleUndoPolish = () => {
         if (undoSegments) {
+            // Save current state for redo
+            setRedoSegments(JSON.parse(JSON.stringify(segments)));
+
             setSegments(undoSegments);
             setUndoSegments(null);
+            setIsOpen(false);
+            triggerRef.current?.focus();
+        }
+    };
+
+    const handleRedoPolish = () => {
+        if (redoSegments) {
+            // Save current state (original) back to undo
+            setUndoSegments(JSON.parse(JSON.stringify(segments)));
+
+            setSegments(redoSegments);
+            setRedoSegments(null);
             setIsOpen(false);
             triggerRef.current?.focus();
         }
@@ -159,7 +176,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="polish-menu-dropdown"
-                data-tooltip={isPolishing ? t('polish.polishing') : t('polish.title', { defaultValue: 'Polish Text' })}
+                data-tooltip={isPolishing ? t('polish.polishing') : t('polish.title')}
                 data-tooltip-pos="bottom"
             >
                 {isPolishing ? (
@@ -192,8 +209,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <SparklesIcon />
                         <span>
                             {isPolishing
-                                ? t('polish.polishing', { defaultValue: 'Polishing...' })
-                                : t('polish.start', { defaultValue: 'Polish Text' })}
+                                ? t('polish.polishing')
+                                : t('polish.start')}
                         </span>
                     </button>
 
@@ -207,7 +224,21 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                             tabIndex={-1}
                         >
                             <RestoreIcon />
-                            <span>{t('polish.undo', { defaultValue: 'Undo Polish' })}</span>
+                            <span>{t('polish.undo')}</span>
+                        </button>
+                    )}
+
+                    {redoSegments && (
+                        <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={handleRedoPolish}
+                            disabled={isPolishing}
+                            role="menuitem"
+                            tabIndex={-1}
+                        >
+                            <RedoIcon />
+                            <span>{t('polish.redo')}</span>
                         </button>
                     )}
                 </div>

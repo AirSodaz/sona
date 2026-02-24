@@ -307,5 +307,14 @@
             "de": "German",
             "es": "Spanish"
         }
+    },
+    "polish": {
+        "title": "Polish Text",
+        "start": "Polish Text",
+        "polishing": "Polishing...",
+        "undo": "Undo Polish",
+        "redo": "Redo Polish",
+        "error_config_missing": "Please configure AI service in Settings before polishing.",
+        "error_failed": "Polishing failed: "
     }
 }
