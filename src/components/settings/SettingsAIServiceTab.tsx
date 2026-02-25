@@ -52,6 +52,15 @@ export function SettingsAIServiceTab({
             case 'gemini':
                 setAiBaseUrl('https://generativelanguage.googleapis.com');
                 break;
+            case 'deepseek':
+                setAiBaseUrl('https://api.deepseek.com');
+                break;
+            case 'kimi':
+                setAiBaseUrl('https://api.moonshot.cn/v1');
+                break;
+            case 'siliconflow':
+                setAiBaseUrl('https://api.siliconflow.cn/v1');
+                break;
             default:
                 break;
         }
@@ -138,10 +147,13 @@ export function SettingsAIServiceTab({
                         value={aiServiceType}
                         onChange={handleServiceTypeChange}
                         options={[
-                            { value: 'openai', label: 'OpenAI' },
-                            { value: 'anthropic', label: 'Anthropic' },
-                            { value: 'ollama', label: 'Ollama' },
-                            { value: 'gemini', label: 'Google Gemini' }
+                            { value: 'openai', label: t('settings.ai.services.openai') || 'OpenAI' },
+                            { value: 'anthropic', label: t('settings.ai.services.anthropic') || 'Anthropic' },
+                            { value: 'ollama', label: t('settings.ai.services.ollama') || 'Ollama' },
+                            { value: 'gemini', label: t('settings.ai.services.gemini') || 'Google Gemini' },
+                            { value: 'deepseek', label: t('settings.ai.services.deepseek') || 'DeepSeek' },
+                            { value: 'kimi', label: t('settings.ai.services.kimi') || 'Kimi' },
+                            { value: 'siliconflow', label: t('settings.ai.services.siliconflow') || 'SiliconFlow' }
                         ]}
                     />
                 </div>

@@ -236,7 +236,10 @@
                 "openai": "OpenAI 兼容",
                 "anthropic": "Anthropic",
                 "ollama": "Ollama",
-                "gemini": "Google Gemini"
+                "gemini": "Google Gemini",
+                "deepseek": "DeepSeek",
+                "kimi": "Kimi",
+                "siliconflow": "SiliconFlow"
             }
         }
     },
