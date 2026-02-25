@@ -1,8 +1,7 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EditorToolbar } from '../EditorToolbar';
 import { useTranscriptStore } from '../../stores/transcriptStore';
-import { vi } from 'vitest';
+import { vi, describe, beforeEach, it, expect } from 'vitest';
 
 // Mock store
 vi.mock('../../stores/transcriptStore', () => ({
@@ -11,7 +10,7 @@ vi.mock('../../stores/transcriptStore', () => ({
 
 // Mock translation
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (key: string, def: string) => def }),
+    useTranslation: () => ({ t: (_key: string, def: string) => def }),
 }));
 
 describe('EditorToolbar', () => {
