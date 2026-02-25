@@ -315,6 +315,11 @@
         "undo": "撤销润色",
         "redo": "重做润色",
         "error_config_missing": "请先在设置中配置 AI 服务。",
-        "error_failed": "润色失败："
+        "error_failed": "润色失败：",
+        "advanced_settings": "高级设置",
+        "keywords": "关键词",
+        "keywords_placeholder": "输入关键词...",
+        "context": "上下文",
+        "context_placeholder": "输入上下文..."
     }
 }

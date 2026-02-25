@@ -60,8 +60,20 @@ class PolishService {
     }
 
     private buildPrompt(segments: { id: string; text: string }[]): string {
+        const config = useTranscriptStore.getState().config;
         const jsonStr = JSON.stringify(segments.map(s => ({ id: s.id, text: s.text })));
-        return `You are a professional editor. The following text segments are from a speech-to-text transcription and may contain errors.
+
+        let prompt = "";
+
+        if (config.polishContext && config.polishContext.trim()) {
+            prompt += `[User Context]\n${config.polishContext.trim()}\n\n`;
+        }
+
+        if (config.polishKeywords && config.polishKeywords.trim()) {
+            prompt += `[User Keywords]\n${config.polishKeywords.trim()}\n\n`;
+        }
+
+        prompt += `You are a professional editor. The following text segments are from a speech-to-text transcription and may contain errors.
 Your task is to:
 1. Fix any speech recognition errors.
 2. Improve grammar and clarity.
@@ -76,6 +88,8 @@ CRITICAL INSTRUCTIONS:
 
 Input:
 ${jsonStr}`;
+
+        return prompt;
     }
 
     private parseAIResponse(responseText: string): { id: string; text: string }[] {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { polishService } from '../services/polishService';
-import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon } from './Icons';
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, ProcessingIcon, RestoreIcon, RedoIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
 
 /** Props for PolishButton. */
@@ -23,6 +23,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const { alert } = useDialogStore();
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -35,6 +36,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const isPolishing = useTranscriptStore((state) => state.isPolishing);
     const polishProgress = useTranscriptStore((state) => state.polishProgress);
     const config = useTranscriptStore((state) => state.config);
+    const setConfig = useTranscriptStore((state) => state.setConfig);
     const setSegments = useTranscriptStore((state) => state.setSegments);
     const segments = useTranscriptStore((state) => state.segments);
 
@@ -241,6 +243,58 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                             <span>{t('polish.redo')}</span>
                         </button>
                     )}
+
+                    <div style={{ borderTop: '1px solid var(--color-border)', marginTop: '4px', paddingTop: '4px' }}>
+                        <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowAdvanced(!showAdvanced);
+                            }}
+                            role="menuitem"
+                            tabIndex={-1}
+                            style={{ justifyContent: 'space-between' }}
+                        >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {showAdvanced ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                                {t('polish.advanced_settings')}
+                            </span>
+                        </button>
+
+                        {showAdvanced && (
+                            <div style={{ padding: '0 12px 12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                        {t('polish.keywords')}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="settings-input"
+                                        style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                                        placeholder={t('polish.keywords_placeholder')}
+                                        value={config.polishKeywords || ''}
+                                        onChange={(e) => setConfig({ polishKeywords: e.target.value })}
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                        {t('polish.context')}
+                                    </label>
+                                    <textarea
+                                        className="settings-input"
+                                        style={{ fontSize: '0.8rem', padding: '4px 8px', minHeight: '60px', resize: 'vertical' }}
+                                        placeholder={t('polish.context_placeholder')}
+                                        value={config.polishContext || ''}
+                                        onChange={(e) => setConfig({ polishContext: e.target.value })}
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

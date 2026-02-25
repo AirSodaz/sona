@@ -95,4 +95,8 @@ export interface AppConfig {
   aiModel?: string;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
+  /** Keywords for polishing. */
+  polishKeywords?: string;
+  /** Context for polishing. */
+  polishContext?: string;
 }
