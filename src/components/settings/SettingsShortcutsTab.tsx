@@ -39,6 +39,15 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 { key: 'Shift + Enter', description: t('shortcuts.prev_match') },
                 { key: 'Esc', description: t('shortcuts.close') },
             ]
+        },
+        {
+            title: t('shortcuts.section_editor'),
+            items: [
+                { key: 'Ctrl + B', description: t('shortcuts.editor_bold') },
+                { key: 'Ctrl + I', description: t('shortcuts.editor_italic') },
+                { key: 'Ctrl + U', description: t('shortcuts.editor_underline') },
+                { key: 'Shift + Enter', description: t('shortcuts.editor_line_break') },
+            ]
         }
     ];
 
