@@ -99,4 +99,8 @@ export interface AppConfig {
   polishKeywords?: string;
   /** Context for polishing. */
   polishContext?: string;
+  /** Whether to automatically polish the transcript. */
+  autoPolish?: boolean;
+  /** Frequency of auto-polishing in segments (for live recording). */
+  autoPolishFrequency?: number;
 }

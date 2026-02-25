@@ -129,9 +129,13 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     const enableTimeline = config.enableTimeline ?? true;
     const language = config.language;
+    const autoPolish = config.autoPolish ?? false;
+    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
 
     const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
     const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
+    const setAutoPolish = useCallback((val: boolean) => setConfig({ autoPolish: val }), [setConfig]);
+    const setAutoPolishFrequency = useCallback((val: number) => setConfig({ autoPolishFrequency: val }), [setConfig]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -290,6 +294,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                     setEnableTimeline={setEnableTimeline}
                     language={language}
                     setLanguage={setLanguage}
+                    autoPolish={autoPolish}
+                    setAutoPolish={setAutoPolish}
+                    autoPolishFrequency={autoPolishFrequency}
+                    setAutoPolishFrequency={setAutoPolishFrequency}
                 />
             </div>
         );
@@ -333,6 +341,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 setEnableTimeline={setEnableTimeline}
                 language={language}
                 setLanguage={setLanguage}
+                autoPolish={autoPolish}
+                setAutoPolish={setAutoPolish}
+                autoPolishFrequency={autoPolishFrequency}
+                setAutoPolishFrequency={setAutoPolishFrequency}
             />
         </div>
     );

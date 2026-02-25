@@ -6,6 +6,7 @@ import { TranscriptSegment } from '../types/transcript';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { modelService } from '../services/modelService';
+import { polishService } from '../services/polishService';
 import { useTranscriptStore } from './transcriptStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { tempDir, join } from '@tauri-apps/api/path';
@@ -253,13 +254,40 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
             get().updateItemSegments(itemId, finalSegments);
 
+            // Auto-Polish Logic
+            const autoPolish = config.autoPolish ?? false;
+            if (autoPolish && finalSegments.length > 0) {
+                // Check if AI service is configured
+                if (config.aiApiKey && config.aiBaseUrl && config.aiModel && config.aiServiceType) {
+                    try {
+                        // Indicate polishing (keep at 99% or similar)
+                        get().updateItemStatus(itemId, 'processing', 99);
+
+                        await polishService.polishSegments(finalSegments, (polishedChunk) => {
+                            // Update segments incrementally
+                            const currentSegments = get().queueItems.find(i => i.id === itemId)?.segments || [];
+                            const updatedSegments = currentSegments.map(seg => {
+                                const polished = polishedChunk.find(p => p.id === seg.id);
+                                return polished ? { ...seg, text: polished.text } : seg;
+                            });
+                            get().updateItemSegments(itemId, updatedSegments);
+                        });
+                    } catch (polishError) {
+                        console.error('[BatchQueue] Auto-polish failed:', polishError);
+                        // Don't fail the whole file, just log error
+                    }
+                }
+            }
+
             // Calculate duration from last segment
-            const duration = finalSegments.length > 0 ? finalSegments[finalSegments.length - 1].end : 0;
+            // Re-fetch segments in case they were updated by polish
+            const postPolishSegments = get().queueItems.find(i => i.id === itemId)?.segments || finalSegments;
+            const duration = postPolishSegments.length > 0 ? postPolishSegments[postPolishSegments.length - 1].end : 0;
 
             // Save to History
             try {
-                if (finalSegments.length > 0) {
-                    const historyItem = await historyService.saveImportedFile(item.filePath, finalSegments, duration, tempWavPath);
+                if (postPolishSegments.length > 0) {
+                    const historyItem = await historyService.saveImportedFile(item.filePath, postPolishSegments, duration, tempWavPath);
                     if (historyItem) {
                         set((state) => ({
                             queueItems: state.queueItems.map((i) =>

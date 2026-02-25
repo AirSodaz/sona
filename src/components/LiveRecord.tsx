@@ -4,6 +4,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
+import { polishService } from '../services/polishService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
@@ -80,6 +81,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const usingNativeCaptureRef = useRef(false);
     const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
     const audioChunksRef = useRef<Int16Array[]>([]);
+    const polishedIdsRef = useRef<Set<string>>(new Set());
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
@@ -114,12 +116,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Use config directly
     const enableTimeline = config.enableTimeline ?? true;
     const language = config.language;
+    const autoPolish = config.autoPolish ?? false;
+    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;
     const enableTimelineRef = useRef(true);
 
     const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
     const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
+    const setAutoPolish = useCallback((val: boolean) => setConfig({ autoPolish: val }), [setConfig]);
+    const setAutoPolishFrequency = useCallback((val: number) => setConfig({ autoPolishFrequency: val }), [setConfig]);
 
     // Sync ref
     useEffect(() => {
@@ -240,6 +246,28 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             } else {
                 upsertSegmentAndSetActive(segment);
             }
+
+            // Auto-Polish Logic
+            const config = useTranscriptStore.getState().config;
+            const autoPolish = config.autoPolish ?? false;
+            const frequency = config.autoPolishFrequency ?? 5;
+
+            if (autoPolish && frequency > 0) {
+                const allSegments = useTranscriptStore.getState().segments;
+                const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
+
+                if (unpolished.length >= frequency) {
+                    const toPolish = unpolished.slice(0, frequency);
+                    toPolish.forEach(s => polishedIdsRef.current.add(s.id));
+
+                    polishService.polishSegments(toPolish, (chunk) => {
+                        const store = useTranscriptStore.getState();
+                        chunk.forEach(p => store.updateSegment(p.id, { text: p.text }));
+                    }).catch(err => {
+                        console.error('[LiveRecord] Auto-polish failed:', err);
+                    });
+                }
+            }
         }
     };
 
@@ -261,6 +289,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         }
 
         setIsRecordingInitializing(true);
+        polishedIdsRef.current.clear();
 
         try {
             let stream: MediaStream | undefined;
@@ -880,6 +909,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 setEnableTimeline={setEnableTimeline}
                 language={language}
                 setLanguage={setLanguage}
+                autoPolish={autoPolish}
+                setAutoPolish={setAutoPolish}
+                autoPolishFrequency={autoPolishFrequency}
+                setAutoPolishFrequency={setAutoPolishFrequency}
                 disabled={isRecording}
             />
         </div>

@@ -1,37 +1,45 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { TranscriptSegment } from '../types/transcript';
 
 class PolishService {
     /**
-     * Polishes the current segments in the store using the configured AI service.
-     * Updates the store's segments progressively.
+     * Polishes the provided segments using the configured AI service.
+     *
+     * @param segments The list of segments to polish.
+     * @param onChunkPolished Optional callback when a chunk of segments is polished.
+     *                        If not provided, no side effects occur (store is not updated).
+     * @returns A promise that resolves when all segments are polished.
      */
-    async polishTranscript() {
+    async polishSegments(
+        segments: TranscriptSegment[],
+        onChunkPolished?: (polishedChunk: { id: string; text: string }[]) => void
+    ): Promise<void> {
         const store = useTranscriptStore.getState();
         const config = store.config;
 
         if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel || !config.aiServiceType) {
+            // If AI is not configured, we might want to skip polishing silently or throw error.
+            // For auto-polish, skipping silently or logging warning is better than crashing.
+            // However, manual polish expects an error.
+            // Let's throw, and let the caller handle it.
             throw new Error('AI Service not fully configured.');
         }
 
-        const segments = store.segments;
         if (!segments || segments.length === 0) {
             return;
         }
 
-        store.setIsPolishing(true);
-        store.setPolishProgress(0);
-
         const CHUNK_SIZE = 30; // Number of segments to polish per API request
         const totalChunks = Math.ceil(segments.length / CHUNK_SIZE);
 
-        try {
-            for (let i = 0; i < totalChunks; i++) {
-                const chunk = segments.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        for (let i = 0; i < totalChunks; i++) {
+            const chunk = segments.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
 
-                // Prepare prompt
-                const prompt = this.buildPrompt(chunk);
+            // Prepare prompt
+            const prompt = this.buildPrompt(chunk);
 
+            try {
                 // Call AI
                 const responseText = await invoke<string>('call_ai_model', {
                     apiKey: config.aiApiKey,
@@ -44,15 +52,43 @@ class PolishService {
                 // Parse JSON output
                 const polishedSegments = this.parseAIResponse(responseText);
 
-                // Update the store
+                if (onChunkPolished) {
+                    onChunkPolished(polishedSegments);
+                }
+            } catch (error) {
+                console.error('Failed to polish chunk:', error);
+                throw error; // Re-throw to let caller know
+            }
+        }
+    }
+
+    /**
+     * Polishes all segments in the store.
+     * Updates the store's segments progressively.
+     */
+    async polishTranscript() {
+        const store = useTranscriptStore.getState();
+        const segments = store.segments;
+
+        if (!segments || segments.length === 0) {
+            return;
+        }
+
+        store.setIsPolishing(true);
+        store.setPolishProgress(0);
+
+        const totalChunks = Math.ceil(segments.length / 30);
+        let completedChunks = 0;
+
+        try {
+            await this.polishSegments(segments, (polishedChunk) => {
                 const currentStore = useTranscriptStore.getState();
-                polishedSegments.forEach(({ id, text }) => {
+                polishedChunk.forEach(({ id, text }) => {
                     currentStore.updateSegment(id, { text });
                 });
-
-                // Update progress
-                store.setPolishProgress(Math.round(((i + 1) / totalChunks) * 100));
-            }
+                completedChunks++;
+                store.setPolishProgress(Math.round((completedChunks / totalChunks) * 100));
+            });
         } finally {
             store.setIsPolishing(false);
             store.setPolishProgress(0);
