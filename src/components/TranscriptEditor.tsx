@@ -11,6 +11,7 @@ import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from './transcript/TranscriptUIContext';
 import { SearchUI } from './SearchUI';
+import { EditorToolbar } from './EditorToolbar';
 import { useSearchStore } from '../stores/searchStore';
 
 
@@ -346,6 +347,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
 
     return (
         <div className="transcript-editor">
+            <EditorToolbar />
             <TranscriptUIContext.Provider value={uiStore}>
                 <Virtuoso<TranscriptSegment, TranscriptContext>
                     ref={virtuosoRef}
