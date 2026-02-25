@@ -23,9 +23,23 @@ const CJK_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]/u;
 
 // Regex for alignTokensToText
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
-const RAW_WORDS_REGEX = /(\s+|[\p{sc=Han}]|[^\s\p{sc=Han}]+)/gu;
 const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
 const WHITESPACE_ONLY_REGEX = /^\s+$/;
+
+// Tag-aware lexer regex
+// 1. Tags (b, i, u)
+// 2. Whitespace
+// 3. CJK characters
+// 4. Other words (non-tag, non-whitespace, non-CJK, non-<)
+// 5. Stray < (punctuation)
+const LEXER_REGEX = /(<\/?(?:b|i|u)>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
+
+/**
+ * Strips HTML tags from a string.
+ */
+export function stripHtmlTags(text: string): string {
+    return text.replace(/<\/?[^>]+(>|$)/g, "");
+}
 
 /**
  * Calculates the length of the text excluding punctuation and whitespace.
@@ -493,14 +507,6 @@ export function findSegmentForTime(segments: TranscriptSegment[], time: number):
 }
 
 /**
- * Aligns formatted text with raw tokens to assign timestamps to display words.
- * 
- * @param text The formatted text (with punctuation/ITN).
- * @param rawTokens The raw tokens from the recognizer.
- * @param rawTimestamps The timestamps corresponding to rawTokens.
- * @return Array of objects with text chunk and its start timestamp.
- */
-/**
  * Computes a lightweight fingerprint for a list of segments.
  * Used to detect changes without deep comparison of every field.
  *
@@ -513,6 +519,14 @@ export function computeSegmentsFingerprint(segments: TranscriptSegment[]): strin
     ).join('|');
 }
 
+/**
+ * Aligns formatted text with raw tokens to assign timestamps to display words.
+ *
+ * @param text The formatted text (with punctuation/ITN).
+ * @param rawTokens The raw tokens from the recognizer.
+ * @param rawTimestamps The timestamps corresponding to rawTokens.
+ * @return Array of objects with text chunk and its start timestamp.
+ */
 export function alignTokensToText(
     text: string,
     rawTokens: string[],
@@ -526,32 +540,62 @@ export function alignTokensToText(
         return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
     }
 
-    // Pre-normalize tokens to avoid repeated regex and toLowerCase calls
+    // Pre-normalize raw tokens to avoid repeated regex and toLowerCase calls
     const normalizedTokens = rawTokens.map(t => {
         if (typeof t !== 'string') return '';
         return t.toLowerCase().replace(NORMALIZE_REGEX, '');
     });
 
-    // Tokenize text:
-    // 1. Whitespace (kept to preserve spacing)
-    // 2. Chinese characters (Han script) treated as individual words
-    // 3. Everything else (English, numbers, punctuation) grouped until whitespace/Han/End
-    const rawWords = safeText.match(RAW_WORDS_REGEX) || [];
-
-    // Merge standalone punctuation into the previous word
+    // Tokenize text with tags support
     const words: string[] = [];
     const normalizedWords: string[] = [];
 
-    for (const w of rawWords) {
-        // Check if w is purely punctuation (and previous word exists and is not whitespace)
-        if (words.length > 0 && PUNCTUATION_ONLY_REGEX.test(w) && !WHITESPACE_ONLY_REGEX.test(w) && !WHITESPACE_ONLY_REGEX.test(words[words.length - 1])) {
+    // Lexer state
+    const activeTags = new Set<string>();
+
+    // Loop through regex matches
+    let match;
+    LEXER_REGEX.lastIndex = 0;
+
+    while ((match = LEXER_REGEX.exec(safeText)) !== null) {
+        const [full, tag, _space, _han, _word, _other] = match;
+
+        // 1. Handle Tags
+        if (tag) {
+            const tagName = tag.replace(/[<\/>]/g, '').toLowerCase();
+            if (tag.startsWith('</')) {
+                activeTags.delete(tagName);
+            } else {
+                activeTags.add(tagName);
+            }
+            continue; // Tags are not words in the output list
+        }
+
+        // 2. Handle Content (Whitespace, Han, Word, or other)
+        const tokenText = full;
+
+        // Wrap content with active tags
+        let wrapped = tokenText;
+        // Sort tags for consistent output order
+        // We reverse to make alphabetical tags outer-most (e.g. b before i -> <b><i>...</i></b>)
+        const sortedTags = Array.from(activeTags).sort().reverse();
+        for (const t of sortedTags) {
+            wrapped = `<${t}>${wrapped}</${t}>`;
+        }
+
+        // Check if token is punctuation to merge with previous word
+        const isPunctuation = PUNCTUATION_ONLY_REGEX.test(tokenText) && !WHITESPACE_ONLY_REGEX.test(tokenText);
+
+        if (words.length > 0 && isPunctuation && !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(words[words.length - 1]))) {
             // Append to previous word
-            words[words.length - 1] += w;
+            words[words.length - 1] += wrapped;
+
             // Update normalized cache for the merged word
-            normalizedWords[normalizedWords.length - 1] = words[words.length - 1].toLowerCase().replace(NORMALIZE_REGEX, '');
+            // Re-normalize from scratch using the new full word (stripped of tags)
+            normalizedWords[normalizedWords.length - 1] = stripHtmlTags(words[words.length - 1]).toLowerCase().replace(NORMALIZE_REGEX, '');
         } else {
-            words.push(w);
-            normalizedWords.push(w.toLowerCase().replace(NORMALIZE_REGEX, ''));
+            words.push(wrapped);
+            normalizedWords.push(stripHtmlTags(wrapped).toLowerCase().replace(NORMALIZE_REGEX, ''));
         }
     }
 
@@ -561,8 +605,10 @@ export function alignTokensToText(
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
 
-        // Skip whitespace words but preserve them in output
-        if (!word.trim()) {
+        // Handle whitespace words: Preserve them but don't try to match
+        // Note: stripHtmlTags checks if the *content* is whitespace
+        const cleanWord = stripHtmlTags(word);
+        if (!cleanWord.trim()) {
             const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
             result.push({ text: word, timestamp: ts });
             continue;

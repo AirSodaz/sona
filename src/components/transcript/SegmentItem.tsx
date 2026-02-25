@@ -23,6 +23,88 @@ export interface SegmentItemProps {
     onAnimationEnd: (id: string) => void;
 }
 
+function textToHtml(text: string): string {
+    if (!text) return '';
+    return text.replace(/\n/g, '<br>');
+}
+
+function htmlToText(html: string): string {
+    if (!html) return '';
+
+    // Replace block elements and breaks with newlines
+    let text = html
+        .replace(/<div>/gi, '\n')
+        .replace(/<\/div>/gi, '')
+        .replace(/<p>/gi, '\n')
+        .replace(/<\/p>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n');
+
+    // Normalize formatting tags
+    text = text
+        .replace(/<(\/?)strong/gi, '<$1b')
+        .replace(/<(\/?)em/gi, '<$1i');
+
+    // Normalize spaces
+    text = text.replace(/&nbsp;/g, ' ');
+
+    // Strip all tags EXCEPT b, i, u
+    // Regex explanation: Match <...> where content does NOT start with /?(b|i|u) followed by > or space
+    text = text.replace(/<(?!\/?(?:b|i|u)(?:>|\s))[^>]*>/gi, '');
+
+    return text;
+}
+
+const ContentEditable = React.forwardRef<HTMLDivElement, {
+    html: string;
+    onChange: (e: React.FormEvent<HTMLDivElement>) => void;
+    onBlur: () => void;
+    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+    className?: string;
+}>(({ html, onChange, onBlur, onKeyDown, className }, ref) => {
+    const divRef = useRef<HTMLDivElement>(null);
+
+    // Sync html prop to div
+    useLayoutEffect(() => {
+        if (divRef.current && divRef.current.innerHTML !== html) {
+             divRef.current.innerHTML = html;
+        }
+
+        if (typeof ref === 'function') {
+            ref(divRef.current);
+        } else if (ref) {
+            ref.current = divRef.current;
+        }
+    }, [html, ref]);
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        // Insert plain text (strips formatting from source to be safe,
+        // or we could sanitize HTML paste, but plain text is safer default)
+        document.execCommand('insertText', false, text);
+    };
+
+    return (
+        <div
+            ref={divRef}
+            className={className}
+            contentEditable
+            onInput={onChange}
+            onBlur={onBlur}
+            onKeyDown={onKeyDown}
+            onPaste={handlePaste}
+            style={{
+                whiteSpace: 'pre-wrap',
+                overflowY: 'auto',
+                // Mimic textarea styles from css if needed, but class should handle most
+                minHeight: '1.8em',
+                outline: 'none'
+            }}
+        />
+    );
+});
+ContentEditable.displayName = 'ContentEditable';
+
 /**
  * Individual transcript segment item.
  * Supports viewing, seeking, editing, deleting, and merging.
@@ -68,26 +150,20 @@ function SegmentItemComponent({
         return (match && match.segmentId === segment.id) ? match : null;
     }, [segment.id]));
 
-    const [editText, setEditText] = useState(segment.text);
-    const inputRef = useRef<HTMLTextAreaElement>(null);
-
-    // Auto-resize textarea
-    useLayoutEffect(() => {
-        if (isEditing && inputRef.current) {
-            inputRef.current.style.height = 'auto';
-            inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
-        }
-    }, [isEditing, editText]);
+    // Local state stores HTML for the editor
+    const [editText, setEditText] = useState(() => textToHtml(segment.text));
+    const inputRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
-            inputRef.current.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length);
+            // Optional: Move cursor to end? ContentEditable logic makes this tricky without selection API.
+            // But browser often focuses at start.
         }
     }, [isEditing]);
 
     useEffect(() => {
-        setEditText(segment.text);
+        setEditText(textToHtml(segment.text));
     }, [segment.text]);
 
     function handleTextClick(): void {
@@ -103,18 +179,33 @@ function SegmentItemComponent({
         }
     }
 
-    function handleKeyDown(e: React.KeyboardEvent): void {
+    function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            onSave(segment.id, editText);
+            // Save current HTML converted to text
+            onSave(segment.id, htmlToText(e.currentTarget.innerHTML));
         } else if (e.key === 'Escape') {
-            setEditText(segment.text);
+            setEditText(textToHtml(segment.text));
+            // Save original (cancel)
             onSave(segment.id, segment.text);
+        } else if ((e.ctrlKey || e.metaKey)) {
+             const key = e.key.toLowerCase();
+             if (['b', 'i', 'u'].includes(key)) {
+                 e.preventDefault();
+                 const command = key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline';
+                 document.execCommand(command);
+             }
         }
     }
 
     function handleBlur(): void {
-        onSave(segment.id, editText);
+        // Use current state or ref? State updates onInput, so editText is up to date (mostly).
+        // But safer to use htmlToText(editText)
+        onSave(segment.id, htmlToText(editText));
+    }
+
+    function handleChange(e: React.FormEvent<HTMLDivElement>) {
+        setEditText(e.currentTarget.innerHTML);
     }
 
     function handleAnimationEnd(e: React.AnimationEvent): void {
@@ -137,11 +228,11 @@ function SegmentItemComponent({
 
             <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
                 {isEditing ? (
-                    <textarea
+                    <ContentEditable
                         ref={inputRef}
                         className="segment-input"
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
+                        html={editText}
+                        onChange={handleChange}
                         onKeyDown={handleKeyDown}
                         onBlur={handleBlur}
                     />
