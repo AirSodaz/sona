@@ -9,6 +9,8 @@
 - **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
 - **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
 - **🌊 Waveform Visualization**: Beautiful, real-time audio visualization during recording and playback.
+- **✨ AI Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
+- **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
 
 ## 🚀 Getting Started
@@ -56,15 +58,21 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 
 ## 📦 Model Management
 
-Sona allows you to choose the AI model that best fits your needs.
+Sona allows you to choose the AI model that best fits your needs, both for offline transcription and online assistance.
 
-1.  **Launch Sona**.
-2.  Navigate to **Settings > Models**.
-3.  Choose from a curated list of high-performance models:
+### Offline Transcription
+1.  Navigate to **Settings > Models**.
+2.  Choose from a curated list of high-performance models:
     *   **SenseVoice**: Best for multilingual support and emotion recognition.
     *   **Whisper (Tiny)**: Lightweight version of OpenAI's Whisper model.
     *   **Paraformer**: Optimized for streaming.
-4.  Click **Download**. The model will be automatically stored locally.
+3.  Click **Download**. The model will be automatically stored locally.
+
+### AI Assistant (Polish & Translate)
+1.  Navigate to **Settings > AI Service**.
+2.  Select your provider (OpenAI, Anthropic, Gemini, or Ollama).
+3.  Enter your API Key and Base URL (if applicable).
+4.  Select a model to power the Polish and Translate features.
 
 ## 🤝 Contributing
 

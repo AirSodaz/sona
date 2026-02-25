@@ -23,6 +23,7 @@
 ### Backend (Tauri)
 *   **Core**: Tauri v2 (Rust)
 *   **Capabilities**: `shell` (for sidecar), `fs`, `dialog`, `http`.
+*   **AI Proxy**: `ai.rs` uses `reqwest` to proxy requests to OpenAI, Anthropic, Gemini, and Ollama.
 *   **Configuration**: `src-tauri/tauri.conf.json`.
 
 ### AI Engine (Sidecar)
@@ -44,6 +45,10 @@ The frontend does NOT run AI models directly.
 
 ### 3.2. Critical Services & Stores
 *   **`transcriptionService.ts`**: Manages sidecar lifecycle (`spawn`/`kill`). Uses `StreamLineBuffer` to reconstruct JSON from stdout chunks.
+*   **`polishService.ts` / `translationService.ts`**:
+    *   Batches transcript segments into chunks.
+    *   Sends prompts to the AI backend via `call_ai_model`.
+    *   Parses JSON responses to update segments in place.
 *   **`transcriptStore.ts`**:
     *   **`upsertSegment`**: Optimized for streaming; checks last segment first.
     *   **`findSegmentAndIndexForTime`**: Uses index hinting for O(1) lookups during playback.
@@ -53,6 +58,13 @@ The frontend does NOT run AI models directly.
 ### 3.3. Performance Optimizations
 *   **High-Frequency Updates**: Components like `AudioPlayer` (TimeDisplay, SeekSlider) use `useRef` and direct `store.subscribe` to bypass React render cycles for `currentTime`.
 *   **Granular Selectors**: `App.tsx` selects specific state slices (e.g., `state.config.theme`) to avoid full-tree re-renders.
+
+### 3.4. AI Assistant Services
+The "AI Assistant" features (Polish & Translate) are implemented via a hybrid Rust/TS architecture:
+1.  **Frontend (`*Service.ts`)**: Constructs prompts and manages state (loading, error handling).
+2.  **Backend (`ai.rs`)**: Acts as a secure proxy.
+    *   **`call_ai_model`**: Handles the actual HTTP request to the provider (OpenAI/Anthropic/etc).
+    *   **`get_ai_models`**: Fetches available models, handling provider-specific API differences (e.g., Gemini's query param vs OpenAI's Bearer token).
 
 ## 4. Coding Standards & Guidelines
 
@@ -109,6 +121,7 @@ The frontend does NOT run AI models directly.
 
 *   `src-tauri/sidecar/`: Node.js AI Engine.
     *   **Do NOT edit `dist/` directly**. Edit `sherpa-recognizer.js` and verify the build.
+*   `src/components/settings/`: Contains individual settings tab components.
 *   `src/locales/`: i18n JSONs. Update both `en.json` and `zh.json`.
 *   `.Jules/palette.md`: Contains UX/accessibility learnings. Append new findings here.
 
