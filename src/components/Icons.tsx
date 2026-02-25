@@ -10,6 +10,14 @@ export function FolderIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Ele
     );
 }
 
+export function ChevronRightIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" {...props}>
+            <polyline points="9 18 15 12 9 6" />
+        </svg>
+    );
+}
+
 /** Icon for redoing an action. */
 export function RedoIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
     return (

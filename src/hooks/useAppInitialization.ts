@@ -49,6 +49,8 @@ export function useAppInitialization() {
                         aiBaseUrl: parsed.aiBaseUrl || '',
                         aiApiKey: parsed.aiApiKey || '',
                         aiModel: parsed.aiModel || '',
+                        polishKeywords: parsed.polishKeywords || '',
+                        polishContext: parsed.polishContext || '',
                     };
 
                     setConfig(loadedConfig);
@@ -135,6 +137,8 @@ export function useAppInitialization() {
                 aiBaseUrl: config.aiBaseUrl,
                 aiApiKey: config.aiApiKey,
                 aiModel: config.aiModel,
+                polishKeywords: config.polishKeywords,
+                polishContext: config.polishContext,
             };
             localStorage.setItem('sona-config', JSON.stringify(configToSave));
         }, 500);

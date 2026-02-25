@@ -318,6 +318,11 @@
         "undo": "Undo Polish",
         "redo": "Redo Polish",
         "error_config_missing": "Please configure AI service in Settings before polishing.",
-        "error_failed": "Polishing failed: "
+        "error_failed": "Polishing failed: ",
+        "advanced_settings": "Advanced Settings",
+        "keywords": "Keywords",
+        "keywords_placeholder": "Enter keywords...",
+        "context": "Context",
+        "context_placeholder": "Enter context..."
     }
 }
