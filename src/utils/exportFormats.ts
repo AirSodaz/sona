@@ -1,6 +1,48 @@
 import { TranscriptSegment } from '../types/transcript';
+import { stripHtmlTags } from './segmentUtils';
 
 export type ExportMode = 'original' | 'translation' | 'bilingual';
+
+function decodeHtmlEntities(text: string): string {
+    return text
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+}
+
+function htmlToPlainText(html: string): string {
+    if (!html) return '';
+    // Convert structural tags to newlines
+    let text = html
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<div>/gi, '')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<p>/gi, '');
+
+    // Strip all other tags
+    text = stripHtmlTags(text);
+
+    // Decode entities
+    return decodeHtmlEntities(text);
+}
+
+function htmlToFormattedText(html: string): string {
+    if (!html) return '';
+    // Convert structural tags to newlines, but preserve formatting tags (b, i, u)
+    let text = html
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<div>/gi, '')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<p>/gi, '');
+
+    // Decode entities (converts &lt; to <, etc.)
+    return decodeHtmlEntities(text);
+}
 
 /**
  * Formats seconds to timestamp format (HH:MM:SS<separator>mmm).
@@ -43,8 +85,8 @@ export function toSRT(segments: TranscriptSegment[], mode: ExportMode = 'origina
     return segments
         .filter((seg) => seg.isFinal)
         .map((segment) => {
-            const original = segment.text.trim();
-            const translation = (segment.translation || '').trim();
+            const original = htmlToFormattedText(segment.text.trim());
+            const translation = (segment.translation || '').trim(); // Translation assumed plain text or simple
             let text = original;
 
             if (mode === 'translation') {
@@ -76,7 +118,10 @@ export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'origin
     const exportData = segments
         .filter((seg) => seg.isFinal)
         .map((segment) => {
-            const original = segment.text.trim();
+            // For JSON, we probably want the formatted text (with tags) but decoded entities?
+            // Or stripped? Usually JSON export preserves data structure.
+            // So keep tags.
+            const original = htmlToFormattedText(segment.text.trim());
             const translation = (segment.translation || '').trim();
 
             if (mode === 'translation') {
@@ -116,7 +161,7 @@ export function toTXT(segments: TranscriptSegment[], mode: ExportMode = 'origina
     return segments
         .filter((seg) => seg.isFinal)
         .map((segment) => {
-            const original = segment.text.trim();
+            const original = htmlToPlainText(segment.text.trim());
             const translation = (segment.translation || '').trim();
             let text = original;
 
@@ -145,7 +190,7 @@ export function toVTT(segments: TranscriptSegment[], mode: ExportMode = 'origina
     const content = segments
         .filter((seg) => seg.isFinal)
         .map((segment) => {
-            const original = segment.text.trim();
+            const original = htmlToFormattedText(segment.text.trim());
             const translation = (segment.translation || '').trim();
             let text = original;
 

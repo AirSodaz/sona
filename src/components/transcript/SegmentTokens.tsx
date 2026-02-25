@@ -105,7 +105,7 @@ function TokenListComponent({
     }, [alignedTokens]);
 
     return (
-        <p className={`segment-text ${!isFinal ? 'partial' : ''}`}>
+        <p className={`segment-text ${!isFinal ? 'partial' : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
             {tokensWithIndices ? (
                 tokensWithIndices.map((tokenObj, i) => {
                     const isTimeActive = tokenObj.timestamp === activeTokenTimestamp;
@@ -142,13 +142,12 @@ function TokenListComponent({
                                     onMatchClick(matchIndex);
                                 }
                             }}
-                        >
-                            {tokenObj.text}
-                        </span>
+                            dangerouslySetInnerHTML={{ __html: tokenObj.text }}
+                        />
                     );
                 })
             ) : (
-                typeof segmentText === 'string' && segmentText ? segmentText : '(empty)'
+                <span dangerouslySetInnerHTML={{ __html: segmentText || '(empty)' }} />
             )}
         </p>
     );
