@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import { TranscriptEditor } from '../TranscriptEditor';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import React from 'react';
 
 // Mock i18next
 vi.mock('react-i18next', () => ({
