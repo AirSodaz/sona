@@ -9,6 +9,10 @@ interface TranscriptionOptionsProps {
     setEnableTimeline: (value: boolean) => void;
     language: string;
     setLanguage: (value: string) => void;
+    autoPolish: boolean;
+    setAutoPolish: (value: boolean) => void;
+    autoPolishFrequency: number;
+    setAutoPolishFrequency: (value: number) => void;
     className?: string;
     disabled?: boolean;
 }
@@ -25,6 +29,10 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     setEnableTimeline,
     language,
     setLanguage,
+    autoPolish,
+    setAutoPolish,
+    autoPolishFrequency,
+    setAutoPolishFrequency,
     className = '',
     disabled = false
 }: TranscriptionOptionsProps): React.JSX.Element {
@@ -59,6 +67,10 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
                 setEnableTimeline={setEnableTimeline}
                 language={language}
                 setLanguage={setLanguage}
+                autoPolish={autoPolish}
+                setAutoPolish={setAutoPolish}
+                autoPolishFrequency={autoPolishFrequency}
+                setAutoPolishFrequency={setAutoPolishFrequency}
                 disabled={disabled}
             />
         </div>

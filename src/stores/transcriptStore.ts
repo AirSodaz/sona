@@ -249,6 +249,8 @@ const DEFAULT_CONFIG: AppConfig = {
     captionFontSize: 24,
     captionFontColor: '#ffffff',
     translationLanguage: 'zh',
+    autoPolish: false,
+    autoPolishFrequency: 5,
 };
 
 /**

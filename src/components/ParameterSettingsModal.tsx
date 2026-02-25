@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { XIcon } from './Icons';
+import { useTranscriptStore } from '../stores/transcriptStore';
 
 interface ParameterSettingsModalProps {
     isOpen: boolean;
@@ -11,11 +12,15 @@ interface ParameterSettingsModalProps {
     setEnableTimeline: (value: boolean) => void;
     language: string;
     setLanguage: (value: string) => void;
+    autoPolish: boolean;
+    setAutoPolish: (value: boolean) => void;
+    autoPolishFrequency: number;
+    setAutoPolishFrequency: (value: number) => void;
     disabled?: boolean;
 }
 
 /**
- * Modal for configuring transcription parameters (Subtitle Mode, Language).
+ * Modal for configuring transcription parameters (Subtitle Mode, Language, Auto-Polish).
  */
 export function ParameterSettingsModal({
     isOpen,
@@ -24,11 +29,19 @@ export function ParameterSettingsModal({
     setEnableTimeline,
     language,
     setLanguage,
+    autoPolish,
+    setAutoPolish,
+    autoPolishFrequency,
+    setAutoPolishFrequency,
     disabled = false
 }: ParameterSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+    // Check if AI is configured
+    const config = useTranscriptStore((state) => state.config);
+    const isAIConfigured = Boolean(config.aiApiKey && config.aiBaseUrl && config.aiModel && config.aiServiceType);
 
     // Focus management
     useEffect(() => {
@@ -134,6 +147,54 @@ export function ParameterSettingsModal({
                             style={{ width: '180px', opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? 'none' : 'auto' }}
                         />
                     </div>
+
+                    {/* Auto Polish */}
+                    <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="options-label">
+                            <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.auto_polish', { defaultValue: 'Auto-Polish' })}</span>
+                            <span className="options-hint">
+                                {isAIConfigured
+                                    ? t('batch.auto_polish_hint', { defaultValue: 'Automatically polish text with AI' })
+                                    : t('polish.error_config_missing', { defaultValue: 'Please configure AI service first' })}
+                            </span>
+                        </div>
+                        <Switch
+                            checked={autoPolish}
+                            onChange={(val) => !disabled && isAIConfigured && setAutoPolish(val)}
+                            disabled={disabled || !isAIConfigured}
+                        />
+                    </div>
+
+                    {/* Auto Polish Frequency */}
+                    {autoPolish && (
+                        <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div className="options-label">
+                                <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.auto_polish_frequency', { defaultValue: 'Auto-Polish Frequency' })}</span>
+                            </div>
+                            <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={autoPolishFrequency}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val > 0) {
+                                        setAutoPolishFrequency(val);
+                                    }
+                                }}
+                                disabled={disabled}
+                                style={{
+                                    width: '100px',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid var(--color-border)',
+                                    backgroundColor: 'var(--color-bg-input)',
+                                    color: 'var(--color-text)',
+                                    textAlign: 'center'
+                                }}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer (optional close button, though X is top right) */}
