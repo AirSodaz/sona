@@ -9,7 +9,6 @@ import { historyService } from '../services/historyService';
 import { encodeWAV } from '../utils/wavUtils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { AppConfig } from '../types/config';
 
 interface UseAudioRecorderProps {
     inputSource: 'microphone' | 'desktop';

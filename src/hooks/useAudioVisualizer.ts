@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 
 interface UseAudioVisualizerProps {
-    canvasRef: React.RefObject<HTMLCanvasElement>;
+    canvasRef: React.RefObject<HTMLCanvasElement | null>;
     analyserRef: React.RefObject<AnalyserNode | null>;
     isPaused: boolean;
 }
