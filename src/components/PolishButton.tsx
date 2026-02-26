@@ -281,17 +281,39 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                        {t('polish.context')}
+                                        {t('polish.scenario_label')}
                                     </label>
-                                    <textarea
+                                    <select
                                         className="settings-input"
-                                        style={{ fontSize: '0.8rem', padding: '4px 8px', minHeight: '60px', resize: 'vertical' }}
-                                        placeholder={t('polish.context_placeholder')}
-                                        value={config.polishContext || ''}
-                                        onChange={(e) => setConfig({ polishContext: e.target.value })}
+                                        style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                                        value={config.polishScenario || 'custom'}
+                                        onChange={(e) => setConfig({ polishScenario: e.target.value })}
                                         onClick={(e) => e.stopPropagation()}
-                                    />
+                                    >
+                                        <option value="customer_service">{t('polish.scenarios.customer_service')}</option>
+                                        <option value="meeting">{t('polish.scenarios.meeting')}</option>
+                                        <option value="interview">{t('polish.scenarios.interview')}</option>
+                                        <option value="lecture">{t('polish.scenarios.lecture')}</option>
+                                        <option value="podcast">{t('polish.scenarios.podcast')}</option>
+                                        <option value="custom">{t('polish.scenarios.custom')}</option>
+                                    </select>
                                 </div>
+
+                                {(config.polishScenario === 'custom' || !config.polishScenario) && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                            {t('polish.custom_context')}
+                                        </label>
+                                        <textarea
+                                            className="settings-input"
+                                            style={{ fontSize: '0.8rem', padding: '4px 8px', minHeight: '60px', resize: 'vertical' }}
+                                            placeholder={t('polish.context_placeholder')}
+                                            value={config.polishContext || ''}
+                                            onChange={(e) => setConfig({ polishContext: e.target.value })}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

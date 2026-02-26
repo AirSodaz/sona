@@ -327,7 +327,24 @@
         "advanced_settings": "高级设置",
         "keywords": "关键词",
         "keywords_placeholder": "输入关键词...",
+        "scenario_label": "场景预设",
+        "custom_context": "自定义上下文",
         "context": "上下文",
-        "context_placeholder": "输入上下文..."
+        "context_placeholder": "输入上下文...",
+        "scenarios": {
+            "customer_service": "客服通话",
+            "meeting": "会议",
+            "interview": "采访",
+            "lecture": "讲座",
+            "podcast": "播客",
+            "custom": "自定义"
+        },
+        "prompts": {
+            "customer_service": "这是一段客服通话的转录文本。",
+            "meeting": "这是一段会议的转录文本。",
+            "interview": "这是一段采访的转录文本。",
+            "lecture": "这是一段讲座的转录文本。",
+            "podcast": "这是一段播客的转录文本。"
+        }
     }
 }

@@ -330,7 +330,24 @@
         "advanced_settings": "Advanced Settings",
         "keywords": "Keywords",
         "keywords_placeholder": "Enter keywords...",
+        "scenario_label": "Scenario Presets",
+        "custom_context": "Custom Context",
         "context": "Context",
-        "context_placeholder": "Enter context..."
+        "context_placeholder": "Enter context...",
+        "scenarios": {
+            "customer_service": "Customer Service Call",
+            "meeting": "Meeting",
+            "interview": "Interview",
+            "lecture": "Lecture",
+            "podcast": "Podcast",
+            "custom": "Custom"
+        },
+        "prompts": {
+            "customer_service": "This is a transcript of a customer service call.",
+            "meeting": "This is a transcript of a meeting.",
+            "interview": "This is a transcript of an interview.",
+            "lecture": "This is a transcript of a lecture.",
+            "podcast": "This is a transcript of a podcast."
+        }
     }
 }
