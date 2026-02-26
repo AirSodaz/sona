@@ -19,11 +19,9 @@ describe('SettingsAIServiceTab', () => {
         aiServiceType: 'openai',
         setAiServiceType: vi.fn(),
         aiBaseUrl: 'https://api.openai.com/v1',
-        setAiBaseUrl: vi.fn(),
         aiApiKey: 'test-key',
-        setAiApiKey: vi.fn(),
         aiModel: 'gpt-4o',
-        setAiModel: vi.fn(),
+        updateAiServiceSetting: vi.fn(),
     };
 
     it('renders all fields with correct localization keys', () => {
@@ -47,14 +45,12 @@ describe('SettingsAIServiceTab', () => {
 
     it('updates Service Type when changed', async () => {
         const setAiServiceType = vi.fn();
-        const setAiBaseUrl = vi.fn();
 
         render(
             <SettingsAIServiceTab
                 {...defaultProps}
                 aiServiceType="openai"
                 setAiServiceType={setAiServiceType}
-                setAiBaseUrl={setAiBaseUrl}
             />
         );
 
@@ -67,7 +63,6 @@ describe('SettingsAIServiceTab', () => {
         fireEvent.click(anthropicOption);
 
         expect(setAiServiceType).toHaveBeenCalledWith('anthropic');
-        // Base URL update is now handled by useSettingsLogic, not the component directly
     });
 
     it('calls invoke when Test Connection is clicked', async () => {

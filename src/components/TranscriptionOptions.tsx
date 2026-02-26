@@ -2,17 +2,15 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingsIcon } from './Icons';
 import { ParameterSettingsModal } from './ParameterSettingsModal';
+import { AppConfig } from '../types/transcript';
 
 /** Props for TranscriptionOptions component. */
 interface TranscriptionOptionsProps {
     enableTimeline: boolean;
-    setEnableTimeline: (value: boolean) => void;
     language: string;
-    setLanguage: (value: string) => void;
     autoPolish: boolean;
-    setAutoPolish: (value: boolean) => void;
     autoPolishFrequency: number;
-    setAutoPolishFrequency: (value: number) => void;
+    updateConfig: (config: Partial<AppConfig>) => void;
     className?: string;
     disabled?: boolean;
 }
@@ -26,13 +24,10 @@ interface TranscriptionOptionsProps {
  */
 export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     enableTimeline,
-    setEnableTimeline,
     language,
-    setLanguage,
     autoPolish,
-    setAutoPolish,
     autoPolishFrequency,
-    setAutoPolishFrequency,
+    updateConfig,
     className = '',
     disabled = false
 }: TranscriptionOptionsProps): React.JSX.Element {
@@ -64,13 +59,10 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 enableTimeline={enableTimeline}
-                setEnableTimeline={setEnableTimeline}
                 language={language}
-                setLanguage={setLanguage}
                 autoPolish={autoPolish}
-                setAutoPolish={setAutoPolish}
                 autoPolishFrequency={autoPolishFrequency}
-                setAutoPolishFrequency={setAutoPolishFrequency}
+                updateConfig={updateConfig}
                 disabled={disabled}
             />
         </div>

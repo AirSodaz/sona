@@ -132,11 +132,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;
 
-    const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
-    const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
-    const setAutoPolish = useCallback((val: boolean) => setConfig({ autoPolish: val }), [setConfig]);
-    const setAutoPolishFrequency = useCallback((val: number) => setConfig({ autoPolishFrequency: val }), [setConfig]);
-
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setIsDragOver(false);
@@ -291,13 +286,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 {/* Options */}
                 <TranscriptionOptions
                     enableTimeline={enableTimeline}
-                    setEnableTimeline={setEnableTimeline}
                     language={language}
-                    setLanguage={setLanguage}
                     autoPolish={autoPolish}
-                    setAutoPolish={setAutoPolish}
                     autoPolishFrequency={autoPolishFrequency}
-                    setAutoPolishFrequency={setAutoPolishFrequency}
+                    updateConfig={setConfig}
                 />
             </div>
         );
@@ -338,13 +330,10 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
             <TranscriptionOptions
                 enableTimeline={enableTimeline}
-                setEnableTimeline={setEnableTimeline}
                 language={language}
-                setLanguage={setLanguage}
                 autoPolish={autoPolish}
-                setAutoPolish={setAutoPolish}
                 autoPolishFrequency={autoPolishFrequency}
-                setAutoPolishFrequency={setAutoPolishFrequency}
+                updateConfig={setConfig}
             />
         </div>
     );

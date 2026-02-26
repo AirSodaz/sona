@@ -4,18 +4,16 @@ import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { XIcon } from './Icons';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { AppConfig } from '../types/transcript';
 
 interface ParameterSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     enableTimeline: boolean;
-    setEnableTimeline: (value: boolean) => void;
     language: string;
-    setLanguage: (value: string) => void;
     autoPolish: boolean;
-    setAutoPolish: (value: boolean) => void;
     autoPolishFrequency: number;
-    setAutoPolishFrequency: (value: number) => void;
+    updateConfig: (config: Partial<AppConfig>) => void;
     disabled?: boolean;
 }
 
@@ -26,13 +24,10 @@ export function ParameterSettingsModal({
     isOpen,
     onClose,
     enableTimeline,
-    setEnableTimeline,
     language,
-    setLanguage,
     autoPolish,
-    setAutoPolish,
     autoPolishFrequency,
-    setAutoPolishFrequency,
+    updateConfig,
     disabled = false
 }: ParameterSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
@@ -122,7 +117,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Switch
                             checked={enableTimeline}
-                            onChange={(val) => !disabled && setEnableTimeline(val)}
+                            onChange={(val) => !disabled && updateConfig({ enableTimeline: val })}
                             disabled={disabled}
                         />
                     </div>
@@ -135,7 +130,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Dropdown
                             value={language}
-                            onChange={(val) => !disabled && setLanguage(val)}
+                            onChange={(val) => !disabled && updateConfig({ language: val })}
                             options={[
                                 { value: 'auto', label: 'Auto' },
                                 { value: 'zh', label: 'Chinese' },
@@ -160,7 +155,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Switch
                             checked={autoPolish}
-                            onChange={(val) => !disabled && isAIConfigured && setAutoPolish(val)}
+                            onChange={(val) => !disabled && isAIConfigured && updateConfig({ autoPolish: val })}
                             disabled={disabled || !isAIConfigured}
                         />
                     </div>
@@ -179,7 +174,7 @@ export function ParameterSettingsModal({
                                 onChange={(e) => {
                                     const val = parseInt(e.target.value, 10);
                                     if (!isNaN(val) && val > 0) {
-                                        setAutoPolishFrequency(val);
+                                        updateConfig({ autoPolishFrequency: val });
                                     }
                                 }}
                                 disabled={disabled}

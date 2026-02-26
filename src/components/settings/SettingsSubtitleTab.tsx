@@ -1,35 +1,26 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '../Switch';
+import { AppConfig } from '../../types/transcript';
 
 interface SettingsSubtitleTabProps {
     lockWindow: boolean;
-    setLockWindow: (enabled: boolean) => void;
     alwaysOnTop: boolean;
-    setAlwaysOnTop: (enabled: boolean) => void;
     startOnLaunch: boolean;
-    setStartOnLaunch: (enabled: boolean) => void;
     captionWindowWidth: number;
-    setCaptionWindowWidth: (width: number) => void;
     captionFontSize: number;
-    setCaptionFontSize: (size: number) => void;
     captionFontColor: string;
-    setCaptionFontColor: (color: string) => void;
+    updateConfig: (config: Partial<AppConfig>) => void;
 }
 
 export function SettingsSubtitleTab({
     lockWindow,
-    setLockWindow,
     alwaysOnTop,
-    setAlwaysOnTop,
     startOnLaunch,
-    setStartOnLaunch,
     captionWindowWidth,
-    setCaptionWindowWidth,
     captionFontSize,
-    setCaptionFontSize,
     captionFontColor,
-    setCaptionFontColor
+    updateConfig
 }: SettingsSubtitleTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -47,7 +38,7 @@ export function SettingsSubtitleTab({
                     </div>
                     <Switch
                         checked={startOnLaunch}
-                        onChange={setStartOnLaunch}
+                        onChange={(enabled) => updateConfig({ startOnLaunch: enabled })}
                     />
                 </div>
             </div>
@@ -64,7 +55,7 @@ export function SettingsSubtitleTab({
                     </div>
                     <Switch
                         checked={lockWindow}
-                        onChange={setLockWindow}
+                        onChange={(enabled) => updateConfig({ lockWindow: enabled })}
                     />
                 </div>
             </div>
@@ -81,7 +72,7 @@ export function SettingsSubtitleTab({
                     </div>
                     <Switch
                         checked={alwaysOnTop}
-                        onChange={setAlwaysOnTop}
+                        onChange={(enabled) => updateConfig({ alwaysOnTop: enabled })}
                     />
                 </div>
             </div>
@@ -98,7 +89,7 @@ export function SettingsSubtitleTab({
                             max="1600"
                             step="50"
                             value={captionWindowWidth}
-                            onChange={(e) => setCaptionWindowWidth(Number(e.target.value))}
+                            onChange={(e) => updateConfig({ captionWindowWidth: Number(e.target.value) })}
                             className="settings-input"
                             style={{ width: '100px' }}
                         />
@@ -118,7 +109,7 @@ export function SettingsSubtitleTab({
                             max="72"
                             step="1"
                             value={captionFontSize}
-                            onChange={(e) => setCaptionFontSize(Number(e.target.value))}
+                            onChange={(e) => updateConfig({ captionFontSize: Number(e.target.value) })}
                             className="settings-input"
                             style={{ width: '100px' }}
                         />
@@ -145,7 +136,7 @@ export function SettingsSubtitleTab({
                             <input
                                 type="color"
                                 value={captionFontColor}
-                                onChange={(e) => setCaptionFontColor(e.target.value)}
+                                onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
                                 aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
                                 style={{
                                     width: '150%',
@@ -161,7 +152,7 @@ export function SettingsSubtitleTab({
                         <input
                             type="text"
                             value={captionFontColor}
-                            onChange={(e) => setCaptionFontColor(e.target.value)}
+                            onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
                             placeholder="#RRGGBB"
                             maxLength={7}
                             aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}

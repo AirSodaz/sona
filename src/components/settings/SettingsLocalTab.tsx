@@ -6,21 +6,16 @@ import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { RestoreIcon } from '../Icons';
+import { AppConfig } from '../../types/transcript';
 
 interface SettingsLocalTabProps {
     offlineModelPath: string;
-    setOfflineModelPath: (path: string) => void;
     punctuationModelPath: string;
-    setPunctuationModelPath: (path: string) => void;
     vadModelPath: string;
-    setVadModelPath: (path: string) => void;
     ctcModelPath: string;
-    setCtcModelPath: (path: string) => void;
     vadBufferSize: number;
-    setVadBufferSize: (size: number) => void;
     maxConcurrent: number;
-    setMaxConcurrent: (size: number) => void;
-    handleBrowse: (type: 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
+    updateConfig: (config: Partial<AppConfig>) => void;
 
     // ITN Props
     itnRulesOrder: string[];
@@ -31,8 +26,6 @@ interface SettingsLocalTabProps {
     setEnableITN: (enabled: boolean) => void;
     installedITNModels: Set<string>;
 
-    // downloadingId: string | null;
-    // progress: number;
     downloads: Record<string, { progress: number; status: string }>;
     onDownloadITN: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
@@ -42,15 +35,13 @@ interface SettingsLocalTabProps {
 
 export function SettingsLocalTab({
     offlineModelPath,
-    setOfflineModelPath,
     punctuationModelPath,
-    setPunctuationModelPath,
     vadModelPath,
-    setVadModelPath,
     ctcModelPath,
-    setCtcModelPath,
     vadBufferSize,
-    setVadBufferSize,
+    maxConcurrent,
+    updateConfig,
+
     itnRulesOrder,
     setItnRulesOrder,
     enabledITNModels,
@@ -61,8 +52,6 @@ export function SettingsLocalTab({
     downloads,
     onDownloadITN,
     onCancelDownload,
-    maxConcurrent,
-    setMaxConcurrent,
     installedModels,
     onRestoreDefaults
 }: SettingsLocalTabProps): React.JSX.Element {
@@ -71,9 +60,9 @@ export function SettingsLocalTab({
 
     const handleToggle = async (type: 'punctuation' | 'vad' | 'ctc', checked: boolean) => {
         if (!checked) {
-            if (type === 'punctuation') setPunctuationModelPath('');
-            else if (type === 'vad') setVadModelPath('');
-            else if (type === 'ctc') setCtcModelPath('');
+            if (type === 'punctuation') updateConfig({ punctuationModelPath: '' });
+            else if (type === 'vad') updateConfig({ vadModelPath: '' });
+            else if (type === 'ctc') updateConfig({ ctcModelPath: '' });
             return;
         }
 
@@ -86,9 +75,9 @@ export function SettingsLocalTab({
 
             try {
                 const path = await modelService.getModelPath(model.id);
-                if (type === 'punctuation') setPunctuationModelPath(path);
-                else if (type === 'vad') setVadModelPath(path);
-                else if (type === 'ctc') setCtcModelPath(path);
+                if (type === 'punctuation') updateConfig({ punctuationModelPath: path });
+                else if (type === 'vad') updateConfig({ vadModelPath: path });
+                else if (type === 'ctc') updateConfig({ ctcModelPath: path });
             } catch (e) {
                 console.error(`Failed to get path for ${type} model`, e);
             }
@@ -110,7 +99,6 @@ export function SettingsLocalTab({
                 if (model.type === 'offline') {
                     const path = await modelService.getModelPath(model.id);
                     // Simple check if paths match (might need normalization in real world, but strict equality for now)
-                    // On Windows, paths might differ by slashes, but usually consistency is maintained if set via the same service.
                     if (path === offlineModelPath) {
                         setSelectedOfflineModelId(model.id);
                         return;
@@ -128,7 +116,7 @@ export function SettingsLocalTab({
         setSelectedOfflineModelId(modelId);
         try {
             const path = await modelService.getModelPath(modelId);
-            setOfflineModelPath(path);
+            updateConfig({ offlineModelPath: path });
         } catch (e) {
             console.error('Failed to get offline model path', e);
         }
@@ -201,7 +189,7 @@ export function SettingsLocalTab({
                         type="number"
                         className="settings-input"
                         value={vadBufferSize}
-                        onChange={(e) => setVadBufferSize(Number(e.target.value))}
+                        onChange={(e) => updateConfig({ vadBufferSize: Number(e.target.value) })}
                         min={0}
                         max={30}
                         step={0.5}
@@ -224,7 +212,7 @@ export function SettingsLocalTab({
                         onChange={(e) => {
                             const val = Number(e.target.value);
                             if (val > 0) {
-                                setMaxConcurrent(val);
+                                updateConfig({ maxConcurrent: val });
                             }
                         }}
                         min={1}

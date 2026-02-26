@@ -12,17 +12,12 @@ vi.mock('react-i18next', () => ({
 describe('SettingsSubtitleTab', () => {
     const defaultProps = {
         lockWindow: false,
-        setLockWindow: vi.fn(),
         alwaysOnTop: false,
-        setAlwaysOnTop: vi.fn(),
         startOnLaunch: false,
-        setStartOnLaunch: vi.fn(),
         captionWindowWidth: 1000,
-        setCaptionWindowWidth: vi.fn(),
         captionFontSize: 24,
-        setCaptionFontSize: vi.fn(),
         captionFontColor: '#ffffff',
-        setCaptionFontColor: vi.fn(),
+        updateConfig: vi.fn(),
     };
 
     it('renders all controls', () => {
@@ -51,13 +46,13 @@ describe('SettingsSubtitleTab', () => {
         expect(widthRange).toBeNull();
     });
 
-    it('calls setCaptionWindowWidth when inputs change', () => {
+    it('calls updateConfig when inputs change', () => {
         render(<SettingsSubtitleTab {...defaultProps} />);
 
         const numberInput = screen.getByDisplayValue('1000');
 
         fireEvent.change(numberInput, { target: { value: '1200' } });
-        expect(defaultProps.setCaptionWindowWidth).toHaveBeenCalledWith(1200);
+        expect(defaultProps.updateConfig).toHaveBeenCalledWith({ captionWindowWidth: 1200 });
     });
 
     it('renders font size input with correct classes', () => {

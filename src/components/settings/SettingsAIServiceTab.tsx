@@ -8,22 +8,18 @@ interface SettingsAIServiceTabProps {
     aiServiceType: string;
     setAiServiceType: (type: string) => void;
     aiBaseUrl: string;
-    setAiBaseUrl: (url: string) => void;
     aiApiKey: string;
-    setAiApiKey: (key: string) => void;
     aiModel: string;
-    setAiModel: (model: string) => void;
+    updateAiServiceSetting: (field: 'baseUrl' | 'apiKey' | 'model', value: string) => void;
 }
 
 export function SettingsAIServiceTab({
     aiServiceType,
     setAiServiceType,
     aiBaseUrl,
-    setAiBaseUrl,
     aiApiKey,
-    setAiApiKey,
     aiModel,
-    setAiModel
+    updateAiServiceSetting
 }: SettingsAIServiceTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -60,7 +56,7 @@ export function SettingsAIServiceTab({
                       // If current model is in list or empty, use dropdown
                       setIsManualEntry(false);
                       if (!aiModel) {
-                          setAiModel(models[0]);
+                          updateAiServiceSetting('model', models[0]);
                       }
                  }
             } else {
@@ -138,7 +134,7 @@ export function SettingsAIServiceTab({
                     type="text"
                     className="settings-input"
                     value={aiBaseUrl}
-                    onChange={(e) => setAiBaseUrl(e.target.value)}
+                    onChange={(e) => updateAiServiceSetting('baseUrl', e.target.value)}
                     placeholder="https://api.openai.com/v1"
                 />
             </div>
@@ -149,7 +145,7 @@ export function SettingsAIServiceTab({
                     type="password"
                     className="settings-input"
                     value={aiApiKey}
-                    onChange={(e) => setAiApiKey(e.target.value)}
+                    onChange={(e) => updateAiServiceSetting('apiKey', e.target.value)}
                     placeholder="sk-..."
                 />
             </div>
@@ -170,7 +166,7 @@ export function SettingsAIServiceTab({
                                     if (val === '__manual__') {
                                         setIsManualEntry(true);
                                     } else {
-                                        setAiModel(val);
+                                        updateAiServiceSetting('model', val);
                                     }
                                 }}
                                 options={[
@@ -184,7 +180,7 @@ export function SettingsAIServiceTab({
                                 type="text"
                                 className="settings-input"
                                 value={aiModel}
-                                onChange={(e) => setAiModel(e.target.value)}
+                                onChange={(e) => updateAiServiceSetting('model', e.target.value)}
                                 placeholder="gpt-4o"
                             />
                         )}

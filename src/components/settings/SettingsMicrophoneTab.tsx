@@ -5,6 +5,7 @@ import { Switch } from '../Switch';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { AppConfig } from '../../types/transcript';
 
 interface AudioDevice {
     name: string;
@@ -12,20 +13,16 @@ interface AudioDevice {
 
 interface SettingsMicrophoneTabProps {
     microphoneId: string;
-    setMicrophoneId: (id: string) => void;
     systemAudioDeviceId: string;
-    setSystemAudioDeviceId: (id: string) => void;
     muteDuringRecording: boolean;
-    setMuteDuringRecording: (enabled: boolean) => void;
+    updateConfig: (config: Partial<AppConfig>) => void;
 }
 
 export function SettingsMicrophoneTab({
     microphoneId,
-    setMicrophoneId,
     systemAudioDeviceId,
-    setSystemAudioDeviceId,
     muteDuringRecording,
-    setMuteDuringRecording
+    updateConfig
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
@@ -472,7 +469,7 @@ export function SettingsMicrophoneTab({
                         <Dropdown
                             id="settings-mic-select"
                             value={microphoneId}
-                            onChange={setMicrophoneId}
+                            onChange={(id) => updateConfig({ microphoneId: id })}
                             options={devices}
                         />
                     </div>
@@ -507,7 +504,7 @@ export function SettingsMicrophoneTab({
                         <Dropdown
                             id="settings-system-audio-select"
                             value={systemAudioDeviceId}
-                            onChange={setSystemAudioDeviceId}
+                            onChange={(id) => updateConfig({ systemAudioDeviceId: id })}
                             options={systemDevices}
                         />
                     </div>
@@ -544,7 +541,7 @@ export function SettingsMicrophoneTab({
                     </div>
                     <Switch
                         checked={muteDuringRecording}
-                        onChange={setMuteDuringRecording}
+                        onChange={(enabled) => updateConfig({ muteDuringRecording: enabled })}
                     />
                 </div>
             </div>

@@ -122,11 +122,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const alwaysOnTop = config.alwaysOnTop ?? true;
     const enableTimelineRef = useRef(enableTimeline);
 
-    const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
-    const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
-    const setAutoPolish = useCallback((val: boolean) => setConfig({ autoPolish: val }), [setConfig]);
-    const setAutoPolishFrequency = useCallback((val: number) => setConfig({ autoPolishFrequency: val }), [setConfig]);
-
     // Sync ref
     useEffect(() => {
         enableTimelineRef.current = enableTimeline;
@@ -906,13 +901,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
             <TranscriptionOptions
                 enableTimeline={enableTimeline}
-                setEnableTimeline={setEnableTimeline}
                 language={language}
-                setLanguage={setLanguage}
                 autoPolish={autoPolish}
-                setAutoPolish={setAutoPolish}
                 autoPolishFrequency={autoPolishFrequency}
-                setAutoPolishFrequency={setAutoPolishFrequency}
+                updateConfig={setConfig}
                 disabled={isRecording}
             />
         </div>

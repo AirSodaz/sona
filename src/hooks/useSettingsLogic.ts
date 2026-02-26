@@ -39,7 +39,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }, [initialTab, _isOpen]);
 
-    // We read directly from the config store
+    // We read directly from the config store for ITN state
     const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || []));
     const [enableITN, setEnableITNState] = useState<boolean>(config.enableITN ?? true);
 
@@ -78,16 +78,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     // Helper to update config and persist immediately
     const updateConfig = (updates: Partial<typeof config>) => {
         setConfig(updates);
-        // Persistence is now handled by useAppInitialization
+        // Persistence is handled by useAppInitialization
     };
-
-    // Setters that update store immediately
-    const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
-    const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
-    const setCtcModelPath = (path: string) => updateConfig({ ctcModelPath: path });
-    const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
-    const setVadBufferSize = (size: number) => updateConfig({ vadBufferSize: size });
-    const setMaxConcurrent = (size: number) => updateConfig({ maxConcurrent: size });
 
     const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
         const newOrder = typeof action === 'function'
@@ -122,24 +114,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     };
 
-    const setTheme = (theme: 'auto' | 'light' | 'dark') => updateConfig({ theme: theme });
-    const setFont = (font: string) => updateConfig({ font: font as any });
-
-    const setMicrophoneId = (id: string) => updateConfig({ microphoneId: id });
-    const setSystemAudioDeviceId = (id: string) => updateConfig({ systemAudioDeviceId: id });
-    const setMuteDuringRecording = (enabled: boolean) => updateConfig({ muteDuringRecording: enabled });
-
-    const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
-    const setAutoCheckUpdates = (enabled: boolean) => updateConfig({ autoCheckUpdates: enabled });
-
-    const setLockWindow = (enabled: boolean) => updateConfig({ lockWindow: enabled });
-    const setAlwaysOnTop = (enabled: boolean) => updateConfig({ alwaysOnTop: enabled });
-
-    const setStartOnLaunch = (enabled: boolean) => updateConfig({ startOnLaunch: enabled });
-    const setCaptionWindowWidth = (width: number) => updateConfig({ captionWindowWidth: width });
-    const setCaptionFontSize = (size: number) => updateConfig({ captionFontSize: size });
-    const setCaptionFontColor = (color: string) => updateConfig({ captionFontColor: color });
-
     const setAiServiceType = (type: string) => {
         const currentType = config.aiServiceType || 'openai';
         const aiServices = config.aiServices || {};
@@ -168,48 +142,24 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    const setAiBaseUrl = (url: string) => {
+    const updateAiServiceSetting = (field: 'baseUrl' | 'apiKey' | 'model', value: string) => {
         const currentType = config.aiServiceType || 'openai';
         const aiServices = config.aiServices || {};
         const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
 
+        const updateObj: any = {};
+        if (field === 'baseUrl') updateObj.aiBaseUrl = value;
+        if (field === 'apiKey') updateObj.aiApiKey = value;
+        if (field === 'model') updateObj.aiModel = value;
+
         updateConfig({
-            aiBaseUrl: url,
+            ...updateObj,
             aiServices: {
                 ...aiServices,
-                [currentType]: { ...currentSettings, baseUrl: url }
+                [currentType]: { ...currentSettings, [field]: value }
             }
         });
     };
-
-    const setAiApiKey = (key: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
-
-        updateConfig({
-            aiApiKey: key,
-            aiServices: {
-                ...aiServices,
-                [currentType]: { ...currentSettings, apiKey: key }
-            }
-        });
-    };
-
-    const setAiModel = (model: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
-
-        updateConfig({
-            aiModel: model,
-            aiServices: {
-                ...aiServices,
-                [currentType]: { ...currentSettings, model: model }
-            }
-        });
-    };
-
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
@@ -236,13 +186,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
                     if (type === 'offline') {
-                        setOfflineModelPath(path);
+                        updateConfig({ offlineModelPath: path });
                     } else if (type === 'vad') {
-                        setVadModelPath(path);
+                        updateConfig({ vadModelPath: path });
                     } else if (type === 'ctc') {
-                        setCtcModelPath(path);
+                        updateConfig({ ctcModelPath: path });
                     } else {
-                        setPunctuationModelPath(path);
+                        updateConfig({ punctuationModelPath: path });
                     }
                 }
             }
@@ -265,13 +215,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     function setModelPathByType(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
         if (type === 'offline') {
-            setOfflineModelPath(path);
+            updateConfig({ offlineModelPath: path });
         } else if (type === 'vad') {
-            setVadModelPath(path);
+            updateConfig({ vadModelPath: path });
         } else if (type === 'ctc') {
-            setCtcModelPath(path);
+            updateConfig({ ctcModelPath: path });
         } else {
-            setPunctuationModelPath(path);
+            updateConfig({ punctuationModelPath: path });
         }
     }
 
@@ -377,16 +327,16 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             const deletedPath = await modelService.getModelPath(model.id);
             // Streaming path removed
             if (config.offlineModelPath === deletedPath) {
-                setOfflineModelPath('');
+                updateConfig({ offlineModelPath: '' });
             }
             if (config.punctuationModelPath === deletedPath) {
-                setPunctuationModelPath('');
+                updateConfig({ punctuationModelPath: '' });
             }
             if (config.vadModelPath === deletedPath) {
-                setVadModelPath('');
+                updateConfig({ vadModelPath: '' });
             }
             if (config.ctcModelPath === deletedPath) {
-                setCtcModelPath('');
+                updateConfig({ ctcModelPath: '' });
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
@@ -471,59 +421,38 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         appLanguage: config.appLanguage || 'auto',
         setAppLanguage,
         theme: config.theme || 'auto',
-        setTheme,
         font: config.font || 'system',
-        setFont,
         microphoneId: config.microphoneId || 'default',
-        setMicrophoneId,
         systemAudioDeviceId: config.systemAudioDeviceId || 'default',
-        setSystemAudioDeviceId,
         muteDuringRecording: config.muteDuringRecording || false,
-        setMuteDuringRecording,
         minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
-        setMinimizeToTrayOnExit,
 
         autoCheckUpdates: config.autoCheckUpdates ?? true,
-        setAutoCheckUpdates,
 
         lockWindow: config.lockWindow ?? false,
-        setLockWindow,
         alwaysOnTop: config.alwaysOnTop ?? true,
-        setAlwaysOnTop,
 
         startOnLaunch: config.startOnLaunch ?? false,
-        setStartOnLaunch,
         captionWindowWidth: config.captionWindowWidth ?? 800,
-        setCaptionWindowWidth,
         captionFontSize: config.captionFontSize ?? 24,
-        setCaptionFontSize,
         captionFontColor: config.captionFontColor || '#ffffff',
-        setCaptionFontColor,
 
         aiServiceType: config.aiServiceType || 'openai',
         setAiServiceType,
         aiBaseUrl: config.aiBaseUrl || '',
-        setAiBaseUrl,
         aiApiKey: config.aiApiKey || '',
-        setAiApiKey,
         aiModel: config.aiModel || '',
-        setAiModel,
+        updateAiServiceSetting,
 
         // streamingModelPath removed
         offlineModelPath: config.offlineModelPath,
-        setOfflineModelPath,
         punctuationModelPath: config.punctuationModelPath || '',
-        setPunctuationModelPath,
         vadModelPath: config.vadModelPath || '',
-        setVadModelPath,
         ctcModelPath: config.ctcModelPath || '',
-        setCtcModelPath,
 
         vadBufferSize: config.vadBufferSize || 5,
-        setVadBufferSize,
 
         maxConcurrent: config.maxConcurrent || 2,
-        setMaxConcurrent,
 
         itnRulesOrder: config.itnRulesOrder || ['itn-zh-number'],
         setItnRulesOrder,
@@ -545,6 +474,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         handleLoad,
         handleDelete,
         isModelSelected,
-        restoreDefaultModelSettings
+        restoreDefaultModelSettings,
+
+        // Expose generic updateConfig for all other settings
+        updateConfig
     };
 }

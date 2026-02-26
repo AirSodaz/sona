@@ -91,7 +91,7 @@ describe('useSettingsLogic', () => {
         const newUrl = 'https://custom.openai.com';
 
         act(() => {
-            result.current.setAiBaseUrl(newUrl);
+            result.current.updateAiServiceSetting('baseUrl', newUrl);
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
