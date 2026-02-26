@@ -60,7 +60,7 @@ const ContentEditable = React.forwardRef<HTMLDivElement, {
     onBlur: () => void;
     onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
     className?: string;
-}>(({ html, onChange, onBlur, onKeyDown, className }, ref) => {
+}>(function ContentEditable({ html, onChange, onBlur, onKeyDown, className }, ref) {
     const divRef = useRef<HTMLDivElement>(null);
 
     // Sync html prop to div
@@ -190,9 +190,15 @@ function SegmentItemComponent({
             onSave(segment.id, segment.text);
         } else if ((e.ctrlKey || e.metaKey)) {
              const key = e.key.toLowerCase();
-             if (['b', 'i', 'u'].includes(key)) {
+             let command = '';
+             switch (key) {
+                 case 'b': command = 'bold'; break;
+                 case 'i': command = 'italic'; break;
+                 case 'u': command = 'underline'; break;
+             }
+
+             if (command) {
                  e.preventDefault();
-                 const command = key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline';
                  document.execCommand(command);
              }
         }

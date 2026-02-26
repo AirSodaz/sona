@@ -47,7 +47,7 @@ function formatDate(timestamp: number): string {
     return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
 }
 
-const HistoryItemComponent = ({
+function HistoryItemComponent({
     item,
     onLoad,
     onDelete,
@@ -55,7 +55,7 @@ const HistoryItemComponent = ({
     isSelectionMode = false,
     isSelected = false,
     onToggleSelection
-}: HistoryItemProps) => {
+}: HistoryItemProps): React.JSX.Element {
     const { t } = useTranslation();
 
     const handleClick = (e: React.MouseEvent) => {
@@ -175,6 +175,6 @@ const HistoryItemComponent = ({
             )}
         </div>
     );
-};
+}
 
 export const HistoryItem = React.memo(HistoryItemComponent);
