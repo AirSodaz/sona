@@ -202,7 +202,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         if (!item || item.status !== 'pending') return;
 
         const config = useTranscriptStore.getState().config;
-        const enableTimeline = config.enableTimeline ?? true;
+        const enableTimeline = config.enableTimeline ?? false;
         const language = config.language;
 
         // Update status to processing
@@ -234,7 +234,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         if (currentItem) {
                             // Process the buffered segments
                             const config = useTranscriptStore.getState().config;
-                            const enableTimeline = config.enableTimeline ?? true;
+                            const enableTimeline = config.enableTimeline ?? false;
                             const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
 
                             // Append to existing segments
