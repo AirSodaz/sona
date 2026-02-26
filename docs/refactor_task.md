@@ -16,10 +16,10 @@
   - [ ] 实现标点符号模型集成 (Punctuation)。(注：当前 `sherpa-onnx` 0.1.8 crate 未开放 Punctuation FFI 接口，暂缓集成)
   - [x] 移植逆文本正则化 (ITN/nzh，中文数字转换) 逻辑。
 
-- [ ] 4. **Tauri 主应用集成 (Managed State & Commands)**
-  - [ ] 设计状态机：将 Recognizer 实例注入并挂载到 Tauri `State`。
-  - [ ] 实现 `tauri::command`：供前端调用启动、停止、配置模型（替代原有基于 IPC 及子进程启动的方式）。
-  - [ ] 实现事件机制：将流式音频识别结果、状态变更等，通过 `app_handle.emit_all()` 即时推送到前端界面（替代原有写入 stdout JSON 的方式）。
+- [x] 4. **Tauri 主应用集成 (Managed State & Commands)**
+  - [x] 设计状态机：将 Recognizer 实例注入并挂载到 Tauri `State`。
+  - [x] 实现 `tauri::command`：供前端调用启动、停止、配置模型（替代原有基于 IPC 及子进程启动的方式）。
+  - [x] 实现事件机制：将流式音频识别结果、状态变更等，通过 `app_handle.emit_all()` 即时推送到前端界面（替代原有写入 stdout JSON 的方式）。
 
 - [ ] 5. **前端适配与重构 (Frontend Adaptation)**
   - [ ] 移除前端代码中原本通过 `tauri/api/process/Command` 孵化 (spawn) Node/Sidecar 的逻辑。

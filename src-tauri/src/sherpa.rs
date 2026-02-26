@@ -244,6 +244,21 @@ use tokio::sync::Mutex;
 pub struct SherpaState {
     pub recognizer: Mutex<Option<Recognizer>>,
     pub stream: Mutex<Option<SafeStream>>,
+    pub total_samples: Mutex<usize>,
+    pub segment_start_time: Mutex<f64>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSegment {
+    pub id: String,
+    pub text: String,
+    pub start: f64,
+    pub end: f64,
+    pub is_final: bool,
+    pub tokens: Option<Vec<String>>,
+    pub timestamps: Option<Vec<f32>>,
+    pub durations: Option<Vec<f32>>,
 }
 
 #[tauri::command]
@@ -266,6 +281,8 @@ pub async fn start_recognizer(
     
     *state.recognizer.lock().await = Some(recognizer);
     *state.stream.lock().await = stream;
+    *state.total_samples.lock().await = 0;
+    *state.segment_start_time.lock().await = 0.0;
     Ok(())
 }
 
@@ -273,6 +290,8 @@ pub async fn start_recognizer(
 pub async fn stop_recognizer(state: State<'_, SherpaState>) -> Result<(), String> {
     *state.recognizer.lock().await = None;
     *state.stream.lock().await = None;
+    *state.total_samples.lock().await = 0;
+    *state.segment_start_time.lock().await = 0.0;
     Ok(())
 }
 
@@ -284,22 +303,55 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let rec_guard = state.recognizer.lock().await;
     let stream_guard = state.stream.lock().await;
+    let mut total_samples = state.total_samples.lock().await;
+    let mut segment_start = state.segment_start_time.lock().await;
 
     if let (Some(Recognizer { inner: RecognizerInner::Online(r) }), Some(st)) = (rec_guard.as_ref(), stream_guard.as_ref()) {
         st.0.accept_waveform(16000, &samples);
+        *total_samples += samples.len();
+
         while r.is_ready(&st.0) {
             r.decode(&st.0);
         }
         
+        let current_time = *total_samples as f64 / 16000.0;
+        
         if let Some(result) = r.get_result(&st.0) {
             if !result.text.trim().is_empty() {
-                // Emit final and partial results, for simple testing emit raw text
-                let _ = app.emit("recognizer-event", &result.text); 
+                let segment = TranscriptSegment {
+                    id: uuid::Uuid::new_v4().to_string(), // Requires uuid crate
+                    text: result.text.clone(),
+                    start: *segment_start,
+                    end: current_time,
+                    is_final: false,
+                    tokens: Some(result.tokens.clone()),
+                    timestamps: result.timestamps.clone(),
+                    durations: None,
+                };
+                let _ = app.emit("recognizer-output", &segment); 
             }
         }
         
         if r.is_endpoint(&st.0) {
+            // Re-get final result
+            if let Some(result) = r.get_result(&st.0) {
+                if !result.text.trim().is_empty() {
+                    let segment = TranscriptSegment {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        text: result.text.clone(),
+                        start: *segment_start,
+                        end: current_time,
+                        is_final: true,
+                        tokens: Some(result.tokens),
+                        timestamps: result.timestamps,
+                        durations: None,
+                    };
+                    let _ = app.emit("recognizer-output", &segment); 
+                }
+            }
+
             r.reset(&st.0);
+            *segment_start = current_time;
         }
     }
     Ok(())
@@ -310,9 +362,10 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     _app: AppHandle<R>,
     state: State<'_, SherpaState>,
     file_path: String,
-) -> Result<String, String> {
+) -> Result<Vec<TranscriptSegment>, String> {
     let samples = crate::pipeline::extract_and_resample_audio(&file_path, 16000)?;
     let rec_guard = state.recognizer.lock().await;
+    let total_duration = samples.len() as f64 / 16000.0;
     
     if let Some(Recognizer { inner: RecognizerInner::Offline(r) }) = rec_guard.as_ref() {
         let stream = r.create_stream();
@@ -320,19 +373,73 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         r.decode(&stream);
         
         if let Some(result) = stream.get_result() {
-            return Ok(result.text);
+            let segment = TranscriptSegment {
+                id: uuid::Uuid::new_v4().to_string(),
+                text: result.text,
+                start: 0.0,
+                end: total_duration,
+                is_final: true,
+                tokens: Some(result.tokens),
+                timestamps: result.timestamps,
+                durations: None,
+            };
+            return Ok(vec![segment]);
         }
     }
     // Alternatively fallback to online recognizer for batch
     if let Some(Recognizer { inner: RecognizerInner::Online(r) }) = rec_guard.as_ref() {
         let stream = r.create_stream();
         stream.accept_waveform(16000, &samples);
-        while r.is_ready(&stream) {
-            r.decode(&stream);
+        let mut segments = Vec::new();
+        let mut segment_start = 0.0;
+        let mut current_samples = 0;
+        
+        // Simulating decoding by chunks
+        let chunk_size = 16000; // 1s
+        for chunk in samples.chunks(chunk_size) {
+            stream.accept_waveform(16000, chunk);
+            current_samples += chunk.len();
+            while r.is_ready(&stream) {
+                r.decode(&stream);
+            }
+            if r.is_endpoint(&stream) {
+                let current_time = current_samples as f64 / 16000.0;
+                if let Some(result) = r.get_result(&stream) {
+                    if !result.text.trim().is_empty() {
+                        segments.push(TranscriptSegment {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            text: result.text,
+                            start: segment_start,
+                            end: current_time,
+                            is_final: true,
+                            tokens: Some(result.tokens),
+                            timestamps: result.timestamps,
+                            durations: None,
+                        });
+                    }
+                }
+                r.reset(&stream);
+                segment_start = current_time;
+            }
         }
+        
+        // Finalize remaining
         if let Some(result) = r.get_result(&stream) {
-            return Ok(result.text);
+            if !result.text.trim().is_empty() {
+                segments.push(TranscriptSegment {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    text: result.text,
+                    start: segment_start,
+                    end: total_duration,
+                    is_final: true,
+                    tokens: Some(result.tokens),
+                    timestamps: result.timestamps,
+                    durations: None,
+                });
+            }
         }
+        
+        return Ok(segments);
     }
     
     Err("Recognizer not initialized or failed".to_string())

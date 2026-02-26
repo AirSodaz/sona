@@ -545,6 +545,8 @@ pub fn run() {
         .manage(sherpa::SherpaState {
             recognizer: tokio::sync::Mutex::new(None),
             stream: tokio::sync::Mutex::new(None),
+            total_samples: tokio::sync::Mutex::new(0),
+            segment_start_time: tokio::sync::Mutex::new(0.0),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

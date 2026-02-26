@@ -77,6 +77,9 @@ jobs:
           tar -xjf sherpa-onnx-win.tar.bz2
           echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}\sherpa-onnx-v1.12.27-win-x64-shared-MD-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Configure RUSTFLAGS
+        run: echo "RUSTFLAGS=-C link-arg=-Wl,-rpath,$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
+
       - name: Build the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
