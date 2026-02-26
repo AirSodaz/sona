@@ -37,33 +37,6 @@ export function SettingsAIServiceTab({
         setAiServiceType(type);
         setAvailableModels([]);
         setIsManualEntry(false);
-
-        // Auto-fill Base URL based on selection
-        switch (type) {
-            case 'openai':
-                setAiBaseUrl('https://api.openai.com/v1');
-                break;
-            case 'anthropic':
-                setAiBaseUrl('https://api.anthropic.com');
-                break;
-            case 'ollama':
-                setAiBaseUrl('http://localhost:11434/v1');
-                break;
-            case 'gemini':
-                setAiBaseUrl('https://generativelanguage.googleapis.com');
-                break;
-            case 'deepseek':
-                setAiBaseUrl('https://api.deepseek.com');
-                break;
-            case 'kimi':
-                setAiBaseUrl('https://api.moonshot.cn/v1');
-                break;
-            case 'siliconflow':
-                setAiBaseUrl('https://api.siliconflow.cn/v1');
-                break;
-            default:
-                break;
-        }
     };
 
     const fetchModels = async () => {
@@ -147,13 +120,13 @@ export function SettingsAIServiceTab({
                         value={aiServiceType}
                         onChange={handleServiceTypeChange}
                         options={[
-                            { value: 'openai', label: t('settings.ai.services.openai') || 'OpenAI' },
-                            { value: 'anthropic', label: t('settings.ai.services.anthropic') || 'Anthropic' },
-                            { value: 'ollama', label: t('settings.ai.services.ollama') || 'Ollama' },
-                            { value: 'gemini', label: t('settings.ai.services.gemini') || 'Google Gemini' },
-                            { value: 'deepseek', label: t('settings.ai.services.deepseek') || 'DeepSeek' },
-                            { value: 'kimi', label: t('settings.ai.services.kimi') || 'Kimi' },
-                            { value: 'siliconflow', label: t('settings.ai.services.siliconflow') || 'SiliconFlow' }
+                            { value: 'openai', label: 'OpenAI' },
+                            { value: 'anthropic', label: 'Anthropic' },
+                            { value: 'ollama', label: 'Ollama' },
+                            { value: 'gemini', label: 'Google Gemini' },
+                            { value: 'deepseek', label: 'DeepSeek' },
+                            { value: 'kimi', label: 'Kimi' },
+                            { value: 'siliconflow', label: 'SiliconFlow' }
                         ]}
                     />
                 </div>

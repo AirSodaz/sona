@@ -45,7 +45,7 @@ describe('SettingsAIServiceTab', () => {
         expect(screen.getByText('settings.ai.test_connection')).toBeDefined();
     });
 
-    it('updates Base URL when Service Type changes', async () => {
+    it('updates Service Type when changed', async () => {
         const setAiServiceType = vi.fn();
         const setAiBaseUrl = vi.fn();
 
@@ -67,32 +67,7 @@ describe('SettingsAIServiceTab', () => {
         fireEvent.click(anthropicOption);
 
         expect(setAiServiceType).toHaveBeenCalledWith('anthropic');
-        expect(setAiBaseUrl).toHaveBeenCalledWith('https://api.anthropic.com');
-    });
-
-    it('updates Base URL for Ollama', async () => {
-        const setAiServiceType = vi.fn();
-        const setAiBaseUrl = vi.fn();
-
-        render(
-            <SettingsAIServiceTab
-                {...defaultProps}
-                aiServiceType="openai"
-                setAiServiceType={setAiServiceType}
-                setAiBaseUrl={setAiBaseUrl}
-            />
-        );
-
-        // Open Dropdown
-        const trigger = screen.getByText('OpenAI');
-        fireEvent.click(trigger);
-
-        // Find Ollama option
-        const ollamaOption = screen.getByText('Ollama');
-        fireEvent.click(ollamaOption);
-
-        expect(setAiServiceType).toHaveBeenCalledWith('ollama');
-        expect(setAiBaseUrl).toHaveBeenCalledWith('http://localhost:11434/v1');
+        // Base URL update is now handled by useSettingsLogic, not the component directly
     });
 
     it('calls invoke when Test Connection is clicked', async () => {

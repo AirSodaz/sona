@@ -248,6 +248,7 @@ const DEFAULT_CONFIG: AppConfig = {
     captionWindowWidth: 800,
     captionFontSize: 24,
     captionFontColor: '#ffffff',
+    aiServices: {},
     translationLanguage: 'zh',
     autoPolish: false,
     autoPolishFrequency: 5,
