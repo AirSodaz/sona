@@ -5,31 +5,28 @@ import { Switch } from '../Switch';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { AppConfig } from '../../types/transcript';
 
 interface AudioDevice {
     name: string;
 }
 
 interface SettingsMicrophoneTabProps {
-    microphoneId: string;
-    setMicrophoneId: (id: string) => void;
-    systemAudioDeviceId: string;
-    setSystemAudioDeviceId: (id: string) => void;
-    muteDuringRecording: boolean;
-    setMuteDuringRecording: (enabled: boolean) => void;
+    config: AppConfig;
+    updateConfig: (updates: Partial<AppConfig>) => void;
 }
 
 export function SettingsMicrophoneTab({
-    microphoneId,
-    setMicrophoneId,
-    systemAudioDeviceId,
-    setSystemAudioDeviceId,
-    muteDuringRecording,
-    setMuteDuringRecording
+    config,
+    updateConfig
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
     const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
+
+    const microphoneId = config.microphoneId || 'default';
+    const systemAudioDeviceId = config.systemAudioDeviceId || 'default';
+    const muteDuringRecording = config.muteDuringRecording || false;
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -472,7 +469,7 @@ export function SettingsMicrophoneTab({
                         <Dropdown
                             id="settings-mic-select"
                             value={microphoneId}
-                            onChange={setMicrophoneId}
+                            onChange={(val) => updateConfig({ microphoneId: val })}
                             options={devices}
                         />
                     </div>
@@ -507,7 +504,7 @@ export function SettingsMicrophoneTab({
                         <Dropdown
                             id="settings-system-audio-select"
                             value={systemAudioDeviceId}
-                            onChange={setSystemAudioDeviceId}
+                            onChange={(val) => updateConfig({ systemAudioDeviceId: val })}
                             options={systemDevices}
                         />
                     </div>
@@ -544,7 +541,7 @@ export function SettingsMicrophoneTab({
                     </div>
                     <Switch
                         checked={muteDuringRecording}
-                        onChange={setMuteDuringRecording}
+                        onChange={(enabled) => updateConfig({ muteDuringRecording: enabled })}
                     />
                 </div>
             </div>

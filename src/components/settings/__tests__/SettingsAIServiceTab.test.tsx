@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsAIServiceTab } from '../SettingsAIServiceTab';
 import * as tauriApi from '@tauri-apps/api/core';
+import { AppConfig } from '../../../types/transcript';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -15,15 +16,24 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 describe('SettingsAIServiceTab', () => {
-    const defaultProps = {
+    const mockUpdateConfig = vi.fn();
+    const mockChangeAiServiceType = vi.fn();
+
+    const mockConfig: AppConfig = {
+        offlineModelPath: '',
+        language: 'auto',
+        appLanguage: 'auto',
         aiServiceType: 'openai',
-        setAiServiceType: vi.fn(),
         aiBaseUrl: 'https://api.openai.com/v1',
-        setAiBaseUrl: vi.fn(),
         aiApiKey: 'test-key',
-        setAiApiKey: vi.fn(),
         aiModel: 'gpt-4o',
-        setAiModel: vi.fn(),
+        aiServices: {}
+    };
+
+    const defaultProps = {
+        config: mockConfig,
+        updateConfig: mockUpdateConfig,
+        changeAiServiceType: mockChangeAiServiceType
     };
 
     it('renders all fields with correct localization keys', () => {
@@ -46,17 +56,7 @@ describe('SettingsAIServiceTab', () => {
     });
 
     it('updates Service Type when changed', async () => {
-        const setAiServiceType = vi.fn();
-        const setAiBaseUrl = vi.fn();
-
-        render(
-            <SettingsAIServiceTab
-                {...defaultProps}
-                aiServiceType="openai"
-                setAiServiceType={setAiServiceType}
-                setAiBaseUrl={setAiBaseUrl}
-            />
-        );
+        render(<SettingsAIServiceTab {...defaultProps} />);
 
         // Open Dropdown
         const trigger = screen.getByText('OpenAI');
@@ -66,8 +66,7 @@ describe('SettingsAIServiceTab', () => {
         const anthropicOption = screen.getByText('Anthropic');
         fireEvent.click(anthropicOption);
 
-        expect(setAiServiceType).toHaveBeenCalledWith('anthropic');
-        // Base URL update is now handled by useSettingsLogic, not the component directly
+        expect(mockChangeAiServiceType).toHaveBeenCalledWith('anthropic');
     });
 
     it('calls invoke when Test Connection is clicked', async () => {
