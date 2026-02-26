@@ -127,6 +127,13 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
         return null;
     }
 
+    function getTooltipText(): string {
+        if (isExporting) {
+            return t('export.exporting');
+        }
+        return t('export.button');
+    }
+
     const handleExport = async (format: ExportFormat) => {
         if (segments.length === 0) {
             await alert(t('export.no_segments'), {variant: 'info'});
@@ -168,7 +175,7 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             onBlur={handleBlur}
         >
             <div
-                data-tooltip={segments.length === 0 ? t('export.no_segments') : (isExporting ? t('export.exporting') : t('export.button'))}
+                data-tooltip={getTooltipText()}
                 data-tooltip-pos="bottom"
                 style={{ display: 'inline-block' }}
             >
