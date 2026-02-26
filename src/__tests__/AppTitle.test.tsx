@@ -10,6 +10,7 @@ vi.mock('../components/TranscriptEditor', () => ({ TranscriptEditor: () => <div>
 vi.mock('../components/AudioPlayer', () => ({ AudioPlayer: () => <div>AudioPlayer</div> }));
 vi.mock('../components/ExportButton', () => ({ ExportButton: () => <div>ExportButton</div> }));
 vi.mock('../components/TranslateButton', () => ({ TranslateButton: () => <div>TranslateButton</div> }));
+vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/HistoryView', () => ({ HistoryView: () => <div>HistoryView</div> }));

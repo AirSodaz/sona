@@ -5,6 +5,16 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { open } from '@tauri-apps/plugin-dialog';
 
+const DEFAULT_AI_URLS: Record<string, string> = {
+    openai: 'https://api.openai.com/v1',
+    anthropic: 'https://api.anthropic.com',
+    ollama: 'http://localhost:11434/v1',
+    gemini: 'https://generativelanguage.googleapis.com',
+    deepseek: 'https://api.deepseek.com',
+    kimi: 'https://api.moonshot.cn/v1',
+    siliconflow: 'https://api.siliconflow.cn/v1',
+};
+
 /**
  * Custom hook managing the business logic for the Settings dialog.
  *
@@ -130,10 +140,75 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setCaptionFontSize = (size: number) => updateConfig({ captionFontSize: size });
     const setCaptionFontColor = (color: string) => updateConfig({ captionFontColor: color });
 
-    const setAiServiceType = (type: string) => updateConfig({ aiServiceType: type });
-    const setAiBaseUrl = (url: string) => updateConfig({ aiBaseUrl: url });
-    const setAiApiKey = (key: string) => updateConfig({ aiApiKey: key });
-    const setAiModel = (model: string) => updateConfig({ aiModel: model });
+    const setAiServiceType = (type: string) => {
+        const currentType = config.aiServiceType || 'openai';
+        const aiServices = config.aiServices || {};
+
+        // Save current settings
+        const currentSettings = {
+            baseUrl: config.aiBaseUrl || '',
+            apiKey: config.aiApiKey || '',
+            model: config.aiModel || ''
+        };
+        const updatedServices = { ...aiServices, [currentType]: currentSettings };
+
+        // Load new settings
+        const newSettings = updatedServices[type] || {
+            baseUrl: DEFAULT_AI_URLS[type] || '',
+            apiKey: '',
+            model: ''
+        };
+
+        updateConfig({
+            aiServiceType: type,
+            aiBaseUrl: newSettings.baseUrl,
+            aiApiKey: newSettings.apiKey,
+            aiModel: newSettings.model,
+            aiServices: updatedServices
+        });
+    };
+
+    const setAiBaseUrl = (url: string) => {
+        const currentType = config.aiServiceType || 'openai';
+        const aiServices = config.aiServices || {};
+        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
+
+        updateConfig({
+            aiBaseUrl: url,
+            aiServices: {
+                ...aiServices,
+                [currentType]: { ...currentSettings, baseUrl: url }
+            }
+        });
+    };
+
+    const setAiApiKey = (key: string) => {
+        const currentType = config.aiServiceType || 'openai';
+        const aiServices = config.aiServices || {};
+        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
+
+        updateConfig({
+            aiApiKey: key,
+            aiServices: {
+                ...aiServices,
+                [currentType]: { ...currentSettings, apiKey: key }
+            }
+        });
+    };
+
+    const setAiModel = (model: string) => {
+        const currentType = config.aiServiceType || 'openai';
+        const aiServices = config.aiServices || {};
+        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
+
+        updateConfig({
+            aiModel: model,
+            aiServices: {
+                ...aiServices,
+                [currentType]: { ...currentSettings, model: model }
+            }
+        });
+    };
 
 
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {

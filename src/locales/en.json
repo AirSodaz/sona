@@ -239,16 +239,7 @@
             "connection_failed": "Connection failed: ",
             "loading_models": "Loading models...",
             "type_manually": "Type manually...",
-            "back_to_list": "Back to list",
-            "services": {
-                "openai": "OpenAI Compatible",
-                "anthropic": "Anthropic",
-                "ollama": "Ollama",
-                "gemini": "Google Gemini",
-                "deepseek": "DeepSeek",
-                "kimi": "Kimi",
-                "siliconflow": "SiliconFlow"
-            }
+            "back_to_list": "Back to list"
         }
     },
     "shortcuts": {
