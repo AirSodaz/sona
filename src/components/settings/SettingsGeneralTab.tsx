@@ -12,6 +12,8 @@ interface SettingsGeneralTabProps {
     setFont: (font: string) => void;
     minimizeToTrayOnExit: boolean;
     setMinimizeToTrayOnExit: (enabled: boolean) => void;
+    autoCheckUpdates: boolean;
+    setAutoCheckUpdates: (enabled: boolean) => void;
 }
 
 function getFontFamily(fontValue: string): string {
@@ -30,7 +32,9 @@ export function SettingsGeneralTab({
     font,
     setFont,
     minimizeToTrayOnExit,
-    setMinimizeToTrayOnExit
+    setMinimizeToTrayOnExit,
+    autoCheckUpdates,
+    setAutoCheckUpdates
 }: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
@@ -153,6 +157,16 @@ export function SettingsGeneralTab({
                     <Switch
                         checked={minimizeToTrayOnExit}
                         onChange={setMinimizeToTrayOnExit}
+                    />
+                </div>
+            </div>
+
+            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}</div>
+                    <Switch
+                        checked={autoCheckUpdates}
+                        onChange={setAutoCheckUpdates}
                     />
                 </div>
             </div>

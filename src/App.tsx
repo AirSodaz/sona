@@ -14,6 +14,7 @@ import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
+import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
@@ -128,6 +129,7 @@ function App(): React.JSX.Element {
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />
       <GlobalDialog />
       <FirstRunGuide />
+      <UpdateNotification />
     </div>
   );
 }

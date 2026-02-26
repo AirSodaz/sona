@@ -105,4 +105,6 @@ export interface AppConfig {
   autoPolish?: boolean;
   /** Frequency of auto-polishing in segments (for live recording). */
   autoPolishFrequency?: number;
+  /** Whether to automatically check for updates on startup. */
+  autoCheckUpdates?: boolean;
 }
