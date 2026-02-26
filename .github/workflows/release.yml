@@ -73,7 +73,7 @@ jobs:
       - name: Download and extract sherpa-onnx shared libraries (Windows)
         if: startsWith(matrix.platform, 'windows')
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.27/sherpa-onnx-v1.12.27-win-x64-shared-MD-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.27/sherpa-onnx-v1.12.27-win-x64-shared-MT-Release-no-tts.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
           echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}\sherpa-onnx-v1.12.27-win-x64-shared-MD-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 

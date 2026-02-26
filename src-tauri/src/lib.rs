@@ -2,6 +2,7 @@ mod audio;
 mod hardware;
 mod ai;
 pub mod pipeline;
+pub mod sherpa;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -541,6 +542,10 @@ pub fn run() {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
         .manage(audio::AudioState::new())
+        .manage(sherpa::SherpaState {
+            recognizer: tokio::sync::Mutex::new(None),
+            stream: tokio::sync::Mutex::new(None),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -562,7 +567,11 @@ pub fn run() {
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,
             ai::call_ai_model,
-            ai::get_ai_models
+            ai::get_ai_models,
+            sherpa::start_recognizer,
+            sherpa::stop_recognizer,
+            sherpa::feed_audio_chunk,
+            sherpa::process_batch_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

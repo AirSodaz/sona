@@ -6,15 +6,15 @@
   - [x] 确定解压解包库（使用 `sevenz-rust` 替代 `7zip-bin`/`node-7z`）。 (已安装 `sevenz-rust`)
   - [x] 整理并在 `src-tauri/Cargo.toml` 中引入所有必要的 crates。 (全部引入并且通过 `cargo build` 编译链接测试)
 
-- [ ] 2. **核心业务逻辑：音频处理 (Audio Pipeline)**
-  - [ ] 使用 Rust 实现基于 VAD (Voice Activity Detection) 或固定片段的音频切分（移植 `yieldVADSegments` 和 `yieldFixedChunks`）。
-  - [ ] 实现音频数据 (PCM/WAV) 内存缓冲区处理、转码及文件写入。
+- [x] 2. **核心业务逻辑：音频处理 (Audio Pipeline)**
+  - [x] 使用 Rust 实现基于 VAD (Voice Activity Detection) 或固定片段的音频切分（移植 `yieldVADSegments` 和 `yieldFixedChunks`）。
+  - [x] 实现音频数据 (PCM/WAV) 内存缓冲区处理、转码及文件写入。
 
-- [ ] 3. **核心业务逻辑：引入与封装 `sherpa-onnx`**
-  - [ ] 实现模型路径自动检测与配置构建 (`findModelConfig`)。
-  - [ ] 实例化 OnlineRecognizer (流式) / OfflineRecognizer (批量)。
-  - [ ] 实现标点符号模型集成 (Punctuation)。
-  - [ ] 移植逆文本正则化 (ITN/nzh，中文数字转换) 逻辑。
+- [x] 3. **核心业务逻辑：引入与封装 `sherpa-onnx`**
+  - [x] 实现模型路径自动检测与配置构建 (`findModelConfig`)。
+  - [x] 实例化 OnlineRecognizer (流式) / OfflineRecognizer (批量)。
+  - [ ] 实现标点符号模型集成 (Punctuation)。(注：当前 `sherpa-onnx` 0.1.8 crate 未开放 Punctuation FFI 接口，暂缓集成)
+  - [x] 移植逆文本正则化 (ITN/nzh，中文数字转换) 逻辑。
 
 - [ ] 4. **Tauri 主应用集成 (Managed State & Commands)**
   - [ ] 设计状态机：将 Recognizer 实例注入并挂载到 Tauri `State`。
