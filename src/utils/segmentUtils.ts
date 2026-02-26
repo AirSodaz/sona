@@ -12,7 +12,6 @@ const ABBREVIATIONS = new Set([
 ]);
 
 // Regular expressions for text processing
-// Hoisted to module scope to avoid reallocation in loops
 const SPLIT_REGEX = /([.?!。？！]+)/;
 const COMMA_SPLIT_REGEX = /([,，;；:：]+)/;
 const PUNCTUATION_REGEX = /[\s\p{P}]/u;
@@ -27,11 +26,6 @@ const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
 const WHITESPACE_ONLY_REGEX = /^\s+$/;
 
 // Tag-aware lexer regex
-// 1. Tags (b, i, u)
-// 2. Whitespace
-// 3. CJK characters
-// 4. Other words (non-tag, non-whitespace, non-CJK, non-<)
-// 5. Stray < (punctuation)
 const LEXER_REGEX = /(<\/?(?:b|i|u)>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
 
 /**
@@ -45,13 +39,11 @@ export function stripHtmlTags(text: string): string {
  * Calculates the length of the text excluding punctuation and whitespace.
  */
 function getEffectiveLength(text: string): number {
-    // Check for punctuation first to avoid unnecessary allocation
     if (!PUNCTUATION_REGEX.test(text)) {
         return text.length;
     }
 
     let reduction = 0;
-    // Reset lastIndex for the global regex before reuse
     PUNCTUATION_REPLACE_REGEX.lastIndex = 0;
     let match;
     while ((match = PUNCTUATION_REPLACE_REGEX.exec(text)) !== null) {
@@ -66,7 +58,6 @@ function getEffectiveLength(text: string): number {
 function endsWithAbbreviation(text: string): boolean {
     const trimmed = text.trim();
     if (!trimmed) return false;
-    // Get last word (simplistic split by space is usually sufficient for this check)
     const words = trimmed.split(/\s+/);
     const lastWord = words[words.length - 1].toLowerCase();
     return ABBREVIATIONS.has(lastWord);
@@ -81,14 +72,6 @@ function isCJK(text: string): boolean {
 
 /**
  * Splits transcript segments based on punctuation marks.
- * Uses a two-pass approach:
- * 1. Split by sentence-ending punctuation (handling abbreviations).
- * 2. Split long segments by weaker punctuation (commas) based on language constraints.
- *    - CJK: 36 characters
- *    - Western: 84 characters
- *
- * @param segments The array of transcript segments to split.
- * @return A new array of split transcript segments.
  */
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
     // Pass 1: Sentence Splitting (Strong Punctuation)
@@ -106,11 +89,8 @@ export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSeg
         const segmentText = typeof segment.text === 'string' ? segment.text : String(segment.text || '');
         const limit = isCJK(segmentText) ? MAX_SEGMENT_LENGTH_CJK : MAX_SEGMENT_LENGTH_WESTERN;
 
-        // If segment is too long, try to split by commas
         if (segmentText.length > limit) {
             const subSegments = splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
-            // If splitting happened (length > 1), we use the sub-segments.
-            // Even if length is 1 (no comma found), we push that 1 segment.
             finalSegments.push(...subSegments);
         } else {
             finalSegments.push(segment);
@@ -124,197 +104,202 @@ interface SplitOptions {
     checkAbbreviations: boolean;
 }
 
+/** State for the splitting process */
+interface SplitterState {
+    currentText: string;
+    currentStart: number; // Time
+    currentSegmentStart: number; // Time
+    charIndex: number;
+    effectiveCharIndex: number;
+    lastTokenIndex: number;
+    nextTokenSliceStart: number;
+}
+
 /**
  * Helper to split a single segment by a given regex pattern.
- * Handles token/timestamp interpolation and abbreviation checks.
  */
 function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options: SplitOptions): TranscriptSegment[] {
-    const newSegments: TranscriptSegment[] = [];
     const text = typeof segment.text === 'string' ? segment.text : String(segment.text || '');
     const parts = text.split(regex);
 
-    // Optimization: If no split happened, return original (cloned with new ID if needed, or just original?)
-    // To be safe and consistent, we'll process it. But if parts.length === 1, it's just one segment.
     if (parts.length <= 1) {
-        return [{ ...segment, id: uuidv4() }]; // Return copy with new ID for consistency? Or keep original ID?
-        // Actually, best to just return the segment itself to avoid unnecessary ID churn if no change?
-        // But `splitByPunctuation` usually generates new IDs.
-        // Let's assume consistent ID generation is safer.
+        return [{ ...segment, id: uuidv4() }];
     }
 
-    const hasTimestamps = segment.tokens && segment.timestamps &&
-        segment.tokens.length === segment.timestamps.length;
-
-    let tokenMap: TokenMap | null = null;
-    if (hasTimestamps) {
-        tokenMap = buildTokenMap(segment);
-    }
-
-    let currentStart = segment.start;
+    const hasTimestamps = checkHasTimestamps(segment);
+    const tokenMap = hasTimestamps ? buildTokenMap(segment) : null;
     const totalDuration = segment.end - segment.start;
     const totalLength = text.length;
 
-    let charIndex = 0; // Current character index in the original text
-    let effectiveCharIndex = 0; // Current effective character index (ignoring punctuation/spaces)
+    // Initialize state
+    const state: SplitterState = {
+        currentText: "",
+        currentStart: segment.start,
+        currentSegmentStart: (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0)
+            ? tokenMap.timestamps[0]
+            : segment.start,
+        charIndex: 0,
+        effectiveCharIndex: 0,
+        lastTokenIndex: 0,
+        nextTokenSliceStart: 0,
+    };
 
-    let currentText = "";
-    let currentSegmentStart = currentStart;
-
-    // Fix: Use the first token's timestamp as the true start time if available
-    if (hasTimestamps && tokenMap && tokenMap.timestamps.length > 0) {
-        currentSegmentStart = tokenMap.timestamps[0];
-    }
-
-    let lastTokenIndex = 0; // Hint for the next search
-    let nextTokenSliceStart = 0; // Track token slicing
+    const newSegments: TranscriptSegment[] = [];
 
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         const partEffectiveLen = getEffectiveLength(part);
 
         if (regex.test(part)) {
-            // It's a delimiter (punctuation)
-
-            // Check for abbreviation if enabled
-            // Only relevant if the delimiter starts with '.' (e.g. SPLIT_REGEX)
-            // But we can just check `options.checkAbbreviations`
-            let shouldMerge = false;
-            if (options.checkAbbreviations && part.includes('.')) {
-                if (endsWithAbbreviation(currentText)) {
-                    shouldMerge = true;
-                }
-            }
-
-            if (shouldMerge) {
-                // Treat delimiter as content
-                currentText += part;
-                charIndex += part.length;
-                effectiveCharIndex += partEffectiveLen;
-                // Continue to next part
-                continue;
-            }
-
-            // Normal split
-            currentText += part;
-            charIndex += part.length;
-            effectiveCharIndex += partEffectiveLen;
-
-            let segmentEnd: number;
-            let currentTokens: string[] | undefined;
-            let currentTimestamps: number[] | undefined;
-
-            if (hasTimestamps && tokenMap) {
-                // Find the token at the current boundary
-                const found = findTimestampFromMap(tokenMap, effectiveCharIndex, lastTokenIndex);
-
-                let sliceEnd = tokenMap.timestamps.length;
-
-                if (found) {
-                    sliceEnd = found.index;
-                    // End of CURRENT segment is the start of the token FOLLOWING this text block.
-                    // Wait, `found` is the token that *starts* at or after effectiveCharIndex.
-                    // So yes, found.timestamp is the split point.
-                    segmentEnd = found.timestamp;
-                    lastTokenIndex = found.index;
-                } else {
-                    // End of stream or drift
-                    segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
-                }
-
-                // Extract tokens
-                if (sliceEnd > nextTokenSliceStart) {
-                    currentTokens = segment.tokens!.slice(nextTokenSliceStart, sliceEnd);
-                    currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart, sliceEnd);
-                    nextTokenSliceStart = sliceEnd;
-                }
-
-                if (currentTimestamps && currentTimestamps.length > 0) {
-                    currentSegmentStart = currentTimestamps[0];
-                }
-
-            } else {
-                segmentEnd = currentStart + (totalLength > 0 ? (currentText.length / totalLength) * totalDuration : 0);
-            }
-
-            // Push the segment
-            newSegments.push({
-                id: uuidv4(),
-                text: currentText.trim(),
-                start: currentSegmentStart,
-                end: segmentEnd,
-                isFinal: true,
-                tokens: currentTokens,
-                timestamps: currentTimestamps
-            });
-
-            // Prepare for next segment
-            currentStart = segmentEnd;
-            currentSegmentStart = segmentEnd; // Default
-
-            // If found valid next token start, use it
-            if (hasTimestamps && tokenMap && lastTokenIndex < tokenMap.timestamps.length) {
-                if (lastTokenIndex === nextTokenSliceStart) {
-                    if (nextTokenSliceStart < tokenMap.timestamps.length) {
-                        currentSegmentStart = tokenMap.timestamps[nextTokenSliceStart];
-                        currentStart = currentSegmentStart;
-                    }
-                }
-            }
-
-            currentText = "";
-
+            handleDelimiter(part, partEffectiveLen, state, options, hasTimestamps, tokenMap, segment, totalLength, totalDuration, newSegments);
         } else {
             // Content
-            currentText += part;
-            charIndex += part.length;
-            effectiveCharIndex += partEffectiveLen;
+            state.currentText += part;
+            state.charIndex += part.length;
+            state.effectiveCharIndex += partEffectiveLen;
         }
     }
 
     // Leftover text
-    if (currentText.trim()) {
-        let segmentEnd = segment.end;
-        let currentTokens: string[] | undefined;
-        let currentTimestamps: number[] | undefined;
-
-        if (hasTimestamps && tokenMap) {
-            currentTokens = segment.tokens!.slice(nextTokenSliceStart);
-            currentTimestamps = segment.timestamps!.slice(nextTokenSliceStart);
-
-            if (currentTimestamps.length > 0) {
-                currentSegmentStart = currentTimestamps[0];
-            }
-        }
-
-        newSegments.push({
-            id: uuidv4(),
-            text: currentText.trim(),
-            start: currentSegmentStart,
-            end: segmentEnd,
-            isFinal: true,
-            tokens: currentTokens,
-            timestamps: currentTimestamps
-        });
+    if (state.currentText.trim()) {
+        finalizeSegment(state, segment, hasTimestamps, tokenMap, newSegments);
     }
 
     return newSegments;
 }
 
+function checkHasTimestamps(segment: TranscriptSegment): boolean {
+    return !!(segment.tokens && segment.timestamps && segment.tokens.length === segment.timestamps.length);
+}
+
+function handleDelimiter(
+    part: string,
+    partEffectiveLen: number,
+    state: SplitterState,
+    options: SplitOptions,
+    hasTimestamps: boolean,
+    tokenMap: TokenMap | null,
+    originalSegment: TranscriptSegment,
+    totalLength: number,
+    totalDuration: number,
+    results: TranscriptSegment[]
+) {
+    // Check abbreviation
+    let shouldMerge = false;
+    if (options.checkAbbreviations && part.includes('.')) {
+        if (endsWithAbbreviation(state.currentText)) {
+            shouldMerge = true;
+        }
+    }
+
+    if (shouldMerge) {
+        state.currentText += part;
+        state.charIndex += part.length;
+        state.effectiveCharIndex += partEffectiveLen;
+        return;
+    }
+
+    // Normal split
+    state.currentText += part;
+    state.charIndex += part.length;
+    state.effectiveCharIndex += partEffectiveLen;
+
+    // Calculate segment end and tokens
+    let segmentEnd: number;
+    let currentTokens: string[] | undefined;
+    let currentTimestamps: number[] | undefined;
+
+    if (hasTimestamps && tokenMap) {
+        const found = findTimestampFromMap(tokenMap, state.effectiveCharIndex, state.lastTokenIndex);
+        let sliceEnd = tokenMap.timestamps.length;
+
+        if (found) {
+            sliceEnd = found.index;
+            segmentEnd = found.timestamp;
+            state.lastTokenIndex = found.index;
+        } else {
+            segmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
+        }
+
+        if (sliceEnd > state.nextTokenSliceStart) {
+            currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart, sliceEnd);
+            currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart, sliceEnd);
+            state.nextTokenSliceStart = sliceEnd;
+        }
+
+        if (currentTimestamps && currentTimestamps.length > 0) {
+            state.currentSegmentStart = currentTimestamps[0];
+        }
+    } else {
+        segmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
+    }
+
+    results.push({
+        id: uuidv4(),
+        text: state.currentText.trim(),
+        start: state.currentSegmentStart,
+        end: segmentEnd,
+        isFinal: true,
+        tokens: currentTokens,
+        timestamps: currentTimestamps
+    });
+
+    // Prepare for next
+    state.currentStart = segmentEnd;
+    state.currentSegmentStart = segmentEnd;
+    state.currentText = "";
+
+    // Adjust next start if tokens available
+    if (hasTimestamps && tokenMap && state.lastTokenIndex < tokenMap.timestamps.length) {
+        if (state.lastTokenIndex === state.nextTokenSliceStart) {
+            if (state.nextTokenSliceStart < tokenMap.timestamps.length) {
+                state.currentSegmentStart = tokenMap.timestamps[state.nextTokenSliceStart];
+                state.currentStart = state.currentSegmentStart;
+            }
+        }
+    }
+}
+
+function finalizeSegment(
+    state: SplitterState,
+    originalSegment: TranscriptSegment,
+    hasTimestamps: boolean,
+    tokenMap: TokenMap | null,
+    results: TranscriptSegment[]
+) {
+    let segmentEnd = originalSegment.end;
+    let currentTokens: string[] | undefined;
+    let currentTimestamps: number[] | undefined;
+
+    if (hasTimestamps && tokenMap) {
+        currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart);
+        currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart);
+
+        if (currentTimestamps.length > 0) {
+            state.currentSegmentStart = currentTimestamps[0];
+        }
+    }
+
+    results.push({
+        id: uuidv4(),
+        text: state.currentText.trim(),
+        start: state.currentSegmentStart,
+        end: segmentEnd,
+        isFinal: true,
+        tokens: currentTokens,
+        timestamps: currentTimestamps
+    });
+}
+
 /** Pre-calculated map for faster lookups. */
 interface TokenMap {
-    /** Start effective index of each token. */
     startIndices: number[];
-    /** End effective index of each token. */
     endIndices: number[];
-    /** Timestamp of each token. */
     timestamps: number[];
 }
 
 /**
  * Builds a map of tokens to their timestamps and effective indices.
- *
- * @param segment The transcript segment to build the map from.
- * @return The token map, or null if tokens or timestamps are missing.
  */
 function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
     if (!segment.tokens || !segment.timestamps) return null;
@@ -327,14 +312,11 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
 
     for (let i = 0; i < segment.tokens.length; i++) {
         const token = segment.tokens[i];
-        // Strip punctuation and whitespace
         const tokenLen = getEffectiveLength(typeof token === 'string' ? token : '');
 
-        // Include all tokens, even whitespace/punctuation, to maintain alignment
         startIndices.push(currentLen);
         currentLen += tokenLen;
         endIndices.push(currentLen);
-        // Token timestamps are already absolute
         timestamps.push(segment.timestamps[i]);
     }
 
@@ -343,19 +325,13 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
 
 /**
  * Finds the timestamp corresponding to an effective character index from the map.
- *
- * @param map The token map.
- * @param effectiveIndex The effective character index to search for.
- * @param hintIndex An optional hint index to optimize sequential access.
- * @return An object containing the timestamp and the index in the map, or undefined if not found.
  */
 function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: number = 0): { timestamp: number, index: number } | undefined {
-    // Check hint first for O(1) access
+    // Check hint first
     if (hintIndex < map.startIndices.length) {
         if (map.startIndices[hintIndex] <= effectiveIndex && effectiveIndex < map.endIndices[hintIndex]) {
             return { timestamp: map.timestamps[hintIndex], index: hintIndex };
         }
-        // Check next token (common case for sequential access)
         const next = hintIndex + 1;
         if (next < map.startIndices.length) {
             if (map.startIndices[next] <= effectiveIndex && effectiveIndex < map.endIndices[next]) {
@@ -364,19 +340,15 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
         }
     }
 
-    // Binary search to find the token that covers effectiveIndex
-    // We are looking for idx where startIndices[idx] <= effectiveIndex < endIndices[idx]
-
+    // Binary search
     let left = hintIndex;
     let right = map.startIndices.length - 1;
     let idx = -1;
 
-    // If hint was past the target (shouldn't happen with sequential access), reset left
     if (left > right || (left < map.startIndices.length && map.startIndices[left] > effectiveIndex)) {
         left = 0;
     }
 
-    // Find rightmost start <= effectiveIndex
     while (left <= right) {
         const mid = (left + right) >>> 1;
         if (map.startIndices[mid] <= effectiveIndex) {
@@ -388,7 +360,6 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
     }
 
     if (idx !== -1) {
-        // Check if effectiveIndex is strictly within this token (or at start)
         if (effectiveIndex < map.endIndices[idx]) {
             return { timestamp: map.timestamps[idx], index: idx };
         }
@@ -398,27 +369,17 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
 
 /**
  * Efficiently finds the segment containing the given time using binary search.
- *
- * Assumes segments are sorted by start time. Accepts an optional hint index for O(1) sequential access.
- *
- * @param segments The list of transcript segments.
- * @param time The time to search for.
- * @param hintIndex Optional hint index to start the search from.
- * @return An object containing the segment (if found) and its index.
  */
 export function findSegmentAndIndexForTime(
     segments: TranscriptSegment[],
     time: number,
     hintIndex?: number
 ): { segment: TranscriptSegment | undefined, index: number } {
-    // Tolerance for floating point precision issues and micro-gaps (e.g. 50ms)
     const EPSILON = 0.05;
     const searchTime = time + EPSILON;
 
-    // Optimization: Check hint and surrounding indices first (O(1))
+    // Hint optimization
     if (hintIndex !== undefined && hintIndex >= -1 && hintIndex < segments.length) {
-
-        // Handle pre-roll (hint -1)
         if (hintIndex === -1) {
             if (segments.length > 0 && time < segments[0].start) {
                 return { segment: undefined, index: -1 };
@@ -427,13 +388,11 @@ export function findSegmentAndIndexForTime(
                 return { segment: segments[0], index: 0 };
             }
         } else {
-            // Check current hint
             const seg = segments[hintIndex];
             if (seg.start <= searchTime && time < seg.end) {
                 return { segment: seg, index: hintIndex };
             }
 
-            // Check next segment (common case for forward playback)
             const nextIdx = hintIndex + 1;
             if (nextIdx < segments.length) {
                 const nextSeg = segments[nextIdx];
@@ -442,14 +401,12 @@ export function findSegmentAndIndexForTime(
                 }
             }
 
-            // Check gap after hint (time >= seg.end AND (next doesn't exist OR time < next.start))
             if (time >= seg.end) {
                 if (nextIdx >= segments.length || searchTime < segments[nextIdx].start) {
                     return { segment: undefined, index: hintIndex };
                 }
             }
 
-            // Check previous segment (common case for slight rewind/loops)
             const prevIdx = hintIndex - 1;
             if (prevIdx >= 0) {
                 const prevSeg = segments[prevIdx];
@@ -457,7 +414,6 @@ export function findSegmentAndIndexForTime(
                     return { segment: prevSeg, index: prevIdx };
                 }
 
-                // Check gap after prev (time >= prevSeg.end AND time < seg.start)
                 if (time >= prevSeg.end && searchTime < seg.start) {
                     return { segment: undefined, index: prevIdx };
                 }
@@ -469,7 +425,6 @@ export function findSegmentAndIndexForTime(
     let right = segments.length - 1;
     let idx = -1;
 
-    // Binary search for the rightmost segment that starts at or before the time
     while (left <= right) {
         const mid = (left + right) >>> 1;
         if (segments[mid].start <= searchTime) {
@@ -485,48 +440,22 @@ export function findSegmentAndIndexForTime(
         if (time <= seg.end) {
             return { segment: seg, index: idx };
         }
-        // If time > seg.end, we are in the gap after 'idx'.
-        // Return 'idx' as the "closest preceding segment index".
         return { segment: undefined, index: idx };
     }
 
     return { segment: undefined, index: -1 };
 }
 
-/**
- * Efficiently finds the segment containing the given time using binary search.
- *
- * Assumes segments are sorted by start time.
- *
- * @param segments The list of transcript segments.
- * @param time The time to search for.
- * @return The segment containing the time, or undefined if not found.
- */
 export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {
     return findSegmentAndIndexForTime(segments, time).segment;
 }
 
-/**
- * Computes a lightweight fingerprint for a list of segments.
- * Used to detect changes without deep comparison of every field.
- *
- * Includes ID, text, timing, finality status, and translation.
- */
 export function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
-    // We verify ID, text, timing, finality, and translation for each segment.
     return segments.map(s =>
         `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}`
     ).join('|');
 }
 
-/**
- * Aligns formatted text with raw tokens to assign timestamps to display words.
- *
- * @param text The formatted text (with punctuation/ITN).
- * @param rawTokens The raw tokens from the recognizer.
- * @param rawTimestamps The timestamps corresponding to rawTokens.
- * @return Array of objects with text chunk and its start timestamp.
- */
 export function alignTokensToText(
     text: string,
     rawTokens: string[],
@@ -534,33 +463,26 @@ export function alignTokensToText(
 ): { text: string; timestamp: number }[] {
     const result: { text: string; timestamp: number }[] = [];
 
-    // Validations for input types
     const safeText = typeof text === 'string' ? text : String(text || '');
     if (!safeText || !Array.isArray(rawTokens) || !Array.isArray(rawTimestamps) || rawTokens.length !== rawTimestamps.length) {
         return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
     }
 
-    // Pre-normalize raw tokens to avoid repeated regex and toLowerCase calls
     const normalizedTokens = rawTokens.map(t => {
         if (typeof t !== 'string') return '';
         return t.toLowerCase().replace(NORMALIZE_REGEX, '');
     });
 
-    // Tokenize text with tags support
     const words: string[] = [];
     const normalizedWords: string[] = [];
-
-    // Lexer state
     const activeTags = new Set<string>();
 
-    // Loop through regex matches
     let match;
     LEXER_REGEX.lastIndex = 0;
 
     while ((match = LEXER_REGEX.exec(safeText)) !== null) {
-        const [full, tag, _space, _han, _word, _other] = match;
+        const [full, tag] = match;
 
-        // 1. Handle Tags
         if (tag) {
             const tagName = tag.replace(/[<\/>]/g, '').toLowerCase();
             if (tag.startsWith('</')) {
@@ -568,30 +490,20 @@ export function alignTokensToText(
             } else {
                 activeTags.add(tagName);
             }
-            continue; // Tags are not words in the output list
+            continue;
         }
 
-        // 2. Handle Content (Whitespace, Han, Word, or other)
         const tokenText = full;
-
-        // Wrap content with active tags
         let wrapped = tokenText;
-        // Sort tags for consistent output order
-        // We reverse to make alphabetical tags outer-most (e.g. b before i -> <b><i>...</i></b>)
         const sortedTags = Array.from(activeTags).sort().reverse();
         for (const t of sortedTags) {
             wrapped = `<${t}>${wrapped}</${t}>`;
         }
 
-        // Check if token is punctuation to merge with previous word
         const isPunctuation = PUNCTUATION_ONLY_REGEX.test(tokenText) && !WHITESPACE_ONLY_REGEX.test(tokenText);
 
         if (words.length > 0 && isPunctuation && !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(words[words.length - 1]))) {
-            // Append to previous word
             words[words.length - 1] += wrapped;
-
-            // Update normalized cache for the merged word
-            // Re-normalize from scratch using the new full word (stripped of tags)
             normalizedWords[normalizedWords.length - 1] = stripHtmlTags(words[words.length - 1]).toLowerCase().replace(NORMALIZE_REGEX, '');
         } else {
             words.push(wrapped);
@@ -604,10 +516,8 @@ export function alignTokensToText(
 
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
-
-        // Handle whitespace words: Preserve them but don't try to match
-        // Note: stripHtmlTags checks if the *content* is whitespace
         const cleanWord = stripHtmlTags(word);
+
         if (!cleanWord.trim()) {
             const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
             result.push({ text: word, timestamp: ts });
@@ -626,10 +536,10 @@ export function alignTokensToText(
             : 0;
         result.push({ text: word, timestamp: startTimestamp });
 
-        // Try to match `normWord` against next N tokens.
+        // Token matching logic (simplified)
+        let foundMatch = false;
         let accumulatedTokenStr = "";
         let tokensConsumed = 0;
-        let foundMatch = false;
 
         for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
             const t = normalizedTokens[currentRawIndex + j];
@@ -646,8 +556,7 @@ export function alignTokensToText(
         }
 
         if (!foundMatch) {
-            // Drastic mismatch (ITN).
-            // Find the NEXT content word in `words`.
+            // Recover from mismatch
             let nextNorm = "";
             for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
                 nextNorm = normalizedWords[nextIdx];
@@ -655,21 +564,15 @@ export function alignTokensToText(
             }
 
             if (nextNorm) {
-                // distinct next word
-                // Scan ahead in tokens to find `nextNorm`.
                 for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
                     const t = normalizedTokens[currentRawIndex + k];
                     if (t && t.startsWith(nextNorm)) {
-                        // Found next word at k offset.
-                        // So current word consumes everything up to k.
                         currentRawIndex += k;
                         foundMatch = true;
                         break;
                     }
                 }
             } else {
-                // If there is no next word, we are at the end.
-                // Consume all remaining tokens if reasonable
                 let hasRemainingContent = false;
                 for (let r = i + 1; r < words.length; r++) {
                     if (normalizedWords[r]) {
@@ -677,7 +580,6 @@ export function alignTokensToText(
                         break;
                     }
                 }
-
                 if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
                     currentRawIndex = maxTokens;
                     foundMatch = true;
@@ -685,7 +587,6 @@ export function alignTokensToText(
             }
 
             if (!foundMatch) {
-                // Fallback: Just consume 1 token.
                 currentRawIndex++;
             }
         }
