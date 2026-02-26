@@ -2884,3 +2884,64 @@ input[type="radio"]:focus {
   gap: var(--spacing-sm);
   margin-top: var(--spacing-xs);
 }
+
+/* ===========================
+   New Settings Styles
+   =========================== */
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.connection-status {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.connection-status.success {
+  background-color: rgba(78, 160, 103, 0.1);
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.connection-status.error {
+  background-color: rgba(224, 62, 62, 0.1);
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn-loading-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-text-hidden {
+  visibility: hidden;
+}
+
+.btn-spinner-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

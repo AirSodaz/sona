@@ -87,7 +87,8 @@ describe('SettingsAIServiceTab', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('settings.ai.connection_successOK')).toBeDefined();
+            expect(screen.getByText('settings.ai.connection_success')).toBeDefined();
+            expect(screen.getByText('OK')).toBeDefined();
         });
     });
 
@@ -100,7 +101,8 @@ describe('SettingsAIServiceTab', () => {
         fireEvent.click(testBtn);
 
         await waitFor(() => {
-            expect(screen.getByText('settings.ai.connection_failedNetwork Error')).toBeDefined();
+            expect(screen.getByText('settings.ai.connection_failed')).toBeDefined();
+            expect(screen.getByText('Network Error')).toBeDefined();
         });
     });
 });
