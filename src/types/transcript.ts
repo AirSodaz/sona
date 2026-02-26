@@ -99,6 +99,8 @@ export interface AppConfig {
   polishKeywords?: string;
   /** Context for polishing. */
   polishContext?: string;
+  /** Scenario preset for polishing. */
+  polishScenario?: string;
   /** Whether to automatically polish the transcript. */
   autoPolish?: boolean;
   /** Frequency of auto-polishing in segments (for live recording). */

@@ -327,7 +327,17 @@
         "advanced_settings": "高级设置",
         "keywords": "关键词",
         "keywords_placeholder": "输入关键词...",
+        "scenario_label": "场景预设",
+        "custom_context": "自定义上下文",
         "context": "上下文",
-        "context_placeholder": "输入上下文..."
+        "context_placeholder": "输入上下文...",
+        "scenarios": {
+            "customer_service": "客服通话",
+            "meeting": "会议",
+            "interview": "采访",
+            "lecture": "讲座",
+            "podcast": "播客",
+            "custom": "自定义"
+        }
     }
 }

@@ -330,7 +330,17 @@
         "advanced_settings": "Advanced Settings",
         "keywords": "Keywords",
         "keywords_placeholder": "Enter keywords...",
+        "scenario_label": "Scenario Presets",
+        "custom_context": "Custom Context",
         "context": "Context",
-        "context_placeholder": "Enter context..."
+        "context_placeholder": "Enter context...",
+        "scenarios": {
+            "customer_service": "Customer Service Call",
+            "meeting": "Meeting",
+            "interview": "Interview",
+            "lecture": "Lecture",
+            "podcast": "Podcast",
+            "custom": "Custom"
+        }
     }
 }

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
+import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 
 class PolishService {
     /**
@@ -101,8 +102,17 @@ class PolishService {
 
         let prompt = "";
 
-        if (config.polishContext && config.polishContext.trim()) {
-            prompt += `[User Context]\n${config.polishContext.trim()}\n\n`;
+        let contextText = "";
+        const scenario = config.polishScenario || 'custom';
+
+        if (scenario === 'custom') {
+            contextText = config.polishContext || "";
+        } else {
+            contextText = POLISH_SCENARIO_PROMPTS[scenario] || "";
+        }
+
+        if (contextText.trim()) {
+            prompt += `[User Context]\n${contextText.trim()}\n\n`;
         }
 
         if (config.polishKeywords && config.polishKeywords.trim()) {
