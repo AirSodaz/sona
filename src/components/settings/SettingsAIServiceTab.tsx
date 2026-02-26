@@ -202,40 +202,29 @@ export function SettingsAIServiceTab({
                     )}
 
                     <button
-                        className="btn btn-primary"
+                        className="btn btn-primary btn-loading-wrapper"
                         onClick={handleTestConnection}
                         disabled={testStatus === 'loading'}
                         style={{ whiteSpace: 'nowrap' }}
                     >
-                        {testStatus === 'loading' ? (
-                            <>
+                        <span className={testStatus === 'loading' ? 'btn-text-hidden' : ''}>
+                            {t('settings.ai.test_connection')}
+                        </span>
+                        {testStatus === 'loading' && (
+                            <div className="btn-spinner-overlay">
                                 <Loader2 className="animate-spin" size={16} />
-                                <span>{t('settings.ai.testing')}</span>
-                            </>
-                        ) : (
-                            t('settings.ai.test_connection')
+                            </div>
                         )}
                     </button>
                 </div>
 
                 {testMessage && (
-                    <div style={{
-                        marginTop: 10,
-                        color: testStatus === 'error' ? 'var(--color-error)' : 'var(--color-success)',
-                        whiteSpace: 'pre-wrap',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                        border: '1px solid var(--color-border)',
-                        padding: '8px',
-                        borderRadius: '4px',
-                        backgroundColor: 'var(--color-bg-input)',
-                        fontSize: '0.875rem'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            {testStatus === 'error' ? <X size={16} /> : <Check size={16} />}
-                            <strong>{testStatus === 'error' ? 'Connection Failed' : 'Connection Successful'}</strong>
+                    <div className={`connection-status ${testStatus === 'error' ? 'error' : 'success'}`}>
+                        {testStatus === 'error' ? <X size={16} style={{ flexShrink: 0, marginTop: 2 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
+                        <div>
+                            <strong>{testStatus === 'error' ? t('settings.ai.connection_failed') : t('settings.ai.connection_success')}</strong>
+                            <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage.replace(t('settings.ai.connection_success'), '').replace(t('settings.ai.connection_failed'), '')}</div>
                         </div>
-                        {testMessage}
                     </div>
                 )}
             </div>
