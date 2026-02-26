@@ -59,24 +59,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const config = useTranscriptStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
 
     // Initialize dedicated caption session hook
     useCaptionSession(config, isCaptionMode);
 
     // Config Helpers
     const enableTimeline = config.enableTimeline ?? false;
-    const language = config.language;
-    const autoPolish = config.autoPolish ?? false;
-    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;
     const enableTimelineRef = useRef(enableTimeline);
-
-    const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
-    const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);
-    const setAutoPolish = useCallback((val: boolean) => setConfig({ autoPolish: val }), [setConfig]);
-    const setAutoPolishFrequency = useCallback((val: number) => setConfig({ autoPolishFrequency: val }), [setConfig]);
 
     const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
 
@@ -293,14 +284,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             </div>
 
             <TranscriptionOptions
-                enableTimeline={enableTimeline}
-                setEnableTimeline={setEnableTimeline}
-                language={language}
-                setLanguage={setLanguage}
-                autoPolish={autoPolish}
-                setAutoPolish={setAutoPolish}
-                autoPolishFrequency={autoPolishFrequency}
-                setAutoPolishFrequency={setAutoPolishFrequency}
                 disabled={isRecording}
             />
         </div>

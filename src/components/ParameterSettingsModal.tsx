@@ -8,14 +8,6 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 interface ParameterSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    enableTimeline: boolean;
-    setEnableTimeline: (value: boolean) => void;
-    language: string;
-    setLanguage: (value: string) => void;
-    autoPolish: boolean;
-    setAutoPolish: (value: boolean) => void;
-    autoPolishFrequency: number;
-    setAutoPolishFrequency: (value: number) => void;
     disabled?: boolean;
 }
 
@@ -25,22 +17,21 @@ interface ParameterSettingsModalProps {
 export function ParameterSettingsModal({
     isOpen,
     onClose,
-    enableTimeline,
-    setEnableTimeline,
-    language,
-    setLanguage,
-    autoPolish,
-    setAutoPolish,
-    autoPolishFrequency,
-    setAutoPolishFrequency,
     disabled = false
 }: ParameterSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-    // Check if AI is configured
+    // Get config and setters from store
     const config = useTranscriptStore((state) => state.config);
+    const setConfig = useTranscriptStore((state) => state.setConfig);
+
+    // Derived values
+    const enableTimeline = config.enableTimeline ?? false;
+    const language = config.language;
+    const autoPolish = config.autoPolish ?? false;
+    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
     const isAIConfigured = Boolean(config.aiApiKey && config.aiBaseUrl && config.aiModel && config.aiServiceType);
 
     // Focus management
@@ -122,7 +113,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Switch
                             checked={enableTimeline}
-                            onChange={(val) => !disabled && setEnableTimeline(val)}
+                            onChange={(val) => !disabled && setConfig({ enableTimeline: val })}
                             disabled={disabled}
                         />
                     </div>
@@ -135,7 +126,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Dropdown
                             value={language}
-                            onChange={(val) => !disabled && setLanguage(val)}
+                            onChange={(val) => !disabled && setConfig({ language: val })}
                             options={[
                                 { value: 'auto', label: 'Auto' },
                                 { value: 'zh', label: 'Chinese' },
@@ -160,7 +151,7 @@ export function ParameterSettingsModal({
                         </div>
                         <Switch
                             checked={autoPolish}
-                            onChange={(val) => !disabled && isAIConfigured && setAutoPolish(val)}
+                            onChange={(val) => !disabled && isAIConfigured && setConfig({ autoPolish: val })}
                             disabled={disabled || !isAIConfigured}
                         />
                     </div>
@@ -179,7 +170,7 @@ export function ParameterSettingsModal({
                                 onChange={(e) => {
                                     const val = parseInt(e.target.value, 10);
                                     if (!isNaN(val) && val > 0) {
-                                        setAutoPolishFrequency(val);
+                                        setConfig({ autoPolishFrequency: val });
                                     }
                                 }}
                                 disabled={disabled}
@@ -196,9 +187,6 @@ export function ParameterSettingsModal({
                         </div>
                     )}
                 </div>
-
-                {/* Footer (optional close button, though X is top right) */}
-                 {/* No footer needed as per design usually */}
             </div>
         </div>
     );
