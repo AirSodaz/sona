@@ -127,7 +127,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
 
-    const enableTimeline = config.enableTimeline ?? true;
+    const enableTimeline = config.enableTimeline ?? false;
     const language = config.language;
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;

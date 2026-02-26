@@ -38,7 +38,7 @@ export function useAppInitialization() {
                         theme: parsed.theme || 'auto',
                         font: parsed.font || 'system',
                         language: parsed.language || 'auto',
-                        enableTimeline: parsed.enableTimeline ?? true,
+                        enableTimeline: parsed.enableTimeline ?? false,
                         minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
                         muteDuringRecording: parsed.muteDuringRecording ?? false,
                         startOnLaunch: parsed.startOnLaunch ?? false,

@@ -114,13 +114,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     useCaptionSession(config, isCaptionMode);
 
     // Use config directly
-    const enableTimeline = config.enableTimeline ?? true;
+    const enableTimeline = config.enableTimeline ?? false;
     const language = config.language;
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;
-    const enableTimelineRef = useRef(true);
+    const enableTimelineRef = useRef(enableTimeline);
 
     const setEnableTimeline = useCallback((val: boolean) => setConfig({ enableTimeline: val }), [setConfig]);
     const setLanguage = useCallback((val: string) => setConfig({ language: val }), [setConfig]);

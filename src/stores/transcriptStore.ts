@@ -231,7 +231,7 @@ const DEFAULT_CONFIG: AppConfig = {
     enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
     itnRulesOrder: ['itn-zh-number'],
     enableITN: true, // Keep for legacy check
-    enableTimeline: true,
+    enableTimeline: false,
     punctuationModelPath: '',
     vadModelPath: '',
     theme: 'auto',
