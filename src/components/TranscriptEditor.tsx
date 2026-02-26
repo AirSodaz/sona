@@ -1,19 +1,18 @@
-import React, { useRef, useCallback, useMemo, useLayoutEffect, useEffect } from 'react';
+import React, { useRef, useCallback, useMemo, useEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { transcriptionService } from '../services/transcriptionService';
 import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
-import { TranscriptUIContext, TranscriptUIState } from './transcript/TranscriptUIContext';
+import { TranscriptUIContext } from './transcript/TranscriptUIContext';
 import { SearchUI } from './SearchUI';
 import { EditorToolbar } from './EditorToolbar';
 import { useSearchStore } from '../stores/searchStore';
-
+import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
+import { useSegmentAlignment } from '../hooks/useSegmentAlignment';
 
 /** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {
@@ -51,163 +50,13 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
     const requestSeek = useTranscriptStore((state) => state.requestSeek);
 
-    // Track which segment IDs have been seen (for animation)
-    const knownSegmentIdsRef = useRef<Set<string>>(new Set());
-    const prevNewSegmentIdsRef = useRef<Set<string>>(new Set());
+    // Hooks for UI state and alignment
+    const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
+    const requestAlignment = useSegmentAlignment();
 
-    // Create a local store for UI state (newSegmentIds) to prevent Context updates
-    // from re-rendering the entire list.
-    const uiStore = useMemo(() => createStore<TranscriptUIState>(() => ({
-        newSegmentIds: new Set(),
-        activeSegmentId: useTranscriptStore.getState().activeSegmentId,
-        editingSegmentId: useTranscriptStore.getState().editingSegmentId,
-        totalSegments: useTranscriptStore.getState().segments.length,
-        aligningSegmentIds: useTranscriptStore.getState().aligningSegmentIds,
-    })), []);
-
-    // Compute new segment IDs synchronously during render
-    const newSegmentIds = useMemo(() => {
-        const known = knownSegmentIdsRef.current;
-        const newIds = new Set<string>();
-        let hasNew = false;
-        let consecutiveKnowns = 0;
-
-        for (let i = segments.length - 1; i >= 0; i--) {
-            const segment = segments[i];
-            if (!known.has(segment.id)) {
-                newIds.add(segment.id);
-                hasNew = true;
-                consecutiveKnowns = 0;
-
-                // Optimization: If there are too many new segments (e.g. bulk load),
-                // prevent O(N) calculations on subsequent renders by marking all as known immediately.
-                if (newIds.size > 50) {
-                    knownSegmentIdsRef.current = new Set(segments.map(s => s.id));
-                    return new Set<string>();
-                }
-            } else {
-                consecutiveKnowns++;
-                if (consecutiveKnowns >= 50) {
-                    break;
-                }
-            }
-        }
-
-        const prev = prevNewSegmentIdsRef.current;
-
-        if (!hasNew && prev.size === 0) {
-            return prev;
-        }
-
-        if (newIds.size === prev.size) {
-            let allSame = true;
-            for (const id of newIds) {
-                if (!prev.has(id)) {
-                    allSame = false;
-                    break;
-                }
-            }
-            if (allSame) {
-                return prev;
-            }
-        }
-
-        prevNewSegmentIdsRef.current = newIds;
-        return newIds;
-    }, [segments]);
-
-    // Sync newSegmentIds and totalSegments to local store
-    useLayoutEffect(() => {
-        uiStore.setState({
-            newSegmentIds,
-            totalSegments: segments.length
-        });
-    }, [newSegmentIds, segments.length, uiStore]);
-
-    // Sync activeSegmentId, editingSegmentId, and aligningSegmentIds from global store to local store
-    // This avoids this component re-rendering when they change
-    useEffect(() => {
-        return useTranscriptStore.subscribe((state, prevState) => {
-            const updates: Partial<TranscriptUIState> = {};
-            let hasUpdates = false;
-
-            if (state.activeSegmentId !== prevState.activeSegmentId) {
-                updates.activeSegmentId = state.activeSegmentId;
-                hasUpdates = true;
-            }
-            if (state.editingSegmentId !== prevState.editingSegmentId) {
-                updates.editingSegmentId = state.editingSegmentId;
-                hasUpdates = true;
-            }
-            if (state.aligningSegmentIds !== prevState.aligningSegmentIds) {
-                updates.aligningSegmentIds = state.aligningSegmentIds;
-                hasUpdates = true;
-            }
-
-            if (hasUpdates) {
-                uiStore.setState(updates);
-            }
-        });
-    }, [uiStore]);
-
-    // Keep a ref to segments to make callbacks stable
+    // Keep a ref to segments to make callbacks stable where needed
     const segmentsRef = useRef(segments);
     segmentsRef.current = segments;
-
-    // Debounced alignment timers per segment
-    const alignTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-    // Cleanup alignment timers on unmount
-    useEffect(() => {
-        return () => {
-            for (const timer of alignTimersRef.current.values()) {
-                clearTimeout(timer);
-            }
-            alignTimersRef.current.clear();
-        };
-    }, []);
-
-    /**
-     * Requests CTC re-alignment for a segment after a debounce period.
-     * Spawns the sidecar to produce fresh tokens/timestamps/durations.
-     */
-    const requestAlignment = useCallback((segmentId: string) => {
-        // Cancel any pending alignment for this segment
-        const existing = alignTimersRef.current.get(segmentId);
-        if (existing) {
-            clearTimeout(existing);
-        }
-
-        const timer = setTimeout(async () => {
-            alignTimersRef.current.delete(segmentId);
-
-            // Re-read segment from store (may have been edited again or deleted)
-            const segment = useTranscriptStore.getState().segments.find(s => s.id === segmentId);
-            if (!segment) return;
-
-            const store = useTranscriptStore.getState();
-            store.addAligningSegmentId(segmentId);
-
-            try {
-                const result = await transcriptionService.alignSegment(segment);
-                // Verify segment still exists before applying
-                const current = useTranscriptStore.getState().segments.find(s => s.id === segmentId);
-                if (current && result) {
-                    useTranscriptStore.getState().updateSegment(segmentId, {
-                        tokens: result.tokens,
-                        timestamps: result.timestamps,
-                        durations: result.durations,
-                    });
-                }
-            } catch (error) {
-                console.error('[TranscriptEditor] Alignment failed:', error);
-            } finally {
-                useTranscriptStore.getState().removeAligningSegmentId(segmentId);
-            }
-        }, 1500);
-
-        alignTimersRef.current.set(segmentId, timer);
-    }, []);
 
     // Auto-scroll to active segment during playback
     useAutoScroll(virtuosoRef);
@@ -262,19 +111,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
             }
         }
     }, [mergeSegments, t]);
-
-    const handleAnimationEnd = useCallback((id: string) => {
-        knownSegmentIdsRef.current.add(id);
-
-        // Update store directly to remove from newSegmentIds without triggering full re-render
-        uiStore.setState(state => {
-            if (!state.newSegmentIds.has(id)) return state;
-
-            const next = new Set(state.newSegmentIds);
-            next.delete(id);
-            return { newSegmentIds: next };
-        });
-    }, [uiStore]);
 
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({

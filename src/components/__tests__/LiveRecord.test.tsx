@@ -92,6 +92,14 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+// Mock history service
+vi.mock('../../services/historyService', () => ({
+    historyService: {
+        saveRecording: vi.fn().mockResolvedValue({ id: 'test-id' }),
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'test-id' }),
+    }
+}));
+
 // Mock caption window service
 vi.mock('../../services/captionWindowService', () => ({
     captionWindowService: {
