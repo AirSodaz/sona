@@ -2,18 +2,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
+import { AppConfig } from '../../types/transcript';
 
 interface SettingsGeneralTabProps {
-    appLanguage: string;
-    setAppLanguage: (lang: 'auto' | 'en' | 'zh') => void;
-    theme: string;
-    setTheme: (theme: 'auto' | 'light' | 'dark') => void;
-    font: string;
-    setFont: (font: string) => void;
-    minimizeToTrayOnExit: boolean;
-    setMinimizeToTrayOnExit: (enabled: boolean) => void;
-    autoCheckUpdates: boolean;
-    setAutoCheckUpdates: (enabled: boolean) => void;
+    config: AppConfig;
+    updateConfig: (updates: Partial<AppConfig>) => void;
 }
 
 function getFontFamily(fontValue: string): string {
@@ -25,18 +18,16 @@ function getFontFamily(fontValue: string): string {
 }
 
 export function SettingsGeneralTab({
-    appLanguage,
-    setAppLanguage,
-    theme,
-    setTheme,
-    font,
-    setFont,
-    minimizeToTrayOnExit,
-    setMinimizeToTrayOnExit,
-    autoCheckUpdates,
-    setAutoCheckUpdates
+    config,
+    updateConfig
 }: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
+
+    const appLanguage = config.appLanguage || 'auto';
+    const theme = config.theme || 'auto';
+    const font = config.font || 'system';
+    const minimizeToTrayOnExit = config.minimizeToTrayOnExit ?? true;
+    const autoCheckUpdates = config.autoCheckUpdates ?? true;
 
     return (
         <div
@@ -52,7 +43,7 @@ export function SettingsGeneralTab({
                     <Dropdown
                         id="settings-language"
                         value={appLanguage}
-                        onChange={(value) => setAppLanguage(value as 'auto' | 'en' | 'zh')}
+                        onChange={(value) => updateConfig({ appLanguage: value as 'auto' | 'en' | 'zh' })}
                         options={[
                             { value: 'auto', label: t('common.auto') },
                             { value: 'en', label: 'English' },
@@ -71,7 +62,7 @@ export function SettingsGeneralTab({
                     <div className="theme-selector-container">
                         <button
                             className={`theme-card ${theme === 'light' ? 'active' : ''}`}
-                            onClick={() => setTheme('light')}
+                            onClick={() => updateConfig({ theme: 'light' })}
                             aria-label={t('settings.theme_light', { defaultValue: 'Light' })}
                             aria-pressed={theme === 'light'}
                         >
@@ -89,7 +80,7 @@ export function SettingsGeneralTab({
 
                         <button
                             className={`theme-card ${theme === 'dark' ? 'active' : ''}`}
-                            onClick={() => setTheme('dark')}
+                            onClick={() => updateConfig({ theme: 'dark' })}
                             aria-label={t('settings.theme_dark', { defaultValue: 'Dark' })}
                             aria-pressed={theme === 'dark'}
                         >
@@ -107,7 +98,7 @@ export function SettingsGeneralTab({
 
                         <button
                             className={`theme-card ${theme === 'auto' ? 'active' : ''}`}
-                            onClick={() => setTheme('auto')}
+                            onClick={() => updateConfig({ theme: 'auto' })}
                             aria-label={t('common.auto')}
                             aria-pressed={theme === 'auto'}
                         >
@@ -132,7 +123,7 @@ export function SettingsGeneralTab({
                     <Dropdown
                         id="settings-font"
                         value={font}
-                        onChange={setFont}
+                        onChange={(value) => updateConfig({ font: value as any })}
                         options={[
                             { value: 'system', label: t('settings.font_system', { defaultValue: 'System Default' }), style: { fontFamily: 'inherit' } },
                             { value: 'serif', label: 'Serif (Merriweather)', style: { fontFamily: 'serif' } },
@@ -156,7 +147,7 @@ export function SettingsGeneralTab({
                     </div>
                     <Switch
                         checked={minimizeToTrayOnExit}
-                        onChange={setMinimizeToTrayOnExit}
+                        onChange={(enabled) => updateConfig({ minimizeToTrayOnExit: enabled })}
                     />
                 </div>
             </div>
@@ -166,7 +157,7 @@ export function SettingsGeneralTab({
                     <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}</div>
                     <Switch
                         checked={autoCheckUpdates}
-                        onChange={setAutoCheckUpdates}
+                        onChange={(enabled) => updateConfig({ autoCheckUpdates: enabled })}
                     />
                 </div>
             </div>

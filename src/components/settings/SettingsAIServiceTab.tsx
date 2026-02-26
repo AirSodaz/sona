@@ -3,27 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
 import { List, Loader2, Check, X } from 'lucide-react';
+import { AppConfig } from '../../types/transcript';
 
 interface SettingsAIServiceTabProps {
-    aiServiceType: string;
-    setAiServiceType: (type: string) => void;
-    aiBaseUrl: string;
-    setAiBaseUrl: (url: string) => void;
-    aiApiKey: string;
-    setAiApiKey: (key: string) => void;
-    aiModel: string;
-    setAiModel: (model: string) => void;
+    config: AppConfig;
+    updateConfig: (updates: Partial<AppConfig>) => void;
+    changeAiServiceType: (type: string) => void;
 }
 
 export function SettingsAIServiceTab({
-    aiServiceType,
-    setAiServiceType,
-    aiBaseUrl,
-    setAiBaseUrl,
-    aiApiKey,
-    setAiApiKey,
-    aiModel,
-    setAiModel
+    config,
+    updateConfig,
+    changeAiServiceType
 }: SettingsAIServiceTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -34,10 +25,34 @@ export function SettingsAIServiceTab({
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
+    const aiServiceType = config.aiServiceType || 'openai';
+    const aiBaseUrl = config.aiBaseUrl || '';
+    const aiApiKey = config.aiApiKey || '';
+    const aiModel = config.aiModel || '';
+
     const handleServiceTypeChange = (type: string) => {
-        setAiServiceType(type);
+        changeAiServiceType(type);
         setAvailableModels([]);
         setIsManualEntry(false);
+    };
+
+    const updateAiSetting = (key: 'baseUrl' | 'apiKey' | 'model', value: string) => {
+        const currentType = config.aiServiceType || 'openai';
+        const aiServices = config.aiServices || {};
+        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
+
+        const updates: Partial<AppConfig> = {
+            aiServices: {
+                ...aiServices,
+                [currentType]: { ...currentSettings, [key]: value }
+            }
+        };
+
+        if (key === 'baseUrl') updates.aiBaseUrl = value;
+        if (key === 'apiKey') updates.aiApiKey = value;
+        if (key === 'model') updates.aiModel = value;
+
+        updateConfig(updates);
     };
 
     const fetchModels = async () => {
@@ -45,6 +60,8 @@ export function SettingsAIServiceTab({
 
         setIsLoadingModels(true);
         try {
+            // Note: get_ai_models command might need to be adjusted if it relies on store state,
+            // but here we pass params explicitly.
             const models = await invoke<string[]>('get_ai_models', {
                 apiKey: aiApiKey,
                 baseUrl: aiBaseUrl,
@@ -60,7 +77,7 @@ export function SettingsAIServiceTab({
                       // If current model is in list or empty, use dropdown
                       setIsManualEntry(false);
                       if (!aiModel) {
-                          setAiModel(models[0]);
+                          updateAiSetting('model', models[0]);
                       }
                  }
             } else {
@@ -138,7 +155,7 @@ export function SettingsAIServiceTab({
                     type="text"
                     className="settings-input"
                     value={aiBaseUrl}
-                    onChange={(e) => setAiBaseUrl(e.target.value)}
+                    onChange={(e) => updateAiSetting('baseUrl', e.target.value)}
                     placeholder="https://api.openai.com/v1"
                 />
             </div>
@@ -149,7 +166,7 @@ export function SettingsAIServiceTab({
                     type="password"
                     className="settings-input"
                     value={aiApiKey}
-                    onChange={(e) => setAiApiKey(e.target.value)}
+                    onChange={(e) => updateAiSetting('apiKey', e.target.value)}
                     placeholder="sk-..."
                 />
             </div>
@@ -170,7 +187,7 @@ export function SettingsAIServiceTab({
                                     if (val === '__manual__') {
                                         setIsManualEntry(true);
                                     } else {
-                                        setAiModel(val);
+                                        updateAiSetting('model', val);
                                     }
                                 }}
                                 options={[
@@ -184,7 +201,7 @@ export function SettingsAIServiceTab({
                                 type="text"
                                 className="settings-input"
                                 value={aiModel}
-                                onChange={(e) => setAiModel(e.target.value)}
+                                onChange={(e) => updateAiSetting('model', e.target.value)}
                                 placeholder="gpt-4o"
                             />
                         )}

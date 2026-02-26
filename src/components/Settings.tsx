@@ -45,67 +45,11 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     const {
         activeTab,
         setActiveTab,
-        appLanguage,
-        setAppLanguage,
-        theme,
-        setTheme,
-        font,
-        setFont,
-        microphoneId,
-        setMicrophoneId,
-        systemAudioDeviceId,
-        setSystemAudioDeviceId,
-        muteDuringRecording,
-        setMuteDuringRecording,
-        minimizeToTrayOnExit,
-        setMinimizeToTrayOnExit,
-        autoCheckUpdates,
-        setAutoCheckUpdates,
-
-        lockWindow,
-        setLockWindow,
-        alwaysOnTop,
-        setAlwaysOnTop,
-        startOnLaunch,
-        setStartOnLaunch,
-        captionWindowWidth,
-        setCaptionWindowWidth,
-        captionFontSize,
-        setCaptionFontSize,
-        captionFontColor,
-        setCaptionFontColor,
-
-        aiServiceType,
-        setAiServiceType,
-        aiBaseUrl,
-        setAiBaseUrl,
-        aiApiKey,
-        setAiApiKey,
-        aiModel,
-        setAiModel,
-
-        offlineModelPath,
-        setOfflineModelPath,
-        punctuationModelPath,
-        setPunctuationModelPath,
-        vadModelPath,
-        setVadModelPath,
-        ctcModelPath,
-        setCtcModelPath,
-
-        vadBufferSize,
-        setVadBufferSize,
-
-        itnRulesOrder,
-        setItnRulesOrder,
-        enabledITNModels,
-        setEnabledITNModels,
-        enableITN,
-        setEnableITN,
-        installedITNModels,
+        config,
+        updateConfig,
+        changeAiServiceType,
 
         downloads,
-        // downloadingId, progress, statusMessage,
         installedModels,
 
         handleBrowse,
@@ -114,8 +58,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         handleLoad,
         handleDelete,
         isModelSelected,
-        maxConcurrent,
-        setMaxConcurrent,
         restoreDefaultModelSettings
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
@@ -278,49 +220,28 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                         {activeTab === 'general' && (
                             <SettingsGeneralTab
-                                appLanguage={appLanguage}
-                                setAppLanguage={setAppLanguage}
-                                theme={theme}
-                                setTheme={setTheme}
-                                font={font}
-                                setFont={setFont}
-                                minimizeToTrayOnExit={minimizeToTrayOnExit}
-                                setMinimizeToTrayOnExit={setMinimizeToTrayOnExit}
-                                autoCheckUpdates={autoCheckUpdates}
-                                setAutoCheckUpdates={setAutoCheckUpdates}
+                                config={config}
+                                updateConfig={updateConfig}
                             />
                         )}
 
                         {activeTab === 'microphone' && (
                             <SettingsMicrophoneTab
-                                microphoneId={microphoneId}
-                                setMicrophoneId={setMicrophoneId}
-                                systemAudioDeviceId={systemAudioDeviceId}
-                                setSystemAudioDeviceId={setSystemAudioDeviceId}
-                                muteDuringRecording={muteDuringRecording}
-                                setMuteDuringRecording={setMuteDuringRecording}
+                                config={config}
+                                updateConfig={updateConfig}
                             />
                         )}
 
                         {activeTab === 'subtitle' && (
                             <SettingsSubtitleTab
-                                lockWindow={lockWindow}
-                                setLockWindow={setLockWindow}
-                                alwaysOnTop={alwaysOnTop}
-                                setAlwaysOnTop={setAlwaysOnTop}
-                                startOnLaunch={startOnLaunch}
-                                setStartOnLaunch={setStartOnLaunch}
-                                captionWindowWidth={captionWindowWidth}
-                                setCaptionWindowWidth={setCaptionWindowWidth}
-                                captionFontSize={captionFontSize}
-                                setCaptionFontSize={setCaptionFontSize}
-                                captionFontColor={captionFontColor}
-                                setCaptionFontColor={setCaptionFontColor}
+                                config={config}
+                                updateConfig={updateConfig}
                             />
                         )}
 
                         {activeTab === 'models' && (
                             <SettingsModelsTab
+                                config={config}
                                 installedModels={installedModels}
                                 downloads={downloads}
                                 onLoad={handleLoad}
@@ -333,31 +254,12 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                         {activeTab === 'local' && (
                             <SettingsLocalTab
-
-                                offlineModelPath={offlineModelPath}
-                                setOfflineModelPath={setOfflineModelPath}
-                                punctuationModelPath={punctuationModelPath}
-                                setPunctuationModelPath={setPunctuationModelPath}
-                                vadModelPath={vadModelPath}
-                                setVadModelPath={setVadModelPath}
-                                ctcModelPath={ctcModelPath}
-                                setCtcModelPath={setCtcModelPath}
-                                vadBufferSize={vadBufferSize}
-                                setVadBufferSize={setVadBufferSize}
+                                config={config}
+                                updateConfig={updateConfig}
                                 handleBrowse={handleBrowse}
-
-                                itnRulesOrder={itnRulesOrder}
-                                setItnRulesOrder={setItnRulesOrder}
-                                enabledITNModels={enabledITNModels}
-                                setEnabledITNModels={setEnabledITNModels}
-                                enableITN={enableITN}
-                                setEnableITN={setEnableITN}
-                                installedITNModels={installedITNModels}
                                 downloads={downloads}
                                 onDownloadITN={handleDownload}
                                 onCancelDownload={handleCancelDownload}
-                                maxConcurrent={maxConcurrent}
-                                setMaxConcurrent={setMaxConcurrent}
                                 installedModels={installedModels}
                                 onRestoreDefaults={restoreDefaultModelSettings}
                             />
@@ -365,14 +267,9 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                         {activeTab === 'ai_service' && (
                             <SettingsAIServiceTab
-                                aiServiceType={aiServiceType}
-                                setAiServiceType={setAiServiceType}
-                                aiBaseUrl={aiBaseUrl}
-                                setAiBaseUrl={setAiBaseUrl}
-                                aiApiKey={aiApiKey}
-                                setAiApiKey={setAiApiKey}
-                                aiModel={aiModel}
-                                setAiModel={setAiModel}
+                                config={config}
+                                updateConfig={updateConfig}
+                                changeAiServiceType={changeAiServiceType}
                             />
                         )}
 

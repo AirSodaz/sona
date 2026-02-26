@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
+import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
@@ -53,25 +54,46 @@ function ModelSection({
 }
 
 interface SettingsModelsTabProps {
+    config: AppConfig;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
-    isModelSelected: (model: ModelInfo) => boolean;
+    isModelSelected: (model: ModelInfo) => boolean; // Keep for backward compatibility if needed, but we'll use internal logic or this
 }
 
 export function SettingsModelsTab({
+    config,
     installedModels,
     downloads,
     onLoad,
     onDelete,
     onDownload,
     onCancelDownload,
-    isModelSelected
+    isModelSelected: propsIsModelSelected // Allow overriding or ignoring
 }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
+
+    const isModelSelected = (model: ModelInfo): boolean => {
+        if (propsIsModelSelected) return propsIsModelSelected(model);
+
+        // Fallback to internal logic using config
+        if (model.type === 'offline') {
+            return (config.offlineModelPath || '').includes(model.filename || model.id);
+        }
+        if (model.type === 'punctuation') {
+            return (config.punctuationModelPath || '').includes(model.filename || model.id);
+        }
+        if (model.type === 'vad') {
+            return (config.vadModelPath || '').includes(model.filename || model.id);
+        }
+        if (model.type === 'ctc') {
+            return (config.ctcModelPath || '').includes(model.filename || model.id);
+        }
+        return false;
+    };
 
     const sectionProps = {
         installedModels,

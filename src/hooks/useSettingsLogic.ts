@@ -39,10 +39,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }, [initialTab, _isOpen]);
 
-    // We read directly from the config store
-    const [enabledITNModels, setEnabledITNModels] = useState<Set<string>>(new Set(config.enabledITNModels || []));
-    const [enableITN, setEnableITNState] = useState<boolean>(config.enableITN ?? true);
-
     // Download state
     type DownloadState = {
         progress: number;
@@ -53,11 +49,14 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
 
-    // Sync ITN state when config changes externally
+    // Sync language change
     useEffect(() => {
-        setEnabledITNModels(new Set(config.enabledITNModels || []));
-        setEnableITNState(config.enableITN ?? true);
-    }, [config.enabledITNModels, config.enableITN]);
+        if (config.appLanguage === 'auto') {
+            i18n.changeLanguage(navigator.language);
+        } else {
+            i18n.changeLanguage(config.appLanguage);
+        }
+    }, [config.appLanguage, i18n]);
 
     async function checkInstalledModels() {
         const installed = new Set<string>();
@@ -81,66 +80,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         // Persistence is now handled by useAppInitialization
     };
 
-    // Setters that update store immediately
-    const setOfflineModelPath = (path: string) => updateConfig({ offlineModelPath: path });
-    const setPunctuationModelPath = (path: string) => updateConfig({ punctuationModelPath: path });
-    const setCtcModelPath = (path: string) => updateConfig({ ctcModelPath: path });
-    const setVadModelPath = (path: string) => updateConfig({ vadModelPath: path });
-    const setVadBufferSize = (size: number) => updateConfig({ vadBufferSize: size });
-    const setMaxConcurrent = (size: number) => updateConfig({ maxConcurrent: size });
-
-    const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
-        const newOrder = typeof action === 'function'
-            ? (action as (prev: string[]) => string[])(config.itnRulesOrder || ['itn-zh-number'])
-            : action;
-        updateConfig({ itnRulesOrder: newOrder });
-    };
-
-    const handleSetEnabledITNModels = (action: React.SetStateAction<Set<string>>) => {
-        const currentSet = new Set(config.enabledITNModels || []);
-        const newSet = typeof action === 'function'
-            ? (action as (prev: Set<string>) => Set<string>)(currentSet)
-            : action;
-
-        setEnabledITNModels(newSet);
-        updateConfig({
-            enabledITNModels: Array.from(newSet)
-        });
-    };
-
-    const setEnableITN = (enabled: boolean) => {
-        setEnableITNState(enabled);
-        updateConfig({ enableITN: enabled });
-    };
-
-    const setAppLanguage = (lang: 'auto' | 'en' | 'zh') => {
-        updateConfig({ appLanguage: lang });
-        if (lang === 'auto') {
-            i18n.changeLanguage(navigator.language);
-        } else {
-            i18n.changeLanguage(lang);
-        }
-    };
-
-    const setTheme = (theme: 'auto' | 'light' | 'dark') => updateConfig({ theme: theme });
-    const setFont = (font: string) => updateConfig({ font: font as any });
-
-    const setMicrophoneId = (id: string) => updateConfig({ microphoneId: id });
-    const setSystemAudioDeviceId = (id: string) => updateConfig({ systemAudioDeviceId: id });
-    const setMuteDuringRecording = (enabled: boolean) => updateConfig({ muteDuringRecording: enabled });
-
-    const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
-    const setAutoCheckUpdates = (enabled: boolean) => updateConfig({ autoCheckUpdates: enabled });
-
-    const setLockWindow = (enabled: boolean) => updateConfig({ lockWindow: enabled });
-    const setAlwaysOnTop = (enabled: boolean) => updateConfig({ alwaysOnTop: enabled });
-
-    const setStartOnLaunch = (enabled: boolean) => updateConfig({ startOnLaunch: enabled });
-    const setCaptionWindowWidth = (width: number) => updateConfig({ captionWindowWidth: width });
-    const setCaptionFontSize = (size: number) => updateConfig({ captionFontSize: size });
-    const setCaptionFontColor = (color: string) => updateConfig({ captionFontColor: color });
-
-    const setAiServiceType = (type: string) => {
+    const changeAiServiceType = (type: string) => {
         const currentType = config.aiServiceType || 'openai';
         const aiServices = config.aiServices || {};
 
@@ -168,49 +108,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    const setAiBaseUrl = (url: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
-
-        updateConfig({
-            aiBaseUrl: url,
-            aiServices: {
-                ...aiServices,
-                [currentType]: { ...currentSettings, baseUrl: url }
-            }
-        });
-    };
-
-    const setAiApiKey = (key: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
-
-        updateConfig({
-            aiApiKey: key,
-            aiServices: {
-                ...aiServices,
-                [currentType]: { ...currentSettings, apiKey: key }
-            }
-        });
-    };
-
-    const setAiModel = (model: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
-
-        updateConfig({
-            aiModel: model,
-            aiServices: {
-                ...aiServices,
-                [currentType]: { ...currentSettings, model: model }
-            }
-        });
-    };
-
-
     function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
             case 'offline':
@@ -236,13 +133,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
                     if (type === 'offline') {
-                        setOfflineModelPath(path);
+                        updateConfig({ offlineModelPath: path });
                     } else if (type === 'vad') {
-                        setVadModelPath(path);
+                        updateConfig({ vadModelPath: path });
                     } else if (type === 'ctc') {
-                        setCtcModelPath(path);
+                        updateConfig({ ctcModelPath: path });
                     } else {
-                        setPunctuationModelPath(path);
+                        updateConfig({ punctuationModelPath: path });
                     }
                 }
             }
@@ -265,13 +162,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     function setModelPathByType(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
         if (type === 'offline') {
-            setOfflineModelPath(path);
+            updateConfig({ offlineModelPath: path });
         } else if (type === 'vad') {
-            setVadModelPath(path);
+            updateConfig({ vadModelPath: path });
         } else if (type === 'ctc') {
-            setCtcModelPath(path);
+            updateConfig({ ctcModelPath: path });
         } else {
-            setPunctuationModelPath(path);
+            updateConfig({ punctuationModelPath: path });
         }
     }
 
@@ -337,8 +234,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             (id, cb, sig) => modelService.downloadModel(id, cb, sig),
             (path) => {
                 if (model.type === 'itn') {
-                    setEnabledITNModels(prev => new Set(prev).add(model.id));
-                    // Also enable ITN if not enabled? No, keep user choice.
+                    // Update enabledITNModels in config
+                    const current = new Set(config.enabledITNModels || []);
+                    current.add(model.id);
+                    updateConfig({ enabledITNModels: Array.from(current) });
                 } else {
                     setModelPathByType(model.type as any, path);
                 }
@@ -377,16 +276,16 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             const deletedPath = await modelService.getModelPath(model.id);
             // Streaming path removed
             if (config.offlineModelPath === deletedPath) {
-                setOfflineModelPath('');
+                updateConfig({ offlineModelPath: '' });
             }
             if (config.punctuationModelPath === deletedPath) {
-                setPunctuationModelPath('');
+                updateConfig({ punctuationModelPath: '' });
             }
             if (config.vadModelPath === deletedPath) {
-                setVadModelPath('');
+                updateConfig({ vadModelPath: '' });
             }
             if (config.ctcModelPath === deletedPath) {
-                setCtcModelPath('');
+                updateConfig({ ctcModelPath: '' });
             }
         } catch (error: any) {
             console.error('Delete failed:', error);
@@ -457,83 +356,14 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             enabledITNModels: [],
             itnRulesOrder: [],
         });
-
-        // Sync local state
-        setEnabledITNModels(new Set());
-        setEnableITNState(true);
     }
 
     return {
         activeTab,
         setActiveTab,
-
-        // Return values directly from config store or local state
-        appLanguage: config.appLanguage || 'auto',
-        setAppLanguage,
-        theme: config.theme || 'auto',
-        setTheme,
-        font: config.font || 'system',
-        setFont,
-        microphoneId: config.microphoneId || 'default',
-        setMicrophoneId,
-        systemAudioDeviceId: config.systemAudioDeviceId || 'default',
-        setSystemAudioDeviceId,
-        muteDuringRecording: config.muteDuringRecording || false,
-        setMuteDuringRecording,
-        minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
-        setMinimizeToTrayOnExit,
-
-        autoCheckUpdates: config.autoCheckUpdates ?? true,
-        setAutoCheckUpdates,
-
-        lockWindow: config.lockWindow ?? false,
-        setLockWindow,
-        alwaysOnTop: config.alwaysOnTop ?? true,
-        setAlwaysOnTop,
-
-        startOnLaunch: config.startOnLaunch ?? false,
-        setStartOnLaunch,
-        captionWindowWidth: config.captionWindowWidth ?? 800,
-        setCaptionWindowWidth,
-        captionFontSize: config.captionFontSize ?? 24,
-        setCaptionFontSize,
-        captionFontColor: config.captionFontColor || '#ffffff',
-        setCaptionFontColor,
-
-        aiServiceType: config.aiServiceType || 'openai',
-        setAiServiceType,
-        aiBaseUrl: config.aiBaseUrl || '',
-        setAiBaseUrl,
-        aiApiKey: config.aiApiKey || '',
-        setAiApiKey,
-        aiModel: config.aiModel || '',
-        setAiModel,
-
-        // streamingModelPath removed
-        offlineModelPath: config.offlineModelPath,
-        setOfflineModelPath,
-        punctuationModelPath: config.punctuationModelPath || '',
-        setPunctuationModelPath,
-        vadModelPath: config.vadModelPath || '',
-        setVadModelPath,
-        ctcModelPath: config.ctcModelPath || '',
-        setCtcModelPath,
-
-        vadBufferSize: config.vadBufferSize || 5,
-        setVadBufferSize,
-
-        maxConcurrent: config.maxConcurrent || 2,
-        setMaxConcurrent,
-
-        itnRulesOrder: config.itnRulesOrder || ['itn-zh-number'],
-        setItnRulesOrder,
-
-        enabledITNModels,
-        setEnabledITNModels: handleSetEnabledITNModels,
-        enableITN,
-        setEnableITN,
-
-        installedITNModels: installedModels, // Use installedModels instead
+        config,
+        updateConfig,
+        changeAiServiceType,
 
         deletingId,
         downloads,
