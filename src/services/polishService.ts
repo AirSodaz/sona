@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import i18n from '../i18n';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
+import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 
 class PolishService {
     /**
@@ -108,7 +108,7 @@ class PolishService {
         if (scenario === 'custom') {
             contextText = config.polishContext || "";
         } else {
-            contextText = i18n.t(`polish.prompts.${scenario}`, { defaultValue: "" });
+            contextText = POLISH_SCENARIO_PROMPTS[scenario] || "";
         }
 
         if (contextText.trim()) {
