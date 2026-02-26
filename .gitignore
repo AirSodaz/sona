@@ -28,3 +28,4 @@ dist-ssr
 # Playwright
 playwright-report/
 test-results/
+**/sherpa-onnx*

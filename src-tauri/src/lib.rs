@@ -1,6 +1,7 @@
 mod audio;
 mod hardware;
 mod ai;
+pub mod pipeline;
 
 use std::collections::HashMap;
 use std::sync::Arc;
