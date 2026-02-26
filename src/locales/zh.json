@@ -340,11 +340,11 @@
             "custom": "自定义"
         },
         "prompts": {
-            "customer_service": "这是一段客服通话的转录文本。",
-            "meeting": "这是一段会议的转录文本。",
-            "interview": "这是一段采访的转录文本。",
-            "lecture": "这是一段讲座的转录文本。",
-            "podcast": "这是一段播客的转录文本。"
+            "customer_service": "This is a transcript of a customer service call.",
+            "meeting": "This is a transcript of a meeting.",
+            "interview": "This is a transcript of an interview.",
+            "lecture": "This is a transcript of a lecture.",
+            "podcast": "This is a transcript of a podcast."
         }
     }
 }
