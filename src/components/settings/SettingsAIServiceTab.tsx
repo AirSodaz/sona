@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
+import { List, Loader2, Check, X } from 'lucide-react';
 
 interface SettingsAIServiceTabProps {
     aiServiceType: string;
@@ -114,22 +115,21 @@ export function SettingsAIServiceTab({
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
                 <label className="settings-label">{t('settings.ai.service_type')}</label>
-                <div style={{ maxWidth: 300 }}>
-                    <Dropdown
-                        id="ai-service-type"
-                        value={aiServiceType}
-                        onChange={handleServiceTypeChange}
-                        options={[
-                            { value: 'openai', label: 'OpenAI' },
-                            { value: 'anthropic', label: 'Anthropic' },
-                            { value: 'ollama', label: 'Ollama' },
-                            { value: 'gemini', label: 'Google Gemini' },
-                            { value: 'deepseek', label: 'DeepSeek' },
-                            { value: 'kimi', label: 'Kimi' },
-                            { value: 'siliconflow', label: 'SiliconFlow' }
-                        ]}
-                    />
-                </div>
+                <Dropdown
+                    id="ai-service-type"
+                    value={aiServiceType}
+                    onChange={handleServiceTypeChange}
+                    options={[
+                        { value: 'openai', label: 'OpenAI' },
+                        { value: 'anthropic', label: 'Anthropic' },
+                        { value: 'ollama', label: 'Ollama' },
+                        { value: 'gemini', label: 'Google Gemini' },
+                        { value: 'deepseek', label: 'DeepSeek' },
+                        { value: 'kimi', label: 'Kimi' },
+                        { value: 'siliconflow', label: 'SiliconFlow' }
+                    ]}
+                    style={{ width: '100%' }}
+                />
             </div>
 
             <div className="settings-item">
@@ -140,7 +140,6 @@ export function SettingsAIServiceTab({
                     value={aiBaseUrl}
                     onChange={(e) => setAiBaseUrl(e.target.value)}
                     placeholder="https://api.openai.com/v1"
-                    style={{ width: '100%', padding: '8px', marginTop: '8px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text)' }}
                 />
             </div>
 
@@ -152,7 +151,6 @@ export function SettingsAIServiceTab({
                     value={aiApiKey}
                     onChange={(e) => setAiApiKey(e.target.value)}
                     placeholder="sk-..."
-                    style={{ width: '100%', padding: '8px', marginTop: '8px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text)' }}
                 />
             </div>
 
@@ -162,58 +160,81 @@ export function SettingsAIServiceTab({
                     {isLoadingModels && <span style={{ marginLeft: 10, fontSize: '0.8em', color: 'var(--color-text-muted)' }}>{t('settings.ai.loading_models') || '(Loading models...)'}</span>}
                 </label>
 
-                {!isManualEntry && availableModels.length > 0 ? (
-                    <div style={{ maxWidth: 300 }}>
-                         <Dropdown
-                            id="ai-model"
-                            value={aiModel}
-                            onChange={(val) => {
-                                if (val === '__manual__') {
-                                    setIsManualEntry(true);
-                                } else {
-                                    setAiModel(val);
-                                }
-                            }}
-                            options={[
-                                ...availableModels.map(m => ({ value: m, label: m })),
-                                { value: '__manual__', label: t('settings.ai.type_manually') || 'Type manually...' }
-                            ]}
-                        />
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <input
-                            type="text"
-                            className="settings-input"
-                            value={aiModel}
-                            onChange={(e) => setAiModel(e.target.value)}
-                            placeholder="gpt-4o"
-                            style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text)' }}
-                        />
-                        {availableModels.length > 0 && (
-                            <button
-                                className="btn btn-secondary"
-                                onClick={() => setIsManualEntry(false)}
-                                style={{ padding: '8px', whiteSpace: 'nowrap', cursor: 'pointer', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-input)' }}
-                            >
-                                {t('settings.ai.back_to_list') || 'Back to list'}
-                            </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                        {!isManualEntry && availableModels.length > 0 ? (
+                            <Dropdown
+                                id="ai-model"
+                                value={aiModel}
+                                onChange={(val) => {
+                                    if (val === '__manual__') {
+                                        setIsManualEntry(true);
+                                    } else {
+                                        setAiModel(val);
+                                    }
+                                }}
+                                options={[
+                                    ...availableModels.map(m => ({ value: m, label: m })),
+                                    { value: '__manual__', label: t('settings.ai.type_manually') || 'Type manually...' }
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                        ) : (
+                            <input
+                                type="text"
+                                className="settings-input"
+                                value={aiModel}
+                                onChange={(e) => setAiModel(e.target.value)}
+                                placeholder="gpt-4o"
+                            />
                         )}
                     </div>
-                )}
-            </div>
 
-            <div className="settings-item" style={{ marginTop: 20 }}>
-                <button
-                    className="btn btn-primary"
-                    onClick={handleTestConnection}
-                    disabled={testStatus === 'loading'}
-                    style={{ padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    {testStatus === 'loading' ? t('settings.ai.testing') : t('settings.ai.test_connection')}
-                </button>
+                    {isManualEntry && availableModels.length > 0 && (
+                        <button
+                            className="btn btn-secondary btn-icon"
+                            onClick={() => setIsManualEntry(false)}
+                            title={t('settings.ai.back_to_list') || 'Back to list'}
+                            aria-label={t('settings.ai.back_to_list') || 'Back to list'}
+                        >
+                            <List size={16} />
+                        </button>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleTestConnection}
+                        disabled={testStatus === 'loading'}
+                        style={{ whiteSpace: 'nowrap' }}
+                    >
+                        {testStatus === 'loading' ? (
+                            <>
+                                <Loader2 className="animate-spin" size={16} />
+                                <span>{t('settings.ai.testing')}</span>
+                            </>
+                        ) : (
+                            t('settings.ai.test_connection')
+                        )}
+                    </button>
+                </div>
+
                 {testMessage && (
-                    <div style={{ marginTop: 10, color: testStatus === 'error' ? 'red' : 'green', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '4px' }}>
+                    <div style={{
+                        marginTop: 10,
+                        color: testStatus === 'error' ? 'var(--color-error)' : 'var(--color-success)',
+                        whiteSpace: 'pre-wrap',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        border: '1px solid var(--color-border)',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        backgroundColor: 'var(--color-bg-input)',
+                        fontSize: '0.875rem'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            {testStatus === 'error' ? <X size={16} /> : <Check size={16} />}
+                            <strong>{testStatus === 'error' ? 'Connection Failed' : 'Connection Successful'}</strong>
+                        </div>
                         {testMessage}
                     </div>
                 )}
