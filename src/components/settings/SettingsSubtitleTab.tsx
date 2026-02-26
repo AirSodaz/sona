@@ -36,7 +36,7 @@ export function SettingsSubtitleTab({
     return (
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <div className="settings-item-row">
                     <div>
                         <div className="settings-label" style={{ marginBottom: 0 }}>
                             {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
@@ -52,8 +52,8 @@ export function SettingsSubtitleTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <div>
                         <div className="settings-label" style={{ marginBottom: 0 }}>
                             {t('live.lock_window', { defaultValue: 'Lock Window' })}
@@ -69,8 +69,8 @@ export function SettingsSubtitleTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <div>
                         <div className="settings-label" style={{ marginBottom: 0 }}>
                             {t('live.always_on_top', { defaultValue: 'Always on Top' })}
@@ -86,8 +86,8 @@ export function SettingsSubtitleTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <span className="settings-label" style={{ marginBottom: 0 }}>
                         {t('live.window_width', { defaultValue: 'Floating Window Width' })}
                     </span>
@@ -106,8 +106,8 @@ export function SettingsSubtitleTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <span className="settings-label" style={{ marginBottom: 0 }}>
                         {t('live.font_size', { defaultValue: 'Font Size' })}
                     </span>
@@ -126,8 +126,8 @@ export function SettingsSubtitleTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <span className="settings-label" style={{ marginBottom: 0 }}>
                         {t('live.font_color', { defaultValue: 'Font Color' })}
                     </span>

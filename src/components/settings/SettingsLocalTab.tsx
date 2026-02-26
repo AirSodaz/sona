@@ -143,7 +143,7 @@ export function SettingsLocalTab({
             tabIndex={0}
         >
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Recognition Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Dropdown
@@ -161,7 +161,7 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.punctuation_path_label')}</label>
                     <Switch
@@ -171,7 +171,7 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.vad_path_label', { defaultValue: 'VAD Model' })}</label>
                     <Switch
@@ -183,7 +183,7 @@ export function SettingsLocalTab({
 
 
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ctc_path_label', { defaultValue: 'CTC Model' })}</label>
                     <Switch
@@ -193,7 +193,7 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
                 <div style={{ maxWidth: 300 }}>
                     <input
@@ -213,7 +213,7 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 16 }}>
+            <div className="settings-item">
                 <label htmlFor="settings-max-concurrent" className="settings-label">{t('settings.max_concurrent_label', { defaultValue: 'Max Concurrent Transcriptions' })}</label>
                 <div style={{ maxWidth: 300 }}>
                     <input
@@ -237,7 +237,7 @@ export function SettingsLocalTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
+            <div className="settings-item with-divider">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <div style={{ fontWeight: 500 }}>{t('settings.enable_itn', { defaultValue: 'Enable ITN' })}</div>
@@ -263,7 +263,7 @@ export function SettingsLocalTab({
                 onCancelDownload={onCancelDownload}
             />
 
-            <div style={{ marginTop: 32, borderTop: '1px solid var(--color-border)', paddingTop: 24 }}>
+            <div className="settings-item with-divider">
                 <button
                     className="btn btn-restore-defaults"
                     onClick={onRestoreDefaults}
