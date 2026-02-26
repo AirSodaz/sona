@@ -77,7 +77,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     // Helper to update config and persist immediately
     const updateConfig = (updates: Partial<typeof config>) => {
         setConfig(updates);
-        // Persistence is now handled by useAppInitialization
     };
 
     const changeAiServiceType = (type: string) => {
@@ -108,16 +107,29 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
+    function updateModelPath(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
         switch (type) {
             case 'offline':
-                return t('settings.offline_path_label');
+                updateConfig({ offlineModelPath: path });
+                break;
+            case 'punctuation':
+                updateConfig({ punctuationModelPath: path });
+                break;
             case 'vad':
-                return t('settings.vad_path_label');
+                updateConfig({ vadModelPath: path });
+                break;
             case 'ctc':
-                return t('settings.ctc_path_label');
-            default:
-                return 'Select Punctuation Model Path';
+                updateConfig({ ctcModelPath: path });
+                break;
+        }
+    }
+
+    function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
+        switch (type) {
+            case 'offline': return t('settings.offline_path_label');
+            case 'vad': return t('settings.vad_path_label');
+            case 'ctc': return t('settings.ctc_path_label');
+            default: return 'Select Punctuation Model Path';
         }
     }
 
@@ -132,15 +144,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'offline') {
-                        updateConfig({ offlineModelPath: path });
-                    } else if (type === 'vad') {
-                        updateConfig({ vadModelPath: path });
-                    } else if (type === 'ctc') {
-                        updateConfig({ ctcModelPath: path });
-                    } else {
-                        updateConfig({ punctuationModelPath: path });
-                    }
+                    updateModelPath(type, path);
                 }
             }
         } catch (err) {
@@ -157,18 +161,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 delete next[modelId];
                 return next;
             });
-        }
-    }
-
-    function setModelPathByType(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
-        if (type === 'offline') {
-            updateConfig({ offlineModelPath: path });
-        } else if (type === 'vad') {
-            updateConfig({ vadModelPath: path });
-        } else if (type === 'ctc') {
-            updateConfig({ ctcModelPath: path });
-        } else {
-            updateConfig({ punctuationModelPath: path });
         }
     }
 
@@ -239,7 +231,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                     current.add(model.id);
                     updateConfig({ enabledITNModels: Array.from(current) });
                 } else {
-                    setModelPathByType(model.type as any, path);
+                    updateModelPath(model.type as any, path);
                 }
             }
         );
@@ -248,7 +240,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     async function handleLoad(model: ModelInfo) {
         try {
             const path = await modelService.getModelPath(model.id);
-            setModelPathByType(model.type as any, path);
+            updateModelPath(model.type as any, path);
         } catch (error: any) {
             console.error('Load failed:', error);
         }
@@ -274,19 +266,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
+
             // Streaming path removed
-            if (config.offlineModelPath === deletedPath) {
-                updateConfig({ offlineModelPath: '' });
-            }
-            if (config.punctuationModelPath === deletedPath) {
-                updateConfig({ punctuationModelPath: '' });
-            }
-            if (config.vadModelPath === deletedPath) {
-                updateConfig({ vadModelPath: '' });
-            }
-            if (config.ctcModelPath === deletedPath) {
-                updateConfig({ ctcModelPath: '' });
-            }
+            if (config.offlineModelPath === deletedPath) updateConfig({ offlineModelPath: '' });
+            if (config.punctuationModelPath === deletedPath) updateConfig({ punctuationModelPath: '' });
+            if (config.vadModelPath === deletedPath) updateConfig({ vadModelPath: '' });
+            if (config.ctcModelPath === deletedPath) updateConfig({ ctcModelPath: '' });
+
         } catch (error: any) {
             console.error('Delete failed:', error);
             await alert(`Failed to delete model: ${error.message}`, {
@@ -299,20 +285,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     }
 
     function isModelSelected(model: ModelInfo): boolean {
-        // Streaming path removed
-        if (model.type === 'offline') {
-            return (config.offlineModelPath || '').includes(model.filename || model.id);
+        let currentPath = '';
+        switch (model.type) {
+            case 'offline': currentPath = config.offlineModelPath; break;
+            case 'punctuation': currentPath = config.punctuationModelPath || ''; break;
+            case 'vad': currentPath = config.vadModelPath || ''; break;
+            case 'ctc': currentPath = config.ctcModelPath || ''; break;
+            default: return false;
         }
-        if (model.type === 'punctuation') {
-            return (config.punctuationModelPath || '').includes(model.filename || model.id);
-        }
-        if (model.type === 'vad') {
-            return (config.vadModelPath || '').includes(model.filename || model.id);
-        }
-        if (model.type === 'ctc') {
-            return (config.ctcModelPath || '').includes(model.filename || model.id);
-        }
-        return false;
+        return !!currentPath && currentPath.includes(model.filename || model.id);
     }
 
     /**

@@ -75,29 +75,20 @@ function isCJK(text: string): boolean {
  */
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
     // Pass 1: Sentence Splitting (Strong Punctuation)
-    let intermediateSegments: TranscriptSegment[] = [];
-
-    for (const segment of segments) {
-        const parts = splitSegmentByRegex(segment, SPLIT_REGEX, { checkAbbreviations: true });
-        intermediateSegments.push(...parts);
-    }
+    const intermediateSegments = segments.flatMap(segment =>
+        splitSegmentByRegex(segment, SPLIT_REGEX, { checkAbbreviations: true })
+    );
 
     // Pass 2: Length Constraints (Weak Punctuation)
-    const finalSegments: TranscriptSegment[] = [];
-
-    for (const segment of intermediateSegments) {
+    return intermediateSegments.flatMap(segment => {
         const segmentText = typeof segment.text === 'string' ? segment.text : String(segment.text || '');
         const limit = isCJK(segmentText) ? MAX_SEGMENT_LENGTH_CJK : MAX_SEGMENT_LENGTH_WESTERN;
 
         if (segmentText.length > limit) {
-            const subSegments = splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
-            finalSegments.push(...subSegments);
-        } else {
-            finalSegments.push(segment);
+            return splitSegmentByRegex(segment, COMMA_SPLIT_REGEX, { checkAbbreviations: false });
         }
-    }
-
-    return finalSegments;
+        return [segment];
+    });
 }
 
 interface SplitOptions {
@@ -113,6 +104,17 @@ interface SplitterState {
     effectiveCharIndex: number;
     lastTokenIndex: number;
     nextTokenSliceStart: number;
+}
+
+/** Context passed to delimiter handler to reduce argument count */
+interface SplitterContext {
+    state: SplitterState;
+    originalSegment: TranscriptSegment;
+    hasTimestamps: boolean;
+    tokenMap: TokenMap | null;
+    totalLength: number;
+    totalDuration: number;
+    results: TranscriptSegment[];
 }
 
 /**
@@ -144,14 +146,22 @@ function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options:
         nextTokenSliceStart: 0,
     };
 
-    const newSegments: TranscriptSegment[] = [];
+    const results: TranscriptSegment[] = [];
+    const context: SplitterContext = {
+        state,
+        originalSegment: segment,
+        hasTimestamps,
+        tokenMap,
+        totalLength,
+        totalDuration,
+        results
+    };
 
-    for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
+    for (const part of parts) {
         const partEffectiveLen = getEffectiveLength(part);
 
         if (regex.test(part)) {
-            handleDelimiter(part, partEffectiveLen, state, options, hasTimestamps, tokenMap, segment, totalLength, totalDuration, newSegments);
+            handleDelimiter(part, partEffectiveLen, context, options);
         } else {
             // Content
             state.currentText += part;
@@ -162,10 +172,10 @@ function splitSegmentByRegex(segment: TranscriptSegment, regex: RegExp, options:
 
     // Leftover text
     if (state.currentText.trim()) {
-        finalizeSegment(state, segment, hasTimestamps, tokenMap, newSegments);
+        finalizeSegment(context);
     }
 
-    return newSegments;
+    return results;
 }
 
 function checkHasTimestamps(segment: TranscriptSegment): boolean {
@@ -175,28 +185,19 @@ function checkHasTimestamps(segment: TranscriptSegment): boolean {
 function handleDelimiter(
     part: string,
     partEffectiveLen: number,
-    state: SplitterState,
-    options: SplitOptions,
-    hasTimestamps: boolean,
-    tokenMap: TokenMap | null,
-    originalSegment: TranscriptSegment,
-    totalLength: number,
-    totalDuration: number,
-    results: TranscriptSegment[]
+    context: SplitterContext,
+    options: SplitOptions
 ) {
+    const { state, results, hasTimestamps, tokenMap, originalSegment, totalLength, totalDuration } = context;
+
     // Check abbreviation
-    let shouldMerge = false;
     if (options.checkAbbreviations && part.includes('.')) {
         if (endsWithAbbreviation(state.currentText)) {
-            shouldMerge = true;
+            state.currentText += part;
+            state.charIndex += part.length;
+            state.effectiveCharIndex += partEffectiveLen;
+            return;
         }
-    }
-
-    if (shouldMerge) {
-        state.currentText += part;
-        state.charIndex += part.length;
-        state.effectiveCharIndex += partEffectiveLen;
-        return;
     }
 
     // Normal split
@@ -260,14 +261,9 @@ function handleDelimiter(
     }
 }
 
-function finalizeSegment(
-    state: SplitterState,
-    originalSegment: TranscriptSegment,
-    hasTimestamps: boolean,
-    tokenMap: TokenMap | null,
-    results: TranscriptSegment[]
-) {
-    let segmentEnd = originalSegment.end;
+function finalizeSegment(context: SplitterContext) {
+    const { state, results, hasTimestamps, tokenMap, originalSegment } = context;
+
     let currentTokens: string[] | undefined;
     let currentTimestamps: number[] | undefined;
 
@@ -284,7 +280,7 @@ function finalizeSegment(
         id: uuidv4(),
         text: state.currentText.trim(),
         start: state.currentSegmentStart,
-        end: segmentEnd,
+        end: originalSegment.end,
         isFinal: true,
         tokens: currentTokens,
         timestamps: currentTimestamps
@@ -378,49 +374,34 @@ export function findSegmentAndIndexForTime(
     const EPSILON = 0.05;
     const searchTime = time + EPSILON;
 
-    // Hint optimization
-    if (hintIndex !== undefined && hintIndex >= -1 && hintIndex < segments.length) {
-        if (hintIndex === -1) {
-            if (segments.length > 0 && time < segments[0].start) {
-                return { segment: undefined, index: -1 };
-            }
-            if (segments.length > 0 && time < segments[0].end && time >= segments[0].start) {
-                return { segment: segments[0], index: 0 };
-            }
-        } else {
-            const seg = segments[hintIndex];
-            if (seg.start <= searchTime && time < seg.end) {
-                return { segment: seg, index: hintIndex };
-            }
+    // Hint optimization: Check hint and neighbors
+    if (hintIndex !== undefined && hintIndex >= 0 && hintIndex < segments.length) {
+        // Check current hint
+        const seg = segments[hintIndex];
+        if (seg.start <= searchTime && time < seg.end) {
+            return { segment: seg, index: hintIndex };
+        }
 
-            const nextIdx = hintIndex + 1;
-            if (nextIdx < segments.length) {
-                const nextSeg = segments[nextIdx];
-                if (nextSeg.start <= searchTime && time < nextSeg.end) {
-                    return { segment: nextSeg, index: nextIdx };
-                }
+        // Check next
+        const nextIdx = hintIndex + 1;
+        if (nextIdx < segments.length) {
+            const nextSeg = segments[nextIdx];
+            if (nextSeg.start <= searchTime && time < nextSeg.end) {
+                return { segment: nextSeg, index: nextIdx };
             }
+        }
 
-            if (time >= seg.end) {
-                if (nextIdx >= segments.length || searchTime < segments[nextIdx].start) {
-                    return { segment: undefined, index: hintIndex };
-                }
-            }
-
-            const prevIdx = hintIndex - 1;
-            if (prevIdx >= 0) {
-                const prevSeg = segments[prevIdx];
-                if (prevSeg.start <= searchTime && time < prevSeg.end) {
-                    return { segment: prevSeg, index: prevIdx };
-                }
-
-                if (time >= prevSeg.end && searchTime < seg.start) {
-                    return { segment: undefined, index: prevIdx };
-                }
+        // Check previous
+        const prevIdx = hintIndex - 1;
+        if (prevIdx >= 0) {
+            const prevSeg = segments[prevIdx];
+            if (prevSeg.start <= searchTime && time < prevSeg.end) {
+                return { segment: prevSeg, index: prevIdx };
             }
         }
     }
 
+    // Binary search if hint failed
     let left = 0;
     let right = segments.length - 1;
     let idx = -1;
@@ -456,23 +437,10 @@ export function computeSegmentsFingerprint(segments: TranscriptSegment[]): strin
     ).join('|');
 }
 
-export function alignTokensToText(
-    text: string,
-    rawTokens: string[],
-    rawTimestamps: number[]
-): { text: string; timestamp: number }[] {
-    const result: { text: string; timestamp: number }[] = [];
-
-    const safeText = typeof text === 'string' ? text : String(text || '');
-    if (!safeText || !Array.isArray(rawTokens) || !Array.isArray(rawTimestamps) || rawTokens.length !== rawTimestamps.length) {
-        return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
-    }
-
-    const normalizedTokens = rawTokens.map(t => {
-        if (typeof t !== 'string') return '';
-        return t.toLowerCase().replace(NORMALIZE_REGEX, '');
-    });
-
+/**
+ * Parses text into words and normalized words for token matching, preserving HTML tags.
+ */
+function parseTextForAlignment(text: string): { words: string[], normalizedWords: string[] } {
     const words: string[] = [];
     const normalizedWords: string[] = [];
     const activeTags = new Set<string>();
@@ -480,7 +448,7 @@ export function alignTokensToText(
     let match;
     LEXER_REGEX.lastIndex = 0;
 
-    while ((match = LEXER_REGEX.exec(safeText)) !== null) {
+    while ((match = LEXER_REGEX.exec(text)) !== null) {
         const [full, tag] = match;
 
         if (tag) {
@@ -511,21 +479,35 @@ export function alignTokensToText(
         }
     }
 
+    return { words, normalizedWords };
+}
+
+export function alignTokensToText(
+    text: string,
+    rawTokens: string[],
+    rawTimestamps: number[]
+): { text: string; timestamp: number }[] {
+    const safeText = typeof text === 'string' ? text : String(text || '');
+
+    // Quick validation
+    if (!safeText || !Array.isArray(rawTokens) || !Array.isArray(rawTimestamps) || rawTokens.length !== rawTimestamps.length) {
+        return [{ text: safeText, timestamp: rawTimestamps?.[0] || 0 }];
+    }
+
+    const { words, normalizedWords } = parseTextForAlignment(safeText);
+    const normalizedTokens = rawTokens.map(t => typeof t === 'string' ? t.toLowerCase().replace(NORMALIZE_REGEX, '') : '');
+    const result: { text: string; timestamp: number }[] = [];
+
     let currentRawIndex = 0;
     const maxTokens = rawTokens.length;
 
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
+        const normWord = normalizedWords[i];
         const cleanWord = stripHtmlTags(word);
 
-        if (!cleanWord.trim()) {
-            const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
-            result.push({ text: word, timestamp: ts });
-            continue;
-        }
-
-        const normWord = normalizedWords[i];
-        if (!normWord) {
+        // Skip empty/invisible words
+        if (!cleanWord.trim() || !normWord) {
             const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
             result.push({ text: word, timestamp: ts });
             continue;
@@ -536,57 +518,18 @@ export function alignTokensToText(
             : 0;
         result.push({ text: word, timestamp: startTimestamp });
 
-        // Token matching logic (simplified)
-        let foundMatch = false;
-        let accumulatedTokenStr = "";
-        let tokensConsumed = 0;
+        // Try to match tokens
+        const matchResult = matchToken(normWord, normalizedTokens, currentRawIndex, maxTokens);
 
-        for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
-            const t = normalizedTokens[currentRawIndex + j];
-            accumulatedTokenStr += t;
-            tokensConsumed++;
+        if (matchResult.matched) {
+            currentRawIndex = matchResult.nextIndex;
+        } else {
+            // Mismatch recovery: Look ahead for the next word
+            const recoveryIndex = attemptRecovery(i, words, normalizedWords, normalizedTokens, currentRawIndex, maxTokens);
 
-            if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
-                if (accumulatedTokenStr.length >= normWord.length) {
-                    currentRawIndex += tokensConsumed;
-                    foundMatch = true;
-                    break;
-                }
-            }
-        }
-
-        if (!foundMatch) {
-            // Recover from mismatch
-            let nextNorm = "";
-            for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
-                nextNorm = normalizedWords[nextIdx];
-                if (nextNorm) break;
-            }
-
-            if (nextNorm) {
-                for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
-                    const t = normalizedTokens[currentRawIndex + k];
-                    if (t && t.startsWith(nextNorm)) {
-                        currentRawIndex += k;
-                        foundMatch = true;
-                        break;
-                    }
-                }
+            if (recoveryIndex !== -1) {
+                currentRawIndex = recoveryIndex;
             } else {
-                let hasRemainingContent = false;
-                for (let r = i + 1; r < words.length; r++) {
-                    if (normalizedWords[r]) {
-                        hasRemainingContent = true;
-                        break;
-                    }
-                }
-                if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
-                    currentRawIndex = maxTokens;
-                    foundMatch = true;
-                }
-            }
-
-            if (!foundMatch) {
                 currentRawIndex++;
             }
         }
@@ -595,4 +538,68 @@ export function alignTokensToText(
     }
 
     return result;
+}
+
+/**
+ * Tries to match a normalized word against a sequence of normalized tokens.
+ */
+function matchToken(normWord: string, normalizedTokens: string[], currentIndex: number, maxTokens: number): { matched: boolean, nextIndex: number } {
+    let accumulatedTokenStr = "";
+    let tokensConsumed = 0;
+
+    for (let j = 0; j < 5 && (currentIndex + j) < maxTokens; j++) {
+        const t = normalizedTokens[currentIndex + j];
+        accumulatedTokenStr += t;
+        tokensConsumed++;
+
+        if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
+            if (accumulatedTokenStr.length >= normWord.length) {
+                return { matched: true, nextIndex: currentIndex + tokensConsumed };
+            }
+        }
+    }
+    return { matched: false, nextIndex: currentIndex };
+}
+
+/**
+ * Attempts to recover synchronization by looking ahead.
+ */
+function attemptRecovery(
+    currentWordIndex: number,
+    words: string[],
+    normalizedWords: string[],
+    normalizedTokens: string[],
+    currentRawIndex: number,
+    maxTokens: number
+): number {
+    // Find next valid word to anchor to
+    let nextNorm = "";
+    for (let nextIdx = currentWordIndex + 1; nextIdx < words.length; nextIdx++) {
+        nextNorm = normalizedWords[nextIdx];
+        if (nextNorm) break;
+    }
+
+    if (nextNorm) {
+        // Look ahead in tokens for this next word
+        for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
+            const t = normalizedTokens[currentRawIndex + k];
+            if (t && t.startsWith(nextNorm)) {
+                return currentRawIndex + k;
+            }
+        }
+    } else {
+        // If no more valid words, assume we can skip to end if near end of word list
+        let hasRemainingContent = false;
+        for (let r = currentWordIndex + 1; r < words.length; r++) {
+            if (normalizedWords[r]) {
+                hasRemainingContent = true;
+                break;
+            }
+        }
+        if (currentWordIndex === words.length - 1 || (currentWordIndex > words.length - 3 && !hasRemainingContent)) {
+            return maxTokens;
+        }
+    }
+
+    return -1;
 }

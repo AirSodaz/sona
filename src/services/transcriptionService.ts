@@ -212,7 +212,6 @@ export class TranscriptionService {
         this.spawningPromise = (async () => {
             console.log('Starting sidecar with model:', this.modelPath);
 
-            // Capture the config we are about to use
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
                 itnModelPaths: [...this.itnModelPaths],
@@ -225,44 +224,18 @@ export class TranscriptionService {
 
             try {
                 const scriptPath = await resolveResource('sidecar/dist/index.mjs');
-
                 const commonArgs = this._getCommonArgs();
-                const args = [
-                    scriptPath,
-                    '--mode', 'stream',
-                    ...commonArgs
-                ];
-
+                const args = [scriptPath, '--mode', 'stream', ...commonArgs];
                 const command = Command.sidecar('binaries/node', args);
-
-                // Buffer for stdout stream
                 const stdoutBuffer = new StreamLineBuffer();
 
-                command.on('close', (data) => {
-                    console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
-
-                    // Process any remaining data
-                    const remaining = stdoutBuffer.flush();
-                    remaining.forEach(line => this.handleOutput(line));
-
-                    this.isRunning = false;
-                    this.child = null;
-                });
-
-                command.on('error', (error) => {
-                    console.error(`Sidecar error: "${error}"`);
-                    if (this.onError) this.onError(`Process error: ${error}`);
-                    this.isRunning = false;
-                });
-
+                command.on('close', (data) => this._handleStreamClose(data, stdoutBuffer));
+                command.on('error', (error) => this._handleStreamError(error));
                 command.stdout.on('data', (chunk) => {
                     const lines = stdoutBuffer.process(chunk);
                     lines.forEach(line => this.handleOutput(line));
                 });
-
-                command.stderr.on('data', (chunk) => {
-                    console.log(`[TranscriptionService] stderr: ${chunk}`);
-                });
+                command.stderr.on('data', (chunk) => console.log(`[TranscriptionService] stderr: ${chunk}`));
 
                 this.child = await command.spawn();
                 this.isRunning = true;
@@ -285,6 +258,23 @@ export class TranscriptionService {
         }
     }
 
+    private _handleStreamClose(data: { code: number | null, signal: number | null }, stdoutBuffer: StreamLineBuffer) {
+        console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
+
+        // Process any remaining data
+        const remaining = stdoutBuffer.flush();
+        remaining.forEach(line => this.handleOutput(line));
+
+        this.isRunning = false;
+        this.child = null;
+    }
+
+    private _handleStreamError(error: unknown) {
+        console.error(`Sidecar error: "${error}"`);
+        if (this.onError) this.onError(`Process error: ${error}`);
+        this.isRunning = false;
+    }
+
     /**
      * Checks if the current configuration matches the running configuration.
      */
@@ -300,7 +290,6 @@ export class TranscriptionService {
 
         // Compare ITN model paths (array)
         if (this.itnModelPaths.length !== this.runningConfig.itnModelPaths.length) return false;
-        // Assuming order matters as it affects rule application order
         for (let i = 0; i < this.itnModelPaths.length; i++) {
             if (this.itnModelPaths[i] !== this.runningConfig.itnModelPaths[i]) return false;
         }
@@ -329,30 +318,16 @@ export class TranscriptionService {
 
     /**
      * Stops the transcription gracefully by sending an end-of-stream signal.
-     *
-     * This allows the model to finish the last segment and add punctuation.
      */
     async softStop(): Promise<void> {
         if (!this.child || !this.isRunning) return;
 
         try {
             console.log('[TranscriptionService] Sending __RESET__ command...');
-            // Send Reset instead of EOS to keep process alive
             await this.child.write('__RESET__');
-
-            // We don't wait for isRunning to become false anymore.
-            // We could wait for a "reset" confirmation from the sidecar if we wanted strict sync,
-            // but for now, sending the command is enough to trigger the flush and reset.
-            // The sidecar prints {"reset": true} when done. 
-            // We can optionally wait for that in handleOutput if we needed to block here.
-
-            // To be safe, wait a small amount of time for flush
             await new Promise(r => setTimeout(r, 200));
-
         } catch (error) {
             console.error('Failed to soft stop sidecar:', error);
-            // Don't kill process here, just log error. 
-            // If it's truly stuck, the next start might fail or user can restart app.
         }
     }
 
@@ -372,9 +347,6 @@ export class TranscriptionService {
         if (!this.child || !this.isRunning) return;
 
         try {
-            // Command.write accepts string or Uint8Array
-            // We need to send bytes. Uint8Array view of Int16Array
-            // Use byteOffset and byteLength to handle cases where Int16Array is a view
             const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
             await this.child.write(bytes);
         } catch (error) {
@@ -384,15 +356,6 @@ export class TranscriptionService {
 
     /**
      * Transcribes an audio file.
-     *
-     * If CoreML fails, this method tries again using the CPU.
-     *
-     * @param filePath The absolute path to the audio file.
-     * @param onProgress An optional callback for progress (0-100).
-     * @param onSegment An optional callback for each transcribed segment.
-     * @param language The language code (e.g., 'en', 'zh'). Defaults to 'auto'.
-     * @param saveToPath Optional path to save the processed audio file (WAV format).
-     * @return A promise that resolves to a list of all transcript segments.
      */
     async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
         try {
@@ -408,14 +371,6 @@ export class TranscriptionService {
 
     /**
      * Transcribes a file using a specific execution provider.
-     *
-     * @param filePath The absolute path to the audio file.
-     * @param provider The execution provider (e.g., 'cpu'). If undefined, it uses 'auto'.
-     * @param onProgress A callback for progress updates.
-     * @param onSegment A callback for new segments.
-     * @param language The language code.
-     * @param saveToPath Optional path to save the processed audio file (WAV format).
-     * @return A promise that resolves to the list of segments.
      */
     private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
@@ -424,7 +379,6 @@ export class TranscriptionService {
 
         console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'}, Language: ${language || 'auto'})`);
 
-        // Spawn sidecar in batch mode
         const scriptPath = await resolveResource('sidecar/dist/index.mjs');
         const commonArgs = this._getCommonArgs();
 
@@ -435,107 +389,45 @@ export class TranscriptionService {
             ...commonArgs
         ];
 
-        if (language && language !== 'auto') {
-            args.push('--language', language);
-        }
-
-        if (saveToPath) {
-            args.push('--save-wav', saveToPath);
-        }
-
+        if (language && language !== 'auto') args.push('--language', language);
+        if (saveToPath) args.push('--save-wav', saveToPath);
         if (this.vadModelPath) {
             args.push('--vad-model', this.vadModelPath);
             args.push('--vad-buffer', this.vadBufferSize.toString());
         }
-
-        if (provider) {
-            args.push('--provider', provider);
-        }
+        if (provider) args.push('--provider', provider);
 
         const command = Command.sidecar('binaries/node', args);
 
-        // Optimization: Use array of chunks instead of string concatenation
-        // This prevents O(N^2) copying behavior for large outputs
         const stderrChunks: string[] = [];
         const stderrStreamBuffer = new StreamLineBuffer();
         const stdoutStreamBuffer = new StreamLineBuffer();
-
-        // Accumulate segments to return at the end (compatibility)
         const collectedSegments: TranscriptSegment[] = [];
 
-        // Wrap execution in a promise to await completion
         return new Promise<TranscriptSegment[]>(async (resolve, reject) => {
             command.on('close', (data) => {
                 console.log(`[Batch] Sidecar finished with code ${data.code}`);
-
                 const stderrBuffer = stderrChunks.join('');
 
                 if (data.code === 0) {
-                    // Check for silent CoreML failure
-                    if (!provider &&
-                        stderrBuffer.includes('Error executing model') &&
-                        stderrBuffer.includes('CoreMLExecutionProvider')) {
-
+                    if (!provider && stderrBuffer.includes('Error executing model') && stderrBuffer.includes('CoreMLExecutionProvider')) {
                         reject(new Error('COREML_FAILURE'));
                         return;
                     }
 
-                    // Flush remaining buffer
                     const lines = stdoutStreamBuffer.flush();
-                    lines.forEach(line => {
-                        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
-                                const segment: TranscriptSegment = {
-                                    id: data.id || uuidv4(),
-                                    text: data.text,
-                                    start: data.start,
-                                    end: data.end,
-                                    isFinal: data.isFinal || true,
-                                    tokens: data.tokens,
-                                    timestamps: data.timestamps
-                                };
-                                collectedSegments.push(segment);
-                                if (onSegment) onSegment(segment);
-                            }
-                        } catch (e) { }
-                    });
-
+                    lines.forEach(line => this._processBatchLine(line, collectedSegments, onSegment));
                     resolve(collectedSegments);
-
                 } else {
                     reject(new Error(`Sidecar failed with code ${data.code}: ${stderrBuffer}`));
                 }
             });
 
-            command.on('error', (error) => {
-                reject(new Error(`Process error: ${error}`));
-            });
+            command.on('error', (error) => reject(new Error(`Process error: ${error}`)));
 
             command.stdout.on('data', (chunk) => {
                 const lines = stdoutStreamBuffer.process(chunk);
-                lines.forEach(line => {
-                    if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
-                    try {
-                        const data = JSON.parse(line);
-                        if (Array.isArray(data)) {
-                            data.forEach((item: any) => {
-                                const segment = this._createSegment(item, true);
-                                if (segment) {
-                                    collectedSegments.push(segment);
-                                }
-                            });
-                        } else {
-                            const segment = this._createSegment(data, true);
-                            if (segment) {
-                                collectedSegments.push(segment);
-                                if (onSegment) onSegment(segment);
-                            }
-                        }
-                    } catch (e) {
-                    }
-                });
+                lines.forEach(line => this._processBatchLine(line, collectedSegments, onSegment));
             });
 
             command.stderr.on('data', (chunk) => {
@@ -548,8 +440,7 @@ export class TranscriptionService {
                         if (data.type === 'progress' && typeof data.percentage === 'number') {
                             if (onProgress) onProgress(data.percentage);
                         }
-                    } catch (e) {
-                    }
+                    } catch (e) {}
                     console.log(`[Batch] stderr: ${line}`);
                 });
             });
@@ -560,6 +451,25 @@ export class TranscriptionService {
                 reject(error);
             }
         });
+    }
+
+    private _processBatchLine(line: string, collectedSegments: TranscriptSegment[], onSegment?: TranscriptionCallback) {
+        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
+        try {
+            const data = JSON.parse(line);
+            if (Array.isArray(data)) {
+                data.forEach((item: any) => {
+                    const segment = this._createSegment(item, true);
+                    if (segment) collectedSegments.push(segment);
+                });
+            } else {
+                const segment = this._createSegment(data, true);
+                if (segment) {
+                    collectedSegments.push(segment);
+                    if (onSegment) onSegment(segment);
+                }
+            }
+        } catch (e) {}
     }
 
     /**
@@ -581,16 +491,11 @@ export class TranscriptionService {
             } else if (data.error && this.onError) {
                 this.onError(data.error);
             }
-        } catch (e) {
-            // Ignore non-JSON lines or partial chunks
-            // console.debug('Failed to parse line:', line);
-        }
+        } catch (e) {}
     }
 
     /**
      * Generates the common arguments for the sidecar process.
-     * 
-     * @returns An array of argument strings.
      */
     private _getCommonArgs(): string[] {
         const args = [
@@ -635,13 +540,6 @@ export class TranscriptionService {
 
     /**
      * Runs CTC forced alignment on a segment's audio slice.
-     *
-     * Spawns the sidecar in align mode to re-recognize the audio and produce
-     * fresh tokens/timestamps/durations. Returns null on any failure.
-     *
-     * @param segment The segment to align (uses start/end times).
-     * @param sourceFilePath Optional override for the audio file path.
-     * @return The alignment result, or null if alignment is unavailable or fails.
      */
     async alignSegment(segment: TranscriptSegment, sourceFilePath?: string): Promise<AlignmentResult | null> {
         const filePath = sourceFilePath || this.sourceFilePath;
@@ -697,7 +595,6 @@ export class TranscriptionService {
                 });
 
                 command.on('close', (data) => {
-                    // Flush remaining buffer
                     const remaining = stdoutBuffer.flush();
                     for (const line of remaining) {
                         if (!TranscriptionService.JSON_START_REGEX.test(line)) continue;
@@ -740,10 +637,6 @@ export class TranscriptionService {
 
     /**
      * Creates a TranscriptSegment from raw data.
-     * 
-     * @param data The raw data object.
-     * @param defaultIsFinal The default value for isFinal if not present in data.
-     * @returns A TranscriptSegment or null if data is invalid.
      */
     private _createSegment(data: any, defaultIsFinal: boolean): TranscriptSegment | null {
         if (data && typeof data.text === 'string' && typeof data.start === 'number' && typeof data.end === 'number') {

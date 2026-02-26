@@ -13,8 +13,16 @@ function decodeHtmlEntities(text: string): string {
         .replace(/&#39;/g, "'");
 }
 
-function htmlToPlainText(html: string): string {
+/**
+ * Processes HTML content for export, optionally preserving formatting tags.
+ *
+ * @param html The HTML string to process.
+ * @param stripTags Whether to strip all HTML tags (true) or preserve simple formatting (false).
+ * @returns The processed plain text or formatted text.
+ */
+function processText(html: string, stripTags: boolean): string {
     if (!html) return '';
+
     // Convert structural tags to newlines
     let text = html
         .replace(/<br\s*\/?>/gi, '\n')
@@ -23,24 +31,11 @@ function htmlToPlainText(html: string): string {
         .replace(/<\/p>/gi, '\n')
         .replace(/<p>/gi, '');
 
-    // Strip all other tags
-    text = stripHtmlTags(text);
+    if (stripTags) {
+        text = stripHtmlTags(text);
+    }
 
     // Decode entities
-    return decodeHtmlEntities(text);
-}
-
-function htmlToFormattedText(html: string): string {
-    if (!html) return '';
-    // Convert structural tags to newlines, but preserve formatting tags (b, i, u)
-    let text = html
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/div>/gi, '\n')
-        .replace(/<div>/gi, '')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<p>/gi, '');
-
-    // Decode entities (converts &lt; to <, etc.)
     return decodeHtmlEntities(text);
 }
 
@@ -75,6 +70,40 @@ export function formatDisplayTime(seconds: number): string {
 }
 
 /**
+ * Helper to prepare segments for text-based exports.
+ *
+ * @param segments The source segments.
+ * @param mode The export mode.
+ * @param stripTags Whether to strip all tags (for TXT) or preserve formatting (for SRT/VTT).
+ * @param reverseBilingual If true, puts original first (TXT style). If false, puts translation first (Subtitle style).
+ */
+function prepareExportData(
+    segments: TranscriptSegment[],
+    mode: ExportMode,
+    stripTags: boolean,
+    reverseBilingual: boolean = false
+): { text: string; start: number; end: number }[] {
+    return segments
+        .filter((seg) => seg.isFinal)
+        .map((segment) => {
+            const original = processText(segment.text.trim(), stripTags);
+            const translation = (segment.translation || '').trim();
+            let text = original;
+
+            if (mode === 'translation') {
+                text = translation;
+            } else if (mode === 'bilingual') {
+                text = reverseBilingual
+                    ? `${original}\n${translation}`
+                    : `${translation}\n${original}`;
+            }
+
+            return { start: segment.start, end: segment.end, text };
+        })
+        .filter((seg) => seg.text.trim().length > 0);
+}
+
+/**
  * Converts TranscriptSegment array to SRT (SubRip Subtitle) format.
  *
  * @param segments The array of transcript segments to convert.
@@ -82,23 +111,7 @@ export function formatDisplayTime(seconds: number): string {
  * @return The SRT formatted string.
  */
 export function toSRT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
-    return segments
-        .filter((seg) => seg.isFinal)
-        .map((segment) => {
-            const original = htmlToFormattedText(segment.text.trim());
-            const translation = (segment.translation || '').trim(); // Translation assumed plain text or simple
-            let text = original;
-
-            if (mode === 'translation') {
-                text = translation;
-            } else if (mode === 'bilingual') {
-                // Translation first (main), Original second (secondary)
-                text = `${translation}\n${original}`;
-            }
-
-            return { ...segment, text };
-        })
-        .filter((seg) => seg.text.trim().length > 0)
+    return prepareExportData(segments, mode, false, false)
         .map((segment, index) => {
             const startTime = formatTimestamp(segment.start);
             const endTime = formatTimestamp(segment.end);
@@ -118,10 +131,7 @@ export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'origin
     const exportData = segments
         .filter((seg) => seg.isFinal)
         .map((segment) => {
-            // For JSON, we probably want the formatted text (with tags) but decoded entities?
-            // Or stripped? Usually JSON export preserves data structure.
-            // So keep tags.
-            const original = htmlToFormattedText(segment.text.trim());
+            const original = processText(segment.text.trim(), false);
             const translation = (segment.translation || '').trim();
 
             if (mode === 'translation') {
@@ -139,7 +149,6 @@ export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'origin
                 };
             }
 
-            // Original
             return {
                 start: segment.start,
                 end: segment.end,
@@ -158,23 +167,8 @@ export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'origin
  * @return The plain text string.
  */
 export function toTXT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
-    return segments
-        .filter((seg) => seg.isFinal)
-        .map((segment) => {
-            const original = htmlToPlainText(segment.text.trim());
-            const translation = (segment.translation || '').trim();
-            let text = original;
-
-            if (mode === 'translation') {
-                text = translation;
-            } else if (mode === 'bilingual') {
-                // Original first, Translation second
-                text = `${original}\n${translation}`;
-            }
-
-            return text;
-        })
-        .filter((text) => text.trim().length > 0)
+    return prepareExportData(segments, mode, true, true)
+        .map((segment) => segment.text)
         .join('\n\n');
 }
 
@@ -187,25 +181,8 @@ export function toTXT(segments: TranscriptSegment[], mode: ExportMode = 'origina
  */
 export function toVTT(segments: TranscriptSegment[], mode: ExportMode = 'original'): string {
     const header = 'WEBVTT\n\n';
-    const content = segments
-        .filter((seg) => seg.isFinal)
+    const content = prepareExportData(segments, mode, false, false)
         .map((segment) => {
-            const original = htmlToFormattedText(segment.text.trim());
-            const translation = (segment.translation || '').trim();
-            let text = original;
-
-            if (mode === 'translation') {
-                text = translation;
-            } else if (mode === 'bilingual') {
-                // Translation first (main), Original second (secondary)
-                text = `${translation}\n${original}`;
-            }
-
-            return { ...segment, text };
-        })
-        .filter((seg) => seg.text.trim().length > 0)
-        .map((segment) => {
-            // VTT uses dot separator for milliseconds
             const startTime = formatTimestamp(segment.start, '.');
             const endTime = formatTimestamp(segment.end, '.');
             return `${startTime} --> ${endTime}\n${segment.text}\n`;
