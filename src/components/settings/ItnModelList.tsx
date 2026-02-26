@@ -127,7 +127,7 @@ export function ItnModelList({
     }
 
     return (
-        <div className="settings-item" style={{ marginTop: 16 }}>
+        <div className="settings-item">
             <div className="settings-list">
                 <DndContext
                     sensors={sensors}

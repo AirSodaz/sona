@@ -65,7 +65,7 @@ export function SettingsGeneralTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+            <div className="settings-item with-divider">
                 <label htmlFor="settings-theme" className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
                 <div style={{ maxWidth: 400 }}>
                     <div className="theme-selector-container">
@@ -126,7 +126,7 @@ export function SettingsGeneralTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
+            <div className="settings-item with-divider">
                 <label htmlFor="settings-font" className="settings-label">{t('settings.font', { defaultValue: 'Font' })}</label>
                 <div style={{ maxWidth: 300 }}>
                     <Dropdown
@@ -146,8 +146,8 @@ export function SettingsGeneralTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <div>
                         <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}</div>
                         <div className="settings-hint">
@@ -161,8 +161,8 @@ export function SettingsGeneralTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}</div>
                     <Switch
                         checked={autoCheckUpdates}

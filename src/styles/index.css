@@ -1264,6 +1264,14 @@ input[type="radio"]:focus {
   color: var(--color-text-primary);
 }
 
+.settings-section-subtitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-primary);
+}
+
 .settings-hint {
   font-size: 0.8rem;
   color: var(--color-text-muted);
@@ -2892,7 +2900,34 @@ input[type="radio"]:focus {
 .settings-group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-md);
+}
+
+.settings-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.settings-item.with-divider {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-label {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+  display: block;
+}
+
+.settings-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--spacing-md);
 }
 
 .animate-spin {

@@ -30,7 +30,7 @@ function ModelSection({
 
     return (
         <>
-            <div className="settings-section-subtitle" style={{ marginTop: 30, marginBottom: 10, fontWeight: 'bold' }}>
+            <div className="settings-section-subtitle">
                 {title}
             </div>
             {models.map(model => (

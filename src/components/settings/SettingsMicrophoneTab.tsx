@@ -532,8 +532,8 @@ export function SettingsMicrophoneTab({
                 </div>
             </div>
 
-            <div className="settings-item" style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div className="settings-item with-divider">
+                <div className="settings-item-row">
                     <div>
                         <div className="settings-label" style={{ marginBottom: 0 }}>
                             {t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}

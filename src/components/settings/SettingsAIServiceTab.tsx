@@ -154,7 +154,7 @@ export function SettingsAIServiceTab({
                 />
             </div>
 
-            <div className="settings-item">
+            <div className="settings-item with-divider">
                 <label className="settings-label">
                     {t('settings.ai.model_name')}
                     {isLoadingModels && <span style={{ marginLeft: 10, fontSize: '0.8em', color: 'var(--color-text-muted)' }}>{t('settings.ai.loading_models') || '(Loading models...)'}</span>}
