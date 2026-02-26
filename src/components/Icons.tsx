@@ -10,6 +10,56 @@ export function FolderIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Ele
     );
 }
 
+/** Icon for undoing an action. */
+export function UndoIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 7v6h6" />
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+        </svg>
+    );
+}
+
+/** Icon for bold formatting. */
+export function BoldIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+            <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+        </svg>
+    );
+}
+
+/** Icon for italic formatting. */
+export function ItalicIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <line x1="19" y1="4" x2="10" y2="4" />
+            <line x1="14" y1="20" x2="5" y2="20" />
+            <line x1="15" y1="4" x2="9" y2="20" />
+        </svg>
+    );
+}
+
+/** Icon for underline formatting. */
+export function UnderlineIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+            <line x1="4" y1="21" x2="20" y2="21" />
+        </svg>
+    );
+}
+
+/** Icon for inserting a line break. */
+export function ReturnIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <polyline points="9 10 4 15 9 20" />
+            <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+        </svg>
+    );
+}
 export function ChevronRightIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
     return (
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" {...props}>
