@@ -251,6 +251,7 @@ const DEFAULT_CONFIG: AppConfig = {
     translationLanguage: 'zh',
     autoPolish: false,
     autoPolishFrequency: 5,
+    autoCheckUpdates: true,
 };
 
 /**

@@ -51,6 +51,7 @@ export function useAppInitialization() {
                         aiModel: parsed.aiModel || '',
                         polishKeywords: parsed.polishKeywords || '',
                         polishContext: parsed.polishContext || '',
+                        autoCheckUpdates: parsed.autoCheckUpdates ?? true,
                     };
 
                     setConfig(loadedConfig);
@@ -139,6 +140,7 @@ export function useAppInitialization() {
                 aiModel: config.aiModel,
                 polishKeywords: config.polishKeywords,
                 polishContext: config.polishContext,
+                autoCheckUpdates: config.autoCheckUpdates,
             };
             localStorage.setItem('sona-config', JSON.stringify(configToSave));
         }, 500);

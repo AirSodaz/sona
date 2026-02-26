@@ -120,6 +120,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setMuteDuringRecording = (enabled: boolean) => updateConfig({ muteDuringRecording: enabled });
 
     const setMinimizeToTrayOnExit = (enabled: boolean) => updateConfig({ minimizeToTrayOnExit: enabled });
+    const setAutoCheckUpdates = (enabled: boolean) => updateConfig({ autoCheckUpdates: enabled });
 
     const setLockWindow = (enabled: boolean) => updateConfig({ lockWindow: enabled });
     const setAlwaysOnTop = (enabled: boolean) => updateConfig({ alwaysOnTop: enabled });
@@ -406,6 +407,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setMuteDuringRecording,
         minimizeToTrayOnExit: config.minimizeToTrayOnExit ?? true,
         setMinimizeToTrayOnExit,
+
+        autoCheckUpdates: config.autoCheckUpdates ?? true,
+        setAutoCheckUpdates,
 
         lockWindow: config.lockWindow ?? false,
         setLockWindow,

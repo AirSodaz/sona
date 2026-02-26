@@ -36,6 +36,7 @@ tokio = { version = "1.49.0", features = ["full"] }
 cpal = "0.15"
 rubato = "0.16"
 ringbuf = "0.4"
+tauri-plugin-process = "2.3.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

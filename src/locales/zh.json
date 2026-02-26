@@ -212,6 +212,7 @@
         "about_check_updates": "检查更新",
         "update_checking": "检查更新中...",
         "update_available": "发现新版本: v{{version}}",
+        "update_desc_default": "Sona 有新版本可用。",
         "update_not_available": "当前已是最新版本。",
         "update_downloading": "正在下载更新...",
         "update_installing": "正在安装更新...",
@@ -225,6 +226,7 @@
         "about_source_code": "源代码",
         "minimize_to_tray": "退出时最小化到托盘",
         "minimize_to_tray_hint": "启用后，关闭窗口会将应用最小化到系统托盘，而不是退出程序。",
+        "auto_check_updates": "自动检查更新",
         "ai": {
             "title": "AI 服务",
             "service_type": "AI 服务类型",

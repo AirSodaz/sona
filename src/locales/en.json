@@ -212,6 +212,7 @@
         "about_check_updates": "Check for Updates",
         "update_checking": "Checking for updates...",
         "update_available": "Update available: v{{version}}",
+        "update_desc_default": "A new version of Sona is available.",
         "update_not_available": "You are using the latest version.",
         "update_downloading": "Downloading update...",
         "update_installing": "Installing update...",
@@ -225,6 +226,7 @@
         "about_source_code": "Source Code",
         "minimize_to_tray": "Minimize to tray on exit",
         "minimize_to_tray_hint": "When enabled, closing the window will minimize the application to the system tray instead of quitting.",
+        "auto_check_updates": "Automatically check for updates",
         "ai": {
             "title": "AI Service",
             "service_type": "AI Service Type",

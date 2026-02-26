@@ -59,6 +59,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setMuteDuringRecording,
         minimizeToTrayOnExit,
         setMinimizeToTrayOnExit,
+        autoCheckUpdates,
+        setAutoCheckUpdates,
 
         lockWindow,
         setLockWindow,
@@ -284,6 +286,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 setFont={setFont}
                                 minimizeToTrayOnExit={minimizeToTrayOnExit}
                                 setMinimizeToTrayOnExit={setMinimizeToTrayOnExit}
+                                autoCheckUpdates={autoCheckUpdates}
+                                setAutoCheckUpdates={setAutoCheckUpdates}
                             />
                         )}
 
