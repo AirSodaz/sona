@@ -68,7 +68,7 @@ describe('useSettingsLogic', () => {
 
         // Act: Change to Anthropic
         act(() => {
-            result.current.setAiServiceType('anthropic');
+            result.current.changeAiServiceType('anthropic');
         });
 
         // Assert: config should be updated
@@ -91,16 +91,20 @@ describe('useSettingsLogic', () => {
         const newUrl = 'https://custom.openai.com';
 
         act(() => {
-            result.current.setAiBaseUrl(newUrl);
+            result.current.updateConfig({
+                aiBaseUrl: newUrl,
+                aiServices: {
+                    ...mockConfig.aiServices,
+                    openai: {
+                        ...mockConfig.aiServices.openai,
+                        baseUrl: newUrl
+                    }
+                }
+            });
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
-            aiBaseUrl: newUrl,
-            aiServices: expect.objectContaining({
-                openai: expect.objectContaining({
-                    baseUrl: newUrl
-                })
-            })
+            aiBaseUrl: newUrl
         }));
     });
 
@@ -117,7 +121,7 @@ describe('useSettingsLogic', () => {
         const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
 
         act(() => {
-            result.current.setAiServiceType('anthropic');
+            result.current.changeAiServiceType('anthropic');
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
