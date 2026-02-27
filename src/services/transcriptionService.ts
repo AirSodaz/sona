@@ -361,17 +361,45 @@ export class TranscriptionService {
         console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} via Rust backend`);
 
         try {
-            // Need to make sure the recognizer is initialized for batch (Offline)
-            await invoke('start_recognizer', {
-                modelPath: this.modelPath,
-                numThreads: 4,
-                enableItn: this.enableITN,
-                language: language || this.language || 'auto',
-                itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
-                punctuationModel: this.punctuationModelPath || null,
-                vadModel: this.vadModelPath || null,
-                vadBuffer: this.vadBufferSize || 5.0
-            });
+            // Check if we can reuse the existing recognizer to allow parallel processing
+            // without re-locking the global mutex.
+            let shouldStart = true;
+            if (this.isRunning && this._isConfigMatch()) {
+                // Config matches, skip start_recognizer
+                // However, we need to be careful if language override was passed
+                const requestedLang = language || this.language || 'auto';
+                if (requestedLang === this.language) {
+                    console.log('[TranscriptionService] Reusing active recognizer for batch task');
+                    shouldStart = false;
+                }
+            }
+
+            if (shouldStart) {
+                // Need to make sure the recognizer is initialized for batch (Offline)
+                // This will acquire the write lock and block other tasks briefly
+                await invoke('start_recognizer', {
+                    modelPath: this.modelPath,
+                    numThreads: 4,
+                    enableItn: this.enableITN,
+                    language: language || this.language || 'auto',
+                    itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
+                    punctuationModel: this.punctuationModelPath || null,
+                    vadModel: this.vadModelPath || null,
+                    vadBuffer: this.vadBufferSize || 5.0
+                });
+
+                // Update running state if we started it
+                this.isRunning = true;
+                this.runningConfig = {
+                    modelPath: this.modelPath,
+                    itnModelPaths: [...this.itnModelPaths],
+                    punctuationModelPath: this.punctuationModelPath,
+                    vadModelPath: this.vadModelPath,
+                    vadBufferSize: this.vadBufferSize,
+                    enableITN: this.enableITN,
+                    language: language || this.language || 'auto'
+                };
+            }
 
             let progressUnlisten: UnlistenFn | undefined;
             if (onProgress) {
