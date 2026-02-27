@@ -75,9 +75,10 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.27/sherpa-onnx-v1.12.27-win-x64-static-MD-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}\sherpa-onnx-v1.12.27-win-x64-static-MD-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.27-win-x64-static-MD-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Configure RUSTFLAGS
+        if: startsWith(matrix.platform, 'ubuntu') || startsWith(matrix.platform, 'macos')
         run: echo "RUSTFLAGS=-C link-arg=-Wl,-rpath,$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
 
       - name: Build the app
