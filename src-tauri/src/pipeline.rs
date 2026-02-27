@@ -1,14 +1,7 @@
 use hound;
-use rubato::{FftFixedOut, Resampler};
 use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
-use std::path::Path;
-use symphonia::core::audio::{AudioBuffer, Signal};
-use symphonia::core::codecs::CODEC_TYPE_NULL;
-use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
+use std::path::PathBuf;
+use std::process::Command;
 
 pub struct AudioSegment {
     pub samples: Vec<f32>,
@@ -18,6 +11,19 @@ pub struct AudioSegment {
 
 pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
     data.iter().map(|&s| s as f32 / 32768.0).collect()
+}
+
+/// Convert raw PCM bytes (Int16LE) to Vec<f32> samples.
+fn pcm_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
+    let num_samples = bytes.len() / 2;
+    let mut samples = Vec::with_capacity(num_samples);
+    for i in 0..num_samples {
+        let lo = bytes[i * 2] as i16;
+        let hi = (bytes[i * 2 + 1] as i16) << 8;
+        let sample_i16 = lo | hi;
+        samples.push(sample_i16 as f32 / 32768.0);
+    }
+    samples
 }
 
 pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::Result<()> {
@@ -35,119 +41,65 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
     writer.finalize()
 }
 
+/// Find the FFmpeg binary. Searches near the running executable first,
+/// then falls back to system PATH.
+fn find_ffmpeg() -> PathBuf {
+    // Try next to the running executable (bundled binary)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            // Windows: ffmpeg.exe, Unix: ffmpeg
+            let candidates = [
+                exe_dir.join("ffmpeg.exe"),
+                exe_dir.join("ffmpeg"),
+                // Also check a "sidecar" subdirectory
+                exe_dir.join("sidecar").join("ffmpeg.exe"),
+                exe_dir.join("sidecar").join("ffmpeg"),
+            ];
+            for candidate in &candidates {
+                if candidate.exists() {
+                    return candidate.clone();
+                }
+            }
+        }
+    }
+
+    // Fall back to system PATH
+    PathBuf::from("ffmpeg")
+}
+
+/// Extract audio from any file and resample to the target sample rate using FFmpeg.
+/// This mirrors the JS sidecar's `convertToWav` function exactly:
+///   ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -
 pub fn extract_and_resample_audio(
     filepath: &str,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, String> {
-    let src = std::fs::File::open(filepath).map_err(|e| e.to_string())?;
-    let mss = MediaSourceStream::new(Box::new(src), Default::default());
+    let ffmpeg = find_ffmpeg();
 
-    let mut hint = Hint::new();
-    if let Some(ext) = Path::new(filepath).extension().and_then(|s| s.to_str()) {
-        hint.with_extension(ext);
+    let output = Command::new(&ffmpeg)
+        .args([
+            "-i",
+            filepath,
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            &target_sample_rate.to_string(),
+            "-ac",
+            "1",
+            "-",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run ffmpeg ({}): {}", ffmpeg.display(), e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("FFmpeg exited with {}: {}", output.status, stderr));
     }
 
-    let meta_opts: MetadataOptions = Default::default();
-    let fmt_opts: FormatOptions = Default::default();
-
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &fmt_opts, &meta_opts)
-        .map_err(|e| e.to_string())?;
-
-    let mut format = probed.format;
-
-    let track = format
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        .ok_or("No supported audio track found")?;
-
-    let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.unwrap_or(16000);
-
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &Default::default())
-        .map_err(|e| e.to_string())?;
-
-    let mut all_samples: Vec<f32> = Vec::new();
-
-    loop {
-        let packet = match format.next_packet() {
-            Ok(packet) => packet,
-            Err(SymphoniaError::IoError(err))
-                if err.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                break;
-            }
-            Err(SymphoniaError::DecodeError(_)) => continue,
-            Err(e) => return Err(e.to_string()),
-        };
-
-        if packet.track_id() != track_id {
-            continue;
-        }
-
-        match decoder.decode(&packet) {
-            Ok(decoded) => {
-                let mut buf = AudioBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec());
-                decoded.convert(&mut buf);
-
-                let channels = buf.spec().channels.count();
-                let frames = buf.frames();
-                for i in 0..frames {
-                    let mut sum = 0.0;
-                    for c in 0..channels {
-                        sum += buf.chan(c)[i];
-                    }
-                    all_samples.push(sum / (channels as f32));
-                }
-            }
-            Err(SymphoniaError::DecodeError(_)) => continue,
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-
-    if sample_rate != target_sample_rate {
-        let chunk_size = 1024;
-        let mut resampler = FftFixedOut::<f32>::new(
-            sample_rate as usize,
-            target_sample_rate as usize,
-            chunk_size,
-            1,
-            1,
-        )
-        .map_err(|e| e.to_string())?;
-
-        let mut input_frames_needed = resampler.input_frames_next();
-        let mut resampled_samples = Vec::new();
-
-        let mut i = 0;
-        let mut input_buffer = vec![vec![0.0; input_frames_needed]; 1];
-        let mut output_buffer = vec![vec![0.0; chunk_size]; 1];
-
-        while i < all_samples.len() {
-            let remain = all_samples.len() - i;
-            let take = remain.min(input_frames_needed);
-            input_buffer[0][..take].copy_from_slice(&all_samples[i..i + take]);
-            for j in take..input_frames_needed {
-                input_buffer[0][j] = 0.0;
-            }
-
-            if let Ok((_in_len, out_len)) =
-                resampler.process_into_buffer(&input_buffer, &mut output_buffer, None)
-            {
-                resampled_samples.extend_from_slice(&output_buffer[0][..out_len]);
-            }
-            i += take;
-            input_frames_needed = resampler.input_frames_next();
-            if input_buffer[0].len() != input_frames_needed {
-                input_buffer[0].resize(input_frames_needed, 0.0);
-            }
-        }
-        Ok(resampled_samples)
-    } else {
-        Ok(all_samples)
-    }
+    let samples = pcm_bytes_to_f32(&output.stdout);
+    Ok(samples)
 }
 
 pub fn fixed_chunk_audio(
@@ -277,21 +229,5 @@ mod tests {
         assert_eq!(segments[1].start_time, 2.0);
         assert_eq!(segments[2].duration, 1.0);
         assert_eq!(segments[2].start_time, 4.0);
-    }
-
-    #[test]
-    fn test_vad_segmentation_behavior() {
-        use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
-
-        let sample_rate = 16000;
-        // let's generate 4 seconds of silence, 2 seconds of "speech" (ones), 4 seconds of silence
-        let mut samples = vec![0.0; sample_rate * 4];
-        samples.extend(vec![0.5; sample_rate * 2]);
-        samples.extend(vec![0.0; sample_rate * 4]);
-
-        let mut silero_vad = SileroVadModelConfig::default();
-        // we can't really load a model easily in a unit test without the file, so we just print
-        // Actually, if we cannot load the model, we can't test VAD natively this easily.
-        println!("Test stub");
     }
 }
