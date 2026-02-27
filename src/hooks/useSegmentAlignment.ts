@@ -25,7 +25,7 @@ export function useSegmentAlignment() {
 
     /**
      * Requests CTC re-alignment for a segment after a debounce period.
-     * Spawns the sidecar to produce fresh tokens/timestamps/durations.
+     * Calls the backend to produce fresh tokens/timestamps/durations.
      */
     const requestAlignment = useCallback((segmentId: string) => {
         // Cancel any pending alignment for this segment

@@ -362,8 +362,14 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     _app: AppHandle<R>,
     state: State<'_, SherpaState>,
     file_path: String,
+    save_to_path: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let samples = crate::pipeline::extract_and_resample_audio(&file_path, 16000)?;
+    
+    if let Some(path) = save_to_path {
+        crate::pipeline::save_wav_file(&samples, 16000, &path).map_err(|e| e.to_string())?;
+    }
+
     let rec_guard = state.recognizer.lock().await;
     let total_duration = samples.len() as f64 / 16000.0;
     

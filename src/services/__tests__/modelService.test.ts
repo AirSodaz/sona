@@ -16,31 +16,12 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 
 vi.mock('@tauri-apps/api/path', () => ({
     appLocalDataDir: vi.fn().mockResolvedValue('/app/data'),
-    join: vi.fn((...args) => Promise.resolve(args.join('/'))),
-    resolveResource: vi.fn().mockResolvedValue('/mock/resource/path/sidecar.mjs'),
+    join: vi.fn((...args) => Promise.resolve(args.join('/')))
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
     listen: vi.fn(),
 }));
-
-const mockCommandInstance = {
-    stdout: { on: vi.fn() },
-    stderr: { on: vi.fn() },
-    on: vi.fn(),
-    spawn: vi.fn().mockResolvedValue({
-        pid: 123,
-        kill: vi.fn()
-    })
-};
-
-vi.mock('@tauri-apps/plugin-shell', () => {
-    return {
-        Command: {
-            sidecar: vi.fn(() => mockCommandInstance)
-        }
-    };
-});
 
 describe('ModelService', () => {
     beforeEach(() => {
@@ -86,12 +67,6 @@ describe('ModelService', () => {
                 return Promise.resolve();
             });
 
-            // Mock extraction via event emission simulation on the mock command
-            (mockCommandInstance.on as any).mockImplementation((event: string, cb: any) => {
-                if (event === 'close') {
-                     setTimeout(() => cb({ code: 0 }), 10);
-                }
-            });
 
             await modelService.downloadModel(modelId, onProgress);
 
@@ -118,21 +93,21 @@ describe('ModelService', () => {
         const itnModel = PRESET_MODELS.find(m => m.type === 'itn');
 
         it('checks if ITN model is installed', async () => {
-             if (!itnModel) return; // Skip if no ITN model
-             (exists as any).mockResolvedValue(true);
-             const result = await modelService.isModelInstalled(itnModel.id);
-             expect(result).toBe(true);
+            if (!itnModel) return; // Skip if no ITN model
+            (exists as any).mockResolvedValue(true);
+            const result = await modelService.isModelInstalled(itnModel.id);
+            expect(result).toBe(true);
         });
 
         it('downloads ITN model', async () => {
-             if (!itnModel) return;
-             (exists as any).mockResolvedValue(false);
-             (invoke as any).mockResolvedValue(undefined);
-             await modelService.downloadModel(itnModel.id);
+            if (!itnModel) return;
+            (exists as any).mockResolvedValue(false);
+            (invoke as any).mockResolvedValue(undefined);
+            await modelService.downloadModel(itnModel.id);
 
-             expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
-                 url: expect.stringContaining(itnModel.url)
-             }));
+            expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
+                url: expect.stringContaining(itnModel.url)
+            }));
         });
     });
 });

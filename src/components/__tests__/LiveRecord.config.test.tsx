@@ -22,7 +22,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN: vi.fn(),
             setITNModelPaths: vi.fn(),
             setPunctuationModelPath: vi.fn(),
-            setCtcModelPath: vi.fn(),
+
             setVadModelPath: vi.fn(),
             setVadBufferSize: vi.fn(),
             prepare: mockPrepare,
@@ -36,7 +36,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN = vi.fn();
             setITNModelPaths = vi.fn();
             setPunctuationModelPath = vi.fn();
-            setCtcModelPath = vi.fn();
+
             setVadModelPath = vi.fn();
             setVadBufferSize = vi.fn();
             prepare = vi.fn().mockResolvedValue(undefined);

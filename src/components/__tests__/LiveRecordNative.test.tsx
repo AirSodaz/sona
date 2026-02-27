@@ -44,7 +44,7 @@ const {
     mockSetEnableITN,
     mockSetITNModelPaths,
     mockSetPunctuationModelPath,
-    mockSetCtcModelPath,
+
     mockSetVadModelPath,
     mockSetVadBufferSize,
     mockTerminate
@@ -59,7 +59,7 @@ const {
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
     mockSetPunctuationModelPath: vi.fn(),
-    mockSetCtcModelPath: vi.fn(),
+
     mockSetVadModelPath: vi.fn(),
     mockSetVadBufferSize: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
@@ -78,7 +78,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN: mockSetEnableITN,
             setITNModelPaths: mockSetITNModelPaths,
             setPunctuationModelPath: mockSetPunctuationModelPath,
-            setCtcModelPath: mockSetCtcModelPath,
+
             setVadModelPath: mockSetVadModelPath,
             setVadBufferSize: mockSetVadBufferSize,
             prepare: mockPrepare,
@@ -94,7 +94,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN = mockSetEnableITN;
             setITNModelPaths = mockSetITNModelPaths;
             setPunctuationModelPath = mockSetPunctuationModelPath;
-            setCtcModelPath = mockSetCtcModelPath;
+
             setVadModelPath = mockSetVadModelPath;
             setVadBufferSize = mockSetVadBufferSize;
             prepare = mockPrepare;

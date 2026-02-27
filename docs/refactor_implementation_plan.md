@@ -32,6 +32,6 @@
 ## 阶段五：前端与清理
 目标：整合到目前的前端代码，并在所有测试跑通后再移除旧的历史包袱。
 
-- 将前端组件原本基于 `Command.sidecar` 孵化和侦听的代码重构成基于 `invoke("...")` 和 `listen("recognizer-event")`。
+- 选项之一（完成）：将前端组件原本基于 `Command.sidecar` 孵化和侦听的代码重构成基于 `invoke("...")` 和 `listen("recognizer-event")`。
 - 保留旧的 `src-tauri/sidecar` 作为参考和回退方案。
 - 只有在新后端实现经过全面测试，所有测试用例（尤其是前端端到端和 Node.js 旧有逻辑的行为一致性测试）通过后，再全面抛弃原有的 `src-tauri/sidecar` 以及相关的依赖配置（`tauri.conf.json` 清洗、`package.json` 组件精简）。

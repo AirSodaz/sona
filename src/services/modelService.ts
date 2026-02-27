@@ -2,8 +2,6 @@ import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Command } from '@tauri-apps/plugin-shell';
-import { resolveResource } from '@tauri-apps/api/path';
 
 
 /**
@@ -330,8 +328,8 @@ class ModelService {
 
         try {
             console.log('Starting extraction...');
-            // Try sidecar extraction
-            await this.extractWithSidecar(tempFilePath, modelsDir, onProgress, signal);
+            // Try backend extraction
+            await this.extractArchive(tempFilePath, modelsDir, onProgress, signal);
         } catch (error) {
             throw new Error(`Extraction failed: ${error}`);
         } finally {
@@ -429,9 +427,7 @@ class ModelService {
     }
 
     /**
-     * Extracts an archive using a sidecar process.
-     *
-     * Uses a node script utilizing system tools or libraries to handle the extraction.
+     * Extracts an archive using the Rust backend.
      *
      * @param archivePath The path to the archive file.
      * @param targetDir The directory to extract into.
@@ -439,75 +435,23 @@ class ModelService {
      * @param signal Optional AbortSignal.
      * @return A promise that resolves when extraction is complete.
      */
-    private async extractWithSidecar(archivePath: string, targetDir: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
-        console.log('[ModelService] Attempting extraction via sidecar (7zip)...');
+    private async extractArchive(archivePath: string, targetDir: string, _onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
+        console.log('[ModelService] Attempting extraction via Rust backend (extract_tar_bz2)...');
 
-        const scriptPath = await resolveResource('sidecar/dist/index.mjs');
-        const args = [
-            scriptPath,
-            '--mode', 'extract',
-            '--file', archivePath,
-            '--target-dir', targetDir
-        ];
-
-        const command = Command.sidecar('binaries/node', args);
-        let child: any = null;
-
-        return new Promise(async (resolve, reject) => {
-            let stderr = '';
-
-            command.on('close', (data) => {
-                if (signal?.aborted) {
-                    reject(new Error('Extraction cancelled'));
-                    return;
-                }
-                if (data.code === 0) {
-                    resolve();
-                } else {
-                    reject(new Error(`Sidecar exited with code ${data.code}: ${stderr}`));
-                }
+        if (signal) {
+            signal.addEventListener('abort', () => {
+                console.warn('Extraction cancellation requested, but not supported via Rust backend yet.');
             });
+        }
 
-            command.on('error', (err) => reject(err));
-
-            command.stdout.on('data', (line) => {
-                try {
-                    const data = JSON.parse(line);
-                    if (data.type === 'progress') {
-                        // Map 0-100 of extraction to 60-95% of total progress
-                        // percentage is 0-100
-                        const overall = 60 + Math.round((data.percentage / 100) * 35);
-                        onProgress?.(overall, `Extracting: ${data.status}`);
-                    } else if (data.error) {
-                        // console.error('Sidecar error:', data.error);
-                    }
-                } catch (e) {
-                    // Ignore
-                }
+        try {
+            await invoke('extract_tar_bz2', {
+                archivePath: archivePath,
+                targetDir: targetDir
             });
-
-            command.stderr.on('data', (line) => {
-                stderr += line + '\n';
-                console.log('[Extract Sidecar stderr]', line);
-            });
-
-            child = await command.spawn();
-
-            if (signal) {
-                signal.addEventListener('abort', async () => {
-                    if (child) {
-                        try {
-                            // Use kill if available on Child, or invoke kill command?
-                            // Tauri v2 Command.spawn() returns a Child object which has kill().
-                            await child.kill();
-                        } catch (e) {
-                            console.error('Failed to kill extraction process:', e);
-                        }
-                    }
-                    reject(new Error('Extraction cancelled'));
-                });
-            }
-        });
+        } catch (error) {
+            throw new Error(`Extraction failed: ${error}`);
+        }
     }
 }
 

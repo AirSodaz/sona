@@ -21,10 +21,11 @@
   - [x] 实现 `tauri::command`：供前端调用启动、停止、配置模型（替代原有基于 IPC 及子进程启动的方式）。
   - [x] 实现事件机制：将流式音频识别结果、状态变更等，通过 `app_handle.emit_all()` 即时推送到前端界面（替代原有写入 stdout JSON 的方式）。
 
-- [ ] 5. **前端适配与重构 (Frontend Adaptation)**
-  - [ ] 移除前端代码中原本通过 `tauri/api/process/Command` 孵化 (spawn) Node/Sidecar 的逻辑。
-  - [ ] 修改为直接使用 `@tauri-apps/api/core/invoke` 调用后端的 Rust Command。
-  - [ ] 修改事件监听：由监听 `Command::on('line')` 改为监听 Tauri Window 的原生事件 (`listen('recognizer-output')`)。
+- [x] 5. **前端适配与重构 (Frontend Adaptation)**
+  - [x] 移除前端代码中原本通过 `tauri/api/process/Command` 孵化 (spawn) Node/Sidecar 的逻辑。
+  - [x] 修改为直接使用 `@tauri-apps/api/core/invoke` 调用后端的 Rust Command。
+  - [x] 修改事件监听：由监听 `Command::on('line')` 改为监听 Tauri Window 的原生事件 (`listen('recognizer-output')`)。
+  - [x] 重命名遗留的 sidecar 相关方法与注释（例如：`_spawnSidecar` -> `_startBackend`，并修正过时的 JS Doc）。
 
 - [ ] 6. **测试验证与最终清理**
   - [ ] 确保前端所有相关端到端测试跑通。

@@ -172,7 +172,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
         }
 
-        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+
 
         // Find items to start
         const pendingItems = state.queueItems.filter(item => item.status === 'pending');
@@ -336,12 +336,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null);
             useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
             // Set source file path for CTC alignment
-            transcriptionService.setSourceFilePath(item.filePath);
+
         } else if (id === null) {
             // Clear if null
             useTranscriptStore.getState().loadTranscript([], null);
             useTranscriptStore.getState().setAudioUrl(null);
-            transcriptionService.setSourceFilePath('');
+
         }
     },
 

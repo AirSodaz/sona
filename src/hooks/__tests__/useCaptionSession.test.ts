@@ -36,7 +36,7 @@ const transcriptionMocks = vi.hoisted(() => ({
     setLanguage: vi.fn(),
     setEnableITN: vi.fn(),
     setPunctuationModelPath: vi.fn(),
-    setCtcModelPath: vi.fn(),
+
     setVadModelPath: vi.fn(),
     setVadBufferSize: vi.fn(),
     setITNModelPaths: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock('../../services/transcriptionService', () => {
             setLanguage = transcriptionMocks.setLanguage;
             setEnableITN = transcriptionMocks.setEnableITN;
             setPunctuationModelPath = transcriptionMocks.setPunctuationModelPath;
-            setCtcModelPath = transcriptionMocks.setCtcModelPath;
+
             setVadModelPath = transcriptionMocks.setVadModelPath;
             setVadBufferSize = transcriptionMocks.setVadBufferSize;
             setITNModelPaths = transcriptionMocks.setITNModelPaths;
@@ -121,7 +121,7 @@ describe('useCaptionSession', () => {
     } as AppConfig;
 
     it('should NOT open caption window if toggled off during initialization (Race Condition)', async () => {
-        let resolveDisplayMedia: (value: any) => void = () => {};
+        let resolveDisplayMedia: (value: any) => void = () => { };
 
         const mockGetDisplayMedia = vi.fn().mockImplementation(() => {
             return new Promise((resolve) => {
@@ -147,11 +147,11 @@ describe('useCaptionSession', () => {
 
         // 3. Resolve getDisplayMedia to simulate completion of async task
         await act(async () => {
-             resolveDisplayMedia(mockStream);
+            resolveDisplayMedia(mockStream);
 
-             // Also resolve addModule and service.start
-             audioContextMocks.addModule.mockResolvedValue(undefined);
-             transcriptionMocks.start.mockImplementation((_onSegment: any, _onError: any) => Promise.resolve());
+            // Also resolve addModule and service.start
+            audioContextMocks.addModule.mockResolvedValue(undefined);
+            transcriptionMocks.start.mockImplementation((_onSegment: any, _onError: any) => Promise.resolve());
         });
 
         // Wait a bit for async operations to proceed

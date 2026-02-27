@@ -93,7 +93,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
 
         transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-        transcriptionService.setCtcModelPath(config.ctcModelPath || '');
+
         transcriptionService.setVadModelPath(config.vadModelPath || '');
         transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
     }, [config]);
@@ -440,7 +440,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 .catch(err => console.error('Failed to mute system audio on resume:', err));
         }
         if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-             audioContextRef.current.resume();
+            audioContextRef.current.resume();
         }
     }, [setIsPaused, config.muteDuringRecording, inputSource]);
 

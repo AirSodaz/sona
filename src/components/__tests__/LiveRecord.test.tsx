@@ -9,7 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn().mockResolvedValue(() => {}),
+    listen: vi.fn().mockResolvedValue(() => { }),
 }));
 
 // Hoist mocks to share between singleton and class instances
@@ -24,7 +24,7 @@ const {
     mockSetEnableITN,
     mockSetITNModelPaths,
     mockSetPunctuationModelPath,
-    mockSetCtcModelPath,
+
     mockSetVadModelPath,
     mockSetVadBufferSize,
     mockTerminate
@@ -39,7 +39,7 @@ const {
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
     mockSetPunctuationModelPath: vi.fn(),
-    mockSetCtcModelPath: vi.fn(),
+
     mockSetVadModelPath: vi.fn(),
     mockSetVadBufferSize: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
@@ -58,7 +58,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN: mockSetEnableITN,
             setITNModelPaths: mockSetITNModelPaths,
             setPunctuationModelPath: mockSetPunctuationModelPath,
-            setCtcModelPath: mockSetCtcModelPath,
+
             setVadModelPath: mockSetVadModelPath,
             setVadBufferSize: mockSetVadBufferSize,
             prepare: mockPrepare,
@@ -74,7 +74,7 @@ vi.mock('../../services/transcriptionService', () => {
             setEnableITN = mockSetEnableITN;
             setITNModelPaths = mockSetITNModelPaths;
             setPunctuationModelPath = mockSetPunctuationModelPath;
-            setCtcModelPath = mockSetCtcModelPath;
+
             setVadModelPath = mockSetVadModelPath;
             setVadBufferSize = mockSetVadBufferSize;
             prepare = mockPrepare;

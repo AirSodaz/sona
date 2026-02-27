@@ -1,10 +1,6 @@
-
-import { Command, Child } from '@tauri-apps/plugin-shell';
-import { resolveResource } from '@tauri-apps/api/path';
-import { v4 as uuidv4 } from 'uuid';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
-import { StreamLineBuffer } from '../utils/streamBuffer';
-
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
@@ -22,7 +18,7 @@ export interface AlignmentResult {
     ctcText: string;
 }
 
-/** Configuration used to spawn the sidecar process. */
+/** Configuration used to start the backend recognizer. */
 interface ServiceConfig {
     modelPath: string;
     itnModelPaths: string[];
@@ -34,15 +30,15 @@ interface ServiceConfig {
 }
 
 /**
- * Service to manage the transcription process via a sidecar.
+ * Service to manage the transcription process via the Rust backend.
  *
- * Handles spawning, communication (stdin/stdout), and lifecycle of the external process.
+ * Handles starting, communicating, and lifecycle of the recognizer instance.
  */
 export class TranscriptionService {
-    private static readonly JSON_START_REGEX = /^[\s]*[\{\[]/;
-    private child: Child | null = null;
-    /** Indicates if the sidecar process is currently running. */
+    /** Indicates if the recognizer is currently running. */
     private isRunning: boolean = false;
+    /** Function to stop listening for recognizer events. */
+    private unlistenOutput: UnlistenFn | null = null;
     /** Path to the main ASR model. */
     private modelPath: string = '';
     /** List of paths to Inverse Text Normalization (ITN) models. */
@@ -51,10 +47,6 @@ export class TranscriptionService {
     private punctuationModelPath: string = '';
     /** Path to the Voice Activity Detection (VAD) model. */
     private vadModelPath: string = '';
-    /** Path to the CTC model. */
-    private ctcModelPath: string = '';
-    /** Path to the source audio file for alignment. */
-    private sourceFilePath: string = '';
     /** Buffer size for VAD in seconds. */
     private vadBufferSize: number = 5;
     /** Whether to enable Inverse Text Normalization. */
@@ -63,9 +55,9 @@ export class TranscriptionService {
     private onSegment: TranscriptionCallback | null = null;
     /** Callback for error reporting. */
     private onError: ErrorCallback | null = null;
-    /** Promise to track active spawning to prevent race conditions. */
-    private spawningPromise: Promise<void> | null = null;
-    /** Configuration of the currently running process. */
+    /** Promise to track active starting to prevent race conditions. */
+    private startingPromise: Promise<void> | null = null;
+    /** Configuration of the currently running recognizer. */
     private runningConfig: ServiceConfig | null = null;
     /** Language code for transcription. */
     private language: string = 'auto';
@@ -121,23 +113,6 @@ export class TranscriptionService {
         this.vadModelPath = path;
     }
 
-    /**
-     * Sets the path to the CTC model.
-     *
-     * @param path The absolute path to the CTC model.
-     */
-    setCtcModelPath(path: string): void {
-        this.ctcModelPath = path;
-    }
-
-    /**
-     * Sets the path to the source audio file for alignment.
-     *
-     * @param path The absolute path to the audio file.
-     */
-    setSourceFilePath(path: string): void {
-        this.sourceFilePath = path;
-    }
 
     /**
      * Sets the VAD buffer size.
@@ -169,17 +144,17 @@ export class TranscriptionService {
             if (this._isConfigMatch()) {
                 return;
             }
-            console.log('[TranscriptionService] Configuration changed, restarting sidecar...');
+            console.log('[TranscriptionService] Configuration changed, restarting backend...');
             await this.stop();
         }
 
         if (!this.modelPath) {
-            console.warn('[TranscriptionService] Model path not configured, cannot prepare sidecar');
+            console.warn('[TranscriptionService] Model path not configured, cannot prepare backend');
             return;
         }
 
-        console.log('[TranscriptionService] Pre-spawning sidecar...');
-        return this._spawnSidecar();
+        console.log('[TranscriptionService] Pre-starting backend...');
+        return this._startBackend();
     }
 
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
@@ -192,7 +167,7 @@ export class TranscriptionService {
                 console.log('[TranscriptionService] Service already running with matching config, ready for audio');
                 return;
             }
-            console.log('[TranscriptionService] Configuration changed, restarting sidecar for start...');
+            console.log('[TranscriptionService] Configuration changed, restarting backend for start...');
             await this.stop();
         }
 
@@ -201,18 +176,17 @@ export class TranscriptionService {
             return;
         }
 
-        await this._spawnSidecar();
+        await this._startBackend();
     }
 
-    private async _spawnSidecar(): Promise<void> {
-        if (this.spawningPromise) {
-            return this.spawningPromise;
+    private async _startBackend(): Promise<void> {
+        if (this.startingPromise) {
+            return this.startingPromise;
         }
 
-        this.spawningPromise = (async () => {
-            console.log('Starting sidecar with model:', this.modelPath);
+        this.startingPromise = (async () => {
+            console.log('Starting Rust backend recognizer with model:', this.modelPath);
 
-            // Capture the config we are about to use
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
                 itnModelPaths: [...this.itnModelPaths],
@@ -224,53 +198,29 @@ export class TranscriptionService {
             };
 
             try {
-                const scriptPath = await resolveResource('sidecar/dist/index.mjs');
+                if (!this.unlistenOutput) {
+                    this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
+                        const segment = event.payload;
+                        if (this.onSegment) {
+                            this.onSegment(segment);
+                        }
+                    });
+                }
 
-                const commonArgs = this._getCommonArgs();
-                const args = [
-                    scriptPath,
-                    '--mode', 'stream',
-                    ...commonArgs
-                ];
-
-                const command = Command.sidecar('binaries/node', args);
-
-                // Buffer for stdout stream
-                const stdoutBuffer = new StreamLineBuffer();
-
-                command.on('close', (data) => {
-                    console.log(`Sidecar finished with code ${data.code} and signal ${data.signal}`);
-
-                    // Process any remaining data
-                    const remaining = stdoutBuffer.flush();
-                    remaining.forEach(line => this.handleOutput(line));
-
-                    this.isRunning = false;
-                    this.child = null;
+                await invoke('start_recognizer', {
+                    modelPath: this.modelPath,
+                    numThreads: 4,
+                    enableItn: this.enableITN,
+                    language: this.language,
+                    itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null
                 });
 
-                command.on('error', (error) => {
-                    console.error(`Sidecar error: "${error}"`);
-                    if (this.onError) this.onError(`Process error: ${error}`);
-                    this.isRunning = false;
-                });
-
-                command.stdout.on('data', (chunk) => {
-                    const lines = stdoutBuffer.process(chunk);
-                    lines.forEach(line => this.handleOutput(line));
-                });
-
-                command.stderr.on('data', (chunk) => {
-                    console.log(`[TranscriptionService] stderr: ${chunk}`);
-                });
-
-                this.child = await command.spawn();
                 this.isRunning = true;
                 this.runningConfig = configToUse;
-                console.log('[TranscriptionService] Sidecar started, PID:', this.child.pid);
+                console.log('[TranscriptionService] Rust Recognizer started');
 
             } catch (error) {
-                console.error('Failed to spawn sidecar:', error);
+                console.error('Failed to start recognizer:', error);
                 if (this.onError) this.onError(`Failed to start: ${error}`);
                 this.isRunning = false;
                 this.runningConfig = null;
@@ -279,9 +229,9 @@ export class TranscriptionService {
         })();
 
         try {
-            await this.spawningPromise;
+            await this.startingPromise;
         } finally {
-            this.spawningPromise = null;
+            this.startingPromise = null;
         }
     }
 
@@ -312,17 +262,20 @@ export class TranscriptionService {
      * Stops the transcription process.
      */
     async stop(): Promise<void> {
-        if (!this.child || !this.isRunning) return;
+        if (!this.isRunning) return;
 
         try {
-            await this.child.kill();
+            await invoke('stop_recognizer');
         } catch (error) {
-            console.error('Failed to kill sidecar:', error);
+            console.error('Failed to stop recognizer:', error);
         } finally {
-            console.log('[TranscriptionService] Sidecar stopped');
-            this.child = null;
+            console.log('[TranscriptionService] Recognizer stopped');
             this.isRunning = false;
             this.runningConfig = null;
+            if (this.unlistenOutput) {
+                this.unlistenOutput();
+                this.unlistenOutput = null;
+            }
         }
     }
 
@@ -333,31 +286,11 @@ export class TranscriptionService {
      * This allows the model to finish the last segment and add punctuation.
      */
     async softStop(): Promise<void> {
-        if (!this.child || !this.isRunning) return;
-
-        try {
-            console.log('[TranscriptionService] Sending __RESET__ command...');
-            // Send Reset instead of EOS to keep process alive
-            await this.child.write('__RESET__');
-
-            // We don't wait for isRunning to become false anymore.
-            // We could wait for a "reset" confirmation from the sidecar if we wanted strict sync,
-            // but for now, sending the command is enough to trigger the flush and reset.
-            // The sidecar prints {"reset": true} when done. 
-            // We can optionally wait for that in handleOutput if we needed to block here.
-
-            // To be safe, wait a small amount of time for flush
-            await new Promise(r => setTimeout(r, 200));
-
-        } catch (error) {
-            console.error('Failed to soft stop sidecar:', error);
-            // Don't kill process here, just log error. 
-            // If it's truly stuck, the next start might fail or user can restart app.
-        }
+        await this.stop();
     }
 
     /**
-     * Completely terminates the sidecar process.
+     * Completely terminates the process.
      */
     async terminate(): Promise<void> {
         await this.stop();
@@ -369,16 +302,16 @@ export class TranscriptionService {
      * @param samples An array of Int16 audio samples.
      */
     async sendAudioInt16(samples: Int16Array): Promise<void> {
-        if (!this.child || !this.isRunning) return;
+        if (!this.isRunning) return;
 
         try {
-            // Command.write accepts string or Uint8Array
-            // We need to send bytes. Uint8Array view of Int16Array
-            // Use byteOffset and byteLength to handle cases where Int16Array is a view
-            const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
-            await this.child.write(bytes);
+            const floatSamples = new Float32Array(samples.length);
+            for (let i = 0; i < samples.length; i++) {
+                floatSamples[i] = samples[i] / 32768.0;
+            }
+            await invoke('feed_audio_chunk', { samples: Array.from(floatSamples) });
         } catch (error) {
-            console.error('Failed to write audio to sidecar:', error);
+            console.error('Failed to feed audio to backend:', error);
         }
     }
 
@@ -417,213 +350,58 @@ export class TranscriptionService {
      * @param saveToPath Optional path to save the processed audio file (WAV format).
      * @return A promise that resolves to the list of segments.
      */
-    private async _transcribeFileInternal(filePath: string, provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(filePath: string, _provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, _saveToPath?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) {
             throw new Error('Model path not configured');
         }
 
-        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} (Provider: ${provider || 'auto'}, Language: ${language || 'auto'})`);
+        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} via Rust backend`);
 
-        // Spawn sidecar in batch mode
-        const scriptPath = await resolveResource('sidecar/dist/index.mjs');
-        const commonArgs = this._getCommonArgs();
-
-        const args = [
-            scriptPath,
-            '--mode', 'batch',
-            '--file', filePath,
-            ...commonArgs
-        ];
-
-        if (language && language !== 'auto') {
-            args.push('--language', language);
-        }
-
-        if (saveToPath) {
-            args.push('--save-wav', saveToPath);
-        }
-
-        if (this.vadModelPath) {
-            args.push('--vad-model', this.vadModelPath);
-            args.push('--vad-buffer', this.vadBufferSize.toString());
-        }
-
-        if (provider) {
-            args.push('--provider', provider);
-        }
-
-        const command = Command.sidecar('binaries/node', args);
-
-        // Optimization: Use array of chunks instead of string concatenation
-        // This prevents O(N^2) copying behavior for large outputs
-        const stderrChunks: string[] = [];
-        const stderrStreamBuffer = new StreamLineBuffer();
-        const stdoutStreamBuffer = new StreamLineBuffer();
-
-        // Accumulate segments to return at the end (compatibility)
-        const collectedSegments: TranscriptSegment[] = [];
-
-        // Wrap execution in a promise to await completion
-        return new Promise<TranscriptSegment[]>(async (resolve, reject) => {
-            command.on('close', (data) => {
-                console.log(`[Batch] Sidecar finished with code ${data.code}`);
-
-                const stderrBuffer = stderrChunks.join('');
-
-                if (data.code === 0) {
-                    // Check for silent CoreML failure
-                    if (!provider &&
-                        stderrBuffer.includes('Error executing model') &&
-                        stderrBuffer.includes('CoreMLExecutionProvider')) {
-
-                        reject(new Error('COREML_FAILURE'));
-                        return;
-                    }
-
-                    // Flush remaining buffer
-                    const lines = stdoutStreamBuffer.flush();
-                    lines.forEach(line => {
-                        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.text && typeof data.start === 'number' && typeof data.end === 'number') {
-                                const segment: TranscriptSegment = {
-                                    id: data.id || uuidv4(),
-                                    text: data.text,
-                                    start: data.start,
-                                    end: data.end,
-                                    isFinal: data.isFinal || true,
-                                    tokens: data.tokens,
-                                    timestamps: data.timestamps
-                                };
-                                collectedSegments.push(segment);
-                                if (onSegment) onSegment(segment);
-                            }
-                        } catch (e) { }
-                    });
-
-                    resolve(collectedSegments);
-
-                } else {
-                    reject(new Error(`Sidecar failed with code ${data.code}: ${stderrBuffer}`));
-                }
-            });
-
-            command.on('error', (error) => {
-                reject(new Error(`Process error: ${error}`));
-            });
-
-            command.stdout.on('data', (chunk) => {
-                const lines = stdoutStreamBuffer.process(chunk);
-                lines.forEach(line => {
-                    if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
-                    try {
-                        const data = JSON.parse(line);
-                        if (Array.isArray(data)) {
-                            data.forEach((item: any) => {
-                                const segment = this._createSegment(item, true);
-                                if (segment) {
-                                    collectedSegments.push(segment);
-                                }
-                            });
-                        } else {
-                            const segment = this._createSegment(data, true);
-                            if (segment) {
-                                collectedSegments.push(segment);
-                                if (onSegment) onSegment(segment);
-                            }
-                        }
-                    } catch (e) {
-                    }
-                });
-            });
-
-            command.stderr.on('data', (chunk) => {
-                stderrChunks.push(chunk);
-                const lines = stderrStreamBuffer.process(chunk);
-                lines.forEach(line => {
-                    if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
-                    try {
-                        const data = JSON.parse(line);
-                        if (data.type === 'progress' && typeof data.percentage === 'number') {
-                            if (onProgress) onProgress(data.percentage);
-                        }
-                    } catch (e) {
-                    }
-                    console.log(`[Batch] stderr: ${line}`);
-                });
-            });
-
-            try {
-                await command.spawn();
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    /**
-     * Parses a line of JSON output and updates the state.
-     *
-     * @param line A string containing the JSON output.
-     */
-    private handleOutput(line: string): void {
-        if (!TranscriptionService.JSON_START_REGEX.test(line)) return;
         try {
-            const data = JSON.parse(line);
+            // Need to make sure the recognizer is initialized for batch (Offline)
+            await invoke('start_recognizer', {
+                modelPath: this.modelPath,
+                numThreads: 4,
+                enableItn: this.enableITN,
+                language: language || this.language || 'auto',
+                itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null
+            });
 
-            // Check for segments
-            const segment = this._createSegment(data, false);
-            if (segment) {
-                if (this.onSegment) {
-                    this.onSegment(segment);
-                }
-            } else if (data.error && this.onError) {
-                this.onError(data.error);
+            if (onProgress) {
+                onProgress(50); // Simulate progress as Rust backend is blocking currently
             }
-        } catch (e) {
-            // Ignore non-JSON lines or partial chunks
-            // console.debug('Failed to parse line:', line);
+
+            const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
+                filePath: filePath,
+                saveToPath: _saveToPath || null
+            });
+
+            if (onProgress) {
+                onProgress(100);
+            }
+
+            if (onSegment) {
+                segments.forEach(seg => {
+                    // Filter out single period segments when final if needed (similar to _createSegment)
+                    if (seg.isFinal) {
+                        const trimmedText = seg.text.trim();
+                        if (trimmedText === '.' || trimmedText === '。') {
+                            return;
+                        }
+                    }
+                    onSegment(seg);
+                });
+            }
+
+            return segments;
+        } catch (error) {
+            console.error('[TranscriptionService] Batch transcription failed:', error);
+            throw new Error(`Process error: ${error}`);
         }
     }
 
     /**
-     * Generates the common arguments for the sidecar process.
-     * 
-     * @returns An array of argument strings.
-     */
-    private _getCommonArgs(): string[] {
-        const args = [
-            '--model-path', this.modelPath,
-            '--enable-itn', this.enableITN.toString()
-        ];
-
-        if (this.language && this.language !== 'auto') {
-            args.push('--language', this.language);
-        }
-
-        if (this.enableITN && this.itnModelPaths.length > 0) {
-            args.push('--itn-model', this.itnModelPaths.join(','));
-        }
-
-        if (this.punctuationModelPath) {
-            args.push('--punctuation-model', this.punctuationModelPath);
-        }
-
-        if (import.meta.env.DEV) {
-            args.push('--allow-mock', 'true');
-        }
-
-        if (this.vadModelPath) {
-            args.push('--vad-model', this.vadModelPath);
-            args.push('--vad-buffer', this.vadBufferSize.toString());
-        }
-
-        return args;
-    }
-
-    /**
-     * Emits a segment as if it came from the sidecar.
+     * Emits a segment as if it came from the backend.
      * Useful for testing.
      * @internal
      */
@@ -636,139 +414,14 @@ export class TranscriptionService {
     /**
      * Runs CTC forced alignment on a segment's audio slice.
      *
-     * Spawns the sidecar in align mode to re-recognize the audio and produce
-     * fresh tokens/timestamps/durations. Returns null on any failure.
+     * Returns null as it is currently unimplmented in the Rust backend.
      *
      * @param segment The segment to align (uses start/end times).
      * @param sourceFilePath Optional override for the audio file path.
      * @return The alignment result, or null if alignment is unavailable or fails.
      */
-    async alignSegment(segment: TranscriptSegment, sourceFilePath?: string): Promise<AlignmentResult | null> {
-        const filePath = sourceFilePath || this.sourceFilePath;
-        if (!this.ctcModelPath) {
-            console.log('[TranscriptionService] No CTC model configured, skipping alignment');
-            return null;
-        }
-        if (!filePath) {
-            console.log('[TranscriptionService] No source file path, skipping alignment');
-            return null;
-        }
-
-        console.log(`[TranscriptionService] Aligning segment ${segment.id} (${segment.start}-${segment.end})`);
-
-        try {
-            const scriptPath = await resolveResource('sidecar/dist/index.mjs');
-            const args = [
-                scriptPath,
-                '--mode', 'align',
-                '--file', filePath,
-                '--ctc-model', this.ctcModelPath,
-                '--start-time', segment.start.toString(),
-                '--end-time', segment.end.toString(),
-            ];
-
-            const command = Command.sidecar('binaries/node', args);
-            const stdoutBuffer = new StreamLineBuffer();
-
-            return new Promise<AlignmentResult | null>((resolve) => {
-                let result: AlignmentResult | null = null;
-
-                command.stdout.on('data', (chunk) => {
-                    const lines = stdoutBuffer.process(chunk);
-                    for (const line of lines) {
-                        if (!TranscriptionService.JSON_START_REGEX.test(line)) continue;
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.tokens && Array.isArray(data.tokens)) {
-                                result = {
-                                    tokens: data.tokens,
-                                    timestamps: data.timestamps || [],
-                                    durations: data.durations || [],
-                                    ctcText: data.ctcText || '',
-                                };
-                            }
-                        } catch (e) { /* ignore non-JSON */
-                        }
-                    }
-                });
-
-                command.stderr.on('data', (chunk) => {
-                    console.log(`[Align] stderr: ${chunk}`);
-                });
-
-                command.on('close', (data) => {
-                    // Flush remaining buffer
-                    const remaining = stdoutBuffer.flush();
-                    for (const line of remaining) {
-                        if (!TranscriptionService.JSON_START_REGEX.test(line)) continue;
-                        try {
-                            const data = JSON.parse(line);
-                            if (data.tokens && Array.isArray(data.tokens)) {
-                                result = {
-                                    tokens: data.tokens,
-                                    timestamps: data.timestamps || [],
-                                    durations: data.durations || [],
-                                    ctcText: data.ctcText || '',
-                                };
-                            }
-                        } catch (e) { /* ignore non-JSON */ }
-                    }
-
-                    if (data.code === 0 && result && result.tokens.length > 0) {
-                        resolve(result);
-                    } else {
-                        console.warn(`[TranscriptionService] Alignment failed (code ${data.code})`);
-                        resolve(null);
-                    }
-                });
-
-                command.on('error', (error) => {
-                    console.error(`[TranscriptionService] Alignment process error: ${error}`);
-                    resolve(null);
-                });
-
-                command.spawn().catch((error) => {
-                    console.error(`[TranscriptionService] Failed to spawn alignment sidecar: ${error}`);
-                    resolve(null);
-                });
-            });
-        } catch (error) {
-            console.error('[TranscriptionService] Alignment error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Creates a TranscriptSegment from raw data.
-     * 
-     * @param data The raw data object.
-     * @param defaultIsFinal The default value for isFinal if not present in data.
-     * @returns A TranscriptSegment or null if data is invalid.
-     */
-    private _createSegment(data: any, defaultIsFinal: boolean): TranscriptSegment | null {
-        if (data && typeof data.text === 'string' && typeof data.start === 'number' && typeof data.end === 'number') {
-            const isFinal = data.isFinal ?? defaultIsFinal;
-            const text = data.text;
-
-            // Filter out single period segments when final
-            if (isFinal) {
-                const trimmedText = text.trim();
-                if (trimmedText === '.' || trimmedText === '。') {
-                    return null;
-                }
-            }
-
-            return {
-                id: data.id || uuidv4(),
-                text: text,
-                start: data.start,
-                end: data.end,
-                isFinal: isFinal,
-                tokens: data.tokens,
-                timestamps: data.timestamps,
-                durations: data.durations
-            };
-        }
+    async alignSegment(segment: TranscriptSegment, _sourceFilePath?: string): Promise<AlignmentResult | null> {
+        console.warn(`[TranscriptionService] CTC Alignment is not yet implemented in the Rust backend. Returning null for segment ${segment.id}`);
         return null;
     }
 }

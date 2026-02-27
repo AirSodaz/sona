@@ -34,7 +34,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         service.setLanguage(cfg.language);
         service.setEnableITN(cfg.enableITN ?? false);
         service.setPunctuationModelPath(cfg.punctuationModelPath || '');
-        service.setCtcModelPath(cfg.ctcModelPath || '');
         service.setVadModelPath(cfg.vadModelPath || '');
         service.setVadBufferSize(cfg.vadBufferSize || 5);
 
@@ -109,8 +108,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             (streamRef.current && audioContextRef.current && audioContextRef.current.state === 'running') ||
             (usingNativeCaptureRef.current)
         ) {
-             // Already running
-             return;
+            // Already running
+            return;
         }
 
         try {
@@ -193,12 +192,12 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     try {
                         await audioContext.audioWorklet.addModule('/audio-processor.js');
                     } catch (e) {
-                         if (!activeRef.current) {
-                             await audioContext.close();
-                             audioContextRef.current = null;
-                             return;
-                         }
-                         throw e;
+                        if (!activeRef.current) {
+                            await audioContext.close();
+                            audioContextRef.current = null;
+                            return;
+                        }
+                        throw e;
                     }
                 } else if (audioContextRef.current.state === 'suspended') {
                     await audioContextRef.current.resume();
@@ -286,7 +285,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     useEffect(() => {
         const update = async () => {
             if (isCaptionMode && serviceRef.current && !isInitializing) {
-                // Update service config and restart sidecar only
+                // Update service config and restart backend only
                 await updateServiceConfig(serviceRef.current, config);
 
                 // Triggers internal restart check
@@ -303,7 +302,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         config.language,
         config.enableITN,
         config.punctuationModelPath,
-        config.ctcModelPath,
         config.vadModelPath,
         config.vadBufferSize,
         // Use JSON stringify for deep comparison of arrays/sets
