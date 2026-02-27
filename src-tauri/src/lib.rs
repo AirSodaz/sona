@@ -582,6 +582,7 @@ pub fn run() {
             offline_state: tokio::sync::Mutex::new(sherpa::OfflineState::default()),
             vad_model: tokio::sync::Mutex::new(None),
             vad_buffer: tokio::sync::Mutex::new(5.0),
+            current_segment_id: tokio::sync::Mutex::new(None),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

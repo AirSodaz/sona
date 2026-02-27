@@ -374,6 +374,7 @@ pub struct SherpaState {
     pub offline_state: Mutex<OfflineState>,
     pub vad_model: Mutex<Option<String>>,
     pub vad_buffer: Mutex<f32>,
+    pub current_segment_id: Mutex<Option<String>>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -561,6 +562,7 @@ pub async fn start_recognizer(
     *state.offline_state.lock().await = OfflineState::default();
     *state.vad_model.lock().await = vad_model.clone();
     *state.vad_buffer.lock().await = vad_buffer;
+    *state.current_segment_id.lock().await = None;
     Ok(())
 }
 
@@ -573,6 +575,7 @@ pub async fn stop_recognizer(state: State<'_, SherpaState>) -> Result<(), String
     *state.total_samples.lock().await = 0;
     *state.segment_start_time.lock().await = 0.0;
     *state.offline_state.lock().await = OfflineState::default();
+    *state.current_segment_id.lock().await = None;
     Ok(())
 }
 
@@ -589,6 +592,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     let mut total_samples = state.total_samples.lock().await;
     let mut segment_start = state.segment_start_time.lock().await;
     let mut offline = state.offline_state.lock().await;
+    let mut current_id_guard = state.current_segment_id.lock().await;
 
     // Offline + VAD (pseudo-streaming)
     if let (
@@ -710,8 +714,16 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 
         if let Some(result) = r.0.get_result(&st.0) {
             if !result.text.trim().is_empty() {
+                let id = if let Some(id) = current_id_guard.as_ref() {
+                    id.clone()
+                } else {
+                    let new_id = uuid::Uuid::new_v4().to_string();
+                    *current_id_guard = Some(new_id.clone());
+                    new_id
+                };
+
                 let segment = TranscriptSegment {
-                    id: uuid::Uuid::new_v4().to_string(),
+                    id,
                     text: result.text.clone(),
                     start: *segment_start,
                     end: current_time,
@@ -740,8 +752,14 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                         .as_ref()
                         .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
+                    let id = if let Some(id) = current_id_guard.take() {
+                        id
+                    } else {
+                        uuid::Uuid::new_v4().to_string()
+                    };
+
                     let segment = TranscriptSegment {
-                        id: uuid::Uuid::new_v4().to_string(),
+                        id,
                         text,
                         start: *segment_start,
                         end: current_time,
@@ -751,6 +769,8 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                         durations,
                     };
                     let _ = app.emit("recognizer-output", &segment);
+                } else {
+                    *current_id_guard = None;
                 }
             }
 
