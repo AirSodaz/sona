@@ -23,6 +23,8 @@ fn main() {
             println!("cargo:rustc-link-lib=static=kissfft-float");
             println!("cargo:rustc-link-lib=static=ucd");
             println!("cargo:rustc-link-lib=static=cargs");
+            println!("cargo:rustc-link-lib=static=sherpa-onnx-c-api");
+            println!("cargo:rustc-link-lib=static=onnxruntime");
         } else {
             // Dynamic linking
             println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
