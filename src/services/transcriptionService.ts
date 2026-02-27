@@ -334,7 +334,8 @@ export class TranscriptionService {
         try {
             return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language, saveToPath);
         } catch (error: any) {
-            if (error.message === 'COREML_FAILURE') {
+            // Check if the error message contains 'COREML_FAILURE' inside the wrapped error
+            if (error.message && error.message.includes('COREML_FAILURE')) {
                 console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
                 return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language, saveToPath);
             }

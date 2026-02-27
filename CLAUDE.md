@@ -5,7 +5,7 @@
 
 ### Key Features
 *   **Offline/Private**: No data leaves the device.
-*   **Sidecar Architecture**: AI inference runs in a detached Node.js process managed by Tauri.
+*   **Rust-Native AI**: Inference runs directly in the Rust backend for maximum performance.
 *   **Real-time & Batch**: Supports both live recording and file import.
 *   **Performance**: Optimized audio processing loop and virtualized lists for long transcripts.
 
@@ -22,29 +22,22 @@
 
 ### Backend (Tauri)
 *   **Core**: Tauri v2 (Rust)
-*   **Capabilities**: `shell` (for sidecar), `fs`, `dialog`, `http`.
+*   **Capabilities**: `fs`, `dialog`, `http`, `process`.
+*   **AI Engine**: `sherpa-onnx` (Rust crate) for offline speech recognition.
 *   **AI Proxy**: `ai.rs` uses `reqwest` to proxy requests to OpenAI, Anthropic, Gemini, and Ollama.
 *   **Configuration**: `src-tauri/tauri.conf.json`.
 
-### AI Engine (Sidecar)
-*   **Runtime**: Node.js (packaged binary).
-*   **Inference**: `sherpa-onnx-node`.
-*   **Communication**: Stdin/Stdout streams between Tauri and Sidecar.
-*   **Location**: `src-tauri/sidecar/` (Entry: `sherpa-recognizer.js`).
-
 ## 3. Architecture & Critical Components
 
-### 3.1. Sidecar Architecture
-The frontend does NOT run AI models directly.
-1.  **Tauri** spawns a Node.js binary (bundled in `src-tauri/binaries/`).
-2.  **Script**: Executes `src-tauri/sidecar/dist/index.mjs` (compiled from `sherpa-recognizer.js`).
-3.  **Communication**:
-    *   **Audio Input**: Frontend sends `Int16Array` (converted from Float32 via `public/audio-processor.js` AudioWorklet) -> Tauri Command -> Sidecar Stdin.
-    *   **VAD & Buffering**: Sidecar implements a Ring Buffer (0.3s pre-speech context) to prevent clipped words at segment boundaries during pseudo-streaming.
-    *   **Output**: Sidecar prints JSON lines to Stdout -> Captured by Tauri -> Parsed by `transcriptionService.ts`.
+### 3.1. AI Engine (Rust)
+The application uses `sherpa-onnx` directly within the Tauri Rust process.
+*   **`sherpa.rs`**: Manages the lifecycle of the recognizer (`OnlineRecognizer` or `OfflineRecognizer`).
+*   **Streaming**: Audio data is fed from the frontend (AudioWorklet) to Rust via the `feed_audio_chunk` command.
+*   **Batch**: File processing is handled by `process_batch_file` which decodes audio using `ffmpeg` (via `std::process::Command`) and runs inference.
+*   **VAD**: Voice Activity Detection is integrated to handle segmenting audio streams.
 
 ### 3.2. Critical Services & Stores
-*   **`transcriptionService.ts`**: Manages sidecar lifecycle (`spawn`/`kill`). Uses `StreamLineBuffer` to reconstruct JSON from stdout chunks.
+*   **`transcriptionService.ts`**: Manages the backend recognizer state.
 *   **`polishService.ts` / `translationService.ts`**:
     *   Batches transcript segments into chunks.
     *   Sends prompts to the AI backend via `call_ai_model`.
@@ -101,7 +94,6 @@ The "AI Assistant" features (Polish & Translate) are implemented via a hybrid Ru
 *   **Mocking**:
     *   Mock module paths relative to the **test file** (e.g., `vi.mock('../../hooks/...')`), not the source file.
     *   `vi.mocked()` values persist; explicitly reset conflicting mocks (e.g., `.mockResolvedValue`) inside tests or `beforeEach`.
-    *   `transcriptionService` tests using `@tauri-apps/plugin-shell` must mock the `Child` process and emit 'close' events manually.
 *   **Environment**: `src-tauri/src/hardware.rs` tests run via `cargo test`.
 
 ### 5.2. E2E Testing (Playwright)
@@ -119,10 +111,9 @@ The "AI Assistant" features (Polish & Translate) are implemented via a hybrid Ru
 
 ## 6. Directory Structure & Constraints
 
-*   `src-tauri/sidecar/`: Node.js AI Engine.
-    *   **Do NOT edit `dist/` directly**. Edit `sherpa-recognizer.js` and verify the build.
 *   `src/components/settings/`: Contains individual settings tab components.
 *   `src/locales/`: i18n JSONs. Update both `en.json` and `zh.json`.
+*   `src-tauri/src/sherpa.rs`: Core speech recognition logic.
 *   `.Jules/palette.md`: Contains UX/accessibility learnings. Append new findings here.
 
 ## 7. Troubleshooting & Common Issues

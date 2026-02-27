@@ -1,6 +1,6 @@
 # Sona
 
-**Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), and [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine.
+**Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), and [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine using a high-performance Rust backend.
 
 ## ✨ Features
 
@@ -17,7 +17,7 @@
 
 ### Prerequisites
 
-*   **Node.js**: v20 or later.
+*   **Node.js**: v20 or later (for frontend build).
 *   **Rust**: Stable release (required for the Tauri backend).
 *   **Package Manager**: `npm` (recommended).
 
@@ -34,7 +34,8 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     libssl-dev \
     libgtk-3-dev \
     libayatana-appindicator3-dev \
-    librsvg2-dev
+    librsvg2-dev \
+    libasound2-dev
 ```
 
 ### Installation
@@ -49,7 +50,6 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     ```bash
     npm install
     ```
-    *Note: This automatically triggers the `setup-sidecar` script to configure the transcription engine.*
 
 3.  **Run the application**
     ```bash
