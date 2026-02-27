@@ -1,6 +1,6 @@
+mod ai;
 mod audio;
 mod hardware;
-mod ai;
 pub mod pipeline;
 pub mod sherpa;
 
@@ -67,26 +67,30 @@ fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
 
 #[cfg(target_os = "windows")]
 fn set_mute_windows(mute: bool) -> Result<(), String> {
-    use windows::Win32::Media::Audio::{
-        IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eConsole,
-    };
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-    use windows::Win32::System::Com::{CoInitialize, CoCreateInstance, CLSCTX_ALL};
+    use windows::Win32::Media::Audio::{
+        eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+    };
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitialize, CLSCTX_ALL};
 
     unsafe {
         // We can ignore the result of CoInitialize as it might already be initialized by Tauri
         let _ = CoInitialize(None);
 
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+
+        let device = enumerator
+            .GetDefaultAudioEndpoint(eRender, eConsole)
             .map_err(|e| e.to_string())?;
 
-        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)
+        let volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
             .map_err(|e| e.to_string())?;
 
-        let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
-            .map_err(|e| e.to_string())?;
-
-        volume.SetMute(mute, std::ptr::null()).map_err(|e: windows::core::Error| e.to_string())?;
+        volume
+            .SetMute(mute, std::ptr::null())
+            .map_err(|e: windows::core::Error| e.to_string())?;
     }
     Ok(())
 }
@@ -183,12 +187,24 @@ async fn update_tray_menu<R: tauri::Runtime>(
 ) -> Result<(), String> {
     #[cfg(desktop)]
     {
-        use tauri::menu::{Menu, MenuItem, CheckMenuItem};
-        let show_i = MenuItem::with_id(&app, "show", &show_text, true, None::<&str>).map_err(|e| e.to_string())?;
-        let caption_i = CheckMenuItem::with_id(&app, "toggle_caption", &caption_text, true, caption_checked, None::<&str>).map_err(|e| e.to_string())?;
-        let settings_i = MenuItem::with_id(&app, "settings", &settings_text, true, None::<&str>).map_err(|e| e.to_string())?;
-        let updates_i = MenuItem::with_id(&app, "check_updates", &updates_text, true, None::<&str>).map_err(|e| e.to_string())?;
-        let quit_i = MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>).map_err(|e| e.to_string())?;
+        use tauri::menu::{CheckMenuItem, Menu, MenuItem};
+        let show_i = MenuItem::with_id(&app, "show", &show_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let caption_i = CheckMenuItem::with_id(
+            &app,
+            "toggle_caption",
+            &caption_text,
+            true,
+            caption_checked,
+            None::<&str>,
+        )
+        .map_err(|e| e.to_string())?;
+        let settings_i = MenuItem::with_id(&app, "settings", &settings_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let updates_i = MenuItem::with_id(&app, "check_updates", &updates_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let quit_i = MenuItem::with_id(&app, "quit", &quit_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
 
         let menu = Menu::with_items(
             &app,
@@ -200,7 +216,8 @@ async fn update_tray_menu<R: tauri::Runtime>(
                 &tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?,
                 &quit_i,
             ],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
         if let Some(tray) = app.tray_by_id("main-tray") {
             tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
@@ -420,15 +437,28 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 use tauri::image::Image;
-                use tauri::menu::{Menu, MenuItem, CheckMenuItem};
+                use tauri::menu::{CheckMenuItem, Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
                 let show_i =
                     MenuItem::with_id(app, "show", "Show Main Window", true, None::<&str>)?;
-                let caption_i = CheckMenuItem::with_id(app, "toggle_caption", "Live Caption", true, false, None::<&str>)?;
-                let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-                let updates_i =
-                    MenuItem::with_id(app, "check_updates", "Check for Updates", true, None::<&str>)?;
+                let caption_i = CheckMenuItem::with_id(
+                    app,
+                    "toggle_caption",
+                    "Live Caption",
+                    true,
+                    false,
+                    None::<&str>,
+                )?;
+                let settings_i =
+                    MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+                let updates_i = MenuItem::with_id(
+                    app,
+                    "check_updates",
+                    "Check for Updates",
+                    true,
+                    None::<&str>,
+                )?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
                 let menu = Menu::with_items(
@@ -545,8 +575,13 @@ pub fn run() {
         .manage(sherpa::SherpaState {
             recognizer: tokio::sync::Mutex::new(None),
             stream: tokio::sync::Mutex::new(None),
+            vad: tokio::sync::Mutex::new(None),
+            punctuation: tokio::sync::Mutex::new(None),
             total_samples: tokio::sync::Mutex::new(0),
             segment_start_time: tokio::sync::Mutex::new(0.0),
+            offline_state: tokio::sync::Mutex::new(sherpa::OfflineState::default()),
+            vad_model: tokio::sync::Mutex::new(None),
+            vad_buffer: tokio::sync::Mutex::new(5.0),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

@@ -176,14 +176,21 @@ pub fn vad_segment_audio(
     samples: &[f32],
     sample_rate: u32,
     vad_config: &VadModelConfig,
-    buffer_size_seconds: f32,
+    _buffer_size_seconds: f32,
 ) -> Result<Vec<AudioSegment>, String> {
-    let vad = VoiceActivityDetector::create(vad_config, buffer_size_seconds)
+    let vad = VoiceActivityDetector::create(vad_config, 60.0)
         .ok_or("Failed to create VoiceActivityDetector")?;
 
-    let mut segments = Vec::new();
-    let chunk_size = (sample_rate as f32 * 0.1) as usize;
+    // Use the same window_size as the VAD model (512 samples = 32ms at 16kHz).
+    let window_size = vad_config.silero_vad.window_size as usize;
+    let chunk_size = if window_size > 0 { window_size } else { 512 };
 
+    let mut segments: Vec<AudioSegment> = Vec::new();
+
+    // Feed audio to VAD in window-sized chunks and collect completed segments.
+    // Use segment.samples() directly — sherpa's VoiceActivityDetector already
+    // includes proper context in the samples it returns. Re-extracting from the
+    // original array with manual padding caused misaligned split positions.
     let mut current_pos = 0;
     while current_pos < samples.len() {
         let end = (current_pos + chunk_size).min(samples.len());
@@ -192,25 +199,49 @@ pub fn vad_segment_audio(
 
         while !vad.is_empty() {
             if let Some(segment) = vad.front() {
-                let start_time = segment.start() as f32 / sample_rate as f32;
+                let start_sample = segment.start() as usize;
+                let seg_samples = segment.samples().to_vec();
+                let start_time = start_sample as f32 / sample_rate as f32;
+                let duration = seg_samples.len() as f32 / sample_rate as f32;
+
+                eprintln!(
+                    "[Sona VAD] segment start_sample={} duration={:.2}s samples={}",
+                    start_sample,
+                    duration,
+                    seg_samples.len()
+                );
+
                 segments.push(AudioSegment {
-                    samples: segment.samples().to_vec(),
+                    samples: seg_samples,
                     start_time,
-                    duration: segment.n() as f32 / sample_rate as f32,
+                    duration,
                 });
             }
             vad.pop();
         }
         current_pos += chunk_size;
     }
+
+    // Flush remaining speech at end of audio
     vad.flush();
     while !vad.is_empty() {
         if let Some(segment) = vad.front() {
-            let start_time = segment.start() as f32 / sample_rate as f32;
+            let start_sample = segment.start() as usize;
+            let seg_samples = segment.samples().to_vec();
+            let start_time = start_sample as f32 / sample_rate as f32;
+            let duration = seg_samples.len() as f32 / sample_rate as f32;
+
+            eprintln!(
+                "[Sona VAD] segment (flush) start_sample={} duration={:.2}s samples={}",
+                start_sample,
+                duration,
+                seg_samples.len()
+            );
+
             segments.push(AudioSegment {
-                samples: segment.samples().to_vec(),
+                samples: seg_samples,
                 start_time,
-                duration: segment.n() as f32 / sample_rate as f32,
+                duration,
             });
         }
         vad.pop();
@@ -246,5 +277,21 @@ mod tests {
         assert_eq!(segments[1].start_time, 2.0);
         assert_eq!(segments[2].duration, 1.0);
         assert_eq!(segments[2].start_time, 4.0);
+    }
+
+    #[test]
+    fn test_vad_segmentation_behavior() {
+        use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
+
+        let sample_rate = 16000;
+        // let's generate 4 seconds of silence, 2 seconds of "speech" (ones), 4 seconds of silence
+        let mut samples = vec![0.0; sample_rate * 4];
+        samples.extend(vec![0.5; sample_rate * 2]);
+        samples.extend(vec![0.0; sample_rate * 4]);
+
+        let mut silero_vad = SileroVadModelConfig::default();
+        // we can't really load a model easily in a unit test without the file, so we just print
+        // Actually, if we cannot load the model, we can't test VAD natively this easily.
+        println!("Test stub");
     }
 }

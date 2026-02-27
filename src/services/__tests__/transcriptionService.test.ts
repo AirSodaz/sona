@@ -38,7 +38,10 @@ describe('TranscriptionService', () => {
             numThreads: 4,
             enableItn: true,
             language: 'auto',
-            itnModel: null
+            itnModel: null,
+            punctuationModel: null,
+            vadModel: null,
+            vadBuffer: 5
         });
     });
 

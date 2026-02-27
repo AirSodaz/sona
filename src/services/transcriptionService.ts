@@ -212,7 +212,10 @@ export class TranscriptionService {
                     numThreads: 4,
                     enableItn: this.enableITN,
                     language: this.language,
-                    itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null
+                    itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
+                    punctuationModel: this.punctuationModelPath || null,
+                    vadModel: this.vadModelPath || null,
+                    vadBuffer: this.vadBufferSize || 5.0
                 });
 
                 this.isRunning = true;
@@ -364,17 +367,27 @@ export class TranscriptionService {
                 numThreads: 4,
                 enableItn: this.enableITN,
                 language: language || this.language || 'auto',
-                itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null
+                itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
+                punctuationModel: this.punctuationModelPath || null,
+                vadModel: this.vadModelPath || null,
+                vadBuffer: this.vadBufferSize || 5.0
             });
 
+            let progressUnlisten: UnlistenFn | undefined;
             if (onProgress) {
-                onProgress(50); // Simulate progress as Rust backend is blocking currently
+                progressUnlisten = await listen<number>('batch-progress', (event) => {
+                    onProgress(event.payload);
+                });
             }
 
             const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
                 filePath: filePath,
                 saveToPath: _saveToPath || null
             });
+
+            if (progressUnlisten) {
+                progressUnlisten();
+            }
 
             if (onProgress) {
                 onProgress(100);

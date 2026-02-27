@@ -1,8 +1,12 @@
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
+    SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
 };
+use std::ffi::{c_char, CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub enum ModelType {
@@ -24,7 +28,6 @@ pub enum ModelType {
         use_itn: bool,
     },
     OfflineWhisper {
-        // According to sherpa-onnx, whisper has encoder and decoder
         encoder: PathBuf,
         decoder: PathBuf,
         tokens: PathBuf,
@@ -47,7 +50,6 @@ pub fn find_model_config<P: AsRef<Path>>(
         return None;
     }
 
-    // Helper to find a file containing a specific string
     let find_file = |substring: &str| -> Option<PathBuf> {
         let entries = fs::read_dir(model_path).ok()?;
         let mut candidates = Vec::new();
@@ -64,7 +66,6 @@ pub fn find_model_config<P: AsRef<Path>>(
             return None;
         }
 
-        // Prefer int8
         if let Some(int8_path) = candidates
             .iter()
             .find(|p| p.to_string_lossy().contains("int8"))
@@ -81,8 +82,6 @@ pub fn find_model_config<P: AsRef<Path>>(
     let model = find_file("model"); // For SenseVoice
 
     if let (Some(enc), Some(dec)) = (&encoder, &decoder) {
-        // Could be transducer, paraformer, or whisper.
-        // Let's check if it's whisper (usually has whisper in the path or name)
         let is_whisper = model_path
             .to_string_lossy()
             .to_lowercase()
@@ -115,7 +114,6 @@ pub fn find_model_config<P: AsRef<Path>>(
     }
 
     if let Some(mod_path) = model {
-        // SenseVoice
         return Some(ModelType::OfflineSenseVoice {
             model: mod_path,
             tokens: tokens_path,
@@ -127,9 +125,17 @@ pub fn find_model_config<P: AsRef<Path>>(
     None
 }
 
+pub struct SafeOnlineRecognizer(pub OnlineRecognizer);
+unsafe impl Send for SafeOnlineRecognizer {}
+unsafe impl Sync for SafeOnlineRecognizer {}
+
+pub struct SafeOfflineRecognizer(pub OfflineRecognizer);
+unsafe impl Send for SafeOfflineRecognizer {}
+unsafe impl Sync for SafeOfflineRecognizer {}
+
 pub enum RecognizerInner {
-    Online(OnlineRecognizer),
-    Offline(OfflineRecognizer),
+    Online(SafeOnlineRecognizer),
+    Offline(SafeOfflineRecognizer),
 }
 
 pub struct Recognizer {
@@ -137,7 +143,11 @@ pub struct Recognizer {
 }
 
 impl Recognizer {
-    pub fn new(model_type: ModelType, num_threads: i32, itn_model: Option<String>) -> Result<Self, String> {
+    pub fn new(
+        model_type: ModelType,
+        num_threads: i32,
+        itn_model: Option<String>,
+    ) -> Result<Self, String> {
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -147,6 +157,9 @@ impl Recognizer {
             } => {
                 let mut config = OnlineRecognizerConfig::default();
                 config.rule_fsts = itn_model.clone();
+                config.rule1_min_trailing_silence = 2.4;
+                config.rule2_min_trailing_silence = 2.4;
+                config.rule3_min_utterance_length = 300.0;
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.transducer.decoder =
@@ -161,7 +174,7 @@ impl Recognizer {
 
                 let recognizer =
                     OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
-                RecognizerInner::Online(recognizer)
+                RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
             ModelType::OnlineParaformer {
                 encoder,
@@ -169,7 +182,10 @@ impl Recognizer {
                 tokens,
             } => {
                 let mut config = OnlineRecognizerConfig::default();
-                config.rule_fsts = itn_model.clone();
+                config.rule_fsts = itn_model;
+                config.rule1_min_trailing_silence = 2.4;
+                config.rule2_min_trailing_silence = 2.4;
+                config.rule3_min_utterance_length = 300.0;
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.paraformer.decoder =
@@ -182,7 +198,7 @@ impl Recognizer {
 
                 let recognizer =
                     OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
-                RecognizerInner::Online(recognizer)
+                RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
             ModelType::OfflineSenseVoice {
                 model,
@@ -191,7 +207,7 @@ impl Recognizer {
                 use_itn,
             } => {
                 let mut config = OfflineRecognizerConfig::default();
-                config.rule_fsts = itn_model.clone();
+                config.rule_fsts = itn_model;
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
@@ -203,7 +219,7 @@ impl Recognizer {
 
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
-                RecognizerInner::Offline(recognizer)
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
             ModelType::OfflineWhisper {
                 encoder,
@@ -212,7 +228,7 @@ impl Recognizer {
                 language,
             } => {
                 let mut config = OfflineRecognizerConfig::default();
-                config.rule_fsts = itn_model.clone();
+                config.rule_fsts = itn_model;
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
@@ -224,7 +240,7 @@ impl Recognizer {
 
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
-                RecognizerInner::Offline(recognizer)
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };
         Ok(Self { inner: rec })
@@ -238,14 +254,126 @@ pub struct SafeStream(pub sherpa_onnx::OnlineStream);
 unsafe impl Send for SafeStream {}
 unsafe impl Sync for SafeStream {}
 
-use tauri::{State, AppHandle, Emitter};
-use tokio::sync::Mutex;
+pub struct SafeVad(pub sherpa_onnx::VoiceActivityDetector);
+unsafe impl Send for SafeVad {}
+unsafe impl Sync for SafeVad {}
+
+// -----------------------------------------------------------------------------------------
+// Punctuation FFI
+// -----------------------------------------------------------------------------------------
+#[repr(C)]
+pub struct SherpaOnnxOfflinePunctuationModelConfig {
+    pub ct_transformer: *const c_char,
+    pub num_threads: i32,
+    pub debug: i32,
+    pub provider: *const c_char,
+}
+
+#[repr(C)]
+pub struct SherpaOnnxOfflinePunctuationConfig {
+    pub model: SherpaOnnxOfflinePunctuationModelConfig,
+}
+
+pub enum SherpaOnnxOfflinePunctuation {}
+
+#[link(name = "sherpa-onnx-c-api")]
+extern "C" {
+    pub fn SherpaOnnxCreateOfflinePunctuation(
+        config: *const SherpaOnnxOfflinePunctuationConfig,
+    ) -> *const SherpaOnnxOfflinePunctuation;
+
+    pub fn SherpaOnnxDestroyOfflinePunctuation(punct: *const SherpaOnnxOfflinePunctuation);
+
+    pub fn SherpaOfflinePunctuationAddPunct(
+        punct: *const SherpaOnnxOfflinePunctuation,
+        text: *const c_char,
+    ) -> *const c_char;
+
+    pub fn SherpaOfflinePunctuationFreeText(text: *const c_char);
+}
+
+pub struct Punctuation {
+    ptr: *const SherpaOnnxOfflinePunctuation,
+}
+
+impl Punctuation {
+    pub fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
+        let ct_transformer = CString::new(model_path).map_err(|e| e.to_string())?;
+        let provider = CString::new("cpu").map_err(|e| e.to_string())?;
+
+        let model_config = SherpaOnnxOfflinePunctuationModelConfig {
+            ct_transformer: ct_transformer.as_ptr(),
+            num_threads,
+            debug: 0,
+            provider: provider.as_ptr(),
+        };
+
+        let config = SherpaOnnxOfflinePunctuationConfig {
+            model: model_config,
+        };
+
+        let ptr = unsafe { SherpaOnnxCreateOfflinePunctuation(&config) };
+        if ptr.is_null() {
+            Err("Failed to create OfflinePunctuation".to_string())
+        } else {
+            Ok(Self { ptr })
+        }
+    }
+
+    pub fn add_punct(&self, text: &str) -> String {
+        let c_text = CString::new(text).unwrap_or_default();
+        unsafe {
+            let res_ptr = SherpaOfflinePunctuationAddPunct(self.ptr, c_text.as_ptr());
+            if res_ptr.is_null() {
+                return text.to_string();
+            }
+            let res_str = CStr::from_ptr(res_ptr).to_string_lossy().into_owned();
+            SherpaOfflinePunctuationFreeText(res_ptr);
+            res_str
+        }
+    }
+}
+
+impl Drop for Punctuation {
+    fn drop(&mut self) {
+        unsafe {
+            SherpaOnnxDestroyOfflinePunctuation(self.ptr);
+        }
+    }
+}
+unsafe impl Send for Punctuation {}
+unsafe impl Sync for Punctuation {}
+
+pub struct OfflineState {
+    pub speech_buffer: Vec<Vec<f32>>,
+    pub ring_buffer: std::collections::VecDeque<Vec<f32>>,
+    pub is_speaking: bool,
+    pub last_inference_time: std::time::Instant,
+    pub utterance_start_sample: usize,
+}
+
+impl Default for OfflineState {
+    fn default() -> Self {
+        Self {
+            speech_buffer: Vec::new(),
+            ring_buffer: std::collections::VecDeque::new(),
+            is_speaking: false,
+            last_inference_time: std::time::Instant::now(),
+            utterance_start_sample: 0,
+        }
+    }
+}
 
 pub struct SherpaState {
     pub recognizer: Mutex<Option<Recognizer>>,
     pub stream: Mutex<Option<SafeStream>>,
+    pub vad: Mutex<Option<SafeVad>>,
+    pub punctuation: Mutex<Option<Punctuation>>,
     pub total_samples: Mutex<usize>,
     pub segment_start_time: Mutex<f64>,
+    pub offline_state: Mutex<OfflineState>,
+    pub vad_model: Mutex<Option<String>>,
+    pub vad_buffer: Mutex<f32>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -261,6 +389,111 @@ pub struct TranscriptSegment {
     pub durations: Option<Vec<f32>>,
 }
 
+fn get_valid_itn_paths(itn_model: Option<String>) -> Option<String> {
+    itn_model.and_then(|m| {
+        let valid_paths: Vec<&str> = m
+            .split(',')
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty() && Path::new(p).exists())
+            .collect();
+        if valid_paths.is_empty() {
+            None
+        } else {
+            Some(valid_paths.join(","))
+        }
+    })
+}
+
+fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
+    let mut result = text.trim().to_string();
+    if result.is_empty() {
+        return result;
+    }
+
+    let has_ascii_letters = result.chars().any(|c| c.is_ascii_alphabetic());
+    let is_all_caps = has_ascii_letters && result == result.to_uppercase();
+
+    if is_all_caps {
+        let mut chars = result.chars();
+        if let Some(first) = chars.next() {
+            let lower = chars.as_str().to_lowercase();
+            result = first.to_uppercase().collect::<String>() + &lower;
+        }
+    }
+
+    if let Some(p) = punctuation {
+        result = p.add_punct(&result);
+    }
+    result
+}
+
+fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
+    if timestamps.is_empty() {
+        return None;
+    }
+    let mut durations = Vec::with_capacity(timestamps.len());
+    for i in 0..timestamps.len() {
+        let next_time = if i + 1 < timestamps.len() {
+            timestamps[i + 1]
+        } else {
+            end_time
+        };
+        durations.push(next_time - timestamps[i]);
+    }
+    Some(durations)
+}
+
+fn run_offline_inference<R: tauri::Runtime>(
+    speech_buffer: &[Vec<f32>],
+    app: &AppHandle<R>,
+    r: &sherpa_onnx::OfflineRecognizer,
+    punctuation: Option<&Punctuation>,
+    global_start: f64,
+    is_final: bool,
+) {
+    if speech_buffer.is_empty() {
+        return;
+    }
+    let mut full_audio = Vec::new();
+    for chunk in speech_buffer {
+        full_audio.extend_from_slice(chunk);
+    }
+    let stream = r.create_stream();
+    stream.accept_waveform(16000, &full_audio);
+    r.decode(&stream);
+
+    if let Some(result) = stream.get_result() {
+        if !result.text.trim().is_empty() {
+            let text = if is_final {
+                format_transcript(&result.text, punctuation)
+            } else {
+                result.text.clone()
+            };
+
+            let global_end = global_start + (full_audio.len() as f64 / 16000.0);
+            let timestamps_abs: Option<Vec<f32>> = result
+                .timestamps
+                .as_ref()
+                .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, global_end as f32));
+
+            let segment = TranscriptSegment {
+                id: uuid::Uuid::new_v4().to_string(),
+                text,
+                start: global_start,
+                end: global_end,
+                is_final,
+                tokens: Some(result.tokens),
+                timestamps: timestamps_abs,
+                durations,
+            };
+            let _ = app.emit("recognizer-output", &segment);
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn start_recognizer(
     state: State<'_, SherpaState>,
@@ -269,20 +502,65 @@ pub async fn start_recognizer(
     enable_itn: bool,
     language: String,
     itn_model: Option<String>,
+    punctuation_model: Option<String>,
+    vad_model: Option<String>,
+    vad_buffer: f32,
 ) -> Result<(), String> {
+    let valid_itn = get_valid_itn_paths(itn_model);
+
     let model_type = find_model_config(&model_path, enable_itn, &language)
         .ok_or_else(|| "Could not find valid model configuration".to_string())?;
 
-    let recognizer = Recognizer::new(model_type, num_threads, itn_model)?;
+    let recognizer = Recognizer::new(model_type, num_threads, valid_itn)?;
     let stream = match &recognizer.inner {
-        RecognizerInner::Online(r) => Some(SafeStream(r.create_stream())),
+        RecognizerInner::Online(r) => Some(SafeStream(r.0.create_stream())),
         _ => None,
     };
-    
+
+    // Initialize Punctuation
+    let mut punctuation = None;
+    if let Some(p_path) = punctuation_model {
+        if Path::new(&p_path).exists() {
+            // Find .onnx file in directory
+            let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
+            let onnx_file = entries
+                .flatten()
+                .find(|e| e.path().extension().map_or(false, |ext| ext == "onnx"));
+            if let Some(e) = onnx_file {
+                punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
+            }
+        }
+    }
+
+    // Initialize VAD
+    let mut vad = None;
+    if let Some(v_path) = &vad_model {
+        if Path::new(v_path).exists() {
+            let mut silero_vad = SileroVadModelConfig::default();
+            silero_vad.model = Some(v_path.clone());
+            silero_vad.threshold = 0.35;
+            silero_vad.min_silence_duration = 0.5;
+            silero_vad.min_speech_duration = 0.25;
+            silero_vad.window_size = 512;
+
+            let mut vad_config = VadModelConfig::default();
+            vad_config.silero_vad = silero_vad;
+            vad_config.sample_rate = 16000;
+            vad_config.num_threads = 1;
+
+            vad = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
+        }
+    }
+
     *state.recognizer.lock().await = Some(recognizer);
     *state.stream.lock().await = stream;
+    *state.vad.lock().await = vad;
+    *state.punctuation.lock().await = punctuation;
     *state.total_samples.lock().await = 0;
     *state.segment_start_time.lock().await = 0.0;
+    *state.offline_state.lock().await = OfflineState::default();
+    *state.vad_model.lock().await = vad_model.clone();
+    *state.vad_buffer.lock().await = vad_buffer;
     Ok(())
 }
 
@@ -290,8 +568,11 @@ pub async fn start_recognizer(
 pub async fn stop_recognizer(state: State<'_, SherpaState>) -> Result<(), String> {
     *state.recognizer.lock().await = None;
     *state.stream.lock().await = None;
+    *state.vad.lock().await = None;
+    *state.punctuation.lock().await = None;
     *state.total_samples.lock().await = 0;
     *state.segment_start_time.lock().await = 0.0;
+    *state.offline_state.lock().await = OfflineState::default();
     Ok(())
 }
 
@@ -303,23 +584,134 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let rec_guard = state.recognizer.lock().await;
     let stream_guard = state.stream.lock().await;
+    let vad_guard = state.vad.lock().await;
+    let punct_guard = state.punctuation.lock().await;
     let mut total_samples = state.total_samples.lock().await;
     let mut segment_start = state.segment_start_time.lock().await;
+    let mut offline = state.offline_state.lock().await;
 
-    if let (Some(Recognizer { inner: RecognizerInner::Online(r) }), Some(st)) = (rec_guard.as_ref(), stream_guard.as_ref()) {
+    // Offline + VAD (pseudo-streaming)
+    if let (
+        Some(Recognizer {
+            inner: RecognizerInner::Offline(r),
+        }),
+        Some(SafeVad(vad)),
+    ) = (rec_guard.as_ref(), vad_guard.as_ref())
+    {
+        vad.accept_waveform(&samples);
+        let currently_speaking = vad.detected();
+
+        if currently_speaking && !offline.is_speaking {
+            // Rising edge (silence -> speech)
+            offline.is_speaking = true;
+
+            // Prepend Ring Buffer
+            let samples_to_keep = (16000.0 * 0.3) as usize; // 0.3s context
+            let mut context_len = 0;
+
+            if !offline.ring_buffer.is_empty() {
+                let mut ring_flat: Vec<f32> = Vec::new();
+                for rb in &offline.ring_buffer {
+                    ring_flat.extend_from_slice(rb);
+                }
+
+                let keep_start = if ring_flat.len() > samples_to_keep {
+                    ring_flat.len() - samples_to_keep
+                } else {
+                    0
+                };
+
+                let context = ring_flat[keep_start..].to_vec();
+                context_len = context.len();
+                offline.speech_buffer.push(context);
+            }
+
+            offline.utterance_start_sample = *total_samples - context_len;
+            offline.ring_buffer.clear();
+        }
+
+        if currently_speaking {
+            offline.speech_buffer.push(samples.clone());
+
+            let now = std::time::Instant::now();
+            if now.duration_since(offline.last_inference_time).as_millis() > 200 {
+                let global_start = offline.utterance_start_sample as f64 / 16000.0;
+                run_offline_inference(
+                    &offline.speech_buffer,
+                    &app,
+                    &r.0,
+                    punct_guard.as_ref(),
+                    global_start,
+                    false,
+                );
+                offline.last_inference_time = now;
+            }
+        }
+
+        if !currently_speaking {
+            if offline.is_speaking {
+                // Falling edge (speech -> silence)
+                offline.is_speaking = false;
+                offline.speech_buffer.push(samples.clone());
+
+                let global_start = offline.utterance_start_sample as f64 / 16000.0;
+                run_offline_inference(
+                    &offline.speech_buffer,
+                    &app,
+                    &r.0,
+                    punct_guard.as_ref(),
+                    global_start,
+                    true,
+                );
+
+                offline.speech_buffer.clear();
+            }
+
+            // Maintain Ring Buffer
+            offline.ring_buffer.push_back(samples.clone());
+            let max_ring_samples = (16000.0 * 0.3) as usize;
+
+            let mut ring_len: usize = offline.ring_buffer.iter().map(|v| v.len()).sum();
+            while ring_len > max_ring_samples + 4000 {
+                if let Some(first) = offline.ring_buffer.front() {
+                    let first_len = first.len();
+                    if ring_len - first_len >= max_ring_samples {
+                        offline.ring_buffer.pop_front();
+                        ring_len -= first_len;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        *total_samples += samples.len();
+        return Ok(());
+    }
+
+    // Online model processing
+    if let (
+        Some(Recognizer {
+            inner: RecognizerInner::Online(r),
+        }),
+        Some(st),
+    ) = (rec_guard.as_ref(), stream_guard.as_ref())
+    {
         st.0.accept_waveform(16000, &samples);
         *total_samples += samples.len();
 
-        while r.is_ready(&st.0) {
-            r.decode(&st.0);
+        while r.0.is_ready(&st.0) {
+            r.0.decode(&st.0);
         }
-        
+
         let current_time = *total_samples as f64 / 16000.0;
-        
-        if let Some(result) = r.get_result(&st.0) {
+
+        if let Some(result) = r.0.get_result(&st.0) {
             if !result.text.trim().is_empty() {
                 let segment = TranscriptSegment {
-                    id: uuid::Uuid::new_v4().to_string(), // Requires uuid crate
+                    id: uuid::Uuid::new_v4().to_string(),
                     text: result.text.clone(),
                     start: *segment_start,
                     end: current_time,
@@ -328,29 +720,41 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                     timestamps: result.timestamps.clone(),
                     durations: None,
                 };
-                let _ = app.emit("recognizer-output", &segment); 
+                let _ = app.emit("recognizer-output", &segment);
             }
         }
-        
-        if r.is_endpoint(&st.0) {
-            // Re-get final result
-            if let Some(result) = r.get_result(&st.0) {
+
+        if r.0.is_endpoint(&st.0) {
+            let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+            st.0.accept_waveform(16000, &tail_padding);
+            while r.0.is_ready(&st.0) {
+                r.0.decode(&st.0);
+            }
+
+            if let Some(result) = r.0.get_result(&st.0) {
                 if !result.text.trim().is_empty() {
+                    let text = format_transcript(&result.text, punct_guard.as_ref());
+
+                    let timestamps_f32 = result.timestamps;
+                    let durations = timestamps_f32
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
                     let segment = TranscriptSegment {
                         id: uuid::Uuid::new_v4().to_string(),
-                        text: result.text.clone(),
+                        text,
                         start: *segment_start,
                         end: current_time,
                         is_final: true,
                         tokens: Some(result.tokens),
-                        timestamps: result.timestamps,
-                        durations: None,
+                        timestamps: timestamps_f32,
+                        durations,
                     };
-                    let _ = app.emit("recognizer-output", &segment); 
+                    let _ = app.emit("recognizer-output", &segment);
                 }
             }
 
-            r.reset(&st.0);
+            r.0.reset(&st.0);
             *segment_start = current_time;
         }
     }
@@ -359,94 +763,183 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(
-    _app: AppHandle<R>,
+    app: AppHandle<R>,
     state: State<'_, SherpaState>,
     file_path: String,
     save_to_path: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let samples = crate::pipeline::extract_and_resample_audio(&file_path, 16000)?;
-    
+
     if let Some(path) = save_to_path {
         crate::pipeline::save_wav_file(&samples, 16000, &path).map_err(|e| e.to_string())?;
     }
 
     let rec_guard = state.recognizer.lock().await;
-    let total_duration = samples.len() as f64 / 16000.0;
-    
-    if let Some(Recognizer { inner: RecognizerInner::Offline(r) }) = rec_guard.as_ref() {
-        let stream = r.create_stream();
-        stream.accept_waveform(16000, &samples);
-        r.decode(&stream);
-        
-        if let Some(result) = stream.get_result() {
-            let segment = TranscriptSegment {
-                id: uuid::Uuid::new_v4().to_string(),
-                text: result.text,
-                start: 0.0,
-                end: total_duration,
-                is_final: true,
-                tokens: Some(result.tokens),
-                timestamps: result.timestamps,
-                durations: None,
-            };
-            return Ok(vec![segment]);
+    let vad_guard = state.vad.lock().await;
+    let punct_guard = state.punctuation.lock().await;
+    let vad_model_opt = state.vad_model.lock().await.clone();
+    let vad_buffer_size = *state.vad_buffer.lock().await;
+
+    // Use Offline Recognizer if available
+    if let Some(Recognizer {
+        inner: RecognizerInner::Offline(r),
+    }) = rec_guard.as_ref()
+    {
+        let segments = if let Some(SafeVad(_v)) = vad_guard.as_ref() {
+            if let Some(v_path) = vad_model_opt {
+                let mut silero_vad = sherpa_onnx::SileroVadModelConfig::default();
+                silero_vad.model = Some(v_path.clone());
+                silero_vad.threshold = 0.35;
+                silero_vad.min_silence_duration = 1.0;
+                silero_vad.min_speech_duration = 0.25;
+                silero_vad.window_size = 512;
+
+                let mut vad_config = sherpa_onnx::VadModelConfig::default();
+                vad_config.silero_vad = silero_vad;
+                vad_config.sample_rate = 16000;
+                vad_config.num_threads = 1;
+
+                crate::pipeline::vad_segment_audio(&samples, 16000, &vad_config, vad_buffer_size)
+                    .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0))
+            } else {
+                crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0)
+            }
+        } else {
+            crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0)
+        };
+
+        let mut results = Vec::new();
+        let total_segments = segments.len();
+        for (i, seg) in segments.into_iter().enumerate() {
+            {
+                let stream = r.0.create_stream();
+                stream.accept_waveform(16000, &seg.samples);
+                r.0.decode(&stream);
+
+                if let Some(res) = stream.get_result() {
+                    if !res.text.trim().is_empty() {
+                        let text = format_transcript(&res.text, punct_guard.as_ref());
+                        let timestamps_abs = res.timestamps.as_ref().map(|ts| {
+                            ts.iter()
+                                .map(|t| *t + seg.start_time as f32)
+                                .collect::<Vec<_>>()
+                        });
+                        let durations = timestamps_abs.as_ref().and_then(|ts| {
+                            synthesize_durations(ts, (seg.start_time + seg.duration) as f32)
+                        });
+
+                        results.push(TranscriptSegment {
+                            id: uuid::Uuid::new_v4().to_string(),
+                            text,
+                            start: seg.start_time as f64,
+                            end: (seg.start_time + seg.duration) as f64,
+                            is_final: true,
+                            tokens: Some(res.tokens),
+                            timestamps: timestamps_abs,
+                            durations,
+                        });
+                    }
+                }
+            }
+            // Emit progress
+            let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
+            let _ = app.emit("batch-progress", progress);
+
+            // Yield to Tokio runtime to prevent blocking the async reactor
+            tokio::task::yield_now().await;
         }
+        return Ok(results);
     }
-    // Alternatively fallback to online recognizer for batch
-    if let Some(Recognizer { inner: RecognizerInner::Online(r) }) = rec_guard.as_ref() {
-        let stream = r.create_stream();
-        stream.accept_waveform(16000, &samples);
+
+    if let Some(Recognizer {
+        inner: RecognizerInner::Online(r),
+    }) = rec_guard.as_ref()
+    {
+        let stream = SafeStream(r.0.create_stream());
         let mut segments = Vec::new();
         let mut segment_start = 0.0;
         let mut current_samples = 0;
-        
-        // Simulating decoding by chunks
-        let chunk_size = 16000; // 1s
+
+        let chunk_size = 8000; // 0.5s chunks, matching JS implementation
+        let total_samples = samples.len();
         for chunk in samples.chunks(chunk_size) {
-            stream.accept_waveform(16000, chunk);
+            stream.0.accept_waveform(16000, chunk);
             current_samples += chunk.len();
-            while r.is_ready(&stream) {
-                r.decode(&stream);
+            while r.0.is_ready(&stream.0) {
+                r.0.decode(&stream.0);
             }
-            if r.is_endpoint(&stream) {
+            if r.0.is_endpoint(&stream.0) {
                 let current_time = current_samples as f64 / 16000.0;
-                if let Some(result) = r.get_result(&stream) {
+                if let Some(result) = r.0.get_result(&stream.0) {
                     if !result.text.trim().is_empty() {
+                        let text = format_transcript(&result.text, punct_guard.as_ref());
+                        let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                            ts.iter()
+                                .map(|t| *t + segment_start as f32)
+                                .collect::<Vec<_>>()
+                        });
+                        let durations = timestamps_abs
+                            .as_ref()
+                            .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
                         segments.push(TranscriptSegment {
                             id: uuid::Uuid::new_v4().to_string(),
-                            text: result.text,
+                            text,
                             start: segment_start,
                             end: current_time,
                             is_final: true,
                             tokens: Some(result.tokens),
-                            timestamps: result.timestamps,
-                            durations: None,
+                            timestamps: timestamps_abs,
+                            durations,
                         });
                     }
                 }
-                r.reset(&stream);
+                r.0.reset(&stream.0);
                 segment_start = current_time;
             }
+
+            let progress = (current_samples as f32 / total_samples as f32) * 100.0;
+            let _ = app.emit("batch-progress", progress);
+
+            // Yield after every few chunks if possible, but safely we can yield every chunk
+            tokio::task::yield_now().await;
         }
-        
-        // Finalize remaining
-        if let Some(result) = r.get_result(&stream) {
+
+        // Add tail padding to flush the decoder, matching feed_audio_chunk behavior
+        let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+        stream.0.accept_waveform(16000, &tail_padding);
+        while r.0.is_ready(&stream.0) {
+            r.0.decode(&stream.0);
+        }
+
+        if let Some(result) = r.0.get_result(&stream.0) {
             if !result.text.trim().is_empty() {
+                let text = format_transcript(&result.text, punct_guard.as_ref());
+                let current_time = samples.len() as f64 / 16000.0;
+                let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                    ts.iter()
+                        .map(|t| *t + segment_start as f32)
+                        .collect::<Vec<_>>()
+                });
+                let durations = timestamps_abs
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
                 segments.push(TranscriptSegment {
                     id: uuid::Uuid::new_v4().to_string(),
-                    text: result.text,
+                    text,
                     start: segment_start,
-                    end: total_duration,
+                    end: current_time,
                     is_final: true,
                     tokens: Some(result.tokens),
-                    timestamps: result.timestamps,
-                    durations: None,
+                    timestamps: timestamps_abs,
+                    durations,
                 });
             }
         }
-        
+
         return Ok(segments);
     }
-    
+
     Err("Recognizer not initialized or failed".to_string())
 }
