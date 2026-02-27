@@ -843,7 +843,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
             }
             // Emit progress
             let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
-            let _ = app.emit("batch-progress", progress);
+            let _ = app.emit("batch-progress", (&file_path, progress));
 
             // Yield to Tokio runtime to prevent blocking the async reactor
             tokio::task::yield_now().await;
@@ -899,7 +899,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
             }
 
             let progress = (current_samples as f32 / total_samples as f32) * 100.0;
-            let _ = app.emit("batch-progress", progress);
+            let _ = app.emit("batch-progress", (&file_path, progress));
 
             // Yield after every few chunks if possible, but safely we can yield every chunk
             tokio::task::yield_now().await;

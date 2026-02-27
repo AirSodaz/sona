@@ -375,8 +375,11 @@ export class TranscriptionService {
 
             let progressUnlisten: UnlistenFn | undefined;
             if (onProgress) {
-                progressUnlisten = await listen<number>('batch-progress', (event) => {
-                    onProgress(event.payload);
+                progressUnlisten = await listen<[string, number]>('batch-progress', (event) => {
+                    const [eventFilePath, progress] = event.payload;
+                    if (eventFilePath === filePath) {
+                        onProgress(progress);
+                    }
                 });
             }
 
