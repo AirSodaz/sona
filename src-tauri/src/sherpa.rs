@@ -784,9 +784,16 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(
     app: AppHandle<R>,
-    state: State<'_, SherpaState>,
     file_path: String,
     save_to_path: Option<String>,
+    model_path: String,
+    num_threads: i32,
+    enable_itn: bool,
+    language: String,
+    itn_model: Option<String>,
+    punctuation_model: Option<String>,
+    vad_model: Option<String>,
+    vad_buffer: f32,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let samples = crate::pipeline::extract_and_resample_audio(&file_path, 16000)?;
 
@@ -794,19 +801,32 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         crate::pipeline::save_wav_file(&samples, 16000, &path).map_err(|e| e.to_string())?;
     }
 
-    let rec_guard = state.recognizer.lock().await;
-    let vad_guard = state.vad.lock().await;
-    let punct_guard = state.punctuation.lock().await;
-    let vad_model_opt = state.vad_model.lock().await.clone();
-    let vad_buffer_size = *state.vad_buffer.lock().await;
+    // Initialize local recognizer, punctuation, and VAD instances
+    let valid_itn = get_valid_itn_paths(itn_model);
+
+    let model_type = find_model_config(&model_path, enable_itn, &language)
+        .ok_or_else(|| "Could not find valid model configuration".to_string())?;
+
+    let recognizer = Recognizer::new(model_type, num_threads, valid_itn)?;
+
+    // Initialize Punctuation
+    let mut punctuation = None;
+    if let Some(p_path) = punctuation_model {
+        if Path::new(&p_path).exists() {
+            let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
+            let onnx_file = entries
+                .flatten()
+                .find(|e| e.path().extension().map_or(false, |ext| ext == "onnx"));
+            if let Some(e) = onnx_file {
+                punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
+            }
+        }
+    }
 
     // Use Offline Recognizer if available
-    if let Some(Recognizer {
-        inner: RecognizerInner::Offline(r),
-    }) = rec_guard.as_ref()
-    {
-        let segments = if let Some(SafeVad(_v)) = vad_guard.as_ref() {
-            if let Some(v_path) = vad_model_opt {
+    if let RecognizerInner::Offline(r) = &recognizer.inner {
+        let segments = if let Some(v_path) = vad_model {
+            if Path::new(&v_path).exists() {
                 let mut silero_vad = sherpa_onnx::SileroVadModelConfig::default();
                 silero_vad.model = Some(v_path.clone());
                 silero_vad.threshold = 0.35;
@@ -819,7 +839,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
                 vad_config.sample_rate = 16000;
                 vad_config.num_threads = 1;
 
-                crate::pipeline::vad_segment_audio(&samples, 16000, &vad_config, vad_buffer_size)
+                crate::pipeline::vad_segment_audio(&samples, 16000, &vad_config, vad_buffer)
                     .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0))
             } else {
                 crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0)
@@ -838,7 +858,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 
                 if let Some(res) = stream.get_result() {
                     if !res.text.trim().is_empty() {
-                        let text = format_transcript(&res.text, punct_guard.as_ref());
+                        let text = format_transcript(&res.text, punctuation.as_ref());
                         let timestamps_abs = res.timestamps.as_ref().map(|ts| {
                             ts.iter()
                                 .map(|t| *t + seg.start_time as f32)
@@ -871,10 +891,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         return Ok(results);
     }
 
-    if let Some(Recognizer {
-        inner: RecognizerInner::Online(r),
-    }) = rec_guard.as_ref()
-    {
+    if let RecognizerInner::Online(r) = &recognizer.inner {
         let stream = SafeStream(r.0.create_stream());
         let mut segments = Vec::new();
         let mut segment_start = 0.0;
@@ -892,7 +909,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
                 let current_time = current_samples as f64 / 16000.0;
                 if let Some(result) = r.0.get_result(&stream.0) {
                     if !result.text.trim().is_empty() {
-                        let text = format_transcript(&result.text, punct_guard.as_ref());
+                        let text = format_transcript(&result.text, punctuation.as_ref());
                         let timestamps_abs = result.timestamps.as_ref().map(|ts| {
                             ts.iter()
                                 .map(|t| *t + segment_start as f32)
@@ -934,7 +951,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 
         if let Some(result) = r.0.get_result(&stream.0) {
             if !result.text.trim().is_empty() {
-                let text = format_transcript(&result.text, punct_guard.as_ref());
+                let text = format_transcript(&result.text, punctuation.as_ref());
                 let current_time = samples.len() as f64 / 16000.0;
                 let timestamps_abs = result.timestamps.as_ref().map(|ts| {
                     ts.iter()

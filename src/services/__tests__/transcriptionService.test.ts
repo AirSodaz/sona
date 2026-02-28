@@ -109,21 +109,19 @@ describe('TranscriptionService', () => {
     describe('Batch Transcription', () => {
         it('executes batch transcription with correct args', async () => {
             vi.mocked(invoke).mockImplementation((cmd) => {
-                if (cmd === 'start_recognizer') return Promise.resolve();
                 if (cmd === 'process_batch_file') return Promise.resolve([]);
                 return Promise.resolve();
             });
 
             await transcriptionService.transcribeFile('/path/to/audio.wav');
 
-            expect(invoke).toHaveBeenCalledWith('start_recognizer', expect.objectContaining({
+            expect(invoke).not.toHaveBeenCalledWith('start_recognizer', expect.anything());
+
+            expect(invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+                filePath: '/path/to/audio.wav',
+                saveToPath: null,
                 modelPath: '/mock/model/path'
             }));
-
-            expect(invoke).toHaveBeenCalledWith('process_batch_file', {
-                filePath: '/path/to/audio.wav',
-                saveToPath: null
-            });
         });
 
         it('parses batch results correctly', async () => {
