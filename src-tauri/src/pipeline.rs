@@ -1,6 +1,5 @@
 use hound;
 use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
-use tauri_plugin_shell::ShellExt;
 
 pub struct AudioSegment {
     pub samples: Vec<f32>,
@@ -44,14 +43,32 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
 /// This mirrors the JS sidecar's `convertToWav` function exactly:
 ///   ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -
 pub async fn extract_and_resample_audio<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
+    _app: &tauri::AppHandle<R>,
     filepath: &str,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, String> {
-    let sidecar_command = app.shell().sidecar("ffmpeg")
-        .map_err(|e| format!("Failed to create ffmpeg sidecar command: {}", e))?;
+    // Locate the current executable path
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
 
-    let output = sidecar_command
+    // Get the directory of the current executable
+    let exe_dir = exe_path.parent()
+        .ok_or("Failed to get parent directory of executable")?;
+
+    // Build the target triple specific sidecar name
+    let target = tauri::utils::platform::target_triple()
+        .map_err(|e| format!("Failed to get target triple: {}", e))?;
+
+    #[cfg(windows)]
+    let ffmpeg_filename = format!("ffmpeg-{}.exe", target);
+    #[cfg(not(windows))]
+    let ffmpeg_filename = format!("ffmpeg-{}", target);
+
+    // Construct the absolute path to the sidecar
+    let ffmpeg_path = exe_dir.join(ffmpeg_filename);
+
+    // Run ffmpeg using tokio::process::Command
+    let output = tokio::process::Command::new(ffmpeg_path)
         .args([
             "-i",
             filepath,
@@ -67,7 +84,7 @@ pub async fn extract_and_resample_audio<R: tauri::Runtime>(
         ])
         .output()
         .await
-        .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
+        .map_err(|e| format!("Failed to run ffmpeg command: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
