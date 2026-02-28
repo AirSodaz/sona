@@ -1,7 +1,6 @@
 use hound;
 use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
-use std::path::PathBuf;
-use std::process::Command;
+use tauri_plugin_shell::ShellExt;
 
 pub struct AudioSegment {
     pub samples: Vec<f32>,
@@ -41,42 +40,18 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
     writer.finalize()
 }
 
-/// Find the FFmpeg binary. Searches near the running executable first,
-/// then falls back to system PATH.
-fn find_ffmpeg() -> PathBuf {
-    // Try next to the running executable (bundled binary)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            // Windows: ffmpeg.exe, Unix: ffmpeg
-            let candidates = [
-                exe_dir.join("ffmpeg.exe"),
-                exe_dir.join("ffmpeg"),
-                // Also check a "sidecar" subdirectory
-                exe_dir.join("sidecar").join("ffmpeg.exe"),
-                exe_dir.join("sidecar").join("ffmpeg"),
-            ];
-            for candidate in &candidates {
-                if candidate.exists() {
-                    return candidate.clone();
-                }
-            }
-        }
-    }
-
-    // Fall back to system PATH
-    PathBuf::from("ffmpeg")
-}
-
 /// Extract audio from any file and resample to the target sample rate using FFmpeg.
 /// This mirrors the JS sidecar's `convertToWav` function exactly:
 ///   ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -
-pub fn extract_and_resample_audio(
+pub async fn extract_and_resample_audio<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     filepath: &str,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, String> {
-    let ffmpeg = find_ffmpeg();
+    let sidecar_command = app.shell().sidecar("ffmpeg")
+        .map_err(|e| format!("Failed to create ffmpeg sidecar command: {}", e))?;
 
-    let output = Command::new(&ffmpeg)
+    let output = sidecar_command
         .args([
             "-i",
             filepath,
@@ -91,11 +66,12 @@ pub fn extract_and_resample_audio(
             "-",
         ])
         .output()
-        .map_err(|e| format!("Failed to run ffmpeg ({}): {}", ffmpeg.display(), e))?;
+        .await
+        .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("FFmpeg exited with {}: {}", output.status, stderr));
+        return Err(format!("FFmpeg exited with {:?}: {}", output.status, stderr));
     }
 
     let samples = pcm_bytes_to_f32(&output.stdout);
