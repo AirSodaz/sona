@@ -606,6 +606,7 @@ pub fn run() {
             audio::stop_system_audio_capture,
             ai::call_ai_model,
             ai::get_ai_models,
+            sherpa::init_recognizer,
             sherpa::start_recognizer,
             sherpa::stop_recognizer,
             sherpa::flush_recognizer,
