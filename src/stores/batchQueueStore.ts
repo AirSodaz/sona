@@ -347,11 +347,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     updateItemStatus: (id, status, progress) => {
         set((state) => ({
-            queueItems: state.queueItems.map((item) =>
-                item.id === id
-                    ? { ...item, status, progress: progress !== undefined ? progress : item.progress }
-                    : item
-            ),
+            queueItems: state.queueItems.map((item) => {
+                if (item.id === id) {
+                    return {
+                        ...item,
+                        status,
+                        progress: progress !== undefined ? progress : item.progress
+                    };
+                }
+                return item;
+            }),
         }));
     },
 
