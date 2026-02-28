@@ -68,13 +68,7 @@
           "y": 170
         }
       }
-    },
-    "externalBin": [
-      "binaries/node"
-    ],
-    "resources": [
-      "sidecar/dist/*"
-    ]
+    }
   },
   "plugins": {
     "updater": {

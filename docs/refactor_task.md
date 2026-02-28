@@ -27,8 +27,8 @@
   - [x] 修改事件监听：由监听 `Command::on('line')` 改为监听 Tauri Window 的原生事件 (`listen('recognizer-output')`)。
   - [x] 重命名遗留的 sidecar 相关方法与注释（例如：`_spawnSidecar` -> `_startBackend`，并修正过时的 JS Doc）。
 
-- [ ] 6. **测试验证与最终清理**
-  - [ ] 确保前端所有相关端到端测试跑通。
-  - [ ] 确保新旧识别引擎在文本准确率和流式延迟指标上的表现行为一致。
-  - [ ] **（测试全部通过后）** 移除 `src-tauri/sidecar` 目录、`package.json` 中的 `sherpa-onnx-node` 等无用前端/Node依赖包。
-  - [ ] 移除 `tauri.conf.json` 中的 `sidecar` 配置，直接将 Tauri 构建配置精简。
+- [x] 6. **测试验证与最终清理**
+  - [x] 确保前端所有相关端到端测试跑通。
+  - [x] 确保新旧识别引擎在文本准确率和流式延迟指标上的表现行为一致。
+  - [x] **（测试全部通过后）** 移除 `src-tauri/sidecar` 目录、`package.json` 中的 `sherpa-onnx-node` 等无用前端/Node依赖包。
+  - [x] 移除 `tauri.conf.json` 中的 `sidecar` 配置，直接将 Tauri 构建配置精简。
