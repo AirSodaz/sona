@@ -12,15 +12,12 @@ pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
     data.iter().map(|&s| s as f32 / 32768.0).collect()
 }
 
-/// Convert raw PCM bytes (Int16LE) to Vec<f32> samples.
+/// Convert raw PCM bytes (Float32LE) to Vec<f32> samples.
 fn pcm_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    let num_samples = bytes.len() / 2;
-    let mut samples = Vec::with_capacity(num_samples);
-    for i in 0..num_samples {
-        let lo = bytes[i * 2] as i16;
-        let hi = (bytes[i * 2 + 1] as i16) << 8;
-        let sample_i16 = lo | hi;
-        samples.push(sample_i16 as f32 / 32768.0);
+    let mut samples = Vec::with_capacity(bytes.len() / 4);
+    for chunk in bytes.chunks_exact(4) {
+        let array: [u8; 4] = [chunk[0], chunk[1], chunk[2], chunk[3]];
+        samples.push(f32::from_le_bytes(array));
     }
     samples
 }
@@ -41,8 +38,8 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
 }
 
 /// Extract audio from any file and resample to the target sample rate using FFmpeg.
-/// This mirrors the JS sidecar's `convertToWav` function exactly:
-///   ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -
+/// This outputs f32le natively as Sherpa-ONNX operates on 32-bit floats natively:
+///   ffmpeg -i <file> -f f32le -acodec pcm_f32le -ar <rate> -ac 1 -
 pub async fn extract_and_resample_audio<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     filepath: &str,
@@ -56,9 +53,9 @@ pub async fn extract_and_resample_audio<R: tauri::Runtime>(
             "-i",
             filepath,
             "-f",
-            "s16le",
+            "f32le",
             "-acodec",
-            "pcm_s16le",
+            "pcm_f32le",
             "-ar",
             &target_sample_rate.to_string(),
             "-ac",
