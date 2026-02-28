@@ -4,7 +4,6 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
-import { modelService } from '../services/modelService';
 import { historyService } from '../services/historyService';
 import { encodeWAV } from '../utils/wavUtils';
 import { invoke } from '@tauri-apps/api/core';
@@ -75,32 +74,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         isPausedRef.current = isPaused;
     }, [isPaused]);
 
-    // Service Configuration
-    const configureService = useCallback(async () => {
-        transcriptionService.setModelPath(config.offlineModelPath);
-        transcriptionService.setLanguage(config.language);
-        transcriptionService.setEnableITN(config.enableITN ?? false);
-
-        const enabledITNModels = new Set(config.enabledITNModels || []);
-        const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-        if (enabledITNModels.size > 0) {
-            try {
-                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                transcriptionService.setITNModelPaths(paths);
-            } catch (e) {
-                console.warn('[useAudioRecorder] Failed to setup ITN paths:', e);
-            }
-        }
-
-        transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-
-        transcriptionService.setVadModelPath(config.vadModelPath || '');
-        transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
-    }, [config]);
-
     // Initialize Native Session
     const initializeNativeSession = async () => {
-        await configureService();
         await transcriptionService.start(
             onSegment,
             (error) => { console.error('Transcription error:', error); }
@@ -137,8 +112,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         source.connect(processor);
         processor.connect(audioContextRef.current.destination);
-
-        await configureService();
 
         await transcriptionService.start(
             onSegment,
@@ -344,7 +317,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         } finally {
             setIsInitializing(false);
         }
-    }, [config, inputSource, t, alert, startFileRecording, configureService]); // Added deps
+    }, [config, inputSource, t, alert, startFileRecording, initializeNativeSession, initializeAudioSession]); // Added deps
 
 
     // Stop Recording

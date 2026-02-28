@@ -21,6 +21,7 @@ import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useTrayHandling } from './hooks/useTrayHandling';
+import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 
 /**
  * Helper to determine the title of the left panel based on the current mode.
@@ -58,6 +59,9 @@ function App(): React.JSX.Element {
 
   // Initialize auto-save hook
   useAutoSaveTranscript();
+
+  // Keep TranscriptionService synced and preloaded in background
+  useTranscriptionServiceSync();
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
