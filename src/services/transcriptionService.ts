@@ -289,6 +289,13 @@ export class TranscriptionService {
      * This allows the model to finish the last segment and add punctuation.
      */
     async softStop(): Promise<void> {
+        if (this.isRunning) {
+            try {
+                await invoke('flush_recognizer');
+            } catch (error) {
+                console.error('Failed to flush recognizer:', error);
+            }
+        }
         await this.stop();
     }
 

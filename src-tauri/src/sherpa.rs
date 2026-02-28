@@ -449,6 +449,7 @@ fn run_offline_inference<R: tauri::Runtime>(
     app: &AppHandle<R>,
     r: &sherpa_onnx::OfflineRecognizer,
     punctuation: Option<&Punctuation>,
+    segment_id: &str,
     global_start: f64,
     is_final: bool,
 ) {
@@ -481,7 +482,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                 .and_then(|ts| synthesize_durations(ts, global_end as f32));
 
             let segment = TranscriptSegment {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: segment_id.to_string(),
                 text,
                 start: global_start,
                 end: global_end,
@@ -580,6 +581,100 @@ pub async fn stop_recognizer(state: State<'_, SherpaState>) -> Result<(), String
 }
 
 #[tauri::command]
+pub async fn flush_recognizer<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, SherpaState>,
+) -> Result<(), String> {
+    let rec_guard = state.recognizer.lock().await;
+    let stream_guard = state.stream.lock().await;
+    let punct_guard = state.punctuation.lock().await;
+    let mut offline = state.offline_state.lock().await;
+    let mut current_id_guard = state.current_segment_id.lock().await;
+    let total_samples = state.total_samples.lock().await;
+    let mut segment_start = state.segment_start_time.lock().await;
+
+    // Flush offline speech buffer
+    if let Some(Recognizer {
+        inner: RecognizerInner::Offline(r),
+    }) = rec_guard.as_ref()
+    {
+        if !offline.speech_buffer.is_empty() {
+            let seg_id = current_id_guard
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let global_start = offline.utterance_start_sample as f64 / 16000.0;
+            run_offline_inference(
+                &offline.speech_buffer,
+                &app,
+                &r.0,
+                punct_guard.as_ref(),
+                &seg_id,
+                global_start,
+                true,
+            );
+            offline.speech_buffer.clear();
+            offline.is_speaking = false;
+        }
+        *current_id_guard = None;
+        *offline = OfflineState::default();
+        return Ok(());
+    }
+
+    // Flush online stream
+    if let (
+        Some(Recognizer {
+            inner: RecognizerInner::Online(r),
+        }),
+        Some(st),
+    ) = (rec_guard.as_ref(), stream_guard.as_ref())
+    {
+        let current_time = *total_samples as f64 / 16000.0;
+
+        // Add tail padding to flush the decoder
+        let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+        st.0.accept_waveform(16000, &tail_padding);
+        while r.0.is_ready(&st.0) {
+            r.0.decode(&st.0);
+        }
+
+        if let Some(result) = r.0.get_result(&st.0) {
+            if !result.text.trim().is_empty() {
+                let text = format_transcript(&result.text, punct_guard.as_ref());
+                let timestamps_f32 = result.timestamps;
+                let durations = timestamps_f32
+                    .as_ref()
+                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
+                let id = if let Some(id) = current_id_guard.take() {
+                    id
+                } else {
+                    uuid::Uuid::new_v4().to_string()
+                };
+
+                let segment = TranscriptSegment {
+                    id,
+                    text,
+                    start: *segment_start,
+                    end: current_time,
+                    is_final: true,
+                    tokens: Some(result.tokens),
+                    timestamps: timestamps_f32,
+                    durations,
+                };
+                let _ = app.emit("recognizer-output", &segment);
+            }
+        }
+
+        *current_id_guard = None;
+        r.0.reset(&st.0);
+        *segment_start = current_time;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn feed_audio_chunk<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: State<'_, SherpaState>,
@@ -604,6 +699,12 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     {
         vad.accept_waveform(&samples);
         let currently_speaking = vad.detected();
+
+        // Ensure segment ID exists
+        if current_id_guard.is_none() {
+            *current_id_guard = Some(uuid::Uuid::new_v4().to_string());
+        }
+        let seg_id = current_id_guard.as_ref().unwrap().clone();
 
         if currently_speaking && !offline.is_speaking {
             // Rising edge (silence -> speech)
@@ -645,6 +746,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                     &app,
                     &r.0,
                     punct_guard.as_ref(),
+                    &seg_id,
                     global_start,
                     false,
                 );
@@ -664,11 +766,14 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                     &app,
                     &r.0,
                     punct_guard.as_ref(),
+                    &seg_id,
                     global_start,
                     true,
                 );
 
                 offline.speech_buffer.clear();
+                // Generate new segment ID for the next utterance
+                *current_id_guard = Some(uuid::Uuid::new_v4().to_string());
             }
 
             // Maintain Ring Buffer
@@ -769,11 +874,11 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                         durations,
                     };
                     let _ = app.emit("recognizer-output", &segment);
-                } else {
-                    *current_id_guard = None;
                 }
             }
 
+            // Always reset state after endpoint, regardless of text content
+            *current_id_guard = None;
             r.0.reset(&st.0);
             *segment_start = current_time;
         }

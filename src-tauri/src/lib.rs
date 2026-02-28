@@ -608,6 +608,7 @@ pub fn run() {
             ai::get_ai_models,
             sherpa::start_recognizer,
             sherpa::stop_recognizer,
+            sherpa::flush_recognizer,
             sherpa::feed_audio_chunk,
             sherpa::process_batch_file
         ])
