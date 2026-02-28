@@ -951,7 +951,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     vad_model: Option<String>,
     vad_buffer: f32,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let samples = crate::pipeline::extract_and_resample_audio(&file_path, 16000)?;
+    let samples = crate::pipeline::extract_and_resample_audio(&app, &file_path, 16000).await?;
 
     if let Some(path) = save_to_path {
         crate::pipeline::save_wav_file(&samples, 16000, &path).map_err(|e| e.to_string())?;
