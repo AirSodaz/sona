@@ -102,11 +102,9 @@ describe('LiveRecord Config Changes', () => {
             });
         });
 
-        render(<LiveRecord />);
-
-        // Wait for initial useEffect
         await act(async () => {
-            await new Promise(resolve => setTimeout(resolve, 0));
+            render(<LiveRecord />);
+            await new Promise(resolve => setTimeout(resolve, 10)); // Allow useEffects to run
         });
 
         // Initial prepare should have been called
