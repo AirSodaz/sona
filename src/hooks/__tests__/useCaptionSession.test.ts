@@ -28,33 +28,19 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
-// Mock TranscriptionService class
+// Mock global transcriptionService instance
 const transcriptionMocks = vi.hoisted(() => ({
     start: vi.fn(),
     stop: vi.fn(),
-    setModelPath: vi.fn(),
-    setLanguage: vi.fn(),
-    setEnableITN: vi.fn(),
-    setPunctuationModelPath: vi.fn(),
-
-    setVadModelPath: vi.fn(),
-    setVadBufferSize: vi.fn(),
-    setITNModelPaths: vi.fn(),
+    sendAudioInt16: vi.fn()
 }));
 
 vi.mock('../../services/transcriptionService', () => {
     return {
-        TranscriptionService: class {
-            start = transcriptionMocks.start;
-            stop = transcriptionMocks.stop;
-            setModelPath = transcriptionMocks.setModelPath;
-            setLanguage = transcriptionMocks.setLanguage;
-            setEnableITN = transcriptionMocks.setEnableITN;
-            setPunctuationModelPath = transcriptionMocks.setPunctuationModelPath;
-
-            setVadModelPath = transcriptionMocks.setVadModelPath;
-            setVadBufferSize = transcriptionMocks.setVadBufferSize;
-            setITNModelPaths = transcriptionMocks.setITNModelPaths;
+        transcriptionService: {
+            start: transcriptionMocks.start,
+            stop: transcriptionMocks.stop,
+            sendAudioInt16: transcriptionMocks.sendAudioInt16
         }
     };
 });
