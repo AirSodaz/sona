@@ -1,5 +1,7 @@
 # Sona
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 **Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), and [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine using a high-performance Rust backend.
 
 ## ✨ Features
@@ -8,20 +10,25 @@
 - **🎙️ Real-time Transcription**: Record and transcribe audio in real-time with low latency.
 - **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
 - **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
-- **🌊 Waveform Visualization**: Beautiful, real-time audio visualization during recording and playback.
 - **✨ AI Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Download from GitHub Releases
+
+The easiest way to install Sona is to download the pre-built binaries for your platform from the [GitHub Releases](https://github.com/AirSodaz/sona/releases/latest) page.
+
+### Build from Source
+
+#### Prerequisites
 
 *   **Node.js**: v20 or later (for frontend build).
 *   **Rust**: Stable release (required for the Tauri backend).
 *   **Package Manager**: `npm` (recommended).
 
-#### Linux Requirements
+##### Linux Requirements
 If you are running on Linux (Ubuntu/Debian), ensure you have the necessary system dependencies:
 
 ```bash
@@ -38,7 +45,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     libasound2-dev
 ```
 
-### Installation
+#### Installation
 
 1.  **Clone the repository**
     ```bash
@@ -73,10 +80,6 @@ Sona allows you to choose the AI model that best fits your needs, both for offli
 2.  Select your provider (OpenAI, Anthropic, Gemini, or Ollama).
 3.  Enter your API Key and Base URL (if applicable).
 4.  Select a model to power the Polish and Translate features.
-
-## 🤝 Contributing
-
-We welcome contributions! For developers, please refer to **`AGENTS.md`** for detailed architectural documentation, coding standards, and testing guidelines.
 
 ## 🏗️ Building
 

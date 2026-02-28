@@ -40,7 +40,8 @@
       "deb",
       "appimage",
       "rpm",
-      "dmg"
+      "dmg",
+      "msi"
     ],
     "icon": [
       "icons/32x32.png",
