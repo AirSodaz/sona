@@ -121,7 +121,8 @@ describe('TranscriptionService', () => {
             }));
 
             expect(invoke).toHaveBeenCalledWith('process_batch_file', {
-                filePath: '/path/to/audio.wav'
+                filePath: '/path/to/audio.wav',
+                saveToPath: null
             });
         });
 
@@ -146,6 +147,7 @@ describe('TranscriptionService', () => {
         it('handles fallback to CPU on COREML_FAILURE', async () => {
             let attempt = 0;
             vi.mocked(invoke).mockImplementation((cmd) => {
+                if (cmd === 'start_recognizer') return Promise.resolve();
                 if (cmd === 'process_batch_file') {
                     attempt++;
                     if (attempt === 1) {
