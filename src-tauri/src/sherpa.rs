@@ -657,8 +657,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
             let current_time = *total_samples as f64 / 16000.0;
 
             // Add tail padding to flush the decoder
-            let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-            st.0.accept_waveform(16000, &tail_padding);
+            st.0.input_finished();
             while r.0.is_ready(&st.0) {
                 r.0.decode(&st.0);
             }
@@ -892,8 +891,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         }
 
             if r.0.is_endpoint(&st.0) {
-                let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-                st.0.accept_waveform(16000, &tail_padding);
+                st.0.input_finished();
                 while r.0.is_ready(&st.0) {
                     r.0.decode(&st.0);
                 }
@@ -1099,8 +1097,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         }
 
         // Add tail padding to flush the decoder, matching feed_audio_chunk behavior
-        let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-        stream.0.accept_waveform(16000, &tail_padding);
+        stream.0.input_finished();
         while r.0.is_ready(&stream.0) {
             r.0.decode(&stream.0);
         }
