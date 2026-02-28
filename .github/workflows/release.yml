@@ -163,14 +163,21 @@ jobs:
       - name: Extract Release Notes
         run: |
           VERSION="${{ github.ref_name }}"
+          RAW_VERSION="${VERSION#v}"
           echo "Extracting release notes for version $VERSION"
-          # Simple extraction logic or default message
-          if [ -f "README.md" ]; then
-             # Try to extract from README or just use generic text
-             echo "See the assets to download this version and install." > release_notes.md
-          else
-             echo "Release $VERSION" > release_notes.md
-          fi
+          
+          cat <<EOF > release_notes.md
+          ### Download
+
+          **Windows**
+          [64-bit](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64-setup.exe)
+
+          **macOS**
+          [Apple Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_aarch64.dmg) | [Universal](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_universal.dmg)
+
+          **Linux**
+          [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)
+          EOF
 
       - name: Build updater.json from signatures
         env:
