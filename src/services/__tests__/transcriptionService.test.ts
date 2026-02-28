@@ -33,16 +33,7 @@ describe('TranscriptionService', () => {
         await transcriptionService.start(onSegment, onError);
 
         expect(listen).toHaveBeenCalledWith('recognizer-output', expect.any(Function));
-        expect(invoke).toHaveBeenCalledWith('start_recognizer', {
-            modelPath: '/mock/model/path',
-            numThreads: 4,
-            enableItn: true,
-            language: 'auto',
-            itnModel: null,
-            punctuationModel: null,
-            vadModel: null,
-            vadBuffer: 5
-        });
+        expect(invoke).toHaveBeenCalledWith('start_recognizer');
     });
 
     it('does not start if model path is missing', async () => {

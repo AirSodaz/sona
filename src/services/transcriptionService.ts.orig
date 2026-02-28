@@ -51,10 +51,10 @@ export class TranscriptionService {
     private vadBufferSize: number = 5;
     /** Whether to enable Inverse Text Normalization. */
     private enableITN: boolean = true;
-    /** Callbacks for new transcript segments. */
-    private onSegmentListeners: Set<TranscriptionCallback> = new Set();
-    /** Callbacks for error reporting. */
-    private onErrorListeners: Set<ErrorCallback> = new Set();
+    /** Callback for new transcript segments. */
+    private onSegment: TranscriptionCallback | null = null;
+    /** Callback for error reporting. */
+    private onError: ErrorCallback | null = null;
     /** Promise to track active starting to prevent race conditions. */
     private startingPromise: Promise<void> | null = null;
     /** Configuration of the currently running recognizer. */
@@ -150,8 +150,8 @@ export class TranscriptionService {
     }
 
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
-        this.onSegmentListeners.add(onSegment);
-        this.onErrorListeners.add(onError);
+        this.onSegment = onSegment;
+        this.onError = onError;
 
         if (!this.modelPath) {
             onError('Model path not configured');
@@ -202,7 +202,7 @@ export class TranscriptionService {
 
             } catch (error) {
                 console.error('Failed to initialize recognizer:', error);
-                this.onErrorListeners.forEach((cb: ErrorCallback) => cb(`Failed to initialize: ${error}`));
+                if (this.onError) this.onError(`Failed to initialize: ${error}`);
                 this.runningConfig = null;
                 throw error;
             }

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { TranscriptionService } from '../services/transcriptionService';
+import { transcriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
 import { modelService } from '../services/modelService';
-import { AppConfig } from '../types/transcript';
+import { AppConfig, TranscriptSegment } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
@@ -10,8 +10,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
 
     // Refs to hold instances across renders
-    // We instantiate the service lazily or once.
-    const serviceRef = useRef<TranscriptionService>(new TranscriptionService());
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<AudioWorkletNode | null>(null);
@@ -29,13 +27,13 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, [isCaptionMode]);
 
     // Helper to update service config from AppConfig
-    const updateServiceConfig = useCallback(async (service: TranscriptionService, cfg: AppConfig) => {
-        service.setModelPath(cfg.offlineModelPath);
-        service.setLanguage(cfg.language);
-        service.setEnableITN(cfg.enableITN ?? false);
-        service.setPunctuationModelPath(cfg.punctuationModelPath || '');
-        service.setVadModelPath(cfg.vadModelPath || '');
-        service.setVadBufferSize(cfg.vadBufferSize || 5);
+    const updateServiceConfig = useCallback(async (cfg: AppConfig) => {
+        transcriptionService.setModelPath(cfg.offlineModelPath);
+        transcriptionService.setLanguage(cfg.language);
+        transcriptionService.setEnableITN(cfg.enableITN ?? false);
+        transcriptionService.setPunctuationModelPath(cfg.punctuationModelPath || '');
+        transcriptionService.setVadModelPath(cfg.vadModelPath || '');
+        transcriptionService.setVadBufferSize(cfg.vadBufferSize || 5);
 
         // ITN Setup
         const enabledITNModels = new Set(cfg.enabledITNModels || []);
@@ -43,13 +41,13 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         if (enabledITNModels.size > 0) {
             try {
                 const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                service.setITNModelPaths(paths);
+                transcriptionService.setITNModelPaths(paths);
             } catch (e) {
                 console.warn('[CaptionSession] Failed to setup ITN paths:', e);
-                service.setITNModelPaths([]);
+                transcriptionService.setITNModelPaths([]);
             }
         } else {
-            service.setITNModelPaths([]);
+            transcriptionService.setITNModelPaths([]);
         }
     }, []); // Stable callback
 
@@ -89,9 +87,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         }
 
         // Stop Service
-        if (serviceRef.current) {
-            await serviceRef.current.stop();
-        }
+        await transcriptionService.stop();
 
         processorRef.current = null;
         sourceRef.current = null;
@@ -128,7 +124,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     });
                     const unlisten = await listen<number[]>('system-audio', (event) => {
                         const samples = new Int16Array(event.payload);
-                        serviceRef.current.sendAudioInt16(samples);
+                        transcriptionService.sendAudioInt16(samples);
                     });
                     systemAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;
@@ -213,23 +209,22 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             }
 
             // 3. Configure Service
-            const service = serviceRef.current;
-            await updateServiceConfig(service, config);
+            await updateServiceConfig(config);
 
             if (!activeRef.current) return;
 
             // 4. Start Service
-            await service.start(
-                (segment) => {
+            await transcriptionService.start(
+                (segment: TranscriptSegment) => {
                     captionWindowService.sendSegments([segment]).catch(console.error);
                 },
-                (error) => {
+                (error: string) => {
                     console.error('[CaptionSession] Service error:', error);
                 }
             );
 
             if (!activeRef.current) {
-                await service.stop();
+                await transcriptionService.stop();
                 return;
             }
 
@@ -242,7 +237,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 processorRef.current = processor;
 
                 processor.port.onmessage = (e) => {
-                    service.sendAudioInt16(e.data);
+                    transcriptionService.sendAudioInt16(e.data);
                 };
 
                 source.connect(processor);
@@ -284,14 +279,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     // Effect: Handle Service Config Changes while Active (Restart Service)
     useEffect(() => {
         const update = async () => {
-            if (isCaptionMode && serviceRef.current && !isInitializing) {
+            if (isCaptionMode && !isInitializing) {
                 // Update service config and restart backend only
-                await updateServiceConfig(serviceRef.current, config);
+                await updateServiceConfig(config);
 
                 // Triggers internal restart check
-                await serviceRef.current.start(
-                    (segment) => captionWindowService.sendSegments([segment]).catch(console.error),
-                    (error) => console.error('[CaptionSession] Service error:', error)
+                await transcriptionService.start(
+                    (segment: TranscriptSegment) => captionWindowService.sendSegments([segment]).catch(console.error),
+                    (error: string) => console.error('[CaptionSession] Service error:', error)
                 );
             }
         };
