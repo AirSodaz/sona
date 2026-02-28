@@ -133,19 +133,11 @@ export class TranscriptionService {
     }
 
     /**
-     * Starts the transcription process in streaming mode.
-     *
-     * @param onSegment A callback for when a new transcript segment is ready.
-     * @param onError A callback for when an error occurs.
+     * Initializes the recognizer models in the background.
      */
     async prepare(): Promise<void> {
-        // If running, check if config changed.
-        if (this.isRunning) {
-            if (this._isConfigMatch()) {
-                return;
-            }
-            console.log('[TranscriptionService] Configuration changed, restarting backend...');
-            await this.stop();
+        if (this._isConfigMatch()) {
+            return;
         }
 
         if (!this.modelPath) {
@@ -153,39 +145,35 @@ export class TranscriptionService {
             return;
         }
 
-        console.log('[TranscriptionService] Pre-starting backend...');
-        return this._startBackend();
+        console.log('[TranscriptionService] Initializing recognizer models...');
+        return this._initBackend();
     }
 
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
         this.onSegment = onSegment;
         this.onError = onError;
 
-        // If running, check if config changed.
-        if (this.isRunning) {
-            if (this._isConfigMatch()) {
-                console.log('[TranscriptionService] Service already running with matching config, ready for audio');
-                return;
-            }
-            console.log('[TranscriptionService] Configuration changed, restarting backend for start...');
-            await this.stop();
-        }
-
         if (!this.modelPath) {
             onError('Model path not configured');
             return;
         }
 
-        await this._startBackend();
+        // If config changed, re-initialize first
+        if (!this._isConfigMatch()) {
+            console.log('[TranscriptionService] Configuration changed, re-initializing backend for start...');
+            await this._initBackend();
+        }
+
+        await this._startStream();
     }
 
-    private async _startBackend(): Promise<void> {
+    private async _initBackend(): Promise<void> {
         if (this.startingPromise) {
             return this.startingPromise;
         }
 
         this.startingPromise = (async () => {
-            console.log('Starting Rust backend recognizer with model:', this.modelPath);
+            console.log('Initializing Rust backend recognizer with model:', this.modelPath);
 
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
@@ -198,16 +186,7 @@ export class TranscriptionService {
             };
 
             try {
-                if (!this.unlistenOutput) {
-                    this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
-                        const segment = event.payload;
-                        if (this.onSegment) {
-                            this.onSegment(segment);
-                        }
-                    });
-                }
-
-                await invoke('start_recognizer', {
+                await invoke('init_recognizer', {
                     modelPath: this.modelPath,
                     numThreads: 4,
                     enableItn: this.enableITN,
@@ -218,14 +197,12 @@ export class TranscriptionService {
                     vadBuffer: this.vadBufferSize || 5.0
                 });
 
-                this.isRunning = true;
                 this.runningConfig = configToUse;
-                console.log('[TranscriptionService] Rust Recognizer started');
+                console.log('[TranscriptionService] Rust Recognizer initialized');
 
             } catch (error) {
-                console.error('Failed to start recognizer:', error);
-                if (this.onError) this.onError(`Failed to start: ${error}`);
-                this.isRunning = false;
+                console.error('Failed to initialize recognizer:', error);
+                if (this.onError) this.onError(`Failed to initialize: ${error}`);
                 this.runningConfig = null;
                 throw error;
             }
@@ -235,6 +212,30 @@ export class TranscriptionService {
             await this.startingPromise;
         } finally {
             this.startingPromise = null;
+        }
+    }
+
+    private async _startStream(): Promise<void> {
+        try {
+            if (!this.unlistenOutput) {
+                this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
+                    const segment = event.payload;
+                    if (this.onSegment) {
+                        this.onSegment(segment);
+                    }
+                });
+            }
+
+            await invoke('start_recognizer');
+
+            this.isRunning = true;
+            console.log('[TranscriptionService] Rust Recognizer stream started');
+
+        } catch (error) {
+            console.error('Failed to start recognizer stream:', error);
+            if (this.onError) this.onError(`Failed to start stream: ${error}`);
+            this.isRunning = false;
+            throw error;
         }
     }
 
