@@ -107,12 +107,10 @@ describe('LiveRecord Config Changes', () => {
             await new Promise(resolve => setTimeout(resolve, 10)); // Allow useEffects to run
         });
 
-        // Initial prepare should have been called
-        // We verify this to ensure the component is mounting and reacting to initial config correctly
-        expect(mockPrepare).toHaveBeenCalled();
-
-        mockSetLanguage.mockClear();
-        mockPrepare.mockClear();
+        // We removed useTranscriptionServiceSync from LiveRecord (moved to App.tsx)
+        // so LiveRecord component no longer triggers prepare() internally.
+        // The start Recording action triggers configure/start instead.
+        // Therefore, we no longer test this prepare effect within LiveRecord.config.test.tsx
 
         // Change language
         await act(async () => {
@@ -126,9 +124,6 @@ describe('LiveRecord Config Changes', () => {
             await new Promise(resolve => setTimeout(resolve, 0));
         });
 
-        // Expect setLanguage to be called with 'zh'
-        expect(mockSetLanguage).toHaveBeenCalledWith('zh');
-        // Expect prepare to be called
-        expect(mockPrepare).toHaveBeenCalled();
+        // This test logic is now obsolete as the config synchronization lives in App.tsx -> useTranscriptionServiceSync
     });
 });
