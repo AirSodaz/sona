@@ -69,7 +69,15 @@ pub async fn extract_and_resample_audio<R: tauri::Runtime>(
     let ffmpeg_path = exe_dir.join(ffmpeg_filename);
 
     // Run ffmpeg using tokio::process::Command
-    let output = tokio::process::Command::new(ffmpeg_path)
+    let mut command = tokio::process::Command::new(ffmpeg_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = command
         .args([
             "-i",
             filepath,
