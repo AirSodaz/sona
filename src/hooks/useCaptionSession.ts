@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { TranscriptionService } from '../services/transcriptionService';
+import { transcriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
-import { modelService } from '../services/modelService';
 import { AppConfig } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
@@ -10,8 +9,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
 
     // Refs to hold instances across renders
-    // We instantiate the service lazily or once.
-    const serviceRef = useRef<TranscriptionService>(new TranscriptionService());
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<AudioWorkletNode | null>(null);
@@ -28,30 +25,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         activeRef.current = isCaptionMode;
     }, [isCaptionMode]);
 
-    // Helper to update service config from AppConfig
-    const updateServiceConfig = useCallback(async (service: TranscriptionService, cfg: AppConfig) => {
-        service.setModelPath(cfg.offlineModelPath);
-        service.setLanguage(cfg.language);
-        service.setEnableITN(cfg.enableITN ?? false);
-        service.setPunctuationModelPath(cfg.punctuationModelPath || '');
-        service.setVadModelPath(cfg.vadModelPath || '');
-        service.setVadBufferSize(cfg.vadBufferSize || 5);
-
-        // ITN Setup
-        const enabledITNModels = new Set(cfg.enabledITNModels || []);
-        const itnRulesOrder = cfg.itnRulesOrder || ['itn-zh-number'];
-        if (enabledITNModels.size > 0) {
-            try {
-                const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                service.setITNModelPaths(paths);
-            } catch (e) {
-                console.warn('[CaptionSession] Failed to setup ITN paths:', e);
-                service.setITNModelPaths([]);
-            }
-        } else {
-            service.setITNModelPaths([]);
-        }
-    }, []); // Stable callback
+    // Configuration is now updated globally via useTranscriptionServiceSync,
+    // so we don't need updateServiceConfig here anymore.
 
     const stopCaptionSession = useCallback(async () => {
         console.log('[CaptionSession] Stopping session...');
@@ -89,9 +64,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         }
 
         // Stop Service
-        if (serviceRef.current) {
-            await serviceRef.current.stop();
-        }
+        await transcriptionService.stop();
 
         processorRef.current = null;
         sourceRef.current = null;
@@ -128,7 +101,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     });
                     const unlisten = await listen<number[]>('system-audio', (event) => {
                         const samples = new Int16Array(event.payload);
-                        serviceRef.current.sendAudioInt16(samples);
+                        transcriptionService.sendAudioInt16(samples);
                     });
                     systemAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;
@@ -212,28 +185,22 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 }
             }
 
-            // 3. Configure Service
-            const service = serviceRef.current;
-            await updateServiceConfig(service, config);
-
-            if (!activeRef.current) return;
-
-            // 4. Start Service
-            await service.start(
-                (segment) => {
+            // 3. Start Service (Configuration is already handled globally)
+            await transcriptionService.start(
+                (segment: any) => {
                     captionWindowService.sendSegments([segment]).catch(console.error);
                 },
-                (error) => {
+                (error: any) => {
                     console.error('[CaptionSession] Service error:', error);
                 }
             );
 
             if (!activeRef.current) {
-                await service.stop();
+                await transcriptionService.stop();
                 return;
             }
 
-            // 5. Connect Audio Pipeline (ONLY for Web API fallback)
+            // 4. Connect Audio Pipeline (ONLY for Web API fallback)
             if (!usingNativeCaptureRef.current && !processorRef.current && audioContextRef.current && streamRef.current) {
                 const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
                 sourceRef.current = source;
@@ -242,7 +209,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 processorRef.current = processor;
 
                 processor.port.onmessage = (e) => {
-                    service.sendAudioInt16(e.data);
+                    transcriptionService.sendAudioInt16(e.data);
                 };
 
                 source.connect(processor);
@@ -251,7 +218,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             if (!activeRef.current) return;
 
-            // 6. Open Window
+            // 5. Open Window
             await captionWindowService.open({
                 alwaysOnTop: config.alwaysOnTop ?? true,
                 lockWindow: config.lockWindow ?? false,
@@ -266,7 +233,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         } finally {
             setIsInitializing(false);
         }
-    }, [config, updateServiceConfig, stopCaptionSession]);
+    }, [config, stopCaptionSession]);
 
 
     // Effect: Manage Session based on Mode
@@ -284,14 +251,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     // Effect: Handle Service Config Changes while Active (Restart Service)
     useEffect(() => {
         const update = async () => {
-            if (isCaptionMode && serviceRef.current && !isInitializing) {
-                // Update service config and restart backend only
-                await updateServiceConfig(serviceRef.current, config);
-
+            // Configuration updates are handled globally in useTranscriptionServiceSync.
+            // When config changes, it updates the global transcriptionService.
+            // We just need to restart the stream if we are in caption mode.
+            if (isCaptionMode && !isInitializing) {
                 // Triggers internal restart check
-                await serviceRef.current.start(
-                    (segment) => captionWindowService.sendSegments([segment]).catch(console.error),
-                    (error) => console.error('[CaptionSession] Service error:', error)
+                await transcriptionService.start(
+                    (segment: any) => captionWindowService.sendSegments([segment]).catch(console.error),
+                    (error: any) => console.error('[CaptionSession] Service error:', error)
                 );
             }
         };
@@ -308,8 +275,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         JSON.stringify(config.enabledITNModels),
         JSON.stringify(config.itnRulesOrder),
         isCaptionMode,
-        isInitializing,
-        updateServiceConfig
+        isInitializing
     ]);
 
     // Effect: Handle Style Changes (No Restart)

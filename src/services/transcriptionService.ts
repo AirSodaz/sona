@@ -275,7 +275,9 @@ export class TranscriptionService {
         } finally {
             console.log('[TranscriptionService] Recognizer stopped');
             this.isRunning = false;
-            this.runningConfig = null;
+            // We intentionally do NOT set this.runningConfig = null here.
+            // Keeping the runningConfig allows subsequent starts with the same config
+            // to bypass the expensive _initBackend() call, as the Rust backend keeps the models loaded.
             if (this.unlistenOutput) {
                 this.unlistenOutput();
                 this.unlistenOutput = null;
