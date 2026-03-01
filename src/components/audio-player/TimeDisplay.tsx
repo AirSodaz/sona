@@ -13,7 +13,9 @@ function TimeDisplayComponent(): React.JSX.Element {
         let lastDisplay = formatDisplayTime(useTranscriptStore.getState().currentTime);
         if (spanRef.current) spanRef.current.textContent = lastDisplay;
 
-        const unsubscribe = useTranscriptStore.subscribe((state) => {
+        const unsubscribe = useTranscriptStore.subscribe((state, prevState) => {
+            if (state.currentTime === prevState.currentTime) return;
+
             const newDisplay = formatDisplayTime(state.currentTime);
             if (newDisplay !== lastDisplay) {
                 lastDisplay = newDisplay;

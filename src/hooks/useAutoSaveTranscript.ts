@@ -47,25 +47,29 @@ export function useAutoSaveTranscript() {
 
                 // 2. Handle Edit in Current Item
                 if (currentId) {
-                    const currentFingerprint = computeSegmentsFingerprint(state.segments);
+                    // Optimization: Only compute fingerprint if the segments array reference changed
+                    if (state.segments !== prevState.segments) {
+                        const currentFingerprint = computeSegmentsFingerprint(state.segments);
 
-                    if (currentFingerprint !== lastFingerprintRef.current) {
-                        // Change detected
-                        lastFingerprintRef.current = currentFingerprint;
+                        if (currentFingerprint !== lastFingerprintRef.current) {
+                            // Change detected
+                            lastFingerprintRef.current = currentFingerprint;
 
-                        // Debounce save
-                        if (timeoutRef.current) {
-                            clearTimeout(timeoutRef.current);
+                            // Debounce save
+                            if (timeoutRef.current) {
+                                clearTimeout(timeoutRef.current);
+                            }
+
+                            timeoutRef.current = setTimeout(() => {
+                                console.log('[AutoSave] Debounce triggered for:', currentId);
+                                saveToHistory(currentId, state.segments);
+                            }, 2000);
                         }
-
-                        timeoutRef.current = setTimeout(() => {
-                            console.log('[AutoSave] Debounce triggered for:', currentId);
-                            saveToHistory(currentId, state.segments);
-                        }, 2000);
                     }
                 }
             }
         );
+
 
         return () => {
             unsubscribe();
