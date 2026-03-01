@@ -48,7 +48,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
 
     // Refs
-    const analyserRef = useRef<AnalyserNode | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const activeStreamRef = useRef<MediaStream | null>(null);
@@ -57,7 +56,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const usingNativeCaptureRef = useRef(false);
     const startTimeRef = useRef<number>(0);
     const mimeTypeRef = useRef<string>('');
-    const nextAudioTimeRef = useRef<number>(0);
+    const peakLevelRef = useRef<number>(0);
 
     // State
     const [isInitializing, setIsInitializing] = useState(false);
@@ -73,6 +72,17 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     useEffect(() => {
         isPausedRef.current = isPaused;
     }, [isPaused]);
+
+    const setPeakFromInt16 = useCallback((samples: Int16Array) => {
+        let maxAbs = 0;
+        for (let i = 0; i < samples.length; i++) {
+            const abs = Math.abs(samples[i]);
+            if (abs > maxAbs) {
+                maxAbs = abs;
+            }
+        }
+        peakLevelRef.current = Math.min(1, maxAbs / 32767);
+    }, []);
 
     // Initialize Native Session
     const initializeNativeSession = async () => {
@@ -92,11 +102,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         const source = audioContextRef.current.createMediaStreamSource(stream);
 
-        // Visualizer
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 256;
-        source.connect(analyserRef.current);
-
         // Processor
         try {
             await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
@@ -107,7 +112,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
         processor.port.onmessage = (e) => {
-            transcriptionService.sendAudioInt16(e.data);
+            const samples = e.data as Int16Array;
+            transcriptionService.sendAudioInt16(samples);
+            if (!isPausedRef.current) {
+                setPeakFromInt16(samples);
+            }
         };
 
         source.connect(processor);
@@ -203,56 +212,17 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         instanceId: 'record'
                     });
 
-                    // Initialize AudioContext for visualization
-                    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                        audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-                    } else if (audioContextRef.current.state === 'suspended') {
-                        await audioContextRef.current.resume();
-                    }
-
-                    // Setup Analyser
-                    if (!analyserRef.current && audioContextRef.current) {
-                        analyserRef.current = audioContextRef.current.createAnalyser();
-                        analyserRef.current.fftSize = 256;
-                        const gainNode = audioContextRef.current.createGain();
-                        gainNode.gain.value = 0;
-                        analyserRef.current.connect(gainNode);
-                        gainNode.connect(audioContextRef.current.destination);
-                    }
-
-                    if (audioContextRef.current) {
-                        nextAudioTimeRef.current = audioContextRef.current.currentTime;
-                    }
-
-                    const unlisten = await listen<number[]>('system-audio', (event) => {
-                        const samples = new Int16Array(event.payload);
+                    const unlisten = await listen<number>('system-audio', (event) => {
+                        const peak = Math.abs(event.payload);
+                        const sample = Math.min(32767, Math.round(peak));
+                        const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (isRecordingRef.current && !isPausedRef.current) {
                             audioChunksRef.current.push(samples);
                         }
-
-                        // Visualization
-                        if (audioContextRef.current && analyserRef.current && !isPausedRef.current) {
-                            const float32Data = new Float32Array(samples.length);
-                            for (let i = 0; i < samples.length; i++) {
-                                const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
-                                float32Data[i] = float;
-                            }
-
-                            const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
-                            buffer.copyToChannel(float32Data, 0);
-
-                            const source = audioContextRef.current.createBufferSource();
-                            source.buffer = buffer;
-                            source.connect(analyserRef.current);
-
-                            let startTime = nextAudioTimeRef.current;
-                            if (startTime < audioContextRef.current.currentTime) {
-                                startTime = audioContextRef.current.currentTime;
-                            }
-                            source.start(startTime);
-                            nextAudioTimeRef.current = startTime + buffer.duration;
+                        if (!isPausedRef.current) {
+                            peakLevelRef.current = sample / 32767;
                         }
                     });
 
@@ -292,56 +262,17 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         instanceId: 'record'
                     });
 
-                    // Initialize AudioContext for visualization
-                    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                        audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-                    } else if (audioContextRef.current.state === 'suspended') {
-                        await audioContextRef.current.resume();
-                    }
-
-                    // Setup Analyser
-                    if (!analyserRef.current && audioContextRef.current) {
-                        analyserRef.current = audioContextRef.current.createAnalyser();
-                        analyserRef.current.fftSize = 256;
-                        const gainNode = audioContextRef.current.createGain();
-                        gainNode.gain.value = 0;
-                        analyserRef.current.connect(gainNode);
-                        gainNode.connect(audioContextRef.current.destination);
-                    }
-
-                    if (audioContextRef.current) {
-                        nextAudioTimeRef.current = audioContextRef.current.currentTime;
-                    }
-
-                    const unlisten = await listen<number[]>('microphone-audio', (event) => {
-                        const samples = new Int16Array(event.payload);
+                    const unlisten = await listen<number>('microphone-audio', (event) => {
+                        const peak = Math.abs(event.payload);
+                        const sample = Math.min(32767, Math.round(peak));
+                        const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (isRecordingRef.current && !isPausedRef.current) {
                             audioChunksRef.current.push(samples);
                         }
-
-                        // Visualization
-                        if (audioContextRef.current && analyserRef.current && !isPausedRef.current) {
-                            const float32Data = new Float32Array(samples.length);
-                            for (let i = 0; i < samples.length; i++) {
-                                const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
-                                float32Data[i] = float;
-                            }
-
-                            const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
-                            buffer.copyToChannel(float32Data, 0);
-
-                            const source = audioContextRef.current.createBufferSource();
-                            source.buffer = buffer;
-                            source.connect(analyserRef.current);
-
-                            let startTime = nextAudioTimeRef.current;
-                            if (startTime < audioContextRef.current.currentTime) {
-                                startTime = audioContextRef.current.currentTime;
-                            }
-                            source.start(startTime);
-                            nextAudioTimeRef.current = startTime + buffer.duration;
+                        if (!isPausedRef.current) {
+                            peakLevelRef.current = sample / 32767;
                         }
                     });
 
@@ -469,7 +400,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 await audioContextRef.current.close();
             }
             audioContextRef.current = null;
-            analyserRef.current = null;
         }
 
         if (config.muteDuringRecording) {
@@ -480,6 +410,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
     const pauseRecording = useCallback(() => {
         setIsPaused(true);
+        peakLevelRef.current = 0;
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.pause();
         }
@@ -521,6 +452,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         isRecording,
         isPaused,
         isInitializing,
-        analyserRef
+        peakLevelRef
     };
 }

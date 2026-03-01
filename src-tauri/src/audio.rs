@@ -664,18 +664,16 @@ fn process_mic_audio<R: Runtime>(
                 let _ = task_producer.push_slice(output_f32);
                 let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Downsample for the UI (e.g., take 1 out of 100 samples)
-                let downsample_factor = 100;
-                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
-
-                for (i, &sample) in output_f32.iter().enumerate() {
-                    if i % downsample_factor == 0 {
-                        let s = sample.clamp(-1.0, 1.0);
-                        downsampled_i16.push((s * 32767.0) as i16);
+                // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
+                let mut max_abs = 0.0_f32;
+                for &sample in output_f32 {
+                    let abs_val = sample.abs();
+                    if abs_val > max_abs {
+                        max_abs = abs_val;
                     }
                 }
-
-                let _ = window.app_handle().emit("microphone-audio", &downsampled_i16);
+                let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+                let _ = window.app_handle().emit("microphone-audio", peak_i16);
             }
         }
     }
@@ -752,18 +750,16 @@ fn process_audio<R: Runtime>(
                 let _ = task_producer.push_slice(output_f32);
                 let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Downsample for the UI (e.g., take 1 out of 100 samples)
-                let downsample_factor = 100;
-                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
-
-                for (i, &sample) in output_f32.iter().enumerate() {
-                    if i % downsample_factor == 0 {
-                        let s = sample.clamp(-1.0, 1.0);
-                        downsampled_i16.push((s * 32767.0) as i16);
+                // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
+                let mut max_abs = 0.0_f32;
+                for &sample in output_f32 {
+                    let abs_val = sample.abs();
+                    if abs_val > max_abs {
+                        max_abs = abs_val;
                     }
                 }
-
-                let _ = window.app_handle().emit("system-audio", &downsampled_i16);
+                let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+                let _ = window.app_handle().emit("system-audio", peak_i16);
             }
         }
     }

@@ -100,7 +100,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
                         instanceId: 'caption'
                     });
-                    const unlisten = await listen<number[]>('system-audio', (_event) => {
+                    const unlisten = await listen<number>('system-audio', (_event) => {
                         // The Rust backend now feeds itself directly.
                     });
                     systemAudioUnlistenRef.current = unlisten;

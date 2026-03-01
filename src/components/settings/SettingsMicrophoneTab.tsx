@@ -29,22 +29,20 @@ export function SettingsMicrophoneTab({
     const muteDuringRecording = config.muteDuringRecording || false;
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const analyserRef = useRef<AnalyserNode | null>(null);
-    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const animationRef = useRef<number>(0);
-    const streamRef = useRef<MediaStream | null>(null);
-    const nativeUnlistenRef = useRef<UnlistenFn | null>(null);
-    const usingNativeMicRef = useRef<boolean>(false);
-    const nextMicAudioTimeRef = useRef<number>(0);
-
-    // System Audio Visualizer Refs
     const systemCanvasRef = useRef<HTMLCanvasElement>(null);
-    const systemAudioContextRef = useRef<AudioContext | null>(null);
-    const systemAnalyserRef = useRef<AnalyserNode | null>(null);
+    const animationRef = useRef<number>(0);
     const systemAnimationRef = useRef<number>(0);
+    const nativeUnlistenRef = useRef<UnlistenFn | null>(null);
     const systemUnlistenRef = useRef<UnlistenFn | null>(null);
-    const nextAudioTimeRef = useRef<number>(0);
+    const usingNativeMicRef = useRef<boolean>(false);
+    const startedMicCaptureRef = useRef<boolean>(false);
+    const startedSystemCaptureRef = useRef<boolean>(false);
+    const micTargetPeakRef = useRef(0);
+    const micAmplitudeRef = useRef(0);
+    const micPhaseRef = useRef(0);
+    const systemTargetPeakRef = useRef(0);
+    const systemAmplitudeRef = useRef(0);
+    const systemPhaseRef = useRef(0);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
@@ -155,389 +153,179 @@ export function SettingsMicrophoneTab({
         };
     }, [t]);
 
+    const startWaveAnimation = (
+        canvasRef: React.RefObject<HTMLCanvasElement | null>,
+        frameRef: React.MutableRefObject<number>,
+        targetPeakRef: React.MutableRefObject<number>,
+        amplitudeRef: React.MutableRefObject<number>,
+        phaseRef: React.MutableRefObject<number>
+    ) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const drawLoop = () => {
+            frameRef.current = requestAnimationFrame(drawLoop);
+            amplitudeRef.current += (targetPeakRef.current - amplitudeRef.current) * 0.08;
+            phaseRef.current += 0.06;
+
+            const { width, height } = canvas;
+            const centerY = height / 2;
+            const maxWaveHeight = height * 0.42;
+            const amplitudePx = Math.max(0.02, amplitudeRef.current) * maxWaveHeight;
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#4b5563';
+            ctx.beginPath();
+
+            const cycles = 2.3;
+            for (let x = 0; x <= width; x += 2) {
+                const t = x / width;
+                const y =
+                    centerY +
+                    Math.sin((t * cycles * Math.PI * 2) + phaseRef.current) * amplitudePx +
+                    Math.sin((t * (cycles * 0.55) * Math.PI * 2) + phaseRef.current * 1.45) * (amplitudePx * 0.35);
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        };
+
+        drawLoop();
+    };
+
+    const stopWaveAnimation = (
+        canvasRef: React.RefObject<HTMLCanvasElement | null>,
+        frameRef: React.MutableRefObject<number>,
+        amplitudeRef: React.MutableRefObject<number>
+    ) => {
+        if (frameRef.current) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = 0;
+        }
+        amplitudeRef.current = 0;
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (canvas && ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    };
+
     // System Audio Visualizer Logic
     useEffect(() => {
         let isMounted = true;
 
         async function startSystemVisualizer() {
             try {
-                // Initialize Audio Context
-                if (!systemAudioContextRef.current || systemAudioContextRef.current.state === 'closed') {
-                    systemAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
-                } else if (systemAudioContextRef.current.state === 'suspended') {
-                    await systemAudioContextRef.current.resume();
-                }
-
-                // Initialize Analyser
-                if (!systemAnalyserRef.current && systemAudioContextRef.current) {
-                    systemAnalyserRef.current = systemAudioContextRef.current.createAnalyser();
-                    systemAnalyserRef.current.fftSize = 2048;
-                    // Connect to mute gain to keep graph active
-                    const gainNode = systemAudioContextRef.current.createGain();
-                    gainNode.gain.value = 0;
-                    systemAnalyserRef.current.connect(gainNode);
-                    gainNode.connect(systemAudioContextRef.current.destination);
-                }
-
-                if (systemAudioContextRef.current) {
-                    nextAudioTimeRef.current = systemAudioContextRef.current.currentTime;
-                }
-
-                // If no active session, we start the capture
                 if (!isActiveSession) {
                     await invoke('start_system_audio_capture', {
                         deviceName: systemAudioDeviceId === 'default' ? null : systemAudioDeviceId,
                         instanceId: 'test_system'
                     });
+                    startedSystemCaptureRef.current = true;
+                } else {
+                    startedSystemCaptureRef.current = false;
                 }
 
-                const unlisten = await listen<number[]>('system-audio', (event) => {
-                    if (!isMounted || !systemAudioContextRef.current || !systemAnalyserRef.current) return;
-
-                    const samples = new Int16Array(event.payload);
-                    const float32Data = new Float32Array(samples.length);
-                    for (let i = 0; i < samples.length; i++) {
-                        const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
-                        float32Data[i] = float;
-                    }
-
-                    const buffer = systemAudioContextRef.current.createBuffer(1, samples.length, 16000);
-                    buffer.copyToChannel(float32Data, 0);
-
-                    const source = systemAudioContextRef.current.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(systemAnalyserRef.current);
-
-                    const currentTime = systemAudioContextRef.current.currentTime;
-                    let startTime = nextAudioTimeRef.current;
-                    if (startTime < currentTime) {
-                        startTime = currentTime;
-                    }
-                    source.start(startTime);
-                    nextAudioTimeRef.current = startTime + buffer.duration;
+                const unlisten = await listen<number>('system-audio', (event) => {
+                    if (!isMounted) return;
+                    systemTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
                 });
 
                 systemUnlistenRef.current = unlisten;
-
-                drawSystem();
+                startWaveAnimation(
+                    systemCanvasRef,
+                    systemAnimationRef,
+                    systemTargetPeakRef,
+                    systemAmplitudeRef,
+                    systemPhaseRef
+                );
             } catch (err) {
                 console.error('Error starting system visualizer:', err);
             }
-        }
-
-        function drawSystem() {
-            const canvas = systemCanvasRef.current;
-            const analyser = systemAnalyserRef.current;
-
-            if (!canvas || !analyser) return;
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            const dataArray = new Uint8Array(analyser.fftSize);
-
-            const barCount = 20;
-            const barGap = 2;
-            const totalGap = (barCount - 1) * barGap;
-            const barWidth = (canvas.width - totalGap) / barCount;
-
-            const drawLoop = () => {
-                systemAnimationRef.current = requestAnimationFrame(drawLoop);
-
-                analyser.getByteTimeDomainData(dataArray);
-
-                let sum = 0;
-                for (let i = 0; i < dataArray.length; i++) {
-                    const value = (dataArray[i] - 128) / 128.0;
-                    sum += value * value;
-                }
-                const rms = Math.sqrt(sum / dataArray.length);
-                const displayVolume = Math.min(1.0, rms * 5.0);
-
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                const activeBars = Math.ceil(displayVolume * barCount);
-
-                for (let i = 0; i < barCount; i++) {
-                    const x = i * (barWidth + barGap);
-
-                    let color = '#e5e7eb';
-
-                    if (i < activeBars) {
-                        const percent = i / barCount;
-                        if (percent < 0.6) {
-                            color = '#22c55e';
-                        } else if (percent < 0.8) {
-                            color = '#eab308';
-                        } else {
-                            color = '#ef4444';
-                        }
-                    }
-
-                    ctx.fillStyle = color;
-                    ctx.fillRect(x, 0, barWidth, canvas.height);
-                }
-            };
-
-            drawLoop();
         }
 
         startSystemVisualizer();
 
         return () => {
             isMounted = false;
-
-            if (systemAnimationRef.current) {
-                cancelAnimationFrame(systemAnimationRef.current);
-            }
+            stopWaveAnimation(systemCanvasRef, systemAnimationRef, systemAmplitudeRef);
 
             if (systemUnlistenRef.current) {
                 systemUnlistenRef.current();
+                systemUnlistenRef.current = null;
             }
 
-            if (systemAudioContextRef.current) {
-                systemAudioContextRef.current.close();
-                systemAudioContextRef.current = null;
-                systemAnalyserRef.current = null;
-            }
-
-            // Only stop capture if we started it (i.e., no active session was running)
-            // However, this check uses the initial value of isActiveSession from closure.
-            // But since this effect re-runs if systemAudioDeviceId changes, we need to be careful.
-            // Actually, we can just check the store state via a ref or rely on the fact that
-            // stop_system_audio_capture is safe to call? No, it kills the stream for everyone.
-
-            // To be safe: We check the store via the prop or fresh check if possible.
-            // But hooks can't access updated state in cleanup easily without refs.
-            // We use isActiveSession from the scope. If it was false when we mounted, we stop it.
-            if (!isActiveSession) {
+            if (startedSystemCaptureRef.current) {
                 invoke('stop_system_audio_capture').catch(console.error);
+                startedSystemCaptureRef.current = false;
             }
         };
-    }, [systemAudioDeviceId, isActiveSession]); // Re-run if device changes or active session state changes
-
+    }, [systemAudioDeviceId, isActiveSession]);
 
     // Mic Visualizer Logic
     useEffect(() => {
         let isMounted = true;
-        // Start visualization for the selected microphone
-        // This runs whenever microphoneId changes or component mounts
-
         startVisualizer(microphoneId, () => isMounted);
 
         return () => {
             isMounted = false;
             stopVisualizer();
         };
-    }, [microphoneId]);
+    }, [microphoneId, isActiveSession]);
 
     async function startVisualizer(deviceId: string, checkMounted: () => boolean) {
-        stopVisualizer(); // Stop previous if any
-
-        let nativeSuccess = false;
-
-        // Try Native Visualizer first
+        stopVisualizer();
         try {
-            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                audioContextRef.current = new AudioContextClass({ sampleRate: 16000 });
-            } else if (audioContextRef.current.state === 'suspended') {
-                await audioContextRef.current.resume();
-            }
-
-            if (!analyserRef.current && audioContextRef.current) {
-                analyserRef.current = audioContextRef.current.createAnalyser();
-                analyserRef.current.fftSize = 2048;
-                const gainNode = audioContextRef.current.createGain();
-                gainNode.gain.value = 0;
-                analyserRef.current.connect(gainNode);
-                gainNode.connect(audioContextRef.current.destination);
-            }
-
-            if (audioContextRef.current) {
-                nextMicAudioTimeRef.current = audioContextRef.current.currentTime;
-            }
-
             if (!isActiveSession) {
                 await invoke('start_microphone_capture', {
                     deviceName: deviceId === 'default' ? null : deviceId,
                     instanceId: 'test_mic'
                 });
+                startedMicCaptureRef.current = true;
+            } else {
+                startedMicCaptureRef.current = false;
             }
 
-            const unlisten = await listen<number[]>('microphone-audio', (event) => {
-                if (!checkMounted() || !audioContextRef.current || !analyserRef.current) return;
-
-                const samples = new Int16Array(event.payload);
-                const float32Data = new Float32Array(samples.length);
-                for (let i = 0; i < samples.length; i++) {
-                    const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
-                    float32Data[i] = float;
-                }
-
-                const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
-                buffer.copyToChannel(float32Data, 0);
-
-                const source = audioContextRef.current.createBufferSource();
-                source.buffer = buffer;
-                source.connect(analyserRef.current);
-
-                const currentTime = audioContextRef.current.currentTime;
-                let startTime = nextMicAudioTimeRef.current;
-                if (startTime < currentTime) {
-                    startTime = currentTime;
-                }
-                source.start(startTime);
-                nextMicAudioTimeRef.current = startTime + buffer.duration;
+            const unlisten = await listen<number>('microphone-audio', (event) => {
+                if (!checkMounted()) return;
+                micTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
             });
 
             nativeUnlistenRef.current = unlisten;
             usingNativeMicRef.current = true;
-            nativeSuccess = true;
 
-            draw();
-
+            startWaveAnimation(
+                canvasRef,
+                animationRef,
+                micTargetPeakRef,
+                micAmplitudeRef,
+                micPhaseRef
+            );
         } catch (err) {
-            console.warn('Native microphone visualizer failed, falling back to Web API:', err);
-        }
-
-        if (!nativeSuccess) {
-            // Fallback to Web API Visualizer
-            try {
-                const constraints: MediaStreamConstraints = {
-                    audio: deviceId === 'default'
-                        ? true
-                        : { deviceId: { exact: deviceId } }
-                };
-
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-                if (!checkMounted()) {
-                    stream.getTracks().forEach(t => t.stop());
-                    return;
-                }
-
-                streamRef.current = stream;
-
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                const audioCtx = new AudioContextClass();
-                audioContextRef.current = audioCtx;
-
-                const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 2048;
-                analyserRef.current = analyser;
-
-                const source = audioCtx.createMediaStreamSource(stream);
-                source.connect(analyser);
-                sourceRef.current = source;
-
-                draw();
-            } catch (err) {
-                console.error('Error starting Web API visualizer:', err);
-            }
+            console.warn('Native microphone visualizer failed:', err);
+            stopWaveAnimation(canvasRef, animationRef, micAmplitudeRef);
         }
     }
 
     function stopVisualizer() {
-        if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
-            animationRef.current = 0;
+        stopWaveAnimation(canvasRef, animationRef, micAmplitudeRef);
+
+        if (nativeUnlistenRef.current) {
+            nativeUnlistenRef.current();
+            nativeUnlistenRef.current = null;
         }
-
-        if (usingNativeMicRef.current) {
-            if (nativeUnlistenRef.current) {
-                nativeUnlistenRef.current();
-                nativeUnlistenRef.current = null;
-            }
-            if (!isActiveSession) {
-                invoke('stop_microphone_capture').catch(console.error);
-            }
-            usingNativeMicRef.current = false;
-        } else {
-            if (sourceRef.current) {
-                sourceRef.current.disconnect();
-                sourceRef.current = null;
-            }
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(t => t.stop());
-                streamRef.current = null;
-            }
+        if (usingNativeMicRef.current && startedMicCaptureRef.current) {
+            invoke('stop_microphone_capture').catch(console.error);
         }
-
-        if (analyserRef.current) {
-            analyserRef.current.disconnect();
-            analyserRef.current = null;
-        }
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-    }
-
-    function draw() {
-        const canvas = canvasRef.current;
-        const analyser = analyserRef.current;
-
-        if (!canvas || !analyser) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const dataArray = new Uint8Array(analyser.fftSize); // Use full time domain data buffer
-
-        const barCount = 20; // Number of LED bars
-        const barGap = 2;
-        const totalGap = (barCount - 1) * barGap;
-        const barWidth = (canvas.width - totalGap) / barCount;
-
-        const drawLoop = () => {
-            animationRef.current = requestAnimationFrame(drawLoop);
-
-            // Get time-domain data for waveform/volume calculation
-            analyser.getByteTimeDomainData(dataArray);
-
-            // Calculate RMS
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                // Convert 8-bit unsigned (0-255) to centered -1 to 1 float
-                const value = (dataArray[i] - 128) / 128.0;
-                sum += value * value;
-            }
-            const rms = Math.sqrt(sum / dataArray.length);
-
-            // Normalize/Boost volume for display
-            // Typical speech RMS is often low, so we apply some gain or log scale
-            // Let's use a simple multiplier for sensitivity
-            const displayVolume = Math.min(1.0, rms * 5.0);
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const activeBars = Math.ceil(displayVolume * barCount);
-
-            for (let i = 0; i < barCount; i++) {
-                const x = i * (barWidth + barGap);
-
-                // Color logic
-                let color = '#e5e7eb'; // Default gray (off)
-
-                if (i < activeBars) {
-                    // Color based on index position (0-100% of range)
-                    const percent = i / barCount;
-                    if (percent < 0.6) {
-                        color = '#22c55e'; // Green
-                    } else if (percent < 0.8) {
-                        color = '#eab308'; // Yellow
-                    } else {
-                        color = '#ef4444'; // Red
-                    }
-                }
-
-                ctx.fillStyle = color;
-                ctx.fillRect(x, 0, barWidth, canvas.height);
-            }
-        };
-
-        drawLoop();
+        usingNativeMicRef.current = false;
+        startedMicCaptureRef.current = false;
     }
 
 

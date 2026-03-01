@@ -284,9 +284,13 @@ describe('LiveRecord Native Capture', () => {
         // Mock Canvas
         HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
             clearRect: vi.fn(),
-            createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-            fillRect: vi.fn(),
+            beginPath: vi.fn(),
+            moveTo: vi.fn(),
+            lineTo: vi.fn(),
+            stroke: vi.fn(),
             fillStyle: '',
+            strokeStyle: '',
+            lineWidth: 1,
         })) as any;
 
         // Setup store config
@@ -356,7 +360,7 @@ describe('LiveRecord Native Capture', () => {
 
         // 3. Simulate audio data
         // Simulate a few chunks of audio
-        const mockAudioPayload = Array.from({ length: 1024 }, () => Math.floor(Math.random() * 32767));
+        const mockAudioPayload = Math.floor(Math.random() * 32767);
         if (systemAudioCallback) {
             await act(async () => {
                 systemAudioCallback!({ payload: mockAudioPayload });
@@ -424,7 +428,7 @@ describe('LiveRecord Native Capture', () => {
         expect(systemAudioCallback).toBeDefined();
 
         // 3. Simulate audio data
-        const mockAudioPayload = Array.from({ length: 1024 }, () => 100);
+        const mockAudioPayload = 100;
         if (systemAudioCallback) {
             await act(async () => {
                 systemAudioCallback!({ payload: mockAudioPayload });

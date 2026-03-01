@@ -127,7 +127,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         pauseRecording,
         resumeRecording,
         isInitializing,
-        analyserRef
+        peakLevelRef
     } = useAudioRecorder({
         inputSource,
         onSegment
@@ -136,7 +136,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Visualizer Hook
     const { startVisualizer, stopVisualizer } = useAudioVisualizer({
         canvasRef,
-        analyserRef,
+        peakLevelRef,
         isPaused
     });
 
