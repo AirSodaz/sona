@@ -176,14 +176,13 @@ jobs:
           echo "Extracting release notes for version $VERSION"
           
           cat <<EOF > release_notes.md
-          ### Download
+          ## Download
 
           **Windows**
-          [64-bit (EXE)](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64-setup.exe) | [ARM64 (EXE)](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_arm64-setup.exe)
-          [64-bit (MSI)](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64_en-US.msi) | [ARM64 (MSI)](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_arm64_en-US.msi)
+          [x64](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_x64-setup.exe) | [ARM64](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_arm64-setup.exe)
 
           **macOS**
-          [Apple Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_aarch64.dmg) | [Universal](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_universal.dmg)
+          [Apple Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_aarch64.dmg) | [Intel Silicon](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_universal.dmg)
 
           **Linux**
           [DEB](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.deb) | [RPM](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona-${RAW_VERSION}-1.x86_64.rpm) | [AppImage](https://github.com/AirSodaz/sona/releases/download/$VERSION/Sona_${RAW_VERSION}_amd64.AppImage)
