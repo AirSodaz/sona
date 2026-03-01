@@ -159,6 +159,9 @@ export function GlobalDialog(): React.JSX.Element | null {
                                 fontSize: '0.9rem',
                                 color: 'var(--color-text-secondary)',
                                 lineHeight: 1.5,
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
+                                whiteSpace: 'pre-wrap',
                             }}
                         >
                             {message}

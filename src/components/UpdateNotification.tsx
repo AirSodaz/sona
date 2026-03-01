@@ -54,7 +54,7 @@ export function UpdateNotification(): React.JSX.Element | null {
             const shouldDownload = await confirm(message, {
                 title: t('common.error', { defaultValue: 'Error' }),
                 variant: 'error',
-                confirmLabel: 'Download Manually',
+                confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
                 cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
             });
 

@@ -220,6 +220,7 @@
         "update_error": "Update failed: {{error}}",
         "update_btn_install": "Install Update",
         "update_btn_relaunch": "Relaunch",
+        "update_download_manually": "Download Manually",
         "about_built_with": "Built with",
         "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
         "about_license": "MIT License",

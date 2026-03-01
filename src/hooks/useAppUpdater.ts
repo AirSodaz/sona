@@ -36,7 +36,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
         const shouldDownload = await confirm(message, {
             title: t('common.error', { defaultValue: 'Error' }),
             variant: 'error',
-            confirmLabel: 'Download Manually', // Hardcoded as requested or could add to translations
+            confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
             cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
         });
 
