@@ -676,6 +676,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                                 &seg_id_copy,
                                 global_start,
                                 true,
+                                &instance_id_copy,
                             );
                         }
                     }).await
@@ -824,6 +825,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                                     &seg_id_copy,
                                     global_start,
                                     false,
+                                    &instance_id_copy,
                                 );
                             }
                         });
@@ -856,6 +858,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                                     &seg_id_copy,
                                     global_start,
                                     true,
+                                    &instance_id_copy,
                                 );
                             }
                         });
