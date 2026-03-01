@@ -220,6 +220,7 @@
         "update_error": "更新失败: {{error}}",
         "update_btn_install": "安装更新",
         "update_btn_relaunch": "立即重启",
+        "update_download_manually": "手动下载",
         "about_built_with": "技术栈",
         "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
         "about_license": "MIT 开源协议",

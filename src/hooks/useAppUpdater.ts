@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
+import { useDialogStore } from '../stores/dialogStore';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { useTranslation } from 'react-i18next';
 
 export type UpdateStatus =
     | 'idle'
@@ -15,7 +18,7 @@ interface UseAppUpdaterReturn {
     status: UpdateStatus;
     error: string | null;
     updateInfo: Update | null;
-    checkUpdate: () => Promise<void>;
+    checkUpdate: (manual?: boolean) => Promise<void>;
     installUpdate: () => Promise<void>;
     progress: number;
 }
@@ -25,8 +28,28 @@ export function useAppUpdater(): UseAppUpdaterReturn {
     const [error, setError] = useState<string | null>(null);
     const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
     const [progress, setProgress] = useState<number>(0);
+    const { confirm } = useDialogStore();
+    const { t } = useTranslation();
 
-    const checkUpdate = useCallback(async () => {
+    const showErrorPopup = async (err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        const shouldDownload = await confirm(message, {
+            title: t('common.error', { defaultValue: 'Error' }),
+            variant: 'error',
+            confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
+            cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
+        });
+
+        if (shouldDownload) {
+            try {
+                await openUrl('https://github.com/AirSodaz/sona/releases/latest');
+            } catch (openErr) {
+                console.error('Failed to open URL:', openErr);
+            }
+        }
+    };
+
+    const checkUpdate = useCallback(async (manual: boolean = false) => {
         setStatus('checking');
         setError(null);
         setProgress(0);
@@ -41,10 +64,15 @@ export function useAppUpdater(): UseAppUpdaterReturn {
             }
         } catch (err) {
             console.error('Update check failed:', err);
-            setError(err instanceof Error ? err.message : String(err));
-            setStatus('error');
+            if (manual) {
+                setStatus('idle');
+                await showErrorPopup(err);
+            } else {
+                setError(err instanceof Error ? err.message : String(err));
+                setStatus('error');
+            }
         }
-    }, []);
+    }, [confirm, t]);
 
     const installUpdate = useCallback(async () => {
         if (!updateInfo) return;
@@ -80,10 +108,10 @@ export function useAppUpdater(): UseAppUpdaterReturn {
 
         } catch (err) {
             console.error('Update installation failed:', err);
-            setError(err instanceof Error ? err.message : String(err));
-            setStatus('error');
+            setStatus('idle');
+            await showErrorPopup(err);
         }
-    }, [updateInfo]);
+    }, [updateInfo, confirm, t]);
 
     return {
         status,

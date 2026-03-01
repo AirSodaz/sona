@@ -4,14 +4,16 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { useTranslation } from 'react-i18next';
 import { Download, X } from 'lucide-react';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 export function UpdateNotification(): React.JSX.Element | null {
     const { t } = useTranslation();
     const config = useTranscriptStore((state) => state.config);
+    const { confirm } = useDialogStore();
     const [updateAvailable, setUpdateAvailable] = useState<any>(null);
     const [isInstalling, setIsInstalling] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const checkForUpdates = async () => {
@@ -47,8 +49,22 @@ export function UpdateNotification(): React.JSX.Element | null {
             await relaunch();
         } catch (err: any) {
             console.error('Update failed:', err);
-            setError(err.message || 'Update failed');
             setIsInstalling(false);
+            const message = err.message || 'Update failed';
+            const shouldDownload = await confirm(message, {
+                title: t('common.error', { defaultValue: 'Error' }),
+                variant: 'error',
+                confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
+                cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
+            });
+
+            if (shouldDownload) {
+                try {
+                    await openUrl('https://github.com/AirSodaz/sona/releases/latest');
+                } catch (openErr) {
+                    console.error('Failed to open URL:', openErr);
+                }
+            }
         }
     };
 
@@ -82,7 +98,6 @@ export function UpdateNotification(): React.JSX.Element | null {
                 ) : (
                    <div>{t('settings.update_desc_default')}</div>
                 )}
-                {error && <div style={{ color: 'var(--color-error)', marginTop: '8px' }}>{error}</div>}
             </div>
 
             <div className="update-notification-actions">
