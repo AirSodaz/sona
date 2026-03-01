@@ -193,80 +193,89 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         try {
             let stream: MediaStream | undefined;
 
-            if (inputSource === 'desktop') {
-                // Try Native Capture first
-                let nativeSuccess = false;
-                try {
+            // Try Native Capture first for both 'desktop' and 'microphone'
+            let nativeSuccess = false;
+            try {
+                if (inputSource === 'desktop') {
                     console.log('[useAudioRecorder] Attempting native system audio capture...');
                     await invoke('start_system_audio_capture', {
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId
                     });
-
-                    // Initialize AudioContext for visualization
-                    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                        audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-                    } else if (audioContextRef.current.state === 'suspended') {
-                        await audioContextRef.current.resume();
-                    }
-
-                    // Setup Analyser
-                    if (!analyserRef.current && audioContextRef.current) {
-                        analyserRef.current = audioContextRef.current.createAnalyser();
-                        analyserRef.current.fftSize = 256;
-                        const gainNode = audioContextRef.current.createGain();
-                        gainNode.gain.value = 0;
-                        analyserRef.current.connect(gainNode);
-                        gainNode.connect(audioContextRef.current.destination);
-                    }
-
-                    if (audioContextRef.current) {
-                        nextAudioTimeRef.current = audioContextRef.current.currentTime;
-                    }
-
-                    const unlisten = await listen<number[]>('system-audio', (event) => {
-                        const samples = new Int16Array(event.payload);
-                        transcriptionService.sendAudioInt16(samples);
-
-                        if (isRecordingRef.current && !isPausedRef.current) {
-                            audioChunksRef.current.push(samples);
-                        }
-
-                        // Visualization
-                        if (audioContextRef.current && analyserRef.current && !isPausedRef.current) {
-                            const float32Data = new Float32Array(samples.length);
-                            for (let i = 0; i < samples.length; i++) {
-                                const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
-                                float32Data[i] = float;
-                            }
-
-                            const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
-                            buffer.copyToChannel(float32Data, 0);
-
-                            const source = audioContextRef.current.createBufferSource();
-                            source.buffer = buffer;
-                            source.connect(analyserRef.current);
-
-                            let startTime = nextAudioTimeRef.current;
-                            if (startTime < audioContextRef.current.currentTime) {
-                                startTime = audioContextRef.current.currentTime;
-                            }
-                            source.start(startTime);
-                            nextAudioTimeRef.current = startTime + buffer.duration;
-                        }
+                } else {
+                    console.log('[useAudioRecorder] Attempting native microphone capture...');
+                    await invoke('start_microphone_capture', {
+                        deviceName: config.microphoneId === 'default' ? null : config.microphoneId
                     });
-
-                    systemAudioUnlistenRef.current = unlisten;
-                    usingNativeCaptureRef.current = true;
-                    nativeSuccess = true;
-
-                    audioChunksRef.current = [];
-                    await initializeNativeSession();
-
-                } catch (e) {
-                    console.warn('[useAudioRecorder] Native capture failed, fallback to Web API:', e);
                 }
 
-                if (!nativeSuccess) {
+                // Initialize AudioContext for visualization
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                    audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+                } else if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
+                }
+
+                // Setup Analyser
+                if (!analyserRef.current && audioContextRef.current) {
+                    analyserRef.current = audioContextRef.current.createAnalyser();
+                    analyserRef.current.fftSize = 256;
+                    const gainNode = audioContextRef.current.createGain();
+                    gainNode.gain.value = 0;
+                    analyserRef.current.connect(gainNode);
+                    gainNode.connect(audioContextRef.current.destination);
+                }
+
+                if (audioContextRef.current) {
+                    nextAudioTimeRef.current = audioContextRef.current.currentTime;
+                }
+
+                const eventName = inputSource === 'desktop' ? 'system-audio' : 'microphone-audio';
+
+                const unlisten = await listen<number[]>(eventName, (event) => {
+                    const samples = new Int16Array(event.payload);
+                    transcriptionService.sendAudioInt16(samples);
+
+                    if (isRecordingRef.current && !isPausedRef.current) {
+                        audioChunksRef.current.push(samples);
+                    }
+
+                    // Visualization
+                    if (audioContextRef.current && analyserRef.current && !isPausedRef.current) {
+                        const float32Data = new Float32Array(samples.length);
+                        for (let i = 0; i < samples.length; i++) {
+                            const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
+                            float32Data[i] = float;
+                        }
+
+                        const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
+                        buffer.copyToChannel(float32Data, 0);
+
+                        const source = audioContextRef.current.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(analyserRef.current);
+
+                        let startTime = nextAudioTimeRef.current;
+                        if (startTime < audioContextRef.current.currentTime) {
+                            startTime = audioContextRef.current.currentTime;
+                        }
+                        source.start(startTime);
+                        nextAudioTimeRef.current = startTime + buffer.duration;
+                    }
+                });
+
+                systemAudioUnlistenRef.current = unlisten;
+                usingNativeCaptureRef.current = true;
+                nativeSuccess = true;
+
+                audioChunksRef.current = [];
+                await initializeNativeSession();
+
+            } catch (e) {
+                console.warn(`[useAudioRecorder] Native capture failed for ${inputSource}, fallback to Web API:`, e);
+            }
+
+            if (!nativeSuccess) {
+                if (inputSource === 'desktop') {
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
                         throw new Error(t('live.mic_error') + ': Display media not supported');
                     }
@@ -280,20 +289,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     if (audioTracks.length === 0) throw new Error('No audio track found in display media');
                     stream.getVideoTracks().forEach(track => track.stop());
                     stream = new MediaStream([audioTracks[0]]);
-                }
-            } else {
-                // Microphone
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Media devices API not supported');
-                }
+                } else {
+                    // Microphone Fallback
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('Media devices API not supported');
+                    }
 
-                const constraints: MediaStreamConstraints = {
-                    audio: config.microphoneId && config.microphoneId !== 'default'
-                        ? { deviceId: { exact: config.microphoneId } }
-                        : true
-                };
+                    const constraints: MediaStreamConstraints = {
+                        audio: config.microphoneId && config.microphoneId !== 'default'
+                            ? { deviceId: { exact: config.microphoneId } }
+                            : true
+                    };
 
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                }
             }
 
             if (!usingNativeCaptureRef.current && stream) {
@@ -331,7 +340,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 systemAudioUnlistenRef.current = null;
             }
             try {
-                await invoke('stop_system_audio_capture');
+                if (inputSource === 'desktop') {
+                    await invoke('stop_system_audio_capture');
+                } else {
+                    await invoke('stop_microphone_capture');
+                }
             } catch (e) { console.error(e); }
         } else if (audioContextRef.current && audioContextRef.current.state === 'running') {
             try {

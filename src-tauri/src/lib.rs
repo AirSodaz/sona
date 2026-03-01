@@ -572,6 +572,7 @@ pub fn run() {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
         .manage(audio::AudioState::new())
+        .manage(audio::MicState::new())
         .manage(sherpa::SherpaState {
             recognizer: tokio::sync::Mutex::new(None),
             stream: tokio::sync::Mutex::new(None),
@@ -604,6 +605,9 @@ pub fn run() {
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,
+            audio::get_microphone_devices,
+            audio::start_microphone_capture,
+            audio::stop_microphone_capture,
             ai::call_ai_model,
             ai::get_ai_models,
             sherpa::init_recognizer,

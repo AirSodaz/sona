@@ -20,6 +20,18 @@ impl AudioState {
     }
 }
 
+pub struct MicState {
+    stop_signal: Mutex<Option<Sender<()>>>,
+}
+
+impl MicState {
+    pub fn new() -> Self {
+        Self {
+            stop_signal: Mutex::new(None),
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 pub struct AudioDevice {
     name: String,
@@ -29,6 +41,19 @@ pub struct AudioDevice {
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.output_devices().map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for device in devices {
+        if let Ok(name) = device.name() {
+            result.push(AudioDevice { name });
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
+    let host = cpal::default_host();
+    let devices = host.input_devices().map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for device in devices {
         if let Ok(name) = device.name() {
@@ -140,7 +165,8 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        "system-audio"
                     );
                 },
                 err_fn,
@@ -159,7 +185,8 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        "system-audio"
                     );
                 },
                 err_fn,
@@ -181,7 +208,8 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        "system-audio"
                     );
                 },
                 err_fn,
@@ -227,7 +255,8 @@ fn process_audio<R: Runtime>(
     input_buffer: &mut [Vec<f32>],
     output_buffer: &mut [Vec<f32>],
     window: &Window<R>,
-    input_frames_needed: usize
+    input_frames_needed: usize,
+    event_name: &str
 ) {
     // 1. Mix to Mono and Push to RingBuffer
     for frame in data.chunks(channels) {
@@ -261,10 +290,204 @@ fn process_audio<R: Runtime>(
                     })
                     .collect();
 
-                let _ = window.app_handle().emit("system-audio", &output_i16);
+                let _ = window.app_handle().emit(event_name, &output_i16);
             }
         }
     }
+}
+
+#[tauri::command]
+pub fn start_microphone_capture<R: Runtime>(
+    window: Window<R>,
+    state: tauri::State<'_, MicState>,
+    device_name: Option<String>,
+) -> Result<(), String> {
+    let mut stop_signal_guard = state.stop_signal.lock().unwrap();
+    if stop_signal_guard.is_some() {
+        println!("[Audio] Mic capture already running.");
+        return Ok(());
+    }
+
+    println!("[Audio] Starting microphone capture...");
+
+    let (tx, rx) = channel::<()>();
+    *stop_signal_guard = Some(tx);
+
+    thread::spawn(move || {
+        let err_fn = |err| eprintln!("[Audio] Stream error: {}", err);
+
+        let host = cpal::default_host();
+        let device = if let Some(ref name) = device_name {
+            match host.input_devices() {
+                Ok(mut devices) => devices
+                    .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+                    .or_else(|| host.default_input_device()),
+                Err(_) => host.default_input_device(),
+            }
+        } else {
+            host.default_input_device()
+        };
+
+        let device = match device {
+            Some(d) => d,
+            None => {
+                eprintln!("[Audio] No input device found");
+                return;
+            }
+        };
+
+        println!("[Audio] Mic Device: {}", device.name().unwrap_or("Unknown".into()));
+
+        let supported_config = match device.default_input_config() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[Audio] Failed to get mic default config: {}", e);
+                return;
+            }
+        };
+
+        let sample_format = supported_config.sample_format();
+        let config: cpal::StreamConfig = supported_config.into();
+
+        println!("[Audio] Mic Config: {:?}", config);
+
+        let sample_rate = config.sample_rate.0;
+        let channels = config.channels;
+
+        let target_sample_rate = 16000;
+        let chunk_size_out = 1024;
+
+        let mut resampler = match FftFixedOut::<f32>::new(
+            sample_rate as usize,
+            target_sample_rate,
+            chunk_size_out,
+            2,
+            1,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[Audio] Failed to create mic resampler: {}", e);
+                return;
+            }
+        };
+
+        let input_frames_next = resampler.input_frames_next();
+        let resampler_input_buffer_size = input_frames_next;
+
+        let rb_capacity = resampler_input_buffer_size * 4;
+        let rb = HeapRb::<f32>::new(rb_capacity);
+        let (mut producer, mut consumer) = rb.split();
+
+        let mut input_buffer: Vec<Vec<f32>> = vec![vec![0.0; resampler_input_buffer_size]; 1];
+        let mut output_buffer: Vec<Vec<f32>> = vec![vec![0.0; chunk_size_out]; 1];
+
+        let window_clone = window.clone();
+
+        let stream_result = match sample_format {
+            SampleFormat::F32 => device.build_input_stream(
+                &config,
+                move |data: &[f32], _: &_| {
+                    process_audio(
+                        data,
+                        channels as usize,
+                        &mut producer,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &window_clone,
+                        input_frames_next,
+                        "microphone-audio"
+                    );
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::I16 => device.build_input_stream(
+                &config,
+                move |data: &[i16], _: &_| {
+                    let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
+                    process_audio(
+                        &data_f32,
+                        channels as usize,
+                        &mut producer,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &window_clone,
+                        input_frames_next,
+                        "microphone-audio"
+                    );
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::U16 => device.build_input_stream(
+                &config,
+                move |data: &[u16], _: &_| {
+                    let data_f32: Vec<f32> = data
+                        .iter()
+                        .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                        .collect();
+                    process_audio(
+                        &data_f32,
+                        channels as usize,
+                        &mut producer,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &window_clone,
+                        input_frames_next,
+                        "microphone-audio"
+                    );
+                },
+                err_fn,
+                None,
+            ),
+            _ => {
+                eprintln!("[Audio] Unsupported mic sample format");
+                return;
+            }
+        };
+
+        let stream = match stream_result {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[Audio] Failed to build mic input stream: {}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = stream.play() {
+            eprintln!("[Audio] Failed to play mic stream: {}", e);
+            return;
+        }
+
+        println!("[Audio] Mic capture started successfully.");
+
+        let _ = rx.recv();
+        println!("[Audio] Mic stop signal received. Dropping stream.");
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_microphone_capture(
+    state: tauri::State<'_, MicState>,
+) -> Result<(), String> {
+    let mut stop_signal_guard = state.stop_signal.lock().unwrap();
+
+    if let Some(tx) = stop_signal_guard.take() {
+        println!("[Audio] Stopping mic capture...");
+        let _ = tx.send(());
+    } else {
+        println!("[Audio] Mic stop requested but not running");
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

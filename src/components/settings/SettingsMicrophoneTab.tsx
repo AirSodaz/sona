@@ -55,33 +55,62 @@ export function SettingsMicrophoneTab({
 
         async function getDevices() {
             try {
-                // Check if we have permission first, otherwise labels might be empty
-                // We'll try to get a temporary stream to trigger permission prompt if needed
-                // or just rely on existing permissions.
-                // If labels are empty, we might need to prompt.
+                // Try Rust backend first
+                let usedNative = false;
+                try {
+                    const rustDevs = await invoke<AudioDevice[]>('get_microphone_devices');
+                    if (isMounted && rustDevs && rustDevs.length > 0) {
+                        const options = [
+                            { label: t('settings.mic_auto'), value: 'default' },
+                            ...rustDevs.map(d => ({
+                                label: d.name,
+                                value: d.name
+                            }))
+                        ];
 
-                const devs = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devs.filter(d => d.kind === 'audioinput');
+                        // Deduplicate
+                        const uniqueOptions = options.filter((opt, index, self) =>
+                            index === self.findIndex((t) => (
+                                t.value === opt.value
+                            ))
+                        );
 
-                // If no labels, we might need to request permission
-                const hasLabels = audioInputs.some(d => d.label.length > 0);
-                if (!hasLabels) {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        stream.getTracks().forEach(t => t.stop());
-                        // Try again
-                        const newDevs = await navigator.mediaDevices.enumerateDevices();
-                         const newAudioInputs = newDevs.filter(d => d.kind === 'audioinput');
-                         if (isMounted) {
-                             formatAndSetDevices(newAudioInputs);
-                         }
-                    } catch (err) {
-                        console.warn('Microphone permission denied or error', err);
+                        setDevices(uniqueOptions);
+                        usedNative = true;
                     }
-                } else {
-                     if (isMounted) {
-                         formatAndSetDevices(audioInputs);
-                     }
+                } catch (e) {
+                    console.warn('Native get_microphone_devices failed, falling back to Web API', e);
+                }
+
+                if (!usedNative) {
+                    // Check if we have permission first, otherwise labels might be empty
+                    // We'll try to get a temporary stream to trigger permission prompt if needed
+                    // or just rely on existing permissions.
+                    // If labels are empty, we might need to prompt.
+
+                    const devs = await navigator.mediaDevices.enumerateDevices();
+                    const audioInputs = devs.filter(d => d.kind === 'audioinput');
+
+                    // If no labels, we might need to request permission
+                    const hasLabels = audioInputs.some(d => d.label.length > 0);
+                    if (!hasLabels) {
+                        try {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            stream.getTracks().forEach(t => t.stop());
+                            // Try again
+                            const newDevs = await navigator.mediaDevices.enumerateDevices();
+                            const newAudioInputs = newDevs.filter(d => d.kind === 'audioinput');
+                            if (isMounted) {
+                                formatAndSetDevices(newAudioInputs);
+                            }
+                        } catch (err) {
+                            console.warn('Microphone permission denied or error', err);
+                        }
+                    } else {
+                        if (isMounted) {
+                            formatAndSetDevices(audioInputs);
+                        }
+                    }
                 }
 
             } catch (err) {
@@ -97,12 +126,7 @@ export function SettingsMicrophoneTab({
                     value: d.deviceId
                 }))
             ];
-            // Remove duplicates (sometimes default and deviceId are same physical device, but we want distinct options in UI?
-            // Usually 'default' is separate.
-            // But if we have multiple entries with same deviceId, filter them.
-            // enumerateDevices returns unique deviceIds usually.
 
-            // Deduplicate by value just in case
             const uniqueOptions = options.filter((opt, index, self) =>
                 index === self.findIndex((t) => (
                     t.value === opt.value
@@ -309,147 +333,201 @@ export function SettingsMicrophoneTab({
     }, [systemAudioDeviceId, isActiveSession]); // Re-run if device changes or active session state changes
 
 
+    const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
+
     // Mic Visualizer Logic
     useEffect(() => {
         let isMounted = true;
-        // Start visualization for the selected microphone
-        // This runs whenever microphoneId changes or component mounts
 
-        startVisualizer(microphoneId, () => isMounted);
+        async function startMicVisualizer() {
+            try {
+                // Initialize Audio Context
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                    audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+                } else if (audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
+                }
 
-        return () => {
-            isMounted = false;
-            stopVisualizer();
-        };
-    }, [microphoneId]);
+                // Initialize Analyser
+                if (!analyserRef.current && audioContextRef.current) {
+                    analyserRef.current = audioContextRef.current.createAnalyser();
+                    analyserRef.current.fftSize = 2048;
+                    const gainNode = audioContextRef.current.createGain();
+                    gainNode.gain.value = 0;
+                    analyserRef.current.connect(gainNode);
+                    gainNode.connect(audioContextRef.current.destination);
+                }
 
-    async function startVisualizer(deviceId: string, checkMounted: () => boolean) {
-        stopVisualizer(); // Stop previous if any
+                if (audioContextRef.current) {
+                    nextAudioTimeRef.current = audioContextRef.current.currentTime;
+                }
 
-        try {
-            const constraints: MediaStreamConstraints = {
-                audio: deviceId === 'default'
-                    ? true
-                    : { deviceId: { exact: deviceId } }
-            };
+                let nativeSuccess = false;
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                // If no active session, try to start native microphone capture
+                if (!isActiveSession) {
+                    try {
+                        await invoke('start_microphone_capture', {
+                            deviceName: microphoneId === 'default' ? null : microphoneId
+                        });
 
-            if (!checkMounted()) {
-                stream.getTracks().forEach(t => t.stop());
-                return;
-            }
+                        const unlisten = await listen<number[]>('microphone-audio', (event) => {
+                            if (!isMounted || !audioContextRef.current || !analyserRef.current) return;
 
-            streamRef.current = stream;
+                            const samples = new Int16Array(event.payload);
+                            const float32Data = new Float32Array(samples.length);
+                            for (let i = 0; i < samples.length; i++) {
+                                const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
+                                float32Data[i] = float;
+                            }
 
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            const audioCtx = new AudioContextClass();
-            audioContextRef.current = audioCtx;
+                            const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
+                            buffer.copyToChannel(float32Data, 0);
 
-            const analyser = audioCtx.createAnalyser();
-            // Use a larger FFT size for better time-domain resolution if needed,
-            // but for simple volume (RMS), 2048 is standard.
-            analyser.fftSize = 2048;
-            analyserRef.current = analyser;
+                            const source = audioContextRef.current.createBufferSource();
+                            source.buffer = buffer;
+                            source.connect(analyserRef.current);
 
-            const source = audioCtx.createMediaStreamSource(stream);
-            source.connect(analyser);
-            sourceRef.current = source;
+                            const currentTime = audioContextRef.current.currentTime;
+                            let startTime = nextAudioTimeRef.current;
+                            if (startTime < currentTime) {
+                                startTime = currentTime;
+                            }
+                            source.start(startTime);
+                            nextAudioTimeRef.current = startTime + buffer.duration;
+                        });
 
-            draw();
-        } catch (err) {
-            console.error('Error starting visualizer:', err);
-        }
-    }
-
-    function stopVisualizer() {
-        if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
-            animationRef.current = 0;
-        }
-        if (sourceRef.current) {
-            sourceRef.current.disconnect();
-            sourceRef.current = null;
-        }
-        if (analyserRef.current) {
-            analyserRef.current.disconnect();
-            analyserRef.current = null;
-        }
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(t => t.stop());
-            streamRef.current = null;
-        }
-    }
-
-    function draw() {
-        const canvas = canvasRef.current;
-        const analyser = analyserRef.current;
-
-        if (!canvas || !analyser) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const dataArray = new Uint8Array(analyser.fftSize); // Use full time domain data buffer
-
-        const barCount = 20; // Number of LED bars
-        const barGap = 2;
-        const totalGap = (barCount - 1) * barGap;
-        const barWidth = (canvas.width - totalGap) / barCount;
-
-        const drawLoop = () => {
-            animationRef.current = requestAnimationFrame(drawLoop);
-
-            // Get time-domain data for waveform/volume calculation
-            analyser.getByteTimeDomainData(dataArray);
-
-            // Calculate RMS
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                // Convert 8-bit unsigned (0-255) to centered -1 to 1 float
-                const value = (dataArray[i] - 128) / 128.0;
-                sum += value * value;
-            }
-            const rms = Math.sqrt(sum / dataArray.length);
-
-            // Normalize/Boost volume for display
-            // Typical speech RMS is often low, so we apply some gain or log scale
-            // Let's use a simple multiplier for sensitivity
-            const displayVolume = Math.min(1.0, rms * 5.0);
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const activeBars = Math.ceil(displayVolume * barCount);
-
-            for (let i = 0; i < barCount; i++) {
-                const x = i * (barWidth + barGap);
-
-                // Color logic
-                let color = '#e5e7eb'; // Default gray (off)
-
-                if (i < activeBars) {
-                    // Color based on index position (0-100% of range)
-                    const percent = i / barCount;
-                    if (percent < 0.6) {
-                        color = '#22c55e'; // Green
-                    } else if (percent < 0.8) {
-                        color = '#eab308'; // Yellow
-                    } else {
-                        color = '#ef4444'; // Red
+                        systemAudioUnlistenRef.current = unlisten;
+                        nativeSuccess = true;
+                    } catch (e) {
+                        console.warn('Native mic visualizer failed, falling back to Web API', e);
                     }
                 }
 
-                ctx.fillStyle = color;
-                ctx.fillRect(x, 0, barWidth, canvas.height);
+                // Fallback to Web API if native capture failed or wasn't attempted
+                if (!nativeSuccess) {
+                    try {
+                        const constraints: MediaStreamConstraints = {
+                            audio: microphoneId === 'default'
+                                ? true
+                                : { deviceId: { exact: microphoneId } }
+                        };
+
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                        if (!isMounted) {
+                            stream.getTracks().forEach(t => t.stop());
+                            return;
+                        }
+
+                        streamRef.current = stream;
+
+                        const source = audioContextRef.current!.createMediaStreamSource(stream);
+                        source.connect(analyserRef.current!);
+                        sourceRef.current = source;
+                    } catch (err) {
+                        console.error('Error starting Web API visualizer:', err);
+                    }
+                }
+
+                draw();
+            } catch (err) {
+                console.error('Error starting mic visualizer:', err);
+            }
+        }
+
+        function draw() {
+            const canvas = canvasRef.current;
+            const analyser = analyserRef.current;
+
+            if (!canvas || !analyser) return;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const dataArray = new Uint8Array(analyser.fftSize);
+
+            const barCount = 20;
+            const barGap = 2;
+            const totalGap = (barCount - 1) * barGap;
+            const barWidth = (canvas.width - totalGap) / barCount;
+
+            const drawLoop = () => {
+                animationRef.current = requestAnimationFrame(drawLoop);
+
+                analyser.getByteTimeDomainData(dataArray);
+
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const value = (dataArray[i] - 128) / 128.0;
+                    sum += value * value;
+                }
+                const rms = Math.sqrt(sum / dataArray.length);
+                const displayVolume = Math.min(1.0, rms * 5.0);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const activeBars = Math.ceil(displayVolume * barCount);
+
+                for (let i = 0; i < barCount; i++) {
+                    const x = i * (barWidth + barGap);
+
+                    let color = '#e5e7eb';
+
+                    if (i < activeBars) {
+                        const percent = i / barCount;
+                        if (percent < 0.6) {
+                            color = '#22c55e';
+                        } else if (percent < 0.8) {
+                            color = '#eab308';
+                        } else {
+                            color = '#ef4444';
+                        }
+                    }
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x, 0, barWidth, canvas.height);
+                }
+            };
+
+            drawLoop();
+        }
+
+        startMicVisualizer();
+
+        return () => {
+            isMounted = false;
+
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+
+            if (systemAudioUnlistenRef.current) {
+                systemAudioUnlistenRef.current();
+                systemAudioUnlistenRef.current = null;
+            }
+
+            if (sourceRef.current) {
+                sourceRef.current.disconnect();
+                sourceRef.current = null;
+            }
+
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(t => t.stop());
+                streamRef.current = null;
+            }
+
+            if (audioContextRef.current) {
+                audioContextRef.current.close();
+                audioContextRef.current = null;
+                analyserRef.current = null;
+            }
+
+            if (!isActiveSession) {
+                invoke('stop_microphone_capture').catch(console.error);
             }
         };
-
-        drawLoop();
-    }
+    }, [microphoneId, isActiveSession]);
 
 
     return (
