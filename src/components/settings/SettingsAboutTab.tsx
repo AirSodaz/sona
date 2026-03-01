@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import packageJson from '../../../package.json';
-import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, ErrorIcon, DownloadIcon } from '../Icons';
+import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
 
 /**
@@ -11,11 +11,11 @@ import { useAppUpdater } from '../../hooks/useAppUpdater';
  */
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const { status, error, updateInfo, checkUpdate, installUpdate, progress } = useAppUpdater();
+    const { status, updateInfo, checkUpdate, installUpdate, progress } = useAppUpdater();
 
     React.useEffect(() => {
         const handleTrigger = () => {
-            checkUpdate();
+            checkUpdate(true);
         };
 
         window.addEventListener('trigger-update-check', handleTrigger);
@@ -36,7 +36,7 @@ export function SettingsAboutTab(): React.JSX.Element {
                 return (
                     <button
                         className="btn btn-primary"
-                        onClick={checkUpdate}
+                        onClick={() => checkUpdate(true)}
                     >
                         {t('settings.about_check_updates')}
                     </button>
@@ -100,18 +100,6 @@ export function SettingsAboutTab(): React.JSX.Element {
                     </div>
                 );
             case 'error':
-                return (
-                    <div className="update-status error">
-                        <ErrorIcon className="w-5 h-5 text-red-500" style={{ color: 'var(--color-error)' }} />
-                        <span className="error-text">{t('settings.update_error', { error })}</span>
-                        <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={checkUpdate}
-                        >
-                            {t('common.retry', { defaultValue: 'Retry' })}
-                        </button>
-                    </div>
-                );
             default:
                 return null;
         }
