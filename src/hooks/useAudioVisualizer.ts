@@ -38,34 +38,63 @@ export function useAudioVisualizer({ canvasRef, peakLevelRef, isPaused }: UseAud
             animationRef.current = window.requestAnimationFrame(draw);
 
             const targetAmplitude = Math.max(0.02, Math.min(1, peakLevelRef.current));
-            amplitudeRef.current += (targetAmplitude - amplitudeRef.current) * 0.08;
-            phaseRef.current += 0.06;
+            amplitudeRef.current += (targetAmplitude - amplitudeRef.current) * 0.04; // Slower, graceful interpolation
+            phaseRef.current += 0.03; // Slower, fluid phase movement
 
             const { width, height } = canvas;
-            const centerY = height / 2;
-            const maxWaveHeight = height * 0.42;
+            const maxWaveHeight = height * 0.8;
             const amplitudePx = amplitudeRef.current * maxWaveHeight;
 
             ctx.clearRect(0, 0, width, height);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#4b5563';
-            ctx.beginPath();
 
-            const cycles = 2.5;
+            // Create soft vertical gradient
+            if (typeof ctx.createLinearGradient === 'function') {
+                const gradient = ctx.createLinearGradient(0, height - maxWaveHeight, 0, height);
+                gradient.addColorStop(0, 'rgba(210, 205, 200, 0.6)');
+                gradient.addColorStop(1, 'rgba(210, 205, 200, 0.1)');
+                ctx.fillStyle = gradient;
+            } else {
+                // Fallback for limited canvas mock environments in tests
+                ctx.fillStyle = 'rgba(210, 205, 200, 0.6)';
+            }
+
+            if (typeof ctx.beginPath === 'function') {
+                ctx.beginPath();
+            }
+            if (typeof ctx.moveTo === 'function') {
+                ctx.moveTo(0, height);
+            }
+
+            const cycles = 2.0;
             for (let x = 0; x <= width; x += 2) {
                 const t = x / width;
-                const y =
-                    centerY +
-                    Math.sin((t * cycles * Math.PI * 2) + phaseRef.current) * amplitudePx +
-                    Math.sin((t * (cycles * 0.5) * Math.PI * 2) + phaseRef.current * 1.5) * (amplitudePx * 0.35);
-                if (x === 0) {
-                    ctx.moveTo(x, y);
-                } else {
+
+                // Combine sine waves for an undulating organic look
+                const wave1 = Math.sin((t * cycles * Math.PI * 2) + phaseRef.current);
+                const wave2 = Math.sin((t * (cycles * 0.5) * Math.PI * 2) + phaseRef.current * 1.5) * 0.5;
+
+                // Normalize wave combo (-1.5 to 1.5) to a roughly 0 to 1 range envelope
+                const normalizedWave = (wave1 + wave2 + 1.5) / 3.0;
+
+                // Minimum height so a baseline wave is always visible
+                const minHeight = height * 0.05;
+                const y = height - minHeight - (normalizedWave * amplitudePx);
+
+                if (typeof ctx.lineTo === 'function') {
                     ctx.lineTo(x, y);
                 }
             }
 
-            ctx.stroke();
+            if (typeof ctx.lineTo === 'function') {
+                ctx.lineTo(width, height);
+            }
+            if (typeof ctx.closePath === 'function') {
+                ctx.closePath();
+            }
+
+            if (typeof ctx.fill === 'function') {
+                ctx.fill();
+            }
         };
 
         draw();
