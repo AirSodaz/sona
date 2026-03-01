@@ -61,11 +61,16 @@ export class TranscriptionService {
     private runningConfig: ServiceConfig | null = null;
     /** Language code for transcription. */
     private language: string = 'auto';
+    /** Unique ID for the recognizer instance. */
+    private instanceId: string;
 
     /**
      * Initializes a new instance of the TranscriptionService.
+     * @param instanceId A unique string identifier for this instance.
      */
-    constructor() { }
+    constructor(instanceId: string = 'default') {
+        this.instanceId = instanceId;
+    }
 
     /**
      * Sets the path to the main ASR model.
@@ -173,7 +178,7 @@ export class TranscriptionService {
         }
 
         this.startingPromise = (async () => {
-            console.log('Initializing Rust backend recognizer with model:', this.modelPath);
+            console.log(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
 
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
@@ -187,6 +192,7 @@ export class TranscriptionService {
 
             try {
                 await invoke('init_recognizer', {
+                    instanceId: this.instanceId,
                     modelPath: this.modelPath,
                     numThreads: 4,
                     enableItn: this.enableITN,
@@ -198,10 +204,10 @@ export class TranscriptionService {
                 });
 
                 this.runningConfig = configToUse;
-                console.log('[TranscriptionService] Rust Recognizer initialized');
+                console.log(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized`);
 
             } catch (error) {
-                console.error('Failed to initialize recognizer:', error);
+                console.error(`[TranscriptionService:${this.instanceId}] Failed to initialize recognizer:`, error);
                 if (this.onError) this.onError(`Failed to initialize: ${error}`);
                 this.runningConfig = null;
                 throw error;
@@ -218,7 +224,7 @@ export class TranscriptionService {
     private async _startStream(): Promise<void> {
         try {
             if (!this.unlistenOutput) {
-                this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
+                this.unlistenOutput = await listen<TranscriptSegment>(`recognizer-output-${this.instanceId}`, (event) => {
                     const segment = event.payload;
                     if (this.onSegment) {
                         this.onSegment(segment);
@@ -226,7 +232,7 @@ export class TranscriptionService {
                 });
             }
 
-            await invoke('start_recognizer');
+            await invoke('start_recognizer', { instanceId: this.instanceId });
 
             this.isRunning = true;
             console.log('[TranscriptionService] Rust Recognizer stream started');
@@ -269,11 +275,11 @@ export class TranscriptionService {
         if (!this.isRunning) return;
 
         try {
-            await invoke('stop_recognizer');
+            await invoke('stop_recognizer', { instanceId: this.instanceId });
         } catch (error) {
-            console.error('Failed to stop recognizer:', error);
+            console.error(`[TranscriptionService:${this.instanceId}] Failed to stop recognizer:`, error);
         } finally {
-            console.log('[TranscriptionService] Recognizer stopped');
+            console.log(`[TranscriptionService:${this.instanceId}] Recognizer stopped`);
             this.isRunning = false;
             // We intentionally do NOT set this.runningConfig = null here.
             // Keeping the runningConfig allows subsequent starts with the same config
@@ -294,9 +300,9 @@ export class TranscriptionService {
     async softStop(): Promise<void> {
         if (this.isRunning) {
             try {
-                await invoke('flush_recognizer');
+                await invoke('flush_recognizer', { instanceId: this.instanceId });
             } catch (error) {
-                console.error('Failed to flush recognizer:', error);
+                console.error(`[TranscriptionService:${this.instanceId}] Failed to flush recognizer:`, error);
             }
         }
         await this.stop();
@@ -322,9 +328,9 @@ export class TranscriptionService {
             for (let i = 0; i < samples.length; i++) {
                 floatSamples[i] = samples[i] / 32768.0;
             }
-            await invoke('feed_audio_chunk', { samples: Array.from(floatSamples) });
+            await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: Array.from(floatSamples) });
         } catch (error) {
-            console.error('Failed to feed audio to backend:', error);
+            console.error(`[TranscriptionService:${this.instanceId}] Failed to feed audio to backend:`, error);
         }
     }
 
@@ -449,4 +455,5 @@ export class TranscriptionService {
     }
 }
 
-export const transcriptionService = new TranscriptionService();
+export const transcriptionService = new TranscriptionService('record');
+export const captionTranscriptionService = new TranscriptionService('caption');

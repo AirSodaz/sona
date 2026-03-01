@@ -64,6 +64,22 @@ vi.mock('../../services/transcriptionService', () => {
             prepare: mockPrepare,
             terminate: mockTerminate,
         },
+        captionTranscriptionService: {
+            start: mockStart,
+            stop: mockStop,
+            softStop: mockSoftStop,
+            sendAudioInt16: mockSendAudioInt16,
+            setModelPath: mockSetModelPath,
+            setLanguage: mockSetLanguage,
+            setEnableITN: mockSetEnableITN,
+            setITNModelPaths: mockSetITNModelPaths,
+            setPunctuationModelPath: mockSetPunctuationModelPath,
+
+            setVadModelPath: mockSetVadModelPath,
+            setVadBufferSize: mockSetVadBufferSize,
+            prepare: mockPrepare,
+            terminate: mockTerminate,
+        },
         TranscriptionService: class {
             start = mockStart;
             stop = mockStop;

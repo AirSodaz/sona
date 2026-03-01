@@ -572,18 +572,7 @@ pub fn run() {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
         .manage(audio::AudioState::new())
-        .manage(sherpa::SherpaState {
-            recognizer: tokio::sync::Mutex::new(None),
-            stream: tokio::sync::Mutex::new(None),
-            vad: tokio::sync::Mutex::new(None),
-            punctuation: tokio::sync::Mutex::new(None),
-            total_samples: tokio::sync::Mutex::new(0),
-            segment_start_time: tokio::sync::Mutex::new(0.0),
-            offline_state: tokio::sync::Mutex::new(sherpa::OfflineState::default()),
-            vad_model: tokio::sync::Mutex::new(None),
-            vad_buffer: tokio::sync::Mutex::new(5.0),
-            current_segment_id: tokio::sync::Mutex::new(None),
-        })
+        .manage(sherpa::SherpaState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -604,6 +593,9 @@ pub fn run() {
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,
+            audio::get_microphone_devices,
+            audio::start_microphone_capture,
+            audio::stop_microphone_capture,
             ai::call_ai_model,
             ai::get_ai_models,
             sherpa::init_recognizer,

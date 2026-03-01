@@ -53,7 +53,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const activeStreamRef = useRef<MediaStream | null>(null);
     const audioChunksRef = useRef<Int16Array[]>([]);
-    const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
+    const nativeAudioUnlistenRef = useRef<UnlistenFn | null>(null);
     const usingNativeCaptureRef = useRef(false);
     const startTimeRef = useRef<number>(0);
     const mimeTypeRef = useRef<string>('');
@@ -255,7 +255,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         }
                     });
 
-                    systemAudioUnlistenRef.current = unlisten;
+                    nativeAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
 
@@ -283,17 +283,95 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 }
             } else {
                 // Microphone
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Media devices API not supported');
+                let nativeSuccess = false;
+                try {
+                    console.log('[useAudioRecorder] Attempting native microphone capture...');
+                    await invoke('start_microphone_capture', {
+                        deviceName: config.microphoneId === 'default' ? null : config.microphoneId
+                    });
+
+                    // Initialize AudioContext for visualization
+                    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                        audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+                    } else if (audioContextRef.current.state === 'suspended') {
+                        await audioContextRef.current.resume();
+                    }
+
+                    // Setup Analyser
+                    if (!analyserRef.current && audioContextRef.current) {
+                        analyserRef.current = audioContextRef.current.createAnalyser();
+                        analyserRef.current.fftSize = 256;
+                        const gainNode = audioContextRef.current.createGain();
+                        gainNode.gain.value = 0;
+                        analyserRef.current.connect(gainNode);
+                        gainNode.connect(audioContextRef.current.destination);
+                    }
+
+                    if (audioContextRef.current) {
+                        nextAudioTimeRef.current = audioContextRef.current.currentTime;
+                    }
+
+                    const unlisten = await listen<number[]>('microphone-audio', (event) => {
+                        const samples = new Int16Array(event.payload);
+                        transcriptionService.sendAudioInt16(samples);
+
+                        if (isRecordingRef.current && !isPausedRef.current) {
+                            audioChunksRef.current.push(samples);
+                        }
+
+                        // Visualization
+                        if (audioContextRef.current && analyserRef.current && !isPausedRef.current) {
+                            const float32Data = new Float32Array(samples.length);
+                            for (let i = 0; i < samples.length; i++) {
+                                const float = samples[i] < 0 ? samples[i] / 0x8000 : samples[i] / 0x7FFF;
+                                float32Data[i] = float;
+                            }
+
+                            const buffer = audioContextRef.current.createBuffer(1, samples.length, 16000);
+                            buffer.copyToChannel(float32Data, 0);
+
+                            const source = audioContextRef.current.createBufferSource();
+                            source.buffer = buffer;
+                            source.connect(analyserRef.current);
+
+                            let startTime = nextAudioTimeRef.current;
+                            if (startTime < audioContextRef.current.currentTime) {
+                                startTime = audioContextRef.current.currentTime;
+                            }
+                            source.start(startTime);
+                            nextAudioTimeRef.current = startTime + buffer.duration;
+                        }
+                    });
+
+                    nativeAudioUnlistenRef.current = unlisten;
+                    usingNativeCaptureRef.current = true;
+                    nativeSuccess = true;
+
+                    audioChunksRef.current = [];
+                    await initializeNativeSession();
+
+                    if (config.muteDuringRecording) {
+                        invoke('set_system_audio_mute', { mute: true })
+                            .catch(err => console.error('Failed to mute system audio:', err));
+                    }
+
+                } catch (e) {
+                    console.warn('[useAudioRecorder] Native microphone capture failed, fallback to Web API:', e);
                 }
 
-                const constraints: MediaStreamConstraints = {
-                    audio: config.microphoneId && config.microphoneId !== 'default'
-                        ? { deviceId: { exact: config.microphoneId } }
-                        : true
-                };
+                if (!nativeSuccess) {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('Media devices API not supported');
+                    }
 
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    const constraints: MediaStreamConstraints = {
+                        audio: config.microphoneId && config.microphoneId !== 'default'
+                            ? { deviceId: { exact: config.microphoneId } }
+                            : true
+                    };
+
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                }
             }
 
             if (!usingNativeCaptureRef.current && stream) {
@@ -326,12 +404,16 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         // Stop Native Capture
         if (usingNativeCaptureRef.current) {
-            if (systemAudioUnlistenRef.current) {
-                systemAudioUnlistenRef.current();
-                systemAudioUnlistenRef.current = null;
+            if (nativeAudioUnlistenRef.current) {
+                nativeAudioUnlistenRef.current();
+                nativeAudioUnlistenRef.current = null;
             }
             try {
-                await invoke('stop_system_audio_capture');
+                if (inputSource === 'desktop') {
+                    await invoke('stop_system_audio_capture');
+                } else {
+                    await invoke('stop_microphone_capture');
+                }
             } catch (e) { console.error(e); }
         } else if (audioContextRef.current && audioContextRef.current.state === 'running') {
             try {

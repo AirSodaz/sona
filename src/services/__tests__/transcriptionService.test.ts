@@ -32,8 +32,9 @@ describe('TranscriptionService', () => {
 
         await transcriptionService.start(onSegment, onError);
 
-        expect(listen).toHaveBeenCalledWith('recognizer-output', expect.any(Function));
+        expect(listen).toHaveBeenCalledWith('recognizer-output-record', expect.any(Function));
         expect(invoke).toHaveBeenCalledWith('init_recognizer', {
+            instanceId: 'record',
             modelPath: '/mock/model/path',
             numThreads: 4,
             enableItn: true,
@@ -43,7 +44,7 @@ describe('TranscriptionService', () => {
             vadModel: null,
             vadBuffer: 5
         });
-        expect(invoke).toHaveBeenCalledWith('start_recognizer');
+        expect(invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });
 
     it('does not start if model path is missing', async () => {
@@ -67,6 +68,7 @@ describe('TranscriptionService', () => {
         await transcriptionService.sendAudioInt16(audioData);
 
         expect(invoke).toHaveBeenCalledWith('feed_audio_chunk', {
+            instanceId: 'record',
             samples: [32767 / 32768.0, 0, -32768 / 32768.0]
         });
     });
@@ -104,7 +106,7 @@ describe('TranscriptionService', () => {
 
         await transcriptionService.stop();
 
-        expect(invoke).toHaveBeenCalledWith('stop_recognizer');
+        expect(invoke).toHaveBeenCalledWith('stop_recognizer', { instanceId: 'record' });
     });
 
     describe('Batch Transcription', () => {

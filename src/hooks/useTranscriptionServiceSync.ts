@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { transcriptionService } from '../services/transcriptionService';
+import { transcriptionService, captionTranscriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 
 export function useTranscriptionServiceSync() {
@@ -27,16 +27,26 @@ export function useTranscriptionServiceSync() {
                 transcriptionService.setVadModelPath(config.vadModelPath || '');
                 transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
 
+                captionTranscriptionService.setModelPath(config.offlineModelPath);
+                captionTranscriptionService.setLanguage(config.language);
+                captionTranscriptionService.setEnableITN(config.enableITN ?? false);
+                captionTranscriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
+                captionTranscriptionService.setVadModelPath(config.vadModelPath || '');
+                captionTranscriptionService.setVadBufferSize(config.vadBufferSize || 5);
+
                 const enabledITNModels = new Set(config.enabledITNModels || []);
                 const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
                 if (enabledITNModels.size > 0) {
                     const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
                     transcriptionService.setITNModelPaths(paths);
+                    captionTranscriptionService.setITNModelPaths(paths);
                 } else {
                     transcriptionService.setITNModelPaths([]);
+                    captionTranscriptionService.setITNModelPaths([]);
                 }
 
                 await transcriptionService.prepare();
+                await captionTranscriptionService.prepare();
             } catch (err) {
                 console.error('[useTranscriptionServiceSync] Failed to prepare transcription service:', err);
             }
