@@ -485,7 +485,7 @@ fn run_offline_inference<R: tauri::Runtime>(
     segment_id: &str,
     global_start: f64,
     is_final: bool,
-    instance_id: &str,
+    _instance_id: &str,
 ) {
     if speech_buffer.is_empty() {
         return;
@@ -525,8 +525,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                 timestamps: timestamps_abs,
                 durations,
             };
-            let event_name = format!("recognizer-output-{}", instance_id);
-            let _ = app.emit(&event_name, &segment);
+            let _ = app.emit("recognizer-output", &segment);
         }
     }
 }
@@ -744,15 +743,14 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn feed_audio_chunk<R: tauri::Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, SherpaState>,
-    instance_id: String,
-    samples: Vec<f32>,
+pub async fn feed_audio_samples<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    state: &SherpaState,
+    instance_id: &str,
+    samples: &[f32],
 ) -> Result<(), String> {
     let mut instances = state.instances.lock().await;
-    let instance = instances.get_mut(&instance_id).ok_or("Instance not found")?;
+    let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
 
     // Offline + VAD (pseudo-streaming)
     let is_offline = match instance.recognizer.as_deref() {
@@ -763,7 +761,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     if is_offline {
         if let (Some(recognizer), Some(SafeVad(vad))) = (instance.recognizer.clone(), instance.vad.as_ref()) {
             if let RecognizerInner::Offline(_) = &recognizer.inner {
-                vad.accept_waveform(&samples);
+                vad.accept_waveform(samples);
                 let currently_speaking = vad.detected();
 
                 // Ensure segment ID exists
@@ -802,7 +800,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                 }
 
                 if currently_speaking {
-                    instance.offline_state.speech_buffer.push(samples.clone());
+                    instance.offline_state.speech_buffer.push(samples.to_vec());
 
                     let now = std::time::Instant::now();
                     if now.duration_since(instance.offline_state.last_inference_time).as_millis() > 200 {
@@ -813,7 +811,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                         let recognizer_copy = recognizer.clone();
                         let punct_copy = instance.punctuation.clone();
                         let seg_id_copy = seg_id.clone();
-                        let instance_id_copy = instance_id.clone();
+                        let instance_id_copy = instance_id.to_string();
 
                         tauri::async_runtime::spawn_blocking(move || {
                             if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
@@ -837,7 +835,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                     if instance.offline_state.is_speaking {
                         // Falling edge (speech -> silence)
                         instance.offline_state.is_speaking = false;
-                        instance.offline_state.speech_buffer.push(samples.clone());
+                        instance.offline_state.speech_buffer.push(samples.to_vec());
 
                         let global_start = instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
@@ -846,7 +844,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                         let recognizer_copy = recognizer.clone();
                         let punct_copy = instance.punctuation.clone();
                         let seg_id_copy = seg_id.clone();
-                        let instance_id_copy = instance_id.clone();
+                        let instance_id_copy = instance_id.to_string();
 
                         tauri::async_runtime::spawn_blocking(move || {
                             if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
@@ -869,7 +867,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
                     }
 
                 // Maintain Ring Buffer
-                instance.offline_state.ring_buffer.push_back(samples.clone());
+                instance.offline_state.ring_buffer.push_back(samples.to_vec());
                 let max_ring_samples = (16000.0 * 0.3) as usize;
 
                 let mut ring_len: usize = instance.offline_state.ring_buffer.iter().map(|v| v.len()).sum();
@@ -901,7 +899,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     ) = (instance.recognizer.as_deref(), instance.stream.as_ref())
     {
         if let RecognizerInner::Online(r) = &recognizer.inner {
-        st.0.accept_waveform(16000, &samples);
+        st.0.accept_waveform(16000, samples);
         instance.total_samples += samples.len();
 
         while r.0.is_ready(&st.0) {
@@ -979,6 +977,22 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     }
     Ok(())
 }
+
+#[tauri::command]
+pub async fn feed_audio_chunk<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, SherpaState>,
+    instance_id: String,
+    samples: Vec<u8>,
+) -> Result<(), String> {
+    let mut float_samples = Vec::with_capacity(samples.len() / 2);
+    for chunk in samples.chunks_exact(2) {
+        let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
+        float_samples.push(sample as f32 / 32768.0);
+    }
+    feed_audio_samples(&app, &*state, &instance_id, &float_samples).await
+}
+
 
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(

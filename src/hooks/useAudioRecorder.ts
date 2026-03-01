@@ -199,7 +199,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 try {
                     console.log('[useAudioRecorder] Attempting native system audio capture...');
                     await invoke('start_system_audio_capture', {
-                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId
+                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
+                        instanceId: 'record'
                     });
 
                     // Initialize AudioContext for visualization
@@ -225,7 +226,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
                     const unlisten = await listen<number[]>('system-audio', (event) => {
                         const samples = new Int16Array(event.payload);
-                        transcriptionService.sendAudioInt16(samples);
+                        // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (isRecordingRef.current && !isPausedRef.current) {
                             audioChunksRef.current.push(samples);
@@ -287,7 +288,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 try {
                     console.log('[useAudioRecorder] Attempting native microphone capture...');
                     await invoke('start_microphone_capture', {
-                        deviceName: config.microphoneId === 'default' ? null : config.microphoneId
+                        deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
+                        instanceId: 'record'
                     });
 
                     // Initialize AudioContext for visualization
@@ -313,7 +315,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
                     const unlisten = await listen<number[]>('microphone-audio', (event) => {
                         const samples = new Int16Array(event.payload);
-                        transcriptionService.sendAudioInt16(samples);
+                        // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (isRecordingRef.current && !isPausedRef.current) {
                             audioChunksRef.current.push(samples);
@@ -403,6 +405,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         console.log('[useAudioRecorder] Stopping recording session...');
 
         // Stop Native Capture
+        let savedWavPath: string | null = null;
         if (usingNativeCaptureRef.current) {
             if (nativeAudioUnlistenRef.current) {
                 nativeAudioUnlistenRef.current();
@@ -410,10 +413,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             }
             try {
                 if (inputSource === 'desktop') {
-                    await invoke('stop_system_audio_capture');
+                    savedWavPath = await invoke<string>('stop_system_audio_capture');
                 } else {
-                    await invoke('stop_microphone_capture');
+                    savedWavPath = await invoke<string>('stop_microphone_capture');
                 }
+                console.log('[useAudioRecorder] Saved raw audio to:', savedWavPath);
             } catch (e) { console.error(e); }
         } else if (audioContextRef.current && audioContextRef.current.state === 'running') {
             try {

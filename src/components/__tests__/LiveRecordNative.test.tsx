@@ -350,7 +350,7 @@ describe('LiveRecord Native Capture', () => {
         });
 
         // Check invoke called
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null });
+        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null, instanceId: 'record' });
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(systemAudioCallback).toBeDefined();
 

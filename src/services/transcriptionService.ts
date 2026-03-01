@@ -224,7 +224,7 @@ export class TranscriptionService {
     private async _startStream(): Promise<void> {
         try {
             if (!this.unlistenOutput) {
-                this.unlistenOutput = await listen<TranscriptSegment>(`recognizer-output-${this.instanceId}`, (event) => {
+                this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
                     const segment = event.payload;
                     if (this.onSegment) {
                         this.onSegment(segment);
@@ -324,11 +324,9 @@ export class TranscriptionService {
         if (!this.isRunning) return;
 
         try {
-            const floatSamples = new Float32Array(samples.length);
-            for (let i = 0; i < samples.length; i++) {
-                floatSamples[i] = samples[i] / 32768.0;
-            }
-            await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: Array.from(floatSamples) });
+            // Send the raw bytes of the Int16Array to match the new backend signature (Vec<u8>)
+            const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
+            await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: bytes });
         } catch (error) {
             console.error(`[TranscriptionService:${this.instanceId}] Failed to feed audio to backend:`, error);
         }

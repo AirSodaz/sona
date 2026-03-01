@@ -6,11 +6,13 @@ use rubato::{FftFixedOut, Resampler};
 use std::sync::Mutex;
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
-use tauri::{Emitter, Manager, Runtime, Window};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 
 pub struct AudioState {
     system_stop_signal: Mutex<Option<Sender<()>>>,
     mic_stop_signal: Mutex<Option<Sender<()>>>,
+    system_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
+    mic_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
 }
 
 impl AudioState {
@@ -18,6 +20,8 @@ impl AudioState {
         Self {
             system_stop_signal: Mutex::new(None),
             mic_stop_signal: Mutex::new(None),
+            system_filepath_receiver: Mutex::new(None),
+            mic_filepath_receiver: Mutex::new(None),
         }
     }
 }
@@ -42,9 +46,12 @@ pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub fn start_system_audio_capture<R: Runtime>(
+    app: AppHandle<R>,
     window: Window<R>,
     state: tauri::State<'_, AudioState>,
+    _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
     device_name: Option<String>,
+    instance_id: String,
 ) -> Result<(), String> {
     let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
     if stop_signal_guard.is_some() {
@@ -57,6 +64,103 @@ pub fn start_system_audio_capture<R: Runtime>(
     // Create channel for stop signal
     let (tx, rx) = channel::<()>();
     *stop_signal_guard = Some(tx);
+
+    // Channel for the Tokio task to send back the WAV filepath
+    let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
+    *state.system_filepath_receiver.lock().unwrap() = Some(filepath_rx);
+
+    // Create a lock-free ring buffer for passing data to the Tokio task
+    // Calculate capacity for about 5 seconds of 16kHz audio
+    let task_rb_capacity = 16000 * 5;
+    let task_rb = HeapRb::<f32>::new(task_rb_capacity);
+    let (mut task_producer, mut task_consumer) = task_rb.split();
+
+    // MPSC channel to send data from audio capture thread to Tokio task
+    let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
+
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let recordings_dir = app_data_dir.join("recordings");
+    if !recordings_dir.exists() {
+        std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+    }
+    let wav_filename = format!("system_{}.wav", uuid::Uuid::new_v4());
+    let wav_filepath = recordings_dir.join(&wav_filename);
+    let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+
+    // Spawn Tokio task to feed Sherpa and write WAV
+    let app_clone = app.clone();
+    let instance_id_clone = instance_id.clone();
+    let filepath_to_return = wav_filepath_str.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = match hound::WavWriter::create(&wav_filepath_str, spec) {
+            Ok(w) => Some(w),
+            Err(e) => {
+                eprintln!("[Audio] Failed to create WAV writer: {}", e);
+                None
+            }
+        };
+
+        // Pre-allocate a buffer for pulling from the ring buffer
+        let mut pull_buffer = vec![0.0; 16000];
+
+        // We wait for a signal that data might be available
+        while let Some(()) = data_rx.recv().await {
+            let len = task_consumer.pop_slice(&mut pull_buffer);
+            if len > 0 {
+                let chunk = &pull_buffer[..len];
+
+                // Write to WAV
+                if let Some(w) = writer.as_mut() {
+                    let amplitude = i16::MAX as f32;
+                    for &sample in chunk {
+                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                    }
+                }
+
+                // Feed to Sherpa
+                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+                if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+                    eprintln!("[Audio] Failed to feed audio to Sherpa: {}", e);
+                }
+            }
+        }
+
+        // Final pull to empty the buffer on shutdown
+        loop {
+            let len = task_consumer.pop_slice(&mut pull_buffer);
+            if len == 0 {
+                break;
+            }
+            let chunk = &pull_buffer[..len];
+
+            // Write to WAV
+            if let Some(w) = writer.as_mut() {
+                let amplitude = i16::MAX as f32;
+                for &sample in chunk {
+                    let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                }
+            }
+
+            // Feed to Sherpa
+            let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+            if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+                eprintln!("[Audio] Failed to feed audio to Sherpa: {}", e);
+            }
+        }
+
+
+        if let Some(w) = writer {
+            let _ = w.finalize();
+        }
+        let _ = filepath_tx.send(filepath_to_return);
+    });
 
     // Spawn thread to handle audio stream
     thread::spawn(move || {
@@ -142,7 +246,9 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -161,7 +267,9 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -183,7 +291,9 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -235,9 +345,12 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub fn start_microphone_capture<R: Runtime>(
+    app: AppHandle<R>,
     window: Window<R>,
     state: tauri::State<'_, AudioState>,
+    _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
     device_name: Option<String>,
+    instance_id: String,
 ) -> Result<(), String> {
     let mut stop_signal_guard = state.mic_stop_signal.lock().unwrap();
     if stop_signal_guard.is_some() {
@@ -250,6 +363,100 @@ pub fn start_microphone_capture<R: Runtime>(
     // Create channel for stop signal
     let (tx, rx) = channel::<()>();
     *stop_signal_guard = Some(tx);
+
+    // Channel for the Tokio task to send back the WAV filepath
+    let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
+    *state.mic_filepath_receiver.lock().unwrap() = Some(filepath_rx);
+
+    // Create a lock-free ring buffer for passing data to the Tokio task
+    let task_rb_capacity = 16000 * 5;
+    let task_rb = HeapRb::<f32>::new(task_rb_capacity);
+    let (mut task_producer, mut task_consumer) = task_rb.split();
+
+    // MPSC channel to send data from audio capture thread to Tokio task
+    let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
+
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let recordings_dir = app_data_dir.join("recordings");
+    if !recordings_dir.exists() {
+        std::fs::create_dir_all(&recordings_dir).map_err(|e| e.to_string())?;
+    }
+    let wav_filename = format!("microphone_{}.wav", uuid::Uuid::new_v4());
+    let wav_filepath = recordings_dir.join(&wav_filename);
+    let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+
+    // Spawn Tokio task to feed Sherpa and write WAV
+    let app_clone = app.clone();
+    let instance_id_clone = instance_id.clone();
+    let filepath_to_return = wav_filepath_str.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = match hound::WavWriter::create(&wav_filepath_str, spec) {
+            Ok(w) => Some(w),
+            Err(e) => {
+                eprintln!("[Audio] Failed to create mic WAV writer: {}", e);
+                None
+            }
+        };
+
+        // Pre-allocate a buffer for pulling from the ring buffer
+        let mut pull_buffer = vec![0.0; 16000];
+
+        while let Some(()) = data_rx.recv().await {
+            let len = task_consumer.pop_slice(&mut pull_buffer);
+            if len > 0 {
+                let chunk = &pull_buffer[..len];
+
+                // Write to WAV
+                if let Some(w) = writer.as_mut() {
+                    let amplitude = i16::MAX as f32;
+                    for &sample in chunk {
+                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                    }
+                }
+
+                // Feed to Sherpa
+                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+                if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+                    eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+                }
+            }
+        }
+
+        // Final pull to empty the buffer on shutdown
+        loop {
+            let len = task_consumer.pop_slice(&mut pull_buffer);
+            if len == 0 {
+                break;
+            }
+            let chunk = &pull_buffer[..len];
+
+            // Write to WAV
+            if let Some(w) = writer.as_mut() {
+                let amplitude = i16::MAX as f32;
+                for &sample in chunk {
+                    let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                }
+            }
+
+            // Feed to Sherpa
+            let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+            if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+                eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+            }
+        }
+
+        if let Some(w) = writer {
+            let _ = w.finalize();
+        }
+        let _ = filepath_tx.send(filepath_to_return);
+    });
 
     // Spawn thread to handle audio stream
     thread::spawn(move || {
@@ -335,7 +542,9 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -354,7 +563,9 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -376,7 +587,9 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next
+                        input_frames_next,
+                        &data_tx,
+                        &mut task_producer,
                     );
                 },
                 err_fn,
@@ -422,7 +635,9 @@ fn process_mic_audio<R: Runtime>(
     input_buffer: &mut [Vec<f32>],
     output_buffer: &mut [Vec<f32>],
     window: &Window<R>,
-    input_frames_needed: usize
+    input_frames_needed: usize,
+    data_tx: &tokio::sync::mpsc::Sender<()>,
+    task_producer: &mut impl Producer<Item = f32>,
 ) {
     // 1. Mix to Mono and Push to RingBuffer
     for frame in data.chunks(channels) {
@@ -444,34 +659,55 @@ fn process_mic_audio<R: Runtime>(
         if let Ok((_in_len, out_len)) = result {
             if out_len > 0 {
                 let output_f32 = &output_buffer[0][..out_len];
-                let output_i16: Vec<i16> = output_f32
-                    .iter()
-                    .map(|&s| {
-                        let s = s.clamp(-1.0, 1.0);
-                        (s * 32767.0) as i16
-                    })
-                    .collect();
 
-                let _ = window.app_handle().emit("microphone-audio", &output_i16);
+                // Push the full f32 stream to the task ring buffer
+                let _ = task_producer.push_slice(output_f32);
+                let _ = data_tx.try_send(()); // Signal Tokio task
+
+                // Downsample for the UI (e.g., take 1 out of 100 samples)
+                let downsample_factor = 100;
+                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
+
+                for (i, &sample) in output_f32.iter().enumerate() {
+                    if i % downsample_factor == 0 {
+                        let s = sample.clamp(-1.0, 1.0);
+                        downsampled_i16.push((s * 32767.0) as i16);
+                    }
+                }
+
+                let _ = window.app_handle().emit("microphone-audio", &downsampled_i16);
             }
         }
     }
 }
 
 #[tauri::command]
-pub fn stop_microphone_capture(
+pub async fn stop_microphone_capture(
     state: tauri::State<'_, AudioState>,
-) -> Result<(), String> {
-    let mut stop_signal_guard = state.mic_stop_signal.lock().unwrap();
+) -> Result<String, String> {
+    // Drop the locks *before* calling await!
+    let rx = {
+        let mut stop_signal_guard = state.mic_stop_signal.lock().unwrap();
+        if let Some(tx) = stop_signal_guard.take() {
+            println!("[Audio] Stopping microphone capture...");
+            let _ = tx.send(());
+        } else {
+            println!("[Audio] Mic stop requested but not running");
+            return Err("Not running".to_string());
+        }
 
-    if let Some(tx) = stop_signal_guard.take() {
-        println!("[Audio] Stopping microphone capture...");
-        let _ = tx.send(());
+        let mut filepath_receiver_guard = state.mic_filepath_receiver.lock().unwrap();
+        filepath_receiver_guard.take()
+    };
+
+    if let Some(rx) = rx {
+        match rx.await {
+            Ok(path) => Ok(path),
+            Err(_) => Err("Failed to receive WAV filepath".to_string()),
+        }
     } else {
-        println!("[Audio] Mic stop requested but not running");
+        Err("No filepath receiver found".to_string())
     }
-
-    Ok(())
 }
 
 fn process_audio<R: Runtime>(
@@ -483,7 +719,9 @@ fn process_audio<R: Runtime>(
     input_buffer: &mut [Vec<f32>],
     output_buffer: &mut [Vec<f32>],
     window: &Window<R>,
-    input_frames_needed: usize
+    input_frames_needed: usize,
+    data_tx: &tokio::sync::mpsc::Sender<()>,
+    task_producer: &mut impl Producer<Item = f32>,
 ) {
     // 1. Mix to Mono and Push to RingBuffer
     for frame in data.chunks(channels) {
@@ -509,32 +747,53 @@ fn process_audio<R: Runtime>(
         if let Ok((_in_len, out_len)) = result {
             if out_len > 0 {
                 let output_f32 = &output_buffer[0][..out_len];
-                let output_i16: Vec<i16> = output_f32
-                    .iter()
-                    .map(|&s| {
-                        let s = s.clamp(-1.0, 1.0);
-                        (s * 32767.0) as i16
-                    })
-                    .collect();
 
-                let _ = window.app_handle().emit("system-audio", &output_i16);
+                // Push the full f32 stream to the task ring buffer
+                let _ = task_producer.push_slice(output_f32);
+                let _ = data_tx.try_send(()); // Signal Tokio task
+
+                // Downsample for the UI (e.g., take 1 out of 100 samples)
+                let downsample_factor = 100;
+                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
+
+                for (i, &sample) in output_f32.iter().enumerate() {
+                    if i % downsample_factor == 0 {
+                        let s = sample.clamp(-1.0, 1.0);
+                        downsampled_i16.push((s * 32767.0) as i16);
+                    }
+                }
+
+                let _ = window.app_handle().emit("system-audio", &downsampled_i16);
             }
         }
     }
 }
 
 #[tauri::command]
-pub fn stop_system_audio_capture(
+pub async fn stop_system_audio_capture(
     state: tauri::State<'_, AudioState>,
-) -> Result<(), String> {
-    let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
+) -> Result<String, String> {
+    // Drop the locks *before* calling await!
+    let rx = {
+        let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
+        if let Some(tx) = stop_signal_guard.take() {
+            println!("[Audio] Stopping system capture...");
+            let _ = tx.send(());
+        } else {
+            println!("[Audio] Stop requested but not running");
+            return Err("Not running".to_string());
+        }
 
-    if let Some(tx) = stop_signal_guard.take() {
-        println!("[Audio] Stopping system capture...");
-        let _ = tx.send(());
+        let mut filepath_receiver_guard = state.system_filepath_receiver.lock().unwrap();
+        filepath_receiver_guard.take()
+    };
+
+    if let Some(rx) = rx {
+        match rx.await {
+            Ok(path) => Ok(path),
+            Err(_) => Err("Failed to receive WAV filepath".to_string()),
+        }
     } else {
-        println!("[Audio] Stop requested but not running");
+        Err("No filepath receiver found".to_string())
     }
-
-    Ok(())
 }

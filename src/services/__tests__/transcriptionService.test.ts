@@ -32,7 +32,7 @@ describe('TranscriptionService', () => {
 
         await transcriptionService.start(onSegment, onError);
 
-        expect(listen).toHaveBeenCalledWith('recognizer-output-record', expect.any(Function));
+        expect(listen).toHaveBeenCalledWith('recognizer-output', expect.any(Function));
         expect(invoke).toHaveBeenCalledWith('init_recognizer', {
             instanceId: 'record',
             modelPath: '/mock/model/path',
@@ -67,9 +67,12 @@ describe('TranscriptionService', () => {
         const audioData = new Int16Array([32767, 0, -32768]);
         await transcriptionService.sendAudioInt16(audioData);
 
+        // Int16Array -> Uint8Array sends raw bytes
+        const bytes = new Uint8Array(audioData.buffer, audioData.byteOffset, audioData.byteLength);
+
         expect(invoke).toHaveBeenCalledWith('feed_audio_chunk', {
             instanceId: 'record',
-            samples: [32767 / 32768.0, 0, -32768 / 32768.0]
+            samples: bytes
         });
     });
 
