@@ -97,11 +97,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 try {
                     console.log('[CaptionSession] Attempting native system audio capture...');
                     await invoke('start_system_audio_capture', {
-                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId
+                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
+                        instanceId: 'caption'
                     });
-                    const unlisten = await listen<number[]>('system-audio', (event) => {
-                        const samples = new Int16Array(event.payload);
-                        transcriptionService.sendAudioInt16(samples);
+                    const unlisten = await listen<number[]>('system-audio', (_event) => {
+                        // The Rust backend now feeds itself directly.
                     });
                     systemAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;

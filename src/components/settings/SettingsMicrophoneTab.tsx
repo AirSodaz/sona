@@ -186,7 +186,8 @@ export function SettingsMicrophoneTab({
                 // If no active session, we start the capture
                 if (!isActiveSession) {
                     await invoke('start_system_audio_capture', {
-                        deviceName: systemAudioDeviceId === 'default' ? null : systemAudioDeviceId
+                        deviceName: systemAudioDeviceId === 'default' ? null : systemAudioDeviceId,
+                        instanceId: 'test_system'
                     });
                 }
 
@@ -359,7 +360,8 @@ export function SettingsMicrophoneTab({
 
             if (!isActiveSession) {
                 await invoke('start_microphone_capture', {
-                    deviceName: deviceId === 'default' ? null : deviceId
+                    deviceName: deviceId === 'default' ? null : deviceId,
+                    instanceId: 'test_mic'
                 });
             }
 
