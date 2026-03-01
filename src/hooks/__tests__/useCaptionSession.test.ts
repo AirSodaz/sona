@@ -41,6 +41,11 @@ vi.mock('../../services/transcriptionService', () => {
             start: transcriptionMocks.start,
             stop: transcriptionMocks.stop,
             sendAudioInt16: transcriptionMocks.sendAudioInt16
+        },
+        captionTranscriptionService: {
+            start: transcriptionMocks.start,
+            stop: transcriptionMocks.stop,
+            sendAudioInt16: transcriptionMocks.sendAudioInt16
         }
     };
 });

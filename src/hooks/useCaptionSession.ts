@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { transcriptionService } from '../services/transcriptionService';
+import { captionTranscriptionService as transcriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
 import { AppConfig } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
