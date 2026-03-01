@@ -28,7 +28,9 @@ function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): 
             inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
         }
 
-        const unsubscribe = useTranscriptStore.subscribe((state) => {
+        const unsubscribe = useTranscriptStore.subscribe((state, prevState) => {
+            if (state.currentTime === prevState.currentTime) return;
+
             const time = state.currentTime;
             // Only update if not currently being dragged
             if (inputRef.current && !isDragging.current) {
