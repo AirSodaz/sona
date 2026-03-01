@@ -664,15 +664,22 @@ fn process_mic_audio<R: Runtime>(
                 let _ = task_producer.push_slice(output_f32);
                 let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Downsample for the UI (e.g., take 1 out of 100 samples)
-                let downsample_factor = 100;
-                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
+                // Downsample for the UI by calculating the peak (max absolute value)
+                // for each chunk of 256 samples
+                let chunk_size = 256;
+                let mut downsampled_i16 = Vec::with_capacity(out_len / chunk_size + 1);
 
-                for (i, &sample) in output_f32.iter().enumerate() {
-                    if i % downsample_factor == 0 {
-                        let s = sample.clamp(-1.0, 1.0);
-                        downsampled_i16.push((s * 32767.0) as i16);
+                for chunk in output_f32.chunks(chunk_size) {
+                    let mut max_abs = 0.0_f32;
+                    for &sample in chunk {
+                        let abs_val = sample.abs();
+                        if abs_val > max_abs {
+                            max_abs = abs_val;
+                        }
                     }
+                    // Clamp to handle any unexpected > 1.0 values, then scale to i16
+                    let s = max_abs.clamp(0.0, 1.0);
+                    downsampled_i16.push((s * 32767.0) as i16);
                 }
 
                 let _ = window.app_handle().emit("microphone-audio", &downsampled_i16);
@@ -752,15 +759,22 @@ fn process_audio<R: Runtime>(
                 let _ = task_producer.push_slice(output_f32);
                 let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Downsample for the UI (e.g., take 1 out of 100 samples)
-                let downsample_factor = 100;
-                let mut downsampled_i16 = Vec::with_capacity(out_len / downsample_factor + 1);
+                // Downsample for the UI by calculating the peak (max absolute value)
+                // for each chunk of 256 samples
+                let chunk_size = 256;
+                let mut downsampled_i16 = Vec::with_capacity(out_len / chunk_size + 1);
 
-                for (i, &sample) in output_f32.iter().enumerate() {
-                    if i % downsample_factor == 0 {
-                        let s = sample.clamp(-1.0, 1.0);
-                        downsampled_i16.push((s * 32767.0) as i16);
+                for chunk in output_f32.chunks(chunk_size) {
+                    let mut max_abs = 0.0_f32;
+                    for &sample in chunk {
+                        let abs_val = sample.abs();
+                        if abs_val > max_abs {
+                            max_abs = abs_val;
+                        }
                     }
+                    // Clamp to handle any unexpected > 1.0 values, then scale to i16
+                    let s = max_abs.clamp(0.0, 1.0);
+                    downsampled_i16.push((s * 32767.0) as i16);
                 }
 
                 let _ = window.app_handle().emit("system-audio", &downsampled_i16);
