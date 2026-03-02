@@ -32,7 +32,7 @@ describe('TranscriptionService', () => {
 
         await transcriptionService.start(onSegment, onError);
 
-        expect(listen).toHaveBeenCalledWith('recognizer-output', expect.any(Function));
+        expect(listen).toHaveBeenCalledWith('recognizer-output-record', expect.any(Function));
         expect(invoke).toHaveBeenCalledWith('init_recognizer', {
             instanceId: 'record',
             modelPath: '/mock/model/path',

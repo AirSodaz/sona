@@ -3,6 +3,7 @@ use cpal::SampleFormat;
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use rubato::{FftFixedOut, Resampler};
+use std::collections::HashSet;
 use std::sync::Mutex;
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
@@ -13,6 +14,7 @@ pub struct AudioState {
     mic_stop_signal: Mutex<Option<Sender<()>>>,
     system_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
     mic_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
+    system_instance_ids: Mutex<HashSet<String>>,
 }
 
 impl AudioState {
@@ -22,6 +24,7 @@ impl AudioState {
             mic_stop_signal: Mutex::new(None),
             system_filepath_receiver: Mutex::new(None),
             mic_filepath_receiver: Mutex::new(None),
+            system_instance_ids: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -55,8 +58,16 @@ pub fn start_system_audio_capture<R: Runtime>(
 ) -> Result<(), String> {
     let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
     if stop_signal_guard.is_some() {
-        println!("[Audio] System capture already running.");
+        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        instance_ids.insert(instance_id.clone());
+        println!("[Audio] System capture already running. Attached instance: {}", instance_id);
         return Ok(());
+    }
+
+    {
+        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        instance_ids.clear();
+        instance_ids.insert(instance_id.clone());
     }
 
     println!("[Audio] Starting system audio capture...");
@@ -89,7 +100,6 @@ pub fn start_system_audio_capture<R: Runtime>(
 
     // Spawn Tokio task to feed Sherpa and write WAV
     let app_clone = app.clone();
-    let instance_id_clone = instance_id.clone();
     let filepath_to_return = wav_filepath_str.clone();
 
     tauri::async_runtime::spawn(async move {
@@ -125,10 +135,7 @@ pub fn start_system_audio_capture<R: Runtime>(
                 }
 
                 // Feed to Sherpa
-                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-                if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
-                    eprintln!("[Audio] Failed to feed audio to Sherpa: {}", e);
-                }
+                feed_system_audio_to_instances(&app_clone, chunk).await;
             }
         }
 
@@ -149,10 +156,7 @@ pub fn start_system_audio_capture<R: Runtime>(
             }
 
             // Feed to Sherpa
-            let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-            if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
-                eprintln!("[Audio] Failed to feed audio to Sherpa: {}", e);
-            }
+            feed_system_audio_to_instances(&app_clone, chunk).await;
         }
 
 
@@ -328,6 +332,25 @@ pub fn start_system_audio_capture<R: Runtime>(
     });
 
     Ok(())
+}
+
+async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f32]) {
+    let instance_ids: Vec<String> = {
+        let audio_state = app.state::<AudioState>();
+        let guard = audio_state.system_instance_ids.lock().unwrap();
+        guard.iter().cloned().collect()
+    };
+
+    if instance_ids.is_empty() {
+        return;
+    }
+
+    let sherpa_state = app.state::<crate::sherpa::SherpaState>();
+    for instance_id in instance_ids {
+        if let Err(e) = crate::sherpa::feed_audio_samples(app, &*sherpa_state, &instance_id, chunk).await {
+            eprintln!("[Audio] Failed to feed system audio to Sherpa instance {}: {}", instance_id, e);
+        }
+    }
 }
 
 #[tauri::command]
@@ -768,7 +791,27 @@ fn process_audio<R: Runtime>(
 #[tauri::command]
 pub async fn stop_system_audio_capture(
     state: tauri::State<'_, AudioState>,
+    instance_id: String,
 ) -> Result<String, String> {
+    let should_stop = {
+        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        instance_ids.remove(&instance_id);
+        if instance_ids.is_empty() {
+            true
+        } else {
+            println!(
+                "[Audio] System capture remains active for {} instance(s) after detaching {}",
+                instance_ids.len(),
+                instance_id
+            );
+            false
+        }
+    };
+
+    if !should_stop {
+        return Ok(String::new());
+    }
+
     // Drop the locks *before* calling await!
     let rx = {
         let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();

@@ -39,7 +39,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         // Stop Native Capture
         if (usingNativeCaptureRef.current) {
             try {
-                await invoke('stop_system_audio_capture');
+                await invoke('stop_system_audio_capture', { instanceId: 'caption' });
             } catch (e) { console.error(e); }
             usingNativeCaptureRef.current = false;
         }

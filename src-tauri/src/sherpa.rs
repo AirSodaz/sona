@@ -485,7 +485,7 @@ fn run_offline_inference<R: tauri::Runtime>(
     segment_id: &str,
     global_start: f64,
     is_final: bool,
-    _instance_id: &str,
+    instance_id: &str,
 ) {
     if speech_buffer.is_empty() {
         return;
@@ -525,7 +525,8 @@ fn run_offline_inference<R: tauri::Runtime>(
                 timestamps: timestamps_abs,
                 durations,
             };
-            let _ = app.emit("recognizer-output", &segment);
+            let event_name = format!("recognizer-output-{}", instance_id);
+            let _ = app.emit(&event_name, &segment);
         }
     }
 }
@@ -730,7 +731,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                         timestamps: timestamps_f32,
                         durations,
                     };
-                    let _ = app.emit("recognizer-output", &segment);
+                    let event_name = format!("recognizer-output-{}", instance_id);
+                    let _ = app.emit(&event_name, &segment);
                 }
             }
 
@@ -928,7 +930,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     timestamps: result.timestamps.clone(),
                     durations: None,
                 };
-                let _ = app.emit("recognizer-output", &segment);
+                let event_name = format!("recognizer-output-{}", instance_id);
+                let _ = app.emit(&event_name, &segment);
             }
         }
 
@@ -964,7 +967,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             timestamps: timestamps_f32,
                             durations,
                         };
-                        let _ = app.emit("recognizer-output", &segment);
+                        let event_name = format!("recognizer-output-{}", instance_id);
+                        let _ = app.emit(&event_name, &segment);
                     }
                 }
 

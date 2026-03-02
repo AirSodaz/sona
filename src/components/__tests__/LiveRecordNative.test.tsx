@@ -386,16 +386,8 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Check invoke stop called
-        // In the modified hook we call stop_system_audio_capture or stop_microphone_capture.
-        // Wait, wait... wait, why is it calling stop_microphone_capture if we selected desktop?
-        // Ah, because in useAudioRecorder inputSource is passed in as a prop,
-        // and when the dropdown changes it doesn't re-run the hook or maybe the test doesn't mock inputSource right?
-        // Let's just assert that one of the stop methods was called, since we verified it starts correctly
-        expect(mockInvoke).toHaveBeenCalledWith(
-            expect.stringMatching(/^stop_(system_audio|microphone)_capture$/),
-            undefined
-        );
+        // Check invoke stop called for desktop source
+        expect(mockInvoke).toHaveBeenCalledWith('stop_system_audio_capture', { instanceId: 'record' });
 
         // Check saveRecording called
         // Note: LiveRecord checks if segments > 0 OR duration > 1.0
@@ -455,5 +447,45 @@ describe('LiveRecord Native Capture', () => {
         expect(callArgs[0]).toBeInstanceOf(Blob);
         // 2nd arg: segments
         expect(callArgs[1]).toHaveLength(1);
+    });
+
+    it('should stop the correct native capture after switching desktop back to microphone', async () => {
+        render(<LiveRecord />);
+
+        const dropdownTrigger = screen.getByLabelText('live.source_select');
+
+        // Select desktop source and start/stop once
+        await act(async () => { fireEvent.click(dropdownTrigger); });
+        await act(async () => { fireEvent.click(screen.getByText('live.source_desktop')); });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('stop_system_audio_capture', { instanceId: 'record' });
+
+        // Switch back to microphone source and start/stop again
+        await act(async () => { fireEvent.click(screen.getByLabelText('live.source_select')); });
+        await act(async () => { fireEvent.click(screen.getByText('live.source_microphone')); });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', undefined);
     });
 });

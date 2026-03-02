@@ -263,7 +263,7 @@ export function SettingsMicrophoneTab({
             }
 
             if (startedSystemCaptureRef.current) {
-                invoke('stop_system_audio_capture').catch(console.error);
+                invoke('stop_system_audio_capture', { instanceId: 'test_system' }).catch(console.error);
                 startedSystemCaptureRef.current = false;
             }
         };

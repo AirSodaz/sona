@@ -224,7 +224,8 @@ export class TranscriptionService {
     private async _startStream(): Promise<void> {
         try {
             if (!this.unlistenOutput) {
-                this.unlistenOutput = await listen<TranscriptSegment>('recognizer-output', (event) => {
+                const eventName = `recognizer-output-${this.instanceId}`;
+                this.unlistenOutput = await listen<TranscriptSegment>(eventName, (event) => {
                     const segment = event.payload;
                     if (this.onSegment) {
                         this.onSegment(segment);

@@ -57,6 +57,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const startTimeRef = useRef<number>(0);
     const mimeTypeRef = useRef<string>('');
     const peakLevelRef = useRef<number>(0);
+    const activeInputSourceRef = useRef<'microphone' | 'desktop'>(inputSource);
 
     // State
     const [isInitializing, setIsInitializing] = useState(false);
@@ -201,6 +202,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         try {
             let stream: MediaStream | undefined;
+            activeInputSourceRef.current = inputSource;
 
             if (inputSource === 'desktop') {
                 // Try Native Capture first
@@ -352,8 +354,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 nativeAudioUnlistenRef.current = null;
             }
             try {
-                if (inputSource === 'desktop') {
-                    savedWavPath = await invoke<string>('stop_system_audio_capture');
+                if (activeInputSourceRef.current === 'desktop') {
+                    savedWavPath = await invoke<string>('stop_system_audio_capture', { instanceId: 'record' });
                 } else {
                     savedWavPath = await invoke<string>('stop_microphone_capture');
                 }
