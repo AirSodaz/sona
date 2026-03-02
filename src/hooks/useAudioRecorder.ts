@@ -299,8 +299,17 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
                     const constraints: MediaStreamConstraints = {
                         audio: config.microphoneId && config.microphoneId !== 'default'
-                            ? { deviceId: { exact: config.microphoneId } }
-                            : true
+                            ? {
+                                deviceId: { exact: config.microphoneId },
+                                autoGainControl: true,
+                                noiseSuppression: true,
+                                echoCancellation: true
+                            }
+                            : {
+                                autoGainControl: true,
+                                noiseSuppression: true,
+                                echoCancellation: true
+                            }
                     };
 
                     stream = await navigator.mediaDevices.getUserMedia(constraints);
