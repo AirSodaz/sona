@@ -94,7 +94,7 @@ pub fn start_system_audio_capture<R: Runtime>(
     if !history_dir.exists() {
         std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
     }
-    let wav_filename = format!("system_{}.wav", uuid::Uuid::new_v4());
+    let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
     let wav_filepath = history_dir.join(&wav_filename);
     let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
 
@@ -404,7 +404,7 @@ pub fn start_microphone_capture<R: Runtime>(
     if !history_dir.exists() {
         std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
     }
-    let wav_filename = format!("microphone_{}.wav", uuid::Uuid::new_v4());
+    let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
     let wav_filepath = history_dir.join(&wav_filename);
     let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
 
