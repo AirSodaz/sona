@@ -255,7 +255,6 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -276,7 +275,6 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -300,7 +298,6 @@ pub fn start_system_audio_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -592,7 +589,6 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -613,7 +609,6 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -637,7 +632,6 @@ pub fn start_microphone_capture<R: Runtime>(
                         &mut input_buffer,
                         &mut output_buffer,
                         &window_clone,
-                        input_frames_next,
                         &data_tx,
                         &mut task_producer,
                     );
@@ -685,7 +679,6 @@ fn process_mic_audio<R: Runtime>(
     input_buffer: &mut [Vec<f32>],
     output_buffer: &mut [Vec<f32>],
     window: &Window<R>,
-    input_frames_needed: usize,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
 ) {
@@ -700,30 +693,37 @@ fn process_mic_audio<R: Runtime>(
     }
 
     // 2. Process chunks if enough data
-    while consumer.occupied_len() >= input_frames_needed {
+    while consumer.occupied_len() >= resampler.input_frames_next() {
+        let input_frames_needed = resampler.input_frames_next();
+        input_buffer[0].resize(input_frames_needed, 0.0);
         let chunk_slice = &mut input_buffer[0];
         let _read = consumer.pop_slice(chunk_slice);
 
         let result = resampler.process_into_buffer(input_buffer, output_buffer, None);
 
-        if let Ok((_in_len, out_len)) = result {
-            if out_len > 0 {
-                let output_f32 = &output_buffer[0][..out_len];
+        match result {
+            Ok((_in_len, out_len)) => {
+                if out_len > 0 {
+                    let output_f32 = &output_buffer[0][..out_len];
 
-                // Push the full f32 stream to the task ring buffer
-                let _ = task_producer.push_slice(output_f32);
-                let _ = data_tx.try_send(()); // Signal Tokio task
+                    // Push the full f32 stream to the task ring buffer
+                    let _ = task_producer.push_slice(output_f32);
+                    let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
-                let mut max_abs = 0.0_f32;
-                for &sample in output_f32 {
-                    let abs_val = sample.abs();
-                    if abs_val > max_abs {
-                        max_abs = abs_val;
+                    // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
+                    let mut max_abs = 0.0_f32;
+                    for &sample in output_f32 {
+                        let abs_val = sample.abs();
+                        if abs_val > max_abs {
+                            max_abs = abs_val;
+                        }
                     }
+                    let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+                    let _ = window.app_handle().emit("microphone-audio", peak_i16);
                 }
-                let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                let _ = window.app_handle().emit("microphone-audio", peak_i16);
+            }
+            Err(e) => {
+                eprintln!("[Audio] Mic resampler error: {}", e);
             }
         }
     }
@@ -767,7 +767,6 @@ fn process_audio<R: Runtime>(
     input_buffer: &mut [Vec<f32>],
     output_buffer: &mut [Vec<f32>],
     window: &Window<R>,
-    input_frames_needed: usize,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
 ) {
@@ -782,7 +781,9 @@ fn process_audio<R: Runtime>(
     }
 
     // 2. Process chunks if enough data
-    while consumer.occupied_len() >= input_frames_needed {
+    while consumer.occupied_len() >= resampler.input_frames_next() {
+        let input_frames_needed = resampler.input_frames_next();
+        input_buffer[0].resize(input_frames_needed, 0.0);
         let chunk_slice = &mut input_buffer[0];
         let _read = consumer.pop_slice(chunk_slice);
 
@@ -792,24 +793,29 @@ fn process_audio<R: Runtime>(
         // It returns Result<(usize, usize), ...>
         let result = resampler.process_into_buffer(input_buffer, output_buffer, None);
 
-        if let Ok((_in_len, out_len)) = result {
-            if out_len > 0 {
-                let output_f32 = &output_buffer[0][..out_len];
+        match result {
+            Ok((_in_len, out_len)) => {
+                if out_len > 0 {
+                    let output_f32 = &output_buffer[0][..out_len];
 
-                // Push the full f32 stream to the task ring buffer
-                let _ = task_producer.push_slice(output_f32);
-                let _ = data_tx.try_send(()); // Signal Tokio task
+                    // Push the full f32 stream to the task ring buffer
+                    let _ = task_producer.push_slice(output_f32);
+                    let _ = data_tx.try_send(()); // Signal Tokio task
 
-                // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
-                let mut max_abs = 0.0_f32;
-                for &sample in output_f32 {
-                    let abs_val = sample.abs();
-                    if abs_val > max_abs {
-                        max_abs = abs_val;
+                    // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
+                    let mut max_abs = 0.0_f32;
+                    for &sample in output_f32 {
+                        let abs_val = sample.abs();
+                        if abs_val > max_abs {
+                            max_abs = abs_val;
+                        }
                     }
+                    let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+                    let _ = window.app_handle().emit("system-audio", peak_i16);
                 }
-                let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                let _ = window.app_handle().emit("system-audio", peak_i16);
+            }
+            Err(e) => {
+                eprintln!("[Audio] System resampler error: {}", e);
             }
         }
     }
