@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 // --- OpenAI / Generic Compatible Types ---
 #[derive(Serialize, Deserialize)]
@@ -44,7 +44,6 @@ struct OllamaModel {
 struct OllamaTagsResponse {
     models: Vec<OllamaModel>,
 }
-
 
 // --- Anthropic Types ---
 #[derive(Serialize, Deserialize)]
@@ -149,8 +148,8 @@ pub async fn call_ai_model(
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-             let status = res.status();
-             let error_text = res.text().await.unwrap_or_default();
+            let status = res.status();
+            let error_text = res.text().await.unwrap_or_default();
             return Err(format!("Anthropic API Error: {} - {}", status, error_text));
         }
 
@@ -160,7 +159,6 @@ pub async fn call_ai_model(
         } else {
             Err("No content in Anthropic response".to_string())
         }
-
     } else if api_format == "gemini" {
         if model_name.trim().is_empty() {
             return Err("Model name cannot be empty for Gemini API".to_string());
@@ -168,20 +166,23 @@ pub async fn call_ai_model(
 
         let base = base_url.trim_end_matches('/');
         let url = if base.contains("generateContent") {
-             format!("{}?key={}", base, api_key)
+            format!("{}?key={}", base, api_key)
         } else {
-             let cleaned_base = if base.ends_with("/v1beta/models") {
-                 base.strip_suffix("/v1beta/models").unwrap_or(base)
-             } else if base.ends_with("/models") {
-                 base.strip_suffix("/models").unwrap_or(base)
-             } else if base.ends_with("/v1beta") {
-                 base.strip_suffix("/v1beta").unwrap_or(base)
-             } else if base.ends_with("/v1") {
-                 base.strip_suffix("/v1").unwrap_or(base)
-             } else {
-                 base
-             };
-             format!("{}/v1beta/models/{}:generateContent?key={}", cleaned_base, model_name, api_key)
+            let cleaned_base = if base.ends_with("/v1beta/models") {
+                base.strip_suffix("/v1beta/models").unwrap_or(base)
+            } else if base.ends_with("/models") {
+                base.strip_suffix("/models").unwrap_or(base)
+            } else if base.ends_with("/v1beta") {
+                base.strip_suffix("/v1beta").unwrap_or(base)
+            } else if base.ends_with("/v1") {
+                base.strip_suffix("/v1").unwrap_or(base)
+            } else {
+                base
+            };
+            format!(
+                "{}/v1beta/models/{}:generateContent?key={}",
+                cleaned_base, model_name, api_key
+            )
         };
 
         let request_body = GeminiRequest {
@@ -199,8 +200,8 @@ pub async fn call_ai_model(
             .map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-             let status = res.status();
-             let error_text = res.text().await.unwrap_or_default();
+            let status = res.status();
+            let error_text = res.text().await.unwrap_or_default();
             return Err(format!("Gemini API Error: {} - {}", status, error_text));
         }
 
@@ -214,18 +215,17 @@ pub async fn call_ai_model(
             }
         }
         Err("No content in Gemini response".to_string())
-
     } else {
         // Default: OpenAI Compatible (works for OpenAI, Ollama, Groq, DeepSeek, etc.)
         let url = if base_url.contains("chat/completions") {
-             base_url
+            base_url
         } else {
-             let base = base_url.trim_end_matches('/');
-             if base.ends_with("/v1") {
-                 format!("{}/chat/completions", base)
-             } else {
-                 format!("{}/v1/chat/completions", base)
-             }
+            let base = base_url.trim_end_matches('/');
+            if base.ends_with("/v1") {
+                format!("{}/chat/completions", base)
+            } else {
+                format!("{}/v1/chat/completions", base)
+            }
         };
 
         let request_body = OpenAIRequest {
@@ -249,8 +249,8 @@ pub async fn call_ai_model(
         let res = req.send().await.map_err(|e| e.to_string())?;
 
         if !res.status().is_success() {
-             let status = res.status();
-             let error_text = res.text().await.unwrap_or_default();
+            let status = res.status();
+            let error_text = res.text().await.unwrap_or_default();
             return Err(format!("OpenAI API Error: {} - {}", status, error_text));
         }
 
@@ -295,35 +295,35 @@ pub async fn get_ai_models(
             .await
             .map_err(|e| e.to_string())?;
 
-         if !res.status().is_success() {
-             return Err(format!("Gemini API Error: {}", res.status()));
+        if !res.status().is_success() {
+            return Err(format!("Gemini API Error: {}", res.status()));
         }
 
         let response_body: GeminiModelsResponse = res.json().await.map_err(|e| e.to_string())?;
 
         if let Some(models) = response_body.models {
-            let names = models.into_iter().map(|m| {
-                m.name.trim_start_matches("models/").to_string()
-            }).collect();
+            let names = models
+                .into_iter()
+                .map(|m| m.name.trim_start_matches("models/").to_string())
+                .collect();
             return Ok(names);
         } else {
-             return Ok(vec![]);
+            return Ok(vec![]);
         }
-
     } else {
         // OpenAI / Ollama
         let mut urls_to_try = Vec::new();
 
         if api_format == "ollama" {
-             urls_to_try.push(format!("{}/api/tags", base));
-             urls_to_try.push(format!("{}/v1/models", base));
+            urls_to_try.push(format!("{}/api/tags", base));
+            urls_to_try.push(format!("{}/v1/models", base));
         } else {
-             if base.ends_with("/v1") {
-                 urls_to_try.push(format!("{}/models", base));
-             } else {
-                 urls_to_try.push(format!("{}/v1/models", base));
-                 urls_to_try.push(format!("{}/models", base));
-             }
+            if base.ends_with("/v1") {
+                urls_to_try.push(format!("{}/models", base));
+            } else {
+                urls_to_try.push(format!("{}/v1/models", base));
+                urls_to_try.push(format!("{}/models", base));
+            }
         }
 
         for url in urls_to_try {
@@ -339,16 +339,19 @@ pub async fn get_ai_models(
                         let text = res.text().await.unwrap_or_default();
 
                         // Try OpenAI format
-                        if let Ok(response_body) = serde_json::from_str::<OpenAIModelsResponse>(&text) {
+                        if let Ok(response_body) =
+                            serde_json::from_str::<OpenAIModelsResponse>(&text)
+                        {
                             return Ok(response_body.data.into_iter().map(|m| m.id).collect());
                         }
 
                         // Try Ollama format
-                         if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
+                        if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text)
+                        {
                             return Ok(response_body.models.into_iter().map(|m| m.name).collect());
                         }
                     }
-                },
+                }
                 Err(_) => continue,
             }
         }

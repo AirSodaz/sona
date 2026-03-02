@@ -1,11 +1,11 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
-use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
+use ringbuf::HeapRb;
 use rubato::{FftFixedOut, Resampler};
 use std::collections::HashSet;
-use std::sync::Mutex;
 use std::sync::mpsc::{channel, Sender};
+use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 
@@ -60,7 +60,10 @@ pub fn start_system_audio_capture<R: Runtime>(
     if stop_signal_guard.is_some() {
         let mut instance_ids = state.system_instance_ids.lock().unwrap();
         instance_ids.insert(instance_id.clone());
-        println!("[Audio] System capture already running. Attached instance: {}", instance_id);
+        println!(
+            "[Audio] System capture already running. Attached instance: {}",
+            instance_id
+        );
         return Ok(());
     }
 
@@ -159,7 +162,6 @@ pub fn start_system_audio_capture<R: Runtime>(
             feed_system_audio_to_instances(&app_clone, chunk).await;
         }
 
-
         if let Some(w) = writer {
             let _ = w.finalize();
         }
@@ -190,7 +192,10 @@ pub fn start_system_audio_capture<R: Runtime>(
             }
         };
 
-        println!("[Audio] Device: {}", device.name().unwrap_or("Unknown".into()));
+        println!(
+            "[Audio] Device: {}",
+            device.name().unwrap_or("Unknown".into())
+        );
 
         let supported_config = match device.default_output_config() {
             Ok(c) => c,
@@ -347,8 +352,13 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
 
     let sherpa_state = app.state::<crate::sherpa::SherpaState>();
     for instance_id in instance_ids {
-        if let Err(e) = crate::sherpa::feed_audio_samples(app, &*sherpa_state, &instance_id, chunk).await {
-            eprintln!("[Audio] Failed to feed system audio to Sherpa instance {}: {}", instance_id, e);
+        if let Err(e) =
+            crate::sherpa::feed_audio_samples(app, &*sherpa_state, &instance_id, chunk).await
+        {
+            eprintln!(
+                "[Audio] Failed to feed system audio to Sherpa instance {}: {}",
+                instance_id, e
+            );
         }
     }
 }
@@ -446,7 +456,14 @@ pub fn start_microphone_capture<R: Runtime>(
 
                 // Feed to Sherpa
                 let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-                if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+                if let Err(e) = crate::sherpa::feed_audio_samples(
+                    &app_clone,
+                    &*sherpa_state,
+                    &instance_id_clone,
+                    chunk,
+                )
+                .await
+                {
                     eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
                 }
             }
@@ -470,7 +487,14 @@ pub fn start_microphone_capture<R: Runtime>(
 
             // Feed to Sherpa
             let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-            if let Err(e) = crate::sherpa::feed_audio_samples(&app_clone, &*sherpa_state, &instance_id_clone, chunk).await {
+            if let Err(e) = crate::sherpa::feed_audio_samples(
+                &app_clone,
+                &*sherpa_state,
+                &instance_id_clone,
+                chunk,
+            )
+            .await
+            {
                 eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
             }
         }
@@ -505,7 +529,10 @@ pub fn start_microphone_capture<R: Runtime>(
             }
         };
 
-        println!("[Audio] Mic Device: {}", device.name().unwrap_or("Unknown".into()));
+        println!(
+            "[Audio] Mic Device: {}",
+            device.name().unwrap_or("Unknown".into())
+        );
 
         let supported_config = match device.default_input_config() {
             Ok(c) => c,

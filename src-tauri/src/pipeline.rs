@@ -76,6 +76,8 @@ pub async fn extract_and_resample_audio<R: tauri::Runtime>(
 
     let output = command
         .args([
+            "-loglevel",
+            "error",
             "-i",
             filepath,
             "-f",
