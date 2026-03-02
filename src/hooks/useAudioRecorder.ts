@@ -5,7 +5,6 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
-import { encodeWAV } from '../utils/wavUtils';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
@@ -51,7 +50,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const audioContextRef = useRef<AudioContext | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const activeStreamRef = useRef<MediaStream | null>(null);
-    const audioChunksRef = useRef<Int16Array[]>([]);
     const nativeAudioUnlistenRef = useRef<UnlistenFn | null>(null);
     const usingNativeCaptureRef = useRef(false);
     const startTimeRef = useRef<number>(0);
@@ -216,7 +214,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     const unlisten = await listen<number>('system-audio', (event) => {
                         const peak = Math.abs(event.payload);
                         const sample = Math.min(32767, Math.round(peak));
-                        const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (!isPausedRef.current) {
@@ -262,7 +259,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     const unlisten = await listen<number>('microphone-audio', (event) => {
                         const peak = Math.abs(event.payload);
                         const sample = Math.min(32767, Math.round(peak));
-                        const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
                         if (!isPausedRef.current) {
