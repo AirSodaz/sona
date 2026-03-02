@@ -3,9 +3,15 @@ import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 
 // Mock Tauri invoke
-const mockInvoke = vi.fn().mockResolvedValue(undefined);
+const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
+    if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+        return '/mock/path/to/audio.wav';
+    }
+    return undefined;
+});
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
+    convertFileSrc: vi.fn((path: string) => `asset://${path}`),
 }));
 
 // Mock Tauri listen
@@ -23,9 +29,11 @@ vi.mock('@tauri-apps/api/event', () => ({
 
 // Mock historyService
 const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'mock-id' });
+const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'mock-id' });
 vi.mock('../../services/historyService', () => ({
     historyService: {
         saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
+        saveNativeRecording: (path: string, segments: any, duration: number) => mockSaveNativeRecording(path, segments, duration),
         saveTranscriptFile: vi.fn(),
         getAll: vi.fn().mockResolvedValue([]),
         init: vi.fn(),
@@ -441,10 +449,16 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockSaveRecording).toHaveBeenCalled();
-        const callArgs = mockSaveRecording.mock.calls[0];
-        // 1st arg: Blob
-        expect(callArgs[0]).toBeInstanceOf(Blob);
+        // Give time for promises (like stop_system_audio_capture) to resolve
+        // In Vitest with fake timers, we need to advance them to let promises resolve
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockSaveNativeRecording).toHaveBeenCalled();
+        const callArgs = mockSaveNativeRecording.mock.calls[0];
+        // 1st arg: Path
+        expect(typeof callArgs[0]).toBe('string');
         // 2nd arg: segments
         expect(callArgs[1]).toHaveLength(1);
     });
