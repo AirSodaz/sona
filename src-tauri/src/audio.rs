@@ -89,7 +89,7 @@ pub fn start_system_audio_capture<R: Runtime>(
     // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
 
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     let history_dir = app_data_dir.join("history");
     if !history_dir.exists() {
         std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
@@ -399,7 +399,7 @@ pub fn start_microphone_capture<R: Runtime>(
     // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
 
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     let history_dir = app_data_dir.join("history");
     if !history_dir.exists() {
         std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;

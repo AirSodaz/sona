@@ -60,6 +60,58 @@ export const historyService = {
         return { transcriptFileName, previewText, searchContent };
     },
 
+    async saveNativeRecording(absoluteWavPath: string, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
+        console.log('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
+
+        if (!segments || segments.length === 0) {
+            console.log('[History] Empty transcript, skipping save.');
+            return null;
+        }
+
+        try {
+            await this.init();
+            const id = uuidv4();
+            const timestamp = Date.now();
+            const dateStr = new Date(timestamp).toISOString().split('T')[0];
+            const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
+            const title = `Recording ${dateStr} ${timeStr}`;
+
+            const filename = absoluteWavPath.split(/[/\\]/).pop() || `${id}.wav`;
+            const audioFileName = filename;
+
+            // Save Transcript and generate metadata
+            const { transcriptFileName, previewText, searchContent } = await this.saveTranscriptFile(id, segments);
+
+            const newItem: HistoryItem = {
+                id,
+                timestamp,
+                duration,
+                audioPath: audioFileName,
+                transcriptPath: transcriptFileName,
+                title,
+                previewText,
+                type: 'recording',
+                searchContent
+            };
+
+            // Add to Index
+            console.log('[History] Updating index');
+            const items = await this.getAll();
+            items.unshift(newItem); // Add to beginning
+            await writeTextFile(
+                `${HISTORY_DIR}/${INDEX_FILE}`,
+                JSON.stringify(items, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+
+            console.log('[History] Native save complete:', newItem);
+            return newItem;
+        } catch (error) {
+            console.error('[History] Failed to save native recording:', error);
+            return null;
+        }
+    },
+
     async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
         console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
 

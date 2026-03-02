@@ -6,7 +6,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { encodeWAV } from '../utils/wavUtils';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 interface UseAudioRecorderProps {
@@ -132,7 +132,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // File Recording (MediaRecorder)
     const startFileRecording = useCallback(() => {
         if (usingNativeCaptureRef.current) {
-            audioChunksRef.current = [];
             setIsRecording(true);
             setIsPaused(false);
             startTimeRef.current = Date.now();
@@ -220,9 +219,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
-                        if (isRecordingRef.current && !isPausedRef.current) {
-                            audioChunksRef.current.push(samples);
-                        }
                         if (!isPausedRef.current) {
                             peakLevelRef.current = sample / 32767;
                         }
@@ -232,7 +228,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
 
-                    audioChunksRef.current = [];
                     await initializeNativeSession();
 
                 } catch (e) {
@@ -270,9 +265,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         const samples = new Int16Array([sample]);
                         // Do not send samples back to Rust, backend feeds itself directly.
 
-                        if (isRecordingRef.current && !isPausedRef.current) {
-                            audioChunksRef.current.push(samples);
-                        }
                         if (!isPausedRef.current) {
                             peakLevelRef.current = sample / 32767;
                         }
@@ -282,7 +274,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
 
-                    audioChunksRef.current = [];
                     await initializeNativeSession();
 
                     if (config.muteDuringRecording) {
@@ -372,32 +363,21 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         // Finalize Native Recording
         if (usingNativeCaptureRef.current) {
-            const chunks = audioChunksRef.current;
-            if (chunks.length > 0) {
-                const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-                const fullBuffer = new Int16Array(totalLength);
-                let offset = 0;
-                for (const chunk of chunks) {
-                    fullBuffer.set(chunk, offset);
-                    offset += chunk.length;
-                }
-
-                const blob = encodeWAV(fullBuffer, 16000, 1, 16);
-                const url = URL.createObjectURL(blob);
+            if (savedWavPath) {
+                const url = convertFileSrc(savedWavPath);
                 useTranscriptStore.getState().setAudioUrl(url);
 
                 const segments = useTranscriptStore.getState().segments;
                 const duration = (Date.now() - startTimeRef.current) / 1000;
 
                 if (segments.length > 0) {
-                    const newItem = await historyService.saveRecording(blob, segments, duration);
+                    const newItem = await historyService.saveNativeRecording(savedWavPath, segments, duration);
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
                         useTranscriptStore.getState().setSourceHistoryId(newItem.id);
                     }
                 }
             }
-            audioChunksRef.current = [];
             usingNativeCaptureRef.current = false;
         }
 
