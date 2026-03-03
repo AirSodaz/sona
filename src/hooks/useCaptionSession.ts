@@ -4,6 +4,7 @@ import { captionWindowService } from '../services/captionWindowService';
 import { AppConfig } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { remove } from '@tauri-apps/plugin-fs';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -39,7 +40,15 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         // Stop Native Capture
         if (usingNativeCaptureRef.current) {
             try {
-                await invoke('stop_system_audio_capture', { instanceId: 'caption' });
+                const savedWavPath = await invoke<string>('stop_system_audio_capture', { instanceId: 'caption' });
+                if (savedWavPath) {
+                    console.log('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
+                    try {
+                        await remove(savedWavPath);
+                    } catch (err) {
+                        console.error('[CaptionSession] Failed to delete native capture file:', err);
+                    }
+                }
             } catch (e) { console.error(e); }
             usingNativeCaptureRef.current = false;
         }
