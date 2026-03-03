@@ -345,7 +345,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 if (activeInputSourceRef.current === 'desktop') {
                     savedWavPath = await invoke<string>('stop_system_audio_capture', { instanceId: 'record' });
                 } else {
-                    savedWavPath = await invoke<string>('stop_microphone_capture');
+                    savedWavPath = await invoke<string>('stop_microphone_capture', { instanceId: 'record' });
                 }
                 console.log('[useAudioRecorder] Saved raw audio to:', savedWavPath);
             } catch (e) { console.error(e); }

@@ -47,15 +47,15 @@ export function useAudioVisualizer({ canvasRef, peakLevelRef, isPaused }: UseAud
 
             ctx.clearRect(0, 0, width, height);
 
-            // Create soft vertical gradient
+            // Create soft vertical gradient with more visible color
             if (typeof ctx.createLinearGradient === 'function') {
                 const gradient = ctx.createLinearGradient(0, height - maxWaveHeight, 0, height);
-                gradient.addColorStop(0, 'rgba(210, 205, 200, 0.6)');
-                gradient.addColorStop(1, 'rgba(210, 205, 200, 0.1)');
+                gradient.addColorStop(0, 'rgba(224, 62, 62, 0.6)'); // Muted Red (Recording color)
+                gradient.addColorStop(1, 'rgba(224, 62, 62, 0.1)');
                 ctx.fillStyle = gradient;
             } else {
                 // Fallback for limited canvas mock environments in tests
-                ctx.fillStyle = 'rgba(210, 205, 200, 0.6)';
+                ctx.fillStyle = 'rgba(224, 62, 62, 0.6)';
             }
 
             if (typeof ctx.beginPath === 'function') {
