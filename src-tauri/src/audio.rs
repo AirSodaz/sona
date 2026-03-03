@@ -349,8 +349,11 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
 
     let sherpa_state = app.state::<crate::sherpa::SherpaState>();
     for instance_id in instance_ids {
+        if instance_id.starts_with("test_") {
+            continue;
+        }
         if let Err(e) =
-            crate::sherpa::feed_audio_samples(app, &*sherpa_state, &instance_id, chunk).await
+            crate::sherpa::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
         {
             eprintln!(
                 "[Audio] Failed to feed system audio to Sherpa instance {}: {}",
@@ -452,16 +455,18 @@ pub fn start_microphone_capture<R: Runtime>(
                 }
 
                 // Feed to Sherpa
-                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-                if let Err(e) = crate::sherpa::feed_audio_samples(
-                    &app_clone,
-                    &*sherpa_state,
-                    &instance_id_clone,
-                    chunk,
-                )
-                .await
-                {
-                    eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+                if !instance_id_clone.starts_with("test_") {
+                    let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+                    if let Err(e) = crate::sherpa::feed_audio_samples(
+                        &app_clone,
+                        &sherpa_state,
+                        &instance_id_clone,
+                        chunk,
+                    )
+                    .await
+                    {
+                        eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+                    }
                 }
             }
         }
@@ -483,16 +488,18 @@ pub fn start_microphone_capture<R: Runtime>(
             }
 
             // Feed to Sherpa
-            let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-            if let Err(e) = crate::sherpa::feed_audio_samples(
-                &app_clone,
-                &*sherpa_state,
-                &instance_id_clone,
-                chunk,
-            )
-            .await
-            {
-                eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+            if !instance_id_clone.starts_with("test_") {
+                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
+                if let Err(e) = crate::sherpa::feed_audio_samples(
+                    &app_clone,
+                    &sherpa_state,
+                    &instance_id_clone,
+                    chunk,
+                )
+                .await
+                {
+                    eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+                }
             }
         }
 
@@ -670,6 +677,7 @@ pub fn start_microphone_capture<R: Runtime>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_mic_audio<R: Runtime>(
     data: &[f32],
     channels: usize,
@@ -758,6 +766,7 @@ pub async fn stop_microphone_capture(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_audio<R: Runtime>(
     data: &[f32],
     channels: usize,

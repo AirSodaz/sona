@@ -61,9 +61,9 @@ pub async fn extract_and_resample_audio<R: tauri::Runtime>(
         .map_err(|e| format!("Failed to get target triple: {}", e))?;
 
     #[cfg(windows)]
-    let ffmpeg_filename = format!("ffmpeg.exe");
+    let ffmpeg_filename = "ffmpeg.exe".to_string();
     #[cfg(not(windows))]
-    let ffmpeg_filename = format!("ffmpeg");
+    let ffmpeg_filename = "ffmpeg".to_string();
 
     // Construct the absolute path to the sidecar
     let ffmpeg_path = exe_dir.join(ffmpeg_filename);

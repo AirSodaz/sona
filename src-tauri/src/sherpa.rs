@@ -155,11 +155,13 @@ impl Recognizer {
                 joiner,
                 tokens,
             } => {
-                let mut config = OnlineRecognizerConfig::default();
-                config.rule_fsts = itn_model.clone();
-                config.rule1_min_trailing_silence = 2.4;
-                config.rule2_min_trailing_silence = 2.4;
-                config.rule3_min_utterance_length = 300.0;
+                let mut config = OnlineRecognizerConfig {
+                    rule_fsts: itn_model.clone(),
+                    rule1_min_trailing_silence: 2.4,
+                    rule2_min_trailing_silence: 2.4,
+                    rule3_min_utterance_length: 300.0,
+                    ..Default::default()
+                };
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.transducer.decoder =
@@ -181,11 +183,13 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
-                let mut config = OnlineRecognizerConfig::default();
-                config.rule_fsts = itn_model;
-                config.rule1_min_trailing_silence = 2.4;
-                config.rule2_min_trailing_silence = 2.4;
-                config.rule3_min_utterance_length = 300.0;
+                let mut config = OnlineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    rule1_min_trailing_silence: 2.4,
+                    rule2_min_trailing_silence: 2.4,
+                    rule3_min_utterance_length: 300.0,
+                    ..Default::default()
+                };
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.paraformer.decoder =
@@ -206,8 +210,10 @@ impl Recognizer {
                 language,
                 use_itn,
             } => {
-                let mut config = OfflineRecognizerConfig::default();
-                config.rule_fsts = itn_model;
+                let mut config = OfflineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    ..Default::default()
+                };
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
@@ -227,8 +233,10 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
-                let mut config = OfflineRecognizerConfig::default();
-                config.rule_fsts = itn_model;
+                let mut config = OfflineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    ..Default::default()
+                };
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
@@ -402,6 +410,12 @@ pub struct SherpaState {
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
 }
 
+impl Default for SherpaState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SherpaState {
     pub fn new() -> Self {
         Self {
@@ -477,6 +491,7 @@ fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
     Some(durations)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_offline_inference<R: tauri::Runtime>(
     speech_buffer: &[Vec<f32>],
     app: &AppHandle<R>,
@@ -531,6 +546,7 @@ fn run_offline_inference<R: tauri::Runtime>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn init_recognizer(
     state: State<'_, SherpaState>,
@@ -558,7 +574,7 @@ pub async fn init_recognizer(
             let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
             let onnx_file = entries
                 .flatten()
-                .find(|e| e.path().extension().map_or(false, |ext| ext == "onnx"));
+                .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
             if let Some(e) = onnx_file {
                 punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
             }
@@ -569,17 +585,21 @@ pub async fn init_recognizer(
     let mut vad = None;
     if let Some(v_path) = &vad_model {
         if Path::new(v_path).exists() {
-            let mut silero_vad = SileroVadModelConfig::default();
-            silero_vad.model = Some(v_path.clone());
-            silero_vad.threshold = 0.35;
-            silero_vad.min_silence_duration = 0.5;
-            silero_vad.min_speech_duration = 0.25;
-            silero_vad.window_size = 512;
+            let silero_vad = SileroVadModelConfig {
+                model: Some(v_path.clone()),
+                threshold: 0.35,
+                min_silence_duration: 0.5,
+                min_speech_duration: 0.25,
+                window_size: 512,
+                ..Default::default()
+            };
 
-            let mut vad_config = VadModelConfig::default();
-            vad_config.silero_vad = silero_vad;
-            vad_config.sample_rate = 16000;
-            vad_config.num_threads = 1;
+            let vad_config = VadModelConfig {
+                silero_vad,
+                sample_rate: 16000,
+                num_threads: 1,
+                ..Default::default()
+            };
 
             vad = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
         }
@@ -1012,9 +1032,10 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
         float_samples.push(sample as f32 / 32768.0);
     }
-    feed_audio_samples(&app, &*state, &instance_id, &float_samples).await
+    feed_audio_samples(&app, &state, &instance_id, &float_samples).await
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(
     app: AppHandle<R>,
@@ -1050,7 +1071,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
             let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
             let onnx_file = entries
                 .flatten()
-                .find(|e| e.path().extension().map_or(false, |ext| ext == "onnx"));
+                .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
             if let Some(e) = onnx_file {
                 punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
             }
@@ -1061,17 +1082,21 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     if let RecognizerInner::Offline(r) = &recognizer.inner {
         let segments = if let Some(v_path) = vad_model {
             if Path::new(&v_path).exists() {
-                let mut silero_vad = sherpa_onnx::SileroVadModelConfig::default();
-                silero_vad.model = Some(v_path.clone());
-                silero_vad.threshold = 0.35;
-                silero_vad.min_silence_duration = 1.0;
-                silero_vad.min_speech_duration = 0.25;
-                silero_vad.window_size = 512;
+                let silero_vad = sherpa_onnx::SileroVadModelConfig {
+                    model: Some(v_path.clone()),
+                    threshold: 0.35,
+                    min_silence_duration: 1.0,
+                    min_speech_duration: 0.25,
+                    window_size: 512,
+                    ..Default::default()
+                };
 
-                let mut vad_config = sherpa_onnx::VadModelConfig::default();
-                vad_config.silero_vad = silero_vad;
-                vad_config.sample_rate = 16000;
-                vad_config.num_threads = 1;
+                let vad_config = sherpa_onnx::VadModelConfig {
+                    silero_vad,
+                    sample_rate: 16000,
+                    num_threads: 1,
+                    ..Default::default()
+                };
 
                 crate::pipeline::vad_segment_audio(&samples, 16000, &vad_config, vad_buffer)
                     .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0))
@@ -1093,14 +1118,13 @@ pub async fn process_batch_file<R: tauri::Runtime>(
                 if let Some(res) = stream.get_result() {
                     if !res.text.trim().is_empty() {
                         let text = format_transcript(&res.text, punctuation.as_ref());
-                        let timestamps_abs = res.timestamps.as_ref().map(|ts| {
-                            ts.iter()
-                                .map(|t| *t + seg.start_time as f32)
-                                .collect::<Vec<_>>()
-                        });
-                        let durations = timestamps_abs.as_ref().and_then(|ts| {
-                            synthesize_durations(ts, (seg.start_time + seg.duration) as f32)
-                        });
+                        let timestamps_abs = res
+                            .timestamps
+                            .as_ref()
+                            .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
+                        let durations = timestamps_abs
+                            .as_ref()
+                            .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
 
                         results.push(TranscriptSegment {
                             id: uuid::Uuid::new_v4().to_string(),
