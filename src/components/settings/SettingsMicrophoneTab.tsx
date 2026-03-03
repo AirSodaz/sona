@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { AppConfig } from '../../types/transcript';
+import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
 
 interface AudioDevice {
     name: string;
@@ -30,25 +31,31 @@ export function SettingsMicrophoneTab({
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const systemCanvasRef = useRef<HTMLCanvasElement>(null);
-    const animationRef = useRef<number>(0);
-    const systemAnimationRef = useRef<number>(0);
     const nativeUnlistenRef = useRef<UnlistenFn | null>(null);
     const systemUnlistenRef = useRef<UnlistenFn | null>(null);
     const usingNativeMicRef = useRef<boolean>(false);
     const startedMicCaptureRef = useRef<boolean>(false);
     const startedSystemCaptureRef = useRef<boolean>(false);
     const micTargetPeakRef = useRef(0);
-    const micAmplitudeRef = useRef(0);
-    const micPhaseRef = useRef(0);
     const systemTargetPeakRef = useRef(0);
-    const systemAmplitudeRef = useRef(0);
-    const systemPhaseRef = useRef(0);
 
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
 
     // We only control the system capture if it's not already running for recording/captioning
     const isActiveSession = isRecording || isCaptionMode;
+
+    const { startVisualizer: startMicWaveAnimation, stopVisualizer: stopMicWaveAnimation } = useAudioVisualizer({
+        canvasRef,
+        peakLevelRef: micTargetPeakRef,
+        isPaused: false
+    });
+
+    const { startVisualizer: startSystemWaveAnimation, stopVisualizer: stopSystemWaveAnimation } = useAudioVisualizer({
+        canvasRef: systemCanvasRef,
+        peakLevelRef: systemTargetPeakRef,
+        isPaused: false
+    });
 
     // Enumerate devices
     useEffect(() => {
@@ -153,70 +160,6 @@ export function SettingsMicrophoneTab({
         };
     }, [t]);
 
-    const startWaveAnimation = (
-        canvasRef: React.RefObject<HTMLCanvasElement | null>,
-        frameRef: React.MutableRefObject<number>,
-        targetPeakRef: React.MutableRefObject<number>,
-        amplitudeRef: React.MutableRefObject<number>,
-        phaseRef: React.MutableRefObject<number>
-    ) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const drawLoop = () => {
-            frameRef.current = requestAnimationFrame(drawLoop);
-            amplitudeRef.current += (targetPeakRef.current - amplitudeRef.current) * 0.08;
-            phaseRef.current += 0.06;
-
-            const { width, height } = canvas;
-            const centerY = height / 2;
-            const maxWaveHeight = height * 0.42;
-            const amplitudePx = Math.max(0.02, amplitudeRef.current) * maxWaveHeight;
-
-            ctx.clearRect(0, 0, width, height);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#4b5563';
-            ctx.beginPath();
-
-            const cycles = 2.3;
-            for (let x = 0; x <= width; x += 2) {
-                const t = x / width;
-                const y =
-                    centerY +
-                    Math.sin((t * cycles * Math.PI * 2) + phaseRef.current) * amplitudePx +
-                    Math.sin((t * (cycles * 0.55) * Math.PI * 2) + phaseRef.current * 1.45) * (amplitudePx * 0.35);
-                if (x === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
-            }
-            ctx.stroke();
-        };
-
-        drawLoop();
-    };
-
-    const stopWaveAnimation = (
-        canvasRef: React.RefObject<HTMLCanvasElement | null>,
-        frameRef: React.MutableRefObject<number>,
-        amplitudeRef: React.MutableRefObject<number>
-    ) => {
-        if (frameRef.current) {
-            cancelAnimationFrame(frameRef.current);
-            frameRef.current = 0;
-        }
-        amplitudeRef.current = 0;
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d');
-        if (canvas && ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-    };
-
     // System Audio Visualizer Logic
     useEffect(() => {
         let isMounted = true;
@@ -239,13 +182,7 @@ export function SettingsMicrophoneTab({
                 });
 
                 systemUnlistenRef.current = unlisten;
-                startWaveAnimation(
-                    systemCanvasRef,
-                    systemAnimationRef,
-                    systemTargetPeakRef,
-                    systemAmplitudeRef,
-                    systemPhaseRef
-                );
+                startSystemWaveAnimation();
             } catch (err) {
                 console.error('Error starting system visualizer:', err);
             }
@@ -255,7 +192,7 @@ export function SettingsMicrophoneTab({
 
         return () => {
             isMounted = false;
-            stopWaveAnimation(systemCanvasRef, systemAnimationRef, systemAmplitudeRef);
+            stopSystemWaveAnimation();
 
             if (systemUnlistenRef.current) {
                 systemUnlistenRef.current();
@@ -301,21 +238,15 @@ export function SettingsMicrophoneTab({
             nativeUnlistenRef.current = unlisten;
             usingNativeMicRef.current = true;
 
-            startWaveAnimation(
-                canvasRef,
-                animationRef,
-                micTargetPeakRef,
-                micAmplitudeRef,
-                micPhaseRef
-            );
+            startMicWaveAnimation();
         } catch (err) {
             console.warn('Native microphone visualizer failed:', err);
-            stopWaveAnimation(canvasRef, animationRef, micAmplitudeRef);
+            stopMicWaveAnimation();
         }
     }
 
     function stopVisualizer() {
-        stopWaveAnimation(canvasRef, animationRef, micAmplitudeRef);
+        stopMicWaveAnimation();
 
         if (nativeUnlistenRef.current) {
             nativeUnlistenRef.current();
@@ -363,6 +294,7 @@ export function SettingsMicrophoneTab({
                             ref={canvasRef}
                             width={120}
                             height={36}
+                            className="visualizer-canvas"
                             style={{ display: 'block', width: '100%', height: '100%' }}
                         />
                     </div>
@@ -397,6 +329,7 @@ export function SettingsMicrophoneTab({
                             ref={systemCanvasRef}
                             width={120}
                             height={36}
+                            className="visualizer-canvas"
                             style={{ display: 'block', width: '100%', height: '100%' }}
                         />
                     </div>
