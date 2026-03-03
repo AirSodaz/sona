@@ -273,7 +273,7 @@ pub async fn get_ai_models(
     let base = base_url.trim_end_matches('/');
 
     if api_format == "anthropic" {
-        return Ok(vec![]);
+        Ok(vec![])
     } else if api_format == "gemini" {
         let cleaned_base = if base.ends_with("/v1beta/models") {
             base.strip_suffix("/v1beta/models").unwrap_or(base)
@@ -306,9 +306,9 @@ pub async fn get_ai_models(
                 .into_iter()
                 .map(|m| m.name.trim_start_matches("models/").to_string())
                 .collect();
-            return Ok(names);
+            Ok(names)
         } else {
-            return Ok(vec![]);
+            Ok(vec![])
         }
     } else {
         // OpenAI / Ollama
@@ -317,13 +317,11 @@ pub async fn get_ai_models(
         if api_format == "ollama" {
             urls_to_try.push(format!("{}/api/tags", base));
             urls_to_try.push(format!("{}/v1/models", base));
+        } else if base.ends_with("/v1") {
+            urls_to_try.push(format!("{}/models", base));
         } else {
-            if base.ends_with("/v1") {
-                urls_to_try.push(format!("{}/models", base));
-            } else {
-                urls_to_try.push(format!("{}/v1/models", base));
-                urls_to_try.push(format!("{}/models", base));
-            }
+            urls_to_try.push(format!("{}/v1/models", base));
+            urls_to_try.push(format!("{}/models", base));
         }
 
         for url in urls_to_try {
@@ -356,6 +354,6 @@ pub async fn get_ai_models(
             }
         }
 
-        return Err("Failed to fetch models from any known endpoint".to_string());
+        Err("Failed to fetch models from any known endpoint".to_string())
     }
 }

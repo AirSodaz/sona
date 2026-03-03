@@ -119,7 +119,7 @@ fn set_mute_linux(mute: bool) -> Result<(), String> {
     let state = if mute { "1" } else { "0" }; // 1 is mute, 0 is unmute
 
     let pactl_res = Command::new("pactl")
-        .args(&["set-sink-mute", "@DEFAULT_SINK@", state])
+        .args(["set-sink-mute", "@DEFAULT_SINK@", state])
         .output();
 
     if let Ok(out) = pactl_res {
@@ -131,7 +131,7 @@ fn set_mute_linux(mute: bool) -> Result<(), String> {
     // Fallback to amixer
     let amixer_state = if mute { "mute" } else { "unmute" };
     let amixer_res = Command::new("amixer")
-        .args(&["-D", "pulse", "set", "Master", amixer_state])
+        .args(["-D", "pulse", "set", "Master", amixer_state])
         .output();
 
     if let Ok(out) = amixer_res {
@@ -142,7 +142,7 @@ fn set_mute_linux(mute: bool) -> Result<(), String> {
 
     // Fallback to amixer without -D pulse
     let amixer_res2 = Command::new("amixer")
-        .args(&["set", "Master", amixer_state])
+        .args(["set", "Master", amixer_state])
         .output();
 
     if let Ok(out) = amixer_res2 {
@@ -266,7 +266,7 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
 
         let mut last_emit = Instant::now();
 
-        for (_i, entry) in archive.entries().map_err(|e| e.to_string())?.enumerate() {
+        for entry in archive.entries().map_err(|e| e.to_string())? {
             let mut entry = entry.map_err(|e| e.to_string())?;
 
             // Throttle events: emit only if 100ms passed since last emit
@@ -320,11 +320,9 @@ where
         writer.write_all(&chunk).await.map_err(|e| e.to_string())?;
         downloaded += chunk.len() as u64;
 
-        if total_size > 0 {
-            if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
-                on_progress(downloaded, total_size);
-                last_emit = Instant::now();
-            }
+        if total_size > 0 && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100) {
+            on_progress(downloaded, total_size);
+            last_emit = Instant::now();
         }
     }
     Ok(())
@@ -399,11 +397,11 @@ async fn download_file<R: tauri::Runtime>(
                 writer.write_all(&chunk).await.map_err(|e| e.to_string())?;
                 downloaded += chunk.len() as u64;
 
-                if total_size > 0 {
-                    if downloaded == total_size || last_emit.elapsed().as_millis() >= 100 {
-                        let _ = app.emit("download-progress", (downloaded, total_size, &id));
-                        last_emit = std::time::Instant::now();
-                    }
+                if total_size > 0
+                    && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100)
+                {
+                    let _ = app.emit("download-progress", (downloaded, total_size, &id));
+                    last_emit = std::time::Instant::now();
                 }
             }
             writer.flush().await.map_err(|e| e.to_string())?;
@@ -520,17 +518,16 @@ pub fn run() {
                     })
                     .on_tray_icon_event(|tray, event| {
                         use tauri::tray::{MouseButton, TrayIconEvent};
-                        let should_show = match event {
+                        let should_show = matches!(
+                            event,
                             TrayIconEvent::Click {
                                 button: MouseButton::Left,
                                 ..
-                            } => true,
-                            TrayIconEvent::DoubleClick {
+                            } | TrayIconEvent::DoubleClick {
                                 button: MouseButton::Left,
                                 ..
-                            } => true,
-                            _ => false,
-                        };
+                            }
+                        );
 
                         if should_show {
                             let app = tray.app_handle();
