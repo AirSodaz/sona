@@ -7,6 +7,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { AppConfig } from '../../types/transcript';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
+import { remove } from '@tauri-apps/plugin-fs';
 
 interface AudioDevice {
     name: string;
@@ -200,7 +201,13 @@ export function SettingsMicrophoneTab({
             }
 
             if (startedSystemCaptureRef.current) {
-                invoke('stop_system_audio_capture', { instanceId: 'test_system' }).catch(console.error);
+                invoke<string>('stop_system_audio_capture', { instanceId: 'test_system' })
+                    .then((path) => {
+                        if (path) {
+                            remove(path).catch(console.error);
+                        }
+                    })
+                    .catch(console.error);
                 startedSystemCaptureRef.current = false;
             }
         };
@@ -253,7 +260,13 @@ export function SettingsMicrophoneTab({
             nativeUnlistenRef.current = null;
         }
         if (usingNativeMicRef.current && startedMicCaptureRef.current) {
-            invoke('stop_microphone_capture').catch(console.error);
+            invoke<string>('stop_microphone_capture')
+                .then((path) => {
+                    if (path) {
+                        remove(path).catch(console.error);
+                    }
+                })
+                .catch(console.error);
         }
         usingNativeMicRef.current = false;
         startedMicCaptureRef.current = false;
