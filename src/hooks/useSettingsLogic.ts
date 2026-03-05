@@ -78,6 +78,32 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }, [_isOpen]);
 
+    // Listen for background download requests from components
+    useEffect(() => {
+        const handleBackgroundDownload = async (event: Event) => {
+            const customEvent = event as CustomEvent;
+            if (customEvent.detail && customEvent.detail.modelId) {
+                const modelId = customEvent.detail.modelId;
+                const model = PRESET_MODELS.find(m => m.id === modelId);
+                if (model && !downloads[modelId]) {
+                    try {
+                        // Silent download without updating progress UI
+                        const path = await modelService.downloadModel(modelId, undefined);
+                        await checkInstalledModels();
+                        setModelPathByType(model.type as any, path);
+                    } catch (e) {
+                        console.error(`Background download failed for ${modelId}:`, e);
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('download-background-model', handleBackgroundDownload);
+        return () => {
+            document.removeEventListener('download-background-model', handleBackgroundDownload);
+        };
+    }, [downloads]);
+
     // Helper to update config and persist immediately
     const updateConfig = (updates: Partial<typeof config>) => {
         setConfig(updates);
@@ -244,6 +270,17 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                     updateConfig({ enabledITNModels: Array.from(current) });
                 } else {
                     setModelPathByType(model.type as any, path);
+
+                    // If it's an offline model, automatically apply rules and trigger background downloads for dependencies
+                    if (model.type === 'offline') {
+                        const rules = modelService.getModelRules(model.id);
+                        if (rules.requiresVad) {
+                            document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
+                        }
+                        if (rules.requiresPunctuation) {
+                            document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8' } }));
+                        }
+                    }
                 }
             }
         );

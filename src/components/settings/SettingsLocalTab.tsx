@@ -33,8 +33,6 @@ export function SettingsLocalTab({
     const { alert } = useDialogStore();
 
     const offlineModelPath = config.offlineModelPath;
-    const punctuationModelPath = config.punctuationModelPath || '';
-    const vadModelPath = config.vadModelPath || '';
     const ctcModelPath = config.ctcModelPath || '';
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
@@ -131,6 +129,36 @@ export function SettingsLocalTab({
         try {
             const path = await modelService.getModelPath(modelId);
             updateConfig({ offlineModelPath: path });
+
+            // Automatically apply model rules for VAD and Punctuation based on the new selection
+            const rules = modelService.getModelRules(modelId);
+
+            if (rules.requiresVad) {
+                const vadModelId = 'silero-vad';
+                if (installedModels.has(vadModelId)) {
+                    const vadPath = await modelService.getModelPath(vadModelId);
+                    updateConfig({ vadModelPath: vadPath });
+                } else {
+                    // Start background download for VAD
+                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
+                }
+            } else {
+                updateConfig({ vadModelPath: '' });
+            }
+
+            if (rules.requiresPunctuation) {
+                const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
+                if (installedModels.has(punctModelId)) {
+                    const punctPath = await modelService.getModelPath(punctModelId);
+                    updateConfig({ punctuationModelPath: punctPath });
+                } else {
+                    // Start background download for Punctuation
+                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
+                }
+            } else {
+                updateConfig({ punctuationModelPath: '' });
+            }
+
         } catch (e) {
             console.error('Failed to get offline model path', e);
         }
@@ -200,37 +228,6 @@ export function SettingsLocalTab({
                     </button>
                 </div>
             </div>
-
-            <div className="settings-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.punctuation_path_label')}</label>
-                        {/* Add Browse for punctuation too if needed, but sticking to offline for now as primary */}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                         {/* Hidden browse for others to keep UI clean as per previous design, or re-add if requested.
-                             To fix "unused variable", I MUST use it or remove it.
-                             I'll add it to the Offline model selection as a fallback/option.
-                         */}
-                        <Switch
-                            checked={!!punctuationModelPath}
-                            onChange={(c) => handleToggle('punctuation', c)}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="settings-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.vad_path_label', { defaultValue: 'VAD Model' })}</label>
-                    <Switch
-                        checked={!!vadModelPath}
-                        onChange={(c) => handleToggle('vad', c)}
-                    />
-                </div>
-            </div>
-
-
 
             <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
