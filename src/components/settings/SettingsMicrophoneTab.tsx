@@ -16,11 +16,15 @@ interface AudioDevice {
 interface SettingsMicrophoneTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
+    isActiveTab?: boolean;
+    isOpen?: boolean;
 }
 
 export function SettingsMicrophoneTab({
     config,
-    updateConfig
+    updateConfig,
+    isActiveTab = true,
+    isOpen = true
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
@@ -189,7 +193,9 @@ export function SettingsMicrophoneTab({
             }
         }
 
-        startSystemVisualizer();
+        if (isOpen && isActiveTab) {
+            startSystemVisualizer();
+        }
 
         return () => {
             isMounted = false;
@@ -211,18 +217,21 @@ export function SettingsMicrophoneTab({
                 startedSystemCaptureRef.current = false;
             }
         };
-    }, [systemAudioDeviceId, isActiveSession]);
+    }, [systemAudioDeviceId, isActiveSession, isOpen, isActiveTab]);
 
     // Mic Visualizer Logic
     useEffect(() => {
         let isMounted = true;
-        startVisualizer(microphoneId, () => isMounted);
+
+        if (isOpen && isActiveTab) {
+            startVisualizer(microphoneId, () => isMounted);
+        }
 
         return () => {
             isMounted = false;
             stopVisualizer();
         };
-    }, [microphoneId, isActiveSession]);
+    }, [microphoneId, isActiveSession, isOpen, isActiveTab]);
 
     async function startVisualizer(deviceId: string, checkMounted: () => boolean) {
         stopVisualizer();

@@ -34,8 +34,12 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'ai_service'>('general');
 
     useEffect(() => {
-        if (_isOpen && initialTab) {
-            setActiveTab(initialTab as any);
+        if (_isOpen) {
+            if (initialTab) {
+                setActiveTab(initialTab as any);
+            }
+        } else {
+            setActiveTab('general');
         }
     }, [initialTab, _isOpen]);
 

@@ -229,6 +229,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <SettingsMicrophoneTab
                                 config={config}
                                 updateConfig={updateConfig}
+                                isActiveTab={activeTab === 'microphone'}
+                                isOpen={isOpen}
                             />
                         )}
 
