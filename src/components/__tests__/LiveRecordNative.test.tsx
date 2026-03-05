@@ -500,6 +500,6 @@ describe('LiveRecord Native Capture', () => {
         });
 
         expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
-        expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', undefined);
+        expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
     });
 });
