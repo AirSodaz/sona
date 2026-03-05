@@ -15,6 +15,7 @@ pub struct AudioState {
     system_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
     mic_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
     system_instance_ids: Mutex<HashSet<String>>,
+    mic_boost: Mutex<f32>,
 }
 
 impl AudioState {
@@ -25,6 +26,7 @@ impl AudioState {
             system_filepath_receiver: Mutex::new(None),
             mic_filepath_receiver: Mutex::new(None),
             system_instance_ids: Mutex::new(HashSet::new()),
+            mic_boost: Mutex::new(1.0),
         }
     }
 }
@@ -581,71 +583,88 @@ pub fn start_microphone_capture<R: Runtime>(
         let mut input_buffer: Vec<Vec<f32>> = vec![vec![0.0; resampler_input_buffer_size]; 1];
         let mut output_buffer: Vec<Vec<f32>> = vec![vec![0.0; chunk_size_out]; 1];
 
-        let window_clone = window.clone();
+        let app_handle_f32 = window.app_handle().clone();
+        let app_handle_i16 = window.app_handle().clone();
+        let app_handle_u16 = window.app_handle().clone();
 
         let stream_result = match sample_format {
-            SampleFormat::F32 => device.build_input_stream(
-                &config,
-                move |data: &[f32], _: &_| {
-                    process_mic_audio(
-                        data,
-                        channels as usize,
-                        &mut producer,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &window_clone,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::I16 => device.build_input_stream(
-                &config,
-                move |data: &[i16], _: &_| {
-                    let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
-                    process_mic_audio(
-                        &data_f32,
-                        channels as usize,
-                        &mut producer,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &window_clone,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::U16 => device.build_input_stream(
-                &config,
-                move |data: &[u16], _: &_| {
-                    let data_f32: Vec<f32> = data
-                        .iter()
-                        .map(|&s| (s as f32 - 32768.0) / 32768.0)
-                        .collect();
-                    process_mic_audio(
-                        &data_f32,
-                        channels as usize,
-                        &mut producer,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &window_clone,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
+            SampleFormat::F32 => {
+                let window_clone = window.clone();
+                device.build_input_stream(
+                    &config,
+                    move |data: &[f32], _: &_| {
+                        let boost = *app_handle_f32.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        process_mic_audio(
+                            data,
+                            channels as usize,
+                            &mut producer,
+                            &mut consumer,
+                            &mut resampler,
+                            &mut input_buffer,
+                            &mut output_buffer,
+                            &window_clone,
+                            &data_tx,
+                            &mut task_producer,
+                            boost,
+                        );
+                    },
+                    err_fn,
+                    None,
+                )
+            },
+            SampleFormat::I16 => {
+                let window_clone = window.clone();
+                device.build_input_stream(
+                    &config,
+                    move |data: &[i16], _: &_| {
+                        let boost = *app_handle_i16.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
+                        process_mic_audio(
+                            &data_f32,
+                            channels as usize,
+                            &mut producer,
+                            &mut consumer,
+                            &mut resampler,
+                            &mut input_buffer,
+                            &mut output_buffer,
+                            &window_clone,
+                            &data_tx,
+                            &mut task_producer,
+                            boost,
+                        );
+                    },
+                    err_fn,
+                    None,
+                )
+            },
+            SampleFormat::U16 => {
+                let window_clone = window.clone();
+                device.build_input_stream(
+                    &config,
+                    move |data: &[u16], _: &_| {
+                        let boost = *app_handle_u16.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        let data_f32: Vec<f32> = data
+                            .iter()
+                            .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                            .collect();
+                        process_mic_audio(
+                            &data_f32,
+                            channels as usize,
+                            &mut producer,
+                            &mut consumer,
+                            &mut resampler,
+                            &mut input_buffer,
+                            &mut output_buffer,
+                            &window_clone,
+                            &data_tx,
+                            &mut task_producer,
+                            boost,
+                        );
+                    },
+                    err_fn,
+                    None,
+                )
+            },
             _ => {
                 eprintln!("[Audio] Unsupported mic sample format");
                 return;
@@ -689,14 +708,21 @@ fn process_mic_audio<R: Runtime>(
     window: &Window<R>,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
+    boost: f32,
 ) {
-    // 1. Mix to Mono and Push to RingBuffer
+    // 1. Mix to Mono, Apply Boost & Limiter, and Push to RingBuffer
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
         for sample in frame {
             sum += sample;
         }
-        let mono_sample = sum / channels as f32;
+        let mut mono_sample = sum / channels as f32;
+
+        // Apply boost and clamp between -1.0 and 1.0 (limiter)
+        if (boost - 1.0).abs() > f32::EPSILON {
+            mono_sample = (mono_sample * boost).clamp(-1.0, 1.0);
+        }
+
         let _ = producer.try_push(mono_sample);
     }
 
@@ -877,4 +903,15 @@ pub async fn stop_system_audio_capture(
     } else {
         Err("No filepath receiver found".to_string())
     }
+}
+
+#[tauri::command]
+pub fn set_microphone_boost(
+    state: tauri::State<'_, AudioState>,
+    boost: f32,
+) -> Result<(), String> {
+    let mut mic_boost = state.mic_boost.lock().map_err(|e| e.to_string())?;
+    *mic_boost = boost;
+    println!("[Audio] Set microphone boost to {}", boost);
+    Ok(())
 }

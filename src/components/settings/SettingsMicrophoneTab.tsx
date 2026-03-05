@@ -31,6 +31,7 @@ export function SettingsMicrophoneTab({
     const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
 
     const microphoneId = config.microphoneId || 'default';
+    const microphoneBoost = config.microphoneBoost ?? 1.0;
     const systemAudioDeviceId = config.systemAudioDeviceId || 'default';
     const muteDuringRecording = config.muteDuringRecording || false;
 
@@ -219,6 +220,11 @@ export function SettingsMicrophoneTab({
         };
     }, [systemAudioDeviceId, isActiveSession, isOpen, isActiveTab]);
 
+    // Sync Microphone Boost to Rust backend
+    useEffect(() => {
+        invoke('set_microphone_boost', { boost: microphoneBoost }).catch(console.error);
+    }, [microphoneBoost]);
+
     // Mic Visualizer Logic
     useEffect(() => {
         let isMounted = true;
@@ -358,6 +364,34 @@ export function SettingsMicrophoneTab({
                 </div>
                 <div className="settings-hint">
                     {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
+                </div>
+            </div>
+
+            <div className="settings-item">
+                <label htmlFor="settings-mic-boost" className="settings-label">
+                    {t('settings.microphone_boost', { defaultValue: 'Microphone Boost' })}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                        id="settings-mic-boost"
+                        type="number"
+                        min="1.0"
+                        max="5.0"
+                        step="0.1"
+                        value={microphoneBoost}
+                        onChange={(e) => {
+                            let val = parseFloat(e.target.value);
+                            if (isNaN(val)) return;
+                            val = Math.max(1.0, Math.min(5.0, val));
+                            updateConfig({ microphoneBoost: val });
+                        }}
+                        className="sona-input"
+                        style={{ width: '80px' }}
+                    />
+                    <span className="settings-hint" style={{ marginTop: 0 }}>x</span>
+                </div>
+                <div className="settings-hint">
+                    {t('settings.microphone_boost_hint', { defaultValue: 'Amplify microphone volume (1.0 to 5.0). Useful for quiet microphones.' })}
                 </div>
             </div>
 
