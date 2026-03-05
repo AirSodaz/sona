@@ -94,32 +94,43 @@ pub fn start_system_audio_capture<R: Runtime>(
     // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
 
-    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    let history_dir = app_data_dir.join("history");
-    if !history_dir.exists() {
-        std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+    let is_test = instance_id.starts_with("test_");
+
+    let mut filepath_to_return = String::new();
+    let mut wav_filepath_str = String::new();
+
+    if !is_test {
+        let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+        let history_dir = app_data_dir.join("history");
+        if !history_dir.exists() {
+            std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+        }
+        let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
+        let wav_filepath = history_dir.join(&wav_filename);
+        wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+        filepath_to_return = wav_filepath_str.clone();
     }
-    let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
-    let wav_filepath = history_dir.join(&wav_filename);
-    let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
 
     // Spawn Tokio task to feed Sherpa and write WAV
     let app_clone = app.clone();
-    let filepath_to_return = wav_filepath_str.clone();
 
     tauri::async_runtime::spawn(async move {
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: 16000,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut writer = match hound::WavWriter::create(&wav_filepath_str, spec) {
-            Ok(w) => Some(w),
-            Err(e) => {
-                eprintln!("[Audio] Failed to create WAV writer: {}", e);
-                None
+        let mut writer = if !is_test {
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: 16000,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+            match hound::WavWriter::create(&wav_filepath_str, spec) {
+                Ok(w) => Some(w),
+                Err(e) => {
+                    eprintln!("[Audio] Failed to create WAV writer: {}", e);
+                    None
+                }
             }
+        } else {
+            None
         };
 
         // Pre-allocate a buffer for pulling from the ring buffer
@@ -411,33 +422,44 @@ pub fn start_microphone_capture<R: Runtime>(
     // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
 
-    let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    let history_dir = app_data_dir.join("history");
-    if !history_dir.exists() {
-        std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+    let is_test = instance_id.starts_with("test_");
+
+    let mut filepath_to_return = String::new();
+    let mut wav_filepath_str = String::new();
+
+    if !is_test {
+        let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+        let history_dir = app_data_dir.join("history");
+        if !history_dir.exists() {
+            std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+        }
+        let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
+        let wav_filepath = history_dir.join(&wav_filename);
+        wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+        filepath_to_return = wav_filepath_str.clone();
     }
-    let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
-    let wav_filepath = history_dir.join(&wav_filename);
-    let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
 
     // Spawn Tokio task to feed Sherpa and write WAV
     let app_clone = app.clone();
     let instance_id_clone = instance_id.clone();
-    let filepath_to_return = wav_filepath_str.clone();
 
     tauri::async_runtime::spawn(async move {
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: 16000,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut writer = match hound::WavWriter::create(&wav_filepath_str, spec) {
-            Ok(w) => Some(w),
-            Err(e) => {
-                eprintln!("[Audio] Failed to create mic WAV writer: {}", e);
-                None
+        let mut writer = if !is_test {
+            let spec = hound::WavSpec {
+                channels: 1,
+                sample_rate: 16000,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+            match hound::WavWriter::create(&wav_filepath_str, spec) {
+                Ok(w) => Some(w),
+                Err(e) => {
+                    eprintln!("[Audio] Failed to create mic WAV writer: {}", e);
+                    None
+                }
             }
+        } else {
+            None
         };
 
         // Pre-allocate a buffer for pulling from the ring buffer
@@ -457,7 +479,7 @@ pub fn start_microphone_capture<R: Runtime>(
                 }
 
                 // Feed to Sherpa
-                if !instance_id_clone.starts_with("test_") {
+                if !is_test {
                     let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
                     if let Err(e) = crate::sherpa::feed_audio_samples(
                         &app_clone,
@@ -490,7 +512,7 @@ pub fn start_microphone_capture<R: Runtime>(
             }
 
             // Feed to Sherpa
-            if !instance_id_clone.starts_with("test_") {
+            if !is_test {
                 let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
                 if let Err(e) = crate::sherpa::feed_audio_samples(
                     &app_clone,
