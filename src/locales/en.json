@@ -197,6 +197,8 @@
         "restore_defaults_confirm": "Are you sure you want to restore all model settings to their defaults?",
         "microphone": "Input Device",
         "microphone_selection": "Microphone Selection",
+        "microphone_boost": "Microphone Boost",
+        "microphone_boost_hint": "Amplify microphone volume (1.0 to 5.0). Useful for quiet microphones.",
         "system_audio_selection": "System Audio Selection",
         "input_device": "Input Device",
         "mic_auto": "Auto (Follow system)",

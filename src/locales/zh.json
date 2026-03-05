@@ -197,6 +197,8 @@
         "restore_defaults_confirm": "确定要将所有模型设置恢复为默认值吗？",
         "microphone": "输入设备",
         "microphone_selection": "麦克风选择",
+        "microphone_boost": "麦克风增强",
+        "microphone_boost_hint": "放大麦克风音量 (1.0 至 5.0)，适用于收音较小的麦克风。",
         "system_audio_selection": "系统音频选择",
         "input_device": "输入设备",
         "mic_auto": "自动 (跟随系统)",

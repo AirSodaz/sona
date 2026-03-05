@@ -73,6 +73,8 @@ export interface AppConfig {
   alwaysOnTop?: boolean;
   /** ID of the selected microphone device. Default: 'default'. */
   microphoneId?: string;
+  /** Microphone boost factor (1.0 to 5.0). Default: 1.0. */
+  microphoneBoost?: number;
   /** ID of the selected system audio device. Default: 'default'. */
   systemAudioDeviceId?: string;
   /** Whether to mute system audio during recording. Default: false. */

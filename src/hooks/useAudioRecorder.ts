@@ -252,6 +252,13 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 let nativeSuccess = false;
                 try {
                     console.log('[useAudioRecorder] Attempting native microphone capture...');
+
+                    // Set current microphone boost before starting
+                    const currentBoost = config.microphoneBoost ?? 1.0;
+                    await invoke('set_microphone_boost', { boost: currentBoost }).catch(err => {
+                        console.warn('[useAudioRecorder] Failed to set initial microphone boost:', err);
+                    });
+
                     await invoke('start_microphone_capture', {
                         deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
                         instanceId: 'record'

@@ -590,6 +590,7 @@ pub fn run() {
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,
+            audio::set_microphone_boost,
             audio::get_microphone_devices,
             audio::start_microphone_capture,
             audio::stop_microphone_capture,
