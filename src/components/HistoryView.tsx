@@ -5,7 +5,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { Search } from 'lucide-react';
 import { Dropdown } from './Dropdown';
-import { CloseIcon, FolderIcon } from './Icons';
+import { CloseIcon, FolderIcon, TrashIcon, ListChecksIcon, SquareIcon, CheckSquareIcon } from './Icons';
 import { Virtuoso } from 'react-virtuoso';
 import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
@@ -225,11 +225,12 @@ export function HistoryView() {
                             )}
                         </div>
                         <button
-                            className={`btn ${isSelectionMode ? 'btn-primary' : 'btn-secondary'}`}
+                            className={`btn btn-icon ${isSelectionMode ? 'btn-primary' : 'btn-secondary'}`}
                             onClick={toggleSelectionMode}
-                            style={{ whiteSpace: 'nowrap' }}
+                            title={isSelectionMode ? t('common.cancel', { defaultValue: 'Cancel' }) : t('common.select', { defaultValue: 'Select' })}
+                            aria-label={isSelectionMode ? t('common.cancel', { defaultValue: 'Cancel' }) : t('common.select', { defaultValue: 'Select' })}
                         >
-                            {isSelectionMode ? t('common.cancel', { defaultValue: 'Cancel' }) : t('common.select', { defaultValue: 'Select' })}
+                            {isSelectionMode ? <CloseIcon width={16} height={16} /> : <ListChecksIcon width={16} height={16} />}
                         </button>
                     </div>
 
@@ -266,11 +267,12 @@ export function HistoryView() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-bg-elevated)', padding: 'var(--spacing-sm)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
                                 <button
-                                    className="btn btn-secondary"
+                                    className="btn btn-secondary btn-icon-text"
                                     onClick={handleSelectAll}
                                     style={{ padding: '4px 8px', fontSize: '0.8rem' }}
                                 >
-                                    {selectedIds.length === filteredItems.length ? t('common.deselect_all', { defaultValue: 'Deselect All' }) : t('common.select_all', { defaultValue: 'Select All' })}
+                                    {selectedIds.length === filteredItems.length ? <CheckSquareIcon width={16} height={16} /> : <SquareIcon width={16} height={16} />}
+                                    <span>{selectedIds.length === filteredItems.length ? t('common.deselect_all', { defaultValue: 'Deselect All' }) : t('common.select_all', { defaultValue: 'Select All' })}</span>
                                 </button>
                                 <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                                     {t('history.selected_count', { count: selectedIds.length, defaultValue: `${selectedIds.length} selected` })}
@@ -279,11 +281,12 @@ export function HistoryView() {
 
                             {selectedIds.length > 0 && (
                                 <button
-                                    className="btn btn-danger"
+                                    className="btn btn-icon btn-danger"
                                     onClick={handleBulkDelete}
-                                    style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                                    title={t('common.delete', { defaultValue: 'Delete' })}
+                                    aria-label={t('common.delete', { defaultValue: 'Delete' })}
                                 >
-                                    {t('common.delete', { defaultValue: 'Delete' })}
+                                    <TrashIcon width={16} height={16} />
                                 </button>
                             )}
                         </div>
