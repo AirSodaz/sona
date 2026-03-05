@@ -348,10 +348,21 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             console.warn('Failed to resolve default VAD model path', e);
         }
 
+        // Ensure VAD model is downloaded if not installed
+        const isVadInstalled = await modelService.isModelInstalled(defaultVadModelId);
+        if (!isVadInstalled) {
+            const vadModel = PRESET_MODELS.find(m => m.id === defaultVadModelId);
+            if (vadModel) {
+                modelService.downloadModel(defaultVadModelId).then(async (downloadedPath) => {
+                    updateConfig({ vadModelPath: downloadedPath });
+                }).catch(e => console.error('Failed to download VAD model during restore', e));
+            }
+        }
+
         // Apply all defaults at once
         updateConfig({
             offlineModelPath: offlinePath,
-            punctuationModelPath: '',
+            punctuationModelPath: '', // 2024-07-17 model doesn't need punctuation
             vadModelPath: vadPath,
             ctcModelPath: '',
             vadBufferSize: 5,

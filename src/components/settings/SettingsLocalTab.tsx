@@ -33,8 +33,6 @@ export function SettingsLocalTab({
     const { alert } = useDialogStore();
 
     const offlineModelPath = config.offlineModelPath;
-    const punctuationModelPath = config.punctuationModelPath || '';
-    const vadModelPath = config.vadModelPath || '';
     const ctcModelPath = config.ctcModelPath || '';
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
@@ -130,7 +128,44 @@ export function SettingsLocalTab({
 
         try {
             const path = await modelService.getModelPath(modelId);
-            updateConfig({ offlineModelPath: path });
+            const updates: Partial<AppConfig> = { offlineModelPath: path };
+
+            // Handle punctuation model logic
+            if (modelId === 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09') {
+                const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
+                const isPunctInstalled = await modelService.isModelInstalled(punctModelId);
+
+                if (isPunctInstalled) {
+                    updates.punctuationModelPath = await modelService.getModelPath(punctModelId);
+                } else {
+                    // Trigger download in the background and set path when done
+                    const punctModel = PRESET_MODELS.find(m => m.id === punctModelId);
+                    if (punctModel) {
+                        // We use a small notification or just download it silently
+                        modelService.downloadModel(punctModelId).then(async (downloadedPath) => {
+                            updateConfig({ punctuationModelPath: downloadedPath });
+                        }).catch(e => console.error('Failed to download punctuation model', e));
+                    }
+                }
+            } else if (modelId === 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17') {
+                updates.punctuationModelPath = '';
+            }
+
+            // Ensure VAD is always on and downloaded
+            const vadModelId = 'silero-vad';
+            const isVadInstalled = await modelService.isModelInstalled(vadModelId);
+            if (isVadInstalled) {
+                updates.vadModelPath = await modelService.getModelPath(vadModelId);
+            } else {
+                const vadModel = PRESET_MODELS.find(m => m.id === vadModelId);
+                if (vadModel) {
+                    modelService.downloadModel(vadModelId).then(async (downloadedPath) => {
+                        updateConfig({ vadModelPath: downloadedPath });
+                    }).catch(e => console.error('Failed to download VAD model', e));
+                }
+            }
+
+            updateConfig(updates);
         } catch (e) {
             console.error('Failed to get offline model path', e);
         }
@@ -200,37 +235,6 @@ export function SettingsLocalTab({
                     </button>
                 </div>
             </div>
-
-            <div className="settings-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.punctuation_path_label')}</label>
-                        {/* Add Browse for punctuation too if needed, but sticking to offline for now as primary */}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                         {/* Hidden browse for others to keep UI clean as per previous design, or re-add if requested.
-                             To fix "unused variable", I MUST use it or remove it.
-                             I'll add it to the Offline model selection as a fallback/option.
-                         */}
-                        <Switch
-                            checked={!!punctuationModelPath}
-                            onChange={(c) => handleToggle('punctuation', c)}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="settings-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.vad_path_label', { defaultValue: 'VAD Model' })}</label>
-                    <Switch
-                        checked={!!vadModelPath}
-                        onChange={(c) => handleToggle('vad', c)}
-                    />
-                </div>
-            </div>
-
-
 
             <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
