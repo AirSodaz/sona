@@ -56,6 +56,7 @@ vi.mock('../../services/modelService', () => ({
         downloadModel: vi.fn(),
         getModelPath: vi.fn().mockImplementation((id) => Promise.resolve(`/path/to/${id}`)),
         deleteModel: vi.fn(),
+        getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false })
     }
 }));
 

@@ -7,6 +7,13 @@ import { listen } from '@tauri-apps/api/event';
 /**
  * Interface defining the structure and metadata for an AI model.
  */
+export interface ModelRules {
+    /** Whether the model requires Voice Activity Detection (VAD). */
+    requiresVad: boolean;
+    /** Whether the model requires a Punctuation model. */
+    requiresPunctuation: boolean;
+}
+
 export interface ModelInfo {
     /** Unique identifier for the model. */
     id: string;
@@ -28,7 +35,14 @@ export interface ModelInfo {
     filename?: string;
     /** Inference engine used by the model. */
     engine: 'onnx' | 'ncnn';
+    /** Explicit model rules for VAD and Punctuation models. */
+    rules?: ModelRules;
 }
+
+export const DEFAULT_MODEL_RULES: ModelRules = {
+    requiresVad: true,
+    requiresPunctuation: false
+};
 
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
@@ -40,7 +54,11 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
         size: '~158 MB',
-        engine: 'onnx'
+        engine: 'onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: true
+        }
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
@@ -50,7 +68,11 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'offline',
         language: 'zh,en,ja,ko,yue',
         size: '~155 MB',
-        engine: 'onnx'
+        engine: 'onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        }
     },
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
@@ -452,6 +474,22 @@ class ModelService {
         } catch (error) {
             throw new Error(`Extraction failed: ${error}`);
         }
+    }
+
+    /**
+     * Gets the model rules for a specific model ID.
+     * If the model defines custom rules, those are used.
+     * Otherwise, defaults to DEFAULT_MODEL_RULES.
+     *
+     * @param modelId The ID of the model.
+     * @returns The ModelRules for the model.
+     */
+    getModelRules(modelId: string): ModelRules {
+        const model = PRESET_MODELS.find(m => m.id === modelId);
+        if (model && model.rules) {
+            return model.rules;
+        }
+        return DEFAULT_MODEL_RULES;
     }
 }
 
