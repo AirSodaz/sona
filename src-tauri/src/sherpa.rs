@@ -643,6 +643,32 @@ pub async fn start_recognizer(
     instance.segment_start_time = 0.0;
     instance.offline_state = OfflineState::default();
     instance.current_segment_id = None;
+
+    // Reset VAD state by recreating it
+    let mut vad = None;
+    if let Some(v_path) = &instance.vad_model {
+        if Path::new(v_path).exists() {
+            let silero_vad = SileroVadModelConfig {
+                model: Some(v_path.clone()),
+                threshold: 0.35,
+                min_silence_duration: 0.5,
+                min_speech_duration: 0.25,
+                window_size: 512,
+                ..Default::default()
+            };
+
+            let vad_config = VadModelConfig {
+                silero_vad,
+                sample_rate: 16000,
+                num_threads: 1,
+                ..Default::default()
+            };
+
+            vad = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
+        }
+    }
+    instance.vad = vad;
+
     Ok(())
 }
 
