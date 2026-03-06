@@ -259,6 +259,17 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (!confirmed) return;
         }
 
+        // Trigger background downloads for dependencies immediately
+        if (model.type === 'offline') {
+            const rules = modelService.getModelRules(model.id);
+            if (rules.requiresVad) {
+                document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
+            }
+            if (rules.requiresPunctuation) {
+                document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8' } }));
+            }
+        }
+
         await executeDownload(
             model.id,
             (id, cb, sig) => modelService.downloadModel(id, cb, sig),
@@ -270,17 +281,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                     updateConfig({ enabledITNModels: Array.from(current) });
                 } else {
                     setModelPathByType(model.type as any, path);
-
-                    // If it's an offline model, automatically apply rules and trigger background downloads for dependencies
-                    if (model.type === 'offline') {
-                        const rules = modelService.getModelRules(model.id);
-                        if (rules.requiresVad) {
-                            document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
-                        }
-                        if (rules.requiresPunctuation) {
-                            document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8' } }));
-                        }
-                    }
                 }
             }
         );
