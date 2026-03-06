@@ -258,12 +258,6 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
         let mut archive = tar::Archive::new(tar);
         let target_path = Path::new(&target_dir);
 
-        // Get list of entries first to count them?
-        // Tar streams don't support counting without reading everything.
-        // So we just report "Extracting <filename>" without percentage,
-        // or we could roughly estimate if we knew total files, but we don't.
-        // We will just emit the current file name.
-
         let mut last_emit = Instant::now();
 
         for entry in archive.entries().map_err(|e| e.to_string())? {
