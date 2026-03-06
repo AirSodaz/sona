@@ -341,11 +341,13 @@ class ModelService {
 
         let extractUnlisten: (() => void) | undefined;
         if (onProgress) {
-            extractUnlisten = await listen<string>('extract-progress', (event) => {
-                const filename = event.payload;
+            extractUnlisten = await listen<{ percentage: number; filename: string }>('extract-progress', (event) => {
+                const { percentage, filename } = event.payload;
                 // Truncate filename if too long
                 const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
-                onProgress(60, `Extracting: ${displayFilename}`);
+                // Map the 0-100 extraction percentage to the remaining 60-100 overall progress
+                const overallPercentage = 60 + Math.round((percentage * 40) / 100);
+                onProgress(overallPercentage, `Extracting: ${displayFilename}`);
             });
         }
 
