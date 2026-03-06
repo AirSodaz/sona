@@ -25,12 +25,11 @@ fn main() {
 
             let lib_path = Path::new(&lib_dir);
             if lib_path.exists() {
-                for entry in fs::read_dir(lib_path).unwrap() {
-                    let entry = entry.unwrap();
-                    let path = entry.path();
-                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("dll") {
-                        let file_name = path.file_name().unwrap();
-                        let dest_path = out_path.join(file_name);
+                let dlls_to_copy = ["sherpa-onnx-c-api.dll", "onnxruntime.dll"];
+                for dll in dlls_to_copy.iter() {
+                    let path = lib_path.join(dll);
+                    if path.exists() {
+                        let dest_path = out_path.join(dll);
                         fs::copy(&path, &dest_path).unwrap();
                     }
                 }

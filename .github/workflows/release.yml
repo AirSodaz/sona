@@ -95,7 +95,8 @@ jobs:
       - name: Copy Windows DLLs
         if: startsWith(matrix.platform, 'windows')
         run: |
-          Copy-Item "$env:SHERPA_ONNX_LIB_DIR\*.dll" -Destination "src-tauri" -Recurse
+          Copy-Item "$env:SHERPA_ONNX_LIB_DIR\sherpa-onnx-c-api.dll" -Destination "src-tauri"
+          Copy-Item "$env:SHERPA_ONNX_LIB_DIR\onnxruntime.dll" -Destination "src-tauri"
 
       - name: Build the app
         env:
