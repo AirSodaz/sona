@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
@@ -78,7 +79,7 @@ export class TranscriptionService {
      * @param path The absolute path to the model file or directory.
      */
     setModelPath(path: string): void {
-        console.log('[TranscriptionService] Setting model path:', path);
+        logger.info('[TranscriptionService] Setting model path:', path);
         this.modelPath = path;
     }
 
@@ -146,11 +147,11 @@ export class TranscriptionService {
         }
 
         if (!this.modelPath) {
-            console.warn('[TranscriptionService] Model path not configured, cannot prepare backend');
+            logger.warn('[TranscriptionService] Model path not configured, cannot prepare backend');
             return;
         }
 
-        console.log('[TranscriptionService] Initializing recognizer models...');
+        logger.info('[TranscriptionService] Initializing recognizer models...');
         return this._initBackend();
     }
 
@@ -165,7 +166,7 @@ export class TranscriptionService {
 
         // If config changed, re-initialize first
         if (!this._isConfigMatch()) {
-            console.log('[TranscriptionService] Configuration changed, re-initializing backend for start...');
+            logger.info('[TranscriptionService] Configuration changed, re-initializing backend for start...');
             await this._initBackend();
         }
 
@@ -178,7 +179,7 @@ export class TranscriptionService {
         }
 
         this.startingPromise = (async () => {
-            console.log(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
+            logger.info(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
 
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
@@ -204,10 +205,10 @@ export class TranscriptionService {
                 });
 
                 this.runningConfig = configToUse;
-                console.log(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized`);
+                logger.info(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized`);
 
             } catch (error) {
-                console.error(`[TranscriptionService:${this.instanceId}] Failed to initialize recognizer:`, error);
+                logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize recognizer:`, error);
                 if (this.onError) this.onError(`Failed to initialize: ${error}`);
                 this.runningConfig = null;
                 throw error;
@@ -236,10 +237,10 @@ export class TranscriptionService {
             await invoke('start_recognizer', { instanceId: this.instanceId });
 
             this.isRunning = true;
-            console.log('[TranscriptionService] Rust Recognizer stream started');
+            logger.info('[TranscriptionService] Rust Recognizer stream started');
 
         } catch (error) {
-            console.error('Failed to start recognizer stream:', error);
+            logger.error('Failed to start recognizer stream:', error);
             if (this.onError) this.onError(`Failed to start stream: ${error}`);
             this.isRunning = false;
             throw error;
@@ -278,9 +279,9 @@ export class TranscriptionService {
         try {
             await invoke('stop_recognizer', { instanceId: this.instanceId });
         } catch (error) {
-            console.error(`[TranscriptionService:${this.instanceId}] Failed to stop recognizer:`, error);
+            logger.error(`[TranscriptionService:${this.instanceId}] Failed to stop recognizer:`, error);
         } finally {
-            console.log(`[TranscriptionService:${this.instanceId}] Recognizer stopped`);
+            logger.info(`[TranscriptionService:${this.instanceId}] Recognizer stopped`);
             this.isRunning = false;
             // We intentionally do NOT set this.runningConfig = null here.
             // Keeping the runningConfig allows subsequent starts with the same config
@@ -303,7 +304,7 @@ export class TranscriptionService {
             try {
                 await invoke('flush_recognizer', { instanceId: this.instanceId });
             } catch (error) {
-                console.error(`[TranscriptionService:${this.instanceId}] Failed to flush recognizer:`, error);
+                logger.error(`[TranscriptionService:${this.instanceId}] Failed to flush recognizer:`, error);
             }
         }
         await this.stop();
@@ -329,7 +330,7 @@ export class TranscriptionService {
             const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
             await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: bytes });
         } catch (error) {
-            console.error(`[TranscriptionService:${this.instanceId}] Failed to feed audio to backend:`, error);
+            logger.error(`[TranscriptionService:${this.instanceId}] Failed to feed audio to backend:`, error);
         }
     }
 
@@ -351,7 +352,7 @@ export class TranscriptionService {
         } catch (error: any) {
             // Check if the error message contains 'COREML_FAILURE' inside the wrapped error
             if (error.message && error.message.includes('COREML_FAILURE')) {
-                console.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
+                logger.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
                 return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language, saveToPath);
             }
             throw error;
@@ -374,7 +375,7 @@ export class TranscriptionService {
             throw new Error('Model path not configured');
         }
 
-        console.log(`[TranscriptionService] Starting batch transcription for: ${filePath} via Rust backend`);
+        logger.info(`[TranscriptionService] Starting batch transcription for: ${filePath} via Rust backend`);
 
         try {
             let progressUnlisten: UnlistenFn | undefined;
@@ -423,7 +424,7 @@ export class TranscriptionService {
 
             return segments;
         } catch (error) {
-            console.error('[TranscriptionService] Batch transcription failed:', error);
+            logger.error('[TranscriptionService] Batch transcription failed:', error);
             throw new Error(`Process error: ${error}`);
         }
     }
@@ -449,7 +450,7 @@ export class TranscriptionService {
      * @return The alignment result, or null if alignment is unavailable or fails.
      */
     async alignSegment(segment: TranscriptSegment, _sourceFilePath?: string): Promise<AlignmentResult | null> {
-        console.warn(`[TranscriptionService] CTC Alignment is not yet implemented in the Rust backend. Returning null for segment ${segment.id}`);
+        logger.warn(`[TranscriptionService] CTC Alignment is not yet implemented in the Rust backend. Returning null for segment ${segment.id}`);
         return null;
     }
 }

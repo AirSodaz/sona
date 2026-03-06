@@ -433,7 +433,22 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Info)
+                .level(tauri_plugin_log::log::LevelFilter::Debug)
+                .clear_targets()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("appsona".to_string()),
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                ])
+                .format(|out, message, record| {
+                    let formatted = serde_json::json!({
+                        "level": record.level().to_string(),
+                        "target": record.target(),
+                        "message": message.to_string(),
+                    });
+                    out.finish(format_args!("{}", formatted.to_string()));
+                })
                 .build(),
         )
         .setup(|app| {

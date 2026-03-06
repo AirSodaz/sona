@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger";
 import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, mkdir, copyFile, stat } from '@tauri-apps/plugin-fs';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -20,24 +21,24 @@ export const historyService = {
 
             const indexExists = await exists(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
             if (!indexExists) {
-                console.log('[History] Creating index file');
+                logger.info('[History] Creating index file');
                 await writeTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, '[]', { baseDir: BaseDirectory.AppLocalData });
             }
         } catch (error) {
-            console.error('[History] Failed to initialize service:', error);
+            logger.error('[History] Failed to initialize service:', error);
             throw error; // Re-throw to see it upstream
         }
     },
 
     async getAll(): Promise<HistoryItem[]> {
         try {
-            console.log('[History] Getting all items');
+            logger.info('[History] Getting all items');
             await this.init();
             const content = await readTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
-            console.log('[History] Loaded index:', content?.substring(0, 50));
+            logger.info('[History] Loaded index:', content?.substring(0, 50));
             return JSON.parse(content);
         } catch (error) {
-            console.error('[History] Failed to load history:', error);
+            logger.error('[History] Failed to load history:', error);
             return [];
         }
     },
@@ -46,7 +47,7 @@ export const historyService = {
         // Save Transcript
         const transcriptFileName = `${id}.json`;
         const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
-        console.log('[History] Writing transcript file:', transcriptPathDisplay);
+        logger.info('[History] Writing transcript file:', transcriptPathDisplay);
         await writeTextFile(
             transcriptPathDisplay,
             JSON.stringify(segments, null, 2),
@@ -61,10 +62,10 @@ export const historyService = {
     },
 
     async saveNativeRecording(absoluteWavPath: string, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
-        console.log('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
+        logger.info('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
 
         if (!segments || segments.length === 0) {
-            console.log('[History] Empty transcript, skipping save.');
+            logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
 
@@ -95,7 +96,7 @@ export const historyService = {
             };
 
             // Add to Index
-            console.log('[History] Updating index');
+            logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
             await writeTextFile(
@@ -104,19 +105,19 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            console.log('[History] Native save complete:', newItem);
+            logger.info('[History] Native save complete:', newItem);
             return newItem;
         } catch (error) {
-            console.error('[History] Failed to save native recording:', error);
+            logger.error('[History] Failed to save native recording:', error);
             return null;
         }
     },
 
     async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
-        console.log('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
+        logger.info('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
 
         if (!segments || segments.length === 0) {
-            console.log('[History] Empty transcript, skipping save.');
+            logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
 
@@ -134,7 +135,7 @@ export const historyService = {
             const audioFileName = `${id}.webm`;
             const audioPathDisplay = `${HISTORY_DIR}/${audioFileName}`;
 
-            console.log('[History] Writing audio file:', audioPathDisplay);
+            logger.info('[History] Writing audio file:', audioPathDisplay);
             await writeFile(
                 audioPathDisplay,
                 uint8Array,
@@ -157,7 +158,7 @@ export const historyService = {
             };
 
             // Add to Index
-            console.log('[History] Updating index');
+            logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
             await writeTextFile(
@@ -166,19 +167,19 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            console.log('[History] Save complete:', newItem);
+            logger.info('[History] Save complete:', newItem);
             return newItem;
         } catch (error) {
-            console.error('[History] Failed to save recording:', error);
+            logger.error('[History] Failed to save recording:', error);
             return null;
         }
     },
 
     async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string): Promise<HistoryItem | null> {
-        console.log('[History] Saving imported file...', { filePath, segments: segments.length });
+        logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
 
         if (!segments || segments.length === 0) {
-            console.log('[History] Empty transcript, skipping save.');
+            logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
 
@@ -199,7 +200,7 @@ export const historyService = {
             const audioFileName = `${id}.${targetExt}`;
             const audioPathDisplay = `${HISTORY_DIR}/${audioFileName}`;
 
-            console.log('[History] Copying audio file to:', audioPathDisplay);
+            logger.info('[History] Copying audio file to:', audioPathDisplay);
             // Copy the file to the history directory
             await copyFile(
                 convertedFilePath || filePath,
@@ -223,7 +224,7 @@ export const historyService = {
             };
 
             // Add to Index
-            console.log('[History] Updating index');
+            logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
             await writeTextFile(
@@ -232,11 +233,11 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            console.log('[History] Import save complete:', newItem);
+            logger.info('[History] Import save complete:', newItem);
             return newItem;
 
         } catch (error) {
-            console.error('[History] Failed to save imported file:', error);
+            logger.error('[History] Failed to save imported file:', error);
             return null;
         }
     },
@@ -267,7 +268,7 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
         } catch (error) {
-            console.error('Failed to delete recording:', error);
+            logger.error('Failed to delete recording:', error);
         }
     },
 
@@ -288,7 +289,7 @@ export const historyService = {
                         await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
                     }
                 } catch (e) {
-                    console.error(`Failed to delete files for item ${item.id}`, e);
+                    logger.error(`Failed to delete files for item ${item.id}`, e);
                     // Continue deleting others even if one fails
                 }
             }
@@ -300,7 +301,7 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
         } catch (error) {
-            console.error('Failed to delete recordings:', error);
+            logger.error('Failed to delete recordings:', error);
             throw error;
         }
     },
@@ -311,7 +312,7 @@ export const historyService = {
             const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
             return JSON.parse(content);
         } catch (error) {
-            console.error('Failed to load transcript:', error);
+            logger.error('Failed to load transcript:', error);
             return null;
         }
     },
@@ -327,7 +328,7 @@ export const historyService = {
             const items = await this.getAll();
             const item = items.find(i => i.id === historyId);
             if (!item) {
-                console.error('[History] updateTranscript: item not found:', historyId);
+                logger.error('[History] updateTranscript: item not found:', historyId);
                 return;
             }
 
@@ -351,7 +352,7 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
         } catch (error) {
-            console.error('[History] Failed to update transcript:', error);
+            logger.error('[History] Failed to update transcript:', error);
         }
     },
 
@@ -364,17 +365,17 @@ export const historyService = {
             try {
                 const fileStat = await stat(`${HISTORY_DIR}/${filename}`, { baseDir: BaseDirectory.AppLocalData });
                 if (fileStat.size === 0) {
-                    console.error('[History] Audio file is empty:', filename);
+                    logger.error('[History] Audio file is empty:', filename);
                     return null;
                 }
             } catch (e) {
-                console.error('[History] Audio file not found or inaccessible:', filename, e);
+                logger.error('[History] Audio file not found or inaccessible:', filename, e);
                 return null;
             }
 
             return convertFileSrc(fullPath);
         } catch (e) {
-            console.error('Failed to get audio URL:', e);
+            logger.error('Failed to get audio URL:', e);
             return null;
         }
     },
@@ -383,10 +384,10 @@ export const historyService = {
         try {
             const appDataDirPath = await appLocalDataDir();
             const historyPath = await join(appDataDirPath, HISTORY_DIR);
-            console.log('[History] Opening folder:', historyPath);
+            logger.info('[History] Opening folder:', historyPath);
             await openPath(historyPath);
         } catch (error) {
-            console.error('[History] Failed to open history folder:', error);
+            logger.error('[History] Failed to open history folder:', error);
         }
     }
 };
