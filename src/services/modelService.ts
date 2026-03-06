@@ -259,7 +259,7 @@ class ModelService {
                     lastTime = now;
 
                     if (total > 0) {
-                        const percentage = Math.round((downloaded / total) * (label === 'Downloading' ? 50 : 100)); // 50% for archives, 100% for direct
+                        const percentage = Math.round((downloaded / total) * 100);
                         const downloadedMB = Math.round(downloaded / 1024 / 1024);
                         const totalMB = Math.round(total / 1024 / 1024);
                         onProgress(percentage, `${label}... ${downloadedMB}MB / ${totalMB}MB (${speedStr})`);
@@ -334,20 +334,17 @@ class ModelService {
 
         if (signal?.aborted) throw new Error('Download cancelled');
 
-        onProgress?.(50, 'Saving to disk (instant)...');
         // No manual saving needed, Rust did it directly
 
-        onProgress?.(60, 'Extracting (this may take a while)...');
+        onProgress?.(100, 'Extracting (this may take a while)...');
 
         let extractUnlisten: (() => void) | undefined;
         if (onProgress) {
-            extractUnlisten = await listen<{ percentage: number; filename: string }>('extract-progress', (event) => {
-                const { percentage, filename } = event.payload;
+            extractUnlisten = await listen<string>('extract-progress', (event) => {
+                const filename = event.payload;
                 // Truncate filename if too long
                 const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
-                // Map the 0-100 extraction percentage to the remaining 60-100 overall progress
-                const overallPercentage = 60 + Math.round((percentage * 40) / 100);
-                onProgress(overallPercentage, `Extracting: ${displayFilename}`);
+                onProgress(100, `Extracting: ${displayFilename}`);
             });
         }
 

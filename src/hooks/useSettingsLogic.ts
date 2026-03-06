@@ -86,22 +86,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 const modelId = customEvent.detail.modelId;
                 const model = PRESET_MODELS.find(m => m.id === modelId);
                 if (model && !downloads[modelId]) {
-                    // Check if model is already installed to avoid redundant downloads
-                    const isInstalled = await modelService.isModelInstalled(modelId);
-                    if (isInstalled) {
-                        const path = await modelService.getModelPath(modelId);
-                        setModelPathByType(model.type as any, path);
-                        return;
-                    }
                     try {
-                        // Use executeDownload to show progress in the UI
-                        await executeDownload(
-                            modelId,
-                            (id, cb, sig) => modelService.downloadModel(id, cb, sig),
-                            (path) => {
-                                setModelPathByType(model.type as any, path);
-                            }
-                        );
+                        // Silent download without updating progress UI
+                        const path = await modelService.downloadModel(modelId, undefined);
+                        await checkInstalledModels();
+                        setModelPathByType(model.type as any, path);
                     } catch (e) {
                         console.error(`Background download failed for ${modelId}:`, e);
                     }
@@ -113,7 +102,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         return () => {
             document.removeEventListener('download-background-model', handleBackgroundDownload);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [downloads]);
 
     // Helper to update config and persist immediately

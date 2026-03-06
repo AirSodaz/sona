@@ -229,7 +229,7 @@ async fn update_tray_menu<R: tauri::Runtime>(
 /// Extracts a `.tar.bz2` archive to a target directory.
 ///
 /// Runs in a blocking thread to avoid stalling the async runtime.
-/// Emits `extract-progress` events with the current percentage and filename being extracted.
+/// Emits `extract-progress` events with the current filename being extracted.
 ///
 /// # Arguments
 ///
@@ -246,39 +246,14 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
     archive_path: String,
     target_dir: String,
 ) -> Result<(), String> {
-    use std::io::Read;
     use std::path::Path;
     use std::time::Instant;
     use tauri::Emitter;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
     // Move heavy lifting to a blocking thread to avoid blocking the async runtime
     tauri::async_runtime::spawn_blocking(move || {
         let file = std::fs::File::open(&archive_path).map_err(|e| e.to_string())?;
-        let metadata = file.metadata().map_err(|e| e.to_string())?;
-        let total_size = metadata.len();
-
-        // Progress tracking structures
-        struct ProgressTracker<R> {
-            inner: R,
-            bytes_read: Arc<AtomicU64>,
-        }
-
-        impl<R: Read> Read for ProgressTracker<R> {
-            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-                let n = self.inner.read(buf)?;
-                self.bytes_read.fetch_add(n as u64, Ordering::Relaxed);
-                Ok(n)
-            }
-        }
-
-        let bytes_read = Arc::new(AtomicU64::new(0));
-        let tracker = ProgressTracker {
-            inner: file,
-            bytes_read: Arc::clone(&bytes_read),
-        };
-
-        let buffered = std::io::BufReader::new(tracker);
+        let buffered = std::io::BufReader::new(file);
         let tar = bzip2::read::BzDecoder::new(buffered);
         let mut archive = tar::Archive::new(tar);
         let target_path = Path::new(&target_dir);
@@ -292,30 +267,12 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
             if last_emit.elapsed().as_millis() > 100 {
                 let path = entry.path().map_err(|e| e.to_string())?;
                 let path_str = path.to_string_lossy().to_string();
-
-                let read_so_far = bytes_read.load(Ordering::Relaxed);
-                let percentage = if total_size > 0 {
-                    (read_so_far as f64 / total_size as f64 * 100.0) as u32
-                } else {
-                    0
-                };
-
-                let _ = app.emit("extract-progress", serde_json::json!({
-                    "percentage": percentage.min(100),
-                    "filename": path_str
-                }));
+                let _ = app.emit("extract-progress", &path_str);
                 last_emit = Instant::now();
             }
 
             entry.unpack_in(target_path).map_err(|e| e.to_string())?;
         }
-
-        // Emit final 100%
-        let _ = app.emit("extract-progress", serde_json::json!({
-            "percentage": 100,
-            "filename": "Done"
-        }));
-
         Ok::<(), String>(())
     })
     .await
