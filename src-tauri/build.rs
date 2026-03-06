@@ -28,10 +28,10 @@ fn main() {
         } else {
             // Dynamic linking
             println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
-            println!("cargo:rustc-link-lib=dylib=onnxruntime");
 
             let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
             if target_os == "linux" || target_os == "macos" {
+                println!("cargo:rustc-link-lib=dylib=onnxruntime");
                 println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir);
             }
         }
