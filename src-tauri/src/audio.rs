@@ -615,7 +615,11 @@ pub fn start_microphone_capture<R: Runtime>(
                 device.build_input_stream(
                     &config,
                     move |data: &[f32], _: &_| {
-                        let boost = *app_handle_f32.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        let boost = *app_handle_f32
+                            .state::<AudioState>()
+                            .mic_boost
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
                         process_mic_audio(
                             data,
                             channels as usize,
@@ -633,13 +637,17 @@ pub fn start_microphone_capture<R: Runtime>(
                     err_fn,
                     None,
                 )
-            },
+            }
             SampleFormat::I16 => {
                 let window_clone = window.clone();
                 device.build_input_stream(
                     &config,
                     move |data: &[i16], _: &_| {
-                        let boost = *app_handle_i16.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        let boost = *app_handle_i16
+                            .state::<AudioState>()
+                            .mic_boost
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
                         let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
                         process_mic_audio(
                             &data_f32,
@@ -658,13 +666,17 @@ pub fn start_microphone_capture<R: Runtime>(
                     err_fn,
                     None,
                 )
-            },
+            }
             SampleFormat::U16 => {
                 let window_clone = window.clone();
                 device.build_input_stream(
                     &config,
                     move |data: &[u16], _: &_| {
-                        let boost = *app_handle_u16.state::<AudioState>().mic_boost.lock().unwrap_or_else(|e| e.into_inner());
+                        let boost = *app_handle_u16
+                            .state::<AudioState>()
+                            .mic_boost
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
                         let data_f32: Vec<f32> = data
                             .iter()
                             .map(|&s| (s as f32 - 32768.0) / 32768.0)
@@ -686,7 +698,7 @@ pub fn start_microphone_capture<R: Runtime>(
                     err_fn,
                     None,
                 )
-            },
+            }
             _ => {
                 eprintln!("[Audio] Unsupported mic sample format");
                 return;
@@ -928,10 +940,7 @@ pub async fn stop_system_audio_capture(
 }
 
 #[tauri::command]
-pub fn set_microphone_boost(
-    state: tauri::State<'_, AudioState>,
-    boost: f32,
-) -> Result<(), String> {
+pub fn set_microphone_boost(state: tauri::State<'_, AudioState>, boost: f32) -> Result<(), String> {
     let mut mic_boost = state.mic_boost.lock().map_err(|e| e.to_string())?;
     *mic_boost = boost;
     println!("[Audio] Set microphone boost to {}", boost);
