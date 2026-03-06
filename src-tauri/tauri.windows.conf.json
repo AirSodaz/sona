@@ -3,7 +3,8 @@
     "identifier": "com.asoda.sona",
     "bundle": {
         "resources": [
-            "*.dll"
+            "sherpa-onnx-c-api.dll",
+            "onnxruntime.dll"
         ]
     }
 }
