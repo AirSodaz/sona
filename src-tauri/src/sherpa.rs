@@ -321,6 +321,11 @@ impl Punctuation {
         };
 
         let ptr = unsafe { SherpaOnnxCreateOfflinePunctuation(&config) };
+
+        // Ensure CStrings are kept alive until here
+        drop(ct_transformer);
+        drop(provider);
+
         if ptr.is_null() {
             Err("Failed to create OfflinePunctuation".to_string())
         } else {
