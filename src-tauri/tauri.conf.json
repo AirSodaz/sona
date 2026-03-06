@@ -34,9 +34,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": [
-      "*.dll"
-    ],
+    "resources": [],
     "externalBin": [
       "binaries/ffmpeg"
     ],

@@ -1,38 +1,39 @@
 use std::env;
+use std::fs;
 use std::path::Path;
-
 fn main() {
+    println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
     if let Ok(lib_dir) = env::var("SHERPA_ONNX_LIB_DIR") {
         println!("cargo:rustc-link-search=native={}", lib_dir);
 
-        let is_static = Path::new(&lib_dir).join("sherpa-onnx-core.lib").exists()
-            || Path::new(&lib_dir).join("libsherpa-onnx-core.a").exists();
+        println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
 
-        if is_static {
-            // Static linking required for sherpa-onnx
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-core");
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-cxx-api");
-            println!("cargo:rustc-link-lib=static=kaldi-native-fbank-core");
-            println!("cargo:rustc-link-lib=static=kaldi-decoder-core");
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-fst");
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-fstfar");
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-kaldifst-core");
-            println!("cargo:rustc-link-lib=static=ssentencepiece_core");
-            println!("cargo:rustc-link-lib=static=piper_phonemize");
-            println!("cargo:rustc-link-lib=static=espeak-ng");
-            println!("cargo:rustc-link-lib=static=kissfft-float");
-            println!("cargo:rustc-link-lib=static=ucd");
-            println!("cargo:rustc-link-lib=static=cargs");
-            println!("cargo:rustc-link-lib=static=sherpa-onnx-c-api");
-            println!("cargo:rustc-link-lib=static=onnxruntime");
-        } else {
-            // Dynamic linking
-            println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
+        let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target_os == "linux" || target_os == "macos" {
+            println!("cargo:rustc-link-lib=dylib=onnxruntime");
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir);
+        } else if target_os == "windows" {
+            // Copy dlls to the output directory
+            let out_dir = env::var("OUT_DIR").unwrap();
+            let out_path = Path::new(&out_dir)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap();
 
-            let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-            if target_os == "linux" || target_os == "macos" {
-                println!("cargo:rustc-link-lib=dylib=onnxruntime");
-                println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir);
+            let lib_path = Path::new(&lib_dir);
+            if lib_path.exists() {
+                for entry in fs::read_dir(lib_path).unwrap() {
+                    let entry = entry.unwrap();
+                    let path = entry.path();
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("dll") {
+                        let file_name = path.file_name().unwrap();
+                        let dest_path = out_path.join(file_name);
+                        fs::copy(&path, &dest_path).unwrap();
+                    }
+                }
             }
         }
     }
