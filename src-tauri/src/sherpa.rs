@@ -5,6 +5,7 @@ use sherpa_onnx::{
 use std::ffi::{c_char, CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use log::{debug, error, info, trace, warn};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
@@ -41,7 +42,9 @@ pub fn find_model_config<P: AsRef<Path>>(
     language: &str,
 ) -> Option<ModelType> {
     let model_path = model_path.as_ref();
+    debug!("find_model_config called with path: {:?}, enable_itn: {}, language: {}", model_path, enable_itn, language);
     if !model_path.exists() || !model_path.is_dir() {
+        warn!("Model path does not exist or is not a directory: {:?}", model_path);
         return None;
     }
 
@@ -174,8 +177,10 @@ impl Recognizer {
                 config.feat_config.feature_dim = 80;
                 config.enable_endpoint = true;
 
+                debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineTransducer)");
                 let recognizer =
                     OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
+                debug!("Successfully created OnlineRecognizer (OnlineTransducer)");
                 RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
             ModelType::OnlineParaformer {
@@ -200,8 +205,10 @@ impl Recognizer {
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
 
+                debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineParaformer)");
                 let recognizer =
                     OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
+                debug!("Successfully created OnlineRecognizer (OnlineParaformer)");
                 RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
             ModelType::OfflineSenseVoice {
@@ -223,8 +230,10 @@ impl Recognizer {
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
 
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineSenseVoice)");
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineSenseVoice)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
             ModelType::OfflineWhisper {
@@ -246,8 +255,10 @@ impl Recognizer {
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
 
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineWhisper)");
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineWhisper)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };
@@ -306,8 +317,16 @@ pub struct Punctuation {
 
 impl Punctuation {
     pub fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
-        let ct_transformer = CString::new(model_path).map_err(|e| e.to_string())?;
-        let provider = CString::new("cpu").map_err(|e| e.to_string())?;
+        debug!("Allocating CString for ct_transformer path: {}", model_path);
+        let ct_transformer = CString::new(model_path).map_err(|e| {
+            error!("Memory allocation failed for CString (NulError): {}", e);
+            e.to_string()
+        })?;
+        debug!("Allocating CString for provider: cpu");
+        let provider = CString::new("cpu").map_err(|e| {
+            error!("Memory allocation failed for CString (NulError): {}", e);
+            e.to_string()
+        })?;
 
         let model_config = SherpaOnnxOfflinePunctuationModelConfig {
             ct_transformer: ct_transformer.as_ptr(),
@@ -320,7 +339,9 @@ impl Punctuation {
             model: model_config,
         };
 
+        debug!("FFI: Calling SherpaOnnxCreateOfflinePunctuation");
         let ptr = unsafe { SherpaOnnxCreateOfflinePunctuation(&config) };
+        debug!("FFI: Successfully returned from SherpaOnnxCreateOfflinePunctuation");
 
         // Ensure CStrings are kept alive until here
         drop(ct_transformer);
@@ -334,9 +355,12 @@ impl Punctuation {
     }
 
     pub fn add_punct(&self, text: &str) -> String {
+        debug!("Allocating CString for punctuation text: {}", text);
         let c_text = CString::new(text).unwrap_or_default();
         unsafe {
+            debug!("FFI: Calling SherpaOnnxOfflinePunctuationAddPunct");
             let res_ptr = SherpaOfflinePunctuationAddPunct(self.ptr, c_text.as_ptr());
+            debug!("FFI: Successfully returned from SherpaOnnxOfflinePunctuationAddPunct");
             if res_ptr.is_null() {
                 return text.to_string();
             }
@@ -350,7 +374,9 @@ impl Punctuation {
 impl Drop for Punctuation {
     fn drop(&mut self) {
         unsafe {
+            debug!("FFI: Calling SherpaOnnxDestroyOfflinePunctuation");
             SherpaOnnxDestroyOfflinePunctuation(self.ptr);
+            debug!("FFI: Successfully returned from SherpaOnnxDestroyOfflinePunctuation");
         }
     }
 }
@@ -515,7 +541,9 @@ fn run_offline_inference<R: tauri::Runtime>(
         full_audio.extend_from_slice(chunk);
     }
     let stream = r.create_stream();
+    debug!("FFI: Calling accept_waveform (Offline)");
     stream.accept_waveform(16000, &full_audio);
+    debug!("FFI: Successfully returned from accept_waveform (Offline)");
     r.decode(&stream);
 
     if let Some(result) = stream.get_result() {
@@ -700,6 +728,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
     state: State<'_, SherpaState>,
     instance_id: String,
 ) -> Result<(), String> {
+    info!("Flushing recognizer for instance id: {}", instance_id);
     let mut instances = state.instances.lock().await;
     let instance = instances
         .get_mut(&instance_id)
@@ -757,7 +786,9 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
 
             // Add tail padding to flush the decoder
             let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+            debug!("FFI: Calling accept_waveform (Online, tail_padding)");
             st.0.accept_waveform(16000, &tail_padding);
+            debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
             while r.0.is_ready(&st.0) {
                 r.0.decode(&st.0);
             }
@@ -820,7 +851,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             (instance.recognizer.clone(), instance.vad.as_ref())
         {
             if let RecognizerInner::Offline(_) = &recognizer.inner {
+                debug!("FFI: Calling vad.accept_waveform");
                 vad.accept_waveform(samples);
+                debug!("FFI: Successfully returned from vad.accept_waveform");
                 let currently_speaking = vad.detected();
 
                 // Ensure segment ID exists
@@ -970,7 +1003,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
     {
         if let RecognizerInner::Online(r) = &recognizer.inner {
+            debug!("FFI: Calling accept_waveform (Online, samples)");
             st.0.accept_waveform(16000, samples);
+            debug!("FFI: Successfully returned from accept_waveform (Online, samples)");
             instance.total_samples += samples.len();
 
             while r.0.is_ready(&st.0) {
@@ -1006,7 +1041,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 
             if r.0.is_endpoint(&st.0) {
                 let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+                debug!("FFI: Calling accept_waveform (Online, tail_padding)");
                 st.0.accept_waveform(16000, &tail_padding);
+                debug!("FFI: Successfully returned from accept_waveform (Online, tail_padding)");
                 while r.0.is_ready(&st.0) {
                     r.0.decode(&st.0);
                 }
@@ -1058,6 +1095,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), String> {
+    trace!("feed_audio_chunk called with id: {}, samples bytes: {}", instance_id, samples.len());
     let mut float_samples = Vec::with_capacity(samples.len() / 2);
     for chunk in samples.chunks_exact(2) {
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
@@ -1143,7 +1181,9 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         for (i, seg) in segments.into_iter().enumerate() {
             {
                 let stream = r.0.create_stream();
+                debug!("FFI: Calling accept_waveform (Offline segment)");
                 stream.accept_waveform(16000, &seg.samples);
+                debug!("FFI: Successfully returned from accept_waveform (Offline segment)");
                 r.0.decode(&stream);
 
                 if let Some(res) = stream.get_result() {
@@ -1189,7 +1229,9 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         let chunk_size = 8000; // 0.5s chunks, matching JS implementation
         let total_samples = samples.len();
         for chunk in samples.chunks(chunk_size) {
+            debug!("FFI: Calling accept_waveform (Online chunk)");
             stream.0.accept_waveform(16000, chunk);
+            debug!("FFI: Successfully returned from accept_waveform (Online chunk)");
             current_samples += chunk.len();
             while r.0.is_ready(&stream.0) {
                 r.0.decode(&stream.0);
@@ -1233,7 +1275,9 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 
         // Add tail padding to flush the decoder, matching feed_audio_chunk behavior
         let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+        debug!("FFI: Calling accept_waveform (Online chunk tail_padding)");
         stream.0.accept_waveform(16000, &tail_padding);
+        debug!("FFI: Successfully returned from accept_waveform (Online chunk tail_padding)");
         while r.0.is_ready(&stream.0) {
             r.0.decode(&stream.0);
         }

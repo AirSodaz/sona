@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger";
 import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
@@ -145,7 +146,7 @@ class ModelService {
         if (!(await exists(modelsDir))) {
             await mkdir(modelsDir, { recursive: true });
         }
-        console.log('[ModelService] Models directory:', modelsDir);
+        logger.info('[ModelService] Models directory:', modelsDir);
         return modelsDir;
     }
 
@@ -169,7 +170,7 @@ class ModelService {
                     };
                 }
             } catch (e) {
-                console.error('Hardware check failed:', e);
+                logger.error('Hardware check failed:', e);
                 // Safe default: assume incompatible if check fails
                 return { compatible: false, reason: 'Hardware check failed.' };
             }
@@ -216,7 +217,7 @@ class ModelService {
                 try {
                     await invoke('cancel_download', { id: downloadId });
                 } catch (e) {
-                    console.error('Failed to cancel download:', e);
+                    logger.error('Failed to cancel download:', e);
                 }
             });
         }
@@ -278,7 +279,7 @@ class ModelService {
                         onProgress(0, mirror ? `${label} from mirror...` : `${label}...`);
                     }
 
-                    console.log(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
+                    logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
                     await invoke('download_file', {
                         url: downloadUrl,
                         outputPath: outputPath,
@@ -291,7 +292,7 @@ class ModelService {
                     if (signal?.aborted || error.toString().includes('cancelled')) {
                         throw new Error('Download cancelled');
                     }
-                    console.warn(`Download failed via ${mirror || 'direct'}:`, error);
+                    logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
                     lastError = error;
                     // Continue to next mirror
                 }
@@ -349,7 +350,7 @@ class ModelService {
         }
 
         try {
-            console.log('Starting extraction...');
+            logger.info('Starting extraction...');
             // Try backend extraction
             await this.extractArchive(tempFilePath, modelsDir, onProgress, signal);
         } catch (error) {
@@ -458,11 +459,11 @@ class ModelService {
      * @return A promise that resolves when extraction is complete.
      */
     private async extractArchive(archivePath: string, targetDir: string, _onProgress?: ProgressCallback, signal?: AbortSignal): Promise<void> {
-        console.log('[ModelService] Attempting extraction via Rust backend (extract_tar_bz2)...');
+        logger.info('[ModelService] Attempting extraction via Rust backend (extract_tar_bz2)...');
 
         if (signal) {
             signal.addEventListener('abort', () => {
-                console.warn('Extraction cancellation requested, but not supported via Rust backend yet.');
+                logger.warn('Extraction cancellation requested, but not supported via Rust backend yet.');
             });
         }
 
