@@ -177,7 +177,7 @@
         "download_complete": "下载完成！",
         "download_failed": "下载失败: {{error}}",
         "offline_models": "识别模型",
-        "offline_path_label": "识别模型",
+        "offline_path_label": "选择模型",
         "punctuation_path_label": "标点模型",
         "font": "字体",
         "font_system": "系统默认",
