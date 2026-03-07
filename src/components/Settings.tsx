@@ -55,9 +55,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         handleBrowse,
         handleDownload,
         handleCancelDownload,
-        handleLoad,
         handleDelete,
-        isModelSelected,
         restoreDefaultModelSettings
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
@@ -244,13 +242,13 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                         {activeTab === 'models' && (
                             <SettingsModelsTab
                                 config={config}
+                                updateConfig={updateConfig}
+                                handleBrowse={handleBrowse}
                                 installedModels={installedModels}
                                 downloads={downloads}
-                                onLoad={handleLoad}
                                 onDelete={handleDelete}
                                 onDownload={handleDownload}
                                 onCancelDownload={handleCancelDownload}
-                                isModelSelected={isModelSelected}
                             />
                         )}
 
@@ -258,7 +256,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <SettingsLocalTab
                                 config={config}
                                 updateConfig={updateConfig}
-                                handleBrowse={handleBrowse}
                                 downloads={downloads}
                                 onDownloadITN={handleDownload}
                                 onCancelDownload={handleCancelDownload}

@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '../Switch';
-import { Dropdown } from '../Dropdown';
 import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
@@ -11,7 +10,6 @@ import { AppConfig } from '../../types/transcript';
 interface SettingsLocalTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
     downloads: Record<string, { progress: number; status: string }>;
     onDownloadITN: (model: ModelInfo) => void;
     onCancelDownload: (modelId: string) => void;
@@ -22,7 +20,6 @@ interface SettingsLocalTabProps {
 export function SettingsLocalTab({
     config,
     updateConfig,
-    handleBrowse,
     downloads,
     onDownloadITN,
     onCancelDownload,
@@ -32,7 +29,6 @@ export function SettingsLocalTab({
     const { t } = useTranslation();
     const { alert } = useDialogStore();
 
-    const offlineModelPath = config.offlineModelPath;
     const ctcModelPath = config.ctcModelPath || '';
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
@@ -87,114 +83,6 @@ export function SettingsLocalTab({
         }
     };
 
-    const [selectedOfflineModelId, setSelectedOfflineModelId] = React.useState<string>('');
-
-    // Sync offlineModelPath with selected model ID
-    React.useEffect(() => {
-        const findModel = async () => {
-            if (!offlineModelPath) {
-                setSelectedOfflineModelId('');
-                return;
-            }
-
-            // Try to find which model ID corresponds to this path
-            for (const model of PRESET_MODELS) {
-                if (model.type === 'offline') {
-                    const path = await modelService.getModelPath(model.id);
-                    // Simple check if paths match (might need normalization in real world, but strict equality for now)
-                    // On Windows, paths might differ by slashes, but usually consistency is maintained if set via the same service.
-                    if (path === offlineModelPath) {
-                        setSelectedOfflineModelId(model.id);
-                        return;
-                    }
-                }
-            }
-            // If no match found (e.g. custom path), set to empty or handle gracefully
-            // For now, we leave it empty which will show "Select a model..." or we could add a "Custom" option logic later.
-            setSelectedOfflineModelId('');
-        };
-        findModel();
-    }, [offlineModelPath]);
-
-    const handleOfflineModelChange = async (modelId: string) => {
-        setSelectedOfflineModelId(modelId);
-        // Custom path logic: if modelId is empty or specific "custom" value, we might invoke browse
-        // But here we only list preset models.
-        if (!modelId) {
-             // Maybe clear?
-             updateConfig({ offlineModelPath: '' });
-             return;
-        }
-
-        try {
-            const path = await modelService.getModelPath(modelId);
-            updateConfig({ offlineModelPath: path });
-
-            // Automatically apply model rules for VAD and Punctuation based on the new selection
-            const rules = modelService.getModelRules(modelId);
-
-            if (rules.requiresVad) {
-                const vadModelId = 'silero-vad';
-                if (installedModels.has(vadModelId)) {
-                    const vadPath = await modelService.getModelPath(vadModelId);
-                    updateConfig({ vadModelPath: vadPath });
-                } else {
-                    // Start background download for VAD
-                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
-                }
-            } else {
-                updateConfig({ vadModelPath: '' });
-            }
-
-            if (rules.requiresPunctuation) {
-                const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
-                if (installedModels.has(punctModelId)) {
-                    const punctPath = await modelService.getModelPath(punctModelId);
-                    updateConfig({ punctuationModelPath: punctPath });
-                } else {
-                    // Start background download for Punctuation
-                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
-                }
-            } else {
-                updateConfig({ punctuationModelPath: '' });
-            }
-
-        } catch (e) {
-            console.error('Failed to get offline model path', e);
-        }
-    };
-
-    // Re-adding Browse buttons for custom model paths if needed
-    // In original code, there were `handleBrowse` calls.
-    // The previous implementation had:
-    /*
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.punctuation_path_label')}</label>
-            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                 <button onClick={() => handleBrowse('punctuation')} ...>Browse</button>
-                 <Switch ... />
-            </div>
-        </div>
-    */
-    // But in my refactor I simplified it to just Toggle because `PRESET_MODELS` are used.
-    // If the user wants to use a custom model path (not from presets), they need Browse.
-    // The previous code `SettingsLocalTab` I read (in the `read_file` earlier) *did not* have browse buttons in the JSX I saw.
-    // Wait, let's look at the `SettingsLocalTab.tsx` I read in the "Read Files" step.
-    // It has `handleBrowse` in props but not used in JSX.
-    // The error `handleBrowse is declared but its value is never read` confirms this.
-    // The original `SettingsLocalTab.tsx` (before my refactor) had `handleBrowse` passed to it?
-    // Let's assume for now that I should just remove the unused prop to fix the error,
-    // unless I want to re-enable custom path browsing.
-    // Given the task is "optimize code" and "remove redundancy", and the `handleToggle` logic
-    // implies we fetch paths from `modelService` based on ID, it seems we are moving away from manual paths for these simple toggles?
-    // However, `handleBrowse` is still implemented in `useSettingsLogic`.
-    // Let's add a "Custom..." option to the dropdown or a browse button for offline model to make it useful,
-    // OR just remove it to silence the error if the intent was to rely on presets.
-    // Since I cannot ask the user right now, I will remove the unused prop to fix the build error.
-    // If browsing was critical, it should have been in the UI I wrote.
-    // Actually, looking at `useSettingsLogic.ts`, `handleBrowse` sets the path directly.
-    // I will remove `handleBrowse` from `SettingsLocalTabProps` and component arguments.
-
     return (
         <div
             className="settings-group"
@@ -203,32 +91,6 @@ export function SettingsLocalTab({
             aria-labelledby="settings-tab-local"
             tabIndex={0}
         >
-
-            <div className="settings-item">
-                <label htmlFor="settings-offline-path" className="settings-label">{t('settings.offline_path_label', { defaultValue: 'Recognition Model' })}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <Dropdown
-                        id="settings-offline-path"
-                        value={selectedOfflineModelId}
-                        onChange={(value) => handleOfflineModelChange(value)}
-                        placeholder={t('settings.select_model', { defaultValue: 'Select a model...' })}
-                        options={PRESET_MODELS.filter(m => m.type === 'offline').map(model => ({
-                            value: model.id,
-                            label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
-                            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
-                        }))}
-                        style={{ flex: 1 }}
-                    />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('offline')}
-                        title={t('common.browse', { defaultValue: 'Browse' })}
-                    >
-                        ...
-                    </button>
-                </div>
-            </div>
-
             <div className="settings-item">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ctc_path_label', { defaultValue: 'CTC Model' })}</label>
