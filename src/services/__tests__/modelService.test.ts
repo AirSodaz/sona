@@ -29,11 +29,9 @@ describe('ModelService', () => {
     });
 
     describe('checkHardware', () => {
-        it('returns true for non-NCNN models', async () => {
-            const onnxModelId = PRESET_MODELS.find(m => m.engine === 'onnx')?.id;
-            if (!onnxModelId) throw new Error('No ONNX model found in presets');
-
-            const result = await modelService.checkHardware(onnxModelId);
+        it('returns true for models', async () => {
+            const modelId = PRESET_MODELS[0].id;
+            const result = await modelService.checkHardware(modelId);
             expect(result.compatible).toBe(true);
             expect(invoke).not.toHaveBeenCalledWith('check_gpu_availability');
         });

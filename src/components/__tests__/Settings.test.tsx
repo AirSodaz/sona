@@ -45,10 +45,10 @@ vi.mock('../../stores/transcriptStore', async () => {
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'onnx', filename: 'test-model' },
-        { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'onnx', filename: 'test-model-2' },
-        { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'onnx', filename: 'test-punct' },
-        { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst', type: 'itn', engine: 'onnx' }
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'sherpa-onnx', filename: 'test-model' },
+        { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'sherpa-onnx', filename: 'test-model-2' },
+        { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'sherpa-onnx', filename: 'test-punct' },
+        { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst', type: 'itn', engine: 'sherpa-onnx' }
     ],
     modelService: {
         isModelInstalled: vi.fn().mockResolvedValue(false), // Default: Not installed

@@ -37,7 +37,7 @@ export interface ModelInfo {
     /** Specific filename to look for or save as. */
     filename?: string;
     /** Inference engine used by the model. */
-    engine: 'onnx' | 'ncnn';
+    engine: 'sherpa-onnx';
     /** Explicit model rules for VAD and Punctuation models. */
     rules?: ModelRules;
 }
@@ -58,7 +58,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         modes: ['streaming', 'offline'],
         language: 'zh,en,ja,ko,yue',
         size: '~158 MB',
-        engine: 'onnx',
+        engine: 'sherpa-onnx',
         rules: {
             requiresVad: true,
             requiresPunctuation: true
@@ -73,7 +73,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         modes: ['streaming', 'offline'],
         language: 'zh,en,ja,ko,yue',
         size: '~155 MB',
-        engine: 'onnx',
+        engine: 'sherpa-onnx',
         rules: {
             requiresVad: true,
             requiresPunctuation: false
@@ -87,7 +87,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'punctuation',
         language: 'zh,en',
         size: '~62 MB',
-        engine: 'onnx'
+        engine: 'sherpa-onnx'
     },
     {
         id: 'sherpa-onnx-wenetspeech-yue-u2pp-conformer-ctc-zh-en-cantonese-int8-2025-09-10',
@@ -97,7 +97,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         type: 'ctc',
         language: 'yue,zh,en',
         size: '~112 MB',
-        engine: 'onnx'
+        engine: 'sherpa-onnx'
     },
     {
         id: 'silero-vad',
@@ -109,7 +109,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         size: '629KB',
         isArchive: false,
         filename: 'silero_vad.onnx',
-        engine: 'onnx'
+        engine: 'sherpa-onnx'
     },
     {
         id: 'itn-zh-number',
@@ -120,7 +120,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         language: 'zh',
         filename: 'itn_zh_number.fst',
         size: '< 1 MB',
-        engine: 'onnx',
+        engine: 'sherpa-onnx',
         isArchive: false
     }
 ];
@@ -164,21 +164,6 @@ class ModelService {
         const model = PRESET_MODELS.find(m => m.id === modelId);
         if (!model) return { compatible: false, reason: 'Model not found' };
 
-        if (model.engine === 'ncnn') {
-            try {
-                const hasGpu = await invoke<boolean>('check_gpu_availability');
-                if (!hasGpu) {
-                    return {
-                        compatible: false,
-                        reason: 'No compatible GPU detected (Apple Silicon or NVIDIA). This model requires a GPU.'
-                    };
-                }
-            } catch (e) {
-                logger.error('Hardware check failed:', e);
-                // Safe default: assume incompatible if check fails
-                return { compatible: false, reason: 'Hardware check failed.' };
-            }
-        }
         return { compatible: true };
     }
 
