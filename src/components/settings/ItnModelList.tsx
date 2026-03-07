@@ -139,7 +139,7 @@ export function ItnModelList({
                         strategy={verticalListSortingStrategy}
                     >
                         {displayIds.map(modelId => {
-                            const model = PRESET_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '', type: 'itn', engine: 'onnx', language: '', size: '', url: '' };
+                            const model = PRESET_MODELS.find(m => m.id === modelId) || { id: modelId, name: modelId, description: '', filename: '', type: 'itn', engine: 'sherpa-onnx', language: '', size: '', url: '' };
                             const isInstalled = installedITNModels.has(model.id);
                             const isEnabled = enabledITNModels.has(model.id);
 

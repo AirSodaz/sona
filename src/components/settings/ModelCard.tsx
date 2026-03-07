@@ -94,7 +94,6 @@ export function ModelCard({
                     <div className="model-description">{model.description}</div>
                     <div className="model-tags">
                         <span className="model-tag">{model.language.toUpperCase()}</span>
-                        <span className="model-tag">{model.engine.toUpperCase()}</span>
                         <span className="model-tag">{model.size}</span>
                     </div>
                 </div>
