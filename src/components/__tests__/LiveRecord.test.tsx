@@ -259,7 +259,7 @@ describe('LiveRecord', () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         act(() => {
             useTranscriptStore.setState({
-                config: { ...useTranscriptStore.getState().config, offlineModelPath: '/path/to/model' }
+                config: { ...useTranscriptStore.getState().config, recognitionModelPath: '/path/to/model' }
             });
         });
 
@@ -407,7 +407,7 @@ describe('LiveRecord', () => {
             useTranscriptStore.setState({
                 config: {
                     ...useTranscriptStore.getState().config,
-                    offlineModelPath: '/path/to/model',
+                    recognitionModelPath: '/path/to/model',
                     muteDuringRecording: true
                 }
             });

@@ -24,8 +24,10 @@ export interface ModelInfo {
     description: string;
     /** URL to download the model archive or file. */
     url: string;
-    /** Type of the model (e.g., streaming, offline). */
-    type: 'streaming' | 'offline' | 'punctuation' | 'vad' | 'ctc' | 'itn';
+    /** Type of the model (e.g., streaming, sensevoice). */
+    type: 'streaming' | 'sensevoice' | 'punctuation' | 'vad' | 'ctc' | 'itn';
+    /** Modes supported by the model (e.g., streaming, offline). */
+    modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
@@ -52,7 +54,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (optimized for Cantonese)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2',
-        type: 'offline',
+        type: 'sensevoice',
+        modes: ['streaming', 'offline'],
         language: 'zh,en,ja,ko,yue',
         size: '~158 MB',
         engine: 'onnx',
@@ -66,7 +69,8 @@ export const PRESET_MODELS: ModelInfo[] = [
         name: 'Multilingual - SenseVoice - 2024-07-17 (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
-        type: 'offline',
+        type: 'sensevoice',
+        modes: ['streaming', 'offline'],
         language: 'zh,en,ja,ko,yue',
         size: '~155 MB',
         engine: 'onnx',

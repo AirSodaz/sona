@@ -138,10 +138,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'offline' | 'punctuation' | 'vad' | 'ctc'): string {
+    function getBrowseTitle(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
-            case 'offline':
-                return t('settings.offline_path_label');
+            case 'sensevoice':
+                return t('settings.recognition_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
             case 'ctc':
@@ -151,7 +151,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    async function handleBrowse(type: 'offline' | 'punctuation' | 'vad' | 'ctc') {
+    async function handleBrowse(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc') {
         try {
             const selected = await open({
                 directory: true,
@@ -162,8 +162,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'offline') {
-                        updateConfig({ offlineModelPath: path });
+                    if (type === 'sensevoice') {
+                        updateConfig({ recognitionModelPath: path });
                     } else if (type === 'vad') {
                         updateConfig({ vadModelPath: path });
                     } else if (type === 'ctc') {
@@ -190,9 +190,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    function setModelPathByType(type: 'offline' | 'punctuation' | 'vad' | 'ctc', path: string) {
-        if (type === 'offline') {
-            updateConfig({ offlineModelPath: path });
+    function setModelPathByType(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc', path: string) {
+        if (type === 'sensevoice') {
+            updateConfig({ recognitionModelPath: path });
         } else if (type === 'vad') {
             updateConfig({ vadModelPath: path });
         } else if (type === 'ctc') {
@@ -260,7 +260,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
 
         // Trigger background downloads for dependencies immediately
-        if (model.type === 'offline') {
+        if (model.type === 'sensevoice') {
             const rules = modelService.getModelRules(model.id);
             if (rules.requiresVad) {
                 document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
@@ -316,8 +316,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
             // Streaming path removed
-            if (config.offlineModelPath === deletedPath) {
-                updateConfig({ offlineModelPath: '' });
+            if (config.recognitionModelPath === deletedPath) {
+                updateConfig({ recognitionModelPath: '' });
             }
             if (config.punctuationModelPath === deletedPath) {
                 updateConfig({ punctuationModelPath: '' });
@@ -341,8 +341,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     function isModelSelected(model: ModelInfo): boolean {
         // Streaming path removed
-        if (model.type === 'offline') {
-            return (config.offlineModelPath || '').includes(model.filename || model.id);
+        if (model.type === 'sensevoice') {
+            return (config.recognitionModelPath || '').includes(model.filename || model.id);
         }
         if (model.type === 'punctuation') {
             return (config.punctuationModelPath || '').includes(model.filename || model.id);
@@ -367,16 +367,16 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         if (!confirmed) return;
 
         // Default model IDs
-        const defaultOfflineModelId = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
+        const defaultRecognitionModelId = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
         const defaultVadModelId = 'silero-vad';
 
-        let offlinePath = '';
+        let recognitionPath = '';
         let vadPath = '';
 
         try {
-            offlinePath = await modelService.getModelPath(defaultOfflineModelId);
+            recognitionPath = await modelService.getModelPath(defaultRecognitionModelId);
         } catch (e) {
-            console.warn('Failed to resolve default offline model path', e);
+            console.warn('Failed to resolve default recognition model path', e);
         }
 
         try {
@@ -387,7 +387,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
         // Apply all defaults at once
         updateConfig({
-            offlineModelPath: offlinePath,
+            recognitionModelPath: recognitionPath,
             punctuationModelPath: '',
             vadModelPath: vadPath,
             ctcModelPath: '',

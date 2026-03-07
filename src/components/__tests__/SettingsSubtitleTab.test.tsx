@@ -13,7 +13,7 @@ vi.mock('react-i18next', () => ({
 describe('SettingsSubtitleTab', () => {
     const mockUpdateConfig = vi.fn();
     const mockConfig: AppConfig = {
-        offlineModelPath: '',
+        recognitionModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
         lockWindow: false,

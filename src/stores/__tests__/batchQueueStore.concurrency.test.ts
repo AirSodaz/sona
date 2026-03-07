@@ -59,7 +59,7 @@ describe('batchQueueStore Concurrency', () => {
         useTranscriptStore.setState({
             config: {
 
-                offlineModelPath: '/mock/model',
+                recognitionModelPath: '/mock/model',
                 language: 'en',
                 appLanguage: 'auto',
                 maxConcurrent: 2

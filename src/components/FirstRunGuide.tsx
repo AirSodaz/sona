@@ -24,7 +24,7 @@ export function FirstRunGuide() {
 
         const modelsToDownload = [
             // Recognition
-            { id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17', type: 'offline' },
+            { id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17', type: 'sensevoice' },
             // Punctuation
             { id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8', type: 'punctuation' },
             // VAD
@@ -59,7 +59,7 @@ export function FirstRunGuide() {
 
             // Update Config
             const newConfig = {
-                offlineModelPath: paths['offline'],
+                recognitionModelPath: paths['sensevoice'],
                 vadModelPath: paths['vad'],
                 punctuationModelPath: '', // Downloaded but not enabled
                 ctcModelPath: '', // Not downloaded
