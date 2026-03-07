@@ -22,7 +22,8 @@ vi.mock('../../stores/transcriptStore', async () => {
     const useTranscriptStore = create((set) => ({
         config: {
 
-            recognitionModelPath: '/test/offline',
+            streamingModelPath: "/path/to/model",
+                offlineModelPath: '/test/offline',
             enableITN: true,
             enabledITNModels: ['itn-zh-number'],
             itnRulesOrder: ['itn-zh-number'],
@@ -75,7 +76,8 @@ describe('Settings', () => {
         useTranscriptStore.setState({
             config: {
 
-                recognitionModelPath: '/test/offline',
+                streamingModelPath: "/path/to/model",
+                offlineModelPath: '/test/offline',
                 enableITN: true,
                 enabledITNModels: ['itn-zh-number'],
                 itnRulesOrder: ['itn-zh-number'],
@@ -179,7 +181,7 @@ describe('Settings', () => {
 
         fireEvent.click(screen.getByText('settings.model_hub'));
 
-        const dropdownLabel = await screen.findByText('settings.recognition_path_label');
+        const dropdownLabel = await screen.findByText('settings.streaming_model_label');
         expect(dropdownLabel).toBeDefined();
 
         // Let's use getByText or fallback to direct invocation if UI is tricky
@@ -211,12 +213,13 @@ describe('Settings', () => {
         const path = await modelService.getModelPath('test-model');
 
         await act(async () => {
-            useTranscriptStore.getState().setConfig({ recognitionModelPath: path });
+            useTranscriptStore.getState().setConfig({ streamingModelPath: path,
+                offlineModelPath: path });
         });
 
         // Verify store update
         await waitFor(() => {
-            expect(useTranscriptStore.getState().config.recognitionModelPath).toBe('/path/to/test-model');
+            expect(useTranscriptStore.getState().config.streamingModelPath).toBe('/path/to/test-model');
         });
     });
 });

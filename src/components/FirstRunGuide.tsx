@@ -59,7 +59,8 @@ export function FirstRunGuide() {
 
             // Update Config
             const newConfig = {
-                recognitionModelPath: paths['sensevoice'],
+                streamingModelPath: paths['sensevoice'],
+                offlineModelPath: paths['sensevoice'],
                 vadModelPath: paths['vad'],
                 punctuationModelPath: '', // Downloaded but not enabled
                 ctcModelPath: '', // Not downloaded

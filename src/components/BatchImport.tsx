@@ -195,7 +195,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             }
 
             if (validFiles.length > 0) {
-                if (!config.recognitionModelPath) {
+                if (!config.offlineModelPath) {
                     alert(t('batch.no_model_error'), { variant: 'error' });
                     return;
                 }
@@ -241,7 +241,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             if (selected) {
                 const files = Array.isArray(selected) ? selected : [selected];
                 if (files.length > 0) {
-                    if (!config.recognitionModelPath) {
+                    if (!config.offlineModelPath) {
                         await alert(t('batch.no_model_error'), {variant: 'error'});
                         return;
                     }

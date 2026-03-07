@@ -81,8 +81,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, []);
 
     const startCaptionSession = useCallback(async () => {
-        if (!config.recognitionModelPath) {
-            console.warn('[CaptionSession] No offline model path configured.');
+        if (!config.streamingModelPath) {
+            console.warn('Cannot start caption: streaming model path is not set.');
             return;
         }
 
@@ -274,7 +274,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         update();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
-        config.recognitionModelPath,
+        config.streamingModelPath,
         config.language,
         config.enableITN,
         config.punctuationModelPath,

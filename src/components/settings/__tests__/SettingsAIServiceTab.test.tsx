@@ -20,7 +20,8 @@ describe('SettingsAIServiceTab', () => {
     const mockChangeAiServiceType = vi.fn();
 
     const mockConfig: AppConfig = {
-        recognitionModelPath: '',
+        streamingModelPath: "/path/to/model",
+                offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
         aiServiceType: 'openai',

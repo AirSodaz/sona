@@ -84,7 +84,8 @@ describe('TranscriptEditor Optimization', () => {
             aligningSegmentIds: new Set(),
             config: {
                 enableTimeline: true,
-                recognitionModelPath: '',
+                streamingModelPath: "/path/to/model",
+                offlineModelPath: '',
                 language: 'en',
                 appLanguage: 'en',
             } as any

@@ -20,7 +20,7 @@ vi.mock('../../hooks/useSettingsLogic', () => ({
         theme: 'auto',
         font: 'system',
         streamingModelPath: '',
-        recognitionModelPath: '',
+        offlineModelPath: '',
         punctuationModelPath: '',
         vadModelPath: '',
         vadBufferSize: 5,

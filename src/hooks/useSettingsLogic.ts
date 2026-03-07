@@ -163,7 +163,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
                     if (type === 'sensevoice') {
-                        updateConfig({ recognitionModelPath: path });
+                        // For manual browse, apply to both or one?
+                        // Usually people select a folder or file. For simplicity, just update both if we don't know the mode.
+                        updateConfig({ streamingModelPath: path, offlineModelPath: path });
                     } else if (type === 'vad') {
                         updateConfig({ vadModelPath: path });
                     } else if (type === 'ctc') {
@@ -192,7 +194,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     function setModelPathByType(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc', path: string) {
         if (type === 'sensevoice') {
-            updateConfig({ recognitionModelPath: path });
+            updateConfig({ streamingModelPath: path, offlineModelPath: path });
         } else if (type === 'vad') {
             updateConfig({ vadModelPath: path });
         } else if (type === 'ctc') {
@@ -315,9 +317,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             await checkInstalledModels();
             // If the deleted model was selected, clear the path
             const deletedPath = await modelService.getModelPath(model.id);
-            // Streaming path removed
-            if (config.recognitionModelPath === deletedPath) {
-                updateConfig({ recognitionModelPath: '' });
+            if (config.streamingModelPath === deletedPath) {
+                updateConfig({ streamingModelPath: '' });
+            }
+            if (config.offlineModelPath === deletedPath) {
+                updateConfig({ offlineModelPath: '' });
             }
             if (config.punctuationModelPath === deletedPath) {
                 updateConfig({ punctuationModelPath: '' });
@@ -340,9 +344,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     }
 
     function isModelSelected(model: ModelInfo): boolean {
-        // Streaming path removed
         if (model.type === 'sensevoice') {
-            return (config.recognitionModelPath || '').includes(model.filename || model.id);
+            let isSelected = false;
+            if (model.modes?.includes('streaming')) {
+                isSelected = isSelected || (config.streamingModelPath || '').includes(model.filename || model.id);
+            }
+            if (model.modes?.includes('offline')) {
+                isSelected = isSelected || (config.offlineModelPath || '').includes(model.filename || model.id);
+            }
+            return isSelected;
         }
         if (model.type === 'punctuation') {
             return (config.punctuationModelPath || '').includes(model.filename || model.id);
@@ -387,7 +397,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
         // Apply all defaults at once
         updateConfig({
-            recognitionModelPath: recognitionPath,
+            streamingModelPath: recognitionPath,
+            offlineModelPath: recognitionPath,
             punctuationModelPath: '',
             vadModelPath: vadPath,
             ctcModelPath: '',

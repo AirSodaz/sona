@@ -15,19 +15,19 @@ export function useTranscriptionServiceSync() {
         }
 
         const syncAndPrepare = async () => {
-            if (!config.recognitionModelPath) {
+            if (!config.streamingModelPath) {
                 return;
             }
 
             try {
-                transcriptionService.setModelPath(config.recognitionModelPath);
+                transcriptionService.setModelPath(config.streamingModelPath);
                 transcriptionService.setLanguage(config.language);
                 transcriptionService.setEnableITN(config.enableITN ?? false);
                 transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
                 transcriptionService.setVadModelPath(config.vadModelPath || '');
                 transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
 
-                captionTranscriptionService.setModelPath(config.recognitionModelPath);
+                captionTranscriptionService.setModelPath(config.streamingModelPath);
                 captionTranscriptionService.setLanguage(config.language);
                 captionTranscriptionService.setEnableITN(config.enableITN ?? false);
                 captionTranscriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
@@ -54,7 +54,7 @@ export function useTranscriptionServiceSync() {
 
         syncAndPrepare();
     }, [
-        config.recognitionModelPath,
+        config.streamingModelPath,
         config.language,
         config.enableITN,
         config.punctuationModelPath,
