@@ -1,18 +1,16 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModelInfo } from '../../services/modelService';
-import { CheckIcon, PlayIcon, TrashIcon, DownloadIcon, XIcon } from '../Icons';
+import { TrashIcon, DownloadIcon, XIcon } from '../Icons';
 
 interface ModelCardProps {
     model: ModelInfo;
     isInstalled: boolean;
-    isSelected: boolean;
     isDownloading: boolean;
     // downloadingId: string | null;
     // deletingId: string | null;
     progress: number;
     statusMessage: string;
-    onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
     onCancelDownload: () => void;
@@ -21,11 +19,9 @@ interface ModelCardProps {
 interface ModelCardActionsProps {
     model: ModelInfo;
     isInstalled: boolean;
-    isSelected: boolean;
     isDownloading: boolean;
     // downloadingId: string | null;
     // deletingId: string | null;
-    onLoad: (model: ModelInfo) => void;
     onDelete: (model: ModelInfo) => void;
     onDownload: (model: ModelInfo) => void;
     onCancelDownload: () => void;
@@ -34,11 +30,9 @@ interface ModelCardActionsProps {
 function ModelCardActions({
     model,
     isInstalled,
-    isSelected,
     isDownloading,
     // downloadingId,
     // deletingId,
-    onLoad,
     onDelete,
     onDownload,
     onCancelDownload
@@ -51,15 +45,6 @@ function ModelCardActions({
     if (isInstalled) {
         return (
             <div className="model-actions">
-                <button
-                    className={`btn ${isSelected ? 'btn-success' : 'btn-primary'}`}
-                    onClick={() => onLoad(model)}
-                    disabled={isSelected}
-                    aria-label={`${t('settings.load')} ${model.name}`}
-                    data-tooltip={t('settings.load')}
-                >
-                    {isSelected ? <CheckIcon /> : <PlayIcon />}
-                </button>
                 <button
                     className="btn btn-secondary"
                     onClick={() => onDelete(model)}
@@ -89,13 +74,11 @@ function ModelCardActions({
 export function ModelCard({
     model,
     isInstalled,
-    isSelected,
     isDownloading,
     // downloadingId,
     // deletingId,
     progress,
     statusMessage,
-    onLoad,
     onDelete,
     onDownload,
     onCancelDownload
@@ -118,11 +101,9 @@ export function ModelCard({
                 <ModelCardActions
                     model={model}
                     isInstalled={isInstalled}
-                    isSelected={isSelected}
                     isDownloading={isDownloading}
                     // downloadingId={downloadingId}
                     // deletingId={deletingId}
-                    onLoad={onLoad}
                     onDelete={onDelete}
                     onDownload={onDownload}
                     onCancelDownload={onCancelDownload}
