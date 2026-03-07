@@ -1,3 +1,4 @@
+use log::{debug, error, info, trace, warn};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
@@ -5,7 +6,6 @@ use sherpa_onnx::{
 use std::ffi::{c_char, CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
-use log::{debug, error, info, trace, warn};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
@@ -42,9 +42,15 @@ pub fn find_model_config<P: AsRef<Path>>(
     language: &str,
 ) -> Option<ModelType> {
     let model_path = model_path.as_ref();
-    debug!("find_model_config called with path: {:?}, enable_itn: {}, language: {}", model_path, enable_itn, language);
+    debug!(
+        "find_model_config called with path: {:?}, enable_itn: {}, language: {}",
+        model_path, enable_itn, language
+    );
     if !model_path.exists() || !model_path.is_dir() {
-        warn!("Model path does not exist or is not a directory: {:?}", model_path);
+        warn!(
+            "Model path does not exist or is not a directory: {:?}",
+            model_path
+        );
         return None;
     }
 
@@ -204,6 +210,7 @@ impl Recognizer {
                 config.model_config.provider = Some("cpu".to_string());
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
+                config.enable_endpoint = true;
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineParaformer)");
                 let recognizer =
@@ -1095,7 +1102,11 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
     instance_id: String,
     samples: Vec<u8>,
 ) -> Result<(), String> {
-    trace!("feed_audio_chunk called with id: {}, samples bytes: {}", instance_id, samples.len());
+    trace!(
+        "feed_audio_chunk called with id: {}, samples bytes: {}",
+        instance_id,
+        samples.len()
+    );
     let mut float_samples = Vec::with_capacity(samples.len() / 2);
     for chunk in samples.chunks_exact(2) {
         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
