@@ -7,7 +7,7 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
-    type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc';
+    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc')[];
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -24,7 +24,8 @@ function ModelSection({
     onDownload,
     onCancelDownload
 }: ModelSectionProps): React.JSX.Element {
-    const models = PRESET_MODELS.filter(m => m.type === type);
+    const typesArray = Array.isArray(type) ? type : [type];
+    const models = PRESET_MODELS.filter(m => typesArray.includes(m.type as any));
 
     return (
         <>
@@ -51,7 +52,7 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
+    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -85,7 +86,7 @@ export function SettingsModelsTab({
             }
 
             for (const model of PRESET_MODELS) {
-                if (model.type === 'sensevoice' && model.modes?.includes('streaming')) {
+                if ((model.type === 'sensevoice' || model.type === 'paraformer') && model.modes?.includes('streaming')) {
                     const path = await modelService.getModelPath(model.id);
                     if (path === streamingModelPath) {
                         setSelectedStreamingModelId(model.id);
@@ -209,7 +210,7 @@ export function SettingsModelsTab({
                         value={selectedStreamingModelId}
                         onChange={(value) => handleStreamingModelChange(value)}
                         placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
-                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice' && m.modes?.includes('streaming')).map(model => ({
+                        options={PRESET_MODELS.filter(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming')).map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
@@ -250,7 +251,7 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} type="sensevoice" {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer']} {...sectionProps} />
             <ModelSection title={t('settings.punctuation_models')} type="punctuation" {...sectionProps} />
             <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />
             <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />
