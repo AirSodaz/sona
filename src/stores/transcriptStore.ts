@@ -225,7 +225,7 @@ interface TranscriptState {
 
 const DEFAULT_CONFIG: AppConfig = {
     // streamingModelPath removed
-    offlineModelPath: '',
+    recognitionModelPath: '',
     language: 'auto',
     appLanguage: 'auto',
     enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled

@@ -22,7 +22,7 @@ vi.mock('../../stores/transcriptStore', async () => {
     const useTranscriptStore = create((set) => ({
         config: {
 
-            offlineModelPath: '/test/offline',
+            recognitionModelPath: '/test/offline',
             enableITN: true,
             enabledITNModels: ['itn-zh-number'],
             itnRulesOrder: ['itn-zh-number'],
@@ -45,8 +45,8 @@ vi.mock('../../stores/transcriptStore', async () => {
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
-        { id: 'test-model', name: 'Test Model', language: 'en', type: 'offline', size: '100MB', description: 'Test', engine: 'onnx', filename: 'test-model' },
-        { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'offline', size: '100MB', description: 'Test 2', engine: 'onnx', filename: 'test-model-2' },
+        { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'onnx', filename: 'test-model' },
+        { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'onnx', filename: 'test-model-2' },
         { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'onnx', filename: 'test-punct' },
         { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst', type: 'itn', engine: 'onnx' }
     ],
@@ -75,7 +75,7 @@ describe('Settings', () => {
         useTranscriptStore.setState({
             config: {
 
-                offlineModelPath: '/test/offline',
+                recognitionModelPath: '/test/offline',
                 enableITN: true,
                 enabledITNModels: ['itn-zh-number'],
                 itnRulesOrder: ['itn-zh-number'],
@@ -179,7 +179,7 @@ describe('Settings', () => {
 
         fireEvent.click(screen.getByText('settings.model_hub'));
 
-        const dropdownLabel = await screen.findByText('settings.offline_path_label');
+        const dropdownLabel = await screen.findByText('settings.recognition_path_label');
         expect(dropdownLabel).toBeDefined();
 
         // Let's use getByText or fallback to direct invocation if UI is tricky
@@ -211,12 +211,12 @@ describe('Settings', () => {
         const path = await modelService.getModelPath('test-model');
 
         await act(async () => {
-            useTranscriptStore.getState().setConfig({ offlineModelPath: path });
+            useTranscriptStore.getState().setConfig({ recognitionModelPath: path });
         });
 
         // Verify store update
         await waitFor(() => {
-            expect(useTranscriptStore.getState().config.offlineModelPath).toBe('/path/to/test-model');
+            expect(useTranscriptStore.getState().config.recognitionModelPath).toBe('/path/to/test-model');
         });
     });
 });

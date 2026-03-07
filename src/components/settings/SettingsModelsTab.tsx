@@ -7,7 +7,7 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
-    type: 'offline' | 'punctuation' | 'vad' | 'ctc';
+    type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -51,7 +51,7 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'offline' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
+    handleBrowse: (type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -70,42 +70,42 @@ export function SettingsModelsTab({
     onCancelDownload
 }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
-    const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
+    const [selectedSensevoiceModelId, setSelectedSensevoiceModelId] = useState<string>('');
 
-    const offlineModelPath = config.offlineModelPath;
+    const recognitionModelPath = config.recognitionModelPath;
 
-    // Sync offlineModelPath with selected model ID
+    // Sync recognitionModelPath with selected model ID
     useEffect(() => {
         const findModel = async () => {
-            if (!offlineModelPath) {
-                setSelectedOfflineModelId('');
+            if (!recognitionModelPath) {
+                setSelectedSensevoiceModelId('');
                 return;
             }
 
             for (const model of PRESET_MODELS) {
-                if (model.type === 'offline') {
+                if (model.type === 'sensevoice') {
                     const path = await modelService.getModelPath(model.id);
-                    if (path === offlineModelPath) {
-                        setSelectedOfflineModelId(model.id);
+                    if (path === recognitionModelPath) {
+                        setSelectedSensevoiceModelId(model.id);
                         return;
                     }
                 }
             }
-            setSelectedOfflineModelId('');
+            setSelectedSensevoiceModelId('');
         };
         findModel();
-    }, [offlineModelPath]);
+    }, [recognitionModelPath]);
 
-    const handleOfflineModelChange = async (modelId: string) => {
-        setSelectedOfflineModelId(modelId);
+    const handleSensevoiceModelChange = async (modelId: string) => {
+        setSelectedSensevoiceModelId(modelId);
         if (!modelId) {
-             updateConfig({ offlineModelPath: '' });
+             updateConfig({ recognitionModelPath: '' });
              return;
         }
 
         try {
             const path = await modelService.getModelPath(modelId);
-            updateConfig({ offlineModelPath: path });
+            updateConfig({ recognitionModelPath: path });
 
             // Automatically apply model rules for VAD and Punctuation based on the new selection
             const rules = modelService.getModelRules(modelId);
@@ -156,14 +156,14 @@ export function SettingsModelsTab({
             tabIndex={0}
         >
             <div className="settings-item" style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
-                <label htmlFor="settings-offline-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.offline_path_label', { defaultValue: 'Select Model' })}</label>
+                <label htmlFor="settings-recognition-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.recognition_path_label', { defaultValue: 'Select Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Dropdown
-                        id="settings-offline-path"
-                        value={selectedOfflineModelId}
-                        onChange={(value) => handleOfflineModelChange(value)}
+                        id="settings-recognition-path"
+                        value={selectedSensevoiceModelId}
+                        onChange={(value) => handleSensevoiceModelChange(value)}
                         placeholder={t('settings.select_model', { defaultValue: 'Select a model...' })}
-                        options={PRESET_MODELS.filter(m => m.type === 'offline').map(model => ({
+                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice').map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
@@ -172,7 +172,7 @@ export function SettingsModelsTab({
                     />
                     <button
                         className="btn btn-secondary"
-                        onClick={() => handleBrowse('offline')}
+                        onClick={() => handleBrowse('sensevoice')}
                         title={t('common.browse', { defaultValue: 'Browse' })}
                     >
                         ...
@@ -181,7 +181,7 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.offline_models')} type="offline" {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} type="sensevoice" {...sectionProps} />
             <ModelSection title={t('settings.punctuation_models')} type="punctuation" {...sectionProps} />
             <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />
             <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />

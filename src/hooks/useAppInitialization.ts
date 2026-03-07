@@ -23,9 +23,9 @@ export function useAppInitialization() {
             try {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
-                if (parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage || parsed.language) {
+                if (parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || parsed.appLanguage || parsed.language) {
                     const loadedConfig = {
-                        offlineModelPath: parsed.offlineModelPath || parsed.modelPath || '',
+                        recognitionModelPath: parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
                         punctuationModelPath: parsed.punctuationModelPath || '',
                         vadModelPath: parsed.vadModelPath || '',
                         ctcModelPath: parsed.ctcModelPath || '',
@@ -115,7 +115,7 @@ export function useAppInitialization() {
 
         const timeoutId = setTimeout(() => {
             const configToSave = {
-                offlineModelPath: config.offlineModelPath,
+                recognitionModelPath: config.recognitionModelPath,
                 punctuationModelPath: config.punctuationModelPath,
                 vadModelPath: config.vadModelPath,
                 ctcModelPath: config.ctcModelPath,

@@ -191,7 +191,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
     // Start Recording (Main Entry)
     const startRecording = useCallback(async () => {
-        if (!config.offlineModelPath) {
+        if (!config.recognitionModelPath) {
             await alert(t('batch.no_model_error'), { variant: 'error' });
             return false;
         }

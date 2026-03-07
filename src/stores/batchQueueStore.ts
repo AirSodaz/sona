@@ -132,18 +132,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         const config = useTranscriptStore.getState().config;
         // Don't error out if config is not yet loaded in tests
-        if (!config.offlineModelPath && !process.env.VITEST) {
+        if (!config.recognitionModelPath && !process.env.VITEST) {
             console.error('[BatchQueue] No model path configured');
             return;
         }
 
         // If testing without model path, just simulate processing or return
-        if (!config.offlineModelPath) {
+        if (!config.recognitionModelPath) {
             return;
         }
 
         // Configure transcription service (safe to call multiple times)
-        transcriptionService.setModelPath(config.offlineModelPath);
+        transcriptionService.setModelPath(config.recognitionModelPath);
         const enabledITNModels = new Set(config.enabledITNModels || []);
         const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
 

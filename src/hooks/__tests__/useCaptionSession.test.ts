@@ -107,7 +107,7 @@ describe('useCaptionSession', () => {
     });
 
     const defaultConfig: AppConfig = {
-        offlineModelPath: '/path/to/model',
+        recognitionModelPath: '/path/to/model',
         language: 'en',
     } as AppConfig;
 

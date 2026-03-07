@@ -81,7 +81,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, []);
 
     const startCaptionSession = useCallback(async () => {
-        if (!config.offlineModelPath) {
+        if (!config.recognitionModelPath) {
             console.warn('[CaptionSession] No offline model path configured.');
             return;
         }
@@ -274,7 +274,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         update();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
-        config.offlineModelPath,
+        config.recognitionModelPath,
         config.language,
         config.enableITN,
         config.punctuationModelPath,
