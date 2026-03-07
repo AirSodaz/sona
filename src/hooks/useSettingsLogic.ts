@@ -138,9 +138,10 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc'): string {
+    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc'): string {
         switch (type) {
             case 'sensevoice':
+            case 'paraformer':
                 return t('settings.recognition_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
@@ -151,7 +152,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    async function handleBrowse(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc') {
+    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc') {
         try {
             const selected = await open({
                 directory: true,
@@ -162,7 +163,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'sensevoice') {
+                    if (type === 'sensevoice' || type === 'paraformer') {
                         // For manual browse, apply to both or one?
                         // Usually people select a folder or file. For simplicity, just update both if we don't know the mode.
                         updateConfig({ streamingModelPath: path, offlineModelPath: path });
@@ -192,9 +193,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    function setModelPathByType(type: 'sensevoice' | 'punctuation' | 'vad' | 'ctc', path: string) {
+    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc', path: string) {
         if (type === 'sensevoice') {
             updateConfig({ streamingModelPath: path, offlineModelPath: path });
+        } else if (type === 'paraformer') {
+            updateConfig({ streamingModelPath: path });
         } else if (type === 'vad') {
             updateConfig({ vadModelPath: path });
         } else if (type === 'ctc') {
@@ -262,7 +265,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
 
         // Trigger background downloads for dependencies immediately
-        if (model.type === 'sensevoice') {
+        if (model.type === 'sensevoice' || model.type === 'paraformer') {
             const rules = modelService.getModelRules(model.id);
             if (rules.requiresVad) {
                 document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
@@ -344,7 +347,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     }
 
     function isModelSelected(model: ModelInfo): boolean {
-        if (model.type === 'sensevoice') {
+        if (model.type === 'sensevoice' || model.type === 'paraformer') {
             let isSelected = false;
             if (model.modes?.includes('streaming')) {
                 isSelected = isSelected || (config.streamingModelPath || '').includes(model.filename || model.id);

@@ -25,7 +25,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., streaming, sensevoice). */
-    type: 'streaming' | 'sensevoice' | 'punctuation' | 'vad' | 'ctc' | 'itn';
+    type: 'streaming' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'itn';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -49,6 +49,21 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
+    {
+        id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',
+        name: 'Trilingual - Paraformer - zh-cantonese-en',
+        description: 'Streaming Paraformer model. Supports Chinese, Cantonese, English',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2',
+        type: 'paraformer',
+        modes: ['streaming'],
+        language: 'zh,yue,en',
+        size: '~999 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: false,
+            requiresPunctuation: true
+        }
+    },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
         name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
