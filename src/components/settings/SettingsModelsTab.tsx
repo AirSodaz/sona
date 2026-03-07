@@ -155,7 +155,7 @@ export function SettingsModelsTab({
             aria-labelledby="settings-tab-models"
             tabIndex={0}
         >
-            <div className="settings-item with-divider" style={{ paddingBottom: '16px', marginBottom: '16px' }}>
+            <div className="settings-item" style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
                 <label htmlFor="settings-offline-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.offline_path_label', { defaultValue: 'Select Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Dropdown

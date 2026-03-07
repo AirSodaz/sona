@@ -177,7 +177,7 @@
         "download_complete": "Download complete!",
         "download_failed": "Download failed: {{error}}",
         "offline_models": "Recognition Models",
-        "offline_path_label": "Recognition Model",
+        "offline_path_label": "Select Model",
         "punctuation_path_label": "Punctuation Model",
         "font": "Font",
         "font_system": "System Default",
