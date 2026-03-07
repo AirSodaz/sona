@@ -50,21 +50,6 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
     {
-        id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',
-        name: 'Trilingual - Paraformer - zh-cantonese-en',
-        description: 'Streaming Paraformer model. Supports Chinese, Cantonese, English',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2',
-        type: 'paraformer',
-        modes: ['streaming'],
-        language: 'zh,yue,en',
-        size: '~999 MB',
-        engine: 'sherpa-onnx',
-        rules: {
-            requiresVad: false,
-            requiresPunctuation: true
-        }
-    },
-    {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
         name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (optimized for Cantonese)',
@@ -92,6 +77,21 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: true,
             requiresPunctuation: false
+        }
+    },
+    {
+        id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',
+        name: 'Trilingual - Paraformer',
+        description: 'Streaming Paraformer model. Supports Chinese, Cantonese, English',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2',
+        type: 'paraformer',
+        modes: ['streaming'],
+        language: 'zh,yue,en',
+        size: '~999 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: false,
+            requiresPunctuation: true
         }
     },
     {
