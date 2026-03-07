@@ -68,7 +68,8 @@ describe('TranscriptEditor Performance', () => {
             editingSegmentId: null,
             config: {
                 enableTimeline: true,
-                recognitionModelPath: '',
+                streamingModelPath: "/path/to/model",
+                offlineModelPath: '',
                 language: 'en',
                 appLanguage: 'en',
             } as any

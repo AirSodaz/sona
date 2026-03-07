@@ -37,8 +37,10 @@ export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 
  * Configuration for the application.
  */
 export interface AppConfig {
-  /** Path to offline model (e.g. sherpa-onnx offline paraformer/sensevoice). */
-  recognitionModelPath: string;
+  /** Path to streaming model (e.g. sherpa-onnx streaming sensevoice). */
+  streamingModelPath: string;
+  /** Path to offline model (e.g. sherpa-onnx offline sensevoice). */
+  offlineModelPath: string;
   /** Selected language for transcription. */
   language: string;
   /** Application UI language preference. */

@@ -61,7 +61,8 @@ describe('batchQueueStore History Integration', () => {
         useTranscriptStore.getState().clearSegments();
         useTranscriptStore.setState({
             config: {
-                recognitionModelPath: '/path/to/model',
+                streamingModelPath: "/path/to/model",
+                offlineModelPath: '/path/to/model',
                 language: 'en',
 
                 appLanguage: 'en'

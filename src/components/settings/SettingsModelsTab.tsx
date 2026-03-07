@@ -70,44 +70,58 @@ export function SettingsModelsTab({
     onCancelDownload
 }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
-    const [selectedSensevoiceModelId, setSelectedSensevoiceModelId] = useState<string>('');
+    const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
+    const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
 
-    const recognitionModelPath = config.recognitionModelPath;
+    const streamingModelPath = config.streamingModelPath;
+    const offlineModelPath = config.offlineModelPath;
 
-    // Sync recognitionModelPath with selected model ID
+    // Sync streamingModelPath with selected model ID
     useEffect(() => {
         const findModel = async () => {
-            if (!recognitionModelPath) {
-                setSelectedSensevoiceModelId('');
+            if (!streamingModelPath) {
+                setSelectedStreamingModelId('');
                 return;
             }
 
             for (const model of PRESET_MODELS) {
-                if (model.type === 'sensevoice') {
+                if (model.type === 'sensevoice' && model.modes?.includes('streaming')) {
                     const path = await modelService.getModelPath(model.id);
-                    if (path === recognitionModelPath) {
-                        setSelectedSensevoiceModelId(model.id);
+                    if (path === streamingModelPath) {
+                        setSelectedStreamingModelId(model.id);
                         return;
                     }
                 }
             }
-            setSelectedSensevoiceModelId('');
+            setSelectedStreamingModelId('');
         };
         findModel();
-    }, [recognitionModelPath]);
+    }, [streamingModelPath]);
 
-    const handleSensevoiceModelChange = async (modelId: string) => {
-        setSelectedSensevoiceModelId(modelId);
-        if (!modelId) {
-             updateConfig({ recognitionModelPath: '' });
-             return;
-        }
+    // Sync offlineModelPath with selected model ID
+    useEffect(() => {
+        const findModel = async () => {
+            if (!offlineModelPath) {
+                setSelectedOfflineModelId('');
+                return;
+            }
 
+            for (const model of PRESET_MODELS) {
+                if (model.type === 'sensevoice' && model.modes?.includes('offline')) {
+                    const path = await modelService.getModelPath(model.id);
+                    if (path === offlineModelPath) {
+                        setSelectedOfflineModelId(model.id);
+                        return;
+                    }
+                }
+            }
+            setSelectedOfflineModelId('');
+        };
+        findModel();
+    }, [offlineModelPath]);
+
+    const applyModelRules = async (modelId: string) => {
         try {
-            const path = await modelService.getModelPath(modelId);
-            updateConfig({ recognitionModelPath: path });
-
-            // Automatically apply model rules for VAD and Punctuation based on the new selection
             const rules = modelService.getModelRules(modelId);
 
             if (rules.requiresVad) {
@@ -133,6 +147,38 @@ export function SettingsModelsTab({
             } else {
                 updateConfig({ punctuationModelPath: '' });
             }
+        } catch (e) {
+            console.error('Failed to apply model rules', e);
+        }
+    };
+
+    const handleStreamingModelChange = async (modelId: string) => {
+        setSelectedStreamingModelId(modelId);
+        if (!modelId) {
+             updateConfig({ streamingModelPath: '' });
+             return;
+        }
+
+        try {
+            const path = await modelService.getModelPath(modelId);
+            updateConfig({ streamingModelPath: path });
+            await applyModelRules(modelId);
+        } catch (e) {
+            console.error('Failed to get streaming model path', e);
+        }
+    };
+
+    const handleOfflineModelChange = async (modelId: string) => {
+        setSelectedOfflineModelId(modelId);
+        if (!modelId) {
+             updateConfig({ offlineModelPath: '' });
+             return;
+        }
+
+        try {
+            const path = await modelService.getModelPath(modelId);
+            updateConfig({ offlineModelPath: path });
+            await applyModelRules(modelId);
 
         } catch (e) {
             console.error('Failed to get offline model path', e);
@@ -156,14 +202,37 @@ export function SettingsModelsTab({
             tabIndex={0}
         >
             <div className="settings-item" style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
-                <label htmlFor="settings-recognition-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.recognition_path_label', { defaultValue: 'Select Model' })}</label>
+                <label htmlFor="settings-streaming-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.streaming_model_label', { defaultValue: 'Streaming Model' })}</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: '16px' }}>
+                    <Dropdown
+                        id="settings-streaming-path"
+                        value={selectedStreamingModelId}
+                        onChange={(value) => handleStreamingModelChange(value)}
+                        placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
+                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice' && m.modes?.includes('streaming')).map(model => ({
+                            value: model.id,
+                            label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+                            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
+                        }))}
+                        style={{ flex: 1 }}
+                    />
+                    <button
+                        className="btn btn-secondary"
+                        onClick={() => handleBrowse('sensevoice')}
+                        title={t('common.browse', { defaultValue: 'Browse' })}
+                    >
+                        ...
+                    </button>
+                </div>
+
+                <label htmlFor="settings-offline-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.offline_model_label', { defaultValue: 'Offline Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Dropdown
-                        id="settings-recognition-path"
-                        value={selectedSensevoiceModelId}
-                        onChange={(value) => handleSensevoiceModelChange(value)}
-                        placeholder={t('settings.select_model', { defaultValue: 'Select a model...' })}
-                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice').map(model => ({
+                        id="settings-offline-path"
+                        value={selectedOfflineModelId}
+                        onChange={(value) => handleOfflineModelChange(value)}
+                        placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
+                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice' && m.modes?.includes('offline')).map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined

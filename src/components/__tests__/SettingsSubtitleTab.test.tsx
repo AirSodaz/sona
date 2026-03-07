@@ -13,7 +13,8 @@ vi.mock('react-i18next', () => ({
 describe('SettingsSubtitleTab', () => {
     const mockUpdateConfig = vi.fn();
     const mockConfig: AppConfig = {
-        recognitionModelPath: '',
+        streamingModelPath: "/path/to/model",
+                offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
         lockWindow: false,

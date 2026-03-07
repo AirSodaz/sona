@@ -54,7 +54,8 @@ describe('batchQueueStore buffering', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         useBatchQueueStore.getState().clearQueue();
-        useTranscriptStore.getState().setConfig({ recognitionModelPath: '/model' });
+        useTranscriptStore.getState().setConfig({ streamingModelPath: "/path/to/model",
+                offlineModelPath: '/model' });
         vi.clearAllMocks();
     });
 

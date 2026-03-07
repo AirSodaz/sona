@@ -83,7 +83,8 @@ describe('BatchImport Integration', () => {
         useTranscriptStore.setState({
             config: {
 
-                recognitionModelPath: '/mock/offline/model',
+                streamingModelPath: "/path/to/model",
+                offlineModelPath: '/mock/offline/model',
                 punctuationModelPath: '',
                 enableITN: false,
                 enabledITNModels: [],
