@@ -290,7 +290,6 @@ impl Recognizer {
                 config.model_config.funasr_nano.tokenizer = Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
                 config.model_config.num_threads = num_threads;
-                config.model_config.tokens = Some(String::new());
                 config.model_config.provider = Some("cpu".to_string());
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
