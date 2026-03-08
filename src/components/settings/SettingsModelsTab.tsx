@@ -7,7 +7,7 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
-    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc')[];
+    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'zipformer' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'zipformer')[];
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -52,7 +52,7 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc') => Promise<void>;
+    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'zipformer') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -253,7 +253,7 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer']} {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer', 'zipformer']} {...sectionProps} />
             <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />
 
             {/* Removed VAD and Punctuation models from UI */}
