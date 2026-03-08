@@ -18,6 +18,10 @@ pub struct ModelFileConfig {
     pub model: Option<String>,
     pub joiner: Option<String>,
     pub tokens: Option<String>,
+    pub encoder_adaptor: Option<String>,
+    pub llm: Option<String>,
+    pub embedding: Option<String>,
+    pub tokenizer: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +47,13 @@ pub enum ModelType {
         encoder: PathBuf,
         decoder: PathBuf,
         tokens: PathBuf,
+        language: String,
+    },
+    OfflineFunASRNano {
+        encoder_adaptor: PathBuf,
+        llm: PathBuf,
+        embedding: PathBuf,
+        tokenizer: PathBuf,
         language: String,
     },
 }
@@ -106,6 +117,20 @@ pub fn build_model_config(
                 decoder,
                 tokens,
                 language: whisper_lang.to_string(),
+            })
+        }
+        "funasr-nano" => {
+            let encoder_adaptor = get_path(&fc.encoder_adaptor)?;
+            let llm = get_path(&fc.llm)?;
+            let embedding = get_path(&fc.embedding)?;
+            let tokenizer = get_path(&fc.tokenizer)?;
+            let nano_lang = if language == "multilingual" { "" } else { language };
+            Ok(ModelType::OfflineFunASRNano {
+                encoder_adaptor,
+                llm,
+                embedding,
+                tokenizer,
+                language: nano_lang.to_string(),
             })
         }
         _ => Err(format!("Unsupported model type: {}", model_type)),
@@ -246,6 +271,33 @@ impl Recognizer {
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
                 debug!("Successfully created OfflineRecognizer (OfflineWhisper)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineFunASRNano {
+                encoder_adaptor,
+                llm,
+                embedding,
+                tokenizer,
+                language,
+            } => {
+                let mut config = OfflineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    ..Default::default()
+                };
+                config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
+                config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
+                config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
+                config.model_config.funasr_nano.tokenizer = Some(tokenizer.to_string_lossy().to_string());
+                config.model_config.funasr_nano.language = Some(language);
+                config.model_config.num_threads = num_threads;
+                config.model_config.provider = Some("cpu".to_string());
+                config.feat_config.sample_rate = 16000;
+                config.feat_config.feature_dim = 80;
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
+                let recognizer = OfflineRecognizer::create(&config)
+                    .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineFunASRNano)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };
