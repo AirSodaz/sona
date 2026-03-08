@@ -41,7 +41,9 @@ describe('TranscriptionService', () => {
             itnModel: null,
             punctuationModel: null,
             vadModel: null,
-            vadBuffer: 5
+            vadBuffer: 5,
+            modelType: 'sensevoice',
+            fileConfig: undefined
         });
         expect(invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });
