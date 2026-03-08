@@ -194,6 +194,7 @@ describe('CaptionWindow', () => {
             vi.advanceTimersByTime(100); // debounce timeout
             await Promise.resolve();
             await Promise.resolve();
+            await Promise.resolve(); // extra microtask for imports
         });
 
         // Should resize again to new offsetHeight
