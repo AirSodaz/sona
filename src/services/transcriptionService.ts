@@ -9,18 +9,6 @@ export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
 
-/** Result from CTC forced alignment. */
-export interface AlignmentResult {
-    /** List of tokens from CTC recognition. */
-    tokens: string[];
-    /** Absolute start timestamps for each token. */
-    timestamps: number[];
-    /** Duration of each token. */
-    durations: number[];
-    /** Raw text from CTC recognition (may differ from user-edited text). */
-    ctcText: string;
-}
-
 /** Configuration used to start the backend recognizer. */
 interface ServiceConfig {
     modelPath: string;
@@ -465,19 +453,6 @@ export class TranscriptionService {
         }
     }
 
-    /**
-     * Runs CTC forced alignment on a segment's audio slice.
-     *
-     * Returns null as it is currently unimplmented in the Rust backend.
-     *
-     * @param segment The segment to align (uses start/end times).
-     * @param sourceFilePath Optional override for the audio file path.
-     * @return The alignment result, or null if alignment is unavailable or fails.
-     */
-    async alignSegment(segment: TranscriptSegment, _sourceFilePath?: string): Promise<AlignmentResult | null> {
-        logger.warn(`[TranscriptionService] CTC Alignment is not yet implemented in the Rust backend. Returning null for segment ${segment.id}`);
-        return null;
-    }
 }
 
 export const transcriptionService = new TranscriptionService('record');

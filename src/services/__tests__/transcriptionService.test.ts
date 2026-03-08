@@ -168,17 +168,6 @@ describe('TranscriptionService', () => {
         });
     });
 
-    describe('Alignment', () => {
-        it('returns null since CTC alignment is not yet implemented in Rust backend', async () => {
-            const segment: any = {
-                id: 'seg-1'
-            };
-
-            const result = await transcriptionService.alignSegment(segment);
-            expect(result).toBeNull();
-        });
-    });
-
     describe('Filtering', () => {
         it('filters out segments with only a single period "." and isFinal: true in batch', async () => {
             const mockSegments = [

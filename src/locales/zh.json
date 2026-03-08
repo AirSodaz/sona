@@ -188,8 +188,6 @@
         "toggle_model": "切换 {{name}}",
         "vad_buffer_size": "VAD 缓冲大小 (秒)",
         "vad_buffer_hint": "在检测到语音前预留的缓冲时长（秒）。有助于避免句子开头被截断。",
-        "ctc_models": "CTC 模型",
-        "ctc_path_label": "CTC 模型",
         "max_concurrent_label": "最大并发转录数",
         "max_concurrent_hint": "并行转录的文件数量。",
         "model_not_installed": "请先从模型中心下载该模型。",

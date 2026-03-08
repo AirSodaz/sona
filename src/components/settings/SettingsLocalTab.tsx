@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '../Switch';
-import { useDialogStore } from '../../stores/dialogStore';
 import { ItnModelList } from './ItnModelList';
-import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
+import { ModelInfo } from '../../services/modelService';
 import { RestoreIcon } from '../Icons';
 import { AppConfig } from '../../types/transcript';
 
@@ -27,9 +26,7 @@ export function SettingsLocalTab({
     onRestoreDefaults
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
 
-    const ctcModelPath = config.ctcModelPath || '';
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
     const enableITN = config.enableITN ?? true;
@@ -56,33 +53,6 @@ export function SettingsLocalTab({
         updateConfig({ itnRulesOrder: newOrder });
     };
 
-
-    const handleToggle = async (type: 'punctuation' | 'vad' | 'ctc', checked: boolean) => {
-        if (!checked) {
-            if (type === 'punctuation') updateConfig({ punctuationModelPath: '' });
-            else if (type === 'vad') updateConfig({ vadModelPath: '' });
-            else if (type === 'ctc') updateConfig({ ctcModelPath: '' });
-            return;
-        }
-
-        const model = PRESET_MODELS.find(m => m.type === type);
-        if (model) {
-            if (!installedModels.has(model.id)) {
-                await alert(t('settings.model_not_installed', { defaultValue: 'Please download the model first from the Model Hub.' }));
-                return;
-            }
-
-            try {
-                const path = await modelService.getModelPath(model.id);
-                if (type === 'punctuation') updateConfig({ punctuationModelPath: path });
-                else if (type === 'vad') updateConfig({ vadModelPath: path });
-                else if (type === 'ctc') updateConfig({ ctcModelPath: path });
-            } catch (e) {
-                console.error(`Failed to get path for ${type} model`, e);
-            }
-        }
-    };
-
     return (
         <div
             className="settings-group"
@@ -91,16 +61,6 @@ export function SettingsLocalTab({
             aria-labelledby="settings-tab-local"
             tabIndex={0}
         >
-            <div className="settings-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ctc_path_label', { defaultValue: 'CTC Model' })}</label>
-                    <Switch
-                        checked={!!ctcModelPath}
-                        onChange={(c) => handleToggle('ctc', c)}
-                    />
-                </div>
-            </div>
-
             <div className="settings-item">
                 <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
                 <div style={{ maxWidth: 300 }}>

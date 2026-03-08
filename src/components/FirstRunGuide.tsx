@@ -63,7 +63,6 @@ export function FirstRunGuide() {
                 offlineModelPath: paths['sensevoice'],
                 vadModelPath: paths['vad'],
                 punctuationModelPath: '', // Downloaded but not enabled
-                ctcModelPath: '', // Not downloaded
                 enableITN: true,
                 enabledITNModels: [] // Chinese Number ITN not downloaded/enabled
             };
