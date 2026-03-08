@@ -1,0 +1,11 @@
+--- src/services/modelService.ts
++++ src/services/modelService.ts
+@@ -25,7 +25,7 @@
+     /** URL to download the model archive or file. */
+     url: string;
+-    /** Type of the model (e.g., streaming, sensevoice). */
+-    type: 'streaming' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'itn';
++    /** Type of the model (e.g., zipformer, sensevoice). */
++    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'ctc' | 'itn';
+     /** Modes supported by the model (e.g., streaming, offline). */
+     modes?: ('streaming' | 'offline')[];

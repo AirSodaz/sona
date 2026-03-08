@@ -157,7 +157,7 @@ export class TranscriptionService {
             let vadPathToUse = '';
             let vadBufferToUse = 5.0;
 
-            const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+            const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer' || m.type === 'zipformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
             if (streamingModel) {
                 const rules = modelService.getModelRules(streamingModel.id);
                 if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
@@ -251,7 +251,7 @@ export class TranscriptionService {
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;
 
-        const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+        const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer' || m.type === 'zipformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
         if (streamingModel) {
             const rules = modelService.getModelRules(streamingModel.id);
             if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
