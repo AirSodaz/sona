@@ -112,8 +112,8 @@ export const PRESET_MODELS: ModelInfo[] = [
             requiresPunctuation: true
         },
         fileConfig: {
-            encoder: 'encoder.int8.onnx',
-            decoder: 'decoder.int8.onnx',
+            encoder: 'encoder.onnx',
+            decoder: 'decoder.onnx',
             tokens: 'tokens.txt'
         }
     },
@@ -152,7 +152,7 @@ export const PRESET_MODELS: ModelInfo[] = [
             requiresPunctuation: true
         },
         fileConfig: {
-            encoder: 'encoder.int8.onnx',
+            encoder: 'encoder.onnx',
             decoder: 'decoder.int8.onnx',
             joiner: 'joiner.int8.onnx',
             tokens: 'tokens.txt'
