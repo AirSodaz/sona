@@ -51,10 +51,6 @@ const {
     mockSetLanguage,
     mockSetEnableITN,
     mockSetITNModelPaths,
-    mockSetPunctuationModelPath,
-
-    mockSetVadModelPath,
-    mockSetVadBufferSize,
     mockTerminate
 } = vi.hoisted(() => ({
     mockStart: vi.fn().mockResolvedValue(undefined),
@@ -66,10 +62,6 @@ const {
     mockSetLanguage: vi.fn(),
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
-    mockSetPunctuationModelPath: vi.fn(),
-
-    mockSetVadModelPath: vi.fn(),
-    mockSetVadBufferSize: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
 }));
 
