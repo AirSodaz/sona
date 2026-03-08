@@ -166,8 +166,8 @@ impl Recognizer {
             } => {
                 let mut config = OnlineRecognizerConfig {
                     rule_fsts: itn_model.clone(),
-                    rule1_min_trailing_silence: 2.4,
-                    rule2_min_trailing_silence: 2.4,
+                    rule1_min_trailing_silence: 1.2,
+                    rule2_min_trailing_silence: 1.2,
                     rule3_min_utterance_length: 300.0,
                     ..Default::default()
                 };
@@ -196,8 +196,8 @@ impl Recognizer {
             } => {
                 let mut config = OnlineRecognizerConfig {
                     rule_fsts: itn_model,
-                    rule1_min_trailing_silence: 2.4,
-                    rule2_min_trailing_silence: 2.4,
+                    rule1_min_trailing_silence: 1.2,
+                    rule2_min_trailing_silence: 1.2,
                     rule3_min_utterance_length: 300.0,
                     ..Default::default()
                 };
