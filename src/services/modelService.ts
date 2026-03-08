@@ -95,6 +95,21 @@ export const PRESET_MODELS: ModelInfo[] = [
         }
     },
     {
+        id: 'sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30',
+        name: 'Streaming Zipformer - ZH XLarge (Int8)',
+        description: 'Streaming Zipformer model for Chinese',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2',
+        type: 'zipformer',
+        modes: ['streaming'],
+        language: 'zh',
+        size: '~570 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: false,
+            requiresPunctuation: true
+        }
+    },
+    {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
         name: 'Punctuation - CT Transformer (Int8)',
         description: 'Chinese/English Punctuation Model (Int8 quantized). Adds punctuation to raw text.',
@@ -137,21 +152,6 @@ export const PRESET_MODELS: ModelInfo[] = [
         size: '< 1 MB',
         engine: 'sherpa-onnx',
         isArchive: false
-    },
-    {
-        id: 'sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30',
-        name: 'Streaming Zipformer - ZH XLarge (Int8)',
-        description: 'Streaming Zipformer model for Chinese',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2',
-        type: 'zipformer',
-        modes: ['streaming'],
-        language: 'zh',
-        size: '~570 MB',
-        engine: 'sherpa-onnx',
-        rules: {
-            requiresVad: false,
-            requiresPunctuation: true
-        }
     }
 ];
 
