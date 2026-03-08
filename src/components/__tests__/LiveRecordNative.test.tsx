@@ -85,10 +85,6 @@ vi.mock('../../services/transcriptionService', () => {
             setLanguage: mockSetLanguage,
             setEnableITN: mockSetEnableITN,
             setITNModelPaths: mockSetITNModelPaths,
-            setPunctuationModelPath: mockSetPunctuationModelPath,
-
-            setVadModelPath: mockSetVadModelPath,
-            setVadBufferSize: mockSetVadBufferSize,
             prepare: mockPrepare,
             terminate: mockTerminate,
         },
@@ -101,10 +97,6 @@ vi.mock('../../services/transcriptionService', () => {
             setLanguage: mockSetLanguage,
             setEnableITN: mockSetEnableITN,
             setITNModelPaths: mockSetITNModelPaths,
-            setPunctuationModelPath: mockSetPunctuationModelPath,
-
-            setVadModelPath: mockSetVadModelPath,
-            setVadBufferSize: mockSetVadBufferSize,
             prepare: mockPrepare,
             terminate: mockTerminate,
         },
@@ -117,10 +109,6 @@ vi.mock('../../services/transcriptionService', () => {
             setLanguage = mockSetLanguage;
             setEnableITN = mockSetEnableITN;
             setITNModelPaths = mockSetITNModelPaths;
-            setPunctuationModelPath = mockSetPunctuationModelPath;
-
-            setVadModelPath = mockSetVadModelPath;
-            setVadBufferSize = mockSetVadBufferSize;
             prepare = mockPrepare;
             terminate = mockTerminate;
         }

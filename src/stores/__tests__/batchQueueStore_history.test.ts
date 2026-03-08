@@ -33,9 +33,6 @@ vi.mock('../../services/transcriptionService', () => ({
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
         setITNModelPaths: vi.fn(),
-        setPunctuationModelPath: vi.fn(),
-        setVadModelPath: vi.fn(),
-        setVadBufferSize: vi.fn(),
 
 
         transcribeFile: vi.fn()
