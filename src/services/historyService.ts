@@ -275,7 +275,8 @@ export const historyService = {
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
             const items = await this.getAll();
-            const itemsToDelete = items.filter(item => ids.includes(item.id));
+            const idSet = new Set(ids);
+            const itemsToDelete = items.filter(item => idSet.has(item.id));
 
             for (const item of itemsToDelete) {
                 const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
@@ -294,7 +295,7 @@ export const historyService = {
                 }
             }
 
-            const newItems = items.filter(item => !ids.includes(item.id));
+            const newItems = items.filter(item => !idSet.has(item.id));
             await writeTextFile(
                 `${HISTORY_DIR}/${INDEX_FILE}`,
                 JSON.stringify(newItems, null, 2),
