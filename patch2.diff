@@ -1,0 +1,23 @@
+--- src/services/modelService.ts
++++ src/services/modelService.ts
+@@ -118,6 +118,21 @@
+         size: '< 1 MB',
+         engine: 'sherpa-onnx',
+         isArchive: false
++    },
++    {
++        id: 'sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30',
++        name: 'Streaming Zipformer - ZH XLarge (Int8)',
++        description: 'Streaming Zipformer model for Chinese',
++        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2',
++        type: 'zipformer',
++        modes: ['streaming'],
++        language: 'zh',
++        size: '~570 MB',
++        engine: 'sherpa-onnx',
++        rules: {
++            requiresVad: false,
++            requiresPunctuation: true
++        }
+     }
+ ];

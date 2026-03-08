@@ -86,7 +86,7 @@ export function SettingsModelsTab({
             }
 
             for (const model of PRESET_MODELS) {
-                if ((model.type === 'sensevoice' || model.type === 'paraformer') && model.modes?.includes('streaming')) {
+                if ((model.type === 'sensevoice' || model.type === 'paraformer' || model.type === 'zipformer') && model.modes?.includes('streaming')) {
                     const path = await modelService.getModelPath(model.id);
                     if (path === streamingModelPath) {
                         setSelectedStreamingModelId(model.id);
@@ -212,7 +212,7 @@ export function SettingsModelsTab({
                         value={selectedStreamingModelId}
                         onChange={(value) => handleStreamingModelChange(value)}
                         placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
-                        options={PRESET_MODELS.filter(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming')).map(model => ({
+                        options={PRESET_MODELS.filter(m => (m.type === 'sensevoice' || m.type === 'paraformer' || m.type === 'zipformer') && m.modes?.includes('streaming')).map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
