@@ -610,7 +610,7 @@ pub async fn init_recognizer(
     // Initialize Punctuation
     let mut punctuation = None;
     if let Some(p_path) = punctuation_model {
-        if Path::new(&p_path).exists() {
+        if !p_path.is_empty() && Path::new(&p_path).exists() {
             let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
             let onnx_file = entries
                 .flatten()
@@ -624,7 +624,7 @@ pub async fn init_recognizer(
     // Initialize VAD
     let mut vad = None;
     if let Some(v_path) = &vad_model {
-        if Path::new(v_path).exists() {
+        if !v_path.is_empty() && Path::new(v_path).exists() {
             let silero_vad = SileroVadModelConfig {
                 model: Some(v_path.clone()),
                 threshold: 0.35,
@@ -687,7 +687,7 @@ pub async fn start_recognizer(
     // Reset VAD state by recreating it
     let mut vad = None;
     if let Some(v_path) = &instance.vad_model {
-        if Path::new(v_path).exists() {
+        if !v_path.is_empty() && Path::new(v_path).exists() {
             let silero_vad = SileroVadModelConfig {
                 model: Some(v_path.clone()),
                 threshold: 0.35,
@@ -1147,7 +1147,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     // Initialize Punctuation
     let mut punctuation = None;
     if let Some(p_path) = punctuation_model {
-        if Path::new(&p_path).exists() {
+        if !p_path.is_empty() && Path::new(&p_path).exists() {
             let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
             let onnx_file = entries
                 .flatten()
@@ -1161,7 +1161,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     // Use Offline Recognizer if available
     if let RecognizerInner::Offline(r) = &recognizer.inner {
         let segments = if let Some(v_path) = vad_model {
-            if Path::new(&v_path).exists() {
+            if !v_path.is_empty() && Path::new(&v_path).exists() {
                 let silero_vad = sherpa_onnx::SileroVadModelConfig {
                     model: Some(v_path.clone()),
                     threshold: 0.35,

@@ -161,19 +161,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             transcriptionService.setITNModelPaths([]);
         }
 
-        if (config.punctuationModelPath) {
-            transcriptionService.setPunctuationModelPath(config.punctuationModelPath);
-        } else {
-            transcriptionService.setPunctuationModelPath('');
-        }
-
-        if (config.vadModelPath) {
-            transcriptionService.setVadModelPath(config.vadModelPath);
-            transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
-        }
-
-
-
         // Find items to start
         const pendingItems = state.queueItems.filter(item => item.status === 'pending');
         const slotsAvailable = maxConcurrent - processingCount;
