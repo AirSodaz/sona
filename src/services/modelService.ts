@@ -50,29 +50,29 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = [
     {
-        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09',
-        name: 'Multilingual - SenseVoice - 2025-09-09 (Int8)',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (optimized for Cantonese)',
-        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2',
-        type: 'sensevoice',
-        modes: ['streaming', 'offline'],
-        language: 'zh,en,ja,ko,yue',
-        size: '~158 MB',
-        engine: 'sherpa-onnx',
-        rules: {
-            requiresVad: true,
-            requiresPunctuation: true
-        }
-    },
-    {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
-        name: 'Multilingual - SenseVoice - 2024-07-17 (Int8)',
+        name: 'Multilingual - SenseVoice (Int8)',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
         type: 'sensevoice',
         modes: ['streaming', 'offline'],
         language: 'zh,en,ja,ko,yue',
         size: '~155 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        }
+    },
+    {
+        id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+        name: 'Multilingual - SenseVoice',
+        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
+        type: 'sensevoice',
+        modes: ['streaming', 'offline'],
+        language: 'zh,en,ja,ko,yue',
+        size: '~999 MB',
         engine: 'sherpa-onnx',
         rules: {
             requiresVad: true,
