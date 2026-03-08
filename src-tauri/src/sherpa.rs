@@ -100,11 +100,12 @@ pub fn build_model_config(
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let tokens = get_path(&fc.tokens)?;
+            let whisper_lang = if language == "auto" { "" } else { language };
             Ok(ModelType::OfflineWhisper {
                 encoder,
                 decoder,
                 tokens,
-                language: language.to_string(),
+                language: whisper_lang.to_string(),
             })
         }
         _ => Err(format!("Unsupported model type: {}", model_type)),
