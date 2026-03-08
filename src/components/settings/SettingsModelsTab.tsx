@@ -7,6 +7,7 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
+    type: 'asr' | 'punctuation' | 'vad';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -16,14 +17,20 @@ interface ModelSectionProps {
 
 function ModelSection({
     title,
+    type,
     installedModels,
     downloads,
     onDelete,
     onDownload,
     onCancelDownload
 }: ModelSectionProps): React.JSX.Element {
-    const blacklist = ['vad', 'punctuation', 'itn'];
-    const models = PRESET_MODELS.filter(m => !blacklist.includes(m.type));
+    const models = PRESET_MODELS.filter(m => {
+        if (type === 'asr') {
+            const blacklist = ['vad', 'punctuation', 'itn'];
+            return !blacklist.includes(m.type);
+        }
+        return m.type === type;
+    });
 
     return (
         <>
@@ -156,8 +163,8 @@ export function SettingsModelsTab({
     const handleStreamingModelChange = async (modelId: string) => {
         setSelectedStreamingModelId(modelId);
         if (!modelId) {
-             updateConfig({ streamingModelPath: '' });
-             return;
+            updateConfig({ streamingModelPath: '' });
+            return;
         }
 
         try {
@@ -172,8 +179,8 @@ export function SettingsModelsTab({
     const handleOfflineModelChange = async (modelId: string) => {
         setSelectedOfflineModelId(modelId);
         if (!modelId) {
-             updateConfig({ offlineModelPath: '' });
-             return;
+            updateConfig({ offlineModelPath: '' });
+            return;
         }
 
         try {
@@ -251,10 +258,11 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} type="asr" {...sectionProps} />
 
-            {/* Removed VAD and Punctuation models from UI */}
-            {/* Removed VAD buffer size setting */}
+            {/* Punctuation and VAD models restored */}
+            <ModelSection title={t('settings.punctuation_models', { defaultValue: 'Punctuation Models' })} type="punctuation" {...sectionProps} />
+            <ModelSection title={t('settings.vad_models', { defaultValue: 'Voice Activity Detection (VAD) Models' })} type="vad" {...sectionProps} />
         </div>
     );
 }
