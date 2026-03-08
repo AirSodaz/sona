@@ -23,16 +23,10 @@ export function useTranscriptionServiceSync() {
                 transcriptionService.setModelPath(config.streamingModelPath);
                 transcriptionService.setLanguage(config.language);
                 transcriptionService.setEnableITN(config.enableITN ?? false);
-                transcriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-                transcriptionService.setVadModelPath(config.vadModelPath || '');
-                transcriptionService.setVadBufferSize(config.vadBufferSize || 5);
 
                 captionTranscriptionService.setModelPath(config.streamingModelPath);
                 captionTranscriptionService.setLanguage(config.language);
                 captionTranscriptionService.setEnableITN(config.enableITN ?? false);
-                captionTranscriptionService.setPunctuationModelPath(config.punctuationModelPath || '');
-                captionTranscriptionService.setVadModelPath(config.vadModelPath || '');
-                captionTranscriptionService.setVadBufferSize(config.vadBufferSize || 5);
 
                 const enabledITNModels = new Set(config.enabledITNModels || []);
                 const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];

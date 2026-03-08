@@ -2,6 +2,8 @@ import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
+import { useTranscriptStore } from '../stores/transcriptStore';
+import { PRESET_MODELS, modelService } from './modelService';
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
@@ -44,12 +46,6 @@ export class TranscriptionService {
     private modelPath: string = '';
     /** List of paths to Inverse Text Normalization (ITN) models. */
     private itnModelPaths: string[] = [];
-    /** Path to the punctuation model. */
-    private punctuationModelPath: string = '';
-    /** Path to the Voice Activity Detection (VAD) model. */
-    private vadModelPath: string = '';
-    /** Buffer size for VAD in seconds. */
-    private vadBufferSize: number = 5;
     /** Whether to enable Inverse Text Normalization. */
     private enableITN: boolean = true;
     /** Callback for new transcript segments. */
@@ -99,34 +95,6 @@ export class TranscriptionService {
      */
     setITNModelPaths(paths: string[]): void {
         this.itnModelPaths = paths;
-    }
-
-    /**
-     * Sets the path to the Punctuation model.
-     *
-     * @param path The absolute path to the punctuation model.
-     */
-    setPunctuationModelPath(path: string): void {
-        this.punctuationModelPath = path;
-    }
-
-    /**
-     * Sets the path to the Voice Activity Detection (VAD) model.
-     *
-     * @param path The absolute path to the VAD model.
-     */
-    setVadModelPath(path: string): void {
-        this.vadModelPath = path;
-    }
-
-
-    /**
-     * Sets the VAD buffer size.
-     *
-     * @param size The buffer size in seconds.
-     */
-    setVadBufferSize(size: number): void {
-        this.vadBufferSize = size;
     }
 
     /**
@@ -181,12 +149,32 @@ export class TranscriptionService {
         this.startingPromise = (async () => {
             logger.info(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
 
+            // Fetch app config for VAD/Punctuation paths
+            const appConfig = useTranscriptStore.getState().config;
+
+            // Determine rules based on the streaming model ID
+            let punctuationPathToUse = '';
+            let vadPathToUse = '';
+            let vadBufferToUse = 5.0;
+
+            const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+            if (streamingModel) {
+                const rules = modelService.getModelRules(streamingModel.id);
+                if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
+                    punctuationPathToUse = appConfig.punctuationModelPath;
+                }
+                if (rules.requiresVad && appConfig.vadModelPath) {
+                    vadPathToUse = appConfig.vadModelPath;
+                    vadBufferToUse = appConfig.vadBufferSize || 5.0;
+                }
+            }
+
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
                 itnModelPaths: [...this.itnModelPaths],
-                punctuationModelPath: this.punctuationModelPath,
-                vadModelPath: this.vadModelPath,
-                vadBufferSize: this.vadBufferSize,
+                punctuationModelPath: punctuationPathToUse,
+                vadModelPath: vadPathToUse,
+                vadBufferSize: vadBufferToUse,
                 enableITN: this.enableITN,
                 language: this.language
             };
@@ -199,9 +187,9 @@ export class TranscriptionService {
                     enableItn: this.enableITN,
                     language: this.language,
                     itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
-                    punctuationModel: this.punctuationModelPath || null,
-                    vadModel: this.vadModelPath || null,
-                    vadBuffer: this.vadBufferSize || 5.0
+                    punctuationModel: punctuationPathToUse || null,
+                    vadModel: vadPathToUse || null,
+                    vadBuffer: vadBufferToUse
                 });
 
                 this.runningConfig = configToUse;
@@ -255,10 +243,30 @@ export class TranscriptionService {
 
         if (this.modelPath !== this.runningConfig.modelPath) return false;
         if (this.enableITN !== this.runningConfig.enableITN) return false;
-        if (this.punctuationModelPath !== this.runningConfig.punctuationModelPath) return false;
-        if (this.vadModelPath !== this.runningConfig.vadModelPath) return false;
-        if (this.vadBufferSize !== this.runningConfig.vadBufferSize) return false;
         if (this.language !== this.runningConfig.language) return false;
+
+        // Compare dynamically resolved VAD and Punctuation against what is running
+        const appConfig = useTranscriptStore.getState().config;
+        let punctuationPathToUse = '';
+        let vadPathToUse = '';
+        let vadBufferToUse = 5.0;
+
+        const streamingModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'paraformer') && m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+        if (streamingModel) {
+            const rules = modelService.getModelRules(streamingModel.id);
+            if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
+                punctuationPathToUse = appConfig.punctuationModelPath;
+            }
+            if (rules.requiresVad && appConfig.vadModelPath) {
+                vadPathToUse = appConfig.vadModelPath;
+                vadBufferToUse = appConfig.vadBufferSize || 5.0;
+            }
+        }
+
+        if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) return false;
+        if (vadPathToUse !== this.runningConfig.vadModelPath) return false;
+        if (vadBufferToUse !== this.runningConfig.vadBufferSize) return false;
+
 
         // Compare ITN model paths (array)
         if (this.itnModelPaths.length !== this.runningConfig.itnModelPaths.length) return false;
@@ -388,6 +396,23 @@ export class TranscriptionService {
                 });
             }
 
+            const appConfig = useTranscriptStore.getState().config;
+            let punctuationPathToUse = '';
+            let vadPathToUse = '';
+            let vadBufferToUse = 5.0;
+
+            const offlineModel = PRESET_MODELS.find(m => m.type === 'sensevoice' && m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
+            if (offlineModel) {
+                const rules = modelService.getModelRules(offlineModel.id);
+                if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
+                    punctuationPathToUse = appConfig.punctuationModelPath;
+                }
+                if (rules.requiresVad && appConfig.vadModelPath) {
+                    vadPathToUse = appConfig.vadModelPath;
+                    vadBufferToUse = appConfig.vadBufferSize || 5.0;
+                }
+            }
+
             const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
                 filePath: filePath,
                 saveToPath: _saveToPath || null,
@@ -396,9 +421,9 @@ export class TranscriptionService {
                 enableItn: this.enableITN,
                 language: language || this.language || 'auto',
                 itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
-                punctuationModel: this.punctuationModelPath || null,
-                vadModel: this.vadModelPath || null,
-                vadBuffer: this.vadBufferSize || 5.0
+                punctuationModel: punctuationPathToUse || null,
+                vadModel: vadPathToUse || null,
+                vadBuffer: vadBufferToUse
             });
 
             if (progressUnlisten) {

@@ -18,7 +18,6 @@ describe('TranscriptionService', () => {
         // Reset internal states using public methods before each test
         transcriptionService.setModelPath('/mock/model/path');
         transcriptionService.setITNModelPaths([]);
-        transcriptionService.setPunctuationModelPath('');
         transcriptionService.setEnableITN(true);
     });
 

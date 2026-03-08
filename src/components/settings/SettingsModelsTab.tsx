@@ -127,26 +127,28 @@ export function SettingsModelsTab({
 
             if (rules.requiresVad) {
                 const vadModelId = 'silero-vad';
-                if (installedModels.has(vadModelId)) {
-                    const vadPath = await modelService.getModelPath(vadModelId);
-                    updateConfig({ vadModelPath: vadPath });
-                } else {
-                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
+                // Only sync and save if path is missing in config
+                if (!config.vadModelPath) {
+                    if (installedModels.has(vadModelId)) {
+                        const vadPath = await modelService.getModelPath(vadModelId);
+                        updateConfig({ vadModelPath: vadPath });
+                    } else {
+                        document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
+                    }
                 }
-            } else {
-                updateConfig({ vadModelPath: '' });
             }
 
             if (rules.requiresPunctuation) {
                 const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
-                if (installedModels.has(punctModelId)) {
-                    const punctPath = await modelService.getModelPath(punctModelId);
-                    updateConfig({ punctuationModelPath: punctPath });
-                } else {
-                    document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
+                // Only sync and save if path is missing in config
+                if (!config.punctuationModelPath) {
+                    if (installedModels.has(punctModelId)) {
+                        const punctPath = await modelService.getModelPath(punctModelId);
+                        updateConfig({ punctuationModelPath: punctPath });
+                    } else {
+                        document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
+                    }
                 }
-            } else {
-                updateConfig({ punctuationModelPath: '' });
             }
         } catch (e) {
             console.error('Failed to apply model rules', e);
@@ -252,10 +254,9 @@ export function SettingsModelsTab({
 
             {/* Streaming models removed */}
             <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer']} {...sectionProps} />
-            <ModelSection title={t('settings.punctuation_models')} type="punctuation" {...sectionProps} />
-            <ModelSection title={t('settings.vad_models')} type="vad" {...sectionProps} />
             <ModelSection title={t('settings.ctc_models')} type="ctc" {...sectionProps} />
 
+            {/* Removed VAD and Punctuation models from UI */}
             {/* Removed VAD buffer size setting */}
         </div>
     );
