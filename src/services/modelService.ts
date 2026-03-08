@@ -21,7 +21,7 @@ export interface ModelFileConfig {
     model?: string;
     joiner?: string;
     tokens?: string;
-    encoder_adaptor?: string;
+    encoderAdaptor?: string;
     llm?: string;
     embedding?: string;
     tokenizer?: string;
@@ -174,10 +174,10 @@ export const PRESET_MODELS: ModelInfo[] = [
         engine: 'sherpa-onnx',
         rules: {
             requiresVad: true,
-            requiresPunctuation: false
+            requiresPunctuation: true
         },
         fileConfig: {
-            encoder_adaptor: 'encoder_adaptor.int8.onnx',
+            encoderAdaptor: 'encoder_adaptor.int8.onnx',
             llm: 'llm.int8.onnx',
             embedding: 'embedding.int8.onnx',
             tokenizer: 'Qwen3-0.6B'
