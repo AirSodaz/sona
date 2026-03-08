@@ -138,7 +138,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'ctc'): string {
+    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad'): string {
         switch (type) {
             case 'sensevoice':
             case 'paraformer':
@@ -146,14 +146,12 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                 return t('settings.recognition_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
-            case 'ctc':
-                return t('settings.ctc_path_label');
             default:
                 return 'Select Punctuation Model Path';
         }
     }
 
-    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'ctc') {
+    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad') {
         try {
             const selected = await open({
                 directory: true,
@@ -170,8 +168,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                         updateConfig({ streamingModelPath: path, offlineModelPath: path });
                     } else if (type === 'vad') {
                         updateConfig({ vadModelPath: path });
-                    } else if (type === 'ctc') {
-                        updateConfig({ ctcModelPath: path });
                     } else {
                         updateConfig({ punctuationModelPath: path });
                     }
@@ -194,15 +190,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'ctc', path: string) {
+    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad', path: string) {
         if (type === 'sensevoice') {
             updateConfig({ streamingModelPath: path, offlineModelPath: path });
         } else if (type === 'paraformer' || type === 'zipformer') {
             updateConfig({ streamingModelPath: path });
         } else if (type === 'vad') {
             updateConfig({ vadModelPath: path });
-        } else if (type === 'ctc') {
-            updateConfig({ ctcModelPath: path });
         } else {
             updateConfig({ punctuationModelPath: path });
         }
@@ -333,9 +327,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (config.vadModelPath === deletedPath) {
                 updateConfig({ vadModelPath: '' });
             }
-            if (config.ctcModelPath === deletedPath) {
-                updateConfig({ ctcModelPath: '' });
-            }
         } catch (error: any) {
             console.error('Delete failed:', error);
             await alert(`Failed to delete model: ${error.message}`, {
@@ -363,9 +354,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
         if (model.type === 'vad') {
             return (config.vadModelPath || '').includes(model.filename || model.id);
-        }
-        if (model.type === 'ctc') {
-            return (config.ctcModelPath || '').includes(model.filename || model.id);
         }
         return false;
     }
@@ -405,7 +393,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             offlineModelPath: recognitionPath,
             punctuationModelPath: '',
             vadModelPath: vadPath,
-            ctcModelPath: '',
             vadBufferSize: 5,
             maxConcurrent: 2,
             enableITN: true,

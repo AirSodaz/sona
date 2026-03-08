@@ -12,7 +12,6 @@ import { SearchUI } from './SearchUI';
 import { EditorToolbar } from './EditorToolbar';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
-import { useSegmentAlignment } from '../hooks/useSegmentAlignment';
 
 /** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {
@@ -52,7 +51,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
 
     // Hooks for UI state and alignment
     const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
-    const requestAlignment = useSegmentAlignment();
 
     // Keep a ref to segments to make callbacks stable where needed
     const segmentsRef = useRef(segments);
@@ -70,21 +68,10 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     }, [setEditingSegmentId]);
 
     const handleSave = useCallback((id: string, text: string) => {
-        // Check if text actually changed and alignment is possible
-        const segment = segmentsRef.current.find(s => s.id === id);
-        const textChanged = segment && segment.text !== text;
-
         updateSegment(id, { text });
         setEditingSegmentId(null);
 
-        // Trigger re-alignment if text changed and segment has token data
-        if (textChanged && segment.tokens && segment.tokens.length > 0) {
-            const config = useTranscriptStore.getState().config;
-            if (config.ctcModelPath) {
-                requestAlignment(id);
-            }
-        }
-    }, [updateSegment, setEditingSegmentId, requestAlignment]);
+    }, [updateSegment, setEditingSegmentId]);
 
     const handleDelete = useCallback(async (id: string) => {
         const confirmed = await confirm(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {

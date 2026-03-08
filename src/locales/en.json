@@ -188,8 +188,6 @@
         "vad_path_label": "VAD Model",
         "vad_buffer_size": "VAD Buffer Size (s)",
         "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
-        "ctc_models": "CTC Models",
-        "ctc_path_label": "CTC Model",
         "max_concurrent_label": "Max Concurrent Transcriptions",
         "max_concurrent_hint": "Number of files to transcribe in parallel.",
         "model_not_installed": "Please download the model first from the Model Hub.",
