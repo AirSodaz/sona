@@ -7,7 +7,7 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
-    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer')[];
+    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper')[];
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -52,7 +52,7 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer') => Promise<void>;
+    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -86,7 +86,7 @@ export function SettingsModelsTab({
             }
 
             for (const model of PRESET_MODELS) {
-                if ((model.type === 'sensevoice' || model.type === 'paraformer' || model.type === 'zipformer') && model.modes?.includes('streaming')) {
+                if (model.modes?.includes('streaming')) {
                     const path = await modelService.getModelPath(model.id);
                     if (path === streamingModelPath) {
                         setSelectedStreamingModelId(model.id);
@@ -108,7 +108,7 @@ export function SettingsModelsTab({
             }
 
             for (const model of PRESET_MODELS) {
-                if (model.type === 'sensevoice' && model.modes?.includes('offline')) {
+                if (model.modes?.includes('offline')) {
                     const path = await modelService.getModelPath(model.id);
                     if (path === offlineModelPath) {
                         setSelectedOfflineModelId(model.id);
@@ -212,7 +212,7 @@ export function SettingsModelsTab({
                         value={selectedStreamingModelId}
                         onChange={(value) => handleStreamingModelChange(value)}
                         placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
-                        options={PRESET_MODELS.filter(m => (m.type === 'sensevoice' || m.type === 'paraformer' || m.type === 'zipformer') && m.modes?.includes('streaming')).map(model => ({
+                        options={PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
@@ -235,7 +235,7 @@ export function SettingsModelsTab({
                         value={selectedOfflineModelId}
                         onChange={(value) => handleOfflineModelChange(value)}
                         placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
-                        options={PRESET_MODELS.filter(m => m.type === 'sensevoice' && m.modes?.includes('offline')).map(model => ({
+                        options={PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
                             value: model.id,
                             label: `${model.name}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
                             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
@@ -253,7 +253,7 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer', 'zipformer']} {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer', 'zipformer', 'whisper']} {...sectionProps} />
 
             {/* Removed VAD and Punctuation models from UI */}
             {/* Removed VAD buffer size setting */}

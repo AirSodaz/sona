@@ -138,11 +138,12 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad'): string {
+    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper'): string {
         switch (type) {
             case 'sensevoice':
             case 'paraformer':
             case 'zipformer':
+            case 'whisper':
                 return t('settings.recognition_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
@@ -151,7 +152,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad') {
+    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper') {
         try {
             const selected = await open({
                 directory: true,
@@ -190,11 +191,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad', path: string) {
+    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper', path: string) {
         if (type === 'sensevoice') {
             updateConfig({ streamingModelPath: path, offlineModelPath: path });
         } else if (type === 'paraformer' || type === 'zipformer') {
             updateConfig({ streamingModelPath: path });
+        } else if (type === 'whisper') {
+            updateConfig({ offlineModelPath: path });
         } else if (type === 'vad') {
             updateConfig({ vadModelPath: path });
         } else {
