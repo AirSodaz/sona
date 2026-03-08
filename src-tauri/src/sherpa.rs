@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
@@ -8,6 +8,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelFileConfig {
+    pub encoder: Option<String>,
+    pub decoder: Option<String>,
+    pub model: Option<String>,
+    pub joiner: Option<String>,
+    pub tokens: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub enum ModelType {
@@ -36,102 +47,68 @@ pub enum ModelType {
     },
 }
 
-pub fn find_model_config<P: AsRef<Path>>(
-    model_path: P,
+pub fn build_model_config(
+    model_path: &Path,
+    model_type: &str,
+    file_config: &Option<ModelFileConfig>,
     enable_itn: bool,
     language: &str,
-) -> Option<ModelType> {
-    let model_path = model_path.as_ref();
-    debug!(
-        "find_model_config called with path: {:?}, enable_itn: {}, language: {}",
-        model_path, enable_itn, language
-    );
-    if !model_path.exists() || !model_path.is_dir() {
-        warn!(
-            "Model path does not exist or is not a directory: {:?}",
-            model_path
-        );
-        return None;
-    }
+) -> Result<ModelType, String> {
+    let fc = file_config
+        .as_ref()
+        .ok_or("File configuration is missing for this model.")?;
 
-    let tokens_path = model_path.join("tokens.txt");
-    if !tokens_path.exists() {
-        return None;
-    }
-
-    let find_file = |substring: &str| -> Option<PathBuf> {
-        let entries = fs::read_dir(model_path).ok()?;
-        let mut candidates = Vec::new();
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.contains(substring) && name.ends_with(".onnx") {
-                    candidates.push(path);
-                }
-            }
-        }
-
-        if candidates.is_empty() {
-            return None;
-        }
-
-        if let Some(int8_path) = candidates
-            .iter()
-            .find(|p| p.to_string_lossy().contains("int8"))
-        {
-            return Some(int8_path.clone());
-        }
-
-        Some(candidates[0].clone())
+    let get_path = |filename: &Option<String>| -> Result<PathBuf, String> {
+        let name = filename.as_ref().ok_or("Required file name not specified in config")?;
+        Ok(model_path.join(name))
     };
 
-    let encoder = find_file("encoder");
-    let decoder = find_file("decoder");
-    let joiner = find_file("joiner");
-    let model = find_file("model"); // For SenseVoice
-
-    if let (Some(enc), Some(dec)) = (&encoder, &decoder) {
-        let is_whisper = model_path
-            .to_string_lossy()
-            .to_lowercase()
-            .contains("whisper")
-            || enc.to_string_lossy().to_lowercase().contains("whisper");
-
-        if is_whisper {
-            return Some(ModelType::OfflineWhisper {
-                encoder: enc.clone(),
-                decoder: dec.clone(),
-                tokens: tokens_path,
+    match model_type {
+        "zipformer" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let joiner = get_path(&fc.joiner)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OnlineTransducer {
+                encoder,
+                decoder,
+                joiner,
+                tokens,
+            })
+        }
+        "paraformer" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OnlineParaformer {
+                encoder,
+                decoder,
+                tokens,
+            })
+        }
+        "sensevoice" => {
+            let model = get_path(&fc.model)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineSenseVoice {
+                model,
+                tokens,
                 language: language.to_string(),
-            });
+                use_itn: enable_itn,
+            })
         }
-
-        if let Some(join) = joiner {
-            return Some(ModelType::OnlineTransducer {
-                encoder: enc.clone(),
-                decoder: dec.clone(),
-                joiner: join,
-                tokens: tokens_path,
-            });
-        } else {
-            return Some(ModelType::OnlineParaformer {
-                encoder: enc.clone(),
-                decoder: dec.clone(),
-                tokens: tokens_path,
-            });
+        "whisper" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineWhisper {
+                encoder,
+                decoder,
+                tokens,
+                language: language.to_string(),
+            })
         }
+        _ => Err(format!("Unsupported model type: {}", model_type)),
     }
-
-    if let Some(mod_path) = model {
-        return Some(ModelType::OfflineSenseVoice {
-            model: mod_path,
-            tokens: tokens_path,
-            language: language.to_string(),
-            use_itn: enable_itn,
-        });
-    }
-
-    None
 }
 
 pub struct SafeOnlineRecognizer(pub OnlineRecognizer);
@@ -599,13 +576,20 @@ pub async fn init_recognizer(
     punctuation_model: Option<String>,
     vad_model: Option<String>,
     vad_buffer: f32,
+    model_type: String,
+    file_config: Option<ModelFileConfig>,
 ) -> Result<(), String> {
     let valid_itn = get_valid_itn_paths(itn_model);
 
-    let model_type = find_model_config(&model_path, enable_itn, &language)
-        .ok_or_else(|| "Could not find valid model configuration".to_string())?;
+    let config_type = build_model_config(
+        Path::new(&model_path),
+        &model_type,
+        &file_config,
+        enable_itn,
+        &language,
+    )?;
 
-    let recognizer = Recognizer::new(model_type, num_threads, valid_itn)?;
+    let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
 
     // Initialize Punctuation
     let mut punctuation = None;
@@ -1129,6 +1113,8 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     punctuation_model: Option<String>,
     vad_model: Option<String>,
     vad_buffer: f32,
+    model_type: String,
+    file_config: Option<ModelFileConfig>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let samples = crate::pipeline::extract_and_resample_audio(&app, &file_path, 16000).await?;
 
@@ -1139,10 +1125,15 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     // Initialize local recognizer, punctuation, and VAD instances
     let valid_itn = get_valid_itn_paths(itn_model);
 
-    let model_type = find_model_config(&model_path, enable_itn, &language)
-        .ok_or_else(|| "Could not find valid model configuration".to_string())?;
+    let config_type = build_model_config(
+        Path::new(&model_path),
+        &model_type,
+        &file_config,
+        enable_itn,
+        &language,
+    )?;
 
-    let recognizer = Recognizer::new(model_type, num_threads, valid_itn)?;
+    let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
 
     // Initialize Punctuation
     let mut punctuation = None;

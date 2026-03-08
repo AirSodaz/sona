@@ -15,6 +15,14 @@ export interface ModelRules {
     requiresPunctuation: boolean;
 }
 
+export interface ModelFileConfig {
+    encoder?: string;
+    decoder?: string;
+    model?: string;
+    joiner?: string;
+    tokens?: string;
+}
+
 export interface ModelInfo {
     /** Unique identifier for the model. */
     id: string;
@@ -40,6 +48,8 @@ export interface ModelInfo {
     engine: 'sherpa-onnx';
     /** Explicit model rules for VAD and Punctuation models. */
     rules?: ModelRules;
+    /** Explicit file names within the model folder. */
+    fileConfig?: ModelFileConfig;
 }
 
 export const DEFAULT_MODEL_RULES: ModelRules = {
@@ -62,6 +72,10 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: true,
             requiresPunctuation: false
+        },
+        fileConfig: {
+            model: 'model.int8.onnx',
+            tokens: 'tokens.txt'
         }
     },
     {
@@ -77,6 +91,10 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: true,
             requiresPunctuation: false
+        },
+        fileConfig: {
+            model: 'model.onnx',
+            tokens: 'tokens.txt'
         }
     },
     {
@@ -92,6 +110,11 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: false,
             requiresPunctuation: true
+        },
+        fileConfig: {
+            encoder: 'encoder.onnx',
+            decoder: 'decoder.onnx',
+            tokens: 'tokens.txt'
         }
     },
     {
@@ -107,6 +130,11 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: true,
             requiresPunctuation: false
+        },
+        fileConfig: {
+            encoder: 'turbo-encoder.int8.onnx',
+            decoder: 'turbo-decoder.int8.onnx',
+            tokens: 'turbo-tokens.txt'
         }
     },
     {
@@ -122,6 +150,12 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: false,
             requiresPunctuation: true
+        },
+        fileConfig: {
+            encoder: 'encoder.onnx',
+            decoder: 'decoder.int8.onnx',
+            joiner: 'joiner.int8.onnx',
+            tokens: 'tokens.txt'
         }
     },
     {

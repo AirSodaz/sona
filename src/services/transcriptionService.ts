@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { PRESET_MODELS, modelService } from './modelService';
+import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
@@ -18,6 +18,8 @@ interface ServiceConfig {
     vadBufferSize: number;
     enableITN: boolean;
     language: string;
+    modelType: string;
+    fileConfig?: ModelFileConfig;
 }
 
 /**
@@ -164,7 +166,9 @@ export class TranscriptionService {
                 vadModelPath: vadPathToUse,
                 vadBufferSize: vadBufferToUse,
                 enableITN: this.enableITN,
-                language: this.language
+                language: this.language,
+                modelType: streamingModel?.type || 'sensevoice',
+                fileConfig: streamingModel?.fileConfig
             };
 
             try {
@@ -177,7 +181,9 @@ export class TranscriptionService {
                     itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
                     punctuationModel: punctuationPathToUse || null,
                     vadModel: vadPathToUse || null,
-                    vadBuffer: vadBufferToUse
+                    vadBuffer: vadBufferToUse,
+                    modelType: configToUse.modelType,
+                    fileConfig: configToUse.fileConfig
                 });
 
                 this.runningConfig = configToUse;
@@ -254,6 +260,8 @@ export class TranscriptionService {
         if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) return false;
         if (vadPathToUse !== this.runningConfig.vadModelPath) return false;
         if (vadBufferToUse !== this.runningConfig.vadBufferSize) return false;
+        if (streamingModel?.type !== this.runningConfig.modelType) return false;
+        if (JSON.stringify(streamingModel?.fileConfig) !== JSON.stringify(this.runningConfig.fileConfig)) return false;
 
 
         // Compare ITN model paths (array)
@@ -411,7 +419,9 @@ export class TranscriptionService {
                 itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
                 punctuationModel: punctuationPathToUse || null,
                 vadModel: vadPathToUse || null,
-                vadBuffer: vadBufferToUse
+                vadBuffer: vadBufferToUse,
+                modelType: offlineModel?.type || 'sensevoice',
+                fileConfig: offlineModel?.fileConfig
             });
 
             if (progressUnlisten) {
