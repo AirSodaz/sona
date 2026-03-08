@@ -7,7 +7,6 @@ import { AppConfig } from '../../types/transcript';
 
 interface ModelSectionProps {
     title: string;
-    type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper' | ('sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper')[];
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -17,15 +16,14 @@ interface ModelSectionProps {
 
 function ModelSection({
     title,
-    type,
     installedModels,
     downloads,
     onDelete,
     onDownload,
     onCancelDownload
 }: ModelSectionProps): React.JSX.Element {
-    const typesArray = Array.isArray(type) ? type : [type];
-    const models = PRESET_MODELS.filter(m => typesArray.includes(m.type as any));
+    const blacklist = ['vad', 'punctuation', 'itn'];
+    const models = PRESET_MODELS.filter(m => !blacklist.includes(m.type));
 
     return (
         <>
@@ -253,7 +251,7 @@ export function SettingsModelsTab({
             </div>
 
             {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} type={['sensevoice', 'paraformer', 'zipformer', 'whisper']} {...sectionProps} />
+            <ModelSection title={t('settings.recognition_models')} {...sectionProps} />
 
             {/* Removed VAD and Punctuation models from UI */}
             {/* Removed VAD buffer size setting */}
