@@ -21,6 +21,10 @@ export interface ModelFileConfig {
     model?: string;
     joiner?: string;
     tokens?: string;
+    encoder_adaptor?: string;
+    llm?: string;
+    embedding?: string;
+    tokenizer?: string;
 }
 
 export interface ModelInfo {
@@ -33,7 +37,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper';
+    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -156,6 +160,27 @@ export const PRESET_MODELS: ModelInfo[] = [
             decoder: 'decoder.int8.onnx',
             joiner: 'joiner.int8.onnx',
             tokens: 'tokens.txt'
+        }
+    },
+    {
+        id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
+        name: 'FunASR Nano (Int8)',
+        description: 'FunASR Nano model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
+        type: 'funasr-nano',
+        modes: ['offline'],
+        language: 'multilingual',
+        size: '~716 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        },
+        fileConfig: {
+            encoder_adaptor: 'encoder_adaptor.int8.onnx',
+            llm: 'llm.int8.onnx',
+            embedding: 'embedding.int8.onnx',
+            tokenizer: 'Qwen3-0.6B/tokenizer.json'
         }
     },
     {
