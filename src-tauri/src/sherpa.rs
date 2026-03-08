@@ -157,6 +157,7 @@ impl Recognizer {
                 config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
                 config.model_config.num_threads = num_threads;
                 config.model_config.provider = Some("cpu".to_string());
+                config.model_config.model_type = Some("paraformer".to_string());
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
                 config.enable_endpoint = true;
@@ -186,6 +187,7 @@ impl Recognizer {
                 config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
                 config.model_config.num_threads = num_threads;
                 config.model_config.provider = Some("cpu".to_string());
+                config.model_config.model_type = Some("paraformer".to_string());
                 config.feat_config.sample_rate = 16000;
                 config.feat_config.feature_dim = 80;
                 config.enable_endpoint = true;
