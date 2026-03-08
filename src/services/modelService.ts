@@ -180,7 +180,7 @@ export const PRESET_MODELS: ModelInfo[] = [
             encoder_adaptor: 'encoder_adaptor.int8.onnx',
             llm: 'llm.int8.onnx',
             embedding: 'embedding.int8.onnx',
-            tokenizer: 'Qwen3-0.6B/tokenizer.json'
+            tokenizer: 'Qwen3-0.6B'
         }
     },
     {
