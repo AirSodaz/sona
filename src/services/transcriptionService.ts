@@ -389,7 +389,7 @@ export class TranscriptionService {
             let vadPathToUse = '';
             let vadBufferToUse = 5.0;
 
-            const offlineModel = PRESET_MODELS.find(m => m.type === 'sensevoice' && m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
+            const offlineModel = PRESET_MODELS.find(m => (m.type === 'sensevoice' || m.type === 'whisper') && m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
             if (offlineModel) {
                 const rules = modelService.getModelRules(offlineModel.id);
                 if (rules.requiresPunctuation && appConfig.punctuationModelPath) {

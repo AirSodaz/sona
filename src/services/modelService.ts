@@ -25,7 +25,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn';
+    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -92,6 +92,21 @@ export const PRESET_MODELS: ModelInfo[] = [
         rules: {
             requiresVad: false,
             requiresPunctuation: true
+        }
+    },
+    {
+        id: 'sherpa-onnx-whisper-turbo',
+        name: 'Whisper Turbo',
+        description: 'Whisper Turbo model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2',
+        type: 'whisper',
+        modes: ['offline'],
+        language: 'multilingual',
+        size: '~538 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
         }
     },
     {
