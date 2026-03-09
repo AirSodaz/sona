@@ -1061,7 +1061,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             let current_time = instance.total_samples as f64 / 16000.0;
 
             if let Some(result) = r.0.get_result(&st.0) {
-                if !result.text.trim().is_empty() {
+                let has_text = !result.text.trim().is_empty();
+                if has_text || instance.current_segment_id.is_some() {
                     let id = if let Some(id) = instance.current_segment_id.as_ref() {
                         id.clone()
                     } else {
