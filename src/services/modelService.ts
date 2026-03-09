@@ -131,7 +131,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-whisper-turbo',
-        name: 'Whisper Turbo',
+        name: 'Whisper',
         description: 'Whisper Turbo model for offline transcription',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2',
         type: 'whisper',
@@ -147,7 +147,53 @@ export const PRESET_MODELS: ModelInfo[] = [
             encoder: 'turbo-encoder.int8.onnx',
             decoder: 'turbo-decoder.int8.onnx',
             tokens: 'turbo-tokens.txt'
-        }
+        },
+        groupId: 'whisper',
+        versionLabel: 'Large Turbo'
+    },
+    {
+        id: 'sherpa-onnx-whisper-large-v3',
+        name: 'Whisper',
+        description: 'Whisper Large-v3 model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2',
+        type: 'whisper',
+        modes: ['offline'],
+        language: 'zh,en,ja,ko,yue',
+        size: '~1020 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        },
+        fileConfig: {
+            encoder: 'large-v3-encoder.int8.onnx',
+            decoder: 'large-v3-decoder.int8.onnx',
+            tokens: 'large-v3-tokens.txt'
+        },
+        groupId: 'whisper',
+        versionLabel: 'Large-v3'
+    },
+    {
+        id: 'sherpa-onnx-whisper-medium-aishell',
+        name: 'Whisper',
+        description: 'Whisper Medium-AISHELL model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2',
+        type: 'whisper',
+        modes: ['offline'],
+        language: 'zh,en',
+        size: '~655 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        },
+        fileConfig: {
+            encoder: 'medium-aishell-encoder.int8.onnx',
+            decoder: 'medium-aishell-decoder.int8.onnx',
+            tokens: 'medium-aishell-tokens.txt'
+        },
+        groupId: 'whisper',
+        versionLabel: 'Medium-AISHELL'
     },
     {
         id: 'sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30',

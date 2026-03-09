@@ -87,7 +87,7 @@ export function ModelCard({
             <div className="model-card-header" style={{ alignItems: 'flex-start', marginBottom: isMultiVersion ? '16px' : '0' }}>
                 <div style={{ flex: 1, width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="model-name">{baseModel.name}</div>
+                        <div className="model-name">{baseModel.name}{!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}</div>
                         <div className="model-tags" style={{ marginTop: '0' }}>
                             <span className="model-tag">{baseModel.language.toUpperCase()}</span>
                             {baseModel.modes && baseModel.modes.length > 0 && (
