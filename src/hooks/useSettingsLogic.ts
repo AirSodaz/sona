@@ -90,7 +90,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                         // Silent download without updating progress UI
                         const path = await modelService.downloadModel(modelId, undefined);
                         await checkInstalledModels();
-                        setModelPathByType(model.type as any, path);
+                        setModelPath(model, path);
                     } catch (e) {
                         console.error(`Background download failed for ${modelId}:`, e);
                     }
@@ -138,38 +138,38 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
     };
 
-    function getBrowseTitle(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper'): string {
-        switch (type) {
-            case 'sensevoice':
-            case 'paraformer':
-            case 'zipformer':
-            case 'whisper':
+    function getBrowseTitle(mode: 'streaming' | 'offline' | 'punctuation' | 'vad'): string {
+        switch (mode) {
+            case 'streaming':
+            case 'offline':
                 return t('settings.recognition_path_label');
             case 'vad':
                 return t('settings.vad_path_label');
-            default:
+            case 'punctuation':
                 return 'Select Punctuation Model Path';
+            default:
+                return '';
         }
     }
 
-    async function handleBrowse(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper') {
+    async function handleBrowse(mode: 'streaming' | 'offline' | 'punctuation' | 'vad') {
         try {
             const selected = await open({
                 directory: true,
                 multiple: false,
-                title: getBrowseTitle(type)
+                title: getBrowseTitle(mode)
             });
 
             if (selected) {
                 const path = Array.isArray(selected) ? selected[0] : selected;
                 if (path) {
-                    if (type === 'sensevoice' || type === 'paraformer' || type === 'zipformer') {
-                        // For manual browse, apply to both or one?
-                        // Usually people select a folder or file. For simplicity, just update both if we don't know the mode.
-                        updateConfig({ streamingModelPath: path, offlineModelPath: path });
-                    } else if (type === 'vad') {
+                    if (mode === 'streaming') {
+                        updateConfig({ streamingModelPath: path });
+                    } else if (mode === 'offline') {
+                        updateConfig({ offlineModelPath: path });
+                    } else if (mode === 'vad') {
                         updateConfig({ vadModelPath: path });
-                    } else {
+                    } else if (mode === 'punctuation') {
                         updateConfig({ punctuationModelPath: path });
                     }
                 }
@@ -191,17 +191,27 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
     }
 
-    function setModelPathByType(type: 'sensevoice' | 'paraformer' | 'zipformer' | 'punctuation' | 'vad' | 'whisper', path: string) {
-        if (type === 'sensevoice') {
-            updateConfig({ streamingModelPath: path, offlineModelPath: path });
-        } else if (type === 'paraformer' || type === 'zipformer') {
-            updateConfig({ streamingModelPath: path });
-        } else if (type === 'whisper') {
-            updateConfig({ offlineModelPath: path });
-        } else if (type === 'vad') {
-            updateConfig({ vadModelPath: path });
-        } else {
-            updateConfig({ punctuationModelPath: path });
+    function setModelPath(model: ModelInfo, path: string) {
+        const updates: Partial<typeof config> = {};
+
+        if (model.modes && model.modes.length > 0) {
+            if (model.modes.includes('streaming')) {
+                updates.streamingModelPath = path;
+            }
+            if (model.modes.includes('offline')) {
+                updates.offlineModelPath = path;
+            }
+        } else if (model.type === 'vad') {
+            updates.vadModelPath = path;
+        } else if (model.type === 'punctuation') {
+            updates.punctuationModelPath = path;
+        } else if (model.type === 'itn') {
+            // Handled elsewhere
+            return;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            updateConfig(updates);
         }
     }
 
@@ -263,7 +273,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         }
 
         // Trigger background downloads for dependencies immediately
-        if (model.type === 'sensevoice' || model.type === 'paraformer' || model.type === 'zipformer') {
+        if (model.modes && model.modes.length > 0) {
             const rules = modelService.getModelRules(model.id);
             if (rules.requiresVad) {
                 document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
@@ -283,7 +293,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
                     current.add(model.id);
                     updateConfig({ enabledITNModels: Array.from(current) });
                 } else {
-                    setModelPathByType(model.type as any, path);
+                    setModelPath(model, path);
                 }
             }
         );
@@ -292,7 +302,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     async function handleLoad(model: ModelInfo) {
         try {
             const path = await modelService.getModelPath(model.id);
-            setModelPathByType(model.type as any, path);
+            setModelPath(model, path);
         } catch (error: any) {
             console.error('Load failed:', error);
         }
@@ -342,12 +352,12 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     }
 
     function isModelSelected(model: ModelInfo): boolean {
-        if (model.type === 'sensevoice' || model.type === 'paraformer' || model.type === 'zipformer') {
+        if (model.modes && model.modes.length > 0) {
             let isSelected = false;
-            if (model.modes?.includes('streaming')) {
+            if (model.modes.includes('streaming')) {
                 isSelected = isSelected || (config.streamingModelPath || '').includes(model.filename || model.id);
             }
-            if (model.modes?.includes('offline')) {
+            if (model.modes.includes('offline')) {
                 isSelected = isSelected || (config.offlineModelPath || '').includes(model.filename || model.id);
             }
             return isSelected;
