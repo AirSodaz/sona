@@ -172,7 +172,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     },
     {
         id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
-        name: 'FunASR Nano (Int8)',
+        name: 'FunASR Nano',
         description: 'FunASR Nano model for offline transcription',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
         type: 'funasr-nano',
@@ -189,7 +189,55 @@ export const PRESET_MODELS: ModelInfo[] = [
             llm: 'llm.int8.onnx',
             embedding: 'embedding.int8.onnx',
             tokenizer: 'Qwen3-0.6B'
-        }
+        },
+        groupId: 'funasr-nano',
+        versionLabel: 'Int8'
+    },
+    {
+        id: 'sherpa-onnx-funasr-nano-fp16-2025-12-30',
+        name: 'FunASR Nano',
+        description: 'FunASR Nano model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2',
+        type: 'funasr-nano',
+        modes: ['offline'],
+        language: 'multilingual',
+        size: '~982 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: true
+        },
+        fileConfig: {
+            encoderAdaptor: 'encoder_adaptor.int8.onnx',
+            llm: 'llm.fp16.onnx',
+            embedding: 'embedding.int8.onnx',
+            tokenizer: 'Qwen3-0.6B'
+        },
+        groupId: 'funasr-nano',
+        versionLabel: 'FP16'
+    },
+    {
+        id: 'sherpa-onnx-funasr-nano-2025-12-30',
+        name: 'FunASR Nano',
+        description: 'FunASR Nano model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2',
+        type: 'funasr-nano',
+        modes: ['offline'],
+        language: 'multilingual',
+        size: '~1.23 GB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: true
+        },
+        fileConfig: {
+            encoderAdaptor: 'encoder_adaptor.onnx',
+            llm: 'llm.fp32.onnx',
+            embedding: 'embedding.onnx',
+            tokenizer: 'Qwen3-0.6B'
+        },
+        groupId: 'funasr-nano',
+        versionLabel: 'F32'
     },
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
