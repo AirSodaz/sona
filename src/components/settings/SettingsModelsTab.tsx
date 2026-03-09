@@ -57,7 +57,6 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (mode: 'streaming' | 'offline' | 'punctuation' | 'vad') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -68,7 +67,6 @@ interface SettingsModelsTabProps {
 export function SettingsModelsTab({
     config,
     updateConfig,
-    handleBrowse,
     installedModels,
     downloads,
     onDelete,
@@ -224,13 +222,6 @@ export function SettingsModelsTab({
                         }))}
                         style={{ flex: 1 }}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('streaming')}
-                        title={t('common.browse', { defaultValue: 'Browse' })}
-                    >
-                        ...
-                    </button>
                 </div>
 
                 <label htmlFor="settings-offline-path" className="settings-label" style={{ fontSize: '1.1em', fontWeight: 600 }}>{t('settings.offline_model_label', { defaultValue: 'Offline Model' })}</label>
@@ -247,13 +238,6 @@ export function SettingsModelsTab({
                         }))}
                         style={{ flex: 1 }}
                     />
-                    <button
-                        className="btn btn-secondary"
-                        onClick={() => handleBrowse('offline')}
-                        title={t('common.browse', { defaultValue: 'Browse' })}
-                    >
-                        ...
-                    </button>
                 </div>
             </div>
 

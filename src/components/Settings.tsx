@@ -52,7 +52,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         downloads,
         installedModels,
 
-        handleBrowse,
         handleDownload,
         handleCancelDownload,
         handleDelete,
@@ -243,7 +242,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             <SettingsModelsTab
                                 config={config}
                                 updateConfig={updateConfig}
-                                handleBrowse={handleBrowse}
                                 installedModels={installedModels}
                                 downloads={downloads}
                                 onDelete={handleDelete}
