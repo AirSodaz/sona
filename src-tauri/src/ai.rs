@@ -324,15 +324,20 @@ pub async fn get_ai_models(
             urls_to_try.push(format!("{}/models", base));
         }
 
+        let mut set = tokio::task::JoinSet::new();
+
         for url in urls_to_try {
-            let mut req = client.get(&url).header("Content-Type", "application/json");
+            let client = client.clone();
+            let api_key = api_key.clone();
 
-            if !api_key.is_empty() {
-                req = req.header("Authorization", format!("Bearer {}", api_key));
-            }
+            set.spawn(async move {
+                let mut req = client.get(&url).header("Content-Type", "application/json");
 
-            match req.send().await {
-                Ok(res) => {
+                if !api_key.is_empty() {
+                    req = req.header("Authorization", format!("Bearer {}", api_key));
+                }
+
+                if let Ok(res) = req.send().await {
                     if res.status().is_success() {
                         let text = res.text().await.unwrap_or_default();
 
@@ -340,17 +345,24 @@ pub async fn get_ai_models(
                         if let Ok(response_body) =
                             serde_json::from_str::<OpenAIModelsResponse>(&text)
                         {
-                            return Ok(response_body.data.into_iter().map(|m| m.id).collect());
+                            return Some(response_body.data.into_iter().map(|m| m.id).collect::<Vec<String>>());
                         }
 
                         // Try Ollama format
                         if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text)
                         {
-                            return Ok(response_body.models.into_iter().map(|m| m.name).collect());
+                            return Some(response_body.models.into_iter().map(|m| m.name).collect::<Vec<String>>());
                         }
                     }
                 }
-                Err(_) => continue,
+                None
+            });
+        }
+
+        while let Some(res) = set.join_next().await {
+            if let Ok(Some(models)) = res {
+                set.abort_all();
+                return Ok(models);
             }
         }
 
