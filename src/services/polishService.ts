@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
 import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
+import { historyService } from './historyService';
+import { logger } from '../utils/logger';
 
 class PolishService {
     /**
@@ -75,24 +77,48 @@ class PolishService {
             return;
         }
 
-        store.setIsPolishing(true);
-        store.setPolishProgress(0);
+        const jobHistoryId = store.sourceHistoryId || 'current';
+
+        store.updateAiState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
 
         const totalChunks = Math.ceil(segments.length / 30);
         let completedChunks = 0;
 
         try {
-            await this.polishSegments(segments, (polishedChunk) => {
+            await this.polishSegments(segments, async (polishedChunk) => {
                 const currentStore = useTranscriptStore.getState();
-                polishedChunk.forEach(({ id, text }) => {
-                    currentStore.updateSegment(id, { text });
-                });
+                const currentHistoryId = currentStore.sourceHistoryId || 'current';
+
+                if (currentHistoryId === jobHistoryId) {
+                    polishedChunk.forEach(({ id, text }) => {
+                        currentStore.updateSegment(id, { text });
+                    });
+                } else if (jobHistoryId !== 'current') {
+                    // Update background record's file directly
+                    try {
+                        const bgSegments = await historyService.loadTranscript(`${jobHistoryId}.json`);
+                        if (bgSegments) {
+                            polishedChunk.forEach(({ id, text }) => {
+                                const seg = bgSegments.find(s => s.id === id);
+                                if (seg) seg.text = text;
+                            });
+                            await historyService.updateTranscript(jobHistoryId, bgSegments);
+                        }
+                    } catch (e) {
+                        logger.error('[PolishService] Failed to update background record segments:', e);
+                    }
+                }
+
                 completedChunks++;
-                store.setPolishProgress(Math.round((completedChunks / totalChunks) * 100));
+                useTranscriptStore.getState().updateAiState({
+                    polishProgress: Math.round((completedChunks / totalChunks) * 100)
+                }, jobHistoryId);
             });
         } finally {
-            store.setIsPolishing(false);
-            store.setPolishProgress(0);
+            useTranscriptStore.getState().updateAiState({
+                isPolishing: false,
+                polishProgress: 0
+            }, jobHistoryId);
         }
     }
 

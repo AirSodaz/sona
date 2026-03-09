@@ -33,8 +33,12 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
-    const isPolishing = useTranscriptStore((state) => state.isPolishing);
-    const polishProgress = useTranscriptStore((state) => state.polishProgress);
+
+    // AI State
+    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0 };
+    const { isPolishing, polishProgress } = aiState;
+
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const setSegments = useTranscriptStore((state) => state.setSegments);

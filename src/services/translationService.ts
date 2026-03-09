@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { historyService } from './historyService';
+import { logger } from '../utils/logger';
 
 class TranslationService {
     /**
@@ -19,8 +21,9 @@ class TranslationService {
             return;
         }
 
-        store.setIsTranslating(true);
-        store.setTranslationProgress(0);
+        const jobHistoryId = store.sourceHistoryId || 'current';
+
+        store.updateAiState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
 
         const CHUNK_SIZE = 30; // Number of segments to translate per API request
         const totalChunks = Math.ceil(segments.length / CHUNK_SIZE);
@@ -44,23 +47,44 @@ class TranslationService {
                 // Parse JSON output
                 const translations = this.parseAIResponse(responseText);
 
-                // Update the store
-                // We use the store's updateSegment directly so React components re-render correctly
                 const currentStore = useTranscriptStore.getState();
-                translations.forEach(({ id, translation }) => {
-                    currentStore.updateSegment(id, { translation });
-                });
+                const currentHistoryId = currentStore.sourceHistoryId || 'current';
 
-                // Update progress
-                store.setTranslationProgress(Math.round(((i + 1) / totalChunks) * 100));
+                if (currentHistoryId === jobHistoryId) {
+                    // Still on the same record, update store directly
+                    translations.forEach(({ id, translation }) => {
+                        currentStore.updateSegment(id, { translation });
+                    });
+                } else if (jobHistoryId !== 'current') {
+                    // User switched to another record. We must update the background record's file directly.
+                    try {
+                        // Load the background record's segments from file
+                        const bgSegments = await historyService.loadTranscript(`${jobHistoryId}.json`);
+                        if (bgSegments) {
+                            // Update the segments with translations
+                            translations.forEach(({ id, translation }) => {
+                                const seg = bgSegments.find(s => s.id === id);
+                                if (seg) seg.translation = translation;
+                            });
+                            // Save back to file
+                            await historyService.updateTranscript(jobHistoryId, bgSegments);
+                        }
+                    } catch (e) {
+                        logger.error('[TranslationService] Failed to update background record segments:', e);
+                    }
+                }
+
+                // Update progress for the specific record
+                const progress = Math.round(((i + 1) / totalChunks) * 100);
+                useTranscriptStore.getState().updateAiState({ translationProgress: progress }, jobHistoryId);
             }
         } finally {
-            store.setIsTranslating(false);
-            store.setTranslationProgress(100);
+            const currentStore = useTranscriptStore.getState();
+            currentStore.updateAiState({ isTranslating: false, translationProgress: 100 }, jobHistoryId);
 
             // Auto-show translations when done if not visible
-            if (!store.isTranslationVisible) {
-                store.setIsTranslationVisible(true);
+            if (!store.getAiState(jobHistoryId).isTranslationVisible) {
+                store.updateAiState({ isTranslationVisible: true }, jobHistoryId);
             }
         }
     }

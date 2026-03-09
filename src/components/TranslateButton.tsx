@@ -29,10 +29,13 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const menuRef = useRef<HTMLDivElement>(null);
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
-    const isTranslating = useTranscriptStore((state) => state.isTranslating);
-    const translationProgress = useTranscriptStore((state) => state.translationProgress);
-    const isTranslationVisible = useTranscriptStore((state) => state.isTranslationVisible);
+
+    // AI State
+    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false };
+    const { isTranslating, translationProgress, isTranslationVisible } = aiState;
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
+
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const segments = useTranscriptStore((state) => state.segments);
