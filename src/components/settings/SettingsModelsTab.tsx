@@ -57,7 +57,7 @@ function ModelSection({
 interface SettingsModelsTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    handleBrowse: (type: 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'zipformer' | 'whisper') => Promise<void>;
+    handleBrowse: (mode: 'streaming' | 'offline' | 'punctuation' | 'vad') => Promise<void>;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -226,7 +226,7 @@ export function SettingsModelsTab({
                     />
                     <button
                         className="btn btn-secondary"
-                        onClick={() => handleBrowse('sensevoice')}
+                        onClick={() => handleBrowse('streaming')}
                         title={t('common.browse', { defaultValue: 'Browse' })}
                     >
                         ...
@@ -249,7 +249,7 @@ export function SettingsModelsTab({
                     />
                     <button
                         className="btn btn-secondary"
-                        onClick={() => handleBrowse('sensevoice')}
+                        onClick={() => handleBrowse('offline')}
                         title={t('common.browse', { defaultValue: 'Browse' })}
                     >
                         ...
