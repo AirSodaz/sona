@@ -34,7 +34,7 @@ function ModelSection({
 
     return (
         <>
-            <div className="settings-section-subtitle">
+            <div className="settings-label">
                 {title}
             </div>
             {models.map(model => (
@@ -208,7 +208,7 @@ export function SettingsModelsTab({
             tabIndex={0}
         >
             <div className="settings-item" style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
-                <label htmlFor="settings-streaming-path" className="settings-section-subtitle" style={{ display: 'block' }}>{t('settings.streaming_model_label', { defaultValue: 'Live Record Model' })}</label>
+                <label htmlFor="settings-streaming-path" className="settings-label" style={{ display: 'block' }}>{t('settings.streaming_model_label', { defaultValue: 'Live Record Model' })}</label>
                 <div style={{ display: 'flex', gap: 8, marginBottom: '16px' }}>
                     <Dropdown
                         id="settings-streaming-path"
@@ -224,7 +224,7 @@ export function SettingsModelsTab({
                     />
                 </div>
 
-                <label htmlFor="settings-offline-path" className="settings-section-subtitle" style={{ display: 'block' }}>{t('settings.offline_model_label', { defaultValue: 'Batch Import Model' })}</label>
+                <label htmlFor="settings-offline-path" className="settings-label" style={{ display: 'block' }}>{t('settings.offline_model_label', { defaultValue: 'Batch Import Model' })}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Dropdown
                         id="settings-offline-path"
