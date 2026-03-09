@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
-import { open } from '@tauri-apps/plugin-dialog';
 
 const DEFAULT_AI_URLS: Record<string, string> = {
     openai: 'https://api.openai.com/v1',
@@ -137,47 +136,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             aiServices: updatedServices
         });
     };
-
-    function getBrowseTitle(mode: 'streaming' | 'offline' | 'punctuation' | 'vad'): string {
-        switch (mode) {
-            case 'streaming':
-            case 'offline':
-                return t('settings.recognition_path_label');
-            case 'vad':
-                return t('settings.vad_path_label');
-            case 'punctuation':
-                return 'Select Punctuation Model Path';
-            default:
-                return '';
-        }
-    }
-
-    async function handleBrowse(mode: 'streaming' | 'offline' | 'punctuation' | 'vad') {
-        try {
-            const selected = await open({
-                directory: true,
-                multiple: false,
-                title: getBrowseTitle(mode)
-            });
-
-            if (selected) {
-                const path = Array.isArray(selected) ? selected[0] : selected;
-                if (path) {
-                    if (mode === 'streaming') {
-                        updateConfig({ streamingModelPath: path });
-                    } else if (mode === 'offline') {
-                        updateConfig({ offlineModelPath: path });
-                    } else if (mode === 'vad') {
-                        updateConfig({ vadModelPath: path });
-                    } else if (mode === 'punctuation') {
-                        updateConfig({ punctuationModelPath: path });
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('Failed to open dialog:', err);
-        }
-    }
 
     function handleCancelDownload(modelId: string) {
         const download = downloads[modelId];
@@ -425,7 +383,6 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         downloads,
         installedModels,
 
-        handleBrowse,
         handleDownload,
         handleCancelDownload,
         handleLoad,
