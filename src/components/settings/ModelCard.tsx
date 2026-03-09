@@ -42,7 +42,7 @@ function ModelCardActions({
         return (
             <div className="model-actions">
                 <button
-                    className="btn btn-secondary"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => onDelete(model)}
                     disabled={false} // Allow to delete even if something else is happening
                     aria-label={`${t('common.delete')} ${model.name}`}
@@ -56,7 +56,7 @@ function ModelCardActions({
 
     return (
         <button
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-sm"
             onClick={isDownloading ? onCancelDownload : () => onDownload(model)}
             // disabled={!!downloadingId && !isDownloading} // Allow parallel downloads
             aria-label={isDownloading ? t('common.cancel') : `${t('common.download')} ${model.name}`}
@@ -86,19 +86,21 @@ export function ModelCard({
         <div className="model-card">
             <div className="model-card-header" style={{ alignItems: 'flex-start', marginBottom: isMultiVersion ? '16px' : '0' }}>
                 <div style={{ flex: 1, width: '100%' }}>
-                    <div className="model-name">{baseModel.name}</div>
-                    <div className="model-description">{baseModel.description}</div>
-                    <div className="model-tags">
-                        <span className="model-tag">{baseModel.language.toUpperCase()}</span>
-                        {baseModel.modes && baseModel.modes.length > 0 && (
-                            <span className="model-tag">
-                                {baseModel.modes.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)).join(',')}
-                            </span>
-                        )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="model-name">{baseModel.name}</div>
+                        <div className="model-tags" style={{ marginTop: '0' }}>
+                            <span className="model-tag">{baseModel.language.toUpperCase()}</span>
+                            {baseModel.modes && baseModel.modes.length > 0 && (
+                                <span className="model-tag">
+                                    {baseModel.modes.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)).join(',')}
+                                </span>
+                            )}
+                        </div>
                     </div>
+                    <div className="model-description">{baseModel.description}</div>
                     {!isMultiVersion && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
-                            <span className="model-tag">{baseModel.size}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{baseModel.size}</span>
                             <ModelCardActions
                                 model={baseModel}
                                 isInstalled={installedModels.has(baseModel.id)}
@@ -145,16 +147,18 @@ export function ModelCard({
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <span style={{ fontWeight: 500, color: 'var(--color-text)' }}>{model.versionLabel || model.name}</span>
-                                            <span className="model-tag">{model.size}</span>
                                         </div>
-                                        <ModelCardActions
-                                            model={model}
-                                            isInstalled={isInstalled}
-                                            isDownloading={isDownloading}
-                                            onDelete={onDelete}
-                                            onDownload={onDownload}
-                                            onCancelDownload={() => onCancelDownload(model.id)}
-                                        />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.size}</span>
+                                            <ModelCardActions
+                                                model={model}
+                                                isInstalled={isInstalled}
+                                                isDownloading={isDownloading}
+                                                onDelete={onDelete}
+                                                onDownload={onDownload}
+                                                onCancelDownload={() => onCancelDownload(model.id)}
+                                            />
+                                        </div>
                                     </div>
                                     {isDownloading && (
                                         <div className="progress-container-mini" style={{ marginTop: 0 }}>

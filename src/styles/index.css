@@ -363,6 +363,17 @@ body {
   background: #dc2626;
 }
 
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  height: 28px;
+}
+
+.btn-sm svg {
+  width: 14px;
+  height: 14px;
+}
+
 .btn-icon {
   padding: var(--spacing-sm);
   background: transparent;
