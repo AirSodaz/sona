@@ -224,7 +224,7 @@ export function SettingsModelsTab({
         return PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
             value: model.id,
             label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
-            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
+            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
         }));
     }, [installedModels, t]);
 
@@ -232,7 +232,7 @@ export function SettingsModelsTab({
         return PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
             value: model.id,
             label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
-            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
+            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
         }));
     }, [installedModels, t]);
 
