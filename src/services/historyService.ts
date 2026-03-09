@@ -274,25 +274,32 @@ export const historyService = {
 
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
+            console.time('deleteRecordings');
             const items = await this.getAll();
             const idSet = new Set(ids);
             const itemsToDelete = items.filter(item => idSet.has(item.id));
 
-            for (const item of itemsToDelete) {
-                const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
-                const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
+            // Process deletions in batches to avoid overwhelming Tauri IPC
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < itemsToDelete.length; i += BATCH_SIZE) {
+                const batch = itemsToDelete.slice(i, i + BATCH_SIZE);
 
-                try {
-                    if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
-                        await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
+                await Promise.allSettled(batch.map(async (item) => {
+                    const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
+                    const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
+
+                    try {
+                        if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
+                            await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
+                        }
+                        if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
+                            await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
+                        }
+                    } catch (e) {
+                        logger.error(`Failed to delete files for item ${item.id}`, e);
+                        throw e; // Promise.allSettled will catch this
                     }
-                    if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
-                        await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
-                    }
-                } catch (e) {
-                    logger.error(`Failed to delete files for item ${item.id}`, e);
-                    // Continue deleting others even if one fails
-                }
+                }));
             }
 
             const newItems = items.filter(item => !idSet.has(item.id));
@@ -301,6 +308,7 @@ export const historyService = {
                 JSON.stringify(newItems, null, 2),
                 { baseDir: BaseDirectory.AppLocalData }
             );
+            console.timeEnd('deleteRecordings');
         } catch (error) {
             logger.error('Failed to delete recordings:', error);
             throw error;
