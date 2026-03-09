@@ -51,8 +51,10 @@ describe('batchQueueStore buffering', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         useBatchQueueStore.getState().clearQueue();
-        useTranscriptStore.getState().setConfig({ streamingModelPath: "/path/to/model",
-                offlineModelPath: '/model' });
+        useTranscriptStore.getState().setConfig({
+            streamingModelPath: "/path/to/model",
+            offlineModelPath: '/model'
+        });
         vi.clearAllMocks();
     });
 
@@ -84,7 +86,7 @@ describe('batchQueueStore buffering', () => {
                 }
 
                 // Return full list as final result
-                const finalSegments = Array.from({ length: totalSegments }).map((_, i) => ({
+                const finalSegments = Array.from({ length: totalSegments }, (_, i) => ({
                     id: `seg-${i}`,
                     text: `Segment ${i}`,
                     start: i,

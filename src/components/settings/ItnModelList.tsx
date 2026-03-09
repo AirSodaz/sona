@@ -100,9 +100,10 @@ export function ItnModelList({
 
         // Filter out obsolete IDs from order
         const validOrder = itnRulesOrder.filter(id => allItnIds.has(id));
+        const validOrderSet = new Set(validOrder);
 
         // Add missing IDs
-        const missingIds = allItnModels.filter(m => !validOrder.includes(m.id)).map(m => m.id);
+        const missingIds = allItnModels.filter(m => !validOrderSet.has(m.id)).map(m => m.id);
 
         return [...validOrder, ...missingIds];
     }, [itnRulesOrder]);
