@@ -54,6 +54,10 @@ export interface ModelInfo {
     rules?: ModelRules;
     /** Explicit file names within the model folder. */
     fileConfig?: ModelFileConfig;
+    /** Group ID to group different versions of the same model. */
+    groupId?: string;
+    /** Version label to display in the grouped card. */
+    versionLabel?: string;
 }
 
 export const DEFAULT_MODEL_RULES: ModelRules = {
@@ -65,7 +69,7 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
-        name: 'SenseVoice (Int8)',
+        name: 'SenseVoice',
         description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
         type: 'sensevoice',
@@ -80,7 +84,9 @@ export const PRESET_MODELS: ModelInfo[] = [
         fileConfig: {
             model: 'model.int8.onnx',
             tokens: 'tokens.txt'
-        }
+        },
+        groupId: 'sensevoice',
+        versionLabel: 'Int8'
     },
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
@@ -99,7 +105,9 @@ export const PRESET_MODELS: ModelInfo[] = [
         fileConfig: {
             model: 'model.onnx',
             tokens: 'tokens.txt'
-        }
+        },
+        groupId: 'sensevoice',
+        versionLabel: 'F32'
     },
     {
         id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',

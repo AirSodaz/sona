@@ -32,24 +32,41 @@ function ModelSection({
         return m.type === type;
     });
 
+    const groupedModels: ModelInfo[][] = [];
+    const groupMap = new Map<string, ModelInfo[]>();
+
+    models.forEach(model => {
+        if (model.groupId) {
+            if (!groupMap.has(model.groupId)) {
+                const group: ModelInfo[] = [];
+                groupMap.set(model.groupId, group);
+                groupedModels.push(group);
+            }
+            groupMap.get(model.groupId)!.push(model);
+        } else {
+            groupedModels.push([model]);
+        }
+    });
+
     return (
         <>
             <div className="settings-label">
                 {title}
             </div>
-            {models.map(model => (
-                <ModelCard
-                    key={model.id}
-                    model={model}
-                    isInstalled={installedModels.has(model.id)}
-                    isDownloading={!!downloads[model.id]}
-                    progress={downloads[model.id]?.progress || 0}
-                    statusMessage={downloads[model.id]?.status || ''}
-                    onDelete={onDelete}
-                    onDownload={onDownload}
-                    onCancelDownload={() => onCancelDownload(model.id)}
-                />
-            ))}
+            {groupedModels.map(group => {
+                const key = group[0].groupId || group[0].id;
+                return (
+                    <ModelCard
+                        key={key}
+                        models={group}
+                        installedModels={installedModels}
+                        downloads={downloads}
+                        onDelete={onDelete}
+                        onDownload={onDownload}
+                        onCancelDownload={onCancelDownload}
+                    />
+                );
+            })}
         </>
     );
 }

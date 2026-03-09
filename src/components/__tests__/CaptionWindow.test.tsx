@@ -160,8 +160,7 @@ describe('CaptionWindow', () => {
 
         // We need to wait for async calls in useLayoutEffect
         await act(async () => {
-            await Promise.resolve(); // flush microtasks
-            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(100);
         });
 
         expect(mocks.mockSetSize).toHaveBeenCalled();
@@ -191,9 +190,7 @@ describe('CaptionWindow', () => {
 
         // Wait for async effect
         await act(async () => {
-            vi.advanceTimersByTime(100); // debounce timeout
-            await Promise.resolve();
-            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(100); // debounce timeout
         });
 
         // Should resize again to new offsetHeight
