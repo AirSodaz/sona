@@ -1264,14 +1264,6 @@ input[type="radio"]:focus {
   color: var(--color-text-primary);
 }
 
-.settings-section-subtitle {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-top: var(--spacing-xl);
-  margin-bottom: var(--spacing-sm);
-  color: var(--color-text-primary);
-}
-
 .settings-hint {
   font-size: 0.8rem;
   color: var(--color-text-muted);
