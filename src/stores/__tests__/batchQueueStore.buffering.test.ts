@@ -84,7 +84,7 @@ describe('batchQueueStore buffering', () => {
                 }
 
                 // Return full list as final result
-                const finalSegments = Array.from({ length: totalSegments }).map((_, i) => ({
+                const finalSegments = Array.from({ length: totalSegments }, (_, i) => ({
                     id: `seg-${i}`,
                     text: `Segment ${i}`,
                     start: i,
