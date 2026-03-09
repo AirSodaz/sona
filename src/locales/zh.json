@@ -151,6 +151,8 @@
     },
     "settings": {
         "title": "设置",
+        "streaming_model_label": "实时录音模型",
+        "offline_model_label": "批量转录模型",
         "general": "常规",
         "language": "语言",
         "theme": "主题",

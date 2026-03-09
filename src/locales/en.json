@@ -151,6 +151,8 @@
     },
     "settings": {
         "title": "Settings",
+        "streaming_model_label": "Live Record Model",
+        "offline_model_label": "Batch Import Model",
         "general": "General",
         "language": "Language",
         "theme": "Theme",
