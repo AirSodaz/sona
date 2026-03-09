@@ -511,7 +511,8 @@ class ModelService {
         const orderedModels = order.filter(id => enabledModels.has(id));
 
         // 2. Any other enabled models not in the order (fallback)
-        const remainingModels = Array.from(enabledModels).filter(id => !order.includes(id));
+        const orderSet = new Set(order);
+        const remainingModels = Array.from(enabledModels).filter(id => !orderSet.has(id));
 
         const allModelsToCheck = [...orderedModels, ...remainingModels];
 
