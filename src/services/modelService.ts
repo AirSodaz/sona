@@ -107,7 +107,7 @@ export const PRESET_MODELS: ModelInfo[] = [
             tokens: 'tokens.txt'
         },
         groupId: 'sensevoice',
-        versionLabel: 'F32'
+        versionLabel: 'Fp32'
     },
     {
         id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',
@@ -136,7 +136,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2',
         type: 'whisper',
         modes: ['offline'],
-        language: 'multilingual',
+        language: 'zh,en,ja,ko,yue',
         size: '~538 MB',
         engine: 'sherpa-onnx',
         rules: {
@@ -177,7 +177,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
-        language: 'multilingual',
+        language: 'zh,en,ja,ko,yue',
         size: '~716 MB',
         engine: 'sherpa-onnx',
         rules: {
@@ -200,7 +200,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
-        language: 'multilingual',
+        language: 'zh,en,ja,ko,yue',
         size: '~982 MB',
         engine: 'sherpa-onnx',
         rules: {
@@ -214,7 +214,7 @@ export const PRESET_MODELS: ModelInfo[] = [
             tokenizer: 'Qwen3-0.6B'
         },
         groupId: 'funasr-nano',
-        versionLabel: 'FP16'
+        versionLabel: 'Fp16'
     },
     {
         id: 'sherpa-onnx-funasr-nano-2025-12-30',
@@ -223,7 +223,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
-        language: 'multilingual',
+        language: 'zh,en,ja,ko,yue',
         size: '~1.23 GB',
         engine: 'sherpa-onnx',
         rules: {
@@ -237,7 +237,7 @@ export const PRESET_MODELS: ModelInfo[] = [
             tokenizer: 'Qwen3-0.6B'
         },
         groupId: 'funasr-nano',
-        versionLabel: 'F32'
+        versionLabel: 'Fp32'
     },
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
