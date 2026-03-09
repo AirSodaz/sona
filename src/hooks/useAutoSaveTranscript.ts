@@ -90,8 +90,11 @@ export function useAutoSaveTranscript() {
             await historyService.updateTranscript(historyId, segments);
 
             // 2. Update in-memory metadata (Preview Text & Search Content)
-            // 2. Update in-memory metadata (Preview Text & Search Content)
-            const fullText = segments.map(s => s.text).join(' ');
+            let fullText = '';
+            for (let i = 0; i < segments.length; i++) {
+                if (i > 0) fullText += ' ';
+                fullText += segments[i].text;
+            }
             const previewText = fullText.substring(0, 100) + (fullText.length > 100 ? '...' : '');
 
             updateItemMeta(historyId, {
