@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
@@ -24,29 +24,33 @@ function ModelSection({
     onDownload,
     onCancelDownload
 }: ModelSectionProps): React.JSX.Element {
-    const models = PRESET_MODELS.filter(m => {
-        if (type === 'asr') {
-            const blacklist = ['vad', 'punctuation', 'itn'];
-            return !blacklist.includes(m.type);
-        }
-        return m.type === type;
-    });
-
-    const groupedModels: ModelInfo[][] = [];
-    const groupMap = new Map<string, ModelInfo[]>();
-
-    models.forEach(model => {
-        if (model.groupId) {
-            if (!groupMap.has(model.groupId)) {
-                const group: ModelInfo[] = [];
-                groupMap.set(model.groupId, group);
-                groupedModels.push(group);
+    const groupedModels = useMemo(() => {
+        const models = PRESET_MODELS.filter(m => {
+            if (type === 'asr') {
+                const blacklist = ['vad', 'punctuation', 'itn'];
+                return !blacklist.includes(m.type);
             }
-            groupMap.get(model.groupId)!.push(model);
-        } else {
-            groupedModels.push([model]);
-        }
-    });
+            return m.type === type;
+        });
+
+        const grouped: ModelInfo[][] = [];
+        const groupMap = new Map<string, ModelInfo[]>();
+
+        models.forEach(model => {
+            if (model.groupId) {
+                if (!groupMap.has(model.groupId)) {
+                    const group: ModelInfo[] = [];
+                    groupMap.set(model.groupId, group);
+                    grouped.push(group);
+                }
+                groupMap.get(model.groupId)!.push(model);
+            } else {
+                grouped.push([model]);
+            }
+        });
+
+        return grouped;
+    }, [type]);
 
     return (
         <>
@@ -216,6 +220,22 @@ export function SettingsModelsTab({
         onCancelDownload
     };
 
+    const streamingOptions = useMemo(() => {
+        return PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
+            value: model.id,
+            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
+        }));
+    }, [installedModels, t]);
+
+    const offlineOptions = useMemo(() => {
+        return PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
+            value: model.id,
+            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
+        }));
+    }, [installedModels, t]);
+
     return (
         <div
             className="model-list"
@@ -232,11 +252,7 @@ export function SettingsModelsTab({
                         value={selectedStreamingModelId}
                         onChange={(value) => handleStreamingModelChange(value)}
                         placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
-                        options={PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
-                            value: model.id,
-                            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
-                            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
-                        }))}
+                        options={streamingOptions}
                         style={{ flex: 1 }}
                     />
                 </div>
@@ -248,11 +264,7 @@ export function SettingsModelsTab({
                         value={selectedOfflineModelId}
                         onChange={(value) => handleOfflineModelChange(value)}
                         placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
-                        options={PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
-                            value: model.id,
-                            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
-                            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } : undefined
-                        }))}
+                        options={offlineOptions}
                         style={{ flex: 1 }}
                     />
                 </div>
