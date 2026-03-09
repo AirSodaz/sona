@@ -1300,7 +1300,7 @@ input[type="radio"]:focus {
 .model-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
 }
 
 .model-list-hint {
@@ -1314,44 +1314,57 @@ input[type="radio"]:focus {
 .model-card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   background: var(--color-bg-elevated);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.model-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .model-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 16px;
 }
 
 .model-name {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: var(--color-text-primary);
+  letter-spacing: -0.01em;
 }
 
 .model-description {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-top: 6px;
 }
 
 .model-tags {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 8px;
 }
 
 .model-tag {
   background: var(--color-bg-secondary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
 }
 
 .model-actions {
@@ -1360,22 +1373,81 @@ input[type="radio"]:focus {
   flex-shrink: 0;
 }
 
+.model-versions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.model-version-row:hover {
+  background: var(--color-bg-hover);
+}
+
+.model-version-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-version-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+
+.model-version-size {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.model-version-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .progress-container-mini {
-  margin-top: 8px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
 
 .progress-info-mini {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 0.75rem;
-  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .progress-bar-mini {
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
   overflow: hidden;
+  width: 100%;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent-gradient);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease-out;
 }
 
 /* Spinner */
@@ -2195,36 +2267,7 @@ input[type="radio"]:focus {
    Progress Bar Mini (for Model Cards)
    =========================== */
 
-.progress-container-mini {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-
-.progress-info-mini {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-}
-
-.progress-bar-mini {
-  height: 6px;
-  background: var(--color-bg-tertiary);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  width: 100%;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--color-info);
-  border-radius: var(--radius-full);
-  transition: width 0.2s ease-out;
-}
+/* removed duplicated styles */
 
 /* ===========================
    Theme Selector

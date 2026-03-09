@@ -84,9 +84,9 @@ export function ModelCard({
 
     return (
         <div className="model-card">
-            <div className="model-card-header" style={{ alignItems: 'flex-start', marginBottom: isMultiVersion ? '16px' : '0' }}>
-                <div style={{ flex: 1, width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="model-card-header">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <div className="model-name">{baseModel.name}</div>
                         <div className="model-tags" style={{ marginTop: '0' }}>
                             <span className="model-tag">{baseModel.language.toUpperCase()}</span>
@@ -98,9 +98,11 @@ export function ModelCard({
                         </div>
                     </div>
                     <div className="model-description">{baseModel.description}</div>
-                    {!isMultiVersion && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{baseModel.size}</span>
+                </div>
+                {!isMultiVersion && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{baseModel.size}</span>
                             <ModelCardActions
                                 model={baseModel}
                                 isInstalled={installedModels.has(baseModel.id)}
@@ -110,14 +112,14 @@ export function ModelCard({
                                 onCancelDownload={() => onCancelDownload(baseModel.id)}
                             />
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {!isMultiVersion && !!downloads[baseModel.id] && (
                 <div className="progress-container-mini">
                     <div className="progress-info-mini" aria-live="polite">
-                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{downloads[baseModel.id].status || t('common.loading')}</span>
+                        <span>{downloads[baseModel.id].status || t('common.loading')}</span>
                         <span>{Math.round(downloads[baseModel.id].progress)}%</span>
                     </div>
                     <div
@@ -134,55 +136,52 @@ export function ModelCard({
             )}
 
             {isMultiVersion && (
-                <>
-                    <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: '0 0 16px 0' }} />
-                    <div className="model-versions" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {models.map(model => {
-                            const isInstalled = installedModels.has(model.id);
-                            const downloadState = downloads[model.id];
-                            const isDownloading = !!downloadState;
+                <div className="model-versions-container">
+                    {models.map(model => {
+                        const isInstalled = installedModels.has(model.id);
+                        const downloadState = downloads[model.id];
+                        const isDownloading = !!downloadState;
 
-                            return (
-                                <div key={model.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <span style={{ fontWeight: 500, color: 'var(--color-text)' }}>{model.versionLabel || model.name}</span>
+                        return (
+                            <div key={model.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div className="model-version-row">
+                                    <div className="model-version-info">
+                                        <span className="model-version-name">{model.versionLabel || model.name}</span>
+                                    </div>
+                                    <div className="model-version-actions">
+                                        <span className="model-version-size">{model.size}</span>
+                                        <ModelCardActions
+                                            model={model}
+                                            isInstalled={isInstalled}
+                                            isDownloading={isDownloading}
+                                            onDelete={onDelete}
+                                            onDownload={onDownload}
+                                            onCancelDownload={() => onCancelDownload(model.id)}
+                                        />
+                                    </div>
+                                </div>
+                                {isDownloading && (
+                                    <div className="progress-container-mini" style={{ marginTop: 0, padding: '0 4px 8px 4px' }}>
+                                        <div className="progress-info-mini" aria-live="polite">
+                                            <span>{downloadState.status || t('common.loading')}</span>
+                                            <span>{Math.round(downloadState.progress)}%</span>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.size}</span>
-                                            <ModelCardActions
-                                                model={model}
-                                                isInstalled={isInstalled}
-                                                isDownloading={isDownloading}
-                                                onDelete={onDelete}
-                                                onDownload={onDownload}
-                                                onCancelDownload={() => onCancelDownload(model.id)}
-                                            />
+                                        <div
+                                            className="progress-bar-mini"
+                                            role="progressbar"
+                                            aria-valuenow={Math.round(downloadState.progress)}
+                                            aria-valuemin={0}
+                                            aria-valuemax={100}
+                                            aria-label={`${t('common.download')} ${model.name}`}
+                                        >
+                                            <div className="progress-fill" style={{ width: `${downloadState.progress}%` }} />
                                         </div>
                                     </div>
-                                    {isDownloading && (
-                                        <div className="progress-container-mini" style={{ marginTop: 0 }}>
-                                            <div className="progress-info-mini" aria-live="polite">
-                                                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{downloadState.status || t('common.loading')}</span>
-                                                <span>{Math.round(downloadState.progress)}%</span>
-                                            </div>
-                                            <div
-                                                className="progress-bar-mini"
-                                                role="progressbar"
-                                                aria-valuenow={Math.round(downloadState.progress)}
-                                                aria-valuemin={0}
-                                                aria-valuemax={100}
-                                                aria-label={`${t('common.download')} ${model.name}`}
-                                            >
-                                                <div className="progress-fill" style={{ width: `${downloadState.progress}%` }} />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );
