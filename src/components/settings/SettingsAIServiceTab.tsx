@@ -238,33 +238,33 @@ export function SettingsAIServiceTab({
                     </button>
                 </div>
 
-                <div style={{ marginTop: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ai.temperature') || 'Temperature'}</label>
-                        <input
-                            type="number"
-                            className="settings-input"
-                            style={{ width: '60px', padding: '2px 4px', textAlign: 'center' }}
-                            min={0}
-                            max={2}
-                            step={0.05}
-                            value={aiTemperature}
-                            onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                if (!isNaN(val) && val >= 0 && val <= 2) {
-                                    updateAiSetting('temperature', val);
-                                }
-                            }}
-                        />
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+                    <label className="settings-label" style={{ marginBottom: 0, minWidth: 'fit-content' }}>
+                        {t('settings.ai.temperature') || 'Temperature'}
+                    </label>
                     <input
                         type="range"
-                        style={{ width: '100%' }}
+                        style={{ flex: 1, margin: 0 }}
                         min={0}
                         max={2}
                         step={0.05}
                         value={aiTemperature}
                         onChange={(e) => updateAiSetting('temperature', parseFloat(e.target.value))}
+                    />
+                    <input
+                        type="number"
+                        className="settings-input"
+                        style={{ width: '60px', padding: '2px 4px', textAlign: 'center' }}
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={aiTemperature}
+                        onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 0 && val <= 2) {
+                                updateAiSetting('temperature', val);
+                            }
+                        }}
                     />
                 </div>
 
