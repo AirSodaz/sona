@@ -355,11 +355,15 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     savedWavPath = await invoke<string>('stop_microphone_capture', { instanceId: 'record' });
                 }
                 console.log('[useAudioRecorder] Saved raw audio to:', savedWavPath);
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            }
         } else if (audioContextRef.current && audioContextRef.current.state === 'running') {
             try {
                 await audioContextRef.current.suspend();
-            } catch (e) { console.error('Failed to suspend audio context:', e); }
+            } catch (e) {
+                console.error('Failed to suspend audio context:', e);
+            }
         }
 
         // Soft stop service
@@ -395,8 +399,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         stopFileRecording();
 
         if (audioContextRef.current) {
-            activeStreamRef.current?.getTracks().forEach(t => t.stop());
-            activeStreamRef.current = null;
+            if (activeStreamRef.current) {
+                activeStreamRef.current.getTracks().forEach(t => t.stop());
+                activeStreamRef.current = null;
+            }
 
             if (audioContextRef.current.state !== 'closed') {
                 await audioContextRef.current.close();

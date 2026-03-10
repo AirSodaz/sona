@@ -328,16 +328,13 @@ function buildTokenMap(segment: TranscriptSegment): TokenMap | null {
  */
 function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: number = 0): { timestamp: number, index: number } | undefined {
     // Check hint first
-    if (hintIndex < map.startIndices.length) {
-        if (map.startIndices[hintIndex] <= effectiveIndex && effectiveIndex < map.endIndices[hintIndex]) {
-            return { timestamp: map.timestamps[hintIndex], index: hintIndex };
-        }
-        const next = hintIndex + 1;
-        if (next < map.startIndices.length) {
-            if (map.startIndices[next] <= effectiveIndex && effectiveIndex < map.endIndices[next]) {
-                return { timestamp: map.timestamps[next], index: next };
-            }
-        }
+    if (hintIndex < map.startIndices.length && map.startIndices[hintIndex] <= effectiveIndex && effectiveIndex < map.endIndices[hintIndex]) {
+        return { timestamp: map.timestamps[hintIndex], index: hintIndex };
+    }
+
+    const next = hintIndex + 1;
+    if (next < map.startIndices.length && map.startIndices[next] <= effectiveIndex && effectiveIndex < map.endIndices[next]) {
+        return { timestamp: map.timestamps[next], index: next };
     }
 
     // Binary search
@@ -359,11 +356,10 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
         }
     }
 
-    if (idx !== -1) {
-        if (effectiveIndex < map.endIndices[idx]) {
-            return { timestamp: map.timestamps[idx], index: idx };
-        }
+    if (idx !== -1 && effectiveIndex < map.endIndices[idx]) {
+        return { timestamp: map.timestamps[idx], index: idx };
     }
+
     return undefined;
 }
 
@@ -401,10 +397,8 @@ export function findSegmentAndIndexForTime(
                 }
             }
 
-            if (time >= seg.end) {
-                if (nextIdx >= segments.length || searchTime < segments[nextIdx].start) {
-                    return { segment: undefined, index: hintIndex };
-                }
+            if (time >= seg.end && (nextIdx >= segments.length || searchTime < segments[nextIdx].start)) {
+                return { segment: undefined, index: hintIndex };
             }
 
             const prevIdx = hintIndex - 1;
@@ -435,15 +429,11 @@ export function findSegmentAndIndexForTime(
         }
     }
 
-    if (idx !== -1) {
-        const seg = segments[idx];
-        if (time <= seg.end) {
-            return { segment: seg, index: idx };
-        }
-        return { segment: undefined, index: idx };
+    if (idx !== -1 && time <= segments[idx].end) {
+        return { segment: segments[idx], index: idx };
     }
 
-    return { segment: undefined, index: -1 };
+    return { segment: undefined, index: idx };
 }
 
 export function findSegmentForTime(segments: TranscriptSegment[], time: number): TranscriptSegment | undefined {

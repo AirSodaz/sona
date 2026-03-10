@@ -68,7 +68,11 @@ export function useAppUpdater(): UseAppUpdaterReturn {
                 setStatus('idle');
                 await showErrorPopup(err);
             } else {
-                setError(err instanceof Error ? err.message : String(err));
+                if (err instanceof Error) {
+                    setError(err.message);
+                } else {
+                    setError(String(err));
+                }
                 setStatus('error');
             }
         }
@@ -86,19 +90,15 @@ export function useAppUpdater(): UseAppUpdaterReturn {
             let contentLength = 0;
 
             await updateInfo.downloadAndInstall((event) => {
-                switch (event.event) {
-                    case 'Started':
-                        contentLength = event.data.contentLength || 0;
-                        break;
-                    case 'Progress':
-                        downloaded += event.data.chunkLength;
-                        if (contentLength > 0) {
-                            setProgress(Math.round((downloaded / contentLength) * 100));
-                        }
-                        break;
-                    case 'Finished':
-                        setStatus('installing');
-                        break;
+                if (event.event === 'Started') {
+                    contentLength = event.data.contentLength || 0;
+                } else if (event.event === 'Progress') {
+                    downloaded += event.data.chunkLength;
+                    if (contentLength > 0) {
+                        setProgress(Math.round((downloaded / contentLength) * 100));
+                    }
+                } else if (event.event === 'Finished') {
+                    setStatus('installing');
                 }
             });
 
