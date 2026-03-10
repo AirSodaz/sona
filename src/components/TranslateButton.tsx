@@ -202,11 +202,11 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                     >
                         {hasTranslation ? <EditIcon /> : <PlayIcon />}
                         <span>
-                            {isTranslating
-                                ? t('translation.translating', { defaultValue: 'Translating...' })
-                                : hasTranslation
-                                    ? t('translation.retranslate', { defaultValue: 'Retranslate' })
-                                    : t('translation.start', { defaultValue: 'Start Translation' })}
+                            {(() => {
+                                if (isTranslating) return t('translation.translating', { defaultValue: 'Translating...' });
+                                if (hasTranslation) return t('translation.retranslate', { defaultValue: 'Retranslate' });
+                                return t('translation.start', { defaultValue: 'Start Translation' });
+                            })()}
                         </span>
                     </button>
                     <button
