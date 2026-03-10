@@ -83,7 +83,8 @@ describe('SettingsAIServiceTab', () => {
             baseUrl: 'https://api.openai.com/v1',
             modelName: 'gpt-4o',
             input: 'Hello, this is a connection test.',
-            apiFormat: 'openai'
+            apiFormat: 'openai',
+            temperature: 0.7
         });
 
         await waitFor(() => {
