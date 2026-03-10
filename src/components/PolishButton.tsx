@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { polishService } from '../services/polishService';
-import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, ProcessingIcon, RestoreIcon, RedoIcon } from './Icons';
+import { retranscribeService } from '../services/retranscribeService';
+import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
 
 /** Props for PolishButton. */
@@ -31,6 +32,9 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     // Undo/Redo state
     const [undoSegments, setUndoSegments] = useState<TranscriptSegment[] | null>(null);
     const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
+
+    const [isRetranscribing, setIsRetranscribing] = useState(false);
+    const [retranscribeProgress, setRetranscribeProgress] = useState(0);
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
 
@@ -116,6 +120,35 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         }
     };
 
+    const handleRetranscribe = async () => {
+        if (isRetranscribing) return;
+
+        if (!config.offlineModelPath) {
+            await alert(t('batch.no_model_error'), { variant: 'error' });
+            return;
+        }
+
+        // Save current segments for undo
+        setUndoSegments(JSON.parse(JSON.stringify(segments)));
+        setRedoSegments(null);
+        setIsOpen(false);
+        triggerRef.current?.focus();
+
+        setIsRetranscribing(true);
+        setRetranscribeProgress(0);
+
+        try {
+            await retranscribeService.retranscribeCurrentRecord((progress) => {
+                setRetranscribeProgress(progress);
+            });
+        } catch (error: any) {
+            await alert(error.message || 'Unknown error', { variant: 'error' });
+        } finally {
+            setIsRetranscribing(false);
+            setRetranscribeProgress(0);
+        }
+    };
+
     const handleStartPolish = async () => {
         if (isPolishing) return;
 
@@ -182,10 +215,15 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="polish-menu-dropdown"
-                data-tooltip={isPolishing ? t('polish.polishing') : t('polish.title')}
+                data-tooltip={isRetranscribing ? t('polish.retranscribing', 'Retranscribing...') : (isPolishing ? t('polish.polishing') : t('polish.title'))}
                 data-tooltip-pos="bottom"
             >
-                {isPolishing ? (
+                {isRetranscribing ? (
+                    <>
+                        <ProcessingIcon />
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{retranscribeProgress}%</span>
+                    </>
+                ) : isPolishing ? (
                     <>
                         <ProcessingIcon />
                         <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{polishProgress}%</span>
@@ -204,11 +242,29 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                     role="menu"
                     aria-labelledby="polish-menu-button"
                 >
+                    {sourceHistoryId && sourceHistoryId !== 'current' && (
+                        <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={handleRetranscribe}
+                            disabled={isRetranscribing || isPolishing}
+                            role="menuitem"
+                            tabIndex={-1}
+                        >
+                            <FileTextIcon />
+                            <span>
+                                {isRetranscribing
+                                    ? t('polish.retranscribing', 'Retranscribing...')
+                                    : t('polish.retranscribe', 'Re-transcribe')}
+                            </span>
+                        </button>
+                    )}
+
                     <button
                         type="button"
                         className="export-dropdown-item"
                         onClick={handleStartPolish}
-                        disabled={isPolishing}
+                        disabled={isPolishing || isRetranscribing}
                         role="menuitem"
                         tabIndex={-1}
                     >

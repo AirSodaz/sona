@@ -365,7 +365,7 @@ export const historyService = {
         }
     },
 
-    async getAudioUrl(filename: string): Promise<string | null> {
+    async getAudioAbsolutePath(filename: string): Promise<string | null> {
         try {
             const appDataDirPath = await appLocalDataDir();
             const fullPath = await join(appDataDirPath, HISTORY_DIR, filename);
@@ -382,6 +382,17 @@ export const historyService = {
                 return null;
             }
 
+            return fullPath;
+        } catch (e) {
+            logger.error('Failed to get audio absolute path:', e);
+            return null;
+        }
+    },
+
+    async getAudioUrl(filename: string): Promise<string | null> {
+        try {
+            const fullPath = await this.getAudioAbsolutePath(filename);
+            if (!fullPath) return null;
             return convertFileSrc(fullPath);
         } catch (e) {
             logger.error('Failed to get audio URL:', e);
