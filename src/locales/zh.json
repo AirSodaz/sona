@@ -314,7 +314,7 @@
     },
     "polish": {
         "title": "润色文本",
-        "start": "开始润色",
+        "start": "AI 润色",
         "polishing": "正在润色...",
         "retranscribe": "重新转录",
         "retranscribing": "正在转录...",

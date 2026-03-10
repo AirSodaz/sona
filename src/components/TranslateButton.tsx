@@ -32,8 +32,8 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
     // AI State
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false };
-    const { isTranslating, translationProgress, isTranslationVisible } = aiState;
+    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false, isRetranscribing: false };
+    const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = aiState;
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
 
     const config = useTranscriptStore((state) => state.config);
@@ -166,6 +166,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                 id="translate-menu-button"
                 className="btn btn-icon"
                 onClick={() => setIsOpen(!isOpen)}
+                disabled={isRetranscribing}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="translate-menu-dropdown"
