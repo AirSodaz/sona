@@ -33,15 +33,13 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const [undoSegments, setUndoSegments] = useState<TranscriptSegment[] | null>(null);
     const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
 
-    const [isRetranscribing, setIsRetranscribing] = useState(false);
-    const [retranscribeProgress, setRetranscribeProgress] = useState(0);
-
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
 
     // AI State
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0 };
-    const { isPolishing, polishProgress } = aiState;
+    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
+    const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = aiState;
+    const updateAiState = useTranscriptStore((state) => state.updateAiState);
 
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
@@ -128,24 +126,23 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
             return;
         }
 
-        // Save current segments for undo
-        setUndoSegments(JSON.parse(JSON.stringify(segments)));
-        setRedoSegments(null);
         setIsOpen(false);
         triggerRef.current?.focus();
 
-        setIsRetranscribing(true);
-        setRetranscribeProgress(0);
+        updateAiState({ isRetranscribing: true, retranscribeProgress: 0 });
 
         try {
             await retranscribeService.retranscribeCurrentRecord((progress) => {
-                setRetranscribeProgress(progress);
+                updateAiState({ retranscribeProgress: progress });
             });
+
+            // Clear old polish undo/redo states only after successful re-transcription
+            setUndoSegments(null);
+            setRedoSegments(null);
         } catch (error: any) {
             await alert(error.message || 'Unknown error', { variant: 'error' });
         } finally {
-            setIsRetranscribing(false);
-            setRetranscribeProgress(0);
+            updateAiState({ isRetranscribing: false, retranscribeProgress: 0 });
         }
     };
 
@@ -212,6 +209,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 id="polish-menu-button"
                 className="btn btn-icon"
                 onClick={() => setIsOpen(!isOpen)}
+                disabled={isRetranscribing}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="polish-menu-dropdown"
@@ -221,7 +219,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 {isRetranscribing ? (
                     <>
                         <ProcessingIcon />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{retranscribeProgress}%</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{Math.floor(retranscribeProgress)}%</span>
                     </>
                 ) : isPolishing ? (
                     <>
@@ -272,7 +270,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <span>
                             {isPolishing
                                 ? t('polish.polishing')
-                                : t('polish.start')}
+                                : t('polish.start', 'AI Polish')}
                         </span>
                     </button>
 

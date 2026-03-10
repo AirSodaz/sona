@@ -69,7 +69,7 @@ describe('PolishButton', () => {
     it('shows undo option after polishing (simulated)', async () => {
         render(<PolishButton />);
 
-        // 1. Click Start Polish
+        // 1. Click AI Polish
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 
@@ -86,7 +86,7 @@ describe('PolishButton', () => {
 
         render(<PolishButton />);
 
-        // 1. Start Polish (saves 'Original' to undo)
+        // 1. AI Polish (saves 'Original' to undo)
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 
@@ -115,7 +115,7 @@ describe('PolishButton', () => {
 
         render(<PolishButton />);
 
-        // 1. Start Polish
+        // 1. AI Polish
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 

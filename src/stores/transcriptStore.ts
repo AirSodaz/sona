@@ -229,6 +229,8 @@ export interface AiState {
     isTranslationVisible: boolean;
     isPolishing: boolean;
     polishProgress: number;
+    isRetranscribing: boolean;
+    retranscribeProgress: number;
 }
 
 const DEFAULT_AI_STATE: AiState = {
@@ -237,6 +239,8 @@ const DEFAULT_AI_STATE: AiState = {
     isTranslationVisible: false,
     isPolishing: false,
     polishProgress: 0,
+    isRetranscribing: false,
+    retranscribeProgress: 0,
 };
 
 const DEFAULT_CONFIG: AppConfig = {
