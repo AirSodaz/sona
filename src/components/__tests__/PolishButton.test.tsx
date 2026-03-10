@@ -33,8 +33,7 @@ describe('PolishButton', () => {
             segments: [
                 { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
             ],
-            isPolishing: false,
-            polishProgress: 0,
+            aiStates: {},
             config: {
                 aiApiKey: 'test-key',
                 aiBaseUrl: 'https://api.test',

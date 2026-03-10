@@ -31,8 +31,8 @@ describe('PolishService', () => {
             },
             segments: [],
             updateSegment: vi.fn(),
-            setIsPolishing: vi.fn(),
-            setPolishProgress: vi.fn(),
+            updateAiState: vi.fn(),
+            sourceHistoryId: null,
         });
     });
 
@@ -88,8 +88,8 @@ describe('PolishService', () => {
             },
             segments: segments,
             updateSegment: vi.fn(),
-            setIsPolishing: vi.fn(),
-            setPolishProgress: vi.fn(),
+            updateAiState: vi.fn(),
+            sourceHistoryId: null,
         };
 
         (useTranscriptStore.getState as any).mockReturnValue(mockStore);
@@ -101,8 +101,8 @@ describe('PolishService', () => {
 
         await polishService.polishTranscript();
 
-        expect(mockStore.setIsPolishing).toHaveBeenCalledWith(true);
+        expect(mockStore.updateAiState).toHaveBeenCalledWith({ isPolishing: true, polishProgress: 0 }, 'current');
         expect(mockStore.updateSegment).toHaveBeenCalledWith('1', { text: 'Hello' });
-        expect(mockStore.setIsPolishing).toHaveBeenCalledWith(false);
+        expect(mockStore.updateAiState).toHaveBeenCalledWith({ isPolishing: false, polishProgress: 0 }, 'current');
     });
 });

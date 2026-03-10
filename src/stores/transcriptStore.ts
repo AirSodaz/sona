@@ -49,19 +49,12 @@ interface TranscriptState {
     /** ID of the history item the current segments originate from. */
     sourceHistoryId: string | null;
 
-    // Translation state
-    /** Whether bilingual translations are currently visible. */
-    isTranslationVisible: boolean;
-    /** Whether a translation job is currently running. */
-    isTranslating: boolean;
-    /** Progress of translation (0-100). */
-    translationProgress: number;
-
-    // Polishing state
-    /** Whether a polishing job is currently running. */
-    isPolishing: boolean;
-    /** Progress of polishing (0-100). */
-    polishProgress: number;
+    // AI States mapped by historyId
+    /**
+     * Record of AI states (translation, polishing) mapped by sourceHistoryId.
+     * Use 'current' for the active unsaved recording.
+     */
+    aiStates: Record<string, AiState>;
 
     // Config
     /** Application configuration. */
@@ -164,18 +157,25 @@ interface TranscriptState {
      */
     removeAligningSegmentId: (id: string) => void;
 
-    // Translation actions
-    /** Sets translation visibility toggle. */
-    setIsTranslationVisible: (visible: boolean) => void;
-    /** Sets translating status. */
-    setIsTranslating: (translating: boolean) => void;
-    /** Sets translating progress (0-100). */
-    setTranslationProgress: (progress: number) => void;
+    // AI state actions
+    /**
+     * Gets the AI state for a specific history ID.
+     * If no ID is provided, uses the current sourceHistoryId or 'current'.
+     * Returns a default empty state if not found.
+     */
+    getAiState: (historyId?: string) => AiState;
 
-    // Polishing actions
-    /** Sets polishing status. */
+    /**
+     * Updates the AI state for a specific history ID.
+     * If no ID is provided, updates the current sourceHistoryId or 'current'.
+     */
+    updateAiState: (updates: Partial<AiState>, historyId?: string) => void;
+
+    // Legacy actions for backward compatibility (updates current active state)
+    setIsTranslationVisible: (visible: boolean) => void;
+    setIsTranslating: (translating: boolean) => void;
+    setTranslationProgress: (progress: number) => void;
     setIsPolishing: (polishing: boolean) => void;
-    /** Sets polishing progress (0-100). */
     setPolishProgress: (progress: number) => void;
 
     // Audio actions
@@ -222,6 +222,22 @@ interface TranscriptState {
     setConfig: (config: Partial<AppConfig>) => void;
 }
 
+
+export interface AiState {
+    isTranslating: boolean;
+    translationProgress: number;
+    isTranslationVisible: boolean;
+    isPolishing: boolean;
+    polishProgress: number;
+}
+
+const DEFAULT_AI_STATE: AiState = {
+    isTranslating: false,
+    translationProgress: 0,
+    isTranslationVisible: false,
+    isPolishing: false,
+    polishProgress: 0,
+};
 
 const DEFAULT_CONFIG: AppConfig = {
     streamingModelPath: '',
@@ -278,11 +294,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     lastSeekTimestamp: 0,
     seekRequest: null,
     sourceHistoryId: null,
-    isTranslationVisible: false,
-    isTranslating: false,
-    translationProgress: 0,
-    isPolishing: false,
-    polishProgress: 0,
+    aiStates: {},
     config: DEFAULT_CONFIG,
 
     // History tracking
@@ -411,14 +423,32 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         return { aligningSegmentIds: next };
     }),
 
-    // Translation actions
-    setIsTranslationVisible: (visible) => set({ isTranslationVisible: visible }),
-    setIsTranslating: (translating) => set({ isTranslating: translating }),
-    setTranslationProgress: (progress) => set({ translationProgress: progress }),
+    // AI state actions
+    getAiState: (historyId) => {
+        const state = get();
+        const id = historyId || state.sourceHistoryId || 'current';
+        return state.aiStates[id] || { ...DEFAULT_AI_STATE };
+    },
 
-    // Polishing actions
-    setIsPolishing: (polishing) => set({ isPolishing: polishing }),
-    setPolishProgress: (progress) => set({ polishProgress: progress }),
+    updateAiState: (updates, historyId) => {
+        set((state) => {
+            const id = historyId || state.sourceHistoryId || 'current';
+            const currentState = state.aiStates[id] || { ...DEFAULT_AI_STATE };
+            return {
+                aiStates: {
+                    ...state.aiStates,
+                    [id]: { ...currentState, ...updates }
+                }
+            };
+        });
+    },
+
+    // Legacy actions mapping to current AI state
+    setIsTranslationVisible: (visible) => get().updateAiState({ isTranslationVisible: visible }),
+    setIsTranslating: (translating) => get().updateAiState({ isTranslating: translating }),
+    setTranslationProgress: (progress) => get().updateAiState({ translationProgress: progress }),
+    setIsPolishing: (polishing) => get().updateAiState({ isPolishing: polishing }),
+    setPolishProgress: (progress) => get().updateAiState({ polishProgress: progress }),
 
     // Audio actions
     setAudioFile: (file) => {
