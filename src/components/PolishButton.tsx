@@ -196,6 +196,13 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         return null;
     }
 
+    let tooltipText = t('polish.title');
+    if (isRetranscribing) {
+        tooltipText = t('polish.retranscribing', 'Retranscribing...');
+    } else if (isPolishing) {
+        tooltipText = t('polish.polishing');
+    }
+
     return (
         <div
             className={`export-menu ${className}`}
@@ -213,7 +220,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 aria-controls="polish-menu-dropdown"
-                data-tooltip={isRetranscribing ? t('polish.retranscribing', 'Retranscribing...') : (isPolishing ? t('polish.polishing') : t('polish.title'))}
+                data-tooltip={tooltipText}
                 data-tooltip-pos="bottom"
             >
                 {isRetranscribing ? (

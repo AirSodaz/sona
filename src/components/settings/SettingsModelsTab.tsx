@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
@@ -220,21 +220,32 @@ export function SettingsModelsTab({
         onCancelDownload
     };
 
+    const getModelLabel = useCallback((model: ModelInfo) => {
+        let label = model.name;
+        if (model.versionLabel) {
+            label += ` (${model.versionLabel})`;
+        }
+        if (!installedModels.has(model.id)) {
+            label += t('settings.not_installed', { defaultValue: ' (Not Downloaded)' });
+        }
+        return label;
+    }, [installedModels, t]);
+
     const streamingOptions = useMemo(() => {
         return PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
             value: model.id,
-            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+            label: getModelLabel(model),
             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
         }));
-    }, [installedModels, t]);
+    }, [getModelLabel, installedModels]);
 
     const offlineOptions = useMemo(() => {
         return PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
             value: model.id,
-            label: `${model.name}${model.versionLabel ? ` (${model.versionLabel})` : ''}${!installedModels.has(model.id) ? t('settings.not_installed', { defaultValue: ' (Not Downloaded)' }) : ''}`,
+            label: getModelLabel(model),
             style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
         }));
-    }, [installedModels, t]);
+    }, [getModelLabel, installedModels]);
 
     return (
         <div
