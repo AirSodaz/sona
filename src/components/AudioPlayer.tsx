@@ -107,10 +107,13 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                     });
 
                     let errorMessage = error?.message || 'Unknown error';
-                    if (error?.code === 3) { // MEDIA_ERR_DECODE
-                        errorMessage = t('player.error_decode', { defaultValue: 'Audio decoding failed. The file may be corrupted.' });
-                    } else if (error?.code === 4) { // MEDIA_ERR_SRC_NOT_SUPPORTED
-                        errorMessage = t('player.error_src_not_supported', { defaultValue: 'Audio format not supported or file missing.' });
+                    switch (error?.code) {
+                        case 3: // MEDIA_ERR_DECODE
+                            errorMessage = t('player.error_decode', { defaultValue: 'Audio decoding failed. The file may be corrupted.' });
+                            break;
+                        case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                            errorMessage = t('player.error_src_not_supported', { defaultValue: 'Audio format not supported or file missing.' });
+                            break;
                     }
 
                     alert(t('player.error', { error: errorMessage, code: error?.code }), { variant: 'error' });

@@ -179,36 +179,26 @@ export function SettingsModelsTab({
         }
     };
 
-    const handleStreamingModelChange = async (modelId: string) => {
-        setSelectedStreamingModelId(modelId);
+    const handleModelChange = async (type: 'streaming' | 'offline', modelId: string) => {
+        if (type === 'streaming') {
+            setSelectedStreamingModelId(modelId);
+        } else {
+            setSelectedOfflineModelId(modelId);
+        }
+
+        const configKey = type === 'streaming' ? 'streamingModelPath' : 'offlineModelPath';
+
         if (!modelId) {
-            updateConfig({ streamingModelPath: '' });
+            updateConfig({ [configKey]: '' });
             return;
         }
 
         try {
             const path = await modelService.getModelPath(modelId);
-            updateConfig({ streamingModelPath: path });
+            updateConfig({ [configKey]: path });
             await applyModelRules(modelId);
         } catch (e) {
-            console.error('Failed to get streaming model path', e);
-        }
-    };
-
-    const handleOfflineModelChange = async (modelId: string) => {
-        setSelectedOfflineModelId(modelId);
-        if (!modelId) {
-            updateConfig({ offlineModelPath: '' });
-            return;
-        }
-
-        try {
-            const path = await modelService.getModelPath(modelId);
-            updateConfig({ offlineModelPath: path });
-            await applyModelRules(modelId);
-
-        } catch (e) {
-            console.error('Failed to get offline model path', e);
+            console.error(`Failed to get ${type} model path`, e);
         }
     };
 
@@ -261,7 +251,7 @@ export function SettingsModelsTab({
                     <Dropdown
                         id="settings-streaming-path"
                         value={selectedStreamingModelId}
-                        onChange={(value) => handleStreamingModelChange(value)}
+                        onChange={(value) => handleModelChange('streaming', value)}
                         placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
                         options={streamingOptions}
                         style={{ flex: 1 }}
@@ -273,7 +263,7 @@ export function SettingsModelsTab({
                     <Dropdown
                         id="settings-offline-path"
                         value={selectedOfflineModelId}
-                        onChange={(value) => handleOfflineModelChange(value)}
+                        onChange={(value) => handleModelChange('offline', value)}
                         placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
                         options={offlineOptions}
                         style={{ flex: 1 }}
