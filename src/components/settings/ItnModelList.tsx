@@ -158,7 +158,12 @@ export function ItnModelList({
                                                     {downloads[model.id] ? (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                             <span style={{ fontSize: '0.8rem' }}>{Math.round(downloads[model.id].progress)}%</span>
-                                                            <button className="btn btn-sm btn-icon" onClick={() => onCancelDownload(model.id)} title="Cancel">
+                                                            <button
+                                                                className="btn btn-sm btn-icon"
+                                                                onClick={() => onCancelDownload(model.id)}
+                                                                title={t('common.cancel')}
+                                                                aria-label={t('common.cancel')}
+                                                            >
                                                                 <XIcon />
                                                             </button>
                                                         </div>
