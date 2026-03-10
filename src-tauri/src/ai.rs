@@ -12,6 +12,8 @@ pub struct OpenAIMessage {
 pub struct OpenAIRequest {
     model: String,
     messages: Vec<OpenAIMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -57,6 +59,8 @@ pub struct AnthropicRequest {
     model: String,
     messages: Vec<AnthropicMessage>,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +77,14 @@ struct AnthropicContent {
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<GeminiContent>,
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    generation_config: Option<GeminiGenerationConfig>,
+}
+
+#[derive(Serialize)]
+struct GeminiGenerationConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -117,6 +129,7 @@ pub async fn call_ai_model(
     model_name: String,
     input: String,
     api_format: String,
+    temperature: Option<f32>,
 ) -> Result<String, String> {
     let client = Client::new();
 
@@ -135,6 +148,7 @@ pub async fn call_ai_model(
                 content: input,
             }],
             max_tokens: 1024,
+            temperature,
         };
 
         let res = client
@@ -189,6 +203,7 @@ pub async fn call_ai_model(
             contents: vec![GeminiContent {
                 parts: vec![GeminiPart { text: input }],
             }],
+            generation_config: temperature.map(|t| GeminiGenerationConfig { temperature: Some(t) }),
         };
 
         let res = client
@@ -234,6 +249,7 @@ pub async fn call_ai_model(
                 role: "user".to_string(),
                 content: input,
             }],
+            temperature,
         };
 
         let mut req = client
