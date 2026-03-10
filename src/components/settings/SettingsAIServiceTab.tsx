@@ -29,6 +29,7 @@ export function SettingsAIServiceTab({
     const aiBaseUrl = config.aiBaseUrl || '';
     const aiApiKey = config.aiApiKey || '';
     const aiModel = config.aiModel || '';
+    const aiTemperature = config.aiTemperature ?? 0.7;
 
     const handleServiceTypeChange = (type: string) => {
         changeAiServiceType(type);
@@ -36,10 +37,10 @@ export function SettingsAIServiceTab({
         setIsManualEntry(false);
     };
 
-    const updateAiSetting = (key: 'baseUrl' | 'apiKey' | 'model', value: string) => {
+    const updateAiSetting = (key: 'baseUrl' | 'apiKey' | 'model' | 'temperature', value: string | number) => {
         const currentType = config.aiServiceType || 'openai';
         const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '' };
+        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '', temperature: 0.7 };
 
         const updates: Partial<AppConfig> = {
             aiServices: {
@@ -48,9 +49,10 @@ export function SettingsAIServiceTab({
             }
         };
 
-        if (key === 'baseUrl') updates.aiBaseUrl = value;
-        if (key === 'apiKey') updates.aiApiKey = value;
-        if (key === 'model') updates.aiModel = value;
+        if (key === 'baseUrl') updates.aiBaseUrl = value as string;
+        if (key === 'apiKey') updates.aiApiKey = value as string;
+        if (key === 'model') updates.aiModel = value as string;
+        if (key === 'temperature') updates.aiTemperature = value as number;
 
         updateConfig(updates);
     };
@@ -118,7 +120,8 @@ export function SettingsAIServiceTab({
                 baseUrl: aiBaseUrl,
                 modelName: aiModel,
                 input: 'Hello, this is a connection test.',
-                apiFormat: aiServiceType
+                apiFormat: aiServiceType,
+                temperature: aiTemperature
             });
             setTestStatus('success');
             setTestMessage(t('settings.ai.connection_success') + response);
@@ -233,6 +236,36 @@ export function SettingsAIServiceTab({
                             </div>
                         )}
                     </button>
+                </div>
+
+                <div style={{ marginTop: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('settings.ai.temperature') || 'Temperature'}</label>
+                        <input
+                            type="number"
+                            className="settings-input"
+                            style={{ width: '60px', padding: '2px 4px', textAlign: 'center' }}
+                            min={0}
+                            max={2}
+                            step={0.05}
+                            value={aiTemperature}
+                            onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val) && val >= 0 && val <= 2) {
+                                    updateAiSetting('temperature', val);
+                                }
+                            }}
+                        />
+                    </div>
+                    <input
+                        type="range"
+                        style={{ width: '100%' }}
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={aiTemperature}
+                        onChange={(e) => updateAiSetting('temperature', parseFloat(e.target.value))}
+                    />
                 </div>
 
                 {testMessage && (

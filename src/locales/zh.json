@@ -239,7 +239,8 @@
             "test_connection": "测试连接",
             "testing": "测试中...",
             "connection_success": "连接成功！响应：",
-            "connection_failed": "连接失败："
+            "connection_failed": "连接失败：",
+            "temperature": "温度"
         }
     },
     "shortcuts": {

@@ -117,7 +117,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         const currentSettings = {
             baseUrl: config.aiBaseUrl || '',
             apiKey: config.aiApiKey || '',
-            model: config.aiModel || ''
+            model: config.aiModel || '',
+            temperature: config.aiTemperature ?? 0.7
         };
         const updatedServices = { ...aiServices, [currentType]: currentSettings };
 
@@ -125,7 +126,8 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         const newSettings = updatedServices[type] || {
             baseUrl: DEFAULT_AI_URLS[type] || '',
             apiKey: '',
-            model: ''
+            model: '',
+            temperature: 0.7
         };
 
         updateConfig({
@@ -133,6 +135,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             aiBaseUrl: newSettings.baseUrl,
             aiApiKey: newSettings.apiKey,
             aiModel: newSettings.model,
+            aiTemperature: newSettings.temperature ?? 0.7,
             aiServices: updatedServices
         });
     };

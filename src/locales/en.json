@@ -170,7 +170,7 @@
         "path_hint": "Select the folder containing encoder.onnx, decoder.onnx, etc.",
         "itn_title": "Inverse Text Normalization (ITN)",
         "enable_itn": "Enable ITN",
-        "itn_desc": "Automatically convert Chinese numbers to digits (e.g. \"一百二十三\" → \"123\").",
+        "itn_desc": "Automatically convert Chinese numbers to digits (e.g. \"\u4e00\u767e\u4e8c\u5341\u4e09\" \u2192 \"123\").",
         "itn_note": "Note: Load external FST (Finite State Transducer) rule files to implement ITN.",
         "delete_confirm_title": "Delete Model",
         "delete_confirm_message": "Are you sure you want to delete {{name}}?",
@@ -224,7 +224,7 @@
         "update_btn_relaunch": "Relaunch",
         "update_download_manually": "Download Manually",
         "about_built_with": "Built with",
-        "about_built_with_desc": "Tauri · React · Sherpa-ONNX",
+        "about_built_with_desc": "Tauri \u00b7 React \u00b7 Sherpa-ONNX",
         "about_license": "MIT License",
         "about_source_code": "Source Code",
         "minimize_to_tray": "Minimize to tray on exit",
@@ -242,7 +242,8 @@
             "connection_failed": "Connection failed: ",
             "loading_models": "Loading models...",
             "type_manually": "Type manually...",
-            "back_to_list": "Back to list"
+            "back_to_list": "Back to list",
+            "temperature": "Temperature"
         }
     },
     "shortcuts": {

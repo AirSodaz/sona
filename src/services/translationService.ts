@@ -42,6 +42,7 @@ class TranslationService {
                     modelName: config.aiModel,
                     input: prompt,
                     apiFormat: config.aiServiceType,
+                    temperature: config.aiTemperature ?? 0.7,
                 });
 
                 // Parse JSON output

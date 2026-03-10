@@ -88,7 +88,7 @@ export interface AppConfig {
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
   /** Per-service AI configuration. */
-  aiServices?: Record<string, { baseUrl: string; apiKey: string; model: string }>;
+  aiServices?: Record<string, { baseUrl: string; apiKey: string; model: string; temperature?: number }>;
   /** AI Service Type (e.g. 'openai', 'anthropic', 'ollama', 'gemini'). */
   aiServiceType?: string;
   /** AI Base URL. */
@@ -97,6 +97,8 @@ export interface AppConfig {
   aiApiKey?: string;
   /** AI Model Name. */
   aiModel?: string;
+  /** AI Temperature (0.0 to 2.0). */
+  aiTemperature?: number;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */
