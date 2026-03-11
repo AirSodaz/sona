@@ -340,12 +340,12 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
     // Binary search
     let left = hintIndex;
     let right = map.startIndices.length - 1;
-    let idx = -1;
 
     if (left > right || (left < map.startIndices.length && map.startIndices[left] > effectiveIndex)) {
         left = 0;
     }
 
+    let idx = -1;
     while (left <= right) {
         const mid = (left + right) >>> 1;
         if (map.startIndices[mid] <= effectiveIndex) {
@@ -356,11 +356,59 @@ function findTimestampFromMap(map: TokenMap, effectiveIndex: number, hintIndex: 
         }
     }
 
-    if (idx !== -1 && effectiveIndex < map.endIndices[idx]) {
-        return { timestamp: map.timestamps[idx], index: idx };
+    if (idx === -1 || effectiveIndex >= map.endIndices[idx]) {
+        return undefined;
     }
 
-    return undefined;
+    return { timestamp: map.timestamps[idx], index: idx };
+}
+
+function checkHintIndex(segments: TranscriptSegment[], searchTime: number, time: number, hintIndex: number): { segment: TranscriptSegment | undefined, index: number } | null {
+    if (hintIndex < -1 || hintIndex >= segments.length) {
+        return null;
+    }
+
+    if (hintIndex === -1) {
+        if (segments.length === 0) return null;
+        if (time < segments[0].start) {
+            return { segment: undefined, index: -1 };
+        }
+        if (time < segments[0].end && time >= segments[0].start) {
+            return { segment: segments[0], index: 0 };
+        }
+        return null;
+    }
+
+    const seg = segments[hintIndex];
+    if (seg.start <= searchTime && time < seg.end) {
+        return { segment: seg, index: hintIndex };
+    }
+
+    const nextIdx = hintIndex + 1;
+    if (nextIdx < segments.length) {
+        const nextSeg = segments[nextIdx];
+        if (nextSeg.start <= searchTime && time < nextSeg.end) {
+            return { segment: nextSeg, index: nextIdx };
+        }
+    }
+
+    if (time >= seg.end && (nextIdx >= segments.length || searchTime < segments[nextIdx].start)) {
+        return { segment: undefined, index: hintIndex };
+    }
+
+    const prevIdx = hintIndex - 1;
+    if (prevIdx >= 0) {
+        const prevSeg = segments[prevIdx];
+        if (prevSeg.start <= searchTime && time < prevSeg.end) {
+            return { segment: prevSeg, index: prevIdx };
+        }
+
+        if (time >= prevSeg.end && searchTime < seg.start) {
+            return { segment: undefined, index: prevIdx };
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -374,44 +422,10 @@ export function findSegmentAndIndexForTime(
     const EPSILON = 0.05;
     const searchTime = time + EPSILON;
 
-    // Hint optimization
-    if (hintIndex !== undefined && hintIndex >= -1 && hintIndex < segments.length) {
-        if (hintIndex === -1) {
-            if (segments.length > 0 && time < segments[0].start) {
-                return { segment: undefined, index: -1 };
-            }
-            if (segments.length > 0 && time < segments[0].end && time >= segments[0].start) {
-                return { segment: segments[0], index: 0 };
-            }
-        } else {
-            const seg = segments[hintIndex];
-            if (seg.start <= searchTime && time < seg.end) {
-                return { segment: seg, index: hintIndex };
-            }
-
-            const nextIdx = hintIndex + 1;
-            if (nextIdx < segments.length) {
-                const nextSeg = segments[nextIdx];
-                if (nextSeg.start <= searchTime && time < nextSeg.end) {
-                    return { segment: nextSeg, index: nextIdx };
-                }
-            }
-
-            if (time >= seg.end && (nextIdx >= segments.length || searchTime < segments[nextIdx].start)) {
-                return { segment: undefined, index: hintIndex };
-            }
-
-            const prevIdx = hintIndex - 1;
-            if (prevIdx >= 0) {
-                const prevSeg = segments[prevIdx];
-                if (prevSeg.start <= searchTime && time < prevSeg.end) {
-                    return { segment: prevSeg, index: prevIdx };
-                }
-
-                if (time >= prevSeg.end && searchTime < seg.start) {
-                    return { segment: undefined, index: prevIdx };
-                }
-            }
+    if (hintIndex !== undefined) {
+        const hintResult = checkHintIndex(segments, searchTime, time, hintIndex);
+        if (hintResult !== null) {
+            return hintResult;
         }
     }
 
@@ -444,6 +458,61 @@ export function computeSegmentsFingerprint(segments: TranscriptSegment[]): strin
     return segments.map(s =>
         `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}`
     ).join('|');
+}
+
+function matchTokenToWord(normWord: string, currentRawIndex: number, maxTokens: number, normalizedTokens: string[]): number {
+    let accumulatedTokenStr = "";
+    let tokensConsumed = 0;
+
+    for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
+        const t = normalizedTokens[currentRawIndex + j];
+        accumulatedTokenStr += t;
+        tokensConsumed++;
+
+        if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
+            if (accumulatedTokenStr.length >= normWord.length) {
+                return currentRawIndex + tokensConsumed;
+            }
+        }
+    }
+    return -1;
+}
+
+function recoverTokenMismatch(
+    i: number,
+    words: string[],
+    normalizedWords: string[],
+    currentRawIndex: number,
+    maxTokens: number,
+    normalizedTokens: string[]
+): number {
+    let nextNorm = "";
+    for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
+        nextNorm = normalizedWords[nextIdx];
+        if (nextNorm) break;
+    }
+
+    if (nextNorm) {
+        for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
+            const t = normalizedTokens[currentRawIndex + k];
+            if (t && t.startsWith(nextNorm)) {
+                return currentRawIndex + k;
+            }
+        }
+    } else {
+        let hasRemainingContent = false;
+        for (let r = i + 1; r < words.length; r++) {
+            if (normalizedWords[r]) {
+                hasRemainingContent = true;
+                break;
+            }
+        }
+        if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
+            return maxTokens;
+        }
+    }
+
+    return currentRawIndex + 1;
 }
 
 export function alignTokensToText(
@@ -526,62 +595,16 @@ export function alignTokensToText(
             : 0;
         result.push({ text: word, timestamp: startTimestamp });
 
-        // Token matching logic (simplified)
-        let foundMatch = false;
-        let accumulatedTokenStr = "";
-        let tokensConsumed = 0;
-
-        for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
-            const t = normalizedTokens[currentRawIndex + j];
-            accumulatedTokenStr += t;
-            tokensConsumed++;
-
-            if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
-                if (accumulatedTokenStr.length >= normWord.length) {
-                    currentRawIndex += tokensConsumed;
-                    foundMatch = true;
-                    break;
-                }
-            }
+        const matchResult = matchTokenToWord(normWord, currentRawIndex, maxTokens, normalizedTokens);
+        if (matchResult !== -1) {
+            currentRawIndex = matchResult;
+        } else {
+            currentRawIndex = recoverTokenMismatch(i, words, normalizedWords, currentRawIndex, maxTokens, normalizedTokens);
         }
 
-        if (!foundMatch) {
-            // Recover from mismatch
-            let nextNorm = "";
-            for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
-                nextNorm = normalizedWords[nextIdx];
-                if (nextNorm) break;
-            }
-
-            if (nextNorm) {
-                for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
-                    const t = normalizedTokens[currentRawIndex + k];
-                    if (t && t.startsWith(nextNorm)) {
-                        currentRawIndex += k;
-                        foundMatch = true;
-                        break;
-                    }
-                }
-            } else {
-                let hasRemainingContent = false;
-                for (let r = i + 1; r < words.length; r++) {
-                    if (normalizedWords[r]) {
-                        hasRemainingContent = true;
-                        break;
-                    }
-                }
-                if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
-                    currentRawIndex = maxTokens;
-                    foundMatch = true;
-                }
-            }
-
-            if (!foundMatch) {
-                currentRawIndex++;
-            }
+        if (currentRawIndex >= maxTokens) {
+            currentRawIndex = maxTokens;
         }
-
-        if (currentRawIndex >= maxTokens) currentRawIndex = maxTokens;
     }
 
     return result;
