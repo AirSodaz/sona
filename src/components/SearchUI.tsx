@@ -200,6 +200,11 @@ export function SearchUI(): React.JSX.Element | null {
                     color: var(--color-text-primary);
                 }
                 
+                .btn-icon-sm:focus-visible {
+                    outline: 2px solid var(--color-accent-primary);
+                    outline-offset: 2px;
+                }
+
                 .btn-icon-sm svg {
                     width: 16px;
                     height: 16px;

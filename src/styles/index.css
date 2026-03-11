@@ -333,6 +333,12 @@ body {
   transition: all var(--transition-fast);
 }
 
+.btn:focus-visible,
+.btn-icon:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
 .btn-primary {
   background: var(--color-accent-gradient);
   color: white;
