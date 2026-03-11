@@ -92,12 +92,14 @@ export function useAppInitialization() {
         const root = document.documentElement;
 
         const applyTheme = (targetTheme: string) => {
-            if (targetTheme === 'dark') {
-                root.setAttribute('data-theme', 'dark');
-            } else if (targetTheme === 'light') {
-                root.setAttribute('data-theme', 'light');
-            } else {
-                root.removeAttribute('data-theme');
+            switch (targetTheme) {
+                case 'dark':
+                case 'light':
+                    root.setAttribute('data-theme', targetTheme);
+                    break;
+                default:
+                    root.removeAttribute('data-theme');
+                    break;
             }
         };
 

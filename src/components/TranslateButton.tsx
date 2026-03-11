@@ -98,20 +98,23 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
             const buttons = Array.from(menuRef.current.querySelectorAll('button'));
             const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
 
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const nextIndex = (currentIndex + 1) % buttons.length;
-                buttons[nextIndex].focus();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-                buttons[prevIndex].focus();
-            } else if (e.key === 'Home') {
-                e.preventDefault();
-                buttons[0].focus();
-            } else if (e.key === 'End') {
-                e.preventDefault();
-                buttons[buttons.length - 1].focus();
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    buttons[(currentIndex + 1) % buttons.length].focus();
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    buttons[(currentIndex - 1 + buttons.length) % buttons.length].focus();
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    buttons[0].focus();
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    buttons[buttons.length - 1].focus();
+                    break;
             }
         }
     };
