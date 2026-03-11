@@ -103,9 +103,15 @@ export function Dropdown({
 
         // If not open, Open on ArrowDown/Enter/Space
         if (!isOpen) {
-            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setIsOpen(true);
+            switch (e.key) {
+                case 'ArrowDown':
+                case 'Enter':
+                case ' ':
+                    e.preventDefault();
+                    setIsOpen(true);
+                    break;
+                default:
+                    break;
             }
             return;
         }
@@ -114,23 +120,33 @@ export function Dropdown({
             const buttons = Array.from(menuRef.current.querySelectorAll('button'));
             const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
 
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const nextIndex = (currentIndex + 1) % buttons.length;
-                buttons[nextIndex].focus();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-                buttons[prevIndex].focus();
-            } else if (e.key === 'Home') {
-                e.preventDefault();
-                buttons[0].focus();
-            } else if (e.key === 'End') {
-                e.preventDefault();
-                buttons[buttons.length - 1].focus();
-            } else if (e.key === 'Tab') {
-                // Close on tab (default behavior of tabbing away)
-                setIsOpen(false);
+            switch (e.key) {
+                case 'ArrowDown': {
+                    e.preventDefault();
+                    const nextIndex = (currentIndex + 1) % buttons.length;
+                    buttons[nextIndex].focus();
+                    break;
+                }
+                case 'ArrowUp': {
+                    e.preventDefault();
+                    const prevIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+                    buttons[prevIndex].focus();
+                    break;
+                }
+                case 'Home':
+                    e.preventDefault();
+                    buttons[0].focus();
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    buttons[buttons.length - 1].focus();
+                    break;
+                case 'Tab':
+                    // Close on tab (default behavior of tabbing away)
+                    setIsOpen(false);
+                    break;
+                default:
+                    break;
             }
         }
     };

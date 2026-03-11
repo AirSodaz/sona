@@ -66,18 +66,25 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            nextIndex = (currentIndex + 1) % tabs.length;
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-        } else if (e.key === 'Home') {
-            e.preventDefault();
-            nextIndex = 0;
-        } else if (e.key === 'End') {
-            e.preventDefault();
-            nextIndex = tabs.length - 1;
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                nextIndex = (currentIndex + 1) % tabs.length;
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                break;
+            case 'Home':
+                e.preventDefault();
+                nextIndex = 0;
+                break;
+            case 'End':
+                e.preventDefault();
+                nextIndex = tabs.length - 1;
+                break;
+            default:
+                break;
         }
 
         if (nextIndex !== -1) {
@@ -203,80 +210,92 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                     <div className="settings-content-scroll full-height">
                         <div className="settings-section-header">
                             <h3 className="settings-section-title">
-                                {activeTab === 'general' && t('settings.general')}
-                                {activeTab === 'microphone' && t('settings.input_device', { defaultValue: 'Input Device' })}
-                                {activeTab === 'subtitle' && t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
-                                {activeTab === 'models' && t('settings.model_hub')}
-                                {activeTab === 'ai_service' && t('settings.ai.title')}
-                                {activeTab === 'local' && t('settings.local_path')}
-                                {activeTab === 'shortcuts' && t('shortcuts.title')}
-                                {activeTab === 'about' && t('settings.about')}
+                                {(() => {
+                                    switch (activeTab) {
+                                        case 'general': return t('settings.general');
+                                        case 'microphone': return t('settings.input_device', { defaultValue: 'Input Device' });
+                                        case 'subtitle': return t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' });
+                                        case 'models': return t('settings.model_hub');
+                                        case 'local': return t('settings.local_path');
+                                        case 'ai_service': return t('settings.ai.title');
+                                        case 'shortcuts': return t('shortcuts.title');
+                                        case 'about': return t('settings.about');
+                                        default: return '';
+                                    }
+                                })()}
                             </h3>
                             <div className="settings-divider" />
                         </div>
 
-                        {activeTab === 'general' && (
-                            <SettingsGeneralTab
-                                config={config}
-                                updateConfig={updateConfig}
-                            />
-                        )}
-
-                        {activeTab === 'microphone' && (
-                            <SettingsMicrophoneTab
-                                config={config}
-                                updateConfig={updateConfig}
-                                isActiveTab={activeTab === 'microphone'}
-                                isOpen={isOpen}
-                            />
-                        )}
-
-                        {activeTab === 'subtitle' && (
-                            <SettingsSubtitleTab
-                                config={config}
-                                updateConfig={updateConfig}
-                            />
-                        )}
-
-                        {activeTab === 'models' && (
-                            <SettingsModelsTab
-                                config={config}
-                                updateConfig={updateConfig}
-                                installedModels={installedModels}
-                                downloads={downloads}
-                                onDelete={handleDelete}
-                                onDownload={handleDownload}
-                                onCancelDownload={handleCancelDownload}
-                            />
-                        )}
-
-                        {activeTab === 'local' && (
-                            <SettingsLocalTab
-                                config={config}
-                                updateConfig={updateConfig}
-                                downloads={downloads}
-                                onDownloadITN={handleDownload}
-                                onCancelDownload={handleCancelDownload}
-                                installedModels={installedModels}
-                                onRestoreDefaults={restoreDefaultModelSettings}
-                            />
-                        )}
-
-                        {activeTab === 'ai_service' && (
-                            <SettingsAIServiceTab
-                                config={config}
-                                updateConfig={updateConfig}
-                                changeAiServiceType={changeAiServiceType}
-                            />
-                        )}
-
-                        {activeTab === 'shortcuts' && (
-                            <SettingsShortcutsTab />
-                        )}
-
-                        {activeTab === 'about' && (
-                            <SettingsAboutTab />
-                        )}
+                        {(() => {
+                            switch (activeTab) {
+                                case 'general':
+                                    return (
+                                        <SettingsGeneralTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                        />
+                                    );
+                                case 'microphone':
+                                    return (
+                                        <SettingsMicrophoneTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                            isActiveTab={activeTab === 'microphone'}
+                                            isOpen={isOpen}
+                                        />
+                                    );
+                                case 'subtitle':
+                                    return (
+                                        <SettingsSubtitleTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                        />
+                                    );
+                                case 'models':
+                                    return (
+                                        <SettingsModelsTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                            installedModels={installedModels}
+                                            downloads={downloads}
+                                            onDelete={handleDelete}
+                                            onDownload={handleDownload}
+                                            onCancelDownload={handleCancelDownload}
+                                        />
+                                    );
+                                case 'local':
+                                    return (
+                                        <SettingsLocalTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                            downloads={downloads}
+                                            onDownloadITN={handleDownload}
+                                            onCancelDownload={handleCancelDownload}
+                                            installedModels={installedModels}
+                                            onRestoreDefaults={restoreDefaultModelSettings}
+                                        />
+                                    );
+                                case 'ai_service':
+                                    return (
+                                        <SettingsAIServiceTab
+                                            config={config}
+                                            updateConfig={updateConfig}
+                                            changeAiServiceType={changeAiServiceType}
+                                        />
+                                    );
+                                case 'shortcuts':
+                                    return (
+                                        <SettingsShortcutsTab />
+                                    );
+                                case 'about':
+                                    return (
+                                        <SettingsAboutTab />
+                                    );
+                                default:
+                                    return null;
+                            }
+                        })()}
 
                     </div>
 
