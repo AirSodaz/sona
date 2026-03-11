@@ -5,7 +5,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { Search } from 'lucide-react';
 import { Dropdown } from './Dropdown';
-import { CloseIcon, FolderIcon } from './Icons';
+import { CloseIcon, FolderIcon, HistoryIcon } from './Icons';
 import { Virtuoso } from 'react-virtuoso';
 import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
@@ -296,8 +296,18 @@ export function HistoryView() {
                 {isLoading && <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>{t('history.loading')}</div>}
 
                 {!isLoading && filteredItems.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
-                        <p>{items.length === 0 ? t('history.empty') : t('history.no_results', { defaultValue: 'No results found' })}</p>
+                    <div style={{ textAlign: 'center', padding: 'var(--spacing-2xl) var(--spacing-xl)', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                        {items.length === 0 ? (
+                            <>
+                                <HistoryIcon width={32} height={32} style={{ opacity: 0.5 }} />
+                                <p>{t('history.empty')}</p>
+                            </>
+                        ) : (
+                            <>
+                                <Search size={32} style={{ opacity: 0.5 }} />
+                                <p>{t('history.no_results', { defaultValue: 'No results found' })}</p>
+                            </>
+                        )}
                     </div>
                 )}
 
