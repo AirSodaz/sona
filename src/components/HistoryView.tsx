@@ -240,6 +240,7 @@ export function HistoryView() {
                                 <Dropdown
                                     value={filterType}
                                     onChange={(val) => setFilterType(val as FilterType)}
+                                    aria-label={t('history.filter_type_label', { defaultValue: 'Filter by type' })}
                                     options={[
                                         { value: 'all', label: t('history.filter_all', { defaultValue: 'All Types' }) },
                                         { value: 'recording', label: t('history.filter_recordings', { defaultValue: 'Recordings' }) },
@@ -252,6 +253,7 @@ export function HistoryView() {
                                 <Dropdown
                                     value={dateFilter}
                                     onChange={(val) => setDateFilter(val as DateFilter)}
+                                    aria-label={t('history.filter_date_label', { defaultValue: 'Filter by date' })}
                                     options={[
                                         { value: 'all', label: t('history.date_all', { defaultValue: 'Any Time' }) },
                                         { value: 'today', label: t('history.date_today', { defaultValue: 'Today' }) },
