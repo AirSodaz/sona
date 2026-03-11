@@ -222,6 +222,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 aria-controls="polish-menu-dropdown"
                 data-tooltip={tooltipText}
                 data-tooltip-pos="bottom"
+                aria-label={tooltipText}
             >
                 {isRetranscribing ? (
                     <>
