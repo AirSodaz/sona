@@ -133,6 +133,8 @@ function TokenListComponent({
                     return (
                         <span
                             key={i}
+                            role="button"
+                            tabIndex={0}
                             title={formatDisplayTime(tokenObj.timestamp)}
                             className={className}
                             onClick={(e) => {
@@ -140,6 +142,16 @@ function TokenListComponent({
                                 onSeek(tokenObj.timestamp);
                                 if (isMatch && matchIndex !== -1 && onMatchClick) {
                                     onMatchClick(matchIndex);
+                                }
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onSeek(tokenObj.timestamp);
+                                    if (isMatch && matchIndex !== -1 && onMatchClick) {
+                                        onMatchClick(matchIndex);
+                                    }
                                 }
                             }}
                             dangerouslySetInnerHTML={{ __html: tokenObj.text }}
