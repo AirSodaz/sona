@@ -1366,23 +1366,6 @@ input[type="radio"]:focus {
   flex-shrink: 0;
 }
 
-.progress-container-mini {
-  margin-top: 8px;
-}
-
-.progress-info-mini {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  margin-bottom: 4px;
-}
-
-.progress-bar-mini {
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
-  overflow: hidden;
-}
 
 /* Spinner */
 .spinner {
@@ -1393,10 +1376,6 @@ input[type="radio"]:focus {
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
-
-/* ===========================
-   Visualizer
-   =========================== */
 
 /* ===========================
    Visualizer
@@ -2097,17 +2076,7 @@ input[type="radio"]:focus {
 }
 
 .queue-icon-spin {
-  animation: queue-spin 1s linear infinite;
-}
-
-@keyframes queue-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
+  animation: spin 1s linear infinite;
 }
 
 .queue-item-content {
