@@ -6,9 +6,10 @@ interface SwitchProps {
     label?: string;
     className?: string;
     disabled?: boolean;
+    'aria-label'?: string;
 }
 
-export function Switch({ checked, onChange, label, className = '', disabled = false }: SwitchProps) {
+export function Switch({ checked, onChange, label, className = '', disabled = false, 'aria-label': ariaLabel }: SwitchProps) {
     const classNames = ['switch-container'];
     if (checked) classNames.push('checked');
     if (disabled) classNames.push('disabled');
@@ -25,6 +26,7 @@ export function Switch({ checked, onChange, label, className = '', disabled = fa
             role="switch"
             aria-checked={checked}
             aria-disabled={disabled}
+            aria-label={ariaLabel || label}
             tabIndex={disabled ? -1 : 0}
             onKeyDown={(e) => {
                 if (disabled) return;
