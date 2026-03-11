@@ -92,7 +92,8 @@ export function SearchUI(): React.JSX.Element | null {
                     <button
                         className="btn-icon-sm"
                         onClick={prevMatch}
-                        title={`${t('search.previous', 'Previous match')} (Shift+Enter)`}
+                        data-tooltip={`${t('search.previous', 'Previous match')} (Shift+Enter)`}
+                        data-tooltip-pos="top"
                         aria-label={t('search.previous', 'Previous match')}
                     >
                         <ChevronUpIcon />
@@ -100,7 +101,8 @@ export function SearchUI(): React.JSX.Element | null {
                     <button
                         className="btn-icon-sm"
                         onClick={nextMatch}
-                        title={`${t('search.next', 'Next match')} (Enter)`}
+                        data-tooltip={`${t('search.next', 'Next match')} (Enter)`}
+                        data-tooltip-pos="top"
                         aria-label={t('search.next', 'Next match')}
                     >
                         <ChevronDownIcon />
@@ -108,7 +110,8 @@ export function SearchUI(): React.JSX.Element | null {
                     <button
                         className="btn-icon-sm"
                         onClick={close}
-                        title={`${t('search.close', 'Close')} (Esc)`}
+                        data-tooltip={`${t('search.close', 'Close')} (Esc)`}
+                        data-tooltip-pos="top"
                         aria-label={t('search.close', 'Close')}
                     >
                         <CloseIcon />

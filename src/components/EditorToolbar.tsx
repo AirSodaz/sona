@@ -42,7 +42,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('undo')}
-                title={t('editor.undo', 'Undo')}
+                data-tooltip={t('editor.undo', 'Undo')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.undo', 'Undo')}
             >
                 <UndoIcon />
@@ -51,7 +52,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('redo')}
-                title={t('editor.redo', 'Redo')}
+                data-tooltip={t('editor.redo', 'Redo')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.redo', 'Redo')}
             >
                 <RedoIcon />
@@ -63,7 +65,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('bold')}
-                title={t('editor.bold', 'Bold')}
+                data-tooltip={t('editor.bold', 'Bold')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.bold', 'Bold')}
             >
                 <BoldIcon />
@@ -72,7 +75,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('italic')}
-                title={t('editor.italic', 'Italic')}
+                data-tooltip={t('editor.italic', 'Italic')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.italic', 'Italic')}
             >
                 <ItalicIcon />
@@ -81,7 +85,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('underline')}
-                title={t('editor.underline', 'Underline')}
+                data-tooltip={t('editor.underline', 'Underline')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.underline', 'Underline')}
             >
                 <UnderlineIcon />
@@ -93,7 +98,8 @@ export function EditorToolbar(): React.JSX.Element | null {
                 className="btn-icon toolbar-btn"
                 onMouseDown={handleMouseDown}
                 onClick={() => handleAction('insertLineBreak')} // insertLineBreak inserts a <br> usually
-                title={t('editor.line_break', 'Line break')}
+                data-tooltip={t('editor.line_break', 'Line break')}
+                data-tooltip-pos="top"
                 aria-label={t('editor.line_break', 'Line break')}
             >
                 <ReturnIcon />
