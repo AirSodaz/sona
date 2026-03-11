@@ -143,6 +143,11 @@ export function SearchUI(): React.JSX.Element | null {
                     min-width: 320px;
                 }
 
+                .search-bar:focus-within {
+                    outline: 2px solid var(--color-accent-primary);
+                    outline-offset: 2px;
+                }
+
                 .search-input {
                     border: none;
                     background: transparent;
