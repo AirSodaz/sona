@@ -81,9 +81,39 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
         toggleMute
     });
 
-    const handlePlayPause = () => {
+    function handlePlayPause() {
         setIsPlaying(!isPlaying);
-    };
+    }
+
+    function handleAudioError(e: React.SyntheticEvent<HTMLAudioElement, Event>) {
+        const error = e.currentTarget.error;
+        console.error('Audio playback error:', {
+            code: error?.code,
+            message: error?.message,
+            src: e.currentTarget.src,
+            networkState: e.currentTarget.networkState,
+            readyState: e.currentTarget.readyState
+        });
+
+        let errorMessage = error?.message || 'Unknown error';
+        switch (error?.code) {
+            case 3: // MEDIA_ERR_DECODE
+                errorMessage = t('player.error_decode', { defaultValue: 'Audio decoding failed. The file may be corrupted.' });
+                break;
+            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                errorMessage = t('player.error_src_not_supported', { defaultValue: 'Audio format not supported or file missing.' });
+                break;
+        }
+
+        alert(t('player.error', { error: errorMessage, code: error?.code }), { variant: 'error' });
+    }
+
+    function handleCyclePlaybackRate() {
+        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
+        const currentIndex = speeds.indexOf(playbackRate);
+        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+        setPlaybackRate(nextSpeed);
+    }
 
     if (!audioUrl) {
         return null;
@@ -96,28 +126,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
                 key={audioUrl}
                 src={audioUrl}
                 preload="metadata"
-                onError={(e) => {
-                    const error = e.currentTarget.error;
-                    console.error('Audio playback error:', {
-                        code: error?.code,
-                        message: error?.message,
-                        src: e.currentTarget.src,
-                        networkState: e.currentTarget.networkState,
-                        readyState: e.currentTarget.readyState
-                    });
-
-                    let errorMessage = error?.message || 'Unknown error';
-                    switch (error?.code) {
-                        case 3: // MEDIA_ERR_DECODE
-                            errorMessage = t('player.error_decode', { defaultValue: 'Audio decoding failed. The file may be corrupted.' });
-                            break;
-                        case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-                            errorMessage = t('player.error_src_not_supported', { defaultValue: 'Audio format not supported or file missing.' });
-                            break;
-                    }
-
-                    alert(t('player.error', { error: errorMessage, code: error?.code }), { variant: 'error' });
-                }}
+                onError={handleAudioError}
             />
 
             <div className="audio-controls">
@@ -144,12 +153,7 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
             <div className="audio-controls">
                 <button
                     className="btn btn-icon btn-text"
-                    onClick={() => {
-                        const speeds = [0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
-                        const currentIndex = speeds.indexOf(playbackRate);
-                        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
-                        setPlaybackRate(nextSpeed);
-                    }}
+                    onClick={handleCyclePlaybackRate}
                     aria-label={`${t('player.speed')} ${playbackRate}x`}
                     data-tooltip={t('player.speed')}
                     data-tooltip-pos="top"

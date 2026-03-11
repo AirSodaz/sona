@@ -77,9 +77,9 @@ export function useAutoSaveTranscript() {
                 clearTimeout(timeoutRef.current);
             }
         };
-    }, []); // Run once on mount
+    }, [updateItemMeta]);
 
-    const saveToHistory = async (historyId: string, segments: TranscriptSegment[]) => {
+    async function saveToHistory(historyId: string, segments: TranscriptSegment[]) {
         if (isSavingRef.current) return;
 
         try {
@@ -95,7 +95,11 @@ export function useAutoSaveTranscript() {
                 if (i > 0) fullText += ' ';
                 fullText += segments[i].text;
             }
-            const previewText = fullText.substring(0, 100) + (fullText.length > 100 ? '...' : '');
+
+            let previewText = fullText.substring(0, 100);
+            if (fullText.length > 100) {
+                previewText += '...';
+            }
 
             updateItemMeta(historyId, {
                 previewText,
@@ -107,5 +111,5 @@ export function useAutoSaveTranscript() {
         } finally {
             isSavingRef.current = false;
         }
-    };
+    }
 }
