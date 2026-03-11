@@ -5,9 +5,10 @@ interface CheckboxProps {
     onChange: (checked: boolean) => void;
     label?: string;
     className?: string;
+    'aria-label'?: string;
 }
 
-export function Checkbox({ checked, onChange, label, className = '' }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, className = '', 'aria-label': ariaLabel }: CheckboxProps) {
     return (
         <div
             className={`checkbox-container ${className}`}
@@ -18,10 +19,21 @@ export function Checkbox({ checked, onChange, label, className = '' }: CheckboxP
                 cursor: 'pointer',
                 userSelect: 'none'
             }}
+            role="checkbox"
+            aria-checked={checked}
+            aria-label={ariaLabel || label}
+            tabIndex={0}
             onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onChange(!checked);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onChange(!checked);
+                }
             }}
         >
             <div

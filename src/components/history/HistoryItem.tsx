@@ -84,6 +84,7 @@ function HistoryItemComponent({
                     <Checkbox
                         checked={isSelected}
                         onChange={() => onToggleSelection?.(item.id)}
+                        aria-label={t('history.select_item', { item: item.title, defaultValue: `Select ${item.title}` })}
                     />
                 </div>
             )}
