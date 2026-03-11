@@ -9,9 +9,14 @@ interface SwitchProps {
 }
 
 export function Switch({ checked, onChange, label, className = '', disabled = false }: SwitchProps) {
+    const classNames = ['switch-container'];
+    if (checked) classNames.push('checked');
+    if (disabled) classNames.push('disabled');
+    if (className) classNames.push(className);
+
     return (
         <div
-            className={`switch-container ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} ${className}`}
+            className={classNames.join(' ')}
             onClick={(e) => {
                 if (disabled) return;
                 e.preventDefault();

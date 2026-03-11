@@ -66,12 +66,13 @@ export function GlobalDialog(): React.JSX.Element | null {
 
     // Keyboard support
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
+        function handleKeyDown(e: KeyboardEvent) {
             if (!isOpen) return;
 
             if (e.key === 'Escape') {
                 e.preventDefault();
                 close(false);
+                return;
             }
 
             if (e.key === 'Tab') {
@@ -86,19 +87,15 @@ export function GlobalDialog(): React.JSX.Element | null {
                 const firstElement = focusableElements[0] as HTMLElement;
                 const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
-                if (e.shiftKey) {
-                    if (document.activeElement === firstElement) {
-                        e.preventDefault();
-                        lastElement.focus();
-                    }
-                } else {
-                    if (document.activeElement === lastElement) {
-                        e.preventDefault();
-                        firstElement.focus();
-                    }
+                if (e.shiftKey && document.activeElement === firstElement) {
+                    e.preventDefault();
+                    lastElement.focus();
+                } else if (!e.shiftKey && document.activeElement === lastElement) {
+                    e.preventDefault();
+                    firstElement.focus();
                 }
             }
-        };
+        }
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
