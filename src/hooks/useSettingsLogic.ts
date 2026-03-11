@@ -162,13 +162,18 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (model.modes.includes('offline')) {
                 updates.offlineModelPath = path;
             }
-        } else if (model.type === 'vad') {
-            updates.vadModelPath = path;
-        } else if (model.type === 'punctuation') {
-            updates.punctuationModelPath = path;
-        } else if (model.type === 'itn') {
-            // Handled elsewhere
-            return;
+        } else {
+            switch (model.type) {
+                case 'vad':
+                    updates.vadModelPath = path;
+                    break;
+                case 'punctuation':
+                    updates.punctuationModelPath = path;
+                    break;
+                case 'itn':
+                    // Handled elsewhere
+                    return;
+            }
         }
 
         if (Object.keys(updates).length > 0) {

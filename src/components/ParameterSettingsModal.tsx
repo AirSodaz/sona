@@ -58,6 +58,12 @@ export function ParameterSettingsModal({
 
     if (!isOpen) return null;
 
+    const dropdownStyle = {
+        width: '180px',
+        opacity: disabled ? 0.6 : 1,
+        pointerEvents: disabled ? 'none' : 'auto'
+    } as React.CSSProperties;
+
     return (
         <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
             <div
@@ -135,7 +141,7 @@ export function ParameterSettingsModal({
                                 { value: 'ko', label: 'Korean' },
                                 { value: 'yue', label: 'Cantonese' }
                             ]}
-                            style={{ width: '180px', opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? 'none' : 'auto' }}
+                            style={dropdownStyle}
                         />
                     </div>
 

@@ -104,20 +104,23 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
             const items = Array.from(menuRef.current.querySelectorAll('button, input[type="radio"]')) as HTMLElement[];
             const currentIndex = items.indexOf(document.activeElement as HTMLElement);
 
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const nextIndex = (currentIndex + 1) % items.length;
-                items[nextIndex].focus();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                const prevIndex = (currentIndex - 1 + items.length) % items.length;
-                items[prevIndex].focus();
-            } else if (e.key === 'Home') {
-                e.preventDefault();
-                items[0].focus();
-            } else if (e.key === 'End') {
-                e.preventDefault();
-                items[items.length - 1].focus();
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    items[(currentIndex + 1) % items.length].focus();
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    items[(currentIndex - 1 + items.length) % items.length].focus();
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    items[0].focus();
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    items[items.length - 1].focus();
+                    break;
             }
         }
     };

@@ -209,6 +209,8 @@ function handleDelimiter(
     let currentTokens: string[] | undefined;
     let currentTimestamps: number[] | undefined;
 
+    const fallbackSegmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
+
     if (hasTimestamps && tokenMap) {
         const found = findTimestampFromMap(tokenMap, state.effectiveCharIndex, state.lastTokenIndex);
         let sliceEnd = tokenMap.timestamps.length;
@@ -218,7 +220,7 @@ function handleDelimiter(
             segmentEnd = found.timestamp;
             state.lastTokenIndex = found.index;
         } else {
-            segmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
+            segmentEnd = fallbackSegmentEnd;
         }
 
         if (sliceEnd > state.nextTokenSliceStart) {
@@ -231,7 +233,7 @@ function handleDelimiter(
             state.currentSegmentStart = currentTimestamps[0];
         }
     } else {
-        segmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
+        segmentEnd = fallbackSegmentEnd;
     }
 
     results.push({
@@ -573,27 +575,28 @@ export function alignTokensToText(
     let currentRawIndex = 0;
     const maxTokens = rawTokens.length;
 
+    const getFallbackTimestamp = () => {
+        if (rawTimestamps.length === 0) return 0;
+        const index = Math.min(currentRawIndex, rawTimestamps.length - 1);
+        return rawTimestamps[index];
+    };
+
     for (let i = 0; i < words.length; i++) {
         const word = words[i];
         const cleanWord = stripHtmlTags(word);
 
         if (!cleanWord.trim()) {
-            const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
-            result.push({ text: word, timestamp: ts });
+            result.push({ text: word, timestamp: getFallbackTimestamp() });
             continue;
         }
 
         const normWord = normalizedWords[i];
         if (!normWord) {
-            const ts = rawTimestamps.length > 0 ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)] : 0;
-            result.push({ text: word, timestamp: ts });
+            result.push({ text: word, timestamp: getFallbackTimestamp() });
             continue;
         }
 
-        const startTimestamp = rawTimestamps.length > 0
-            ? rawTimestamps[Math.min(currentRawIndex, rawTimestamps.length - 1)]
-            : 0;
-        result.push({ text: word, timestamp: startTimestamp });
+        result.push({ text: word, timestamp: getFallbackTimestamp() });
 
         const matchResult = matchTokenToWord(normWord, currentRawIndex, maxTokens, normalizedTokens);
         if (matchResult !== -1) {
