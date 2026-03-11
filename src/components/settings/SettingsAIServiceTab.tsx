@@ -49,10 +49,20 @@ export function SettingsAIServiceTab({
             }
         };
 
-        if (key === 'baseUrl') updates.aiBaseUrl = value as string;
-        if (key === 'apiKey') updates.aiApiKey = value as string;
-        if (key === 'model') updates.aiModel = value as string;
-        if (key === 'temperature') updates.aiTemperature = value as number;
+        switch (key) {
+            case 'baseUrl':
+                updates.aiBaseUrl = value as string;
+                break;
+            case 'apiKey':
+                updates.aiApiKey = value as string;
+                break;
+            case 'model':
+                updates.aiModel = value as string;
+                break;
+            case 'temperature':
+                updates.aiTemperature = value as number;
+                break;
+        }
 
         updateConfig(updates);
     };
