@@ -172,6 +172,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                 aria-controls="translate-menu-dropdown"
                 data-tooltip={isTranslating ? t('translation.translating') : t('translation.translate_all', { defaultValue: 'Translate Transcript' })}
                 data-tooltip-pos="bottom"
+                aria-label={isTranslating ? t('translation.translating') : t('translation.translate_all', { defaultValue: 'Translate Transcript' })}
             >
                 {isTranslating ? (
                     <>
