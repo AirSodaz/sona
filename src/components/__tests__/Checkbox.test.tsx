@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { Checkbox } from '../Checkbox';
 import React from 'react';
 import { test, expect } from 'vitest';
