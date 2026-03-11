@@ -121,18 +121,3 @@ button {
     background-color: #0f0f0f69;
   }
 }
-
-/* Active token highlighting */
-.active-token {
-  font-weight: 700;
-  color: var(--color-primary, #646cff);
-  background-color: var(--color-surface-hover, rgba(100, 108, 255, 0.1));
-  border-radius: 2px;
-  cursor: pointer;
-}
-
-.token-hover:hover {
-  background-color: var(--color-surface-hover, rgba(100, 108, 255, 0.1));
-  border-radius: 2px;
-  cursor: pointer;
-}
