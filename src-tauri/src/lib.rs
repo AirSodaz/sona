@@ -441,7 +441,7 @@ pub fn run() {
                         "target": record.target(),
                         "message": message.to_string(),
                     });
-                    out.finish(format_args!("{}", formatted.to_string()));
+                    out.finish(format_args!("{}", formatted));
                 })
                 .build(),
         )

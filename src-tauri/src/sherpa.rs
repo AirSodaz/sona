@@ -56,6 +56,11 @@ pub enum ModelType {
         tokenizer: PathBuf,
         language: String,
     },
+    OfflineFireRedAsr {
+        encoder: PathBuf,
+        decoder: PathBuf,
+        tokens: PathBuf,
+    },
 }
 
 pub fn build_model_config(
@@ -131,6 +136,16 @@ pub fn build_model_config(
                 embedding,
                 tokenizer,
                 language: nano_lang.to_string(),
+            })
+        }
+        "fire-red-asr" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineFireRedAsr {
+                encoder,
+                decoder,
+                tokens,
             })
         }
         _ => Err(format!("Unsupported model type: {}", model_type)),
@@ -298,6 +313,29 @@ impl Recognizer {
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
                 debug!("Successfully created OfflineRecognizer (OfflineFunASRNano)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineFireRedAsr {
+                encoder,
+                decoder,
+                tokens,
+            } => {
+                let mut config = OfflineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    ..Default::default()
+                };
+                config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
+                config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
+                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
+                config.model_config.num_threads = num_threads;
+                config.model_config.provider = Some("cpu".to_string());
+                config.feat_config.sample_rate = 16000;
+                config.feat_config.feature_dim = 80;
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFireRedAsr)");
+                let recognizer = OfflineRecognizer::create(&config)
+                    .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineFireRedAsr)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };

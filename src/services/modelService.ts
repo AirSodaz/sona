@@ -37,7 +37,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano';
+    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -284,6 +284,26 @@ export const PRESET_MODELS: ModelInfo[] = [
         },
         groupId: 'funasr-nano',
         versionLabel: 'Fp32'
+    },
+    {
+        id: 'sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26',
+        name: 'FireRedASR',
+        description: 'FireRedASR model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2',
+        type: 'fire-red-asr',
+        modes: ['offline'],
+        language: 'zh,en',
+        size: '~800 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        },
+        fileConfig: {
+            encoder: 'encoder.int8.onnx',
+            decoder: 'decoder.int8.onnx',
+            tokens: 'tokens.txt'
+        }
     },
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
