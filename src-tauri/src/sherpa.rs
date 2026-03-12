@@ -61,6 +61,10 @@ pub enum ModelType {
         decoder: PathBuf,
         tokens: PathBuf,
     },
+    OfflineDolphin {
+        model: PathBuf,
+        tokens: PathBuf,
+    },
 }
 
 pub fn build_model_config(
@@ -145,6 +149,14 @@ pub fn build_model_config(
             Ok(ModelType::OfflineFireRedAsr {
                 encoder,
                 decoder,
+                tokens,
+            })
+        }
+        "dolphin" => {
+            let model = get_path(&fc.model)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineDolphin {
+                model,
                 tokens,
             })
         }
@@ -336,6 +348,27 @@ impl Recognizer {
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
                 debug!("Successfully created OfflineRecognizer (OfflineFireRedAsr)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineDolphin {
+                model,
+                tokens,
+            } => {
+                let mut config = OfflineRecognizerConfig {
+                    rule_fsts: itn_model,
+                    ..Default::default()
+                };
+                config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
+                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
+                config.model_config.num_threads = num_threads;
+                config.model_config.provider = Some("cpu".to_string());
+                config.feat_config.sample_rate = 16000;
+                config.feat_config.feature_dim = 80;
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
+                let recognizer = OfflineRecognizer::create(&config)
+                    .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineDolphin)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };

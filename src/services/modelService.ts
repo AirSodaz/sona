@@ -37,7 +37,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr';
+    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr' | 'dolphin';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -304,6 +304,48 @@ export const PRESET_MODELS: ModelInfo[] = [
             decoder: 'decoder.int8.onnx',
             tokens: 'tokens.txt'
         }
+    },
+    {
+        id: 'sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02',
+        name: 'Dolphin Small',
+        description: 'Dolphin CTC Multi-lang model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2',
+        type: 'dolphin',
+        modes: ['offline'],
+        language: 'zh,en,ja,ko',
+        size: '~238 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: true
+        },
+        fileConfig: {
+            model: 'model.int8.onnx',
+            tokens: 'tokens.txt'
+        },
+        groupId: 'dolphin',
+        versionLabel: 'Int8'
+    },
+    {
+        id: 'sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02',
+        name: 'Dolphin Small',
+        description: 'Dolphin CTC Multi-lang model for offline transcription',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2',
+        type: 'dolphin',
+        modes: ['offline'],
+        language: 'zh,en,ja,ko',
+        size: '~783 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: true
+        },
+        fileConfig: {
+            model: 'model.onnx',
+            tokens: 'tokens.txt'
+        },
+        groupId: 'dolphin',
+        versionLabel: 'Fp32'
     },
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
