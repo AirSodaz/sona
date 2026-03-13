@@ -70,7 +70,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
         name: 'SenseVoice',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
+        description: 'settings.descriptions.sensevoice',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
         type: 'sensevoice',
         modes: ['streaming', 'offline'],
@@ -91,7 +91,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
         name: 'SenseVoice',
-        description: 'Supports Chinese, English, Japanese, Korean, Cantonese (with build in punctuation)',
+        description: 'settings.descriptions.sensevoice',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
         type: 'sensevoice',
         modes: ['streaming', 'offline'],
@@ -112,7 +112,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en',
         name: 'Paraformer',
-        description: 'Streaming Paraformer model. Supports Chinese, Cantonese, English',
+        description: 'settings.descriptions.paraformer',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2',
         type: 'paraformer',
         modes: ['streaming'],
@@ -132,7 +132,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-whisper-turbo',
         name: 'Whisper',
-        description: 'Whisper Turbo model for offline transcription',
+        description: 'settings.descriptions.whisper_turbo',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2',
         type: 'whisper',
         modes: ['offline'],
@@ -154,7 +154,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-whisper-large-v3',
         name: 'Whisper',
-        description: 'Whisper Large-v3 model for offline transcription',
+        description: 'settings.descriptions.whisper_large',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2',
         type: 'whisper',
         modes: ['offline'],
@@ -176,7 +176,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-whisper-medium-aishell',
         name: 'Whisper',
-        description: 'Whisper Medium-AISHELL model for offline transcription',
+        description: 'settings.descriptions.whisper_medium_aishell',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2',
         type: 'whisper',
         modes: ['offline'],
@@ -198,7 +198,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30',
         name: 'Streaming Zipformer - ZH XLarge (Int8)',
-        description: 'Streaming Zipformer model for Chinese',
+        description: 'settings.descriptions.zipformer_xlarge',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2',
         type: 'zipformer',
         modes: ['streaming'],
@@ -219,7 +219,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
         name: 'FunASR Nano',
-        description: 'FunASR Nano model for offline transcription',
+        description: 'settings.descriptions.funasr_nano',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
@@ -242,7 +242,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-funasr-nano-fp16-2025-12-30',
         name: 'FunASR Nano',
-        description: 'FunASR Nano model for offline transcription',
+        description: 'settings.descriptions.funasr_nano',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
@@ -265,7 +265,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-funasr-nano-2025-12-30',
         name: 'FunASR Nano',
-        description: 'FunASR Nano model for offline transcription',
+        description: 'settings.descriptions.funasr_nano',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2',
         type: 'funasr-nano',
         modes: ['offline'],
@@ -288,7 +288,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26',
         name: 'FireRedASR',
-        description: 'FireRedASR model for offline transcription',
+        description: 'settings.descriptions.firered_asr',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2',
         type: 'fire-red-asr',
         modes: ['offline'],
@@ -308,7 +308,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02',
         name: 'Dolphin',
-        description: 'Dolphin CTC Multi-lang model for offline transcription',
+        description: 'settings.descriptions.dolphin',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2',
         type: 'dolphin',
         modes: ['streaming', 'offline'],
@@ -329,7 +329,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02',
         name: 'Dolphin',
-        description: 'Dolphin CTC Multi-lang model for offline transcription',
+        description: 'settings.descriptions.dolphin',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2',
         type: 'dolphin',
         modes: ['streaming', 'offline'],
@@ -350,7 +350,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8',
         name: 'Punctuation - CT Transformer (Int8)',
-        description: 'Chinese/English Punctuation Model (Int8 quantized). Adds punctuation to raw text.',
+        description: 'settings.descriptions.ct_punctuation',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2',
         type: 'punctuation',
         language: 'zh,en',
@@ -360,7 +360,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'silero-vad',
         name: 'Silero - VAD',
-        description: 'Silero Voice Activity Detection model.',
+        description: 'settings.descriptions.silero_vad',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx',
         type: 'vad',
         language: 'zh,en',
@@ -372,7 +372,7 @@ export const PRESET_MODELS: ModelInfo[] = [
     {
         id: 'itn-zh-number',
         name: 'Chinese Number ITN',
-        description: 'Inverse Text Normalization for Chinese Numbers',
+        description: 'settings.descriptions.itn_zh',
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst',
         type: 'itn',
         language: 'zh',
