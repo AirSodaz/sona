@@ -97,7 +97,7 @@ export function ModelCard({
                             )}
                         </div>
                     </div>
-                    <div className="model-description">{baseModel.description}</div>
+                    <div className="model-description">{t(baseModel.description)}</div>
                     {!isMultiVersion && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
                             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{baseModel.size}</span>
