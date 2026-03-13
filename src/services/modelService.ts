@@ -297,7 +297,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         engine: 'sherpa-onnx',
         rules: {
             requiresVad: true,
-            requiresPunctuation: false
+            requiresPunctuation: true
         },
         fileConfig: {
             encoder: 'encoder.int8.onnx',
@@ -312,7 +312,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2',
         type: 'dolphin',
         modes: ['offline'],
-        language: 'zh,en,ja,ko',
+        language: 'zh,ja,ko',
         size: '~238 MB',
         engine: 'sherpa-onnx',
         rules: {
@@ -333,7 +333,7 @@ export const PRESET_MODELS: ModelInfo[] = [
         url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2',
         type: 'dolphin',
         modes: ['offline'],
-        language: 'zh,en,ja,ko',
+        language: 'zh,ja,ko',
         size: '~783 MB',
         engine: 'sherpa-onnx',
         rules: {
