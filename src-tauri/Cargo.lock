@@ -4925,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-appsona"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "bytes",
  "bzip2",
