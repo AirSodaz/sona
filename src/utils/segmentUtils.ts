@@ -466,7 +466,7 @@ function matchTokenToWord(normWord: string, currentRawIndex: number, maxTokens: 
     let accumulatedTokenStr = "";
     let tokensConsumed = 0;
 
-    for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
+    for (let j = 0; j < 50 && (currentRawIndex + j) < maxTokens; j++) {
         const t = normalizedTokens[currentRawIndex + j];
         accumulatedTokenStr += t;
         tokensConsumed++;
@@ -495,7 +495,7 @@ function recoverTokenMismatch(
     }
 
     if (nextNorm) {
-        for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
+        for (let k = 1; k < 50 && (currentRawIndex + k) < maxTokens; k++) {
             const t = normalizedTokens[currentRawIndex + k];
             if (t && t.startsWith(nextNorm)) {
                 return currentRawIndex + k;
