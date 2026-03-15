@@ -957,169 +957,170 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     let mut instances = state.instances.lock().await;
     let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
 
-    // Offline + VAD (pseudo-streaming)
-    let is_offline = match instance.recognizer.as_deref() {
-        Some(rec) => matches!(rec.inner, RecognizerInner::Offline(_)),
-        None => false,
-    };
+    let recognizer = instance
+        .recognizer
+        .clone()
+        .ok_or("Recognizer not initialized")?;
 
-    if is_offline {
-        if let (Some(recognizer), Some(SafeVad(vad))) =
-            (instance.recognizer.clone(), instance.vad.as_ref())
-        {
-            if let RecognizerInner::Offline(_) = &recognizer.inner {
-                debug!("FFI: Calling vad.accept_waveform");
-                vad.accept_waveform(samples);
-                debug!("FFI: Successfully returned from vad.accept_waveform");
-                let currently_speaking = vad.detected();
+    match &recognizer.inner {
+        RecognizerInner::Offline(_) => {
+            // Offline + VAD (pseudo-streaming)
+            let Some(SafeVad(vad)) = instance.vad.as_ref() else {
+                return Err("VAD model is required for offline pseudo-streaming".to_string());
+            };
 
-                // Ensure segment ID exists
-                if instance.current_segment_id.is_none() {
-                    instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
-                }
-                let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
+            debug!("FFI: Calling vad.accept_waveform");
+            vad.accept_waveform(samples);
+            debug!("FFI: Successfully returned from vad.accept_waveform");
+            let currently_speaking = vad.detected();
 
-                if currently_speaking && !instance.offline_state.is_speaking {
-                    // Rising edge (silence -> speech)
-                    instance.offline_state.is_speaking = true;
+            // Ensure segment ID exists
+            if instance.current_segment_id.is_none() {
+                instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
+            }
+            let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
-                    // Prepend Ring Buffer
-                    let samples_to_keep = (16000.0 * 0.3) as usize; // 0.3s context
-                    let mut context_len = 0;
+            if currently_speaking && !instance.offline_state.is_speaking {
+                // Rising edge (silence -> speech)
+                instance.offline_state.is_speaking = true;
 
-                    if !instance.offline_state.ring_buffer.is_empty() {
-                        let mut ring_flat: Vec<f32> = Vec::new();
-                        for rb in &instance.offline_state.ring_buffer {
-                            ring_flat.extend_from_slice(rb);
-                        }
+                // Prepend Ring Buffer
+                let samples_to_keep = (16000.0 * 0.3) as usize; // 0.3s context
+                let mut context_len = 0;
 
-                        let keep_start = if ring_flat.len() > samples_to_keep {
-                            ring_flat.len() - samples_to_keep
-                        } else {
-                            0
-                        };
-
-                        let context = ring_flat[keep_start..].to_vec();
-                        context_len = context.len();
-                        instance.offline_state.speech_buffer.push(context);
+                if !instance.offline_state.ring_buffer.is_empty() {
+                    let mut ring_flat: Vec<f32> = Vec::new();
+                    for rb in &instance.offline_state.ring_buffer {
+                        ring_flat.extend_from_slice(rb);
                     }
 
-                    instance.offline_state.utterance_start_sample =
-                        instance.total_samples - context_len;
-                    instance.offline_state.ring_buffer.clear();
+                    let keep_start = if ring_flat.len() > samples_to_keep {
+                        ring_flat.len() - samples_to_keep
+                    } else {
+                        0
+                    };
+
+                    let context = ring_flat[keep_start..].to_vec();
+                    context_len = context.len();
+                    instance.offline_state.speech_buffer.push(context);
                 }
 
-                if currently_speaking {
+                instance.offline_state.utterance_start_sample =
+                    instance.total_samples - context_len;
+                instance.offline_state.ring_buffer.clear();
+            }
+
+            if currently_speaking {
+                instance.offline_state.speech_buffer.push(samples.to_vec());
+
+                let now = std::time::Instant::now();
+                if now
+                    .duration_since(instance.offline_state.last_inference_time)
+                    .as_millis()
+                    > 200
+                {
+                    let global_start =
+                        instance.offline_state.utterance_start_sample as f64 / 16000.0;
+
+                    let offline_copy = instance.offline_state.speech_buffer.clone();
+                    let app_copy = app.clone();
+                    let punct_copy = instance.punctuation.clone();
+                    let seg_id_copy = seg_id.clone();
+                    let instance_id_copy = instance_id.to_string();
+                    let recognizer_copy = recognizer.clone();
+
+                    tauri::async_runtime::spawn_blocking(move || {
+                        if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
+                            run_offline_inference(
+                                &offline_copy,
+                                &app_copy,
+                                &safe_r.0,
+                                punct_copy.as_deref(),
+                                &seg_id_copy,
+                                global_start,
+                                false,
+                                &instance_id_copy,
+                            );
+                        }
+                    });
+                    instance.offline_state.last_inference_time = now;
+                }
+            }
+
+            if !currently_speaking {
+                if instance.offline_state.is_speaking {
+                    // Falling edge (speech -> silence)
+                    instance.offline_state.is_speaking = false;
                     instance.offline_state.speech_buffer.push(samples.to_vec());
 
-                    let now = std::time::Instant::now();
-                    if now
-                        .duration_since(instance.offline_state.last_inference_time)
-                        .as_millis()
-                        > 200
-                    {
-                        let global_start =
-                            instance.offline_state.utterance_start_sample as f64 / 16000.0;
+                    let global_start =
+                        instance.offline_state.utterance_start_sample as f64 / 16000.0;
 
-                        let offline_copy = instance.offline_state.speech_buffer.clone();
-                        let app_copy = app.clone();
-                        let recognizer_copy = recognizer.clone();
-                        let punct_copy = instance.punctuation.clone();
-                        let seg_id_copy = seg_id.clone();
-                        let instance_id_copy = instance_id.to_string();
+                    let offline_copy = instance.offline_state.speech_buffer.clone();
+                    let app_copy = app.clone();
+                    let punct_copy = instance.punctuation.clone();
+                    let seg_id_copy = seg_id.clone();
+                    let instance_id_copy = instance_id.to_string();
+                    let recognizer_copy = recognizer.clone();
 
-                        tauri::async_runtime::spawn_blocking(move || {
-                            if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
-                                run_offline_inference(
-                                    &offline_copy,
-                                    &app_copy,
-                                    &safe_r.0,
-                                    punct_copy.as_deref(),
-                                    &seg_id_copy,
-                                    global_start,
-                                    false,
-                                    &instance_id_copy,
-                                );
-                            }
-                        });
-                        instance.offline_state.last_inference_time = now;
-                    }
+                    tauri::async_runtime::spawn_blocking(move || {
+                        if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
+                            run_offline_inference(
+                                &offline_copy,
+                                &app_copy,
+                                &safe_r.0,
+                                punct_copy.as_deref(),
+                                &seg_id_copy,
+                                global_start,
+                                true,
+                                &instance_id_copy,
+                            );
+                        }
+                    });
+
+                    instance.offline_state.speech_buffer.clear();
+                    // Generate new segment ID for the next utterance
+                    instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
                 }
 
-                if !currently_speaking {
-                    if instance.offline_state.is_speaking {
-                        // Falling edge (speech -> silence)
-                        instance.offline_state.is_speaking = false;
-                        instance.offline_state.speech_buffer.push(samples.to_vec());
+                // Maintain Ring Buffer
+                instance
+                    .offline_state
+                    .ring_buffer
+                    .push_back(samples.to_vec());
+                let max_ring_samples = (16000.0 * 0.3) as usize;
 
-                        let global_start =
-                            instance.offline_state.utterance_start_sample as f64 / 16000.0;
-
-                        let offline_copy = instance.offline_state.speech_buffer.clone();
-                        let app_copy = app.clone();
-                        let recognizer_copy = recognizer.clone();
-                        let punct_copy = instance.punctuation.clone();
-                        let seg_id_copy = seg_id.clone();
-                        let instance_id_copy = instance_id.to_string();
-
-                        tauri::async_runtime::spawn_blocking(move || {
-                            if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
-                                run_offline_inference(
-                                    &offline_copy,
-                                    &app_copy,
-                                    &safe_r.0,
-                                    punct_copy.as_deref(),
-                                    &seg_id_copy,
-                                    global_start,
-                                    true,
-                                    &instance_id_copy,
-                                );
-                            }
-                        });
-
-                        instance.offline_state.speech_buffer.clear();
-                        // Generate new segment ID for the next utterance
-                        instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
-                    }
-
-                    // Maintain Ring Buffer
-                    instance
-                        .offline_state
-                        .ring_buffer
-                        .push_back(samples.to_vec());
-                    let max_ring_samples = (16000.0 * 0.3) as usize;
-
-                    let mut ring_len: usize = instance
-                        .offline_state
-                        .ring_buffer
-                        .iter()
-                        .map(|v| v.len())
-                        .sum();
-                    while ring_len > max_ring_samples + 4000 {
-                        if let Some(first) = instance.offline_state.ring_buffer.front() {
-                            let first_len = first.len();
-                            if ring_len - first_len >= max_ring_samples {
-                                instance.offline_state.ring_buffer.pop_front();
-                                ring_len -= first_len;
-                            } else {
-                                break;
-                            }
+                let mut ring_len: usize = instance
+                    .offline_state
+                    .ring_buffer
+                    .iter()
+                    .map(|v| v.len())
+                    .sum();
+                while ring_len > max_ring_samples + 4000 {
+                    if let Some(first) = instance.offline_state.ring_buffer.front() {
+                        let first_len = first.len();
+                        if ring_len - first_len >= max_ring_samples {
+                            instance.offline_state.ring_buffer.pop_front();
+                            ring_len -= first_len;
                         } else {
                             break;
                         }
+                    } else {
+                        break;
                     }
                 }
-
-                instance.total_samples += samples.len();
-                return Ok(());
             }
-        }
-    }
 
-    // Online model processing
-    if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
-    {
-        if let RecognizerInner::Online(r) = &recognizer.inner {
+            instance.total_samples += samples.len();
+            Ok(())
+        }
+        RecognizerInner::Online(r) => {
+            // Online model processing
+            let st = instance
+                .stream
+                .as_ref()
+                .ok_or("Stream not initialized for online model")?;
+
             debug!("FFI: Calling accept_waveform (Online, samples)");
             st.0.accept_waveform(16000, samples);
             debug!("FFI: Successfully returned from accept_waveform (Online, samples)");
@@ -1201,9 +1202,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                 r.0.reset(&st.0);
                 instance.segment_start_time = current_time;
             }
+
+            Ok(())
         }
     }
-    Ok(())
 }
 
 #[tauri::command]
