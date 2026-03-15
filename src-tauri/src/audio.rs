@@ -18,6 +18,12 @@ pub struct AudioState {
     mic_boost: Mutex<f32>,
 }
 
+impl Default for AudioState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioState {
     pub fn new() -> Self {
         Self {
@@ -58,9 +64,9 @@ pub fn start_system_audio_capture<R: Runtime>(
     device_name: Option<String>,
     instance_id: String,
 ) -> Result<(), String> {
-    let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
+    let mut stop_signal_guard = state.system_stop_signal.lock().map_err(|e| e.to_string())?;
     if stop_signal_guard.is_some() {
-        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
         instance_ids.insert(instance_id.clone());
         println!(
             "[Audio] System capture already running. Attached instance: {}",
@@ -70,7 +76,7 @@ pub fn start_system_audio_capture<R: Runtime>(
     }
 
     {
-        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
         instance_ids.clear();
         instance_ids.insert(instance_id.clone());
     }
@@ -83,7 +89,7 @@ pub fn start_system_audio_capture<R: Runtime>(
 
     // Channel for the Tokio task to send back the WAV filepath
     let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
-    *state.system_filepath_receiver.lock().unwrap() = Some(filepath_rx);
+    *state.system_filepath_receiver.lock().map_err(|e| e.to_string())? = Some(filepath_rx);
 
     // Create a lock-free ring buffer for passing data to the Tokio task
     // Calculate capacity for about 5 seconds of 16kHz audio
@@ -186,23 +192,20 @@ pub fn start_system_audio_capture<R: Runtime>(
         let err_fn = |err| eprintln!("[Audio] Stream error: {}", err);
 
         let host = cpal::default_host();
-        let device = if let Some(ref name) = device_name {
-            match host.output_devices() {
-                Ok(mut devices) => devices
-                    .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
-                    .or_else(|| host.default_output_device()),
-                Err(_) => host.default_output_device(),
-            }
-        } else {
-            host.default_output_device()
-        };
+        let device = device_name
+            .as_ref()
+            .and_then(|name| {
+                host.output_devices()
+                    .ok()
+                    .and_then(|mut devices| {
+                        devices.find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+                    })
+            })
+            .or_else(|| host.default_output_device());
 
-        let device = match device {
-            Some(d) => d,
-            None => {
-                eprintln!("[Audio] No output device found");
-                return;
-            }
+        let Some(device) = device else {
+            eprintln!("[Audio] No output device found");
+            return;
         };
 
         println!(
@@ -352,7 +355,10 @@ pub fn start_system_audio_capture<R: Runtime>(
 async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f32]) {
     let instance_ids: Vec<String> = {
         let audio_state = app.state::<AudioState>();
-        let guard = audio_state.system_instance_ids.lock().unwrap();
+        let guard = match audio_state.system_instance_ids.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
         guard.iter().cloned().collect()
     };
 
@@ -398,7 +404,7 @@ pub fn start_microphone_capture<R: Runtime>(
     device_name: Option<String>,
     instance_id: String,
 ) -> Result<(), String> {
-    let mut stop_signal_guard = state.mic_stop_signal.lock().unwrap();
+    let mut stop_signal_guard = state.mic_stop_signal.lock().map_err(|e| e.to_string())?;
     if stop_signal_guard.is_some() {
         println!("[Audio] Microphone capture already running.");
         return Ok(());
@@ -412,7 +418,7 @@ pub fn start_microphone_capture<R: Runtime>(
 
     // Channel for the Tokio task to send back the WAV filepath
     let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
-    *state.mic_filepath_receiver.lock().unwrap() = Some(filepath_rx);
+    *state.mic_filepath_receiver.lock().map_err(|e| e.to_string())? = Some(filepath_rx);
 
     // Create a lock-free ring buffer for passing data to the Tokio task
     let task_rb_capacity = 16000 * 5;
@@ -538,23 +544,20 @@ pub fn start_microphone_capture<R: Runtime>(
         let err_fn = |err| eprintln!("[Audio] Mic stream error: {}", err);
 
         let host = cpal::default_host();
-        let device = if let Some(ref name) = device_name {
-            match host.input_devices() {
-                Ok(mut devices) => devices
-                    .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
-                    .or_else(|| host.default_input_device()),
-                Err(_) => host.default_input_device(),
-            }
-        } else {
-            host.default_input_device()
-        };
+        let device = device_name
+            .as_ref()
+            .and_then(|name| {
+                host.input_devices()
+                    .ok()
+                    .and_then(|mut devices| {
+                        devices.find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+                    })
+            })
+            .or_else(|| host.default_input_device());
 
-        let device = match device {
-            Some(d) => d,
-            None => {
-                eprintln!("[Audio] No input device found");
-                return;
-            }
+        let Some(device) = device else {
+            eprintln!("[Audio] No input device found");
+            return;
         };
 
         println!(
@@ -803,7 +806,7 @@ pub async fn stop_microphone_capture(
 ) -> Result<String, String> {
     // Drop the locks *before* calling await!
     let rx = {
-        let mut stop_signal_guard = state.mic_stop_signal.lock().unwrap();
+        let mut stop_signal_guard = state.mic_stop_signal.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = stop_signal_guard.take() {
             println!("[Audio] Stopping microphone capture...");
             let _ = tx.send(());
@@ -812,7 +815,7 @@ pub async fn stop_microphone_capture(
             return Err("Not running".to_string());
         }
 
-        let mut filepath_receiver_guard = state.mic_filepath_receiver.lock().unwrap();
+        let mut filepath_receiver_guard = state.mic_filepath_receiver.lock().map_err(|e| e.to_string())?;
         filepath_receiver_guard.take()
     };
 
@@ -896,7 +899,7 @@ pub async fn stop_system_audio_capture(
     instance_id: String,
 ) -> Result<String, String> {
     let should_stop = {
-        let mut instance_ids = state.system_instance_ids.lock().unwrap();
+        let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
         instance_ids.remove(&instance_id);
         if instance_ids.is_empty() {
             true
@@ -916,7 +919,7 @@ pub async fn stop_system_audio_capture(
 
     // Drop the locks *before* calling await!
     let rx = {
-        let mut stop_signal_guard = state.system_stop_signal.lock().unwrap();
+        let mut stop_signal_guard = state.system_stop_signal.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = stop_signal_guard.take() {
             println!("[Audio] Stopping system capture...");
             let _ = tx.send(());
@@ -925,7 +928,7 @@ pub async fn stop_system_audio_capture(
             return Err("Not running".to_string());
         }
 
-        let mut filepath_receiver_guard = state.system_filepath_receiver.lock().unwrap();
+        let mut filepath_receiver_guard = state.system_filepath_receiver.lock().map_err(|e| e.to_string())?;
         filepath_receiver_guard.take()
     };
 
