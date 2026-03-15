@@ -54,6 +54,7 @@ pub enum ModelType {
         llm: PathBuf,
         embedding: PathBuf,
         tokenizer: PathBuf,
+        tokens: PathBuf,
         language: String,
     },
     OfflineFireRedAsr {
@@ -120,12 +121,12 @@ pub fn build_model_config(
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let tokens = get_path(&fc.tokens)?;
-            let whisper_lang = if language == "auto" { "" } else { language };
+            let language = if language == "auto" { "" } else { language }.to_string();
             Ok(ModelType::OfflineWhisper {
                 encoder,
                 decoder,
                 tokens,
-                language: whisper_lang.to_string(),
+                language,
             })
         }
         "funasr-nano" => {
@@ -133,13 +134,15 @@ pub fn build_model_config(
             let llm = get_path(&fc.llm)?;
             let embedding = get_path(&fc.embedding)?;
             let tokenizer = get_path(&fc.tokenizer)?;
-            let nano_lang = if language == "multilingual" { "" } else { language };
+            let tokens = get_path(&fc.tokens)?;
+            let language = if language == "multilingual" { "" } else { language }.to_string();
             Ok(ModelType::OfflineFunASRNano {
                 encoder_adaptor,
                 llm,
                 embedding,
                 tokenizer,
-                language: nano_lang.to_string(),
+                tokens,
+                language,
             })
         }
         "fire-red-asr" => {
@@ -181,6 +184,45 @@ pub struct Recognizer {
     pub inner: RecognizerInner,
 }
 
+fn get_base_online_config(
+    num_threads: i32,
+    tokens: &Path,
+    itn_model: Option<String>,
+) -> OnlineRecognizerConfig {
+    let mut config = OnlineRecognizerConfig {
+        rule_fsts: itn_model,
+        rule1_min_trailing_silence: 1.2,
+        rule2_min_trailing_silence: 1.2,
+        rule3_min_utterance_length: 300.0,
+        ..Default::default()
+    };
+    config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
+    config.model_config.num_threads = num_threads;
+    config.model_config.provider = Some("cpu".to_string());
+    config.model_config.model_type = Some("paraformer".to_string());
+    config.feat_config.sample_rate = 16000;
+    config.feat_config.feature_dim = 80;
+    config.enable_endpoint = true;
+    config
+}
+
+fn get_base_offline_config(
+    num_threads: i32,
+    tokens: &Path,
+    itn_model: Option<String>,
+) -> OfflineRecognizerConfig {
+    let mut config = OfflineRecognizerConfig {
+        rule_fsts: itn_model,
+        ..Default::default()
+    };
+    config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
+    config.model_config.num_threads = num_threads;
+    config.model_config.provider = Some("cpu".to_string());
+    config.feat_config.sample_rate = 16000;
+    config.feat_config.feature_dim = 80;
+    config
+}
+
 impl Recognizer {
     pub fn new(
         model_type: ModelType,
@@ -194,25 +236,13 @@ impl Recognizer {
                 joiner,
                 tokens,
             } => {
-                let mut config = OnlineRecognizerConfig {
-                    rule_fsts: itn_model.clone(),
-                    rule1_min_trailing_silence: 1.2,
-                    rule2_min_trailing_silence: 1.2,
-                    rule3_min_utterance_length: 300.0,
-                    ..Default::default()
-                };
+                let mut config = get_base_online_config(num_threads, &tokens, itn_model);
+                config.model_config.model_type = Some("transducer".to_string());
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.transducer.decoder =
                     Some(decoder.to_string_lossy().to_string());
                 config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.model_config.model_type = Some("paraformer".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
-                config.enable_endpoint = true;
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineTransducer)");
                 let recognizer =
@@ -225,24 +255,11 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
-                let mut config = OnlineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    rule1_min_trailing_silence: 1.2,
-                    rule2_min_trailing_silence: 1.2,
-                    rule3_min_utterance_length: 300.0,
-                    ..Default::default()
-                };
+                let mut config = get_base_online_config(num_threads, &tokens, itn_model);
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.paraformer.decoder =
                     Some(decoder.to_string_lossy().to_string());
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.model_config.model_type = Some("paraformer".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
-                config.enable_endpoint = true;
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineParaformer)");
                 let recognizer =
@@ -256,18 +273,10 @@ impl Recognizer {
                 language,
                 use_itn,
             } => {
-                let mut config = OfflineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    ..Default::default()
-                };
+                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineSenseVoice)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -281,18 +290,10 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
-                let mut config = OfflineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    ..Default::default()
-                };
+                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineWhisper)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -305,21 +306,15 @@ impl Recognizer {
                 llm,
                 embedding,
                 tokenizer,
+                tokens,
                 language,
             } => {
-                let mut config = OfflineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    ..Default::default()
-                };
+                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
                 config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
                 config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
                 config.model_config.funasr_nano.tokenizer = Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -332,17 +327,9 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
-                let mut config = OfflineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    ..Default::default()
-                };
+                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
                 config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFireRedAsr)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -354,16 +341,8 @@ impl Recognizer {
                 model,
                 tokens,
             } => {
-                let mut config = OfflineRecognizerConfig {
-                    rule_fsts: itn_model,
-                    ..Default::default()
-                };
+                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
-                config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
-                config.model_config.num_threads = num_threads;
-                config.model_config.provider = Some("cpu".to_string());
-                config.feat_config.sample_rate = 16000;
-                config.feat_config.feature_dim = 80;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -492,6 +471,47 @@ impl Drop for Punctuation {
 }
 unsafe impl Send for Punctuation {}
 unsafe impl Sync for Punctuation {}
+
+pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation> {
+    if let Some(p_path) = punctuation_model {
+        if !p_path.is_empty() && Path::new(&p_path).exists() {
+            if let Ok(entries) = fs::read_dir(&p_path) {
+                let onnx_file = entries
+                    .flatten()
+                    .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
+                if let Some(e) = onnx_file {
+                    return Punctuation::new(&e.path().to_string_lossy(), 1).ok();
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
+    if let Some(v_path) = vad_model {
+        if !v_path.is_empty() && Path::new(&v_path).exists() {
+            let silero_vad = SileroVadModelConfig {
+                model: Some(v_path),
+                threshold: 0.35,
+                min_silence_duration: 0.5,
+                min_speech_duration: 0.25,
+                window_size: 512,
+                ..Default::default()
+            };
+
+            let vad_config = VadModelConfig {
+                silero_vad,
+                sample_rate: 16000,
+                num_threads: 1,
+                ..Default::default()
+            };
+
+            return VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
+        }
+    }
+    None
+}
 
 pub struct OfflineState {
     pub speech_buffer: Vec<Vec<f32>>,
@@ -717,43 +737,8 @@ pub async fn init_recognizer(
 
     let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
 
-    // Initialize Punctuation
-    let mut punctuation = None;
-    if let Some(p_path) = punctuation_model {
-        if !p_path.is_empty() && Path::new(&p_path).exists() {
-            let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
-            let onnx_file = entries
-                .flatten()
-                .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
-            if let Some(e) = onnx_file {
-                punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
-            }
-        }
-    }
-
-    // Initialize VAD
-    let mut vad = None;
-    if let Some(v_path) = &vad_model {
-        if !v_path.is_empty() && Path::new(v_path).exists() {
-            let silero_vad = SileroVadModelConfig {
-                model: Some(v_path.clone()),
-                threshold: 0.35,
-                min_silence_duration: 0.5,
-                min_speech_duration: 0.25,
-                window_size: 512,
-                ..Default::default()
-            };
-
-            let vad_config = VadModelConfig {
-                silero_vad,
-                sample_rate: 16000,
-                num_threads: 1,
-                ..Default::default()
-            };
-
-            vad = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
-        }
-    }
+    let punctuation = load_punctuation(punctuation_model);
+    let vad = load_vad(vad_model.clone());
 
     let mut instances = state.instances.lock().await;
     let instance = instances
@@ -795,29 +780,7 @@ pub async fn start_recognizer(
     instance.current_segment_id = None;
 
     // Reset VAD state by recreating it
-    let mut vad = None;
-    if let Some(v_path) = &instance.vad_model {
-        if !v_path.is_empty() && Path::new(v_path).exists() {
-            let silero_vad = SileroVadModelConfig {
-                model: Some(v_path.clone()),
-                threshold: 0.35,
-                min_silence_duration: 0.5,
-                min_speech_duration: 0.25,
-                window_size: 512,
-                ..Default::default()
-            };
-
-            let vad_config = VadModelConfig {
-                silero_vad,
-                sample_rate: 16000,
-                num_threads: 1,
-                ..Default::default()
-            };
-
-            vad = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
-        }
-    }
-    instance.vad = vad;
+    instance.vad = load_vad(instance.vad_model.clone());
 
     Ok(())
 }
@@ -918,11 +881,10 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                         .as_ref()
                         .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                    let id = if let Some(id) = instance.current_segment_id.take() {
-                        id
-                    } else {
-                        uuid::Uuid::new_v4().to_string()
-                    };
+                    let id = instance
+                        .current_segment_id
+                        .take()
+                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                     let segment = TranscriptSegment {
                         id,
@@ -989,16 +951,15 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                 let mut context_len = 0;
 
                 if !instance.offline_state.ring_buffer.is_empty() {
-                    let mut ring_flat: Vec<f32> = Vec::new();
-                    for rb in &instance.offline_state.ring_buffer {
-                        ring_flat.extend_from_slice(rb);
-                    }
+                    let ring_flat: Vec<f32> = instance
+                        .offline_state
+                        .ring_buffer
+                        .iter()
+                        .flatten()
+                        .copied()
+                        .collect();
 
-                    let keep_start = if ring_flat.len() > samples_to_keep {
-                        ring_flat.len() - samples_to_keep
-                    } else {
-                        0
-                    };
+                    let keep_start = ring_flat.len().saturating_sub(samples_to_keep);
 
                     let context = ring_flat[keep_start..].to_vec();
                     context_len = context.len();
@@ -1135,13 +1096,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             if let Some(result) = r.0.get_result(&st.0) {
                 let has_text = !result.text.trim().is_empty();
                 if has_text || instance.current_segment_id.is_some() {
-                    let id = if let Some(id) = instance.current_segment_id.as_ref() {
-                        id.clone()
-                    } else {
-                        let new_id = uuid::Uuid::new_v4().to_string();
-                        instance.current_segment_id = Some(new_id.clone());
-                        new_id
-                    };
+                    let id = instance.current_segment_id.get_or_insert_with(|| uuid::Uuid::new_v4().to_string()).clone();
 
                     let segment = TranscriptSegment {
                         id,
@@ -1176,11 +1131,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             .as_ref()
                             .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
-                        let id = if let Some(id) = instance.current_segment_id.take() {
-                            id
-                        } else {
-                            uuid::Uuid::new_v4().to_string()
-                        };
+                        let id = instance
+                            .current_segment_id
+                            .take()
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                         let segment = TranscriptSegment {
                             id,
@@ -1264,19 +1218,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 
     let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
 
-    // Initialize Punctuation
-    let mut punctuation = None;
-    if let Some(p_path) = punctuation_model {
-        if !p_path.is_empty() && Path::new(&p_path).exists() {
-            let entries = fs::read_dir(&p_path).map_err(|e| e.to_string())?;
-            let onnx_file = entries
-                .flatten()
-                .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
-            if let Some(e) = onnx_file {
-                punctuation = Punctuation::new(&e.path().to_string_lossy(), 1).ok();
-            }
-        }
-    }
+    let punctuation = load_punctuation(punctuation_model);
 
     // Use Offline Recognizer if available
     if let RecognizerInner::Offline(r) = &recognizer.inner {
