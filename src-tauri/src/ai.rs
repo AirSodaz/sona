@@ -167,27 +167,26 @@ async fn call_anthropic(
     }
 
     let response_body: AnthropicResponse = res.json().await.map_err(|e| e.to_string())?;
-    response_body
+    let first_content = response_body
         .content
         .into_iter()
         .next()
-        .map(|content| content.text)
-        .ok_or_else(|| "No content in Anthropic response".to_string())
+        .ok_or_else(|| "No content in Anthropic response".to_string())?;
+
+    Ok(first_content.text)
 }
 
 fn clean_gemini_base_url(base_url: &str) -> &str {
     let base = base_url.trim_end_matches('/');
-    if let Some(stripped) = base.strip_suffix("/v1beta/models") {
-        stripped
-    } else if let Some(stripped) = base.strip_suffix("/models") {
-        stripped
-    } else if let Some(stripped) = base.strip_suffix("/v1beta") {
-        stripped
-    } else if let Some(stripped) = base.strip_suffix("/v1") {
-        stripped
-    } else {
-        base
+    let suffixes = ["/v1beta/models", "/models", "/v1beta", "/v1"];
+
+    for suffix in suffixes {
+        if let Some(stripped) = base.strip_suffix(suffix) {
+            return stripped;
+        }
     }
+
+    base
 }
 
 fn format_gemini_url(base_url: &str, model_name: &str, api_key: &str) -> String {
@@ -242,24 +241,35 @@ async fn call_gemini(
 
     let response_body: GeminiResponse = res.json().await.map_err(|e| e.to_string())?;
 
-    response_body
+    let candidates = response_body
         .candidates
-        .and_then(|c| c.into_iter().next())
-        .and_then(|c| c.content.parts.into_iter().next())
-        .map(|p| p.text)
-        .ok_or_else(|| "No content in Gemini response".to_string())
+        .ok_or_else(|| "No candidates in Gemini response".to_string())?;
+
+    let first_candidate = candidates
+        .into_iter()
+        .next()
+        .ok_or_else(|| "Empty candidates array in Gemini response".to_string())?;
+
+    let first_part = first_candidate
+        .content
+        .parts
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No parts in Gemini response content".to_string())?;
+
+    Ok(first_part.text)
 }
 
 fn format_openai_url(base_url: &str) -> String {
     if base_url.contains("chat/completions") {
-        base_url.to_string()
+        return base_url.to_string();
+    }
+
+    let base = base_url.trim_end_matches('/');
+    if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
     } else {
-        let base = base_url.trim_end_matches('/');
-        if base.ends_with("/v1") {
-            format!("{}/chat/completions", base)
-        } else {
-            format!("{}/v1/chat/completions", base)
-        }
+        format!("{}/v1/chat/completions", base)
     }
 }
 
@@ -301,12 +311,13 @@ async fn call_openai(
     }
 
     let response_body: OpenAIResponse = res.json().await.map_err(|e| e.to_string())?;
-    response_body
+    let first_choice = response_body
         .choices
         .into_iter()
         .next()
-        .map(|c| c.message.content)
-        .ok_or_else(|| "No choices in OpenAI response".to_string())
+        .ok_or_else(|| "No choices in OpenAI response".to_string())?;
+
+    Ok(first_choice.message.content)
 }
 
 #[tauri::command]
@@ -382,23 +393,20 @@ async fn get_openai_models(
             req = req.header("Authorization", format!("Bearer {}", api_key));
         }
 
-        match req.send().await {
-            Ok(res) => {
-                if res.status().is_success() {
-                    let text = res.text().await.unwrap_or_default();
+        if let Ok(res) = req.send().await {
+            if res.status().is_success() {
+                let text = res.text().await.unwrap_or_default();
 
-                    // Try OpenAI format
-                    if let Ok(response_body) = serde_json::from_str::<OpenAIModelsResponse>(&text) {
-                        return Ok(response_body.data.into_iter().map(|m| m.id).collect());
-                    }
+                // Try OpenAI format
+                if let Ok(response_body) = serde_json::from_str::<OpenAIModelsResponse>(&text) {
+                    return Ok(response_body.data.into_iter().map(|m| m.id).collect());
+                }
 
-                    // Try Ollama format
-                    if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
-                        return Ok(response_body.models.into_iter().map(|m| m.name).collect());
-                    }
+                // Try Ollama format
+                if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
+                    return Ok(response_body.models.into_iter().map(|m| m.name).collect());
                 }
             }
-            Err(_) => continue,
         }
     }
 

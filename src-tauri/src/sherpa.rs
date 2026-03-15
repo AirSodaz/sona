@@ -473,44 +473,44 @@ unsafe impl Send for Punctuation {}
 unsafe impl Sync for Punctuation {}
 
 pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation> {
-    if let Some(p_path) = punctuation_model {
-        if !p_path.is_empty() && Path::new(&p_path).exists() {
-            if let Ok(entries) = fs::read_dir(&p_path) {
-                let onnx_file = entries
-                    .flatten()
-                    .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"));
-                if let Some(e) = onnx_file {
-                    return Punctuation::new(&e.path().to_string_lossy(), 1).ok();
-                }
-            }
-        }
+    let p_path = punctuation_model?;
+
+    if p_path.is_empty() || !Path::new(&p_path).exists() {
+        return None;
     }
-    None
+
+    let entries = fs::read_dir(&p_path).ok()?;
+    let onnx_file = entries
+        .flatten()
+        .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
+
+    Punctuation::new(&onnx_file.path().to_string_lossy(), 1).ok()
 }
 
 pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
-    if let Some(v_path) = vad_model {
-        if !v_path.is_empty() && Path::new(&v_path).exists() {
-            let silero_vad = SileroVadModelConfig {
-                model: Some(v_path),
-                threshold: 0.35,
-                min_silence_duration: 0.5,
-                min_speech_duration: 0.25,
-                window_size: 512,
-                ..Default::default()
-            };
+    let v_path = vad_model?;
 
-            let vad_config = VadModelConfig {
-                silero_vad,
-                sample_rate: 16000,
-                num_threads: 1,
-                ..Default::default()
-            };
-
-            return VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
-        }
+    if v_path.is_empty() || !Path::new(&v_path).exists() {
+        return None;
     }
-    None
+
+    let silero_vad = SileroVadModelConfig {
+        model: Some(v_path),
+        threshold: 0.35,
+        min_silence_duration: 0.5,
+        min_speech_duration: 0.25,
+        window_size: 512,
+        ..Default::default()
+    };
+
+    let vad_config = VadModelConfig {
+        silero_vad,
+        sample_rate: 16000,
+        num_threads: 1,
+        ..Default::default()
+    };
+
+    VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad)
 }
 
 pub struct OfflineState {
@@ -1220,13 +1220,24 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 
     let punctuation = load_punctuation(punctuation_model);
 
-    if let RecognizerInner::Offline(r) = &recognizer.inner {
-        return process_batch_offline(&app, r, &samples, vad_model, vad_buffer, punctuation.as_ref(), &file_path).await;
-    } else if let RecognizerInner::Online(r) = &recognizer.inner {
-        return process_batch_online(&app, r, &samples, punctuation.as_ref(), &file_path).await;
+    match &recognizer.inner {
+        RecognizerInner::Offline(r) => process_batch_offline(
+            &app,
+            r,
+            &samples,
+            vad_model,
+            vad_buffer,
+            punctuation.as_ref(),
+            &file_path,
+        ).await,
+        RecognizerInner::Online(r) => process_batch_online(
+            &app,
+            r,
+            &samples,
+            punctuation.as_ref(),
+            &file_path,
+        ).await,
     }
-
-    Err("Recognizer not initialized or failed".to_string())
 }
 
 async fn process_batch_offline<R: tauri::Runtime>(

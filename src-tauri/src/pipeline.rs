@@ -13,15 +13,15 @@ pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
 
 /// Convert raw PCM bytes (Int16LE) to Vec<f32> samples.
 fn pcm_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    let num_samples = bytes.len() / 2;
-    let mut samples = Vec::with_capacity(num_samples);
-    for i in 0..num_samples {
-        let lo = bytes[i * 2] as i16;
-        let hi = (bytes[i * 2 + 1] as i16) << 8;
-        let sample_i16 = lo | hi;
-        samples.push(sample_i16 as f32 / 32768.0);
-    }
-    samples
+    bytes
+        .chunks_exact(2)
+        .map(|chunk| {
+            let lo = chunk[0] as i16;
+            let hi = (chunk[1] as i16) << 8;
+            let sample_i16 = lo | hi;
+            sample_i16 as f32 / 32768.0
+        })
+        .collect()
 }
 
 pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::Result<()> {
@@ -111,21 +111,20 @@ pub fn fixed_chunk_audio(
     sample_rate: u32,
     chunk_duration: f32,
 ) -> Vec<AudioSegment> {
-    let mut segments = Vec::new();
     let chunk_size = (sample_rate as f32 * chunk_duration) as usize;
-    let mut i = 0;
 
-    while i < samples.len() {
-        let end = (i + chunk_size).min(samples.len());
-        let chunk = &samples[i..end];
-        segments.push(AudioSegment {
-            samples: chunk.to_vec(),
-            start_time: i as f32 / sample_rate as f32,
-            duration: chunk.len() as f32 / sample_rate as f32,
-        });
-        i += chunk_size;
-    }
-    segments
+    samples
+        .chunks(chunk_size)
+        .enumerate()
+        .map(|(i, chunk)| {
+            let start_sample = i * chunk_size;
+            AudioSegment {
+                samples: chunk.to_vec(),
+                start_time: start_sample as f32 / sample_rate as f32,
+                duration: chunk.len() as f32 / sample_rate as f32,
+            }
+        })
+        .collect()
 }
 
 pub fn vad_segment_audio(
@@ -134,7 +133,7 @@ pub fn vad_segment_audio(
     vad_config: &VadModelConfig,
     _buffer_size_seconds: f32,
 ) -> Result<Vec<AudioSegment>, String> {
-    let vad = VoiceActivityDetector::create(vad_config, 60.0)
+    let mut vad = VoiceActivityDetector::create(vad_config, 60.0)
         .ok_or("Failed to create VoiceActivityDetector")?;
 
     // Use the same window_size as the VAD model (512 samples = 32ms at 16kHz).
@@ -147,39 +146,24 @@ pub fn vad_segment_audio(
     // Use segment.samples() directly — sherpa's VoiceActivityDetector already
     // includes proper context in the samples it returns. Re-extracting from the
     // original array with manual padding caused misaligned split positions.
-    let mut current_pos = 0;
-    while current_pos < samples.len() {
-        let end = (current_pos + chunk_size).min(samples.len());
-        let chunk = &samples[current_pos..end];
+    for chunk in samples.chunks(chunk_size) {
         vad.accept_waveform(chunk);
-
-        while !vad.is_empty() {
-            if let Some(segment) = vad.front() {
-                let start_sample = segment.start() as usize;
-                let seg_samples = segment.samples().to_vec();
-                let start_time = start_sample as f32 / sample_rate as f32;
-                let duration = seg_samples.len() as f32 / sample_rate as f32;
-
-                eprintln!(
-                    "[Sona VAD] segment start_sample={} duration={:.2}s samples={}",
-                    start_sample,
-                    duration,
-                    seg_samples.len()
-                );
-
-                segments.push(AudioSegment {
-                    samples: seg_samples,
-                    start_time,
-                    duration,
-                });
-            }
-            vad.pop();
-        }
-        current_pos += chunk_size;
+        extract_vad_segments(&mut vad, sample_rate, &mut segments, false);
     }
 
     // Flush remaining speech at end of audio
     vad.flush();
+    extract_vad_segments(&mut vad, sample_rate, &mut segments, true);
+
+    Ok(segments)
+}
+
+fn extract_vad_segments(
+    vad: &mut VoiceActivityDetector,
+    sample_rate: u32,
+    segments: &mut Vec<AudioSegment>,
+    is_flush: bool,
+) {
     while !vad.is_empty() {
         if let Some(segment) = vad.front() {
             let start_sample = segment.start() as usize;
@@ -187,8 +171,10 @@ pub fn vad_segment_audio(
             let start_time = start_sample as f32 / sample_rate as f32;
             let duration = seg_samples.len() as f32 / sample_rate as f32;
 
+            let tag = if is_flush { "(flush)" } else { "" };
             eprintln!(
-                "[Sona VAD] segment (flush) start_sample={} duration={:.2}s samples={}",
+                "[Sona VAD] segment {} start_sample={} duration={:.2}s samples={}",
+                tag,
                 start_sample,
                 duration,
                 seg_samples.len()
@@ -202,8 +188,6 @@ pub fn vad_segment_audio(
         }
         vad.pop();
     }
-
-    Ok(segments)
 }
 
 #[cfg(test)]
