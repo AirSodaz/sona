@@ -978,7 +978,11 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             if instance.current_segment_id.is_none() {
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
             }
-            let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
+            let seg_id = instance
+                .current_segment_id
+                .as_ref()
+                .ok_or_else(|| "Failed to generate segment ID".to_string())?
+                .clone();
 
             if currently_speaking && !instance.offline_state.is_speaking {
                 // Rising edge (silence -> speech)
@@ -1229,6 +1233,184 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 }
 
 #[allow(clippy::too_many_arguments)]
+async fn process_batch_offline<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    file_path: &str,
+    samples: &[f32],
+    r: &SafeOfflineRecognizer,
+    punctuation: Option<&Punctuation>,
+    vad_model: Option<String>,
+    vad_buffer: f32,
+) -> Result<Vec<TranscriptSegment>, String> {
+    let segments = if let Some(v_path) = vad_model {
+        if !v_path.is_empty() && Path::new(&v_path).exists() {
+            let silero_vad = sherpa_onnx::SileroVadModelConfig {
+                model: Some(v_path.clone()),
+                threshold: 0.35,
+                min_silence_duration: 1.0,
+                min_speech_duration: 0.25,
+                window_size: 512,
+                ..Default::default()
+            };
+
+            let vad_config = sherpa_onnx::VadModelConfig {
+                silero_vad,
+                sample_rate: 16000,
+                num_threads: 1,
+                ..Default::default()
+            };
+
+            crate::pipeline::vad_segment_audio(samples, 16000, &vad_config, vad_buffer)
+                .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0))
+        } else {
+            crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
+        }
+    } else {
+        crate::pipeline::fixed_chunk_audio(samples, 16000, 30.0)
+    };
+
+    let mut results = Vec::new();
+    let total_segments = segments.len();
+    for (i, seg) in segments.into_iter().enumerate() {
+        {
+            let stream = r.0.create_stream();
+            debug!("FFI: Calling accept_waveform (Offline segment)");
+            stream.accept_waveform(16000, &seg.samples);
+            debug!("FFI: Successfully returned from accept_waveform (Offline segment)");
+            r.0.decode(&stream);
+
+            if let Some(res) = stream.get_result() {
+                if !res.text.trim().is_empty() {
+                    let text = format_transcript(&res.text, punctuation);
+                    let timestamps_abs = res
+                        .timestamps
+                        .as_ref()
+                        .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
+                    let durations = timestamps_abs
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
+
+                    results.push(TranscriptSegment {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        text,
+                        start: seg.start_time as f64,
+                        end: (seg.start_time + seg.duration) as f64,
+                        is_final: true,
+                        tokens: Some(res.tokens),
+                        timestamps: timestamps_abs,
+                        durations,
+                    });
+                }
+            }
+        }
+        // Emit progress
+        let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
+        let _ = app.emit("batch-progress", (file_path, progress));
+
+        // Yield to Tokio runtime to prevent blocking the async reactor
+        tokio::task::yield_now().await;
+    }
+    Ok(results)
+}
+
+async fn process_batch_online<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    file_path: &str,
+    samples: &[f32],
+    r: &SafeOnlineRecognizer,
+    punctuation: Option<&Punctuation>,
+) -> Result<Vec<TranscriptSegment>, String> {
+    let stream = SafeStream(r.0.create_stream());
+    let mut segments = Vec::new();
+    let mut segment_start = 0.0;
+    let mut current_samples = 0;
+
+    let chunk_size = 8000; // 0.5s chunks, matching JS implementation
+    let total_samples = samples.len();
+    for chunk in samples.chunks(chunk_size) {
+        debug!("FFI: Calling accept_waveform (Online chunk)");
+        stream.0.accept_waveform(16000, chunk);
+        debug!("FFI: Successfully returned from accept_waveform (Online chunk)");
+        current_samples += chunk.len();
+        while r.0.is_ready(&stream.0) {
+            r.0.decode(&stream.0);
+        }
+        if r.0.is_endpoint(&stream.0) {
+            let current_time = current_samples as f64 / 16000.0;
+            if let Some(result) = r.0.get_result(&stream.0) {
+                if !result.text.trim().is_empty() {
+                    let text = format_transcript(&result.text, punctuation);
+                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                        ts.iter()
+                            .map(|t| *t + segment_start as f32)
+                            .collect::<Vec<_>>()
+                    });
+                    let durations = timestamps_abs
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
+                    segments.push(TranscriptSegment {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        text,
+                        start: segment_start,
+                        end: current_time,
+                        is_final: true,
+                        tokens: Some(result.tokens),
+                        timestamps: timestamps_abs,
+                        durations,
+                    });
+                }
+            }
+            r.0.reset(&stream.0);
+            segment_start = current_time;
+        }
+
+        let progress = (current_samples as f32 / total_samples as f32) * 100.0;
+        let _ = app.emit("batch-progress", (file_path, progress));
+
+        // Yield after every few chunks if possible, but safely we can yield every chunk
+        tokio::task::yield_now().await;
+    }
+
+    // Add tail padding to flush the decoder, matching feed_audio_chunk behavior
+    let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
+    debug!("FFI: Calling accept_waveform (Online chunk tail_padding)");
+    stream.0.accept_waveform(16000, &tail_padding);
+    debug!("FFI: Successfully returned from accept_waveform (Online chunk tail_padding)");
+    while r.0.is_ready(&stream.0) {
+        r.0.decode(&stream.0);
+    }
+
+    if let Some(result) = r.0.get_result(&stream.0) {
+        if !result.text.trim().is_empty() {
+            let text = format_transcript(&result.text, punctuation);
+            let current_time = samples.len() as f64 / 16000.0;
+            let timestamps_abs = result.timestamps.as_ref().map(|ts| {
+                ts.iter()
+                    .map(|t| *t + segment_start as f32)
+                    .collect::<Vec<_>>()
+            });
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, current_time as f32));
+
+            segments.push(TranscriptSegment {
+                id: uuid::Uuid::new_v4().to_string(),
+                text,
+                start: segment_start,
+                end: current_time,
+                is_final: true,
+                tokens: Some(result.tokens),
+                timestamps: timestamps_abs,
+                durations,
+            });
+        }
+    }
+
+    Ok(segments)
+}
+
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(
     app: AppHandle<R>,
@@ -1278,169 +1460,21 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         }
     }
 
-    // Use Offline Recognizer if available
-    if let RecognizerInner::Offline(r) = &recognizer.inner {
-        let segments = if let Some(v_path) = vad_model {
-            if !v_path.is_empty() && Path::new(&v_path).exists() {
-                let silero_vad = sherpa_onnx::SileroVadModelConfig {
-                    model: Some(v_path.clone()),
-                    threshold: 0.35,
-                    min_silence_duration: 1.0,
-                    min_speech_duration: 0.25,
-                    window_size: 512,
-                    ..Default::default()
-                };
-
-                let vad_config = sherpa_onnx::VadModelConfig {
-                    silero_vad,
-                    sample_rate: 16000,
-                    num_threads: 1,
-                    ..Default::default()
-                };
-
-                crate::pipeline::vad_segment_audio(&samples, 16000, &vad_config, vad_buffer)
-                    .unwrap_or_else(|_| crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0))
-            } else {
-                crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0)
-            }
-        } else {
-            crate::pipeline::fixed_chunk_audio(&samples, 16000, 30.0)
-        };
-
-        let mut results = Vec::new();
-        let total_segments = segments.len();
-        for (i, seg) in segments.into_iter().enumerate() {
-            {
-                let stream = r.0.create_stream();
-                debug!("FFI: Calling accept_waveform (Offline segment)");
-                stream.accept_waveform(16000, &seg.samples);
-                debug!("FFI: Successfully returned from accept_waveform (Offline segment)");
-                r.0.decode(&stream);
-
-                if let Some(res) = stream.get_result() {
-                    if !res.text.trim().is_empty() {
-                        let text = format_transcript(&res.text, punctuation.as_ref());
-                        let timestamps_abs = res
-                            .timestamps
-                            .as_ref()
-                            .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
-                        let durations = timestamps_abs
-                            .as_ref()
-                            .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
-
-                        results.push(TranscriptSegment {
-                            id: uuid::Uuid::new_v4().to_string(),
-                            text,
-                            start: seg.start_time as f64,
-                            end: (seg.start_time + seg.duration) as f64,
-                            is_final: true,
-                            tokens: Some(res.tokens),
-                            timestamps: timestamps_abs,
-                            durations,
-                        });
-                    }
-                }
-            }
-            // Emit progress
-            let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
-            let _ = app.emit("batch-progress", (&file_path, progress));
-
-            // Yield to Tokio runtime to prevent blocking the async reactor
-            tokio::task::yield_now().await;
+    match &recognizer.inner {
+        RecognizerInner::Offline(r) => {
+            process_batch_offline(
+                &app,
+                &file_path,
+                &samples,
+                r,
+                punctuation.as_ref(),
+                vad_model,
+                vad_buffer,
+            )
+            .await
         }
-        return Ok(results);
+        RecognizerInner::Online(r) => {
+            process_batch_online(&app, &file_path, &samples, r, punctuation.as_ref()).await
+        }
     }
-
-    if let RecognizerInner::Online(r) = &recognizer.inner {
-        let stream = SafeStream(r.0.create_stream());
-        let mut segments = Vec::new();
-        let mut segment_start = 0.0;
-        let mut current_samples = 0;
-
-        let chunk_size = 8000; // 0.5s chunks, matching JS implementation
-        let total_samples = samples.len();
-        for chunk in samples.chunks(chunk_size) {
-            debug!("FFI: Calling accept_waveform (Online chunk)");
-            stream.0.accept_waveform(16000, chunk);
-            debug!("FFI: Successfully returned from accept_waveform (Online chunk)");
-            current_samples += chunk.len();
-            while r.0.is_ready(&stream.0) {
-                r.0.decode(&stream.0);
-            }
-            if r.0.is_endpoint(&stream.0) {
-                let current_time = current_samples as f64 / 16000.0;
-                if let Some(result) = r.0.get_result(&stream.0) {
-                    if !result.text.trim().is_empty() {
-                        let text = format_transcript(&result.text, punctuation.as_ref());
-                        let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                            ts.iter()
-                                .map(|t| *t + segment_start as f32)
-                                .collect::<Vec<_>>()
-                        });
-                        let durations = timestamps_abs
-                            .as_ref()
-                            .and_then(|ts| synthesize_durations(ts, current_time as f32));
-
-                        segments.push(TranscriptSegment {
-                            id: uuid::Uuid::new_v4().to_string(),
-                            text,
-                            start: segment_start,
-                            end: current_time,
-                            is_final: true,
-                            tokens: Some(result.tokens),
-                            timestamps: timestamps_abs,
-                            durations,
-                        });
-                    }
-                }
-                r.0.reset(&stream.0);
-                segment_start = current_time;
-            }
-
-            let progress = (current_samples as f32 / total_samples as f32) * 100.0;
-            let _ = app.emit("batch-progress", (&file_path, progress));
-
-            // Yield after every few chunks if possible, but safely we can yield every chunk
-            tokio::task::yield_now().await;
-        }
-
-        // Add tail padding to flush the decoder, matching feed_audio_chunk behavior
-        let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
-        debug!("FFI: Calling accept_waveform (Online chunk tail_padding)");
-        stream.0.accept_waveform(16000, &tail_padding);
-        debug!("FFI: Successfully returned from accept_waveform (Online chunk tail_padding)");
-        while r.0.is_ready(&stream.0) {
-            r.0.decode(&stream.0);
-        }
-
-        if let Some(result) = r.0.get_result(&stream.0) {
-            if !result.text.trim().is_empty() {
-                let text = format_transcript(&result.text, punctuation.as_ref());
-                let current_time = samples.len() as f64 / 16000.0;
-                let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                    ts.iter()
-                        .map(|t| *t + segment_start as f32)
-                        .collect::<Vec<_>>()
-                });
-                let durations = timestamps_abs
-                    .as_ref()
-                    .and_then(|ts| synthesize_durations(ts, current_time as f32));
-
-                segments.push(TranscriptSegment {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    text,
-                    start: segment_start,
-                    end: current_time,
-                    is_final: true,
-                    tokens: Some(result.tokens),
-                    timestamps: timestamps_abs,
-                    durations,
-                });
-            }
-        }
-
-        return Ok(segments);
-    }
-
-    Err("Recognizer not initialized or failed".to_string())
 }
