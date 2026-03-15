@@ -13,10 +13,7 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
     {
         use std::env;
         // Check for Apple Silicon (arm64)
-        if env::consts::ARCH == "aarch64" {
-            return Ok(true);
-        }
-        return Ok(false);
+        Ok(env::consts::ARCH == "aarch64")
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -24,16 +21,13 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
         use tokio::process::Command;
         // Check for NVIDIA GPU via nvidia-smi
         // Using "which" or "where" first might be safer but calling it directly works if in PATH
-        match Command::new("nvidia-smi").output().await {
-            Ok(output) => {
-                if output.status.success() {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-            Err(_) => Ok(false),
-        }
+        let is_available = Command::new("nvidia-smi")
+            .output()
+            .await
+            .map(|output| output.status.success())
+            .unwrap_or(false);
+
+        Ok(is_available)
     }
 }
 

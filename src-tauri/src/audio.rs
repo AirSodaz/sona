@@ -46,12 +46,12 @@ pub struct AudioDevice {
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.output_devices().map_err(|e| e.to_string())?;
-    let mut result = Vec::new();
-    for device in devices {
-        if let Ok(name) = device.name() {
-            result.push(AudioDevice { name });
-        }
-    }
+
+    let result = devices
+        .filter_map(|device| device.name().ok())
+        .map(|name| AudioDevice { name })
+        .collect();
+
     Ok(result)
 }
 
@@ -386,12 +386,12 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
 pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.input_devices().map_err(|e| e.to_string())?;
-    let mut result = Vec::new();
-    for device in devices {
-        if let Ok(name) = device.name() {
-            result.push(AudioDevice { name });
-        }
-    }
+
+    let result = devices
+        .filter_map(|device| device.name().ok())
+        .map(|name| AudioDevice { name })
+        .collect();
+
     Ok(result)
 }
 
