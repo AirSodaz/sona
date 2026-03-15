@@ -115,20 +115,40 @@ fn set_mute_macos(mute: bool) -> Result<(), String> {
 fn set_mute_linux(mute: bool) -> Result<(), String> {
     use std::process::Command;
 
+    // Try pactl first (PulseAudio/PipeWire)
     let state = if mute { "1" } else { "0" }; // 1 is mute, 0 is unmute
+
     let pactl_res = Command::new("pactl")
         .args(["set-sink-mute", "@DEFAULT_SINK@", state])
         .output();
-    if pactl_res.map(|out| out.status.success()).unwrap_or(false) {
-        return Ok(());
+
+    if let Ok(out) = pactl_res {
+        if out.status.success() {
+            return Ok(());
+        }
     }
 
+    // Fallback to amixer
     let amixer_state = if mute { "mute" } else { "unmute" };
-    if Command::new("amixer").args(["-D", "pulse", "set", "Master", amixer_state]).output().map(|out| out.status.success()).unwrap_or(false) {
-        return Ok(());
+    let amixer_res = Command::new("amixer")
+        .args(["-D", "pulse", "set", "Master", amixer_state])
+        .output();
+
+    if let Ok(out) = amixer_res {
+        if out.status.success() {
+            return Ok(());
+        }
     }
-    if Command::new("amixer").args(["set", "Master", amixer_state]).output().map(|out| out.status.success()).unwrap_or(false) {
-        return Ok(());
+
+    // Fallback to amixer without -D pulse
+    let amixer_res2 = Command::new("amixer")
+        .args(["set", "Master", amixer_state])
+        .output();
+
+    if let Ok(out) = amixer_res2 {
+        if out.status.success() {
+            return Ok(());
+        }
     }
 
     Err("Failed to set mute state on Linux".to_string())

@@ -122,6 +122,14 @@ struct GeminiModelsResponse {
     models: Option<Vec<GeminiModel>>,
 }
 
+fn format_anthropic_url(base_url: &str) -> String {
+    if base_url.ends_with("/messages") {
+        base_url.to_string()
+    } else {
+        format!("{}/v1/messages", base_url.trim_end_matches('/'))
+    }
+}
+
 async fn call_anthropic(
     client: &Client,
     api_key: &str,
@@ -130,11 +138,7 @@ async fn call_anthropic(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let url = if base_url.ends_with("/messages") {
-        base_url.to_string()
-    } else {
-        format!("{}/v1/messages", base_url.trim_end_matches('/'))
-    };
+    let url = format_anthropic_url(base_url);
 
     let request_body = AnthropicRequest {
         model: model_name.to_string(),
@@ -163,10 +167,39 @@ async fn call_anthropic(
     }
 
     let response_body: AnthropicResponse = res.json().await.map_err(|e| e.to_string())?;
-    if let Some(content) = response_body.content.first() {
-        Ok(content.text.clone())
+    response_body
+        .content
+        .into_iter()
+        .next()
+        .map(|content| content.text)
+        .ok_or_else(|| "No content in Anthropic response".to_string())
+}
+
+fn clean_gemini_base_url(base_url: &str) -> &str {
+    let base = base_url.trim_end_matches('/');
+    if let Some(stripped) = base.strip_suffix("/v1beta/models") {
+        stripped
+    } else if let Some(stripped) = base.strip_suffix("/models") {
+        stripped
+    } else if let Some(stripped) = base.strip_suffix("/v1beta") {
+        stripped
+    } else if let Some(stripped) = base.strip_suffix("/v1") {
+        stripped
     } else {
-        Err("No content in Anthropic response".to_string())
+        base
+    }
+}
+
+fn format_gemini_url(base_url: &str, model_name: &str, api_key: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    if base.contains("generateContent") {
+        format!("{}?key={}", base, api_key)
+    } else {
+        let cleaned_base = clean_gemini_base_url(base);
+        format!(
+            "{}/v1beta/models/{}:generateContent?key={}",
+            cleaned_base, model_name, api_key
+        )
     }
 }
 
@@ -182,26 +215,7 @@ async fn call_gemini(
         return Err("Model name cannot be empty for Gemini API".to_string());
     }
 
-    let base = base_url.trim_end_matches('/');
-    let url = if base.contains("generateContent") {
-        format!("{}?key={}", base, api_key)
-    } else {
-        let cleaned_base = if base.ends_with("/v1beta/models") {
-            base.strip_suffix("/v1beta/models").unwrap_or(base)
-        } else if base.ends_with("/models") {
-            base.strip_suffix("/models").unwrap_or(base)
-        } else if base.ends_with("/v1beta") {
-            base.strip_suffix("/v1beta").unwrap_or(base)
-        } else if base.ends_with("/v1") {
-            base.strip_suffix("/v1").unwrap_or(base)
-        } else {
-            base
-        };
-        format!(
-            "{}/v1beta/models/{}:generateContent?key={}",
-            cleaned_base, model_name, api_key
-        )
-    };
+    let url = format_gemini_url(base_url, model_name, api_key);
 
     let request_body = GeminiRequest {
         contents: vec![GeminiContent {
@@ -228,14 +242,25 @@ async fn call_gemini(
 
     let response_body: GeminiResponse = res.json().await.map_err(|e| e.to_string())?;
 
-    if let Some(candidates) = response_body.candidates {
-        if let Some(candidate) = candidates.first() {
-            if let Some(part) = candidate.content.parts.first() {
-                return Ok(part.text.clone());
-            }
+    response_body
+        .candidates
+        .and_then(|c| c.into_iter().next())
+        .and_then(|c| c.content.parts.into_iter().next())
+        .map(|p| p.text)
+        .ok_or_else(|| "No content in Gemini response".to_string())
+}
+
+fn format_openai_url(base_url: &str) -> String {
+    if base_url.contains("chat/completions") {
+        base_url.to_string()
+    } else {
+        let base = base_url.trim_end_matches('/');
+        if base.ends_with("/v1") {
+            format!("{}/chat/completions", base)
+        } else {
+            format!("{}/v1/chat/completions", base)
         }
     }
-    Err("No content in Gemini response".to_string())
 }
 
 async fn call_openai(
@@ -246,16 +271,7 @@ async fn call_openai(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let url = if base_url.contains("chat/completions") {
-        base_url.to_string()
-    } else {
-        let base = base_url.trim_end_matches('/');
-        if base.ends_with("/v1") {
-            format!("{}/chat/completions", base)
-        } else {
-            format!("{}/v1/chat/completions", base)
-        }
-    };
+    let url = format_openai_url(base_url);
 
     let request_body = OpenAIRequest {
         model: model_name.to_string(),
@@ -285,11 +301,12 @@ async fn call_openai(
     }
 
     let response_body: OpenAIResponse = res.json().await.map_err(|e| e.to_string())?;
-    if let Some(choice) = response_body.choices.first() {
-        Ok(choice.message.content.clone())
-    } else {
-        Err("No choices in OpenAI response".to_string())
-    }
+    response_body
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .ok_or_else(|| "No choices in OpenAI response".to_string())
 }
 
 #[tauri::command]
@@ -315,18 +332,7 @@ async fn get_gemini_models(
     api_key: &str,
     base_url: &str,
 ) -> Result<Vec<String>, String> {
-    let base = base_url.trim_end_matches('/');
-    let cleaned_base = if base.ends_with("/v1beta/models") {
-        base.strip_suffix("/v1beta/models").unwrap_or(base)
-    } else if base.ends_with("/models") {
-        base.strip_suffix("/models").unwrap_or(base)
-    } else if base.ends_with("/v1beta") {
-        base.strip_suffix("/v1beta").unwrap_or(base)
-    } else if base.ends_with("/v1") {
-        base.strip_suffix("/v1").unwrap_or(base)
-    } else {
-        base
-    };
+    let cleaned_base = clean_gemini_base_url(base_url);
     let url = format!("{}/v1beta/models?key={}", cleaned_base, api_key);
 
     let res = client
@@ -342,15 +348,12 @@ async fn get_gemini_models(
 
     let response_body: GeminiModelsResponse = res.json().await.map_err(|e| e.to_string())?;
 
-    if let Some(models) = response_body.models {
-        let names = models
-            .into_iter()
-            .map(|m| m.name.trim_start_matches("models/").to_string())
-            .collect();
-        Ok(names)
-    } else {
-        Ok(vec![])
-    }
+    Ok(response_body
+        .models
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.name.trim_start_matches("models/").to_string())
+        .collect())
 }
 
 async fn get_openai_models(
