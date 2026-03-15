@@ -636,6 +636,94 @@ fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
     result
 }
 
+pub fn align_tokens_with_punctuated_text(
+    punctuated_text: &str,
+    original_tokens: &[String],
+    original_timestamps: &[f32],
+) -> (Vec<String>, Vec<f32>) {
+    if original_tokens.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let mut aligned_tokens: Vec<String> = Vec::with_capacity(original_tokens.len());
+    let punctuated_chars: Vec<char> = punctuated_text.chars().collect();
+    let mut char_idx = 0;
+
+    for (i, orig_token) in original_tokens.iter().enumerate() {
+        let mut new_token = String::new();
+        let orig_chars: Vec<char> = orig_token.chars().collect();
+        let mut orig_char_idx = 0;
+
+        while char_idx < punctuated_chars.len() && orig_char_idx < orig_chars.len() {
+            let p_char = punctuated_chars[char_idx];
+            let o_char = orig_chars[orig_char_idx];
+
+            // Normalize special spaces that tokenizer might output (e.g. U+2581 ' ')
+            let o_char_normalized = if o_char == ' ' { ' ' } else { o_char };
+
+            if p_char.to_lowercase().to_string() == o_char_normalized.to_lowercase().to_string()
+               || (p_char.is_whitespace() && o_char_normalized.is_whitespace()) {
+                new_token.push(p_char);
+                char_idx += 1;
+                orig_char_idx += 1;
+            } else if p_char.is_whitespace() || p_char.is_ascii_punctuation() || "\u{FF0C}\u{3002}\u{FF1F}\u{FF01}\u{FF1A}\u{FF1B}、".contains(p_char) {
+                // Consume added punctuation/whitespace into the current token
+                new_token.push(p_char);
+                char_idx += 1;
+            } else if o_char_normalized.is_whitespace() {
+                // Original token had whitespace that's missing from punctuated text
+                orig_char_idx += 1;
+            } else {
+                // Mismatch, this shouldn't happen usually but let's break and try to recover next token
+                break;
+            }
+        }
+
+        if i == original_tokens.len() - 1 {
+            while char_idx < punctuated_chars.len() {
+                new_token.push(punctuated_chars[char_idx]);
+                char_idx += 1;
+            }
+        } else {
+            // Greedily consume trailing punctuation and spaces for this token
+            while char_idx < punctuated_chars.len() {
+                let p_char = punctuated_chars[char_idx];
+
+                if p_char.is_whitespace() || p_char.is_ascii_punctuation() || "\u{FF0C}\u{3002}\u{FF1F}\u{FF01}\u{FF1A}\u{FF1B}、".contains(p_char) {
+
+                    // Lookahead: Does the next token actually start with this char?
+                    let next_token = &original_tokens[i + 1];
+                    let next_first_char = next_token.chars().find(|c| !c.is_whitespace() && *c != ' ');
+
+                    if let Some(nfc) = next_first_char {
+                        if nfc.to_lowercase().to_string() == p_char.to_lowercase().to_string() {
+                            // Next token starts with this char, don't steal it
+                            break;
+                        }
+                    }
+
+                    new_token.push(p_char);
+                    char_idx += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        aligned_tokens.push(new_token);
+    }
+
+    // Edge case recovery: if we somehow didn't consume all chars (mismatch fallback)
+    if char_idx < punctuated_chars.len() {
+        if let Some(last_token) = aligned_tokens.last_mut() {
+            let remaining: String = punctuated_chars[char_idx..].iter().collect();
+            last_token.push_str(&remaining);
+        }
+    }
+
+    (aligned_tokens, original_timestamps.to_vec())
+}
+
 fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
     if timestamps.is_empty() {
         return None;
@@ -685,10 +773,21 @@ fn run_offline_inference<R: tauri::Runtime>(
             };
 
             let global_end = global_start + (full_audio.len() as f64 / 16000.0);
-            let timestamps_abs: Option<Vec<f32>> = result
-                .timestamps
-                .as_ref()
-                .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
+
+            let (aligned_tokens, timestamps_abs) = if is_final {
+                let ts: Vec<f32> = result.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+                let (at, ats) = align_tokens_with_punctuated_text(&text, &result.tokens, &ts);
+                let abs_ts: Option<Vec<f32>> = if result.timestamps.is_some() {
+                    Some(ats.iter().map(|t| *t + global_start as f32).collect())
+                } else {
+                    None
+                };
+                (at, abs_ts)
+            } else {
+                let abs_ts: Option<Vec<f32>> = result.timestamps.as_ref().map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
+                (result.tokens.clone(), abs_ts)
+            };
+
             let durations = timestamps_abs
                 .as_ref()
                 .and_then(|ts| synthesize_durations(ts, global_end as f32));
@@ -699,7 +798,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                 start: global_start,
                 end: global_end,
                 is_final,
-                tokens: Some(result.tokens),
+                tokens: Some(aligned_tokens),
                 timestamps: timestamps_abs,
                 durations,
             };
@@ -876,7 +975,11 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
             if let Some(result) = r.0.get_result(&st.0) {
                 if !result.text.trim().is_empty() {
                     let text = format_transcript(&result.text, instance.punctuation.as_deref());
-                    let timestamps_f32 = result.timestamps;
+
+                    let ts: Vec<f32> = result.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+                    let (aligned_tokens, aligned_timestamps) = align_tokens_with_punctuated_text(&text, &result.tokens, &ts);
+                    let timestamps_f32: Option<Vec<f32>> = if result.timestamps.is_some() { Some(aligned_timestamps) } else { None };
+
                     let durations = timestamps_f32
                         .as_ref()
                         .and_then(|ts| synthesize_durations(ts, current_time as f32));
@@ -892,7 +995,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                         start: instance.segment_start_time,
                         end: current_time,
                         is_final: true,
-                        tokens: Some(result.tokens),
+                        tokens: Some(aligned_tokens),
                         timestamps: timestamps_f32,
                         durations,
                     };
@@ -1126,7 +1229,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     if !result.text.trim().is_empty() {
                         let text = format_transcript(&result.text, instance.punctuation.as_deref());
 
-                        let timestamps_f32 = result.timestamps;
+                        let ts: Vec<f32> = result.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+                        let (aligned_tokens, aligned_timestamps) = align_tokens_with_punctuated_text(&text, &result.tokens, &ts);
+                        let timestamps_f32: Option<Vec<f32>> = if result.timestamps.is_some() { Some(aligned_timestamps) } else { None };
+
                         let durations = timestamps_f32
                             .as_ref()
                             .and_then(|ts| synthesize_durations(ts, current_time as f32));
@@ -1142,7 +1248,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             start: instance.segment_start_time,
                             end: current_time,
                             is_final: true,
-                            tokens: Some(result.tokens),
+                            tokens: Some(aligned_tokens),
                             timestamps: timestamps_f32,
                             durations,
                         };
@@ -1278,10 +1384,15 @@ async fn process_batch_offline<R: tauri::Runtime>(
             if let Some(res) = stream.get_result() {
                 if !res.text.trim().is_empty() {
                     let text = format_transcript(&res.text, punctuation);
-                    let timestamps_abs = res
-                        .timestamps
-                        .as_ref()
-                        .map(|ts| ts.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>());
+
+                    let ts: Vec<f32> = res.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+                    let (aligned_tokens, aligned_timestamps) = align_tokens_with_punctuated_text(&text, &res.tokens, &ts);
+                    let timestamps_abs: Option<Vec<f32>> = if res.timestamps.is_some() {
+                        Some(aligned_timestamps.iter().map(|t| *t + seg.start_time).collect::<Vec<_>>())
+                    } else {
+                        None
+                    };
+
                     let durations = timestamps_abs
                         .as_ref()
                         .and_then(|ts| synthesize_durations(ts, seg.start_time + seg.duration));
@@ -1292,7 +1403,7 @@ async fn process_batch_offline<R: tauri::Runtime>(
                         start: seg.start_time as f64,
                         end: (seg.start_time + seg.duration) as f64,
                         is_final: true,
-                        tokens: Some(res.tokens),
+                        tokens: Some(aligned_tokens),
                         timestamps: timestamps_abs,
                         durations,
                     });
@@ -1331,9 +1442,15 @@ async fn process_batch_online<R: tauri::Runtime>(
             if let Some(result) = r.0.get_result(&stream.0) {
                 if !result.text.trim().is_empty() {
                     let text = format_transcript(&result.text, punctuation);
-                    let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>()
-                    });
+
+                    let ts: Vec<f32> = result.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+                    let (aligned_tokens, aligned_timestamps) = align_tokens_with_punctuated_text(&text, &result.tokens, &ts);
+                    let timestamps_abs: Option<Vec<f32>> = if result.timestamps.is_some() {
+                        Some(aligned_timestamps.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>())
+                    } else {
+                        None
+                    };
+
                     let durations = timestamps_abs.as_ref().and_then(|ts| synthesize_durations(ts, current_time as f32));
 
                     segments.push(TranscriptSegment {
@@ -1342,7 +1459,7 @@ async fn process_batch_online<R: tauri::Runtime>(
                         start: segment_start,
                         end: current_time,
                         is_final: true,
-                        tokens: Some(result.tokens),
+                        tokens: Some(aligned_tokens),
                         timestamps: timestamps_abs,
                         durations,
                     });
@@ -1366,9 +1483,15 @@ async fn process_batch_online<R: tauri::Runtime>(
         if !result.text.trim().is_empty() {
             let text = format_transcript(&result.text, punctuation);
             let current_time = samples.len() as f64 / 16000.0;
-            let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                ts.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>()
-            });
+
+            let ts: Vec<f32> = result.timestamps.as_ref().map(|ts| ts.clone()).unwrap_or_default();
+            let (aligned_tokens, aligned_timestamps) = align_tokens_with_punctuated_text(&text, &result.tokens, &ts);
+            let timestamps_abs: Option<Vec<f32>> = if result.timestamps.is_some() {
+                Some(aligned_timestamps.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>())
+            } else {
+                None
+            };
+
             let durations = timestamps_abs.as_ref().and_then(|ts| synthesize_durations(ts, current_time as f32));
 
             segments.push(TranscriptSegment {
@@ -1377,7 +1500,7 @@ async fn process_batch_online<R: tauri::Runtime>(
                 start: segment_start,
                 end: current_time,
                 is_final: true,
-                tokens: Some(result.tokens),
+                tokens: Some(aligned_tokens),
                 timestamps: timestamps_abs,
                 durations,
             });
