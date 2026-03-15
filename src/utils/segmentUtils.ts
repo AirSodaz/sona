@@ -462,61 +462,6 @@ export function computeSegmentsFingerprint(segments: TranscriptSegment[]): strin
     ).join('|');
 }
 
-function matchTokenToWord(normWord: string, currentRawIndex: number, maxTokens: number, normalizedTokens: string[]): number {
-    let accumulatedTokenStr = "";
-    let tokensConsumed = 0;
-
-    for (let j = 0; j < 5 && (currentRawIndex + j) < maxTokens; j++) {
-        const t = normalizedTokens[currentRawIndex + j];
-        accumulatedTokenStr += t;
-        tokensConsumed++;
-
-        if (accumulatedTokenStr.startsWith(normWord) || normWord.startsWith(accumulatedTokenStr)) {
-            if (accumulatedTokenStr.length >= normWord.length) {
-                return currentRawIndex + tokensConsumed;
-            }
-        }
-    }
-    return -1;
-}
-
-function recoverTokenMismatch(
-    i: number,
-    words: string[],
-    normalizedWords: string[],
-    currentRawIndex: number,
-    maxTokens: number,
-    normalizedTokens: string[]
-): number {
-    let nextNorm = "";
-    for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
-        nextNorm = normalizedWords[nextIdx];
-        if (nextNorm) break;
-    }
-
-    if (nextNorm) {
-        for (let k = 1; k < 10 && (currentRawIndex + k) < maxTokens; k++) {
-            const t = normalizedTokens[currentRawIndex + k];
-            if (t && t.startsWith(nextNorm)) {
-                return currentRawIndex + k;
-            }
-        }
-    } else {
-        let hasRemainingContent = false;
-        for (let r = i + 1; r < words.length; r++) {
-            if (normalizedWords[r]) {
-                hasRemainingContent = true;
-                break;
-            }
-        }
-        if (i === words.length - 1 || (i > words.length - 3 && !hasRemainingContent)) {
-            return maxTokens;
-        }
-    }
-
-    return currentRawIndex + 1;
-}
-
 export function alignTokensToText(
     text: string,
     rawTokens: string[],
@@ -572,13 +517,26 @@ export function alignTokensToText(
         }
     }
 
-    let currentRawIndex = 0;
-    const maxTokens = rawTokens.length;
+    let joinedTokens = "";
+    const charToTokenIndex: number[] = [];
+    for (let i = 0; i < normalizedTokens.length; i++) {
+        const tok = normalizedTokens[i];
+        joinedTokens += tok;
+        for (let j = 0; j < tok.length; j++) {
+            charToTokenIndex.push(i);
+        }
+    }
 
-    const getFallbackTimestamp = () => {
+    let charPos = 0;
+    const maxChars = joinedTokens.length;
+
+    const getFallbackTimestamp = (cPos: number) => {
         if (rawTimestamps.length === 0) return 0;
-        const index = Math.min(currentRawIndex, rawTimestamps.length - 1);
-        return rawTimestamps[index];
+        if (cPos >= charToTokenIndex.length) {
+             return rawTimestamps[charToTokenIndex[charToTokenIndex.length - 1]] || rawTimestamps[rawTimestamps.length - 1];
+        }
+        const tokenIdx = charToTokenIndex[cPos];
+        return rawTimestamps[tokenIdx] || 0;
     };
 
     for (let i = 0; i < words.length; i++) {
@@ -586,27 +544,49 @@ export function alignTokensToText(
         const cleanWord = stripHtmlTags(word);
 
         if (!cleanWord.trim()) {
-            result.push({ text: word, timestamp: getFallbackTimestamp() });
+            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
             continue;
         }
 
         const normWord = normalizedWords[i];
         if (!normWord) {
-            result.push({ text: word, timestamp: getFallbackTimestamp() });
+            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
             continue;
         }
 
-        result.push({ text: word, timestamp: getFallbackTimestamp() });
+        const searchLimit = Math.max(20, normWord.length * 2);
+        const subStr = joinedTokens.substring(charPos, charPos + searchLimit);
+        const localIdx = subStr.indexOf(normWord);
 
-        const matchResult = matchTokenToWord(normWord, currentRawIndex, maxTokens, normalizedTokens);
-        if (matchResult !== -1) {
-            currentRawIndex = matchResult;
+        let matchPos = charPos;
+        if (localIdx !== -1) {
+            matchPos = charPos + localIdx;
+            result.push({ text: word, timestamp: getFallbackTimestamp(matchPos) });
+            charPos = matchPos + normWord.length;
         } else {
-            currentRawIndex = recoverTokenMismatch(i, words, normalizedWords, currentRawIndex, maxTokens, normalizedTokens);
+            result.push({ text: word, timestamp: getFallbackTimestamp(charPos) });
+
+            let nextNorm = "";
+            for (let nextIdx = i + 1; nextIdx < words.length; nextIdx++) {
+                nextNorm = normalizedWords[nextIdx];
+                if (nextNorm) break;
+            }
+
+            if (nextNorm) {
+                const nextSubStr = joinedTokens.substring(charPos, charPos + searchLimit + nextNorm.length);
+                const nextLocalIdx = nextSubStr.indexOf(nextNorm);
+                if (nextLocalIdx !== -1) {
+                    charPos = charPos + nextLocalIdx;
+                } else {
+                    charPos += 1;
+                }
+            } else {
+                charPos = maxChars;
+            }
         }
 
-        if (currentRawIndex >= maxTokens) {
-            currentRawIndex = maxTokens;
+        if (charPos > maxChars) {
+            charPos = maxChars;
         }
     }
 
