@@ -99,8 +99,14 @@ class PolishService {
                     try {
                         const bgSegments = await historyService.loadTranscript(`${jobHistoryId}.json`);
                         if (bgSegments) {
+                            const segMap = new Map<string, TranscriptSegment>();
+                            for (let i = 0; i < bgSegments.length; i++) {
+                                const seg = bgSegments[i];
+                                segMap.set(seg.id, seg);
+                            }
+
                             polishedChunk.forEach(({ id, text }) => {
-                                const seg = bgSegments.find(s => s.id === id);
+                                const seg = segMap.get(id);
                                 if (seg) seg.text = text;
                             });
                             await historyService.updateTranscript(jobHistoryId, bgSegments);
