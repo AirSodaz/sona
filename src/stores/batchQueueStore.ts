@@ -253,8 +253,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         await polishService.polishSegments(finalSegments, (polishedChunk) => {
                             // Update segments incrementally
                             const currentSegments = get().queueItems.find(i => i.id === itemId)?.segments || [];
+
+                            // O(N) map conversion instead of O(N*M) lookups
+                            const polishedMap = new Map<string, { id: string; text: string }>();
+                            for (let i = 0; i < polishedChunk.length; i++) {
+                                polishedMap.set(polishedChunk[i].id, polishedChunk[i]);
+                            }
+
                             const updatedSegments = currentSegments.map(seg => {
-                                const polished = polishedChunk.find(p => p.id === seg.id);
+                                const polished = polishedMap.get(seg.id);
                                 return polished ? { ...seg, text: polished.text } : seg;
                             });
                             get().updateItemSegments(itemId, updatedSegments);
