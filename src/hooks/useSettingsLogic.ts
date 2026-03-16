@@ -63,9 +63,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     async function checkInstalledModels() {
         const installed = new Set<string>();
-        for (const model of PRESET_MODELS) {
-            if (await modelService.isModelInstalled(model.id)) {
-                installed.add(model.id);
+        const results = await Promise.all(
+            PRESET_MODELS.map(async (model) => {
+                const isInstalled = await modelService.isModelInstalled(model.id);
+                return { id: model.id, isInstalled };
+            })
+        );
+        for (const result of results) {
+            if (result.isInstalled) {
+                installed.add(result.id);
             }
         }
         setInstalledModels(installed);
