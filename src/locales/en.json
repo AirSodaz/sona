@@ -117,7 +117,10 @@
         "merge_confirm_message": "Merge this segment with the next one?",
         "merge_confirm_title": "Confirm Merge",
         "aligning": "Re-aligning tokens...",
-        "alignment_failed": "Token alignment failed"
+        "alignment_failed": "Token alignment failed",
+        "word_count_one": "{{count}} word",
+        "word_count_other": "{{count}} words",
+        "char_count": "{{count}} characters"
     },
     "export": {
         "button": "Export",
