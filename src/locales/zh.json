@@ -117,7 +117,10 @@
         "merge_confirm_message": "确定要将此段落与下一段合并吗？",
         "merge_confirm_title": "确认合并",
         "aligning": "正在重新对齐...",
-        "alignment_failed": "对齐失败"
+        "alignment_failed": "对齐失败",
+        "word_count_one": "{{count}} 字",
+        "word_count_other": "{{count}} 字",
+        "char_count": "{{count}} 字"
     },
     "export": {
         "button": "导出",

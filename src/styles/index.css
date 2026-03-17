@@ -2799,6 +2799,34 @@ input[type="radio"]:focus {
 }
 
 /* ===========================
+   Word Count Badge
+   =========================== */
+
+.word-count-badge {
+  position: absolute;
+  bottom: var(--spacing-md);
+  right: var(--spacing-lg);
+  z-index: 90;
+  padding: 4px 10px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none; /* Don't block clicks underneath */
+  user-select: none;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+
+.transcript-editor:hover .word-count-badge {
+  opacity: 1;
+}
+
+/* ===========================
    Update Notification
    =========================== */
 

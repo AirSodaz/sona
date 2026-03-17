@@ -143,6 +143,28 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [openSearch]);
 
+    // Calculate total words/characters
+    const wordCount = useMemo(() => {
+        if (!segments || segments.length === 0) return 0;
+
+        // Count CJK characters + words using Unicode properties
+        let count = 0;
+        for (const segment of segments) {
+            if (!segment.text) continue;
+            // \p{sc=Han} matches Chinese characters
+            // \p{sc=Hiragana} matches Hiragana
+            // \p{sc=Katakana} matches Katakana
+            // \p{sc=Hangul} matches Korean Hangul
+            // \p{L}+ matches a sequence of letters (words)
+            // \d+ matches a sequence of numbers
+            const matches = segment.text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]|[\p{L}\d]+/gu);
+            if (matches) {
+                count += matches.length;
+            }
+        }
+        return count;
+    }, [segments]);
+
     // Scroll to active match
     useEffect(() => {
         if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
@@ -171,6 +193,11 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     return (
         <div className="transcript-editor">
             <EditorToolbar />
+            {wordCount > 0 && (
+                <div className="word-count-badge">
+                    {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}
+                </div>
+            )}
             <TranscriptUIContext.Provider value={uiStore}>
                 <Virtuoso<TranscriptSegment, TranscriptContext>
                     ref={virtuosoRef}
