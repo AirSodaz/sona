@@ -61,32 +61,32 @@ jobs:
       - name: Download and extract sherpa-onnx shared libraries (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
-          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.28/sherpa-onnx-v1.12.28-linux-x64-shared.tar.bz2
-          tar -xjf sherpa-onnx-v1.12.28-linux-x64-shared.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v1.12.28-linux-x64-shared/lib" >> $GITHUB_ENV
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.31/sherpa-onnx-v1.12.31-linux-x64-shared.tar.bz2
+          tar -xjf sherpa-onnx-v1.12.31-linux-x64-shared.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v1.12.31-linux-x64-shared/lib" >> $GITHUB_ENV
 
       - name: Download and extract sherpa-onnx shared libraries (macOS)
         if: startsWith(matrix.platform, 'macos')
         run: |
-          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.28/sherpa-onnx-v1.12.28-osx-universal2-shared.tar.bz2
-          tar -xjf sherpa-onnx-v1.12.28-osx-universal2-shared.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v1.12.28-osx-universal2-shared/lib" >> $GITHUB_ENV
+          wget https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.31/sherpa-onnx-v1.12.31-osx-universal2-shared.tar.bz2
+          tar -xjf sherpa-onnx-v1.12.31-osx-universal2-shared.tar.bz2
+          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v1.12.31-osx-universal2-shared/lib" >> $GITHUB_ENV
 
       - name: Download and extract sherpa-onnx shared libraries (Windows x64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == ''
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.28/sherpa-onnx-v1.12.28-win-x64-shared-MT-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.31/sherpa-onnx-v1.12.31-win-x64-shared-MT-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-x64-shared-MT-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Copy-Item "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-x64-shared-MT-Release\lib\cargs.lib" -Destination "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-x64-shared-MT-Release\lib\onnxruntime.lib"
+          echo "SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-x64-shared-MT-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Copy-Item "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-x64-shared-MT-Release\lib\cargs.lib" -Destination "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-x64-shared-MT-Release\lib\onnxruntime.lib"
 
       - name: Download and extract sherpa-onnx shared libraries (Windows ARM64)
         if: startsWith(matrix.platform, 'windows') && matrix.args == '--target aarch64-pc-windows-msvc'
         run: |
-          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.28/sherpa-onnx-v1.12.28-win-arm64-shared-MT-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
+          Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.31/sherpa-onnx-v1.12.31-win-arm64-shared-MT-Release.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
           tar -xjf sherpa-onnx-win.tar.bz2
-          echo "SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-arm64-shared-MT-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Copy-Item "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-arm64-shared-MT-Release\lib\cargs.lib" -Destination "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.28-win-arm64-shared-MT-Release\lib\onnxruntime.lib"
+          echo "SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-arm64-shared-MT-Release\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Copy-Item "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-arm64-shared-MT-Release\lib\cargs.lib" -Destination "$env:GITHUB_WORKSPACE\sherpa-onnx-v1.12.31-win-arm64-shared-MT-Release\lib\onnxruntime.lib"
 
       - name: Configure RUSTFLAGS
         if: startsWith(matrix.platform, 'ubuntu') || startsWith(matrix.platform, 'macos')
