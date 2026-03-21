@@ -4516,9 +4516,9 @@ dependencies = [
 
 [[package]]
 name = "sherpa-onnx"
-version = "0.1.9"
+version = "1.12.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cb3cd528fb1ab43135fd7a68d45720910da8d6c036b97808125a456f1b86ffb"
+checksum = "e414b22e7b6cffcdd29b51105d0f83cc811ae82e5c226322735acd6198d219dc"
 dependencies = [
  "serde",
  "serde_json",
@@ -4527,9 +4527,9 @@ dependencies = [
 
 [[package]]
 name = "sherpa-onnx-sys"
-version = "0.1.9"
+version = "1.12.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50748be67c68ff33d4c21c934f8d7c7067bb4ca766583864f05b03219a55d4e9"
+checksum = "11d3160579483667a1cc6ba0586a765c289db6a87f501618ebb665c1428629b9"
 
 [[package]]
 name = "shlex"
