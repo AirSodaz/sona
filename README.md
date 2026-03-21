@@ -26,7 +26,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 *   **Node.js**: v20 or later (for frontend build).
 *   **Rust**: Stable release (required for the Tauri backend).
-*   **Package Manager**: `npm` (recommended).
+*   **Package Manager**: `pnpm` (required).
 
 ##### Linux Requirements
 If you are running on Linux (Ubuntu/Debian), ensure you have the necessary system dependencies:
@@ -55,12 +55,13 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 
 2.  **Install dependencies**
     ```bash
-    npm install
+    pnpm install
     ```
+    *(Note: This automatically runs the `setup-ffmpeg.js` prebuild step to download ffmpeg-static for the Tauri backend).*
 
 3.  **Run the application**
     ```bash
-    npm run tauri dev
+    pnpm run tauri dev
     ```
 
 ## 📦 Model Management
@@ -81,12 +82,21 @@ Sona allows you to choose the AI model that best fits your needs, both for offli
 3.  Enter your API Key and Base URL (if applicable).
 4.  Select a model to power the Polish and Translate features.
 
+## 🛠️ Development Commands
+
+To help with development, here are some common commands you might need:
+
+*   **Run frontend tests**: `pnpm test`
+*   **Build frontend**: `pnpm build`
+*   **Check Rust backend**: `cargo check --manifest-path src-tauri/Cargo.toml`
+*   **Test Rust backend**: `cargo test --manifest-path src-tauri/Cargo.toml`
+
 ## 🏗️ Building
 
 To build the application for production:
 
 ```bash
-npm run tauri build
+pnpm run tauri build
 ```
 
 The executable will be generated in `src-tauri/target/release/bundle`.
