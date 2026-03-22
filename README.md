@@ -54,6 +54,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     ```
 
 2.  **Install dependencies**
+    *(Note: This also triggers the existing `scripts/setup-ffmpeg.js` prebuild/setup step for local development.)*
     ```bash
     npm install
     ```
@@ -61,6 +62,11 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 3.  **Run the application**
     ```bash
     npm run tauri dev
+    ```
+
+4.  **Run frontend tests**
+    ```bash
+    npm test
     ```
 
 ## 📦 Model Management

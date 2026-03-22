@@ -54,6 +54,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     ```
 
 2.  **安装依赖**
+    *（注意：这也将触发本地开发现有的 `scripts/setup-ffmpeg.js` 预构建/设置步骤。）*
     ```bash
     npm install
     ```
@@ -61,6 +62,11 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 3.  **运行应用**
     ```bash
     npm run tauri dev
+    ```
+
+4.  **运行前端测试**
+    ```bash
+    npm test
     ```
 
 ## 📦 模型管理
