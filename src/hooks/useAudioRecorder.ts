@@ -2,12 +2,13 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { useDialogStore } from '../stores/dialogStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
+import { getResumeOnboardingStep } from '../utils/onboarding';
 
 interface UseAudioRecorderProps {
     inputSource: 'microphone' | 'desktop';
@@ -37,7 +38,6 @@ export function getSupportedMimeType(): string {
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
 
     // Store Access
     const config = useTranscriptStore((state) => state.config);
@@ -192,7 +192,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // Start Recording (Main Entry)
     const startRecording = useCallback(async () => {
         if (!config.streamingModelPath) {
-            await alert(t('batch.no_model_error'), { variant: 'error' });
+            const onboardingStore = useOnboardingStore.getState();
+            useTranscriptStore.getState().setMode('live');
+            onboardingStore.reopen(
+                getResumeOnboardingStep(config, 'live_record', onboardingStore.persistedState),
+                'live_record'
+            );
             return false;
         }
 

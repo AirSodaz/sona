@@ -291,13 +291,63 @@
         "close": "关闭"
     },
     "first_run": {
+        "badge": "首次启动设置",
         "title": "欢迎使用 Sona",
-        "description": "首次使用需下载必要模型。",
-        "one_click_download": "一键下载",
-        "skip": "跳过",
-        "downloading": "下载中...",
-        "success": "下载完成",
-        "error": "下载失败"
+        "description": "我们会先完成离线转录所需的准备，让你的第一次实时录音可以尽快开始。",
+        "stepper_label": "首次启动设置步骤",
+        "steps": {
+            "welcome": "欢迎",
+            "models": "模型",
+            "microphone": "麦克风"
+        },
+        "actions": {
+            "continue": "继续",
+            "later": "稍后再说",
+            "download_recommended": "下载推荐模型",
+            "retry": "重新下载",
+            "retry_permission": "重新请求权限",
+            "finish": "前往实时录音",
+            "back": "返回"
+        },
+        "banner": {
+            "title": "完成设置后即可开始转录",
+            "body": "Sona 还需要完成本地模型准备，实时录音和导入文件才能正常使用。",
+            "cta": "继续设置"
+        },
+        "welcome": {
+            "heading": "最快开始第一次实时转录",
+            "body": "我们会下载一套推荐的离线模型，检查麦克风权限，并把高级设置留到之后再调。",
+            "fast_title": "首启优先推荐默认方案",
+            "fast_body": "使用 Sona 默认的本地模型组合，优先打通麦克风实时录音这条路径。",
+            "private_title": "所有内容都留在本机",
+            "private_body": "语音识别完全本地运行，你可以先体验应用，而不把音频发送到外部服务。",
+            "ready_title": "大约一分钟即可准备好",
+            "ready_body": "完成后会直接回到实时录音页，方便你立刻开始。",
+            "recommended_path_label": "首个成功路径",
+            "recommended_path_value": "麦克风 -> 实时录音",
+            "download_label": "下载体积",
+            "download_value": "约 156 MB"
+        },
+        "models": {
+            "heading": "下载推荐的离线模型组合",
+            "body": "这里会安装用于实时与批量转录的 SenseVoice Int8，以及用于语音检测的 Silero VAD。",
+            "preparing": "准备中...",
+            "ready": "已就绪",
+            "error": "下载失败",
+            "error_detail": "推荐模型未能完成下载，请重试。"
+        },
+        "microphone": {
+            "heading": "允许麦克风访问",
+            "body": "Sona 会优先使用麦克风。之后你仍然可以在设置里切换到其他输入源或系统音频。",
+            "default_source_label": "默认输入源",
+            "default_source_value": "麦克风实时录音",
+            "device_label": "当前输入设备",
+            "device_hint": "选择开始实时录音时要使用的麦克风。",
+            "loading_title": "正在检查麦克风访问",
+            "loading_body": "我们正在请求权限并加载可用设备。",
+            "permission_title": "还需要麦克风权限",
+            "permission_body": "请允许麦克风访问，完成设置后才能顺利开始第一次实时录音。"
+        }
     },
     "tray": {
         "show": "显示主窗口",

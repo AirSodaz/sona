@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
+import { useOnboardingStore } from '../../stores/onboardingStore';
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockResolvedValue(undefined);
@@ -142,6 +143,7 @@ describe('LiveRecord', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
         capturedOnSegment = null;
+        localStorage.clear();
 
         mockStart.mockImplementation((onSeg: any, _onError: any) => {
             capturedOnSegment = onSeg;
@@ -242,6 +244,13 @@ describe('LiveRecord', () => {
                 config: { ...useTranscriptStore.getState().config, streamingModelPath: "/path/to/model",
                 offlineModelPath: '/path/to/model' }
             });
+            useOnboardingStore.setState({
+                persistedState: { version: 1, status: 'pending' },
+                currentStep: 'welcome',
+                entryContext: 'startup',
+                isOpen: false,
+                focusStartRecordingToken: 0,
+            });
         });
 
         // Reset mocks
@@ -252,6 +261,7 @@ describe('LiveRecord', () => {
     });
 
     afterEach(async () => {
+        localStorage.clear();
         // Reset store state
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         act(() => {
@@ -261,6 +271,13 @@ describe('LiveRecord', () => {
                 isCaptionMode: false,
                 segments: [],
                 audioUrl: null,
+            });
+            useOnboardingStore.setState({
+                persistedState: { version: 1, status: 'pending' },
+                currentStep: 'welcome',
+                entryContext: 'startup',
+                isOpen: false,
+                focusStartRecordingToken: 0,
             });
         });
         vi.useRealTimers();
@@ -378,6 +395,31 @@ describe('LiveRecord', () => {
 
         expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
         expect(useTranscriptStore.getState().isRecording).toBe(false);
+    });
+
+    it('reopens onboarding instead of starting recording when no live model is configured', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        act(() => {
+            useTranscriptStore.setState({
+                config: {
+                    ...useTranscriptStore.getState().config,
+                    streamingModelPath: '',
+                    offlineModelPath: ''
+                }
+            });
+        });
+
+        render(<LiveRecord />);
+        const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+        await act(async () => {
+            fireEvent.click(startBtn);
+            await vi.advanceTimersByTimeAsync(50);
+        });
+
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
+        expect(useOnboardingStore.getState().isOpen).toBe(true);
+        expect(useOnboardingStore.getState().currentStep).toBe('models');
     });
 
     it('should mute system audio when recording starts if configured', async () => {

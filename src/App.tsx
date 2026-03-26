@@ -14,6 +14,7 @@ import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
+import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
 import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -95,6 +96,8 @@ function App(): React.JSX.Element {
           </button>
         </div>
       </header>
+
+      <OnboardingReminderBanner />
 
       {/* Main Content */}
       <main id="main-content" className="app-main">

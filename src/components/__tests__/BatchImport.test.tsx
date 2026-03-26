@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor, within, act } from '@testing-librar
 import { BatchImport } from '../BatchImport';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
+import { useOnboardingStore } from '../../stores/onboardingStore';
 import { transcriptionService } from '../../services/transcriptionService';
+import { open } from '@tauri-apps/plugin-dialog';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
@@ -76,6 +78,7 @@ vi.mock('react-i18next', () => ({
 
 describe('BatchImport Integration', () => {
     beforeEach(() => {
+        localStorage.clear();
         // Reset stores
         useTranscriptStore.setState({
             config: {
@@ -99,6 +102,13 @@ describe('BatchImport Integration', () => {
             queueItems: [],
             activeItemId: null,
             isQueueProcessing: false,
+        });
+        useOnboardingStore.setState({
+            persistedState: { version: 1, status: 'pending' },
+            currentStep: 'welcome',
+            entryContext: 'startup',
+            isOpen: false,
+            focusStartRecordingToken: 0,
         });
 
         vi.clearAllMocks();
@@ -246,5 +256,25 @@ describe('BatchImport Integration', () => {
 
         // Verify clicking it triggers file dialog
         fireEvent.click(addButton);
+    });
+
+    it('reopens onboarding when selecting a file without an offline model', async () => {
+        useTranscriptStore.setState({
+            config: {
+                ...useTranscriptStore.getState().config,
+                offlineModelPath: '',
+            },
+        });
+        vi.mocked(open).mockResolvedValue(['/path/to/test.wav']);
+
+        render(<BatchImport />);
+
+        const selectButton = screen.getByRole('button', { name: 'batch.select_file' });
+        await act(async () => {
+            fireEvent.click(selectButton);
+        });
+
+        expect(useOnboardingStore.getState().isOpen).toBe(true);
+        expect(useOnboardingStore.getState().currentStep).toBe('models');
     });
 });

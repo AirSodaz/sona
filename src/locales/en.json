@@ -294,13 +294,63 @@
         "close": "Close"
     },
     "first_run": {
+        "badge": "First Run Setup",
         "title": "Welcome to Sona",
-        "description": "To get started, we need to download some models.",
-        "one_click_download": "One-Click Download",
-        "skip": "Skip",
-        "downloading": "Downloading...",
-        "success": "Download Complete",
-        "error": "Download Failed"
+        "description": "We'll set up offline transcription so your first live recording is ready fast.",
+        "stepper_label": "First run setup steps",
+        "steps": {
+            "welcome": "Welcome",
+            "models": "Models",
+            "microphone": "Microphone"
+        },
+        "actions": {
+            "continue": "Continue",
+            "later": "Later",
+            "download_recommended": "Download Recommended Models",
+            "retry": "Retry Download",
+            "retry_permission": "Try Permission Again",
+            "finish": "Start with Live Record",
+            "back": "Back"
+        },
+        "banner": {
+            "title": "Finish setup to start transcribing",
+            "body": "Sona still needs its local model setup before live recording or file import will work.",
+            "cta": "Continue Setup"
+        },
+        "welcome": {
+            "heading": "Fastest path to your first live transcript",
+            "body": "We'll download a recommended offline model pack, check microphone access, and leave advanced settings for later.",
+            "fast_title": "Recommended for the first run",
+            "fast_body": "Use Sona's default local model setup optimized for microphone live transcription.",
+            "private_title": "Everything stays on your device",
+            "private_body": "Speech recognition runs locally, so you can try the app without sending audio anywhere.",
+            "ready_title": "Get ready in about a minute",
+            "ready_body": "After setup, we'll land you on Live Record so you can start immediately.",
+            "recommended_path_label": "First success path",
+            "recommended_path_value": "Microphone -> Live Record",
+            "download_label": "Download size",
+            "download_value": "About 156 MB"
+        },
+        "models": {
+            "heading": "Download the recommended offline model pack",
+            "body": "This installs SenseVoice Int8 for live and batch transcription plus Silero VAD for speech detection.",
+            "preparing": "Preparing...",
+            "ready": "Ready",
+            "error": "Download failed",
+            "error_detail": "We couldn't finish downloading the recommended models. Please try again."
+        },
+        "microphone": {
+            "heading": "Allow microphone access",
+            "body": "Sona uses your microphone first. You can change this later in Settings for other inputs or system audio capture.",
+            "default_source_label": "Default source",
+            "default_source_value": "Microphone live record",
+            "device_label": "Selected input",
+            "device_hint": "Choose which microphone Sona should use when you start live recording.",
+            "loading_title": "Checking microphone access",
+            "loading_body": "We're requesting permission and loading available devices.",
+            "permission_title": "Microphone permission is still needed",
+            "permission_body": "Allow microphone access to finish setup and make the first live recording path work."
+        }
     },
     "tray": {
         "show": "Show Main Window",

@@ -8,10 +8,10 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 import { AppConfig } from '../../types/transcript';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
 import { remove } from '@tauri-apps/plugin-fs';
-
-interface AudioDevice {
-    name: string;
-}
+import {
+    listMicrophoneDeviceOptions,
+    listSystemAudioDeviceOptions,
+} from '../../services/audioDeviceService';
 
 interface SettingsMicrophoneTabProps {
     config: AppConfig;
@@ -68,66 +68,14 @@ export function SettingsMicrophoneTab({
         let isMounted = true;
 
         async function getDevices() {
-            // Attempt Native first
             try {
-                const devs = await invoke<AudioDevice[]>('get_microphone_devices');
-                if (isMounted && devs && devs.length > 0) {
-                    const options = [
-                        { label: t('settings.mic_auto'), value: 'default' },
-                        ...devs.map(d => ({
-                            label: d.name,
-                            value: d.name
-                        }))
-                    ];
+                const options = await listMicrophoneDeviceOptions(t('settings.mic_auto'));
+                if (isMounted) {
                     setDevices(options);
-                    return; // Successfully loaded native devices
-                }
-            } catch (err) {
-                console.warn('Native get_microphone_devices failed, falling back to Web API:', err);
-            }
-
-            // Fallback to Web API
-            try {
-                const devs = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devs.filter(d => d.kind === 'audioinput');
-
-                const hasLabels = audioInputs.some(d => d.label.length > 0);
-                if (!hasLabels) {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        stream.getTracks().forEach(t => t.stop());
-                        const newDevs = await navigator.mediaDevices.enumerateDevices();
-                        const newAudioInputs = newDevs.filter(d => d.kind === 'audioinput');
-                        if (isMounted) {
-                            formatAndSetDevices(newAudioInputs);
-                        }
-                    } catch (err) {
-                        console.warn('Microphone permission denied or error', err);
-                    }
-                } else {
-                    if (isMounted) {
-                        formatAndSetDevices(audioInputs);
-                    }
                 }
             } catch (err) {
                 console.error('Error enumerating devices:', err);
             }
-        }
-
-        function formatAndSetDevices(inputs: MediaDeviceInfo[]) {
-            const options = [
-                { label: t('settings.mic_auto'), value: 'default' },
-                ...inputs.map(d => ({
-                    label: d.label || `Microphone ${d.deviceId.slice(0, 5)}...`,
-                    value: d.deviceId
-                }))
-            ];
-            const uniqueOptions = options.filter((opt, index, self) =>
-                index === self.findIndex((t) => (
-                    t.value === opt.value
-                ))
-            );
-            setDevices(uniqueOptions);
         }
 
         getDevices();
@@ -143,16 +91,9 @@ export function SettingsMicrophoneTab({
 
         async function getSystemDevices() {
             try {
-                const devs = await invoke<AudioDevice[]>('get_system_audio_devices');
+                const devs = await listSystemAudioDeviceOptions(t('settings.mic_auto'));
                 if (isMounted) {
-                    const options = [
-                        { label: t('settings.mic_auto'), value: 'default' },
-                        ...devs.map(d => ({
-                            label: d.name,
-                            value: d.name
-                        }))
-                    ];
-                    setSystemDevices(options);
+                    setSystemDevices(devs);
                 }
             } catch (err) {
                 console.error('Error getting system audio devices:', err);

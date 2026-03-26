@@ -5,6 +5,7 @@ import './i18n';
 import { useTranscriptStore } from "./stores/transcriptStore";
 import { useBatchQueueStore } from "./stores/batchQueueStore";
 import { useDialogStore } from "./stores/dialogStore";
+import { useOnboardingStore } from "./stores/onboardingStore";
 import { transcriptionService } from "./services/transcriptionService";
 import { modelService } from "./services/modelService";
 import { CaptionWindow } from "./components/CaptionWindow";
@@ -14,6 +15,7 @@ if (import.meta.env.DEV) {
   (window as any).useTranscriptStore = useTranscriptStore;
   (window as any).useBatchQueueStore = useBatchQueueStore;
   (window as any).useDialogStore = useDialogStore;
+  (window as any).useOnboardingStore = useOnboardingStore;
   (window as any).transcriptionService = transcriptionService;
   (window as any).modelService = modelService;
 }

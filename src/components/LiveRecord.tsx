@@ -12,6 +12,7 @@ import { captionWindowService } from '../services/captionWindowService';
 import { useCaptionSession } from '../hooks/useCaptionSession';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { useOnboardingStore } from '../stores/onboardingStore';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -39,12 +40,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const { t } = useTranslation();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const polishedIdsRef = useRef<Set<string>>(new Set());
+    const startButtonRef = useRef<HTMLButtonElement>(null);
 
     // State from store
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
     const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
+    const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
     // Local State
     const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
@@ -54,6 +57,12 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     useEffect(() => {
         isRecordingRef.current = isRecording;
     }, [isRecording]);
+
+    useEffect(() => {
+        if (!isRecording) {
+            startButtonRef.current?.focus();
+        }
+    }, [focusStartRecordingToken, isRecording]);
 
     // Caption Mode
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
@@ -213,6 +222,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 <div className="record-controls">
                     {!isRecording ? (
                         <button
+                            ref={startButtonRef}
                             className="control-button start"
                             onClick={handleToggleRecording}
                             disabled={isInitializing}

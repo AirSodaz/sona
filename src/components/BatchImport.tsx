@@ -6,9 +6,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { FileQueueSidebar } from './FileQueueSidebar';
 import { UploadIcon } from './Icons';
 import { TranscriptionOptions } from './TranscriptionOptions';
+import { getResumeOnboardingStep } from '../utils/onboarding';
 
 
 
@@ -196,7 +198,11 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
             if (validFiles.length > 0) {
                 if (!config.offlineModelPath) {
-                    alert(t('batch.no_model_error'), { variant: 'error' });
+                    const onboardingStore = useOnboardingStore.getState();
+                    onboardingStore.reopen(
+                        getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
+                        'batch_import'
+                    );
                     return;
                 }
                 addFiles(validFiles);
@@ -242,7 +248,11 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 const files = Array.isArray(selected) ? selected : [selected];
                 if (files.length > 0) {
                     if (!config.offlineModelPath) {
-                        await alert(t('batch.no_model_error'), {variant: 'error'});
+                        const onboardingStore = useOnboardingStore.getState();
+                        onboardingStore.reopen(
+                            getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
+                            'batch_import'
+                        );
                         return;
                     }
                     addFiles(files);

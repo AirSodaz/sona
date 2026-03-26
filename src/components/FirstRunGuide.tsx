@@ -1,185 +1,458 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
+import { Dropdown } from './Dropdown';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { modelService, PRESET_MODELS } from '../services/modelService';
-import { DownloadIcon, CheckIcon } from './Icons';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import {
+  DeviceOption,
+  listMicrophoneDeviceOptions,
+  requestMicrophonePermission,
+} from '../services/audioDeviceService';
+import {
+  downloadRecommendedOnboardingModels,
+  getRecommendedOnboardingConfig,
+  getRecommendedOnboardingModels,
+} from '../services/onboardingService';
+import { hasRequiredOnboardingModels } from '../utils/onboarding';
 
-export function FirstRunGuide() {
-    const { t } = useTranslation();
-    const [isVisible, setIsVisible] = useState(false);
-    const [status, setStatus] = useState<'idle' | 'downloading' | 'error'>('idle');
-    const [progress, setProgress] = useState<Record<string, { pct: number, status: string }>>({});
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+type ModelStepStatus = 'idle' | 'downloading' | 'error';
+type PermissionState = 'idle' | 'granted' | 'denied';
 
-    useEffect(() => {
-        // Check if first run
-        const completed = localStorage.getItem('sona-first-run-completed');
-        if (!completed) {
-            setIsVisible(true);
-        }
-    }, []);
+interface DownloadProgressState {
+  percentage: number;
+  status: string;
+}
 
-    const handleOneClickDownload = async () => {
-        setStatus('downloading');
+function StepIndicator({
+  stepNumber,
+  title,
+  isActive,
+  isComplete,
+}: {
+  stepNumber: number;
+  title: string;
+  isActive: boolean;
+  isComplete: boolean;
+}): React.JSX.Element {
+  return (
+    <div className={`onboarding-step-chip ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}>
+      <div className="onboarding-step-dot" aria-hidden="true">
+        {isComplete ? <CheckIcon /> : <span>{stepNumber}</span>}
+      </div>
+      <span>{title}</span>
+    </div>
+  );
+}
 
-        const modelsToDownload = [
-            // Recognition
-            { id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17', type: 'sensevoice' },
-            // Punctuation
-            { id: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8', type: 'punctuation' },
-            // VAD
-            { id: 'silero-vad', type: 'vad' }
-        ];
+/**
+ * Blocking first-run onboarding wizard for recommended offline transcription setup.
+ */
+export function FirstRunGuide(): React.JSX.Element | null {
+  const { t } = useTranslation();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const config = useTranscriptStore((state) => state.config);
+  const setConfig = useTranscriptStore((state) => state.setConfig);
+  const setMode = useTranscriptStore((state) => state.setMode);
+  const {
+    isOpen,
+    currentStep,
+    setStep,
+    defer,
+    complete,
+    persistedState,
+  } = useOnboardingStore((state) => ({
+    isOpen: state.isOpen,
+    currentStep: state.currentStep,
+    setStep: state.setStep,
+    defer: state.defer,
+    complete: state.complete,
+    persistedState: state.persistedState,
+  }));
 
-        // Initialize progress
-        const initialProgress: Record<string, { pct: number, status: string }> = {};
-        for (const model of modelsToDownload) {
-            initialProgress[model.id] = { pct: 0, status: 'Starting...' };
-        }
-        setProgress(initialProgress);
+  const recommendedModels = useMemo(() => getRecommendedOnboardingModels(), []);
+  const [modelStepStatus, setModelStepStatus] = useState<ModelStepStatus>('idle');
+  const [modelError, setModelError] = useState('');
+  const [downloads, setDownloads] = useState<Record<string, DownloadProgressState>>({});
+  const [deviceOptions, setDeviceOptions] = useState<DeviceOption[]>([
+    { label: t('settings.mic_auto'), value: 'default' },
+  ]);
+  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState(config.microphoneId || 'default');
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+  const [permissionState, setPermissionState] = useState<PermissionState>('idle');
+  const [microphoneRefreshToken, setMicrophoneRefreshToken] = useState(0);
 
-        try {
-            // Concurrent downloads
-            const downloadPromises = modelsToDownload.map(async (model) => {
-                const path = await modelService.downloadModel(model.id, (pct, statusText) => {
-                    setProgress(prev => ({
-                        ...prev,
-                        [model.id]: { pct, status: statusText }
-                    }));
-                });
-                return { type: model.type, path };
-            });
+  const hasModelsConfigured = hasRequiredOnboardingModels(config);
+  const canDefer = modelStepStatus !== 'downloading';
 
-            const results = await Promise.all(downloadPromises);
+  useFocusTrap(isOpen, () => {}, modalRef);
 
-            const paths: Record<string, string> = {};
-            results.forEach(r => {
-                paths[r.type] = r.path;
-            });
+  useEffect(() => {
+    if (!isOpen) {
+      setModelStepStatus('idle');
+      setModelError('');
+      setDownloads({});
+      setPermissionState('idle');
+      setIsLoadingDevices(false);
+      setSelectedMicrophoneId(config.microphoneId || 'default');
+    }
+  }, [config.microphoneId, isOpen]);
 
-            // Update Config
-            const newConfig = {
-                streamingModelPath: paths['sensevoice'],
-                offlineModelPath: paths['sensevoice'],
-                vadModelPath: paths['vad'],
-                punctuationModelPath: '', // Downloaded but not enabled
-                enableITN: true,
-                enabledITNModels: [] // Chinese Number ITN not downloaded/enabled
-            };
+  useEffect(() => {
+    if (!isOpen || currentStep !== 'microphone') {
+      return;
+    }
 
-            setConfig(newConfig);
+    let isMounted = true;
 
-            // Persist to localStorage (replicating logic from useSettingsLogic/useAppInitialization)
-            const saved = localStorage.getItem('sona-config');
-            let currentSavedConfig = {};
-            if (saved) {
-                try {
-                    currentSavedConfig = JSON.parse(saved);
-                } catch (e) { /* ignore */ }
-            }
+    async function prepareMicrophoneStep() {
+      setIsLoadingDevices(true);
 
-            const configToSave = {
-                ...currentSavedConfig,
-                ...newConfig
-            };
+      const granted = await requestMicrophonePermission();
+      if (!isMounted) {
+        return;
+      }
+      setPermissionState(granted ? 'granted' : 'denied');
 
-            localStorage.setItem('sona-config', JSON.stringify(configToSave));
+      const options = await listMicrophoneDeviceOptions(t('settings.mic_auto'));
+      if (!isMounted) {
+        return;
+      }
 
-            completeFirstRun();
+      setDeviceOptions(options);
+      setSelectedMicrophoneId((currentValue) => {
+        const preferredValue = currentValue || config.microphoneId || 'default';
+        const matchingOption = options.find((option) => option.value === preferredValue);
+        return matchingOption ? matchingOption.value : options[0]?.value || 'default';
+      });
+      setIsLoadingDevices(false);
+    }
 
-        } catch (error) {
-            console.error('First run download failed:', error);
-            setStatus('error');
-        }
+    prepareMicrophoneStep();
+
+    return () => {
+      isMounted = false;
     };
+  }, [config.microphoneId, currentStep, isOpen, microphoneRefreshToken, t]);
 
-    const completeFirstRun = () => {
-        localStorage.setItem('sona-first-run-completed', 'true');
-        setIsVisible(false);
-    };
+  async function handleModelDownload(): Promise<void> {
+    setModelStepStatus('downloading');
+    setModelError('');
 
-    if (!isVisible) return null;
+    const initialProgress: Record<string, DownloadProgressState> = {};
+    recommendedModels.forEach((model) => {
+      initialProgress[model.id] = { percentage: 0, status: t('first_run.models.preparing') };
+    });
+    setDownloads(initialProgress);
 
-    return (
-        <div className="settings-overlay" style={{ zIndex: 2000 }}>
-            <div className="settings-modal" style={{ height: 'auto', maxHeight: '90vh', width: '600px', flexDirection: 'column' }}>
-                <div style={{ padding: '32px 32px 24px', textAlign: 'center' }}>
-                    <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>{t('first_run.title')}</h2>
-                    <p style={{ color: 'var(--color-text-secondary)', marginBottom: '32px' }}>
-                        {t('first_run.description')}
-                    </p>
+    try {
+      const paths = await downloadRecommendedOnboardingModels((update) => {
+        setDownloads((previousState) => ({
+          ...previousState,
+          [update.modelId]: {
+            percentage: update.percentage,
+            status: update.status,
+          },
+        }));
+      });
 
-                    {status === 'idle' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleOneClickDownload}
-                                style={{ padding: '12px', fontSize: '1rem', justifyContent: 'center' }}
-                            >
-                                <DownloadIcon />
-                                {t('first_run.one_click_download')}
-                            </button>
-                            <button
-                                className="btn btn-secondary"
-                                onClick={completeFirstRun}
-                                style={{ padding: '12px', fontSize: '1rem', justifyContent: 'center' }}
-                            >
-                                {t('first_run.skip')}
-                            </button>
-                        </div>
-                    )}
+      setConfig(getRecommendedOnboardingConfig(paths));
+      setModelStepStatus('idle');
+      setStep('microphone');
+    } catch (error) {
+      console.error('[Onboarding] Failed to download recommended models:', error);
+      setModelStepStatus('error');
+      setModelError(
+        error instanceof Error ? error.message : t('first_run.models.error_detail'),
+      );
+    }
+  }
 
-                    {status === 'downloading' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'left' }}>
-                            <div style={{ textAlign: 'center', fontWeight: 500 }}>
-                                {t('first_run.downloading')}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                {Object.entries(progress).map(([id, info]) => {
-                                    const modelDef = PRESET_MODELS.find(m => m.id === id);
-                                    const isComplete = info.pct === 100;
-                                    return (
-                                        <div key={id}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px', alignItems: 'center' }}>
-                                                <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    {modelDef?.name || id}
-                                                    {isComplete && <CheckIcon style={{ width: 14, height: 14, color: 'var(--color-success)' }} />}
-                                                </span>
-                                                <span style={{ color: isComplete ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                                                    {isComplete ? 'Done' : `${info.pct}%`}
-                                                </span>
-                                            </div>
-                                            <div className="progress-bar-mini">
-                                                <div
-                                                    className="progress-fill"
-                                                    style={{
-                                                        width: `${info.pct}%`,
-                                                        backgroundColor: isComplete ? 'var(--color-success)' : undefined
-                                                    }}
-                                                />
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {info.status}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
+  async function handleRetryPermission(): Promise<void> {
+    setPermissionState('idle');
+    setMicrophoneRefreshToken((currentValue) => currentValue + 1);
+  }
 
-                    {status === 'error' && (
-                        <div style={{ color: 'var(--color-error)', marginTop: '16px' }}>
-                            {t('first_run.error')}
-                            <div style={{ marginTop: '16px' }}>
-                                <button className="btn btn-secondary" onClick={() => setStatus('idle')}>
-                                    {t('common.cancel')}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+  function handleContinueFromWelcome(): void {
+    if (hasModelsConfigured) {
+      setStep('microphone');
+      return;
+    }
+
+    setStep('models');
+  }
+
+  function handleFinish(): void {
+    setConfig({ microphoneId: selectedMicrophoneId });
+    setMode('live');
+    complete();
+  }
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const activeStepIndex = currentStep === 'welcome' ? 0 : currentStep === 'models' ? 1 : 2;
+  const isMicrophoneReady = permissionState === 'granted' && deviceOptions.length > 0;
+
+  return (
+    <div className="settings-overlay" style={{ zIndex: 2100 }}>
+      <div
+        ref={modalRef}
+        className="onboarding-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        tabIndex={-1}
+      >
+        <div className="onboarding-hero">
+          <div className="onboarding-badge">
+            <WaveformIcon />
+            <span>{t('first_run.badge')}</span>
+          </div>
+          <h2 id="onboarding-title">{t('first_run.title')}</h2>
+          <p>{t('first_run.description')}</p>
+          <div className="onboarding-stepper" aria-label={t('first_run.stepper_label')}>
+            <StepIndicator
+              stepNumber={1}
+              title={t('first_run.steps.welcome')}
+              isActive={activeStepIndex === 0}
+              isComplete={activeStepIndex > 0}
+            />
+            <StepIndicator
+              stepNumber={2}
+              title={t('first_run.steps.models')}
+              isActive={activeStepIndex === 1}
+              isComplete={activeStepIndex > 1}
+            />
+            <StepIndicator
+              stepNumber={3}
+              title={t('first_run.steps.microphone')}
+              isActive={activeStepIndex === 2}
+              isComplete={false}
+            />
+          </div>
         </div>
-    );
+
+        <div className="onboarding-body">
+          {currentStep === 'welcome' && (
+            <section className="onboarding-panel">
+              <div className="onboarding-panel-header">
+                <span className="onboarding-eyebrow">{t('first_run.steps.welcome')}</span>
+                <h3>{t('first_run.welcome.heading')}</h3>
+                <p>{t('first_run.welcome.body')}</p>
+              </div>
+
+              <div className="onboarding-checklist" role="list">
+                <div className="onboarding-checklist-item" role="listitem">
+                  <CheckIcon />
+                  <div>
+                    <strong>{t('first_run.welcome.fast_title')}</strong>
+                    <span>{t('first_run.welcome.fast_body')}</span>
+                  </div>
+                </div>
+                <div className="onboarding-checklist-item" role="listitem">
+                  <CheckIcon />
+                  <div>
+                    <strong>{t('first_run.welcome.private_title')}</strong>
+                    <span>{t('first_run.welcome.private_body')}</span>
+                  </div>
+                </div>
+                <div className="onboarding-checklist-item" role="listitem">
+                  <CheckIcon />
+                  <div>
+                    <strong>{t('first_run.welcome.ready_title')}</strong>
+                    <span>{t('first_run.welcome.ready_body')}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="onboarding-summary-card">
+                <div>
+                  <span className="onboarding-summary-label">{t('first_run.welcome.recommended_path_label')}</span>
+                  <strong>{t('first_run.welcome.recommended_path_value')}</strong>
+                </div>
+                <div>
+                  <span className="onboarding-summary-label">{t('first_run.welcome.download_label')}</span>
+                  <strong>{t('first_run.welcome.download_value')}</strong>
+                </div>
+              </div>
+
+              <div className="onboarding-actions">
+                <button className="btn btn-primary" onClick={handleContinueFromWelcome}>
+                  {t('first_run.actions.continue')}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={defer}
+                  disabled={!canDefer}
+                >
+                  {t('first_run.actions.later')}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {currentStep === 'models' && (
+            <section className="onboarding-panel">
+              <div className="onboarding-panel-header">
+                <span className="onboarding-eyebrow">{t('first_run.steps.models')}</span>
+                <h3>{t('first_run.models.heading')}</h3>
+                <p>{t('first_run.models.body')}</p>
+              </div>
+
+              <div className="onboarding-model-list" role="list">
+                {recommendedModels.map((model) => {
+                  const downloadState = downloads[model.id];
+                  const isDone = downloadState?.percentage === 100;
+                  return (
+                    <div className="onboarding-model-card" role="listitem" key={model.id}>
+                      <div className="onboarding-model-meta">
+                        <div>
+                          <strong>{model.name}</strong>
+                          <span>{t(model.description)}</span>
+                        </div>
+                        <div className="onboarding-model-badges">
+                          <span className="model-tag">{model.size}</span>
+                          {model.language && <span className="model-tag">{model.language.toUpperCase()}</span>}
+                        </div>
+                      </div>
+
+                      {downloadState && (
+                        <div className="onboarding-progress-block" aria-live="polite">
+                          <div className="onboarding-progress-row">
+                            <span>{downloadState.status}</span>
+                            <span className={isDone ? 'success-text' : ''}>
+                              {isDone ? t('first_run.models.ready') : `${downloadState.percentage}%`}
+                            </span>
+                          </div>
+                          <div className="progress-bar-mini">
+                            <div
+                              className="progress-fill"
+                              style={{ width: `${downloadState.percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {modelStepStatus === 'error' && (
+                <div className="onboarding-inline-alert onboarding-inline-alert-error" role="alert">
+                  <strong>{t('first_run.models.error')}</strong>
+                  <span>{modelError || t('first_run.models.error_detail')}</span>
+                </div>
+              )}
+
+              <div className="onboarding-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={hasModelsConfigured ? () => setStep('microphone') : handleModelDownload}
+                  disabled={modelStepStatus === 'downloading'}
+                >
+                  {hasModelsConfigured
+                    ? t('first_run.actions.continue')
+                    : (
+                      <>
+                        <DownloadIcon />
+                        {modelStepStatus === 'error'
+                          ? t('first_run.actions.retry')
+                          : t('first_run.actions.download_recommended')}
+                      </>
+                    )}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={currentStep === 'models' && persistedState.status === 'pending'
+                    ? () => setStep('welcome')
+                    : defer}
+                  disabled={!canDefer}
+                >
+                  {persistedState.status === 'pending'
+                    ? t('first_run.actions.back')
+                    : t('first_run.actions.later')}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {currentStep === 'microphone' && (
+            <section className="onboarding-panel">
+              <div className="onboarding-panel-header">
+                <span className="onboarding-eyebrow">{t('first_run.steps.microphone')}</span>
+                <h3>{t('first_run.microphone.heading')}</h3>
+                <p>{t('first_run.microphone.body')}</p>
+              </div>
+
+              <div className="onboarding-summary-card">
+                <div>
+                  <span className="onboarding-summary-label">{t('first_run.microphone.default_source_label')}</span>
+                  <strong>{t('first_run.microphone.default_source_value')}</strong>
+                </div>
+                <div>
+                  <span className="onboarding-summary-label">{t('first_run.microphone.device_label')}</span>
+                  <strong>{selectedMicrophoneId === 'default'
+                    ? t('settings.mic_auto')
+                    : selectedMicrophoneId}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="settings-item" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                <label className="settings-label" htmlFor="onboarding-microphone-select">
+                  {t('settings.microphone_selection')}
+                </label>
+                <Dropdown
+                  id="onboarding-microphone-select"
+                  value={selectedMicrophoneId}
+                  onChange={(value) => setSelectedMicrophoneId(value)}
+                  options={deviceOptions}
+                  style={{ width: '100%' }}
+                />
+                <div className="settings-hint">
+                  {t('first_run.microphone.device_hint')}
+                </div>
+              </div>
+
+              {isLoadingDevices && (
+                <div className="onboarding-inline-alert" aria-live="polite">
+                  <strong>{t('first_run.microphone.loading_title')}</strong>
+                  <span>{t('first_run.microphone.loading_body')}</span>
+                </div>
+              )}
+
+              {permissionState === 'denied' && !isLoadingDevices && (
+                <div className="onboarding-inline-alert onboarding-inline-alert-error" role="alert">
+                  <strong>{t('first_run.microphone.permission_title')}</strong>
+                  <span>{t('first_run.microphone.permission_body')}</span>
+                </div>
+              )}
+
+              <div className="onboarding-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={permissionState === 'denied' ? handleRetryPermission : handleFinish}
+                  disabled={isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady)}
+                >
+                  {permissionState === 'denied'
+                    ? t('first_run.actions.retry_permission')
+                    : t('first_run.actions.finish')}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={defer}
+                  disabled={!canDefer || isLoadingDevices}
+                >
+                  {t('first_run.actions.later')}
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

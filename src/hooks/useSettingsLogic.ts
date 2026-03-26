@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
+import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
 
 const DEFAULT_AI_URLS: Record<string, string> = {
     openai: 'https://api.openai.com/v1',
@@ -353,37 +354,21 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         });
         if (!confirmed) return;
 
-        // Default model IDs
-        const defaultRecognitionModelId = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
-        const defaultVadModelId = 'silero-vad';
-
-        let recognitionPath = '';
-        let vadPath = '';
-
-        try {
-            recognitionPath = await modelService.getModelPath(defaultRecognitionModelId);
-        } catch (e) {
-            console.warn('Failed to resolve default recognition model path', e);
-        }
-
-        try {
-            vadPath = await modelService.getModelPath(defaultVadModelId);
-        } catch (e) {
-            console.warn('Failed to resolve default VAD model path', e);
-        }
-
         // Apply all defaults at once
-        updateConfig({
-            streamingModelPath: recognitionPath,
-            offlineModelPath: recognitionPath,
-            punctuationModelPath: '',
-            vadModelPath: vadPath,
-            vadBufferSize: 5,
-            maxConcurrent: 2,
-            enableITN: true,
-            enabledITNModels: [],
-            itnRulesOrder: [],
-        });
+        try {
+            const recommendedPaths = await resolveRecommendedOnboardingPaths();
+            updateConfig({
+                ...getRecommendedOnboardingConfig(recommendedPaths),
+                punctuationModelPath: '',
+                vadBufferSize: 5,
+                maxConcurrent: 2,
+                enableITN: true,
+                enabledITNModels: [],
+                itnRulesOrder: [],
+            });
+        } catch (e) {
+            console.warn('Failed to resolve default onboarding model paths', e);
+        }
     }
 
     return {

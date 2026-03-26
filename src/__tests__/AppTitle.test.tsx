@@ -17,6 +17,7 @@ vi.mock('../components/HistoryView', () => ({ HistoryView: () => <div>HistoryVie
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
+vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
 vi.mock('../components/Icons', () => ({ SettingsIcon: () => <span>SettingsIcon</span>, WaveformIcon: () => <span>WaveformIcon</span> }));
 
 // Mock hooks
