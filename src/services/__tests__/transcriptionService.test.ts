@@ -151,7 +151,7 @@ describe('TranscriptionService', () => {
                 },
             }));
             const batchCall = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === 'process_batch_file');
-            expect(batchCall?.[1]?.fileConfig).not.toHaveProperty('tokens');
+            expect((batchCall?.[1] as any)?.fileConfig).not.toHaveProperty('tokens');
         });
 
         it('parses batch results correctly', async () => {
