@@ -3020,6 +3020,17 @@ input[type="radio"]:focus {
   color: var(--color-text-secondary);
 }
 
+.onboarding-reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.onboarding-reminder-dismiss {
+  border: 1px solid var(--color-border);
+}
+
 .onboarding-modal {
   width: min(760px, 92vw);
   max-height: 88vh;
@@ -3326,15 +3337,24 @@ input[type="radio"]:focus {
 
 .onboarding-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: var(--spacing-sm);
   flex-wrap: wrap;
+}
+
+.onboarding-actions-secondary {
+  margin-inline-end: auto;
 }
 
 @media (max-width: 720px) {
   .onboarding-reminder-banner {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .onboarding-reminder-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .onboarding-modal {
@@ -3356,10 +3376,15 @@ input[type="radio"]:focus {
   }
 
   .onboarding-actions {
-    flex-direction: column-reverse;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .onboarding-actions .btn {
     width: 100%;
+  }
+
+  .onboarding-actions-secondary {
+    margin-inline-end: 0;
   }
 }

@@ -316,7 +316,11 @@
         "banner": {
             "title": "Finish setup to start transcribing",
             "body": "Sona still needs its local model setup before live recording or file import will work.",
-            "cta": "Continue Setup"
+            "cta": "Continue Setup",
+            "dismiss_aria_label": "Hide setup reminder",
+            "dismiss_confirm_title": "Hide setup reminder?",
+            "dismiss_confirm_message": "If you hide this reminder, it will no longer appear on the home screen until setup is complete.",
+            "dismiss_confirm_action": "Hide Reminder"
         },
         "welcome": {
             "heading": "Fastest path to your first live transcript",

@@ -113,6 +113,14 @@ describe('FirstRunGuide', () => {
     });
   });
 
+  it('shows only later and continue on the welcome step', () => {
+    render(<FirstRunGuide />);
+
+    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'first_run.actions.continue' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'first_run.actions.back' })).toBeNull();
+  });
+
   it('walks through welcome, model download, and microphone setup', async () => {
     render(<FirstRunGuide />);
 
@@ -142,6 +150,60 @@ describe('FirstRunGuide', () => {
     expect(useTranscriptStore.getState().mode).toBe('live');
     expect(useOnboardingStore.getState().persistedState.status).toBe('completed');
     expect(useOnboardingStore.getState().isOpen).toBe(false);
+  });
+
+  it('shows later, back, and disables both while model download is in progress', () => {
+    vi.mocked(downloadRecommendedOnboardingModels).mockImplementation(
+      () => new Promise(() => {})
+    );
+
+    render(<FirstRunGuide />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
+
+    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'first_run.actions.download_recommended' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
+
+    expect((screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
+  it('shows later, back, and finish on the microphone step, and can navigate back', async () => {
+    useTranscriptStore.setState({
+      mode: 'batch',
+      config: {
+        ...useTranscriptStore.getState().config,
+        streamingModelPath: '/models/live',
+        offlineModelPath: '/models/offline',
+        microphoneId: 'default',
+      },
+    });
+    useOnboardingStore.setState({
+      persistedState: { version: 1, status: 'deferred' },
+      currentStep: 'microphone',
+      entryContext: 'startup',
+      isOpen: true,
+      focusStartRecordingToken: 0,
+    });
+
+    render(<FirstRunGuide />);
+
+    await waitFor(() => {
+      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+    });
+
+    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'first_run.actions.finish' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.back' }));
+
+    expect(screen.getByText('first_run.models.heading')).toBeDefined();
   });
 
   it('allows deferring from the welcome step', () => {

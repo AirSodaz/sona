@@ -31,7 +31,7 @@ function isValidStatus(value: unknown): value is OnboardingStatus {
 
 function createState(
   status: OnboardingStatus,
-  overrides: Partial<Pick<OnboardingState, 'deferredAt' | 'completedAt'>> = {},
+  overrides: Partial<Pick<OnboardingState, 'deferredAt' | 'completedAt' | 'reminderDismissedAt'>> = {},
 ): OnboardingState {
   return {
     version: ONBOARDING_VERSION,
@@ -102,8 +102,11 @@ export function hasRequiredOnboardingModels(config?: Partial<AppConfig> | null):
 /**
  * Determines whether the reminder banner should remain visible.
  */
-export function shouldShowOnboardingReminder(config?: Partial<AppConfig> | null): boolean {
-  return !hasRequiredOnboardingModels(config);
+export function shouldShowOnboardingReminder(
+  config?: Partial<AppConfig> | null,
+  state?: OnboardingState | null,
+): boolean {
+  return !hasRequiredOnboardingModels(config) && !state?.reminderDismissedAt;
 }
 
 /**
@@ -140,6 +143,10 @@ export function migrateOnboardingState(
         return createState(parsed.status, {
           deferredAt: typeof parsed.deferredAt === 'string' ? parsed.deferredAt : undefined,
           completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : undefined,
+          reminderDismissedAt:
+            typeof parsed.reminderDismissedAt === 'string'
+              ? parsed.reminderDismissedAt
+              : undefined,
         });
       }
     } catch (error) {

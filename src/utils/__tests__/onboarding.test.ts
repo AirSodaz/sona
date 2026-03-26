@@ -62,6 +62,37 @@ describe('onboarding utils', () => {
     ).toBe(false);
   });
 
+  it('hides the reminder when it was dismissed earlier', () => {
+    expect(
+      shouldShowOnboardingReminder(
+        { streamingModelPath: '', offlineModelPath: '' },
+        {
+          version: 1,
+          status: 'deferred',
+          reminderDismissedAt: '2026-03-27T00:00:00.000Z',
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it('preserves reminder dismissal during onboarding migration', () => {
+    expect(
+      migrateOnboardingState(
+        JSON.stringify({
+          version: 1,
+          status: 'deferred',
+          reminderDismissedAt: '2026-03-27T00:00:00.000Z',
+        }),
+        null,
+        null,
+      ),
+    ).toEqual({
+      version: 1,
+      status: 'deferred',
+      reminderDismissedAt: '2026-03-27T00:00:00.000Z',
+    });
+  });
+
   it('resumes at the microphone step once models are configured', () => {
     expect(
       getResumeOnboardingStep(
@@ -72,4 +103,3 @@ describe('onboarding utils', () => {
     ).toBe('microphone');
   });
 });
-

@@ -26,6 +26,19 @@ interface DownloadProgressState {
   status: string;
 }
 
+interface OnboardingActionsProps {
+  backLabel: string;
+  laterLabel: string;
+  onBack?: () => void;
+  onLater: () => void;
+  primaryAction: {
+    disabled?: boolean;
+    label: React.ReactNode;
+    onClick: () => void;
+  };
+  secondaryActionsDisabled?: boolean;
+}
+
 function StepIndicator({
   stepNumber,
   title,
@@ -47,6 +60,43 @@ function StepIndicator({
   );
 }
 
+function OnboardingActions({
+  backLabel,
+  laterLabel,
+  onBack,
+  onLater,
+  primaryAction,
+  secondaryActionsDisabled = false,
+}: OnboardingActionsProps): React.JSX.Element {
+  return (
+    <div className="onboarding-actions">
+      <button
+        className="btn btn-secondary onboarding-actions-secondary"
+        onClick={onLater}
+        disabled={secondaryActionsDisabled}
+      >
+        {laterLabel}
+      </button>
+      {onBack && (
+        <button
+          className="btn btn-secondary"
+          onClick={onBack}
+          disabled={secondaryActionsDisabled}
+        >
+          {backLabel}
+        </button>
+      )}
+      <button
+        className="btn btn-primary"
+        onClick={primaryAction.onClick}
+        disabled={primaryAction.disabled}
+      >
+        {primaryAction.label}
+      </button>
+    </div>
+  );
+}
+
 /**
  * Blocking first-run onboarding wizard for recommended offline transcription setup.
  */
@@ -62,7 +112,6 @@ export function FirstRunGuide(): React.JSX.Element | null {
     setStep,
     defer,
     complete,
-    persistedState,
   } = useOnboardingStore(
     useShallow((state) => ({
       isOpen: state.isOpen,
@@ -70,7 +119,6 @@ export function FirstRunGuide(): React.JSX.Element | null {
       setStep: state.setStep,
       defer: state.defer,
       complete: state.complete,
-      persistedState: state.persistedState,
     }))
   );
 
@@ -87,7 +135,6 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const [microphoneRefreshToken, setMicrophoneRefreshToken] = useState(0);
 
   const hasModelsConfigured = hasRequiredOnboardingModels(config);
-  const canDefer = modelStepStatus !== 'downloading';
 
   // Stable reference for onClose to prevent infinite focus-trap teardown loops
   const noopClose = useCallback(() => {}, []);
@@ -194,12 +241,29 @@ export function FirstRunGuide(): React.JSX.Element | null {
     complete();
   }
 
+  function handleBack(): void {
+    if (currentStep === 'microphone') {
+      setStep('models');
+      return;
+    }
+
+    if (currentStep === 'models') {
+      setStep('welcome');
+    }
+  }
+
   if (!isOpen) {
     return null;
   }
 
   const activeStepIndex = currentStep === 'welcome' ? 0 : currentStep === 'models' ? 1 : 2;
   const isMicrophoneReady = permissionState === 'granted' && deviceOptions.length > 0;
+  const areSecondaryActionsDisabled =
+    currentStep === 'models'
+      ? modelStepStatus === 'downloading'
+      : currentStep === 'microphone'
+        ? isLoadingDevices
+        : false;
 
   return (
     <div className="settings-overlay" style={{ zIndex: 2100 }}>
@@ -284,18 +348,15 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
               </div>
 
-              <div className="onboarding-actions">
-                <button className="btn btn-primary" onClick={handleContinueFromWelcome}>
-                  {t('first_run.actions.continue')}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={defer}
-                  disabled={!canDefer}
-                >
-                  {t('first_run.actions.later')}
-                </button>
-              </div>
+              <OnboardingActions
+                backLabel={t('first_run.actions.back')}
+                laterLabel={t('first_run.actions.later')}
+                onLater={defer}
+                primaryAction={{
+                  label: t('first_run.actions.continue'),
+                  onClick: handleContinueFromWelcome,
+                }}
+              />
             </section>
           )}
 
@@ -352,13 +413,14 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
               )}
 
-              <div className="onboarding-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={hasModelsConfigured ? () => setStep('microphone') : handleModelDownload}
-                  disabled={modelStepStatus === 'downloading'}
-                >
-                  {hasModelsConfigured
+              <OnboardingActions
+                backLabel={t('first_run.actions.back')}
+                laterLabel={t('first_run.actions.later')}
+                onBack={handleBack}
+                onLater={defer}
+                primaryAction={{
+                  disabled: modelStepStatus === 'downloading',
+                  label: hasModelsConfigured
                     ? t('first_run.actions.continue')
                     : (
                       <>
@@ -367,20 +429,11 @@ export function FirstRunGuide(): React.JSX.Element | null {
                           ? t('first_run.actions.retry')
                           : t('first_run.actions.download_recommended')}
                       </>
-                    )}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={currentStep === 'models' && persistedState.status === 'pending'
-                    ? () => setStep('welcome')
-                    : defer}
-                  disabled={!canDefer}
-                >
-                  {persistedState.status === 'pending'
-                    ? t('first_run.actions.back')
-                    : t('first_run.actions.later')}
-                </button>
-              </div>
+                    ),
+                  onClick: hasModelsConfigured ? () => setStep('microphone') : handleModelDownload,
+                }}
+                secondaryActionsDisabled={areSecondaryActionsDisabled}
+              />
             </section>
           )}
 
@@ -436,24 +489,20 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
               )}
 
-              <div className="onboarding-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={permissionState === 'denied' ? handleRetryPermission : handleFinish}
-                  disabled={isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady)}
-                >
-                  {permissionState === 'denied'
+              <OnboardingActions
+                backLabel={t('first_run.actions.back')}
+                laterLabel={t('first_run.actions.later')}
+                onBack={handleBack}
+                onLater={defer}
+                primaryAction={{
+                  disabled: isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady),
+                  label: permissionState === 'denied'
                     ? t('first_run.actions.retry_permission')
-                    : t('first_run.actions.finish')}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={defer}
-                  disabled={!canDefer || isLoadingDevices}
-                >
-                  {t('first_run.actions.later')}
-                </button>
-              </div>
+                    : t('first_run.actions.finish'),
+                  onClick: permissionState === 'denied' ? handleRetryPermission : handleFinish,
+                }}
+                secondaryActionsDisabled={areSecondaryActionsDisabled}
+              />
             </section>
           )}
         </div>

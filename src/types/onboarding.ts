@@ -11,4 +11,5 @@ export interface OnboardingState {
   status: OnboardingStatus;
   deferredAt?: string;
   completedAt?: string;
+  reminderDismissedAt?: string;
 }

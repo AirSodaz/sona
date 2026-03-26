@@ -21,6 +21,7 @@ interface OnboardingStoreState {
   setStep: (step: OnboardingStep) => void;
   defer: () => void;
   complete: () => void;
+  dismissReminder: () => void;
   reopen: (step?: OnboardingStep, context?: OnboardingEntryContext) => void;
 }
 
@@ -54,10 +55,12 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     }),
 
   defer: () => {
+    const previousState = get().persistedState;
     const nextState: OnboardingState = {
       version: 1,
       status: 'deferred',
       deferredAt: new Date().toISOString(),
+      reminderDismissedAt: previousState.reminderDismissedAt,
     };
 
     writeOnboardingState(nextState, typeof window !== 'undefined' ? window.localStorage : null);
@@ -69,10 +72,12 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
   },
 
   complete: () => {
+    const previousState = get().persistedState;
     const nextState: OnboardingState = {
       version: 1,
       status: 'completed',
       completedAt: new Date().toISOString(),
+      reminderDismissedAt: previousState.reminderDismissedAt,
     };
 
     writeOnboardingState(nextState, typeof window !== 'undefined' ? window.localStorage : null);
@@ -83,6 +88,20 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
       entryContext: 'startup',
       focusStartRecordingToken: state.focusStartRecordingToken + 1,
     }));
+  },
+
+  dismissReminder: () => {
+    const previousState = get().persistedState;
+    const nextState: OnboardingState = {
+      ...previousState,
+      reminderDismissedAt: previousState.reminderDismissedAt || new Date().toISOString(),
+    };
+
+    writeOnboardingState(nextState, typeof window !== 'undefined' ? window.localStorage : null);
+
+    set({
+      persistedState: nextState,
+    });
   },
 
   reopen: (step = get().currentStep, context = 'startup') => {

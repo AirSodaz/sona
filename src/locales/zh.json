@@ -313,7 +313,11 @@
         "banner": {
             "title": "完成设置后即可开始转录",
             "body": "Sona 还需要完成本地模型准备，实时录音和导入文件才能正常使用。",
-            "cta": "继续设置"
+            "cta": "继续设置",
+            "dismiss_aria_label": "关闭设置提醒",
+            "dismiss_confirm_title": "关闭设置提醒？",
+            "dismiss_confirm_message": "关闭后，这条提醒将不再在首页显示，直到你完成设置。",
+            "dismiss_confirm_action": "关闭提醒"
         },
         "welcome": {
             "heading": "最快开始第一次实时转录",
