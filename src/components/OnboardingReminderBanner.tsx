@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useShallow } from 'zustand/react/shallow';
 import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/onboarding';
 
 /**
@@ -10,11 +11,13 @@ import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/
 export function OnboardingReminderBanner(): React.JSX.Element | null {
   const { t } = useTranslation();
   const config = useTranscriptStore((state) => state.config);
-  const { isOpen, persistedState, reopen } = useOnboardingStore((state) => ({
-    isOpen: state.isOpen,
-    persistedState: state.persistedState,
-    reopen: state.reopen,
-  }));
+  const { isOpen, persistedState, reopen } = useOnboardingStore(
+    useShallow((state) => ({
+      isOpen: state.isOpen,
+      persistedState: state.persistedState,
+      reopen: state.reopen,
+    }))
+  );
 
   if (isOpen || !shouldShowOnboardingReminder(config)) {
     return null;

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DeviceOption,
   listMicrophoneDeviceOptions,
@@ -62,14 +63,16 @@ export function FirstRunGuide(): React.JSX.Element | null {
     defer,
     complete,
     persistedState,
-  } = useOnboardingStore((state) => ({
-    isOpen: state.isOpen,
-    currentStep: state.currentStep,
-    setStep: state.setStep,
-    defer: state.defer,
-    complete: state.complete,
-    persistedState: state.persistedState,
-  }));
+  } = useOnboardingStore(
+    useShallow((state) => ({
+      isOpen: state.isOpen,
+      currentStep: state.currentStep,
+      setStep: state.setStep,
+      defer: state.defer,
+      complete: state.complete,
+      persistedState: state.persistedState,
+    }))
+  );
 
   const recommendedModels = useMemo(() => getRecommendedOnboardingModels(), []);
   const [modelStepStatus, setModelStepStatus] = useState<ModelStepStatus>('idle');
@@ -86,7 +89,9 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const hasModelsConfigured = hasRequiredOnboardingModels(config);
   const canDefer = modelStepStatus !== 'downloading';
 
-  useFocusTrap(isOpen, () => {}, modalRef);
+  // Stable reference for onClose to prevent infinite focus-trap teardown loops
+  const noopClose = useCallback(() => {}, []);
+  useFocusTrap(isOpen, noopClose, modalRef);
 
   useEffect(() => {
     if (!isOpen) {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
@@ -46,6 +47,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
+    const alert = useDialogStore((state) => state.alert);
 
     // Refs
     const audioContextRef = useRef<AudioContext | null>(null);
