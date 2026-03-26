@@ -20,6 +20,10 @@
 
 The easiest way to install Sona is to download the pre-built binaries for your platform from the [GitHub Releases](https://github.com/AirSodaz/sona/releases/latest) page.
 
+### User Guide
+
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, transcript editing, AI features, export, history, and troubleshooting.
+
 ### Build from Source
 
 #### Prerequisites

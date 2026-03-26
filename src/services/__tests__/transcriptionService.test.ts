@@ -131,6 +131,29 @@ describe('TranscriptionService', () => {
             }));
         });
 
+        it('passes qwen3-asr model metadata for offline transcription', async () => {
+            transcriptionService.setModelPath('/models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25');
+            vi.mocked(invoke).mockImplementation((cmd) => {
+                if (cmd === 'process_batch_file') return Promise.resolve([]);
+                return Promise.resolve();
+            });
+
+            await transcriptionService.transcribeFile('/path/to/audio.wav');
+
+            expect(invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+                modelPath: '/models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25',
+                modelType: 'qwen3-asr',
+                fileConfig: {
+                    convFrontend: 'conv_frontend.onnx',
+                    encoder: 'encoder.int8.onnx',
+                    decoder: 'decoder.int8.onnx',
+                    tokenizer: 'tokenizer',
+                },
+            }));
+            const batchCall = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === 'process_batch_file');
+            expect(batchCall?.[1]?.fileConfig).not.toHaveProperty('tokens');
+        });
+
         it('parses batch results correctly', async () => {
             const mockSegments = [
                 { text: 'Hello', start: 0, end: 1, isFinal: true },

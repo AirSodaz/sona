@@ -21,6 +21,7 @@ export interface ModelFileConfig {
     model?: string;
     joiner?: string;
     tokens?: string;
+    convFrontend?: string;
     encoderAdaptor?: string;
     llm?: string;
     embedding?: string;
@@ -37,7 +38,7 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr' | 'dolphin';
+    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr' | 'dolphin' | 'qwen3-asr';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */
@@ -304,6 +305,29 @@ export const PRESET_MODELS: ModelInfo[] = [
             decoder: 'decoder.int8.onnx',
             tokens: 'tokens.txt'
         }
+    },
+    {
+        id: 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25',
+        name: 'Qwen3 ASR',
+        description: 'settings.descriptions.qwen3_asr',
+        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2',
+        type: 'qwen3-asr',
+        modes: ['offline'],
+        language: 'multi',
+        size: '827 MB',
+        engine: 'sherpa-onnx',
+        rules: {
+            requiresVad: true,
+            requiresPunctuation: false
+        },
+        fileConfig: {
+            convFrontend: 'conv_frontend.onnx',
+            encoder: 'encoder.int8.onnx',
+            decoder: 'decoder.int8.onnx',
+            tokenizer: 'tokenizer'
+        },
+        groupId: 'qwen3-asr',
+        versionLabel: '0.6B Int8'
     },
     {
         id: 'sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02',

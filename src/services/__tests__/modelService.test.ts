@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { modelService, PRESET_MODELS } from '../modelService';
 import { invoke } from '@tauri-apps/api/core';
 import { exists, remove } from '@tauri-apps/plugin-fs';
+import enLocale from '../../locales/en.json';
+import zhLocale from '../../locales/zh.json';
 
 // Mock mocks
 vi.mock('@tauri-apps/api/core', () => ({
@@ -106,6 +108,44 @@ describe('ModelService', () => {
             expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
                 url: expect.stringContaining(itnModel.url)
             }));
+        });
+    });
+
+    describe('Qwen3 ASR metadata', () => {
+        const qwen3ModelId = 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
+
+        it('registers qwen3-asr as an offline-only model with VAD support', () => {
+            const qwen3Model = PRESET_MODELS.find((model) => model.id === qwen3ModelId);
+            const offlineModelIds = PRESET_MODELS
+                .filter((model) => model.modes?.includes('offline'))
+                .map((model) => model.id);
+            const streamingModelIds = PRESET_MODELS
+                .filter((model) => model.modes?.includes('streaming'))
+                .map((model) => model.id);
+
+            expect(qwen3Model).toMatchObject({
+                id: qwen3ModelId,
+                type: 'qwen3-asr',
+                modes: ['offline'],
+                fileConfig: {
+                    convFrontend: 'conv_frontend.onnx',
+                    encoder: 'encoder.int8.onnx',
+                    decoder: 'decoder.int8.onnx',
+                    tokenizer: 'tokenizer',
+                },
+            });
+            expect(qwen3Model?.fileConfig).not.toHaveProperty('tokens');
+            expect(offlineModelIds).toContain(qwen3ModelId);
+            expect(streamingModelIds).not.toContain(qwen3ModelId);
+            expect(modelService.getModelRules(qwen3ModelId)).toEqual({
+                requiresVad: true,
+                requiresPunctuation: false,
+            });
+        });
+
+        it('adds qwen3-asr description keys to both locale files', () => {
+            expect(enLocale.settings.descriptions.qwen3_asr).toBeTruthy();
+            expect(zhLocale.settings.descriptions.qwen3_asr).toBeTruthy();
         });
     });
 });

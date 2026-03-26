@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelFileConfig {
     pub encoder: Option<String>,
@@ -18,6 +18,7 @@ pub struct ModelFileConfig {
     pub model: Option<String>,
     pub joiner: Option<String>,
     pub tokens: Option<String>,
+    pub conv_frontend: Option<String>,
     pub encoder_adaptor: Option<String>,
     pub llm: Option<String>,
     pub embedding: Option<String>,
@@ -65,6 +66,12 @@ pub enum ModelType {
     OfflineDolphin {
         model: PathBuf,
         tokens: PathBuf,
+    },
+    OfflineQwen3Asr {
+        conv_frontend: PathBuf,
+        encoder: PathBuf,
+        decoder: PathBuf,
+        tokenizer: PathBuf,
     },
 }
 
@@ -163,6 +170,18 @@ pub fn build_model_config(
                 tokens,
             })
         }
+        "qwen3-asr" => {
+            let conv_frontend = get_path(&fc.conv_frontend)?;
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let tokenizer = get_path(&fc.tokenizer)?;
+            Ok(ModelType::OfflineQwen3Asr {
+                conv_frontend,
+                encoder,
+                decoder,
+                tokenizer,
+            })
+        }
         _ => Err(format!("Unsupported model type: {}", model_type)),
     }
 }
@@ -208,14 +227,14 @@ fn get_base_online_config(
 
 fn get_base_offline_config(
     num_threads: i32,
-    tokens: &Path,
+    tokens: Option<&Path>,
     itn_model: Option<String>,
 ) -> OfflineRecognizerConfig {
     let mut config = OfflineRecognizerConfig {
         rule_fsts: itn_model,
         ..Default::default()
     };
-    config.model_config.tokens = Some(tokens.to_string_lossy().to_string());
+    config.model_config.tokens = tokens.map(|path| path.to_string_lossy().to_string());
     config.model_config.num_threads = num_threads;
     config.model_config.provider = Some("cpu".to_string());
     config.feat_config.sample_rate = 16000;
@@ -273,7 +292,7 @@ impl Recognizer {
                 language,
                 use_itn,
             } => {
-                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
@@ -290,7 +309,7 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
-                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
@@ -309,7 +328,7 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
-                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
                 config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
@@ -327,7 +346,7 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
-                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
 
@@ -341,13 +360,35 @@ impl Recognizer {
                 model,
                 tokens,
             } => {
-                let mut config = get_base_offline_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
                 let recognizer = OfflineRecognizer::create(&config)
                     .ok_or("Failed to create OfflineRecognizer")?;
                 debug!("Successfully created OfflineRecognizer (OfflineDolphin)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineQwen3Asr {
+                conv_frontend,
+                encoder,
+                decoder,
+                tokenizer,
+            } => {
+                let mut config = get_base_offline_config(num_threads, None, itn_model);
+                config.model_config.qwen3_asr.conv_frontend =
+                    Some(conv_frontend.to_string_lossy().to_string());
+                config.model_config.qwen3_asr.encoder =
+                    Some(encoder.to_string_lossy().to_string());
+                config.model_config.qwen3_asr.decoder =
+                    Some(decoder.to_string_lossy().to_string());
+                config.model_config.qwen3_asr.tokenizer =
+                    Some(tokenizer.to_string_lossy().to_string());
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineQwen3Asr)");
+                let recognizer = OfflineRecognizer::create(&config)
+                    .ok_or("Failed to create OfflineRecognizer")?;
+                debug!("Successfully created OfflineRecognizer (OfflineQwen3Asr)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };
@@ -1395,4 +1436,68 @@ async fn process_batch_online<R: tauri::Runtime>(
         }
     }
     Ok(segments)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_model_config_supports_qwen3_asr_without_tokens() {
+        let model_path = Path::new("C:/models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25");
+        let file_config = Some(ModelFileConfig {
+            conv_frontend: Some("conv_frontend.onnx".to_string()),
+            encoder: Some("encoder.int8.onnx".to_string()),
+            decoder: Some("decoder.int8.onnx".to_string()),
+            tokenizer: Some("tokenizer".to_string()),
+            ..Default::default()
+        });
+
+        let model = build_model_config(
+            model_path,
+            "qwen3-asr",
+            &file_config,
+            false,
+            "auto",
+        )
+        .expect("qwen3-asr model should build");
+
+        match model {
+            ModelType::OfflineQwen3Asr {
+                conv_frontend,
+                encoder,
+                decoder,
+                tokenizer,
+            } => {
+                assert_eq!(conv_frontend, model_path.join("conv_frontend.onnx"));
+                assert_eq!(encoder, model_path.join("encoder.int8.onnx"));
+                assert_eq!(decoder, model_path.join("decoder.int8.onnx"));
+                assert_eq!(tokenizer, model_path.join("tokenizer"));
+            }
+            other => panic!("expected OfflineQwen3Asr, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_model_config_still_requires_tokens_for_sensevoice() {
+        let model_path = Path::new("C:/models/sensevoice");
+        let file_config = Some(ModelFileConfig {
+            model: Some("model.int8.onnx".to_string()),
+            ..Default::default()
+        });
+
+        let error = build_model_config(
+            model_path,
+            "sensevoice",
+            &file_config,
+            true,
+            "auto",
+        )
+        .expect_err("sensevoice should still require tokens.txt");
+
+        assert!(
+            error.contains("Required file name not specified in config"),
+            "unexpected error: {error}"
+        );
+    }
 }

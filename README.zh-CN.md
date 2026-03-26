@@ -20,6 +20,10 @@
 
 安装 Sona 最简单的方法是从 [GitHub Releases](https://github.com/AirSodaz/sona/releases/latest) 页面下载适合您平台的预编译二进制文件。
 
+### 用户指南
+
+如果您想查看面向终端用户的完整使用说明，请阅读[用户指南](docs/user-guide.zh-CN.md)。其中包含首次设置、`Live Record`、`Batch Import`、转录编辑、AI 功能、导出、历史记录与常见问题。
+
 ### 从源码构建
 
 #### 前置条件
