@@ -1,6 +1,6 @@
 # Sona CLI
 
-`sona-cli` 是 Sona 当前面向源码构建场景提供的命令行入口，专注于离线批量转写。
+`sona-cli` 是 Sona 提供的离线批量转写命令行入口。Release 安装包和应用包会直接包含它，同时源码构建场景也仍然可以通过 Cargo 运行。
 
 这个 v1 版本只覆盖一条核心工作流：
 
@@ -10,9 +10,19 @@
 
 ## 当前范围
 
+- 已随桌面版安装器和应用包一起提供
 - 在 `src-tauri/` 目录内已支持：`cargo run --bin sona-cli -- ...`
 - 在 `src-tauri/` 目录内已支持：`cargo build --release --bin sona-cli`
-- 暂不包含：桌面安装包集成、独立 Release 压缩包、实时录音、AI 润色、AI 翻译
+- 暂不包含：系统 `PATH` 注册、独立 CLI 压缩包、实时录音、AI 润色、AI 翻译
+
+## 安装包内的位置
+
+`sona-cli` 会随桌面应用一起打包，但默认不会注册进 `PATH`。
+
+- Windows：在 `Sona.exe` 同级目录直接运行 `sona-cli.exe`
+- macOS：运行 `/Applications/Sona.app/Contents/Resources/sona-cli`
+- Linux 安装包：从 Tauri 资源目录运行，通常是 `/usr/lib/Sona/sona-cli`
+- AppImage：从挂载后的 AppImage 资源目录运行，通常是 `${APPDIR}/usr/lib/Sona/sona-cli`
 
 ## 使用示例
 
@@ -88,7 +98,7 @@ sona-cli transcribe <input>
 
 ## 手工验收
 
-在本机已经安装桌面版模型的前提下，可以这样验证：
+在本机已经安装桌面版模型的前提下，可以这样验证。只要 `models_dir` 指向桌面版模型目录，这个流程既适用于源码构建，也适用于安装包中的 CLI：
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \

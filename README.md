@@ -26,7 +26,16 @@ For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md
 
 ### CLI
 
-Sona also includes a source-build CLI entry point for offline batch transcription:
+Sona also ships a packaged CLI for offline batch transcription. GitHub Release installers and app bundles include `sona-cli`, but it is not added to your shell `PATH`.
+
+Installed package locations:
+
+- Windows: run `sona-cli.exe` from the same installation directory as `Sona.exe`
+- macOS: run `/Applications/Sona.app/Contents/Resources/sona-cli`
+- Linux: run `sona-cli` from the Tauri resource directory, typically `/usr/lib/Sona/sona-cli`
+- AppImage: run `sona-cli` from the mounted AppImage resource directory, typically `${APPDIR}/usr/lib/Sona/sona-cli`
+
+Source builds can still run the CLI directly with Cargo:
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
@@ -37,7 +46,7 @@ Current CLI scope is intentionally narrow:
 
 - Single-file offline transcription
 - Export to `json`, `txt`, `srt`, or `vtt`
-- Source-build usage only for now
+- Packaged with the desktop app, but not registered on `PATH`
 
 For the full CLI guide and a minimal TOML example, read [docs/cli.md](docs/cli.md).
 

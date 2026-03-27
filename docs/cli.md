@@ -1,6 +1,6 @@
 # Sona CLI
 
-`sona-cli` is Sona's source-build-only command line entry point for offline batch transcription.
+`sona-cli` is Sona's command line entry point for offline batch transcription. Release installers and app bundles include it, and source builds can still run it directly with Cargo.
 
 This v1 implementation focuses on a single workflow:
 
@@ -10,9 +10,19 @@ This v1 implementation focuses on a single workflow:
 
 ## Current Scope
 
+- Included in desktop installers and app bundles
 - Supported inside `src-tauri/`: `cargo run --bin sona-cli -- ...`
 - Supported inside `src-tauri/`: `cargo build --release --bin sona-cli`
-- Not included yet: desktop installer packaging, standalone release archives, live recording, AI polish, AI translate
+- Not included yet: shell `PATH` registration, standalone CLI-only archives, live recording, AI polish, AI translate
+
+## Installed Locations
+
+`sona-cli` is packaged with the desktop app, but it is not registered on `PATH`.
+
+- Windows: run `sona-cli.exe` from the same installation directory as `Sona.exe`
+- macOS: run `/Applications/Sona.app/Contents/Resources/sona-cli`
+- Linux packages: run `sona-cli` from the Tauri resource directory, typically `/usr/lib/Sona/sona-cli`
+- AppImage: run `sona-cli` from the mounted AppImage resource directory, typically `${APPDIR}/usr/lib/Sona/sona-cli`
 
 ## Example
 
@@ -88,7 +98,7 @@ sona-cli transcribe <input>
 
 ## Manual Verification
 
-With locally installed desktop models, verify the CLI manually:
+With locally installed desktop models, verify the CLI manually. This works for both source builds and packaged installs as long as `models_dir` points at the desktop model directory:
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \

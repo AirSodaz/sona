@@ -26,7 +26,16 @@
 
 ### CLI
 
-Sona 现在也提供了一个面向源码构建场景的离线批量转写 CLI：
+Sona 现在也会随桌面版安装包一起提供一个离线批量转写 CLI。GitHub Release 中的安装器和应用包都会包含 `sona-cli`，但默认不会帮您写入系统 `PATH`。
+
+安装包内的常见位置：
+
+- Windows：在 `Sona.exe` 同级目录直接运行 `sona-cli.exe`
+- macOS：运行 `/Applications/Sona.app/Contents/Resources/sona-cli`
+- Linux：从 Tauri 资源目录运行，通常是 `/usr/lib/Sona/sona-cli`
+- AppImage：从挂载后的 AppImage 资源目录运行，通常是 `${APPDIR}/usr/lib/Sona/sona-cli`
+
+如果您是从源码构建，也仍然可以直接通过 Cargo 运行 CLI：
 
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
@@ -37,7 +46,7 @@ cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
 
 - 单文件离线转写
 - 导出到 `json`、`txt`、`srt`、`vtt`
-- 目前仅保证源码构建使用
+- 会随桌面应用一起打包，但不会注册到 `PATH`
 
 完整 CLI 说明和最小 TOML 示例请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
 

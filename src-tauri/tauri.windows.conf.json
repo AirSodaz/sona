@@ -1,10 +1,4 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "identifier": "com.asoda.sona",
-    "bundle": {
-        "resources": [
-            "sherpa-onnx-c-api.dll",
-            "onnxruntime.dll"
-        ]
-    }
+    "identifier": "com.asoda.sona"
 }
