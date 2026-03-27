@@ -1,7 +1,10 @@
 mod ai;
 mod audio;
+pub mod cli;
+pub mod export;
 mod hardware;
 pub mod pipeline;
+pub mod preset_models;
 pub mod sherpa;
 
 use std::collections::HashMap;

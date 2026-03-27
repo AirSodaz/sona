@@ -24,6 +24,23 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, transcript editing, AI features, export, history, and troubleshooting.
 
+### CLI
+
+Sona also includes a source-build CLI entry point for offline batch transcription:
+
+```bash
+cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
+  transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt
+```
+
+Current CLI scope is intentionally narrow:
+
+- Single-file offline transcription
+- Export to `json`, `txt`, `srt`, or `vtt`
+- Source-build usage only for now
+
+For the full CLI guide and a minimal TOML example, read [docs/cli.md](docs/cli.md).
+
 ### Build from Source
 
 #### Prerequisites

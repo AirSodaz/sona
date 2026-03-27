@@ -55,7 +55,7 @@ pub enum ModelType {
         llm: PathBuf,
         embedding: PathBuf,
         tokenizer: PathBuf,
-        tokens: PathBuf,
+        tokens: Option<PathBuf>,
         language: String,
     },
     OfflineFireRedAsr {
@@ -141,7 +141,11 @@ pub fn build_model_config(
             let llm = get_path(&fc.llm)?;
             let embedding = get_path(&fc.embedding)?;
             let tokenizer = get_path(&fc.tokenizer)?;
-            let tokens = get_path(&fc.tokens)?;
+            let tokens = fc
+                .tokens
+                .as_ref()
+                .map(|_| get_path(&fc.tokens))
+                .transpose()?;
             let language = if language == "multilingual" { "" } else { language }.to_string();
             Ok(ModelType::OfflineFunASRNano {
                 encoder_adaptor,
@@ -328,7 +332,7 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
-                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
+                let mut config = get_base_offline_config(num_threads, tokens.as_deref(), itn_model);
                 config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
                 config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
@@ -626,7 +630,24 @@ impl SherpaState {
     }
 }
 
-#[derive(serde::Serialize, Clone)]
+/// Batch transcription request shared by the GUI Tauri command and the CLI.
+#[derive(Debug, Clone)]
+pub struct BatchTranscriptionRequest {
+    pub file_path: String,
+    pub save_to_path: Option<String>,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub itn_model: Option<String>,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub model_type: String,
+    pub file_config: Option<ModelFileConfig>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSegment {
     pub id: String,
@@ -1240,56 +1261,82 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     model_type: String,
     file_config: Option<ModelFileConfig>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let samples = crate::pipeline::extract_and_resample_audio(&app, &file_path, 16000).await?;
+    let request = BatchTranscriptionRequest {
+        file_path,
+        save_to_path,
+        model_path,
+        num_threads,
+        enable_itn,
+        language,
+        itn_model,
+        punctuation_model,
+        vad_model,
+        vad_buffer,
+        model_type,
+        file_config,
+    };
+    let progress_file_path = request.file_path.clone();
 
-    if let Some(path) = save_to_path {
-        crate::pipeline::save_wav_file(&samples, 16000, &path).map_err(|e| e.to_string())?;
+    transcribe_batch_with_progress(&request, |progress| {
+        let _ = app.emit("batch-progress", &(progress_file_path.as_str(), progress));
+    })
+    .await
+}
+
+/// Runs batch transcription without depending on Tauri runtime types.
+pub async fn transcribe_batch_with_progress<F>(
+    request: &BatchTranscriptionRequest,
+    mut on_progress: F,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+{
+    let samples = crate::pipeline::extract_and_resample_audio(&request.file_path, 16000).await?;
+
+    if let Some(path) = request.save_to_path.as_ref() {
+        crate::pipeline::save_wav_file(&samples, 16000, path).map_err(|e| e.to_string())?;
     }
 
-    // Initialize local recognizer, punctuation, and VAD instances
-    let valid_itn = get_valid_itn_paths(itn_model);
-
+    let valid_itn = get_valid_itn_paths(request.itn_model.clone());
     let config_type = build_model_config(
-        Path::new(&model_path),
-        &model_type,
-        &file_config,
-        enable_itn,
-        &language,
+        Path::new(&request.model_path),
+        &request.model_type,
+        &request.file_config,
+        request.enable_itn,
+        &request.language,
     )?;
-
-    let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
-
-    let punctuation = load_punctuation(punctuation_model);
+    let recognizer = Recognizer::new(config_type, request.num_threads, valid_itn)?;
+    let punctuation = load_punctuation(request.punctuation_model.clone());
 
     match &recognizer.inner {
-        RecognizerInner::Offline(r) => process_batch_offline(
-            &app,
-            r,
-            &samples,
-            vad_model,
-            vad_buffer,
-            punctuation.as_ref(),
-            &file_path,
-        ).await,
-        RecognizerInner::Online(r) => process_batch_online(
-            &app,
-            r,
-            &samples,
-            punctuation.as_ref(),
-            &file_path,
-        ).await,
+        RecognizerInner::Offline(r) => {
+            process_batch_offline(
+                r,
+                &samples,
+                request.vad_model.clone(),
+                request.vad_buffer,
+                punctuation.as_ref(),
+                &mut on_progress,
+            )
+            .await
+        }
+        RecognizerInner::Online(r) => {
+            process_batch_online(r, &samples, punctuation.as_ref(), &mut on_progress).await
+        }
     }
 }
 
-async fn process_batch_offline<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+async fn process_batch_offline<F>(
     r: &SafeOfflineRecognizer,
     samples: &[f32],
     vad_model: Option<String>,
     vad_buffer: f32,
     punctuation: Option<&Punctuation>,
-    file_path: &str,
-) -> Result<Vec<TranscriptSegment>, String> {
+    on_progress: &mut F,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+{
     let segments = if let Some(v_path) = vad_model {
         if !v_path.is_empty() && Path::new(&v_path).exists() {
             let silero_vad = sherpa_onnx::SileroVadModelConfig {
@@ -1319,6 +1366,11 @@ async fn process_batch_offline<R: tauri::Runtime>(
 
     let mut results = Vec::new();
     let total_segments = segments.len();
+    if total_segments == 0 {
+        on_progress(100.0);
+        return Ok(results);
+    }
+
     for (i, seg) in segments.into_iter().enumerate() {
         {
             let stream = r.0.create_stream();
@@ -1352,19 +1404,21 @@ async fn process_batch_offline<R: tauri::Runtime>(
             }
         }
         let progress = ((i + 1) as f32 / total_segments as f32) * 100.0;
-        let _ = app.emit("batch-progress", &(file_path, progress));
+        on_progress(progress);
         tokio::task::yield_now().await;
     }
     Ok(results)
 }
 
-async fn process_batch_online<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+async fn process_batch_online<F>(
     r: &SafeOnlineRecognizer,
     samples: &[f32],
     punctuation: Option<&Punctuation>,
-    file_path: &str,
-) -> Result<Vec<TranscriptSegment>, String> {
+    on_progress: &mut F,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+{
     let stream = SafeStream(r.0.create_stream());
     let mut segments = Vec::new();
     let mut segment_start = 0.0;
@@ -1372,6 +1426,11 @@ async fn process_batch_online<R: tauri::Runtime>(
 
     let chunk_size = 8000;
     let total_samples = samples.len();
+    if total_samples == 0 {
+        on_progress(100.0);
+        return Ok(segments);
+    }
+
     for chunk in samples.chunks(chunk_size) {
         stream.0.accept_waveform(16000, chunk);
         current_samples += chunk.len();
@@ -1404,7 +1463,7 @@ async fn process_batch_online<R: tauri::Runtime>(
             segment_start = current_time;
         }
         let progress = (current_samples as f32 / total_samples as f32) * 100.0;
-        let _ = app.emit("batch-progress", &(file_path, progress));
+        on_progress(progress);
         tokio::task::yield_now().await;
     }
 
@@ -1435,6 +1494,7 @@ async fn process_batch_online<R: tauri::Runtime>(
             });
         }
     }
+    on_progress(100.0);
     Ok(segments)
 }
 
@@ -1499,5 +1559,33 @@ mod tests {
             error.contains("Required file name not specified in config"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn build_model_config_supports_funasr_nano_without_tokens() {
+        let model_path = Path::new("C:/models/funasr-nano");
+        let file_config = Some(ModelFileConfig {
+            encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
+            llm: Some("llm.int8.onnx".to_string()),
+            embedding: Some("embedding.int8.onnx".to_string()),
+            tokenizer: Some("Qwen3-0.6B".to_string()),
+            ..Default::default()
+        });
+
+        let model = build_model_config(
+            model_path,
+            "funasr-nano",
+            &file_config,
+            false,
+            "auto",
+        )
+        .expect("funasr-nano should build without tokens");
+
+        match model {
+            ModelType::OfflineFunASRNano { tokens, .. } => {
+                assert!(tokens.is_none());
+            }
+            other => panic!("expected OfflineFunASRNano, got {other:?}"),
+        }
     }
 }

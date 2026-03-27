@@ -24,6 +24,23 @@
 
 如果您想查看面向终端用户的完整使用说明，请阅读[用户指南](docs/user-guide.zh-CN.md)。其中包含首次设置、`Live Record`、`Batch Import`、转录编辑、AI 功能、导出、历史记录与常见问题。
 
+### CLI
+
+Sona 现在也提供了一个面向源码构建场景的离线批量转写 CLI：
+
+```bash
+cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
+  transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt
+```
+
+当前 CLI 范围刻意保持精简：
+
+- 单文件离线转写
+- 导出到 `json`、`txt`、`srt`、`vtt`
+- 目前仅保证源码构建使用
+
+完整 CLI 说明和最小 TOML 示例请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
+
 ### 从源码构建
 
 #### 前置条件

@@ -39,11 +39,11 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
     writer.finalize()
 }
 
-/// Extract audio from any file and resample to the target sample rate using FFmpeg.
-/// This mirrors the JS sidecar's `convertToWav` function exactly:
-///   ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -
-pub async fn extract_and_resample_audio<R: tauri::Runtime>(
-    _app: &tauri::AppHandle<R>,
+/// Extracts audio from any file and resamples it to the target sample rate with FFmpeg.
+///
+/// This mirrors the GUI batch path:
+/// `ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -`
+pub async fn extract_and_resample_audio(
     filepath: &str,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, String> {
@@ -172,7 +172,7 @@ fn extract_vad_segments(
             let duration = seg_samples.len() as f32 / sample_rate as f32;
 
             let tag = if is_flush { "(flush)" } else { "" };
-            eprintln!(
+            log::debug!(
                 "[Sona VAD] segment {} start_sample={} duration={:.2}s samples={}",
                 tag,
                 start_sample,
