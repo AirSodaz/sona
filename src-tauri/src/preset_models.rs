@@ -23,9 +23,15 @@ pub struct ModelRules {
 #[serde(rename_all = "camelCase")]
 pub struct PresetModel {
     pub id: String,
+    pub name: String,
+    pub description: String,
+    pub url: String,
     #[serde(rename = "type")]
     pub model_type: String,
     pub modes: Option<Vec<String>>,
+    pub language: String,
+    pub size: String,
+    pub is_archive: Option<bool>,
     pub filename: Option<String>,
     pub rules: Option<ModelRules>,
     pub file_config: Option<ModelFileConfig>,
@@ -55,6 +61,20 @@ impl PresetModel {
             Some(filename) => models_dir.join(filename),
             None => models_dir.join(&self.id),
         }
+    }
+
+    /// Returns the expected download filename under the given models directory.
+    pub fn resolve_download_path(&self, models_dir: &Path) -> PathBuf {
+        if self.is_archive() {
+            models_dir.join(format!("{}.tar.bz2", self.id))
+        } else {
+            self.resolve_install_path(models_dir)
+        }
+    }
+
+    /// Returns true when the preset ships as an archive.
+    pub fn is_archive(&self) -> bool {
+        self.is_archive.unwrap_or(true)
     }
 
     /// Returns the effective rules for this preset model.
@@ -95,6 +115,23 @@ mod tests {
     fn resolves_file_models_by_filename() {
         let model = find_preset_model("silero-vad").unwrap();
         let path = model.resolve_install_path(Path::new("C:/models"));
+        assert_eq!(path, PathBuf::from("C:/models/silero_vad.onnx"));
+    }
+
+    #[test]
+    fn resolves_archive_download_path_by_id() {
+        let model = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
+        let path = model.resolve_download_path(Path::new("C:/models"));
+        assert_eq!(
+            path,
+            PathBuf::from("C:/models/sherpa-onnx-whisper-turbo.tar.bz2")
+        );
+    }
+
+    #[test]
+    fn resolves_file_download_path_by_filename() {
+        let model = find_preset_model("silero-vad").unwrap();
+        let path = model.resolve_download_path(Path::new("C:/models"));
         assert_eq!(path, PathBuf::from("C:/models/silero_vad.onnx"));
     }
 

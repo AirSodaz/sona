@@ -1,9 +1,11 @@
 use crate::export::ExportFormat;
-use crate::preset_models::{find_preset_model, PresetModel};
+use crate::preset_models::{find_preset_model, preset_models, PresetModel};
 use crate::sherpa::BatchTranscriptionRequest;
+use futures_util::StreamExt;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use tokio::io::AsyncWriteExt;
 
 const DEFAULT_THREADS: i32 = 4;
 const DEFAULT_LANGUAGE: &str = "auto";
@@ -57,6 +59,35 @@ pub struct ResolvedTranscribeOptions {
     pub output_target: OutputTarget,
     pub quiet: bool,
     pub request: BatchTranscriptionRequest,
+}
+
+/// Summary information for one preset model exposed by the CLI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliModelSummary {
+    pub id: String,
+    pub name: String,
+    pub model_type: String,
+    pub language: String,
+    pub size: String,
+    pub modes: Vec<String>,
+    pub installed: bool,
+    pub install_path: PathBuf,
+}
+
+/// Download settings resolved from CLI arguments and defaults.
+#[derive(Debug, Clone)]
+pub struct ResolvedModelDownload {
+    pub model: PresetModel,
+    pub models_dir: PathBuf,
+    pub download_path: PathBuf,
+    pub install_path: PathBuf,
+}
+
+/// Companion model ids suggested after downloading a preset.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RequiredCompanionModels {
+    pub vad_model_id: Option<String>,
+    pub punctuation_model_id: Option<String>,
 }
 
 /// Loads a TOML configuration file for the CLI.
@@ -181,6 +212,131 @@ pub fn write_output(target: &OutputTarget, content: &str) -> Result<(), String> 
     }
 }
 
+/// Returns preset models known to the CLI with installation status.
+pub fn list_models(models_dir: Option<PathBuf>) -> Result<Vec<CliModelSummary>, String> {
+    let models_dir = resolve_models_dir(models_dir)?;
+    Ok(preset_models()
+        .iter()
+        .map(|model| {
+            let install_path = model.resolve_install_path(&models_dir);
+            CliModelSummary {
+                id: model.id.clone(),
+                name: model.name.clone(),
+                model_type: model.model_type.clone(),
+                language: model.language.clone(),
+                size: model.size.clone(),
+                modes: model.modes.clone().unwrap_or_default(),
+                installed: install_path.exists(),
+                install_path,
+            }
+        })
+        .collect())
+}
+
+/// Resolves model download settings from CLI arguments and defaults.
+pub fn resolve_model_download(
+    model_id: &str,
+    models_dir: Option<PathBuf>,
+) -> Result<ResolvedModelDownload, String> {
+    let models_dir = resolve_models_dir(models_dir)?;
+    let model = find_preset_model(model_id)
+        .ok_or_else(|| format!("Unknown model id: {model_id}"))?
+        .clone();
+    let download_path = model.resolve_download_path(&models_dir);
+    let install_path = model.resolve_install_path(&models_dir);
+
+    Ok(ResolvedModelDownload {
+        model,
+        models_dir,
+        download_path,
+        install_path,
+    })
+}
+
+/// Downloads a preset model into the local models directory.
+pub async fn download_model<F>(
+    resolved: &ResolvedModelDownload,
+    mut on_progress: F,
+) -> Result<PathBuf, String>
+where
+    F: FnMut(u64, u64),
+{
+    if resolved.install_path.exists() {
+        return Ok(resolved.install_path.clone());
+    }
+
+    tokio::fs::create_dir_all(&resolved.models_dir)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to create models directory {}: {error}",
+                resolved.models_dir.display()
+            )
+        })?;
+
+    let client = reqwest::Client::builder()
+        .user_agent("Sona/1.0")
+        .build()
+        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
+    let response = client
+        .get(&resolved.model.url)
+        .send()
+        .await
+        .map_err(|error| format!("Failed to download model: {error}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+
+    let total_size = response.content_length().unwrap_or(0);
+    let file = tokio::fs::File::create(&resolved.download_path)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to create download file {}: {error}",
+                resolved.download_path.display()
+            )
+        })?;
+    let mut writer = tokio::io::BufWriter::new(file);
+    let mut stream = response
+        .bytes_stream()
+        .map(|item| item.map_err(|error| error.to_string()));
+
+    process_download_stream(&mut stream, &mut writer, total_size, |downloaded, total| {
+        on_progress(downloaded, total);
+    })
+    .await?;
+    writer
+        .flush()
+        .await
+        .map_err(|error| format!("Failed to flush download file: {error}"))?;
+
+    if resolved.model.is_archive() {
+        extract_tar_bz2_archive(&resolved.download_path, &resolved.models_dir).await?;
+        tokio::fs::remove_file(&resolved.download_path)
+            .await
+            .map_err(|error| {
+                format!(
+                    "Failed to remove archive {}: {error}",
+                    resolved.download_path.display()
+                )
+            })?;
+    }
+
+    Ok(resolved.install_path.clone())
+}
+
+/// Returns suggested companion model ids for the given preset model.
+pub fn required_companion_models(model: &PresetModel) -> RequiredCompanionModels {
+    let rules = model.resolved_rules();
+    RequiredCompanionModels {
+        vad_model_id: rules.requires_vad.then(|| "silero-vad".to_string()),
+        punctuation_model_id: rules
+            .requires_punctuation
+            .then(|| "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8".to_string()),
+    }
+}
+
 fn resolve_export_format(format: Option<&str>, output: Option<&Path>) -> Result<ExportFormat, String> {
     if let Some(value) = format {
         return ExportFormat::parse(value);
@@ -190,6 +346,55 @@ fn resolve_export_format(format: Option<&str>, output: Option<&Path>) -> Result<
         Some(path) => ExportFormat::from_output_path(path),
         None => Ok(ExportFormat::Json),
     }
+}
+
+async fn process_download_stream<S, W, F>(
+    stream: &mut S,
+    writer: &mut W,
+    total_size: u64,
+    mut on_progress: F,
+) -> Result<(), String>
+where
+    S: futures_util::Stream<Item = Result<bytes::Bytes, String>> + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+    F: FnMut(u64, u64),
+{
+    let mut downloaded: u64 = 0;
+    let mut last_emit = std::time::Instant::now();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item?;
+        writer
+            .write_all(&chunk)
+            .await
+            .map_err(|error| error.to_string())?;
+        downloaded += chunk.len() as u64;
+
+        if total_size > 0 && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100) {
+            on_progress(downloaded, total_size);
+            last_emit = std::time::Instant::now();
+        }
+    }
+
+    Ok(())
+}
+
+async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Result<(), String> {
+    let archive_path = archive_path.to_path_buf();
+    let target_dir = target_dir.to_path_buf();
+
+    tokio::task::spawn_blocking(move || {
+        let file = std::fs::File::open(&archive_path)
+            .map_err(|error| format!("Failed to open archive {}: {error}", archive_path.display()))?;
+        let buffered = std::io::BufReader::new(file);
+        let tar = bzip2::read::BzDecoder::new(buffered);
+        let mut archive = tar::Archive::new(tar);
+        archive
+            .unpack(&target_dir)
+            .map_err(|error| format!("Failed to extract archive into {}: {error}", target_dir.display()))
+    })
+    .await
+    .map_err(|error| format!("Failed to join extraction task: {error}"))?
 }
 
 fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
