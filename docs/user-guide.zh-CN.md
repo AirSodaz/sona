@@ -15,7 +15,7 @@ Sona 是一款以隐私优先为目标的本地转录编辑器，适合希望默
 - 用 `Live Record` 实时录音并转录会议、课堂、访谈或语音笔记
 - 用 `Batch Import` 批量转录已有的音频或视频文件
 - 在按时间轴组织的编辑器中逐段修改文字
-- 在自行配置 AI 服务后，对文本进行润色或翻译
+- 在自行配置 LLM 服务后，对文本进行润色或翻译
 - 将结果导出为字幕或纯文本
 
 ## 2. 安装与启动
@@ -84,7 +84,7 @@ Sona 首次打开时，可能会直接显示 `First Run Setup`。如果之前跳
 
 - 新的转录分段会实时出现在右侧编辑器中。
 - 当前活跃分段会跟随播放和录音状态变化。
-- 如果启用了 `Auto-Polish`，且 AI 服务已配置完成，Sona 可以按批次自动润色已完成的分段。
+- 如果启用了 `Auto-Polish`，且 LLM 服务已配置完成，Sona 可以按批次自动润色已完成的分段。
 
 ### 说明
 
@@ -152,23 +152,23 @@ Sona 首次打开时，可能会直接显示 `First Run Setup`。如果之前跳
 - 工具栏支持 `Undo`、`Redo`、`Bold`、`Italic`、`Underline` 和换行。
 - 搜索结果可以在不同分段之间快速跳转。
 
-## 7. AI 润色与翻译
+## 7. LLM 润色与翻译
 
-Sona 的 AI 功能是可选能力。离线转录本身不依赖它，但 `AI Polish` 与 `Translate` 需要您先配置 AI 服务。
+Sona 的 LLM 功能是可选能力。离线转录本身不依赖它，但 `LLM Polish` 与 `Translate` 需要您先配置 LLM 服务。
 
 ### 前置条件
 
 - 您已经有转录分段。
-- 您已经在 `Settings > AI Service` 中填写了：
-  `AI Service Type`、`Base URL`、`API Key`、`Model Name`，以及可选的 `Temperature`。
+- 您已经在 `Settings > LLM Service` 中填写了：
+  `LLM Service Type`、`Base URL`、`API Key`、`Model Name`，以及可选的 `Temperature`。
 
-### AI 润色步骤
+### LLM 润色步骤
 
-1. 打开 `Settings > AI Service`。
+1. 打开 `Settings > LLM Service`。
 2. 选择服务提供方，例如 `OpenAI`、`Anthropic`、`Ollama`、`Google Gemini`、`DeepSeek`、`Kimi` 或 `SiliconFlow`。
 3. 填入连接信息。
 4. 点击 `Test Connection` 确认设置可用。
-5. 回到主界面，点击 `AI Polish` 按钮。
+5. 回到主界面，点击 `LLM Polish` 按钮。
 6. 根据当前状态，从菜单中选择开始润色、重新转录、撤销润色或重做润色。
 
 ### 翻译步骤
@@ -181,13 +181,13 @@ Sona 的 AI 功能是可选能力。离线转录本身不依赖它，但 `AI Pol
 
 ### 完成后会发生什么
 
-- `AI Polish` 会直接更新转录文本。
+- `LLM Polish` 会直接更新转录文本。
 - `Translate` 会将翻译结果保存到每个分段，并可显示在原文下方。
 
 ### 说明
 
 - 当前支持的翻译目标语言包括 `Chinese (Simplified)`、`English`、`Japanese`、`Korean`、`French`、`German` 和 `Spanish`。
-- `Parameter Settings` 中的 `Auto-Polish` 依赖有效的 AI 配置。
+- `Parameter Settings` 中的 `Auto-Polish` 依赖有效的 LLM 配置。
 
 ## 8. 导出字幕与文本
 
@@ -265,9 +265,9 @@ Sona 的 AI 功能是可选能力。离线转录本身不依赖它，但 `AI Pol
 - 确认文件扩展名属于支持格式。
 - 如果 Sona 提示格式不支持，请先把文件转成支持的音频或视频格式再导入。
 
-### `AI Polish` 或 `Translate` 不可用，或者执行失败
+### `LLM Polish` 或 `Translate` 不可用，或者执行失败
 
-- 确认 `Settings > AI Service` 中的 provider、base URL、API key 与 model 都填写正确。
+- 确认 `Settings > LLM Service` 中的 provider、base URL、API key 与 model 都填写正确。
 - 先用 `Test Connection` 验证连通性。
 - 如果您使用自定义接口地址或本地服务，例如 `Ollama`，请先确认那个服务本身可访问。
 

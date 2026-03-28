@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Sona is a privacy-first desktop transcript editor built with Tauri v2, React 19, TypeScript, Zustand, and a Rust backend powered by sherpa-onnx. The main product flow is offline transcription; cloud AI is optional and only used for transcript polish/translation.
+Sona is a privacy-first desktop transcript editor built with Tauri v2, React 19, TypeScript, Zustand, and a Rust backend powered by sherpa-onnx. The main product flow is offline transcription; cloud LLM is optional and only used for transcript polish/translation.
 
 Key product modes:
 - Live recording with real-time transcription
 - Batch import with background queue processing
 - Transcript editing with synchronized playback
-- Optional AI polish/translate via OpenAI, Anthropic, Gemini, or Ollama
+- Optional LLM polish/translate via OpenAI, Anthropic, Gemini, or Ollama
 - Local history, export, and model management
 
 ## Common commands
@@ -48,7 +48,7 @@ Key product modes:
 - `src/App.tsx` is the main orchestrator for app mode, initialization hooks, dialog rendering, and top-level layout.
 
 ### State model
-- `src/stores/transcriptStore.ts` is the central source of truth for transcript segments, playback/recording state, current mode, config, and AI task state.
+- `src/stores/transcriptStore.ts` is the central source of truth for transcript segments, playback/recording state, current mode, config, and LLM task state.
 - `src/stores/batchQueueStore.ts` manages the batch queue, concurrency, progress, auto-polish integration, and handoff into history.
 - `src/stores/historyStore.ts` manages the persisted transcript/audio history index.
 - `src/stores/onboardingStore.ts` tracks first-run setup and onboarding UI state.
@@ -65,10 +65,10 @@ Key product modes:
 - ffmpeg is used to decode/resample input before offline inference.
 - Completed batch items are written into history and can become the active transcript context.
 
-### AI assistant flow
+### LLM assistant flow
 - `src/services/polishService.ts` and `src/services/translationService.ts` chunk transcript segments, build prompts, call the backend, parse strict JSON responses, and progressively update transcript/history content.
-- `src-tauri/src/ai.rs` is the provider adapter/proxy for OpenAI-compatible APIs, Anthropic, Gemini, and Ollama.
-- If the user navigates away during AI processing, services may update the backing history transcript directly rather than only mutating the active in-memory state.
+- `src-tauri/src/llm.rs` is the provider adapter/proxy for OpenAI-compatible APIs, Anthropic, Gemini, and Ollama.
+- If the user navigates away during LLM processing, services may update the backing history transcript directly rather than only mutating the active in-memory state.
 
 ### Persistence and setup
 - Main user config is persisted in localStorage under `sona-config`.
@@ -131,8 +131,8 @@ Key product modes:
 ## Directory cues
 
 - `src/components/settings/` — settings tab implementations
-- `src/services/` — frontend orchestration for transcription, AI, history, export, and models
+- `src/services/` — frontend orchestration for transcription, LLM, history, export, and models
 - `src/stores/` — Zustand stores; start here when behavior spans multiple screens
-- `src-tauri/src/` — Tauri command handlers, audio capture, AI proxy, Sherpa integration, pipeline code
+- `src-tauri/src/` — Tauri command handlers, audio capture, LLM proxy, Sherpa integration, pipeline code
 - `docs/user-guide.md` — end-user workflows and setup details
 - `docs/cli.md` — CLI usage and configuration

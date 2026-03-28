@@ -10,7 +10,7 @@
 - **🎙️ Real-time Transcription**: Record and transcribe audio in real-time with low latency.
 - **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
 - **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
-- **✨ AI Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
+- **✨ LLM Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
 
@@ -22,7 +22,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, transcript editing, AI features, export, history, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, transcript editing, LLM features, export, history, and troubleshooting.
 
 ### CLI
 
@@ -111,8 +111,8 @@ Sona allows you to choose the AI model that best fits your needs, both for offli
     *   **Paraformer**: Optimized for streaming.
 3.  Click **Download**. The model will be automatically stored locally.
 
-### AI Assistant (Polish & Translate)
-1.  Navigate to **Settings > AI Service**.
+### LLM Assistant (Polish & Translate)
+1.  Navigate to **Settings > LLM Service**.
 2.  Select your provider (OpenAI, Anthropic, Gemini, or Ollama).
 3.  Enter your API Key and Base URL (if applicable).
 4.  Select a model to power the Polish and Translate features.

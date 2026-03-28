@@ -31,7 +31,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const { confirm, alert } = useDialogStore();
     const { t, i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'ai_service'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'llm_service'>('general');
 
     useEffect(() => {
         if (_isOpen) {

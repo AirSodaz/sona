@@ -15,7 +15,7 @@ Sona is a good fit if you want to:
 - record meetings, lectures, interviews, or notes with `Live Record`
 - transcribe existing audio or video files with `Batch Import`
 - edit timestamps and text in a transcript-focused editor
-- optionally polish or translate text with an AI provider you configure yourself
+- optionally polish or translate text with an LLM provider you configure yourself
 - export subtitles or plain text in common formats
 
 ## 2. Install And Launch
@@ -84,7 +84,7 @@ Use `Live Record` when you want to capture speech in real time and see the trans
 
 - Transcript segments appear in the editor on the right.
 - The currently active segment can follow playback and recording state.
-- If `Auto-Polish` is enabled and AI is configured, Sona can polish final segments in batches.
+- If `Auto-Polish` is enabled and LLM is configured, Sona can polish final segments in batches.
 
 ### Notes
 
@@ -152,23 +152,23 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 - The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and line breaks.
 - Search can jump between matching segments without leaving the editor.
 
-## 7. AI Polish And Translation
+## 7. LLM Polish And Translation
 
-Sona's AI features are optional. Local transcription works without them, but `AI Polish` and `Translate` require an AI provider configuration.
+Sona's LLM features are optional. Local transcription works without them, but `LLM Polish` and `Translate` require an LLM provider configuration.
 
 ### Preconditions
 
 - You already have transcript segments.
-- In `Settings > AI Service`, you configured:
-  `AI Service Type`, `Base URL`, `API Key`, `Model Name`, and optionally `Temperature`.
+- In `Settings > LLM Service`, you configured:
+  `LLM Service Type`, `Base URL`, `API Key`, `Model Name`, and optionally `Temperature`.
 
-### Steps For AI Polish
+### Steps For LLM Polish
 
-1. Open `Settings > AI Service`.
+1. Open `Settings > LLM Service`.
 2. Choose a provider such as `OpenAI`, `Anthropic`, `Ollama`, `Google Gemini`, `DeepSeek`, `Kimi`, or `SiliconFlow`.
 3. Enter the provider connection details.
 4. Use `Test Connection` to confirm the configuration.
-5. Return to the main workspace and click the `AI Polish` button.
+5. Return to the main workspace and click the `LLM Polish` button.
 6. Use the menu to start polishing, re-transcribe, undo polish, or redo polish depending on current state.
 
 ### Steps For Translate
@@ -181,13 +181,13 @@ Sona's AI features are optional. Local transcription works without them, but `AI
 
 ### Result
 
-- `AI Polish` updates transcript text in place.
+- `LLM Polish` updates transcript text in place.
 - `Translate` stores translation text per segment and can display it under the original text.
 
 ### Notes
 
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
-- `Auto-Polish` in `Parameter Settings` depends on a valid AI configuration.
+- `Auto-Polish` in `Parameter Settings` depends on a valid LLM configuration.
 
 ## 8. Export Subtitles And Text
 
@@ -265,9 +265,9 @@ Use `History` to reopen earlier work, and use `Settings` to manage the app's def
 - Confirm the file extension is supported.
 - If Sona reports an unsupported format, convert the file to a supported audio or video format before importing again.
 
-### `AI Polish` or `Translate` is disabled or fails
+### `LLM Polish` or `Translate` is disabled or fails
 
-- Confirm `Settings > AI Service` has a valid provider, base URL, API key, and model.
+- Confirm `Settings > LLM Service` has a valid provider, base URL, API key, and model.
 - Use `Test Connection` before retrying.
 - If your provider uses a custom base URL or a local service such as `Ollama`, verify that endpoint first.
 

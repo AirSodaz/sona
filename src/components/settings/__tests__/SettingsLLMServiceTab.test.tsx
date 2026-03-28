@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { SettingsLLMServiceTab } from '../SettingsAIServiceTab';
+import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 import * as tauriApi from '@tauri-apps/api/core';
 import { AppConfig } from '../../../types/transcript';
 
@@ -20,8 +20,8 @@ describe('SettingsLLMServiceTab', () => {
     const mockChangeLlmServiceType = vi.fn();
 
     const mockConfig: AppConfig = {
-        streamingModelPath: "/path/to/model",
-                offlineModelPath: '',
+        streamingModelPath: '/path/to/model',
+        offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
         llmServiceType: 'openai',
@@ -40,20 +40,20 @@ describe('SettingsLLMServiceTab', () => {
     it('renders all fields with correct localization keys', () => {
         render(<SettingsLLMServiceTab {...defaultProps} />);
 
-        expect(screen.getByText('settings.ai.service_type')).toBeDefined();
+        expect(screen.getByText('settings.llm.service_type')).toBeDefined();
         // Dropdown value (selected option label)
         expect(screen.getByText('OpenAI')).toBeDefined();
 
-        expect(screen.getByText('settings.ai.base_url')).toBeDefined();
+        expect(screen.getByText('settings.llm.base_url')).toBeDefined();
         expect(screen.getByDisplayValue('https://api.openai.com/v1')).toBeDefined();
 
-        expect(screen.getByText('settings.ai.api_key')).toBeDefined();
+        expect(screen.getByText('settings.llm.api_key')).toBeDefined();
         expect(screen.getByDisplayValue('test-key')).toBeDefined();
 
-        expect(screen.getByText('settings.ai.model_name')).toBeDefined();
+        expect(screen.getByText('settings.llm.model_name')).toBeDefined();
         expect(screen.getByDisplayValue('gpt-4o')).toBeDefined();
 
-        expect(screen.getByText('settings.ai.test_connection')).toBeDefined();
+        expect(screen.getByText('settings.llm.test_connection')).toBeDefined();
     });
 
     it('updates Service Type when changed', async () => {
@@ -75,7 +75,7 @@ describe('SettingsLLMServiceTab', () => {
 
         render(<SettingsLLMServiceTab {...defaultProps} />);
 
-        const testBtn = screen.getByText('settings.ai.test_connection');
+        const testBtn = screen.getByText('settings.llm.test_connection');
         fireEvent.click(testBtn);
 
         expect(tauriApi.invoke).toHaveBeenCalledWith('call_llm_model', {
@@ -88,7 +88,7 @@ describe('SettingsLLMServiceTab', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('settings.ai.connection_success')).toBeDefined();
+            expect(screen.getByText('settings.llm.connection_success')).toBeDefined();
             expect(screen.getByText('OK')).toBeDefined();
         });
     });
@@ -98,11 +98,11 @@ describe('SettingsLLMServiceTab', () => {
 
         render(<SettingsLLMServiceTab {...defaultProps} />);
 
-        const testBtn = screen.getByText('settings.ai.test_connection');
+        const testBtn = screen.getByText('settings.llm.test_connection');
         fireEvent.click(testBtn);
 
         await waitFor(() => {
-            expect(screen.getByText('settings.ai.connection_failed')).toBeDefined();
+            expect(screen.getByText('settings.llm.connection_failed')).toBeDefined();
             expect(screen.getByText('Network Error')).toBeDefined();
         });
     });

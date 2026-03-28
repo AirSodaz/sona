@@ -134,19 +134,19 @@ export function SettingsLLMServiceTab({
                 temperature: llmTemperature
             });
             setTestStatus('success');
-            setTestMessage(t('settings.ai.connection_success') + response);
+            setTestMessage(t('settings.llm.connection_success') + response);
         } catch (error: any) {
             setTestStatus('error');
-            setTestMessage(t('settings.ai.connection_failed') + error);
+            setTestMessage(t('settings.llm.connection_failed') + error);
         }
     };
 
     return (
         <div className="settings-group" role="tabpanel">
             <div className="settings-item">
-                <label className="settings-label">{t('settings.ai.service_type')}</label>
+                <label className="settings-label">{t('settings.llm.service_type')}</label>
                 <Dropdown
-                    id="ai-service-type"
+                    id="llm-service-type"
                     value={llmServiceType}
                     onChange={handleServiceTypeChange}
                     options={[
@@ -163,7 +163,7 @@ export function SettingsLLMServiceTab({
             </div>
 
             <div className="settings-item">
-                <label className="settings-label">{t('settings.ai.base_url')}</label>
+                <label className="settings-label">{t('settings.llm.base_url')}</label>
                 <input
                     type="text"
                     className="settings-input"
@@ -174,7 +174,7 @@ export function SettingsLLMServiceTab({
             </div>
 
             <div className="settings-item">
-                <label className="settings-label">{t('settings.ai.api_key')}</label>
+                <label className="settings-label">{t('settings.llm.api_key')}</label>
                 <input
                     type="password"
                     className="settings-input"
@@ -186,15 +186,15 @@ export function SettingsLLMServiceTab({
 
             <div className="settings-item with-divider">
                 <label className="settings-label">
-                    {t('settings.ai.model_name')}
-                    {isLoadingModels && <span style={{ marginLeft: 10, fontSize: '0.8em', color: 'var(--color-text-muted)' }}>{t('settings.ai.loading_models') || '(Loading models...)'}</span>}
+                    {t('settings.llm.model_name')}
+                    {isLoadingModels && <span style={{ marginLeft: 10, fontSize: '0.8em', color: 'var(--color-text-muted)' }}>{t('settings.llm.loading_models') || '(Loading models...)'}</span>}
                 </label>
 
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                         {!isManualEntry && availableModels.length > 0 ? (
                             <Dropdown
-                                id="ai-model"
+                                id="llm-model"
                                 value={llmModel}
                                 onChange={(val) => {
                                     if (val === '__manual__') {
@@ -205,7 +205,7 @@ export function SettingsLLMServiceTab({
                                 }}
                                 options={[
                                     ...availableModels.map(m => ({ value: m, label: m })),
-                                    { value: '__manual__', label: t('settings.ai.type_manually') || 'Type manually...' }
+                                    { value: '__manual__', label: t('settings.llm.type_manually') || 'Type manually...' }
                                 ]}
                                 style={{ width: '100%' }}
                             />
@@ -224,8 +224,8 @@ export function SettingsLLMServiceTab({
                         <button
                             className="btn btn-secondary btn-icon"
                             onClick={() => setIsManualEntry(false)}
-                            title={t('settings.ai.back_to_list') || 'Back to list'}
-                            aria-label={t('settings.ai.back_to_list') || 'Back to list'}
+                            title={t('settings.llm.back_to_list') || 'Back to list'}
+                            aria-label={t('settings.llm.back_to_list') || 'Back to list'}
                         >
                             <List size={16} />
                         </button>
@@ -238,7 +238,7 @@ export function SettingsLLMServiceTab({
                         style={{ whiteSpace: 'nowrap' }}
                     >
                         <span className={testStatus === 'loading' ? 'btn-text-hidden' : ''}>
-                            {t('settings.ai.test_connection')}
+                            {t('settings.llm.test_connection')}
                         </span>
                         {testStatus === 'loading' && (
                             <div className="btn-spinner-overlay">
@@ -250,7 +250,7 @@ export function SettingsLLMServiceTab({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
                     <label className="settings-label" style={{ marginBottom: 0, minWidth: 'fit-content' }}>
-                        {t('settings.ai.temperature') || 'Temperature'}
+                        {t('settings.llm.temperature') || 'Temperature'}
                     </label>
                     <input
                         type="range"
@@ -282,8 +282,8 @@ export function SettingsLLMServiceTab({
                     <div className={`connection-status ${testStatus === 'error' ? 'error' : 'success'}`}>
                         {testStatus === 'error' ? <X size={16} style={{ flexShrink: 0, marginTop: 2 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
                         <div>
-                            <strong>{testStatus === 'error' ? t('settings.ai.connection_failed') : t('settings.ai.connection_success')}</strong>
-                            <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage.replace(t('settings.ai.connection_success'), '').replace(t('settings.ai.connection_failed'), '')}</div>
+                            <strong>{testStatus === 'error' ? t('settings.llm.connection_failed') : t('settings.llm.connection_success')}</strong>
+                            <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage.replace(t('settings.llm.connection_success'), '').replace(t('settings.llm.connection_failed'), '')}</div>
                         </div>
                     </div>
                 )}

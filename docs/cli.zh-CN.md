@@ -14,7 +14,7 @@
 - 已随桌面版安装器和应用包一起提供
 - 在 `src-tauri/` 目录内已支持：`cargo run --bin sona-cli -- ...`
 - 在 `src-tauri/` 目录内已支持：`cargo build --release --bin sona-cli`
-- 暂不包含：系统 `PATH` 注册、实时录音、AI 润色、AI 翻译
+- 暂不包含：系统 `PATH` 注册、实时录音、LLM 润色、LLM 翻译
 
 ## 安装包内的位置
 

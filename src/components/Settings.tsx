@@ -62,7 +62,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'ai_service', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'llm_service', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -165,12 +165,12 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'local' ? 0 : -1}
                         />
                         <SettingsTabButton
-                            id="ai_service"
-                            label={t('settings.ai.title')}
+                            id="llm_service"
+                            label={t('settings.llm.title')}
                             Icon={RobotIcon}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
-                            tabIndex={activeTab === 'ai_service' ? 0 : -1}
+                            tabIndex={activeTab === 'llm_service' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="shortcuts"
@@ -217,7 +217,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                         case 'subtitle': return t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' });
                                         case 'models': return t('settings.model_hub');
                                         case 'local': return t('settings.local_path');
-                                        case 'ai_service': return t('settings.ai.title');
+                                        case 'llm_service': return t('settings.llm.title');
                                         case 'shortcuts': return t('shortcuts.title');
                                         case 'about': return t('settings.about');
                                         default: return '';
@@ -276,7 +276,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                             onRestoreDefaults={restoreDefaultModelSettings}
                                         />
                                     );
-                                case 'ai_service':
+                                case 'llm_service':
                                     return (
                                         <SettingsLLMServiceTab
                                             config={config}

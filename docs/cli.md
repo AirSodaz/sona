@@ -14,7 +14,7 @@ The current CLI covers two core workflows:
 - Included in desktop installers and app bundles
 - Supported inside `src-tauri/`: `cargo run --bin sona-cli -- ...`
 - Supported inside `src-tauri/`: `cargo build --release --bin sona-cli`
-- Not included yet: shell `PATH` registration, live recording, AI polish, AI translate
+- Not included yet: shell `PATH` registration, live recording, LLM polish, LLM translate
 
 ## Installed Locations
 
