@@ -3,13 +3,32 @@ import { useTranslation } from 'react-i18next';
 import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
 import { List, Loader2, Check, X } from 'lucide-react';
-import { AppConfig } from '../../types/transcript';
+import { AppConfig, LlmConfig, LlmProvider } from '../../types/transcript';
 
 interface SettingsLLMServiceTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    changeLlmServiceType: (type: string) => void;
+    changeLlmServiceType: (type: LlmProvider) => void;
 }
+
+const PROVIDER_OPTIONS: { value: LlmProvider; label: string }[] = [
+    { value: 'open_ai', label: 'OpenAI' },
+    { value: 'anthropic', label: 'Anthropic' },
+    { value: 'ollama', label: 'Ollama' },
+    { value: 'gemini', label: 'Google Gemini' },
+    { value: 'deep_seek', label: 'DeepSeek' },
+    { value: 'kimi', label: 'Kimi' },
+    { value: 'silicon_flow', label: 'SiliconFlow' },
+    { value: 'open_ai_compatible', label: 'OpenAI Compatible' }
+];
+
+const DEFAULT_LLM_CONFIG: LlmConfig = {
+    provider: 'open_ai',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: '',
+    temperature: 0.7
+};
 
 export function SettingsLLMServiceTab({
     config,
@@ -25,46 +44,26 @@ export function SettingsLLMServiceTab({
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    const llmServiceType = config.llmServiceType || 'openai';
-    const llmBaseUrl = config.llmBaseUrl || '';
-    const llmApiKey = config.llmApiKey || '';
-    const llmModel = config.llmModel || '';
-    const llmTemperature = config.llmTemperature ?? 0.7;
+    const llm = config.llm || DEFAULT_LLM_CONFIG;
+    const llmServiceType = llm.provider;
+    const llmBaseUrl = llm.baseUrl || '';
+    const llmApiKey = llm.apiKey || '';
+    const llmModel = llm.model || '';
+    const llmTemperature = llm.temperature ?? 0.7;
 
     const handleServiceTypeChange = (type: string) => {
-        changeLlmServiceType(type);
+        changeLlmServiceType(type as LlmProvider);
         setAvailableModels([]);
         setIsManualEntry(false);
     };
 
-    const updateLlmSetting = (key: 'baseUrl' | 'apiKey' | 'model' | 'temperature', value: string | number) => {
-        const currentType = config.llmServiceType || 'openai';
-        const llmServices = config.llmServices || {};
-        const currentSettings = llmServices[currentType] || { baseUrl: '', apiKey: '', model: '', temperature: 0.7 };
-
-        const updates: Partial<AppConfig> = {
-            llmServices: {
-                ...llmServices,
-                [currentType]: { ...currentSettings, [key]: value }
+    const updateLlmSetting = (key: keyof LlmConfig, value: string | number) => {
+        updateConfig({
+            llm: {
+                ...llm,
+                [key]: value
             }
-        };
-
-        switch (key) {
-            case 'baseUrl':
-                updates.llmBaseUrl = value as string;
-                break;
-            case 'apiKey':
-                updates.llmApiKey = value as string;
-                break;
-            case 'model':
-                updates.llmModel = value as string;
-                break;
-            case 'temperature':
-                updates.llmTemperature = value as number;
-                break;
-        }
-
-        updateConfig(updates);
+        });
     };
 
     const fetchModels = async () => {
@@ -74,10 +73,12 @@ export function SettingsLLMServiceTab({
         try {
             // Note: get_llm_models command might need to be adjusted if it relies on store state,
             // but here we pass params explicitly.
-            const models = await invoke<string[]>('get_llm_models', {
-                apiKey: llmApiKey,
-                baseUrl: llmBaseUrl,
-                apiFormat: llmServiceType
+            const models = await invoke<string[]>('list_llm_models', {
+                request: {
+                    provider: llmServiceType,
+                    baseUrl: llmBaseUrl,
+                    apiKey: llmApiKey
+                }
             });
             setAvailableModels(models);
 
@@ -125,13 +126,11 @@ export function SettingsLLMServiceTab({
         setTestStatus('loading');
         setTestMessage('');
         try {
-            const response = await invoke<string>('call_llm_model', {
-                apiKey: llmApiKey,
-                baseUrl: llmBaseUrl,
-                modelName: llmModel,
-                input: 'Hello, this is a connection test.',
-                apiFormat: llmServiceType,
-                temperature: llmTemperature
+            const response = await invoke<string>('generate_llm_text', {
+                request: {
+                    config: llm,
+                    input: 'Hello, this is a connection test.'
+                }
             });
             setTestStatus('success');
             setTestMessage(t('settings.llm.connection_success') + response);
@@ -149,15 +148,7 @@ export function SettingsLLMServiceTab({
                     id="llm-service-type"
                     value={llmServiceType}
                     onChange={handleServiceTypeChange}
-                    options={[
-                        { value: 'openai', label: 'OpenAI' },
-                        { value: 'anthropic', label: 'Anthropic' },
-                        { value: 'ollama', label: 'Ollama' },
-                        { value: 'gemini', label: 'Google Gemini' },
-                        { value: 'deepseek', label: 'DeepSeek' },
-                        { value: 'kimi', label: 'Kimi' },
-                        { value: 'siliconflow', label: 'SiliconFlow' }
-                    ]}
+                    options={PROVIDER_OPTIONS}
                     style={{ width: '100%' }}
                 />
             </div>

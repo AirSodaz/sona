@@ -153,49 +153,30 @@ describe('CaptionWindow', () => {
     it('resizes window when content changes', async () => {
         render(<CaptionWindow />);
 
-        // Initial render triggers layout effect with "Waiting for speech..."
-        // offsetHeight mocked to 50. Total height = 50.
-        // innerSize width 1600 / scale 2 = 800.
-        // So setSize(800, 50).
-
-        // We need to wait for async calls in useLayoutEffect
         await act(async () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
         expect(mocks.mockSetSize).toHaveBeenCalled();
-        const call = mocks.mockSetSize.mock.calls[0][0];
-        expect(call.width).toBe(1600); // Mocked innerSize
-        expect(call.height).toBe(100); // 50 (getBoundingClientRect) * 2 (scaleFactor)
+        const initialCall = mocks.mockSetSize.mock.calls[mocks.mockSetSize.mock.calls.length - 1]?.[0];
+        expect(initialCall?.width).toBe(1600);
+        expect(initialCall?.height).toBe(100);
 
-        // Update content
         mocks.mockSetSize.mockClear();
-        // Change bounding client rect for next render
         HTMLElement.prototype.getBoundingClientRect = () => ({
             width: 800, height: 150, top: 0, left: 0, bottom: 150, right: 800, x: 0, y: 0, toJSON: () => { }
         });
 
         await act(async () => {
-            if (mocks.listenCallbacks['caption:segments']) {
-                mocks.listenCallbacks['caption:segments']({
-                    payload: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: false, tokens: [], timestamps: [], durations: [] }]
-                });
-            }
+            mocks.listenCallbacks['caption:segments']?.({
+                payload: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: false, tokens: [], timestamps: [], durations: [] }]
+            });
+            mocks.resizeObserverInstance.triggerResize();
+            await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Trigger resize manually
-        await act(async () => {
-             mocks.resizeObserverInstance.triggerResize();
-        });
-
-        // Wait for async effect
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(100); // debounce timeout
-        });
-
-        // Should resize again to new offsetHeight
         expect(mocks.mockSetSize).toHaveBeenCalled();
-        const call2 = mocks.mockSetSize.mock.calls[0][0];
-        expect(call2.height).toBe(300); // 150 * 2
+        const resizedCall = mocks.mockSetSize.mock.calls[mocks.mockSetSize.mock.calls.length - 1]?.[0];
+        expect(resizedCall?.height).toBe(300);
     });
 });

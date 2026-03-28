@@ -24,11 +24,13 @@ describe('SettingsLLMServiceTab', () => {
         offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
-        llmServiceType: 'openai',
-        llmBaseUrl: 'https://api.openai.com/v1',
-        llmApiKey: 'test-key',
-        llmModel: 'gpt-4o',
-        llmServices: {}
+        llm: {
+            provider: 'open_ai',
+            baseUrl: 'https://api.openai.com/v1',
+            apiKey: 'test-key',
+            model: 'gpt-4o',
+            temperature: 0.7
+        }
     };
 
     const defaultProps = {
@@ -78,13 +80,17 @@ describe('SettingsLLMServiceTab', () => {
         const testBtn = screen.getByText('settings.llm.test_connection');
         fireEvent.click(testBtn);
 
-        expect(tauriApi.invoke).toHaveBeenCalledWith('call_llm_model', {
-            apiKey: 'test-key',
-            baseUrl: 'https://api.openai.com/v1',
-            modelName: 'gpt-4o',
-            input: 'Hello, this is a connection test.',
-            apiFormat: 'openai',
-            temperature: 0.7
+        expect(tauriApi.invoke).toHaveBeenCalledWith('generate_llm_text', {
+            request: {
+                config: {
+                    provider: 'open_ai',
+                    baseUrl: 'https://api.openai.com/v1',
+                    apiKey: 'test-key',
+                    model: 'gpt-4o',
+                    temperature: 0.7
+                },
+                input: 'Hello, this is a connection test.'
+            }
         });
 
         await waitFor(() => {

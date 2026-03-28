@@ -33,6 +33,7 @@ tar = "0.4"
 bzip2 = "0.4"
 toml = "0.8.20"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls", "json"] }
+rig-core = "0.14"
 futures-util = "0.3"
 bytes = "1"
 tokio = { version = "1.49.0", features = ["full"] }

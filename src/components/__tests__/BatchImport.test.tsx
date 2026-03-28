@@ -269,9 +269,9 @@ describe('BatchImport Integration', () => {
 
         render(<BatchImport />);
 
-        const selectButton = screen.getByRole('button', { name: 'batch.select_file' });
+        const dropZone = screen.getByRole('button', { name: 'batch.drop_desc' });
         await act(async () => {
-            fireEvent.click(selectButton);
+            fireEvent.click(dropZone);
         });
 
         expect(useOnboardingStore.getState().isOpen).toBe(true);

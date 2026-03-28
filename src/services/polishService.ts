@@ -21,7 +21,8 @@ class PolishService {
         const store = useTranscriptStore.getState();
         const config = store.config;
 
-        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel || !config.llmServiceType) {
+        const llm = config.llm;
+        if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
             // If the LLM service is not configured, we might want to skip polishing silently or throw error.
             // For auto-polish, skipping silently or logging warning is better than crashing.
             // However, manual polish expects an error.
@@ -44,13 +45,11 @@ class PolishService {
 
             try {
                 // Call LLM
-                const responseText = await invoke<string>('call_llm_model', {
-                    apiKey: config.llmApiKey,
-                    baseUrl: config.llmBaseUrl,
-                    modelName: config.llmModel,
-                    input: prompt,
-                    apiFormat: config.llmServiceType,
-                    temperature: config.llmTemperature ?? 0.7,
+                const responseText = await invoke<string>('generate_llm_text', {
+                    request: {
+                        config: llm,
+                        input: prompt,
+                    }
                 });
 
                 // Parse JSON output

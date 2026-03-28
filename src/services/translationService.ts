@@ -12,7 +12,8 @@ class TranslationService {
         const store = useTranscriptStore.getState();
         const config = store.config;
 
-        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel || !config.llmServiceType) {
+        const llm = config.llm;
+        if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
             throw new Error('LLM Service not fully configured.');
         }
 
@@ -36,13 +37,11 @@ class TranslationService {
                 const prompt = this.buildPrompt(chunk, config.translationLanguage || 'zh');
 
                 // Call LLM
-                const responseText = await invoke<string>('call_llm_model', {
-                    apiKey: config.llmApiKey,
-                    baseUrl: config.llmBaseUrl,
-                    modelName: config.llmModel,
-                    input: prompt,
-                    apiFormat: config.llmServiceType,
-                    temperature: config.llmTemperature ?? 0.7,
+                const responseText = await invoke<string>('generate_llm_text', {
+                    request: {
+                        config: llm,
+                        input: prompt,
+                    }
                 });
 
                 // Parse JSON output

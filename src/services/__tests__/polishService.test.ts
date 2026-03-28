@@ -24,10 +24,13 @@ describe('PolishService', () => {
         // Setup default store state
         (useTranscriptStore.getState as any).mockReturnValue({
             config: {
-                llmApiKey: 'test-key',
-                llmBaseUrl: 'test-url',
-                llmModel: 'test-model',
-                llmServiceType: 'openai',
+                llm: {
+                    provider: 'open_ai',
+                    baseUrl: 'test-url',
+                    apiKey: 'test-key',
+                    model: 'test-model',
+                    temperature: 0.7,
+                },
             },
             segments: [],
             updateSegment: vi.fn(),
@@ -53,9 +56,11 @@ describe('PolishService', () => {
 
         await polishService.polishSegments(segments, onChunk);
 
-        expect(invoke).toHaveBeenCalledWith('call_llm_model', expect.objectContaining({
-            apiKey: 'test-key',
-            input: expect.stringContaining('hello'),
+        expect(invoke).toHaveBeenCalledWith('generate_llm_text', expect.objectContaining({
+            request: expect.objectContaining({
+                config: expect.objectContaining({ apiKey: 'test-key' }),
+                input: expect.stringContaining('hello'),
+            })
         }));
 
         expect(onChunk).toHaveBeenCalledWith([
@@ -81,10 +86,13 @@ describe('PolishService', () => {
 
         const mockStore = {
             config: {
-                llmApiKey: 'test-key',
-                llmBaseUrl: 'test-url',
-                llmModel: 'test-model',
-                llmServiceType: 'openai',
+                llm: {
+                    provider: 'open_ai',
+                    baseUrl: 'test-url',
+                    apiKey: 'test-key',
+                    model: 'test-model',
+                    temperature: 0.7,
+                },
             },
             segments: segments,
             updateSegment: vi.fn(),

@@ -4,15 +4,17 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
+import { LlmProvider } from '../types/transcript';
 
-const DEFAULT_LLM_URLS: Record<string, string> = {
-    openai: 'https://api.openai.com/v1',
+const DEFAULT_LLM_URLS: Record<LlmProvider, string> = {
+    open_ai: 'https://api.openai.com/v1',
     anthropic: 'https://api.anthropic.com',
     ollama: 'http://localhost:11434/v1',
     gemini: 'https://generativelanguage.googleapis.com',
-    deepseek: 'https://api.deepseek.com',
+    deep_seek: 'https://api.deepseek.com',
     kimi: 'https://api.moonshot.cn/v1',
-    siliconflow: 'https://api.siliconflow.cn/v1',
+    silicon_flow: 'https://api.siliconflow.cn/v1',
+    open_ai_compatible: ''
 };
 
 /**
@@ -116,34 +118,15 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         // Persistence is now handled by useAppInitialization
     };
 
-    const changeLlmServiceType = (type: string) => {
-        const currentType = config.llmServiceType || 'openai';
-        const llmServices = config.llmServices || {};
-
-        // Save current settings
-        const currentSettings = {
-            baseUrl: config.llmBaseUrl || '',
-            apiKey: config.llmApiKey || '',
-            model: config.llmModel || '',
-            temperature: config.llmTemperature ?? 0.7
-        };
-        const updatedServices = { ...llmServices, [currentType]: currentSettings };
-
-        // Load new settings
-        const newSettings = updatedServices[type] || {
-            baseUrl: DEFAULT_LLM_URLS[type] || '',
-            apiKey: '',
-            model: '',
-            temperature: 0.7
-        };
-
+    const changeLlmServiceType = (provider: LlmProvider) => {
         updateConfig({
-            llmServiceType: type,
-            llmBaseUrl: newSettings.baseUrl,
-            llmApiKey: newSettings.apiKey,
-            llmModel: newSettings.model,
-            llmTemperature: newSettings.temperature ?? 0.7,
-            llmServices: updatedServices
+            llm: {
+                provider,
+                baseUrl: DEFAULT_LLM_URLS[provider] || '',
+                apiKey: '',
+                model: '',
+                temperature: 0.7
+            }
         });
     };
 

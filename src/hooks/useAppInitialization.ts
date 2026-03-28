@@ -50,12 +50,25 @@ export function useAppInitialization() {
                         captionWindowWidth: parsed.captionWindowWidth || 800,
                         captionFontSize: parsed.captionFontSize || 24,
                         captionFontColor: parsed.captionFontColor || '#ffffff',
-                        llmServices: parsed.llmServices || parsed.aiServices || {},
-                        llmServiceType: parsed.llmServiceType || parsed.aiServiceType || 'openai',
-                        llmBaseUrl: parsed.llmBaseUrl || parsed.aiBaseUrl || '',
-                        llmApiKey: parsed.llmApiKey || parsed.aiApiKey || '',
-                        llmModel: parsed.llmModel || parsed.aiModel || '',
-                        llmTemperature: parsed.llmTemperature ?? parsed.aiTemperature ?? 0.7,
+                        llm: parsed.llm || {
+                            provider: parsed.llmServiceType === 'anthropic'
+                                ? 'anthropic'
+                                : parsed.llmServiceType === 'gemini'
+                                    ? 'gemini'
+                                    : parsed.llmServiceType === 'ollama'
+                                        ? 'ollama'
+                                        : parsed.llmServiceType === 'deepseek'
+                                            ? 'deep_seek'
+                                            : parsed.llmServiceType === 'siliconflow'
+                                                ? 'silicon_flow'
+                                                : parsed.llmServiceType === 'kimi'
+                                                    ? 'kimi'
+                                                    : 'open_ai',
+                            baseUrl: parsed.llmBaseUrl || parsed.aiBaseUrl || '',
+                            apiKey: parsed.llmApiKey || parsed.aiApiKey || '',
+                            model: parsed.llmModel || parsed.aiModel || '',
+                            temperature: parsed.llmTemperature ?? parsed.aiTemperature ?? 0.7,
+                        },
                         translationLanguage: parsed.translationLanguage || 'zh',
                         polishKeywords: parsed.polishKeywords || '',
                         polishContext: parsed.polishContext || '',
@@ -152,12 +165,7 @@ export function useAppInitialization() {
                 captionWindowWidth: config.captionWindowWidth,
                 captionFontSize: config.captionFontSize,
                 captionFontColor: config.captionFontColor,
-                llmServices: config.llmServices,
-                llmServiceType: config.llmServiceType,
-                llmBaseUrl: config.llmBaseUrl,
-                llmApiKey: config.llmApiKey,
-                llmModel: config.llmModel,
-                llmTemperature: config.llmTemperature,
+                llm: config.llm,
                 translationLanguage: config.translationLanguage,
                 polishKeywords: config.polishKeywords,
                 polishContext: config.polishContext,

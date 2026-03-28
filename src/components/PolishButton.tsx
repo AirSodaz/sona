@@ -152,7 +152,8 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const handleStartPolish = async () => {
         if (isPolishing) return;
 
-        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel) {
+        const llm = config.llm;
+        if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
             await alert(t('polish.error_config_missing'), { variant: 'error' });
             return;
         }

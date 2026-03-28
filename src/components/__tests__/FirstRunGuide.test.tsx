@@ -129,18 +129,27 @@ describe('FirstRunGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
     expect(screen.getByText('first_run.models.heading')).toBeDefined();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
 
     await waitFor(() => {
       expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+    });
+
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'first_run.actions.finish' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('onboarding-microphone-select'), {
         target: { value: 'desk-mic' },
       });
+    });
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('onboarding-microphone-select') as HTMLSelectElement).value).toBe('desk-mic');
+    });
+
+    await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
     });
 

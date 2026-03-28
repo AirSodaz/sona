@@ -33,6 +33,29 @@ export type AppMode = 'live' | 'batch' | 'history';
  */
 export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
 
+export type LlmProvider =
+  | 'open_ai'
+  | 'anthropic'
+  | 'gemini'
+  | 'ollama'
+  | 'deep_seek'
+  | 'kimi'
+  | 'silicon_flow'
+  | 'open_ai_compatible';
+
+export interface LlmConfig {
+  /** LLM provider kind. */
+  provider: LlmProvider;
+  /** LLM base URL. */
+  baseUrl: string;
+  /** LLM API key. */
+  apiKey: string;
+  /** LLM model name. */
+  model: string;
+  /** LLM temperature (0.0 to 2.0). */
+  temperature?: number;
+}
+
 /**
  * Configuration for the application.
  */
@@ -87,18 +110,8 @@ export interface AppConfig {
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
-  /** Per-service LLM configuration. */
-  llmServices?: Record<string, { baseUrl: string; apiKey: string; model: string; temperature?: number }>;
-  /** LLM service type (e.g. 'openai', 'anthropic', 'ollama', 'gemini'). */
-  llmServiceType?: string;
-  /** LLM base URL. */
-  llmBaseUrl?: string;
-  /** LLM API key. */
-  llmApiKey?: string;
-  /** LLM model name. */
-  llmModel?: string;
-  /** LLM temperature (0.0 to 2.0). */
-  llmTemperature?: number;
+  /** LLM configuration. */
+  llm?: LlmConfig;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */

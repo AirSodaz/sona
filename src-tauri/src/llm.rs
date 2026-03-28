@@ -1,42 +1,57 @@
 use reqwest::Client;
+use rig::client::CompletionClient;
+use rig::completion::CompletionModel;
+use rig::providers::{anthropic, deepseek, gemini, moonshot, ollama, openai};
 use serde::{Deserialize, Serialize};
 
-// --- OpenAI / Generic Compatible Types ---
-#[derive(Serialize, Deserialize)]
-pub struct OpenAIMessage {
-    role: String,
-    content: String,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmProvider {
+    OpenAi,
+    Anthropic,
+    Gemini,
+    Ollama,
+    DeepSeek,
+    Kimi,
+    SiliconFlow,
+    OpenAiCompatible,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct OpenAIRequest {
-    model: String,
-    messages: Vec<OpenAIMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmConfig {
+    pub provider: LlmProvider,
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub temperature: Option<f32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmGenerateRequest {
+    pub config: LlmConfig,
+    pub input: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmModelsRequest {
+    pub provider: LlmProvider,
+    pub base_url: String,
+    pub api_key: String,
 }
 
 #[derive(Deserialize)]
-struct OpenAIResponse {
-    choices: Vec<OpenAIChoice>,
-}
-
-#[derive(Deserialize)]
-struct OpenAIChoice {
-    message: OpenAIMessage,
-}
-
-#[derive(Deserialize)]
-struct OpenAIModel {
+struct OpenAiModel {
     id: String,
 }
 
 #[derive(Deserialize)]
-struct OpenAIModelsResponse {
-    data: Vec<OpenAIModel>,
+struct OpenAiModelsResponse {
+    data: Vec<OpenAiModel>,
 }
 
-// --- Ollama Tags Types ---
 #[derive(Deserialize)]
 struct OllamaModel {
     name: String,
@@ -47,71 +62,6 @@ struct OllamaTagsResponse {
     models: Vec<OllamaModel>,
 }
 
-// --- Anthropic Types ---
-#[derive(Serialize, Deserialize)]
-pub struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AnthropicRequest {
-    model: String,
-    messages: Vec<AnthropicMessage>,
-    max_tokens: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
-}
-
-#[derive(Deserialize)]
-struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
-}
-
-#[derive(Deserialize)]
-struct AnthropicContent {
-    text: String,
-}
-
-// --- Gemini Types ---
-#[derive(Serialize)]
-struct GeminiRequest {
-    contents: Vec<GeminiContent>,
-    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
-    generation_config: Option<GeminiGenerationConfig>,
-}
-
-#[derive(Serialize)]
-struct GeminiGenerationConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
-}
-
-#[derive(Serialize)]
-struct GeminiContent {
-    parts: Vec<GeminiPart>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GeminiPart {
-    text: String,
-}
-
-#[derive(Deserialize)]
-struct GeminiResponse {
-    candidates: Option<Vec<GeminiCandidate>>,
-}
-
-#[derive(Deserialize)]
-struct GeminiCandidate {
-    content: GeminiCandidateContent,
-}
-
-#[derive(Deserialize)]
-struct GeminiCandidateContent {
-    parts: Vec<GeminiPart>,
-}
-
 #[derive(Deserialize)]
 struct GeminiModel {
     name: String,
@@ -120,60 +70,6 @@ struct GeminiModel {
 #[derive(Deserialize)]
 struct GeminiModelsResponse {
     models: Option<Vec<GeminiModel>>,
-}
-
-fn format_anthropic_url(base_url: &str) -> String {
-    if base_url.ends_with("/messages") {
-        base_url.to_string()
-    } else {
-        format!("{}/v1/messages", base_url.trim_end_matches('/'))
-    }
-}
-
-async fn call_anthropic(
-    client: &Client,
-    api_key: &str,
-    base_url: &str,
-    model_name: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let url = format_anthropic_url(base_url);
-
-    let request_body = AnthropicRequest {
-        model: model_name.to_string(),
-        messages: vec![AnthropicMessage {
-            role: "user".to_string(),
-            content: input.to_string(),
-        }],
-        max_tokens: 1024,
-        temperature,
-    };
-
-    let res = client
-        .post(&url)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let error_text = res.text().await.unwrap_or_default();
-        return Err(format!("Anthropic API Error: {} - {}", status, error_text));
-    }
-
-    let response_body: AnthropicResponse = res.json().await.map_err(|e| e.to_string())?;
-    let first_content = response_body
-        .content
-        .into_iter()
-        .next()
-        .ok_or_else(|| "No content in Anthropic response".to_string())?;
-
-    Ok(first_content.text)
 }
 
 fn clean_gemini_base_url(base_url: &str) -> &str {
@@ -189,160 +85,21 @@ fn clean_gemini_base_url(base_url: &str) -> &str {
     base
 }
 
-fn format_gemini_url(base_url: &str, model_name: &str, api_key: &str) -> String {
+fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
     let base = base_url.trim_end_matches('/');
-    if base.contains("generateContent") {
-        format!("{}?key={}", base, api_key)
-    } else {
-        let cleaned_base = clean_gemini_base_url(base);
-        format!(
-            "{}/v1beta/models/{}:generateContent?key={}",
-            cleaned_base, model_name, api_key
-        )
-    }
-}
 
-async fn call_gemini(
-    client: &Client,
-    api_key: &str,
-    base_url: &str,
-    model_name: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    if model_name.trim().is_empty() {
-        return Err("Model name cannot be empty for Gemini API".to_string());
+    if is_ollama {
+        return vec![format!("{}/api/tags", base), format!("{}/v1/models", base)];
     }
 
-    let url = format_gemini_url(base_url, model_name, api_key);
-
-    let request_body = GeminiRequest {
-        contents: vec![GeminiContent {
-            parts: vec![GeminiPart {
-                text: input.to_string(),
-            }],
-        }],
-        generation_config: temperature.map(|t| GeminiGenerationConfig { temperature: Some(t) }),
-    };
-
-    let res = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let error_text = res.text().await.unwrap_or_default();
-        return Err(format!("Gemini API Error: {} - {}", status, error_text));
-    }
-
-    let response_body: GeminiResponse = res.json().await.map_err(|e| e.to_string())?;
-
-    let candidates = response_body
-        .candidates
-        .ok_or_else(|| "No candidates in Gemini response".to_string())?;
-
-    let first_candidate = candidates
-        .into_iter()
-        .next()
-        .ok_or_else(|| "Empty candidates array in Gemini response".to_string())?;
-
-    let first_part = first_candidate
-        .content
-        .parts
-        .into_iter()
-        .next()
-        .ok_or_else(|| "No parts in Gemini response content".to_string())?;
-
-    Ok(first_part.text)
-}
-
-fn format_openai_url(base_url: &str) -> String {
-    if base_url.contains("chat/completions") {
-        return base_url.to_string();
-    }
-
-    let base = base_url.trim_end_matches('/');
     if base.ends_with("/v1") {
-        format!("{}/chat/completions", base)
+        vec![format!("{}/models", base)]
     } else {
-        format!("{}/v1/chat/completions", base)
+        vec![format!("{}/v1/models", base), format!("{}/models", base)]
     }
 }
 
-async fn call_openai(
-    client: &Client,
-    api_key: &str,
-    base_url: &str,
-    model_name: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let url = format_openai_url(base_url);
-
-    let request_body = OpenAIRequest {
-        model: model_name.to_string(),
-        messages: vec![OpenAIMessage {
-            role: "user".to_string(),
-            content: input.to_string(),
-        }],
-        temperature,
-    };
-
-    let mut req = client
-        .post(&url)
-        .header("Content-Type", "application/json")
-        .json(&request_body);
-
-    // Only add Authorization header if api_key is not empty (Ollama often doesn't need it)
-    if !api_key.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", api_key));
-    }
-
-    let res = req.send().await.map_err(|e| e.to_string())?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let error_text = res.text().await.unwrap_or_default();
-        return Err(format!("OpenAI API Error: {} - {}", status, error_text));
-    }
-
-    let response_body: OpenAIResponse = res.json().await.map_err(|e| e.to_string())?;
-    let first_choice = response_body
-        .choices
-        .into_iter()
-        .next()
-        .ok_or_else(|| "No choices in OpenAI response".to_string())?;
-
-    Ok(first_choice.message.content)
-}
-
-#[tauri::command]
-pub async fn call_llm_model(
-    api_key: String,
-    base_url: String,
-    model_name: String,
-    input: String,
-    api_format: String,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = Client::new();
-
-    match api_format.as_str() {
-        "anthropic" => call_anthropic(&client, &api_key, &base_url, &model_name, &input, temperature).await,
-        "gemini" => call_gemini(&client, &api_key, &base_url, &model_name, &input, temperature).await,
-        _ => call_openai(&client, &api_key, &base_url, &model_name, &input, temperature).await,
-    }
-}
-
-async fn get_gemini_models(
-    client: &Client,
-    api_key: &str,
-    base_url: &str,
-) -> Result<Vec<String>, String> {
+async fn get_gemini_models(client: &Client, api_key: &str, base_url: &str) -> Result<Vec<String>, String> {
     let cleaned_base = clean_gemini_base_url(base_url);
     let url = format!("{}/v1beta/models?key={}", cleaned_base, api_key);
 
@@ -367,26 +124,8 @@ async fn get_gemini_models(
         .collect())
 }
 
-async fn get_openai_models(
-    client: &Client,
-    api_key: &str,
-    base_url: &str,
-    is_ollama: bool,
-) -> Result<Vec<String>, String> {
-    let base = base_url.trim_end_matches('/');
-    let mut urls_to_try = Vec::new();
-
-    if is_ollama {
-        urls_to_try.push(format!("{}/api/tags", base));
-        urls_to_try.push(format!("{}/v1/models", base));
-    } else if base.ends_with("/v1") {
-        urls_to_try.push(format!("{}/models", base));
-    } else {
-        urls_to_try.push(format!("{}/v1/models", base));
-        urls_to_try.push(format!("{}/models", base));
-    }
-
-    for url in urls_to_try {
+async fn get_openai_models(client: &Client, api_key: &str, base_url: &str, is_ollama: bool) -> Result<Vec<String>, String> {
+    for url in format_openai_models_urls(base_url, is_ollama) {
         let mut req = client.get(&url).header("Content-Type", "application/json");
 
         if !api_key.is_empty() {
@@ -397,12 +136,10 @@ async fn get_openai_models(
             if res.status().is_success() {
                 let text = res.text().await.unwrap_or_default();
 
-                // Try OpenAI format
-                if let Ok(response_body) = serde_json::from_str::<OpenAIModelsResponse>(&text) {
+                if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
                     return Ok(response_body.data.into_iter().map(|m| m.id).collect());
                 }
 
-                // Try Ollama format
                 if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
                     return Ok(response_body.models.into_iter().map(|m| m.name).collect());
                 }
@@ -413,18 +150,230 @@ async fn get_openai_models(
     Err("Failed to fetch models from any known endpoint".to_string())
 }
 
+fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
+    !matches!(provider, LlmProvider::Anthropic)
+}
+
+fn extract_text_response(choice: &rig::OneOrMany<rig::completion::AssistantContent>) -> Result<String, String> {
+    let parts = choice
+        .iter()
+        .filter_map(|content| match content {
+            rig::completion::AssistantContent::Text(text) => Some(text.text.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if parts.is_empty() {
+        return Err("LLM response did not contain text output".to_string());
+    }
+
+    Ok(parts.join("\n"))
+}
+
+async fn generate_with_openai_compatible(base_url: &str, api_key: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = openai::Client::from_url(api_key, base_url);
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_anthropic(base_url: &str, api_key: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = anthropic::ClientBuilder::new(api_key)
+        .base_url(base_url)
+        .build();
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_gemini(base_url: &str, api_key: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = gemini::Client::from_url(api_key, clean_gemini_base_url(base_url));
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_ollama(base_url: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = ollama::Client::from_url(base_url.trim_end_matches("/v1"));
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_deepseek(base_url: &str, api_key: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = deepseek::Client::from_url(api_key, base_url);
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_kimi(base_url: &str, api_key: &str, model: &str, input: &str, temperature: Option<f32>) -> Result<String, String> {
+    let client = moonshot::Client::from_url(api_key, base_url);
+    let response = client
+        .completion_model(model)
+        .completion_request(input)
+        .temperature_opt(temperature.map(|value| value as f64))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    extract_text_response(&response.choice)
+}
+
+async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String> {
+    let config = request.config;
+
+    match config.provider {
+        LlmProvider::OpenAi | LlmProvider::OpenAiCompatible | LlmProvider::SiliconFlow => {
+            generate_with_openai_compatible(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+        LlmProvider::Anthropic => {
+            generate_with_anthropic(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+        LlmProvider::Gemini => {
+            generate_with_gemini(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+        LlmProvider::Ollama => {
+            generate_with_ollama(
+                &config.base_url,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+        LlmProvider::DeepSeek => {
+            generate_with_deepseek(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+        LlmProvider::Kimi => {
+            generate_with_kimi(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+            )
+            .await
+        }
+    }
+}
+
 #[tauri::command]
-pub async fn get_llm_models(
-    api_key: String,
-    base_url: String,
-    api_format: String,
-) -> Result<Vec<String>, String> {
+pub async fn generate_llm_text(request: LlmGenerateRequest) -> Result<String, String> {
+    if request.config.model.trim().is_empty() {
+        return Err("Model name cannot be empty".to_string());
+    }
+
+    if request.input.trim().is_empty() {
+        return Err("Input cannot be empty".to_string());
+    }
+
+    generate_with_rig(request).await
+}
+
+#[tauri::command]
+pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<String>, String> {
+    if !provider_supports_model_listing(&request.provider) {
+        return Ok(vec![]);
+    }
+
     let client = Client::new();
 
-    match api_format.as_str() {
-        "anthropic" => Ok(vec![]),
-        "gemini" => get_gemini_models(&client, &api_key, &base_url).await,
-        "ollama" => get_openai_models(&client, &api_key, &base_url, true).await,
-        _ => get_openai_models(&client, &api_key, &base_url, false).await,
+    match request.provider {
+        LlmProvider::Gemini => get_gemini_models(&client, &request.api_key, &request.base_url).await,
+        LlmProvider::Ollama => get_openai_models(&client, &request.api_key, &request.base_url, true).await,
+        _ => get_openai_models(&client, &request.api_key, &request.base_url, false).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn openai_models_url_accepts_root_or_v1() {
+        assert_eq!(
+            format_openai_models_urls("https://api.openai.com", false),
+            vec![
+                "https://api.openai.com/v1/models".to_string(),
+                "https://api.openai.com/models".to_string()
+            ]
+        );
+        assert_eq!(
+            format_openai_models_urls("https://api.openai.com/v1", false),
+            vec!["https://api.openai.com/v1/models".to_string()]
+        );
+    }
+
+    #[test]
+    fn gemini_base_url_is_cleaned() {
+        assert_eq!(
+            clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/models"),
+            "https://generativelanguage.googleapis.com"
+        );
+    }
+
+    #[test]
+    fn anthropic_listing_is_disabled() {
+        assert!(!provider_supports_model_listing(&LlmProvider::Anthropic));
+        assert!(provider_supports_model_listing(&LlmProvider::OpenAi));
     }
 }

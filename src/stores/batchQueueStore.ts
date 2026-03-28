@@ -245,7 +245,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             const autoPolish = config.autoPolish ?? false;
             if (autoPolish && finalSegments.length > 0) {
                 // Check if LLM service is configured
-                if (config.llmApiKey && config.llmBaseUrl && config.llmModel && config.llmServiceType) {
+                const llm = config.llm;
+                if (llm?.apiKey && llm.baseUrl && llm.model && llm.provider) {
                     try {
                         // Indicate polishing (keep at 99% or similar)
                         get().updateItemStatus(itemId, 'processing', 99);

@@ -5,11 +5,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock stores
 const mockSetConfig = vi.fn();
 let mockConfig: any = {
-    llmServiceType: 'openai',
-    llmBaseUrl: 'https://api.openai.com/v1',
-    llmApiKey: '',
-    llmModel: '',
-    llmServices: {}
+    llm: {
+        provider: 'open_ai',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: '',
+        model: '',
+        temperature: 0.7
+    }
 };
 
 vi.mock('../../stores/transcriptStore', () => ({
@@ -55,11 +57,13 @@ describe('useSettingsLogic', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockConfig = {
-            llmServiceType: 'openai',
-            llmBaseUrl: 'https://api.openai.com/v1',
-            llmApiKey: '',
-            llmModel: '',
-            llmServices: {}
+            llm: {
+                provider: 'open_ai',
+                baseUrl: 'https://api.openai.com/v1',
+                apiKey: '',
+                model: '',
+                temperature: 0.7
+            }
         };
     });
 
@@ -69,39 +73,26 @@ describe('useSettingsLogic', () => {
         expect(typeof result.current.changeLlmServiceType).toBe('function');
     });
 
-    it('should update LLM Base URL and sync to llmServices', () => {
+    it('should update llm config directly', () => {
         const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
 
         const newUrl = 'https://custom.openai.com';
 
         act(() => {
             result.current.updateConfig({
-                llmBaseUrl: newUrl,
-                llmServices: {
-                    ...mockConfig.llmServices,
-                    openai: {
-                        ...mockConfig.llmServices.openai,
-                        baseUrl: newUrl
-                    }
+                llm: {
+                    ...mockConfig.llm,
+                    baseUrl: newUrl
                 }
             });
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
-            llmBaseUrl: newUrl
+            llm: expect.objectContaining({ baseUrl: newUrl })
         }));
     });
 
-    it('should load saved settings when switching back to a service', () => {
-        // Setup: config has saved settings for anthropic
-        mockConfig.llmServices = {
-            anthropic: {
-                baseUrl: 'https://custom.anthropic.com',
-                apiKey: 'sk-ant-test',
-                model: 'claude-3'
-            }
-        };
-
+    it('should replace llm config when switching provider', () => {
         const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
 
         act(() => {
@@ -109,10 +100,12 @@ describe('useSettingsLogic', () => {
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
-            llmServiceType: 'anthropic',
-            llmBaseUrl: 'https://custom.anthropic.com',
-            llmApiKey: 'sk-ant-test',
-            llmModel: 'claude-3'
+            llm: expect.objectContaining({
+                provider: 'anthropic',
+                baseUrl: 'https://api.anthropic.com',
+                apiKey: '',
+                model: ''
+            })
         }));
     });
 });

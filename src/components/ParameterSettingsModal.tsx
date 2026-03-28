@@ -32,7 +32,8 @@ export function ParameterSettingsModal({
     const language = config.language;
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;
-    const isLlmConfigured = Boolean(config.llmApiKey && config.llmBaseUrl && config.llmModel && config.llmServiceType);
+    const llm = config.llm;
+    const isLlmConfigured = Boolean(llm?.apiKey && llm.baseUrl && llm.model && llm.provider);
 
     // Focus management
     useEffect(() => {

@@ -35,10 +35,13 @@ describe('PolishButton', () => {
             ],
             llmStates: {},
             config: {
-                llmApiKey: 'test-key',
-                llmBaseUrl: 'https://api.test',
-                llmModel: 'test-model',
-                llmServiceType: 'openai',
+                llm: {
+                    provider: 'open_ai',
+                    baseUrl: 'https://api.test',
+                    apiKey: 'test-key',
+                    model: 'test-model',
+                    temperature: 0.7,
+                },
             } as any
         });
     });

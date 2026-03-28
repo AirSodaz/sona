@@ -122,7 +122,8 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const handleStartTranslation = async () => {
         if (isTranslating) return;
 
-        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel) {
+        const llm = config.llm;
+        if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
             await alert(t('translation.error_config_missing', { defaultValue: 'Please configure LLM service in Settings before translating.' }), { variant: 'error' });
             return;
         }
