@@ -87,18 +87,18 @@ export interface AppConfig {
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
-  /** Per-service AI configuration. */
-  aiServices?: Record<string, { baseUrl: string; apiKey: string; model: string; temperature?: number }>;
-  /** AI Service Type (e.g. 'openai', 'anthropic', 'ollama', 'gemini'). */
-  aiServiceType?: string;
-  /** AI Base URL. */
-  aiBaseUrl?: string;
-  /** AI API Key. */
-  aiApiKey?: string;
-  /** AI Model Name. */
-  aiModel?: string;
-  /** AI Temperature (0.0 to 2.0). */
-  aiTemperature?: number;
+  /** Per-service LLM configuration. */
+  llmServices?: Record<string, { baseUrl: string; apiKey: string; model: string; temperature?: number }>;
+  /** LLM service type (e.g. 'openai', 'anthropic', 'ollama', 'gemini'). */
+  llmServiceType?: string;
+  /** LLM base URL. */
+  llmBaseUrl?: string;
+  /** LLM API key. */
+  llmApiKey?: string;
+  /** LLM model name. */
+  llmModel?: string;
+  /** LLM temperature (0.0 to 2.0). */
+  llmTemperature?: number;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */

@@ -24,19 +24,19 @@ describe('PolishService', () => {
         // Setup default store state
         (useTranscriptStore.getState as any).mockReturnValue({
             config: {
-                aiApiKey: 'test-key',
-                aiBaseUrl: 'test-url',
-                aiModel: 'test-model',
-                aiServiceType: 'openai',
+                llmApiKey: 'test-key',
+                llmBaseUrl: 'test-url',
+                llmModel: 'test-model',
+                llmServiceType: 'openai',
             },
             segments: [],
             updateSegment: vi.fn(),
-            updateAiState: vi.fn(),
+            updateLlmState: vi.fn(),
             sourceHistoryId: null,
         });
     });
 
-    it('polishSegments calls AI and parses response', async () => {
+    it('polishSegments calls LLM and parses response', async () => {
         const segments: TranscriptSegment[] = [
             { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
             { id: '2', start: 1, end: 2, text: 'world', isFinal: true },
@@ -53,7 +53,7 @@ describe('PolishService', () => {
 
         await polishService.polishSegments(segments, onChunk);
 
-        expect(invoke).toHaveBeenCalledWith('call_ai_model', expect.objectContaining({
+        expect(invoke).toHaveBeenCalledWith('call_llm_model', expect.objectContaining({
             apiKey: 'test-key',
             input: expect.stringContaining('hello'),
         }));
@@ -64,14 +64,14 @@ describe('PolishService', () => {
         ]);
     });
 
-    it('polishSegments handles AI error', async () => {
+    it('polishSegments handles LLM error', async () => {
         const segments: TranscriptSegment[] = [
             { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
         ];
 
-        (invoke as any).mockRejectedValue(new Error('AI Error'));
+        (invoke as any).mockRejectedValue(new Error('LLM Error'));
 
-        await expect(polishService.polishSegments(segments)).rejects.toThrow('AI Error');
+        await expect(polishService.polishSegments(segments)).rejects.toThrow('LLM Error');
     });
 
     it('polishTranscript updates store', async () => {
@@ -81,14 +81,14 @@ describe('PolishService', () => {
 
         const mockStore = {
             config: {
-                aiApiKey: 'test-key',
-                aiBaseUrl: 'test-url',
-                aiModel: 'test-model',
-                aiServiceType: 'openai',
+                llmApiKey: 'test-key',
+                llmBaseUrl: 'test-url',
+                llmModel: 'test-model',
+                llmServiceType: 'openai',
             },
             segments: segments,
             updateSegment: vi.fn(),
-            updateAiState: vi.fn(),
+            updateLlmState: vi.fn(),
             sourceHistoryId: null,
         };
 
@@ -101,8 +101,8 @@ describe('PolishService', () => {
 
         await polishService.polishTranscript();
 
-        expect(mockStore.updateAiState).toHaveBeenCalledWith({ isPolishing: true, polishProgress: 0 }, 'current');
+        expect(mockStore.updateLlmState).toHaveBeenCalledWith({ isPolishing: true, polishProgress: 0 }, 'current');
         expect(mockStore.updateSegment).toHaveBeenCalledWith('1', { text: 'Hello' });
-        expect(mockStore.updateAiState).toHaveBeenCalledWith({ isPolishing: false, polishProgress: 0 }, 'current');
+        expect(mockStore.updateLlmState).toHaveBeenCalledWith({ isPolishing: false, polishProgress: 0 }, 'current');
     });
 });

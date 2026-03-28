@@ -5,7 +5,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
 
-const DEFAULT_AI_URLS: Record<string, string> = {
+const DEFAULT_LLM_URLS: Record<string, string> = {
     openai: 'https://api.openai.com/v1',
     anthropic: 'https://api.anthropic.com',
     ollama: 'http://localhost:11434/v1',
@@ -116,34 +116,34 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         // Persistence is now handled by useAppInitialization
     };
 
-    const changeAiServiceType = (type: string) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
+    const changeLlmServiceType = (type: string) => {
+        const currentType = config.llmServiceType || 'openai';
+        const llmServices = config.llmServices || {};
 
         // Save current settings
         const currentSettings = {
-            baseUrl: config.aiBaseUrl || '',
-            apiKey: config.aiApiKey || '',
-            model: config.aiModel || '',
-            temperature: config.aiTemperature ?? 0.7
+            baseUrl: config.llmBaseUrl || '',
+            apiKey: config.llmApiKey || '',
+            model: config.llmModel || '',
+            temperature: config.llmTemperature ?? 0.7
         };
-        const updatedServices = { ...aiServices, [currentType]: currentSettings };
+        const updatedServices = { ...llmServices, [currentType]: currentSettings };
 
         // Load new settings
         const newSettings = updatedServices[type] || {
-            baseUrl: DEFAULT_AI_URLS[type] || '',
+            baseUrl: DEFAULT_LLM_URLS[type] || '',
             apiKey: '',
             model: '',
             temperature: 0.7
         };
 
         updateConfig({
-            aiServiceType: type,
-            aiBaseUrl: newSettings.baseUrl,
-            aiApiKey: newSettings.apiKey,
-            aiModel: newSettings.model,
-            aiTemperature: newSettings.temperature ?? 0.7,
-            aiServices: updatedServices
+            llmServiceType: type,
+            llmBaseUrl: newSettings.baseUrl,
+            llmApiKey: newSettings.apiKey,
+            llmModel: newSettings.model,
+            llmTemperature: newSettings.temperature ?? 0.7,
+            llmServices: updatedServices
         });
     };
 
@@ -376,7 +376,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         setActiveTab,
         config,
         updateConfig,
-        changeAiServiceType,
+        changeLlmServiceType,
 
         deletingId,
         downloads,

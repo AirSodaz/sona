@@ -5,15 +5,15 @@ import { logger } from '../utils/logger';
 
 class TranslationService {
     /**
-     * Translates the current segments in the store using the configured AI service.
+     * Translates the current segments in the store using the configured LLM service.
      * Updates the store's segments progressively.
      */
     async translateCurrentTranscript() {
         const store = useTranscriptStore.getState();
         const config = store.config;
 
-        if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel || !config.aiServiceType) {
-            throw new Error('AI Service not fully configured.');
+        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel || !config.llmServiceType) {
+            throw new Error('LLM Service not fully configured.');
         }
 
         const segments = store.segments;
@@ -23,7 +23,7 @@ class TranslationService {
 
         const jobHistoryId = store.sourceHistoryId || 'current';
 
-        store.updateAiState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
+        store.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
 
         const CHUNK_SIZE = 30; // Number of segments to translate per API request
         const totalChunks = Math.ceil(segments.length / CHUNK_SIZE);
@@ -35,18 +35,18 @@ class TranslationService {
                 // Prepare prompt
                 const prompt = this.buildPrompt(chunk, config.translationLanguage || 'zh');
 
-                // Call AI
-                const responseText = await invoke<string>('call_ai_model', {
-                    apiKey: config.aiApiKey,
-                    baseUrl: config.aiBaseUrl,
-                    modelName: config.aiModel,
+                // Call LLM
+                const responseText = await invoke<string>('call_llm_model', {
+                    apiKey: config.llmApiKey,
+                    baseUrl: config.llmBaseUrl,
+                    modelName: config.llmModel,
                     input: prompt,
-                    apiFormat: config.aiServiceType,
-                    temperature: config.aiTemperature ?? 0.7,
+                    apiFormat: config.llmServiceType,
+                    temperature: config.llmTemperature ?? 0.7,
                 });
 
                 // Parse JSON output
-                const translations = this.parseAIResponse(responseText);
+                const translations = this.parseLlmResponse(responseText);
 
                 const currentStore = useTranscriptStore.getState();
                 const currentHistoryId = currentStore.sourceHistoryId || 'current';
@@ -77,15 +77,15 @@ class TranslationService {
 
                 // Update progress for the specific record
                 const progress = Math.round(((i + 1) / totalChunks) * 100);
-                useTranscriptStore.getState().updateAiState({ translationProgress: progress }, jobHistoryId);
+                useTranscriptStore.getState().updateLlmState({ translationProgress: progress }, jobHistoryId);
             }
         } finally {
             const currentStore = useTranscriptStore.getState();
-            currentStore.updateAiState({ isTranslating: false, translationProgress: 100 }, jobHistoryId);
+            currentStore.updateLlmState({ isTranslating: false, translationProgress: 100 }, jobHistoryId);
 
             // Auto-show translations when done if not visible
-            if (!store.getAiState(jobHistoryId).isTranslationVisible) {
-                store.updateAiState({ isTranslationVisible: true }, jobHistoryId);
+            if (!store.getLlmState(jobHistoryId).isTranslationVisible) {
+                store.updateLlmState({ isTranslationVisible: true }, jobHistoryId);
             }
         }
     }
@@ -103,10 +103,10 @@ Input:
 ${jsonStr}`;
     }
 
-    private parseAIResponse(responseText: string): { id: string; translation: string }[] {
+    private parseLlmResponse(responseText: string): { id: string; translation: string }[] {
         try {
-            // Sometimes AI includes markdown wrapping even when told not to.
-            // Strip ```json and ``` 
+            // Sometimes the LLM includes markdown wrapping even when told not to.
+            // Strip ```json and ```
             let cleaned = responseText.trim();
             if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
             if (cleaned.startsWith('```')) cleaned = cleaned.substring(3);
@@ -115,12 +115,12 @@ ${jsonStr}`;
 
             const parsed = JSON.parse(cleaned);
             if (!Array.isArray(parsed)) {
-                throw new Error("AI response is not a valid JSON array");
+                throw new Error("LLM response is not a valid JSON array");
             }
             return parsed;
         } catch (e) {
-            console.error("Failed to parse AI translation response:", e, "\nRaw Response:", responseText);
-            throw new Error(`Failed to parse AI response: ${e instanceof Error ? e.message : 'Unknown'}`);
+            console.error("Failed to parse LLM translation response:", e, "\nRaw Response:", responseText);
+            throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : 'Unknown'}`);
         }
     }
 

@@ -1,4 +1,4 @@
-mod ai;
+mod llm;
 mod audio;
 pub mod cli;
 pub mod export;
@@ -591,8 +591,8 @@ pub fn run() {
             audio::get_microphone_devices,
             audio::start_microphone_capture,
             audio::stop_microphone_capture,
-            ai::call_llm_model,
-            ai::get_llm_models,
+            llm::call_llm_model,
+            llm::get_llm_models,
             sherpa::init_recognizer,
             sherpa::start_recognizer,
             sherpa::stop_recognizer,

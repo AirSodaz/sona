@@ -35,11 +35,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
 
-    // AI State
+    // LLM state
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
-    const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = aiState;
-    const updateAiState = useTranscriptStore((state) => state.updateAiState);
+    const llmState = useTranscriptStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
+    const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = llmState;
+    const updateLlmState = useTranscriptStore((state) => state.updateLlmState);
 
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
@@ -132,11 +132,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         setIsOpen(false);
         triggerRef.current?.focus();
 
-        updateAiState({ isRetranscribing: true, retranscribeProgress: 0 });
+        updateLlmState({ isRetranscribing: true, retranscribeProgress: 0 });
 
         try {
             await retranscribeService.retranscribeCurrentRecord((progress) => {
-                updateAiState({ retranscribeProgress: progress });
+                updateLlmState({ retranscribeProgress: progress });
             });
 
             // Clear old polish undo/redo states only after successful re-transcription
@@ -145,14 +145,14 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         } catch (error: any) {
             await alert(error.message || 'Unknown error', { variant: 'error' });
         } finally {
-            updateAiState({ isRetranscribing: false, retranscribeProgress: 0 });
+            updateLlmState({ isRetranscribing: false, retranscribeProgress: 0 });
         }
     };
 
     const handleStartPolish = async () => {
         if (isPolishing) return;
 
-        if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel) {
+        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel) {
             await alert(t('polish.error_config_missing'), { variant: 'error' });
             return;
         }
@@ -281,7 +281,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                         <span>
                             {isPolishing
                                 ? t('polish.polishing')
-                                : t('polish.start', 'AI Polish')}
+                                : t('polish.start', 'LLM Polish')}
                         </span>
                     </button>
 

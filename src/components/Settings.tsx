@@ -6,7 +6,7 @@ import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
 import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
-import { SettingsAIServiceTab } from './settings/SettingsAIServiceTab';
+import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
@@ -47,7 +47,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setActiveTab,
         config,
         updateConfig,
-        changeAiServiceType,
+        changeLlmServiceType,
 
         downloads,
         installedModels,
@@ -278,10 +278,10 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                     );
                                 case 'ai_service':
                                     return (
-                                        <SettingsAIServiceTab
+                                        <SettingsLLMServiceTab
                                             config={config}
                                             updateConfig={updateConfig}
-                                            changeAiServiceType={changeAiServiceType}
+                                            changeLlmServiceType={changeLlmServiceType}
                                         />
                                     );
                                 case 'shortcuts':

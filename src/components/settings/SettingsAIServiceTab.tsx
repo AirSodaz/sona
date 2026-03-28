@@ -5,17 +5,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { List, Loader2, Check, X } from 'lucide-react';
 import { AppConfig } from '../../types/transcript';
 
-interface SettingsAIServiceTabProps {
+interface SettingsLLMServiceTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    changeAiServiceType: (type: string) => void;
+    changeLlmServiceType: (type: string) => void;
 }
 
-export function SettingsAIServiceTab({
+export function SettingsLLMServiceTab({
     config,
     updateConfig,
-    changeAiServiceType
-}: SettingsAIServiceTabProps): React.JSX.Element {
+    changeLlmServiceType
+}: SettingsLLMServiceTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
@@ -25,42 +25,42 @@ export function SettingsAIServiceTab({
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    const aiServiceType = config.aiServiceType || 'openai';
-    const aiBaseUrl = config.aiBaseUrl || '';
-    const aiApiKey = config.aiApiKey || '';
-    const aiModel = config.aiModel || '';
-    const aiTemperature = config.aiTemperature ?? 0.7;
+    const llmServiceType = config.llmServiceType || 'openai';
+    const llmBaseUrl = config.llmBaseUrl || '';
+    const llmApiKey = config.llmApiKey || '';
+    const llmModel = config.llmModel || '';
+    const llmTemperature = config.llmTemperature ?? 0.7;
 
     const handleServiceTypeChange = (type: string) => {
-        changeAiServiceType(type);
+        changeLlmServiceType(type);
         setAvailableModels([]);
         setIsManualEntry(false);
     };
 
-    const updateAiSetting = (key: 'baseUrl' | 'apiKey' | 'model' | 'temperature', value: string | number) => {
-        const currentType = config.aiServiceType || 'openai';
-        const aiServices = config.aiServices || {};
-        const currentSettings = aiServices[currentType] || { baseUrl: '', apiKey: '', model: '', temperature: 0.7 };
+    const updateLlmSetting = (key: 'baseUrl' | 'apiKey' | 'model' | 'temperature', value: string | number) => {
+        const currentType = config.llmServiceType || 'openai';
+        const llmServices = config.llmServices || {};
+        const currentSettings = llmServices[currentType] || { baseUrl: '', apiKey: '', model: '', temperature: 0.7 };
 
         const updates: Partial<AppConfig> = {
-            aiServices: {
-                ...aiServices,
+            llmServices: {
+                ...llmServices,
                 [currentType]: { ...currentSettings, [key]: value }
             }
         };
 
         switch (key) {
             case 'baseUrl':
-                updates.aiBaseUrl = value as string;
+                updates.llmBaseUrl = value as string;
                 break;
             case 'apiKey':
-                updates.aiApiKey = value as string;
+                updates.llmApiKey = value as string;
                 break;
             case 'model':
-                updates.aiModel = value as string;
+                updates.llmModel = value as string;
                 break;
             case 'temperature':
-                updates.aiTemperature = value as number;
+                updates.llmTemperature = value as number;
                 break;
         }
 
@@ -68,28 +68,28 @@ export function SettingsAIServiceTab({
     };
 
     const fetchModels = async () => {
-        if (!aiBaseUrl) return;
+        if (!llmBaseUrl) return;
 
         setIsLoadingModels(true);
         try {
-            // Note: get_ai_models command might need to be adjusted if it relies on store state,
+            // Note: get_llm_models command might need to be adjusted if it relies on store state,
             // but here we pass params explicitly.
-            const models = await invoke<string[]>('get_ai_models', {
-                apiKey: aiApiKey,
-                baseUrl: aiBaseUrl,
-                apiFormat: aiServiceType
+            const models = await invoke<string[]>('get_llm_models', {
+                apiKey: llmApiKey,
+                baseUrl: llmBaseUrl,
+                apiFormat: llmServiceType
             });
             setAvailableModels(models);
 
             if (models.length > 0) {
-                 if (aiModel && !models.includes(aiModel)) {
+                 if (llmModel && !models.includes(llmModel)) {
                       // If current model is not in list, keep it but show manual entry
                       setIsManualEntry(true);
                  } else {
                       // If current model is in list or empty, use dropdown
                       setIsManualEntry(false);
-                      if (!aiModel) {
-                          updateAiSetting('model', models[0]);
+                      if (!llmModel) {
+                          updateLlmSetting('model', models[0]);
                       }
                  }
             } else {
@@ -119,19 +119,19 @@ export function SettingsAIServiceTab({
                 clearTimeout(debounceTimeout.current);
             }
         };
-    }, [aiBaseUrl, aiApiKey, aiServiceType]);
+    }, [llmBaseUrl, llmApiKey, llmServiceType]);
 
     const handleTestConnection = async () => {
         setTestStatus('loading');
         setTestMessage('');
         try {
-            const response = await invoke<string>('call_ai_model', {
-                apiKey: aiApiKey,
-                baseUrl: aiBaseUrl,
-                modelName: aiModel,
+            const response = await invoke<string>('call_llm_model', {
+                apiKey: llmApiKey,
+                baseUrl: llmBaseUrl,
+                modelName: llmModel,
                 input: 'Hello, this is a connection test.',
-                apiFormat: aiServiceType,
-                temperature: aiTemperature
+                apiFormat: llmServiceType,
+                temperature: llmTemperature
             });
             setTestStatus('success');
             setTestMessage(t('settings.ai.connection_success') + response);
@@ -147,7 +147,7 @@ export function SettingsAIServiceTab({
                 <label className="settings-label">{t('settings.ai.service_type')}</label>
                 <Dropdown
                     id="ai-service-type"
-                    value={aiServiceType}
+                    value={llmServiceType}
                     onChange={handleServiceTypeChange}
                     options={[
                         { value: 'openai', label: 'OpenAI' },
@@ -167,8 +167,8 @@ export function SettingsAIServiceTab({
                 <input
                     type="text"
                     className="settings-input"
-                    value={aiBaseUrl}
-                    onChange={(e) => updateAiSetting('baseUrl', e.target.value)}
+                    value={llmBaseUrl}
+                    onChange={(e) => updateLlmSetting('baseUrl', e.target.value)}
                     placeholder="https://api.openai.com/v1"
                 />
             </div>
@@ -178,8 +178,8 @@ export function SettingsAIServiceTab({
                 <input
                     type="password"
                     className="settings-input"
-                    value={aiApiKey}
-                    onChange={(e) => updateAiSetting('apiKey', e.target.value)}
+                    value={llmApiKey}
+                    onChange={(e) => updateLlmSetting('apiKey', e.target.value)}
                     placeholder="sk-..."
                 />
             </div>
@@ -195,12 +195,12 @@ export function SettingsAIServiceTab({
                         {!isManualEntry && availableModels.length > 0 ? (
                             <Dropdown
                                 id="ai-model"
-                                value={aiModel}
+                                value={llmModel}
                                 onChange={(val) => {
                                     if (val === '__manual__') {
                                         setIsManualEntry(true);
                                     } else {
-                                        updateAiSetting('model', val);
+                                        updateLlmSetting('model', val);
                                     }
                                 }}
                                 options={[
@@ -213,8 +213,8 @@ export function SettingsAIServiceTab({
                             <input
                                 type="text"
                                 className="settings-input"
-                                value={aiModel}
-                                onChange={(e) => updateAiSetting('model', e.target.value)}
+                                value={llmModel}
+                                onChange={(e) => updateLlmSetting('model', e.target.value)}
                                 placeholder="gpt-4o"
                             />
                         )}
@@ -258,8 +258,8 @@ export function SettingsAIServiceTab({
                         min={0}
                         max={2}
                         step={0.05}
-                        value={aiTemperature}
-                        onChange={(e) => updateAiSetting('temperature', parseFloat(e.target.value))}
+                        value={llmTemperature}
+                        onChange={(e) => updateLlmSetting('temperature', parseFloat(e.target.value))}
                     />
                     <input
                         type="number"
@@ -268,11 +268,11 @@ export function SettingsAIServiceTab({
                         min={0}
                         max={2}
                         step={0.05}
-                        value={aiTemperature}
+                        value={llmTemperature}
                         onChange={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val >= 0 && val <= 2) {
-                                updateAiSetting('temperature', val);
+                                updateLlmSetting('temperature', val);
                             }
                         }}
                     />

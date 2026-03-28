@@ -30,10 +30,10 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
     const segmentsLength = useTranscriptStore((state) => state.segments.length);
 
-    // AI State
+    // LLM state
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const aiState = useTranscriptStore((state) => state.aiStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false, isRetranscribing: false };
-    const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = aiState;
+    const llmState = useTranscriptStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false, isRetranscribing: false };
+    const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
 
     const config = useTranscriptStore((state) => state.config);
@@ -122,8 +122,8 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const handleStartTranslation = async () => {
         if (isTranslating) return;
 
-        if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel) {
-            await alert(t('translation.error_config_missing', { defaultValue: 'Please configure AI service in Settings before translating.' }), { variant: 'error' });
+        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel) {
+            await alert(t('translation.error_config_missing', { defaultValue: 'Please configure LLM service in Settings before translating.' }), { variant: 'error' });
             return;
         }
 

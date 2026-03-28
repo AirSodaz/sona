@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { SettingsAIServiceTab } from '../SettingsAIServiceTab';
+import { SettingsLLMServiceTab } from '../SettingsAIServiceTab';
 import * as tauriApi from '@tauri-apps/api/core';
 import { AppConfig } from '../../../types/transcript';
 
@@ -15,30 +15,30 @@ vi.mock('@tauri-apps/api/core', () => ({
     invoke: vi.fn(),
 }));
 
-describe('SettingsAIServiceTab', () => {
+describe('SettingsLLMServiceTab', () => {
     const mockUpdateConfig = vi.fn();
-    const mockChangeAiServiceType = vi.fn();
+    const mockChangeLlmServiceType = vi.fn();
 
     const mockConfig: AppConfig = {
         streamingModelPath: "/path/to/model",
                 offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
-        aiServiceType: 'openai',
-        aiBaseUrl: 'https://api.openai.com/v1',
-        aiApiKey: 'test-key',
-        aiModel: 'gpt-4o',
-        aiServices: {}
+        llmServiceType: 'openai',
+        llmBaseUrl: 'https://api.openai.com/v1',
+        llmApiKey: 'test-key',
+        llmModel: 'gpt-4o',
+        llmServices: {}
     };
 
     const defaultProps = {
         config: mockConfig,
         updateConfig: mockUpdateConfig,
-        changeAiServiceType: mockChangeAiServiceType
+        changeLlmServiceType: mockChangeLlmServiceType
     };
 
     it('renders all fields with correct localization keys', () => {
-        render(<SettingsAIServiceTab {...defaultProps} />);
+        render(<SettingsLLMServiceTab {...defaultProps} />);
 
         expect(screen.getByText('settings.ai.service_type')).toBeDefined();
         // Dropdown value (selected option label)
@@ -57,7 +57,7 @@ describe('SettingsAIServiceTab', () => {
     });
 
     it('updates Service Type when changed', async () => {
-        render(<SettingsAIServiceTab {...defaultProps} />);
+        render(<SettingsLLMServiceTab {...defaultProps} />);
 
         // Open Dropdown
         const trigger = screen.getByText('OpenAI');
@@ -67,18 +67,18 @@ describe('SettingsAIServiceTab', () => {
         const anthropicOption = screen.getByText('Anthropic');
         fireEvent.click(anthropicOption);
 
-        expect(mockChangeAiServiceType).toHaveBeenCalledWith('anthropic');
+        expect(mockChangeLlmServiceType).toHaveBeenCalledWith('anthropic');
     });
 
     it('calls invoke when Test Connection is clicked', async () => {
         vi.mocked(tauriApi.invoke).mockResolvedValue('OK');
 
-        render(<SettingsAIServiceTab {...defaultProps} />);
+        render(<SettingsLLMServiceTab {...defaultProps} />);
 
         const testBtn = screen.getByText('settings.ai.test_connection');
         fireEvent.click(testBtn);
 
-        expect(tauriApi.invoke).toHaveBeenCalledWith('call_ai_model', {
+        expect(tauriApi.invoke).toHaveBeenCalledWith('call_llm_model', {
             apiKey: 'test-key',
             baseUrl: 'https://api.openai.com/v1',
             modelName: 'gpt-4o',
@@ -96,7 +96,7 @@ describe('SettingsAIServiceTab', () => {
     it('displays error message when connection fails', async () => {
         vi.mocked(tauriApi.invoke).mockRejectedValue('Network Error');
 
-        render(<SettingsAIServiceTab {...defaultProps} />);
+        render(<SettingsLLMServiceTab {...defaultProps} />);
 
         const testBtn = screen.getByText('settings.ai.test_connection');
         fireEvent.click(testBtn);

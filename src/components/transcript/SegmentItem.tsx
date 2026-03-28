@@ -130,10 +130,10 @@ function SegmentItemComponent({
     const isNew = useStore(uiStore, useCallback((state) => state.newSegmentIds.has(segment.id), [segment.id]));
     const isAligning = useStore(uiStore, useCallback((state) => state.aligningSegmentIds.has(segment.id), [segment.id]));
 
-    // AI state (translation visibility)
+    // LLM state (translation visibility)
     const sourceHistoryId = useTranscriptStore(state => state.sourceHistoryId);
-    const aiState = useTranscriptStore(state => state.aiStates[sourceHistoryId || 'current']);
-    const isTranslationVisible = aiState ? aiState.isTranslationVisible : false;
+    const llmState = useTranscriptStore(state => state.llmStates[sourceHistoryId || 'current']);
+    const isTranslationVisible = llmState ? llmState.isTranslationVisible : false;
 
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));

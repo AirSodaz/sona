@@ -49,12 +49,12 @@ interface TranscriptState {
     /** ID of the history item the current segments originate from. */
     sourceHistoryId: string | null;
 
-    // AI States mapped by historyId
+    // LLM states mapped by historyId
     /**
-     * Record of AI states (translation, polishing) mapped by sourceHistoryId.
+     * Record of LLM states (translation, polishing) mapped by sourceHistoryId.
      * Use 'current' for the active unsaved recording.
      */
-    aiStates: Record<string, AiState>;
+    llmStates: Record<string, LlmState>;
 
     // Config
     /** Application configuration. */
@@ -157,19 +157,19 @@ interface TranscriptState {
      */
     removeAligningSegmentId: (id: string) => void;
 
-    // AI state actions
+    // LLM state actions
     /**
-     * Gets the AI state for a specific history ID.
+     * Gets the LLM state for a specific history ID.
      * If no ID is provided, uses the current sourceHistoryId or 'current'.
      * Returns a default empty state if not found.
      */
-    getAiState: (historyId?: string) => AiState;
+    getLlmState: (historyId?: string) => LlmState;
 
     /**
-     * Updates the AI state for a specific history ID.
+     * Updates the LLM state for a specific history ID.
      * If no ID is provided, updates the current sourceHistoryId or 'current'.
      */
-    updateAiState: (updates: Partial<AiState>, historyId?: string) => void;
+    updateLlmState: (updates: Partial<LlmState>, historyId?: string) => void;
 
     // Legacy actions for backward compatibility (updates current active state)
     setIsTranslationVisible: (visible: boolean) => void;
@@ -223,7 +223,7 @@ interface TranscriptState {
 }
 
 
-export interface AiState {
+export interface LlmState {
     isTranslating: boolean;
     translationProgress: number;
     isTranslationVisible: boolean;
@@ -233,7 +233,7 @@ export interface AiState {
     retranscribeProgress: number;
 }
 
-const DEFAULT_AI_STATE: AiState = {
+const DEFAULT_LLM_STATE: LlmState = {
     isTranslating: false,
     translationProgress: 0,
     isTranslationVisible: false,
@@ -268,8 +268,8 @@ const DEFAULT_CONFIG: AppConfig = {
     captionWindowWidth: 800,
     captionFontSize: 24,
     captionFontColor: '#ffffff',
-    aiServices: {},
-    aiTemperature: 0.7,
+    llmServices: {},
+    llmTemperature: 0.7,
     translationLanguage: 'zh',
     autoPolish: false,
     autoPolishFrequency: 5,
@@ -299,7 +299,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     lastSeekTimestamp: 0,
     seekRequest: null,
     sourceHistoryId: null,
-    aiStates: {},
+    llmStates: {},
     config: DEFAULT_CONFIG,
 
     // History tracking
@@ -428,32 +428,32 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         return { aligningSegmentIds: next };
     }),
 
-    // AI state actions
-    getAiState: (historyId) => {
+    // LLM state actions
+    getLlmState: (historyId) => {
         const state = get();
         const id = historyId || state.sourceHistoryId || 'current';
-        return state.aiStates[id] || { ...DEFAULT_AI_STATE };
+        return state.llmStates[id] || { ...DEFAULT_LLM_STATE };
     },
 
-    updateAiState: (updates, historyId) => {
+    updateLlmState: (updates, historyId) => {
         set((state) => {
             const id = historyId || state.sourceHistoryId || 'current';
-            const currentState = state.aiStates[id] || { ...DEFAULT_AI_STATE };
+            const currentState = state.llmStates[id] || { ...DEFAULT_LLM_STATE };
             return {
-                aiStates: {
-                    ...state.aiStates,
+                llmStates: {
+                    ...state.llmStates,
                     [id]: { ...currentState, ...updates }
                 }
             };
         });
     },
 
-    // Legacy actions mapping to current AI state
-    setIsTranslationVisible: (visible) => get().updateAiState({ isTranslationVisible: visible }),
-    setIsTranslating: (translating) => get().updateAiState({ isTranslating: translating }),
-    setTranslationProgress: (progress) => get().updateAiState({ translationProgress: progress }),
-    setIsPolishing: (polishing) => get().updateAiState({ isPolishing: polishing }),
-    setPolishProgress: (progress) => get().updateAiState({ polishProgress: progress }),
+    // Legacy actions mapping to current LLM state
+    setIsTranslationVisible: (visible) => get().updateLlmState({ isTranslationVisible: visible }),
+    setIsTranslating: (translating) => get().updateLlmState({ isTranslating: translating }),
+    setTranslationProgress: (progress) => get().updateLlmState({ translationProgress: progress }),
+    setIsPolishing: (polishing) => get().updateLlmState({ isPolishing: polishing }),
+    setPolishProgress: (progress) => get().updateLlmState({ polishProgress: progress }),
 
     // Audio actions
     setAudioFile: (file) => {

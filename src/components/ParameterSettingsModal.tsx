@@ -32,7 +32,7 @@ export function ParameterSettingsModal({
     const language = config.language;
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;
-    const isAIConfigured = Boolean(config.aiApiKey && config.aiBaseUrl && config.aiModel && config.aiServiceType);
+    const isLlmConfigured = Boolean(config.llmApiKey && config.llmBaseUrl && config.llmModel && config.llmServiceType);
 
     // Focus management
     useEffect(() => {
@@ -150,15 +150,15 @@ export function ParameterSettingsModal({
                         <div className="options-label">
                             <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.auto_polish', { defaultValue: 'Auto-Polish' })}</span>
                             <span className="options-hint">
-                                {isAIConfigured
-                                    ? t('batch.auto_polish_hint', { defaultValue: 'Automatically polish text with AI' })
-                                    : t('polish.error_config_missing', { defaultValue: 'Please configure AI service first' })}
+                                {isLlmConfigured
+                                    ? t('batch.auto_polish_hint', { defaultValue: 'Automatically polish text with LLM' })
+                                    : t('polish.error_config_missing', { defaultValue: 'Please configure LLM service first' })}
                             </span>
                         </div>
                         <Switch
                             checked={autoPolish}
-                            onChange={(val) => !disabled && isAIConfigured && setConfig({ autoPolish: val })}
-                            disabled={disabled || !isAIConfigured}
+                            onChange={(val) => !disabled && isLlmConfigured && setConfig({ autoPolish: val })}
+                            disabled={disabled || !isLlmConfigured}
                         />
                     </div>
 

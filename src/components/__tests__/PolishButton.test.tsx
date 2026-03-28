@@ -33,11 +33,12 @@ describe('PolishButton', () => {
             segments: [
                 { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
             ],
-            aiStates: {},
+            llmStates: {},
             config: {
-                aiApiKey: 'test-key',
-                aiBaseUrl: 'https://api.test',
-                aiModel: 'test-model',
+                llmApiKey: 'test-key',
+                llmBaseUrl: 'https://api.test',
+                llmModel: 'test-model',
+                llmServiceType: 'openai',
             } as any
         });
     });
@@ -69,7 +70,7 @@ describe('PolishButton', () => {
     it('shows undo option after polishing (simulated)', async () => {
         render(<PolishButton />);
 
-        // 1. Click AI Polish
+        // 1. Click LLM Polish
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 
@@ -86,7 +87,7 @@ describe('PolishButton', () => {
 
         render(<PolishButton />);
 
-        // 1. AI Polish (saves 'Original' to undo)
+        // 1. LLM Polish (saves 'Original' to undo)
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 
@@ -115,7 +116,7 @@ describe('PolishButton', () => {
 
         render(<PolishButton />);
 
-        // 1. AI Polish
+        // 1. LLM Polish
         fireEvent.click(screen.getByRole('button', { expanded: false }));
         fireEvent.click(screen.getByText('polish.start'));
 

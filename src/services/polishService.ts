@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 
 class PolishService {
     /**
-     * Polishes the provided segments using the configured AI service.
+     * Polishes the provided segments using the configured LLM service.
      *
      * @param segments The list of segments to polish.
      * @param onChunkPolished Optional callback when a chunk of segments is polished.
@@ -21,12 +21,12 @@ class PolishService {
         const store = useTranscriptStore.getState();
         const config = store.config;
 
-        if (!config.aiApiKey || !config.aiBaseUrl || !config.aiModel || !config.aiServiceType) {
-            // If AI is not configured, we might want to skip polishing silently or throw error.
+        if (!config.llmApiKey || !config.llmBaseUrl || !config.llmModel || !config.llmServiceType) {
+            // If the LLM service is not configured, we might want to skip polishing silently or throw error.
             // For auto-polish, skipping silently or logging warning is better than crashing.
             // However, manual polish expects an error.
             // Let's throw, and let the caller handle it.
-            throw new Error('AI Service not fully configured.');
+            throw new Error('LLM Service not fully configured.');
         }
 
         if (!segments || segments.length === 0) {
@@ -43,18 +43,18 @@ class PolishService {
             const prompt = this.buildPrompt(chunk);
 
             try {
-                // Call AI
-                const responseText = await invoke<string>('call_ai_model', {
-                    apiKey: config.aiApiKey,
-                    baseUrl: config.aiBaseUrl,
-                    modelName: config.aiModel,
+                // Call LLM
+                const responseText = await invoke<string>('call_llm_model', {
+                    apiKey: config.llmApiKey,
+                    baseUrl: config.llmBaseUrl,
+                    modelName: config.llmModel,
                     input: prompt,
-                    apiFormat: config.aiServiceType,
-                    temperature: config.aiTemperature ?? 0.7,
+                    apiFormat: config.llmServiceType,
+                    temperature: config.llmTemperature ?? 0.7,
                 });
 
                 // Parse JSON output
-                const polishedSegments = this.parseAIResponse(responseText);
+                const polishedSegments = this.parseLlmResponse(responseText);
 
                 if (onChunkPolished) {
                     onChunkPolished(polishedSegments);
@@ -80,7 +80,7 @@ class PolishService {
 
         const jobHistoryId = store.sourceHistoryId || 'current';
 
-        store.updateAiState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
+        store.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
 
         const totalChunks = Math.ceil(segments.length / 30);
         let completedChunks = 0;
@@ -117,12 +117,12 @@ class PolishService {
                 }
 
                 completedChunks++;
-                useTranscriptStore.getState().updateAiState({
+                useTranscriptStore.getState().updateLlmState({
                     polishProgress: Math.round((completedChunks / totalChunks) * 100)
                 }, jobHistoryId);
             });
         } finally {
-            useTranscriptStore.getState().updateAiState({
+            useTranscriptStore.getState().updateLlmState({
                 isPolishing: false,
                 polishProgress: 0
             }, jobHistoryId);
@@ -171,7 +171,7 @@ ${jsonStr}`;
         return prompt;
     }
 
-    private parseAIResponse(responseText: string): { id: string; text: string }[] {
+    private parseLlmResponse(responseText: string): { id: string; text: string }[] {
         try {
             let cleaned = responseText.trim();
             if (cleaned.startsWith('```json')) cleaned = cleaned.substring(7);
@@ -183,12 +183,12 @@ ${jsonStr}`;
 
             const parsed = JSON.parse(cleaned);
             if (!Array.isArray(parsed)) {
-                throw new Error("AI response is not a valid JSON array");
+                throw new Error("LLM response is not a valid JSON array");
             }
             return parsed;
         } catch (e) {
-            console.error("Failed to parse AI polish response:", e, "\nRaw Response:", responseText);
-            throw new Error(`Failed to parse AI response: ${e instanceof Error ? e.message : 'Unknown'}`);
+            console.error("Failed to parse LLM polish response:", e, "\nRaw Response:", responseText);
+            throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : 'Unknown'}`);
         }
     }
 }

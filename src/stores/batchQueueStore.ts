@@ -244,8 +244,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             // Auto-Polish Logic
             const autoPolish = config.autoPolish ?? false;
             if (autoPolish && finalSegments.length > 0) {
-                // Check if AI service is configured
-                if (config.aiApiKey && config.aiBaseUrl && config.aiModel && config.aiServiceType) {
+                // Check if LLM service is configured
+                if (config.llmApiKey && config.llmBaseUrl && config.llmModel && config.llmServiceType) {
                     try {
                         // Indicate polishing (keep at 99% or similar)
                         get().updateItemStatus(itemId, 'processing', 99);
@@ -267,7 +267,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                             get().updateItemSegments(itemId, updatedSegments);
                         });
                     } catch (polishError) {
-                        console.error('[BatchQueue] Auto-polish failed:', polishError);
+                        console.error('[BatchQueue] Auto-LLM polish failed:', polishError);
                         // Don't fail the whole file, just log error
                     }
                 }
