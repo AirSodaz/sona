@@ -1,122 +1,138 @@
-# AGENTS.md
+# CLAUDE.md
 
-## 1. Project Overview
-**Sona** is a privacy-first, offline transcript editor built with **Tauri**, **React**, and **Sherpa-onnx**. It performs real-time and batch speech-to-text processing locally on the user's machine.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-### Key Features
-*   **Offline/Private**: No data leaves the device.
-*   **Rust-Native AI**: Inference runs directly in the Rust backend for maximum performance.
-*   **Real-time & Batch**: Supports both live recording and file import.
-*   **Performance**: Optimized audio processing loop and virtualized lists for long transcripts.
+## Project overview
 
-## 2. Tech Stack
+Sona is a privacy-first desktop transcript editor built with Tauri v2, React 19, TypeScript, Zustand, and a Rust backend powered by sherpa-onnx. The main product flow is offline transcription; cloud AI is optional and only used for transcript polish/translation.
 
-### Frontend
-*   **Framework**: React 19 + TypeScript
-*   **Build Tool**: Vite
-*   **State Management**: Zustand
-*   **Styling**: Pure CSS with Variables (No Tailwind). Design system defined in `src/styles/index.css`.
-*   **Icons**: Lucide React (Centralized in `src/components/Icons.tsx`)
-*   **Internationalization**: i18next (English/Chinese). *Note: New strings must be added to both `src/locales/en.json` and `zh.json`.*
-*   **Virtualization**: `react-virtuoso` for transcript lists.
+Key product modes:
+- Live recording with real-time transcription
+- Batch import with background queue processing
+- Transcript editing with synchronized playback
+- Optional AI polish/translate via OpenAI, Anthropic, Gemini, or Ollama
+- Local history, export, and model management
 
-### Backend (Tauri)
-*   **Core**: Tauri v2 (Rust)
-*   **Capabilities**: `fs`, `dialog`, `http`, `process`.
-*   **AI Engine**: `sherpa-onnx` (Rust crate) for offline speech recognition.
-*   **AI Proxy**: `ai.rs` uses `reqwest` to proxy requests to OpenAI, Anthropic, Gemini, and Ollama.
-*   **Configuration**: `src-tauri/tauri.conf.json`.
+## Common commands
 
-## 3. Architecture & Critical Components
+### Frontend and desktop app
+- `npm run dev` — start the Vite dev server on port 1420
+- `npm run tauri dev` — run the full desktop app in Tauri dev mode
+- `npm run build` — TypeScript check + production frontend build
+- `npm run tauri build` — build the production desktop bundle
+- `npm run preview` — preview the production frontend build
 
-### 3.1. AI Engine (Rust)
-The application uses `sherpa-onnx` directly within the Tauri Rust process.
-*   **`sherpa.rs`**: Manages the lifecycle of the recognizer (`OnlineRecognizer` or `OfflineRecognizer`).
-*   **Streaming**: Audio data is fed from the frontend (AudioWorklet) to Rust via the `feed_audio_chunk` command.
-*   **Batch**: File processing is handled by `process_batch_file` which decodes audio using `ffmpeg` (via `std::process::Command`) and runs inference.
-*   **VAD**: Voice Activity Detection is integrated to handle segmenting audio streams.
+### Tests
+- `npm test` — run the Vitest suite
+- `npx vitest src/path/to/file.test.tsx` — run one Vitest file
+- `npx vitest -t "test name"` — run Vitest tests matching a name
+- `npx playwright test` — run Playwright end-to-end tests
+- `npx playwright test tests/e2e/example.spec.ts` — run one Playwright file
+- `npx playwright test -g "test title"` — run one Playwright test by title
+- `cargo test --manifest-path src-tauri/Cargo.toml` — run Rust tests
+- `cargo test --manifest-path src-tauri/Cargo.toml test_name` — run a specific Rust test
 
-### 3.2. Critical Services & Stores
-*   **`transcriptionService.ts`**: Manages the backend recognizer state.
-*   **`polishService.ts` / `translationService.ts`**:
-    *   Batches transcript segments into chunks.
-    *   Sends prompts to the AI backend via `call_ai_model`.
-    *   Parses JSON responses to update segments in place.
-*   **`transcriptStore.ts`**:
-    *   **`upsertSegment`**: Optimized for streaming; checks last segment first.
-    *   **`findSegmentAndIndexForTime`**: Uses index hinting for O(1) lookups during playback.
-    *   **`setActiveSegmentId`**: Accepts an optional `index` to allow O(1) updates.
-*   **`segmentUtils.ts`**: Uses `getEffectiveLength` (regex-based loop) instead of string replacement for 28% faster length calculations.
+### CLI and packaging helpers
+- `cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` — run the offline CLI from source
+- `npm run verify:cli-bundle` — verify the packaged CLI bundle
 
-### 3.3. Performance Optimizations
-*   **High-Frequency Updates**: Components like `AudioPlayer` (TimeDisplay, SeekSlider) use `useRef` and direct `store.subscribe` to bypass React render cycles for `currentTime`.
-*   **Granular Selectors**: `App.tsx` selects specific state slices (e.g., `state.config.theme`) to avoid full-tree re-renders.
+### Notes
+- There is currently no verified `lint` script in the root `package.json`.
+- `npm run build` triggers `scripts/setup-ffmpeg.js` via `prebuild`.
+- Tauri build/dev flows go through `scripts/tauri.js`.
 
-### 3.4. AI Assistant Services
-The "AI Assistant" features (Polish & Translate) are implemented via a hybrid Rust/TS architecture:
-1.  **Frontend (`*Service.ts`)**: Constructs prompts and manages state (loading, error handling).
-2.  **Backend (`ai.rs`)**: Acts as a secure proxy.
-    *   **`call_ai_model`**: Handles the actual HTTP request to the provider (OpenAI/Anthropic/etc).
-    *   **`get_ai_models`**: Fetches available models, handling provider-specific API differences (e.g., Gemini's query param vs OpenAI's Bearer token).
+## High-level architecture
 
-## 4. Coding Standards & Guidelines
+### Frontend shell
+- `src/main.tsx` boots either the main app or the caption-only window depending on query params.
+- `src/App.tsx` is the main orchestrator for app mode, initialization hooks, dialog rendering, and top-level layout.
 
-**All code and documentation must follow [Google Style Guides](https://google.github.io/styleguide/).**
+### State model
+- `src/stores/transcriptStore.ts` is the central source of truth for transcript segments, playback/recording state, current mode, config, and AI task state.
+- `src/stores/batchQueueStore.ts` manages the batch queue, concurrency, progress, auto-polish integration, and handoff into history.
+- `src/stores/historyStore.ts` manages the persisted transcript/audio history index.
+- `src/stores/onboardingStore.ts` tracks first-run setup and onboarding UI state.
 
-### 4.1. General Rules
-*   **Style**: 2-space indentation, clear variable naming.
-*   **Docstrings**: All exported functions/classes must have JSDoc comments.
-*   **Strict Typing**: No `any`. Define interfaces in `src/types/`.
-*   **No Tailwind**: Use standard CSS classes and variables (`src/styles/index.css`).
-*   **Named Functions**: Use `function ComponentName() { ... }` instead of arrow functions for components.
+### Live transcription flow
+1. The frontend records audio through hooks in `src/hooks/useAudioRecorder.ts`.
+2. `src/services/transcriptionService.ts` manages recognizer lifecycle and frontend/backend synchronization.
+3. Rust commands in `src-tauri/src/lib.rs` dispatch into `src-tauri/src/sherpa.rs` and `src-tauri/src/audio.rs`.
+4. The Rust backend emits recognizer output events back to the frontend, where transcript segments are upserted into the store.
 
-### 4.2. React Best Practices
-*   **Functional Components**: Use hooks.
-*   **Memoization**: `useMemo`/`useCallback` for stable references.
-*   **Complex Logic**: Refactor nested ternary operators into helper functions or `switch` statements.
-*   **Audio/Timer Logic**:
-    *   `RecordingTimer` uses `useRef` for `isPaused` to prevent `setInterval` closures from capturing stale state.
-    *   `LiveRecord` delegates timer logic to `RecordingTimer` to isolate updates.
+### Batch transcription flow
+- Batch jobs are coordinated from `src/stores/batchQueueStore.ts`.
+- Rust batch processing lives primarily in `src-tauri/src/sherpa.rs` and `src-tauri/src/pipeline.rs`.
+- ffmpeg is used to decode/resample input before offline inference.
+- Completed batch items are written into history and can become the active transcript context.
 
-### 4.3. Accessibility (A11y)
-*   **Interactive Elements**: All buttons/inputs must have `aria-label` or visible labels.
-*   **Nested Controls**: "Buttons" inside interactive containers (like `BatchImport` drop zone) must be `div`s with `aria-hidden="true"` and `pointer-events: none` to prevent invalid HTML.
-*   **Disabled State**: Use `data-tooltip` to explain why a button is disabled.
-*   **Modals**:
-    *   Implement focus traps (listen for `Tab`/`Shift+Tab`).
-    *   Handle `Escape` key via global listener checking `useDialogStore.getState().isOpen`.
-    *   Manage focus restoration on unmount.
-*   **Lists**: Use `role="list"`/`role="listitem"` for complex lists (like FileQueue) instead of `listbox` if items contain nested actions.
+### AI assistant flow
+- `src/services/polishService.ts` and `src/services/translationService.ts` chunk transcript segments, build prompts, call the backend, parse strict JSON responses, and progressively update transcript/history content.
+- `src-tauri/src/ai.rs` is the provider adapter/proxy for OpenAI-compatible APIs, Anthropic, Gemini, and Ollama.
+- If the user navigates away during AI processing, services may update the backing history transcript directly rather than only mutating the active in-memory state.
 
-## 5. Testing Strategy
+### Persistence and setup
+- Main user config is persisted in localStorage under `sona-config`.
+- `src/hooks/useAppInitialization.ts` loads config, applies theme/font settings, and syncs tray-close behavior to the Rust backend.
+- `src/hooks/useAutoSaveTranscript.ts` debounces transcript persistence and flushes on context switches to avoid overwriting another history item.
+- `src/services/modelService.ts` coordinates model download/extract flows with Tauri commands.
+- `src/services/historyService.ts` owns transcript/audio persistence under the app-local history directory.
 
-### 5.1. Unit Testing (Vitest)
-*   **Mocking**:
-    *   Mock module paths relative to the **test file** (e.g., `vi.mock('../../hooks/...')`), not the source file.
-    *   `vi.mocked()` values persist; explicitly reset conflicting mocks (e.g., `.mockResolvedValue`) inside tests or `beforeEach`.
-*   **Environment**: `src-tauri/src/hardware.rs` tests run via `cargo test`.
+## Key implementation constraints
 
-### 5.2. E2E Testing (Playwright)
-*   **Initialization**:
-    *   Inject `window.__TAURI_INTERNALS__` via `page.add_init_script` (mocks must be ready before app load).
-    *   Inject `sona-config` into `localStorage` to bypass "Model Setup" overlays.
-*   **Mocking Tauri**:
-    *   Mock `plugin:fs|exists` and `plugin:path|resolve_directory` to prevent crashes.
-    *   Mock `plugin:dialog|open` to return flat arrays of file paths.
-*   **Quirks**:
-    *   Use `page.keyboard.press('Escape')` to close modals (avoids pointer interception).
-    *   Use `exact: true` for text locators (e.g., distinguishing "Language" label from selected values).
-    *   `AudioPlayer` is conditional (`null` if no `audioUrl`); inject a valid URL into the store to test it.
-    *   `BatchImport` verification needs `plugin:fs` mocks.
+### UI and styling
+- Use pure CSS and existing variables in `src/styles/index.css`. Do not add Tailwind.
+- Use Lucide icons through the shared icon layer in `src/components/Icons.tsx`.
+- Prefer named function components instead of arrow-function components.
 
-## 6. Directory Structure & Constraints
+### Typing and docs
+- Follow Google style guidance already used in this repo.
+- Use 2-space indentation.
+- Do not introduce `any`.
+- Add JSDoc for exported functions and classes.
+- Put shared interfaces/types in `src/types/` when they need to be reused.
 
-*   `src/components/settings/`: Contains individual settings tab components.
-*   `src/locales/`: i18n JSONs. Update both `en.json` and `zh.json`.
-*   `src-tauri/src/sherpa.rs`: Core speech recognition logic.
-*   `.Jules/palette.md`: Contains UX/accessibility learnings. Append new findings here.
+### React and performance
+- Prefer granular Zustand selectors to avoid whole-tree rerenders.
+- For high-frequency audio/playback state, follow the existing `useRef` + direct subscription patterns instead of pushing everything through React render cycles.
+- Avoid nested ternaries in complex rendering logic; extract helpers or use `switch`.
 
-## 7. Troubleshooting & Common Issues
-*   **Timeouts in `Settings.test.tsx`**: Often due to async `useEffect`. Use `waitFor` instead of `act`.
-*   **ESM Modules**: Playwright tests cannot use `__dirname`; use `fileURLToPath(import.meta.url)`.
-*   **Act Warnings**: Resolve by awaiting state changes triggered by effects.
+### i18n
+- This app uses `react-i18next`.
+- Any new user-facing string must be added to both:
+  - `src/locales/en.json`
+  - `src/locales/zh.json`
+
+### Accessibility
+- Interactive controls must have an `aria-label` or a visible label.
+- In interactive containers, do not nest actual buttons inside other interactive elements; follow the existing `aria-hidden` + `pointer-events: none` pattern where needed.
+- Disabled controls should explain why via `data-tooltip` when appropriate.
+- Modal work must preserve focus trap, Escape handling, and focus restoration patterns.
+- For complex lists with nested actions, prefer `role="list"` / `role="listitem"` over `listbox`.
+
+## Testing guidance
+
+### Vitest
+- Vitest runs in jsdom and excludes `tests/e2e/**`.
+- When mocking modules, mock paths relative to the test file, not the source file.
+- `vi.mocked()` state can persist between tests; reset conflicting mock behavior in `beforeEach` or inside the test.
+
+### Playwright
+- Inject Tauri mocks before app load with `page.add_init_script`.
+- Seed `sona-config` in localStorage when tests need to bypass first-run/model-setup UI.
+- Mock `plugin:fs|exists`, `plugin:path|resolve_directory`, and dialog APIs when flows depend on them.
+- Prefer `page.keyboard.press('Escape')` to close modals when pointer interactions are flaky.
+- Use `exact: true` for ambiguous text locators.
+- `AudioPlayer` only renders when an `audioUrl` exists.
+
+### Rust tests
+- Rust-side tests run with `cargo test --manifest-path src-tauri/Cargo.toml`.
+- CLI integration coverage lives under `src-tauri/tests/`.
+
+## Directory cues
+
+- `src/components/settings/` — settings tab implementations
+- `src/services/` — frontend orchestration for transcription, AI, history, export, and models
+- `src/stores/` — Zustand stores; start here when behavior spans multiple screens
+- `src-tauri/src/` — Tauri command handlers, audio capture, AI proxy, Sherpa integration, pipeline code
+- `docs/user-guide.md` — end-user workflows and setup details
+- `docs/cli.md` — CLI usage and configuration
