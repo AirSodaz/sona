@@ -321,7 +321,7 @@ async fn call_openai(
 }
 
 #[tauri::command]
-pub async fn call_ai_model(
+pub async fn call_llm_model(
     api_key: String,
     base_url: String,
     model_name: String,
@@ -414,7 +414,7 @@ async fn get_openai_models(
 }
 
 #[tauri::command]
-pub async fn get_ai_models(
+pub async fn get_llm_models(
     api_key: String,
     base_url: String,
     api_format: String,
