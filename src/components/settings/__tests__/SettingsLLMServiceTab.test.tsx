@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 import * as tauriApi from '@tauri-apps/api/core';
-import { AppConfig } from '../../../types/transcript';
+import { AppConfig, LlmConfig } from '../../../types/transcript';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -39,6 +39,14 @@ describe('SettingsLLMServiceTab', () => {
         changeLlmServiceType: mockChangeLlmServiceType
     };
 
+    const geminiConfig: LlmConfig = {
+        provider: 'gemini',
+        baseUrl: '',
+        apiKey: mockConfig.llm?.apiKey ?? '',
+        model: mockConfig.llm?.model ?? '',
+        temperature: mockConfig.llm?.temperature,
+    };
+
     it('renders all fields with correct localization keys', () => {
         render(<SettingsLLMServiceTab {...defaultProps} />);
 
@@ -64,11 +72,7 @@ describe('SettingsLLMServiceTab', () => {
                 {...defaultProps}
                 config={{
                     ...mockConfig,
-                    llm: {
-                        ...mockConfig.llm,
-                        provider: 'gemini',
-                        baseUrl: ''
-                    }
+                    llm: geminiConfig
                 }}
             />
         );
