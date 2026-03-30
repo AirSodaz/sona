@@ -94,6 +94,7 @@ function buildUniversalMacOsBinary(profile) {
 
 function buildSingleTargetBinary(target, profile) {
   const platform = getTargetPlatform(target);
+  validateBuildEnvironment(target, platform, profile);
   const expectedBinaryPath = path.resolve(
     binariesDir,
     `sona-cli-${target}${getBinaryExtension(platform)}`
@@ -202,7 +203,7 @@ function stageRuntimeLibraries(target, profile) {
 
   if (runtimeLibraries.length === 0) {
     throw new Error(
-      `Unable to find runtime libraries for ${target}. Set SHERPA_ONNX_LIB_DIR or provide the runtime files in ${srcTauriDir}.`
+      `Unable to find runtime libraries for ${target}. Checked: ${formatDirectoryList(searchDirectories)}. Set SHERPA_ONNX_LIB_DIR or provide the runtime files in ${srcTauriDir}.`
     );
   }
 
@@ -210,6 +211,49 @@ function stageRuntimeLibraries(target, profile) {
     const destinationPath = path.resolve(runtimeDir, path.basename(sourcePath));
     fs.copyFileSync(sourcePath, destinationPath);
   }
+}
+
+function validateBuildEnvironment(target, platform, profile) {
+  console.log(
+    `[cli-sidecar] Building sona-cli for ${target} (${profile}) with SHERPA_ONNX_LIB_DIR=${process.env.SHERPA_ONNX_LIB_DIR ?? '<unset>'}`
+  );
+
+  if (platform !== 'windows') {
+    return;
+  }
+
+  const libDir = process.env.SHERPA_ONNX_LIB_DIR;
+  if (!libDir) {
+    throw new Error(
+      `SHERPA_ONNX_LIB_DIR is required for Windows CLI sidecar builds (${target}).`
+    );
+  }
+
+  if (!fs.existsSync(libDir)) {
+    throw new Error(
+      `SHERPA_ONNX_LIB_DIR does not exist for ${target}: ${libDir}`
+    );
+  }
+
+  const requiredFiles = [
+    'sherpa-onnx-c-api.lib',
+    'sherpa-onnx-c-api.dll',
+    'onnxruntime.dll',
+  ];
+
+  const missingFiles = requiredFiles.filter(
+    (fileName) => !fs.existsSync(path.resolve(libDir, fileName))
+  );
+
+  if (missingFiles.length > 0) {
+    throw new Error(
+      `Missing required Windows sherpa-onnx files for ${target} in ${libDir}: ${missingFiles.join(', ')}`
+    );
+  }
+}
+
+function formatDirectoryList(directoryPaths) {
+  return directoryPaths.length > 0 ? directoryPaths.join(', ') : '<none>';
 }
 
 function getRuntimeSearchDirectories(builtBinaryDirectory) {
@@ -290,7 +334,14 @@ function runCommand(command, commandArgs, options = {}) {
   }
 
   if (result.status !== 0 && !allowFailure) {
-    throw new Error(`Command failed: ${command} ${commandArgs.join(' ')}`);
+    const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+    const details = stderr || stdout;
+    throw new Error(
+      details
+        ? `Command failed: ${command} ${commandArgs.join(' ')}\n${details}`
+        : `Command failed: ${command} ${commandArgs.join(' ')}`
+    );
   }
 
   return result;
