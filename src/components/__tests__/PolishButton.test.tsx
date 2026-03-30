@@ -19,8 +19,8 @@ vi.mock('../../services/polishService', () => ({
 
 // Mock useDialogStore
 vi.mock('../../stores/dialogStore', () => ({
-    useDialogStore: () => ({
-        alert: vi.fn(),
+    useDialogStore: (selector: any) => selector({
+        showError: vi.fn(),
     }),
 }));
 

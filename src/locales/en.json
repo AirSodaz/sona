@@ -14,12 +14,59 @@
         "close": "Close",
         "confirm": "Confirm",
         "ok": "OK",
+        "details": "Details",
         "skip_to_content": "Skip to Content",
         "select": "Select",
         "select_all": "Select All",
         "deselect_all": "Deselect All",
         "clear_search": "Clear Search",
         "parameter_settings": "Parameter Settings"
+    },
+    "errors": {
+        "common": {
+            "unknown": "An unknown error occurred.",
+            "operation_failed": "The operation could not be completed."
+        },
+        "audio": {
+            "playback_failed": "Audio playback failed.",
+            "decode_failed": "Audio decoding failed. The file may be corrupted.",
+            "src_not_supported": "The audio format is not supported, or the file is missing.",
+            "microphone_failed": "Failed to access the microphone. Check permissions or input-device settings.",
+            "capture_failed": "Failed to start audio capture. Check permissions and the selected input source."
+        },
+        "config": {
+            "llm_missing": "Please configure the LLM service in Settings first.",
+            "offline_model_missing": "Please configure an offline model in Settings first."
+        },
+        "batch": {
+            "unsupported_format": "Unsupported file format. Please use: {{formats}}",
+            "file_picker_failed": "Failed to open the file picker."
+        },
+        "history": {
+            "missing_files_deleted": "Both the audio and transcript files are missing. This record will be deleted.",
+            "load_failed": "Failed to load the history item."
+        },
+        "model": {
+            "download_failed": "Failed to download the model.",
+            "load_failed": "Failed to load model: {{name}}",
+            "delete_failed": "Failed to delete model: {{name}}"
+        },
+        "export": {
+            "failed": "Failed to export the transcript."
+        },
+        "translation": {
+            "failed": "Translation failed."
+        },
+        "polish": {
+            "failed": "Polishing failed.",
+            "retranscribe_failed": "Retranscription failed."
+        },
+        "update": {
+            "failed": "Update failed."
+        },
+        "runtime": {
+            "unexpected": "The application hit an unexpected error. Try again, and restart the app if it keeps happening."
+        }
     },
     "header": {
         "settings": "Settings"

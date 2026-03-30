@@ -30,7 +30,8 @@ const DEFAULT_LLM_URLS: Record<LlmProvider, string> = {
 export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initialTab?: string) {
     const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
-    const { confirm, alert } = useDialogStore();
+    const confirm = useDialogStore((state) => state.confirm);
+    const showError = useDialogStore((state) => state.showError);
     const { t, i18n } = useTranslation();
 
     const [activeTab, setActiveTab] = useState<'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'llm_service'>('general');
@@ -205,7 +206,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (error.message === 'Download cancelled') {
                 console.log('Download cancelled by user');
             } else {
-                console.error('Download failed:', error);
+                await showError({
+                    code: 'model.download_failed',
+                    messageKey: 'errors.model.download_failed',
+                    cause: error,
+                });
             }
         } finally {
             // Reset state
@@ -259,8 +264,13 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         try {
             const path = await modelService.getModelPath(model.id);
             setModelPath(model, path);
-        } catch (error: any) {
-            console.error('Load failed:', error);
+        } catch (error) {
+            await showError({
+                code: 'model.load_failed',
+                messageKey: 'errors.model.load_failed',
+                messageParams: { name: model.name },
+                cause: error,
+            });
         }
     }
 
@@ -296,11 +306,12 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
             if (config.vadModelPath === deletedPath) {
                 updateConfig({ vadModelPath: '' });
             }
-        } catch (error: any) {
-            console.error('Delete failed:', error);
-            await alert(`Failed to delete model: ${error.message}`, {
-                title: 'Error',
-                variant: 'error'
+        } catch (error) {
+            await showError({
+                code: 'model.delete_failed',
+                messageKey: 'errors.model.delete_failed',
+                messageParams: { name: model.name },
+                cause: error,
             });
         } finally {
             setDeletingId(null);

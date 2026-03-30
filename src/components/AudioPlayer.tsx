@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { logger } from '../utils/logger';
 import { formatDisplayTime } from '../utils/exportFormats';
 import { PlayFilledIcon, PauseIcon, VolumeIcon, MuteIcon } from './Icons';
 import { TimeDisplay } from './audio-player/TimeDisplay';
@@ -25,7 +26,7 @@ interface AudioPlayerProps {
  */
 export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
+    const showError = useDialogStore((state) => state.showError);
     const audioRef = useRef<HTMLAudioElement>(null);
     const lastUpdateTime = useRef(0);
 
@@ -87,25 +88,42 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
 
     function handleAudioError(e: React.SyntheticEvent<HTMLAudioElement, Event>) {
         const error = e.currentTarget.error;
-        console.error('Audio playback error:', {
+        const errorContext = {
             code: error?.code,
             message: error?.message,
             src: e.currentTarget.src,
             networkState: e.currentTarget.networkState,
             readyState: e.currentTarget.readyState
-        });
+        };
 
-        let errorMessage = error?.message || 'Unknown error';
-        switch (error?.code) {
-            case 3: // MEDIA_ERR_DECODE
-                errorMessage = t('player.error_decode', { defaultValue: 'Audio decoding failed. The file may be corrupted.' });
-                break;
-            case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-                errorMessage = t('player.error_src_not_supported', { defaultValue: 'Audio format not supported or file missing.' });
-                break;
-        }
+        void logger.error('[AudioPlayer] Audio playback error', errorContext);
 
-        alert(t('player.error', { error: errorMessage, code: error?.code }), { variant: 'error' });
+        const errorInput = (() => {
+            switch (error?.code) {
+                case 3:
+                    return {
+                        code: 'audio.decode_failed',
+                        messageKey: 'errors.audio.decode_failed',
+                        cause: errorContext,
+                        showCause: false,
+                    } as const;
+                case 4:
+                    return {
+                        code: 'audio.src_not_supported',
+                        messageKey: 'errors.audio.src_not_supported',
+                        cause: errorContext,
+                        showCause: false,
+                    } as const;
+                default:
+                    return {
+                        code: 'audio.playback_failed',
+                        messageKey: 'errors.audio.playback_failed',
+                        cause: errorContext,
+                    } as const;
+            }
+        })();
+
+        void showError(errorInput);
     }
 
     function handleCyclePlaybackRate() {

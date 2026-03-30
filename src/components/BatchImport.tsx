@@ -116,7 +116,7 @@ interface BatchImportProps {
  * @return The batch import UI.
  */
 export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
-    const { alert } = useDialogStore();
+    const showError = useDialogStore((state) => state.showError);
     const [isDragOver, setIsDragOver] = useState(false);
     const { t } = useTranslation();
 
@@ -193,7 +193,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             });
 
             if (invalidFiles.length > 0) {
-                alert(t('batch.unsupported_format', { formats: SUPPORTED_EXTENSIONS.join(', ') }), { variant: 'error' });
+                void showError({
+                    code: 'batch.unsupported_format',
+                    messageKey: 'errors.batch.unsupported_format',
+                    messageParams: { formats: SUPPORTED_EXTENSIONS.join(', ') },
+                    showCause: false,
+                });
             }
 
             if (validFiles.length > 0) {
@@ -259,7 +264,11 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 }
             }
         } catch (err) {
-            console.error('Failed to open dialog:', err);
+            await showError({
+                code: 'batch.file_picker_failed',
+                messageKey: 'errors.batch.file_picker_failed',
+                cause: err,
+            });
         }
     };
 

@@ -4,6 +4,7 @@ import { Dropdown } from '../Dropdown';
 import { invoke } from '@tauri-apps/api/core';
 import { List, Loader2, Check, X } from 'lucide-react';
 import { AppConfig, LlmConfig, LlmProvider } from '../../types/transcript';
+import { normalizeError } from '../../utils/errorUtils';
 
 interface SettingsLLMServiceTabProps {
     config: AppConfig;
@@ -133,10 +134,10 @@ export function SettingsLLMServiceTab({
                 }
             });
             setTestStatus('success');
-            setTestMessage(t('settings.llm.connection_success') + response);
-        } catch (error: any) {
+            setTestMessage(response);
+        } catch (error) {
             setTestStatus('error');
-            setTestMessage(t('settings.llm.connection_failed') + error);
+            setTestMessage(normalizeError(error).message);
         }
     };
 
@@ -274,7 +275,7 @@ export function SettingsLLMServiceTab({
                         {testStatus === 'error' ? <X size={16} style={{ flexShrink: 0, marginTop: 2 }} /> : <Check size={16} style={{ flexShrink: 0, marginTop: 2 }} />}
                         <div>
                             <strong>{testStatus === 'error' ? t('settings.llm.connection_failed') : t('settings.llm.connection_success')}</strong>
-                            <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage.replace(t('settings.llm.connection_success'), '').replace(t('settings.llm.connection_failed'), '')}</div>
+                            <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage}</div>
                         </div>
                     </div>
                 )}

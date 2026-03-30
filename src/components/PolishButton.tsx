@@ -21,7 +21,7 @@ interface PolishButtonProps {
  */
 export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
+    const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -125,7 +125,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
         if (isRetranscribing) return;
 
         if (!config.offlineModelPath) {
-            await alert(t('batch.no_model_error'), { variant: 'error' });
+            await showError({
+                code: 'config.offline_model_missing',
+                messageKey: 'errors.config.offline_model_missing',
+                showCause: false,
+            });
             return;
         }
 
@@ -142,8 +146,12 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
             // Clear old polish undo/redo states only after successful re-transcription
             setUndoSegments(null);
             setRedoSegments(null);
-        } catch (error: any) {
-            await alert(error.message || 'Unknown error', { variant: 'error' });
+        } catch (error) {
+            await showError({
+                code: 'polish.retranscribe_failed',
+                messageKey: 'errors.polish.retranscribe_failed',
+                cause: error,
+            });
         } finally {
             updateLlmState({ isRetranscribing: false, retranscribeProgress: 0 });
         }
@@ -154,7 +162,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
         const llm = config.llm;
         if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
-            await alert(t('polish.error_config_missing'), { variant: 'error' });
+            await showError({
+                code: 'config.llm_missing',
+                messageKey: 'errors.config.llm_missing',
+                showCause: false,
+            });
             return;
         }
 
@@ -167,8 +179,12 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
         try {
             await polishService.polishTranscript();
-        } catch (error: any) {
-            await alert(t('polish.error_failed') + (error.message || 'Unknown error'), { variant: 'error' });
+        } catch (error) {
+            await showError({
+                code: 'polish.failed',
+                messageKey: 'errors.polish.failed',
+                cause: error,
+            });
         }
     };
 

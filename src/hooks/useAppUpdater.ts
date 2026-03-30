@@ -3,6 +3,7 @@ import { check, Update } from '@tauri-apps/plugin-updater';
 import { useDialogStore } from '../stores/dialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useTranslation } from 'react-i18next';
+import { buildErrorDialogOptions } from '../utils/errorUtils';
 
 export type UpdateStatus =
     | 'idle'
@@ -28,13 +29,18 @@ export function useAppUpdater(): UseAppUpdaterReturn {
     const [error, setError] = useState<string | null>(null);
     const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
     const [progress, setProgress] = useState<number>(0);
-    const { confirm } = useDialogStore();
+    const confirm = useDialogStore((state) => state.confirm);
     const { t } = useTranslation();
 
     const showErrorPopup = async (err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
+        const { title, message, details } = buildErrorDialogOptions(t, {
+            code: 'update.failed',
+            messageKey: 'errors.update.failed',
+            cause: err,
+        });
         const shouldDownload = await confirm(message, {
-            title: t('common.error', { defaultValue: 'Error' }),
+            title,
+            details,
             variant: 'error',
             confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
             cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })

@@ -99,8 +99,8 @@ describe('SettingsLLMServiceTab', () => {
         });
     });
 
-    it('displays error message when connection fails', async () => {
-        vi.mocked(tauriApi.invoke).mockRejectedValue('Network Error');
+    it('displays normalized error message when connection fails', async () => {
+        vi.mocked(tauriApi.invoke).mockRejectedValue('error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error');
 
         render(<SettingsLLMServiceTab {...defaultProps} />);
 

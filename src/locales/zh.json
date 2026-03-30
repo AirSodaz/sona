@@ -14,12 +14,59 @@
         "close": "关闭",
         "confirm": "确认",
         "ok": "确定",
+        "details": "详细信息",
         "skip_to_content": "跳转到主要内容",
         "select": "选择",
         "select_all": "全选",
         "deselect_all": "取消全选",
         "clear_search": "清空搜索",
         "parameter_settings": "参数设置"
+    },
+    "errors": {
+        "common": {
+            "unknown": "发生未知错误。",
+            "operation_failed": "操作未能完成。"
+        },
+        "audio": {
+            "playback_failed": "音频播放失败。",
+            "decode_failed": "音频解码失败，文件可能已损坏。",
+            "src_not_supported": "音频格式不受支持，或文件已丢失。",
+            "microphone_failed": "无法访问麦克风，请检查权限或输入设备配置。",
+            "capture_failed": "无法开始音频采集，请检查权限和输入源设置。"
+        },
+        "config": {
+            "llm_missing": "请先在设置中配置 LLM 服务。",
+            "offline_model_missing": "请先在设置中配置离线模型。"
+        },
+        "batch": {
+            "unsupported_format": "不支持的文件格式。请使用：{{formats}}",
+            "file_picker_failed": "无法打开文件选择器。"
+        },
+        "history": {
+            "missing_files_deleted": "音频和转录文件都不存在，记录将被删除。",
+            "load_failed": "加载历史记录失败。"
+        },
+        "model": {
+            "download_failed": "模型下载失败。",
+            "load_failed": "加载模型失败：{{name}}",
+            "delete_failed": "删除模型失败：{{name}}"
+        },
+        "export": {
+            "failed": "导出转录失败。"
+        },
+        "translation": {
+            "failed": "翻译失败。"
+        },
+        "polish": {
+            "failed": "润色失败。",
+            "retranscribe_failed": "重新转录失败。"
+        },
+        "update": {
+            "failed": "更新失败。"
+        },
+        "runtime": {
+            "unexpected": "程序遇到未处理错误，请重试；如果问题持续出现，请重启应用。"
+        }
     },
     "header": {
         "settings": "设置"

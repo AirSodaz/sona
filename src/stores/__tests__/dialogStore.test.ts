@@ -58,4 +58,24 @@ describe('dialogStore', () => {
         const result = await promise;
         expect(result).toBe(false);
     });
+
+    it('should open a standardized error dialog with details', async () => {
+        const { showError, close } = useDialogStore.getState();
+
+        const promise = showError({
+            code: 'translation.failed',
+            messageKey: 'errors.translation.failed',
+            cause: new Error('timeout'),
+        });
+
+        expect(useDialogStore.getState().isOpen).toBe(true);
+        expect(useDialogStore.getState().options?.title).toBeTruthy();
+        expect(useDialogStore.getState().options?.variant).toBe('error');
+        expect(useDialogStore.getState().options?.details).toBe('timeout');
+
+        close(true);
+
+        await promise;
+        expect(useDialogStore.getState().isOpen).toBe(false);
+    });
 });

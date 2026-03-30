@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import i18n from '../i18n';
+import { logger } from '../utils/logger';
+import { AppErrorInput, buildErrorDialogOptions, normalizeError } from '../utils/errorUtils';
 
 /** Supported dialog types. */
 export type DialogType = 'alert' | 'confirm';
@@ -12,6 +15,8 @@ export interface DialogOptions {
     title?: string;
     /** The content message. */
     message: string;
+    /** Optional detail text rendered below the main message. */
+    details?: string;
     /** The type of dialog (alert or confirm). */
     type?: DialogType;
     /** The visual style variant. */
@@ -40,6 +45,14 @@ interface DialogState {
      * @return A promise that resolves when the alert is closed.
      */
     alert: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<void>;
+
+    /**
+     * Shows a standardized error dialog.
+     *
+     * @param input Error metadata for localization, normalization, and logging.
+     * @return A promise that resolves when the dialog is closed.
+     */
+    showError: (input: AppErrorInput) => Promise<void>;
 
     /**
      * Shows a confirmation dialog.
@@ -78,6 +91,22 @@ export const useDialogStore = create<DialogState>((set, get) => ({
                 },
                 resolveRef: () => resolve(),
             });
+        });
+    },
+
+    showError: async (input) => {
+        const normalized = input.cause === undefined ? undefined : normalizeError(input.cause);
+        const { title, message, details } = buildErrorDialogOptions(i18n.t.bind(i18n), input);
+
+        void logger.error(`[DialogError:${input.code}] ${message}`, {
+            input,
+            normalized,
+        });
+
+        return get().alert(message, {
+            title,
+            details,
+            variant: 'error',
         });
     },
 

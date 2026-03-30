@@ -22,7 +22,8 @@ interface ExportButtonProps {
  */
 export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
+    const alert = useDialogStore((state) => state.alert);
+    const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const [isExporting, setIsExporting] = useState(false);
@@ -156,8 +157,11 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
                 defaultFileName: `transcript_${new Date().toISOString().slice(0, 10)}`,
             });
         } catch (error) {
-            console.error('Export failed:', error);
-            await alert(t('export.failed'), {variant: 'error'});
+            await showError({
+                code: 'export.failed',
+                messageKey: 'errors.export.failed',
+                cause: error,
+            });
         } finally {
             setIsExporting(false);
         }

@@ -6,11 +6,12 @@ import { Download, X } from 'lucide-react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { buildErrorDialogOptions } from '../utils/errorUtils';
 
 export function UpdateNotification(): React.JSX.Element | null {
     const { t } = useTranslation();
     const config = useTranscriptStore((state) => state.config);
-    const { confirm } = useDialogStore();
+    const confirm = useDialogStore((state) => state.confirm);
     const [updateAvailable, setUpdateAvailable] = useState<any>(null);
     const [isInstalling, setIsInstalling] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -50,9 +51,14 @@ export function UpdateNotification(): React.JSX.Element | null {
         } catch (err: any) {
             console.error('Update failed:', err);
             setIsInstalling(false);
-            const message = err.message || 'Update failed';
+            const { title, message, details } = buildErrorDialogOptions(t, {
+                code: 'update.failed',
+                messageKey: 'errors.update.failed',
+                cause: err,
+            });
             const shouldDownload = await confirm(message, {
-                title: t('common.error', { defaultValue: 'Error' }),
+                title,
+                details,
                 variant: 'error',
                 confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
                 cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })

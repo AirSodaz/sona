@@ -25,9 +25,9 @@ vi.mock('../../stores/transcriptStore', () => ({
 }));
 
 vi.mock('../../stores/dialogStore', () => ({
-    useDialogStore: () => ({
+    useDialogStore: (selector: any) => selector({
         confirm: vi.fn(),
-        alert: vi.fn()
+        showError: vi.fn()
     })
 }));
 

@@ -21,7 +21,7 @@ interface TranslateButtonProps {
  */
 export function TranslateButton({ className = '' }: TranslateButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const { alert } = useDialogStore();
+    const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -124,7 +124,11 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
         const llm = config.llm;
         if (!llm?.apiKey || !llm.baseUrl || !llm.model || !llm.provider) {
-            await alert(t('translation.error_config_missing', { defaultValue: 'Please configure LLM service in Settings before translating.' }), { variant: 'error' });
+            await showError({
+                code: 'config.llm_missing',
+                messageKey: 'errors.config.llm_missing',
+                showCause: false,
+            });
             return;
         }
 
@@ -133,8 +137,12 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
         try {
             await translationService.translateCurrentTranscript();
-        } catch (error: any) {
-            await alert(t('translation.error_failed', { defaultValue: 'Translation failed: ' }) + (error.message || 'Unknown error'), { variant: 'error' });
+        } catch (error) {
+            await showError({
+                code: 'translation.failed',
+                messageKey: 'errors.translation.failed',
+                cause: error,
+            });
         }
     };
 

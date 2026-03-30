@@ -25,7 +25,7 @@ export function HistoryView() {
     // Actions
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
     const confirm = useDialogStore((state) => state.confirm);
-    const alert = useDialogStore((state) => state.alert);
+    const showError = useDialogStore((state) => state.showError);
 
     // Local UI State
     const [searchQuery, setSearchQuery] = useState('');
@@ -93,7 +93,11 @@ export function HistoryView() {
             // Check if both are missing
             if (!segments && !url) {
                 console.warn('[History] Both transcript and audio are missing for item:', item.id);
-                await alert(t('history.error_missing_files_delete', { defaultValue: 'Both audio and transcript files are missing. This record will be deleted.' }), { variant: 'error' });
+                await showError({
+                    code: 'history.missing_files_deleted',
+                    messageKey: 'errors.history.missing_files_deleted',
+                    showCause: false,
+                });
                 await deleteItem(item.id);
                 return;
             }
@@ -114,8 +118,11 @@ export function HistoryView() {
             setAudioUrl(url);
 
         } catch (error) {
-            console.error('Failed to load item:', error);
-            await alert(t('history.error_load_failed', { defaultValue: 'Failed to load history item.' }), { variant: 'error' });
+            await showError({
+                code: 'history.load_failed',
+                messageKey: 'errors.history.load_failed',
+                cause: error,
+            });
         }
     };
 

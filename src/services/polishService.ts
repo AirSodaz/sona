@@ -4,6 +4,7 @@ import { TranscriptSegment } from '../types/transcript';
 import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
+import { normalizeError } from '../utils/errorUtils';
 
 class PolishService {
     /**
@@ -60,7 +61,7 @@ class PolishService {
                 }
             } catch (error) {
                 console.error('Failed to polish chunk:', error);
-                throw error; // Re-throw to let caller know
+                throw new Error(normalizeError(error).message);
             }
         }
     }
@@ -187,7 +188,7 @@ ${jsonStr}`;
             return parsed;
         } catch (e) {
             console.error("Failed to parse LLM polish response:", e, "\nRaw Response:", responseText);
-            throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : 'Unknown'}`);
+            throw new Error(`Failed to parse LLM response: ${normalizeError(e).message}`);
         }
     }
 }

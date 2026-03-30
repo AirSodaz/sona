@@ -106,6 +106,7 @@ export function GlobalDialog(): React.JSX.Element | null {
     const {
         title,
         message,
+        details,
         type = 'alert',
         variant = 'info',
         confirmLabel,
@@ -163,6 +164,39 @@ export function GlobalDialog(): React.JSX.Element | null {
                         >
                             {message}
                         </p>
+                        {details && (
+                            <div
+                                style={{
+                                    marginTop: 'var(--spacing-sm)',
+                                    paddingTop: 'var(--spacing-sm)',
+                                    borderTop: '1px solid var(--color-border)',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        color: 'var(--color-text-secondary)',
+                                        marginBottom: '4px',
+                                    }}
+                                >
+                                    {t('common.details', { defaultValue: 'Details' })}
+                                </div>
+                                <p
+                                    style={{
+                                        fontSize: '0.82rem',
+                                        color: 'var(--color-text-secondary)',
+                                        lineHeight: 1.5,
+                                        overflowWrap: 'anywhere',
+                                        wordBreak: 'break-word',
+                                        whiteSpace: 'pre-wrap',
+                                        margin: 0,
+                                    }}
+                                >
+                                    {details}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

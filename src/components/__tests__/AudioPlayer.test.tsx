@@ -12,8 +12,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../stores/dialogStore', () => ({
-    useDialogStore: () => ({
-        alert: vi.fn(),
+    useDialogStore: (selector: any) => selector({
+        showError: vi.fn(),
     }),
 }));
 

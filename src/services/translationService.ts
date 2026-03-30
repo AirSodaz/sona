@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
+import { normalizeError } from '../utils/errorUtils';
 
 class TranslationService {
     /**
@@ -37,12 +38,17 @@ class TranslationService {
                 const prompt = this.buildPrompt(chunk, config.translationLanguage || 'zh');
 
                 // Call LLM
-                const responseText = await invoke<string>('generate_llm_text', {
-                    request: {
-                        config: llm,
-                        input: prompt,
-                    }
-                });
+                let responseText: string;
+                try {
+                    responseText = await invoke<string>('generate_llm_text', {
+                        request: {
+                            config: llm,
+                            input: prompt,
+                        }
+                    });
+                } catch (error) {
+                    throw new Error(normalizeError(error).message);
+                }
 
                 // Parse JSON output
                 const translations = this.parseLlmResponse(responseText);
@@ -119,7 +125,7 @@ ${jsonStr}`;
             return parsed;
         } catch (e) {
             console.error("Failed to parse LLM translation response:", e, "\nRaw Response:", responseText);
-            throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : 'Unknown'}`);
+            throw new Error(`Failed to parse LLM response: ${normalizeError(e).message}`);
         }
     }
 

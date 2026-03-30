@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -38,8 +37,6 @@ export function getSupportedMimeType(): string {
 }
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
-    const { t } = useTranslation();
-
     // Store Access
     const config = useTranscriptStore((state) => state.config);
     const isRecording = useTranscriptStore((state) => state.isRecording);
@@ -47,7 +44,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
-    const alert = useDialogStore((state) => state.alert);
+    const showError = useDialogStore((state) => state.showError);
 
     // Refs
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -241,7 +238,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
                 if (!nativeSuccess) {
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                        throw new Error(t('live.mic_error') + ': Display media not supported');
+                        throw new Error('Display media not supported');
                     }
 
                     stream = await navigator.mediaDevices.getDisplayMedia({
@@ -334,14 +331,16 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return true;
 
         } catch (error) {
-            console.error('Failed to start capture:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            await alert(`${t('live.mic_error')} (${errorMessage})`, { variant: 'error' });
+            await showError({
+                code: inputSource === 'microphone' ? 'audio.microphone_failed' : 'audio.capture_failed',
+                messageKey: inputSource === 'microphone' ? 'errors.audio.microphone_failed' : 'errors.audio.capture_failed',
+                cause: error,
+            });
             return false;
         } finally {
             setIsInitializing(false);
         }
-    }, [config, inputSource, t, alert, startFileRecording, initializeNativeSession, initializeAudioSession]); // Added deps
+    }, [config, inputSource, showError, startFileRecording, initializeNativeSession, initializeAudioSession]); // Added deps
 
 
     // Stop Recording
