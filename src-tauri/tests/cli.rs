@@ -3,7 +3,9 @@ use std::process::Command;
 use tempfile::tempdir;
 
 fn cli_command() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_sona-cli"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_tauri-appsona"));
+    command.env("SONA_FORCE_CLI", "1");
+    command
 }
 
 #[test]
@@ -12,10 +14,38 @@ fn help_is_printed_to_stdout() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sona-cli"));
+    assert!(stdout.contains("sona"));
     assert!(stdout.contains("transcribe"));
     assert!(stdout.contains("models"));
-    assert!(stdout.contains("sona-cli models list --type whisper --language zh"));
+    assert!(stdout.contains("sona models list --type whisper --language zh"));
+}
+
+#[test]
+fn version_is_printed_to_stdout() {
+    let output = cli_command().arg("--version").output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("sona 0.5.0"));
+}
+
+#[test]
+fn short_help_is_printed_to_stdout() {
+    let output = cli_command().arg("-h").output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("sona"));
+    assert!(stdout.contains("transcribe"));
+}
+
+#[test]
+fn short_version_is_printed_to_stdout() {
+    let output = cli_command().arg("-V").output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("sona 0.5.0"));
 }
 
 #[test]
@@ -49,7 +79,7 @@ fn models_list_help_mentions_new_filters() {
     assert!(stdout.contains("--type"));
     assert!(stdout.contains("--language"));
     assert!(stdout.contains("--installed"));
-    assert!(stdout.contains("sona-cli models list --mode offline --type whisper"));
+    assert!(stdout.contains("sona models list --mode offline --type whisper"));
 }
 
 #[test]

@@ -99,9 +99,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build -- ${{ matrix.args }}
 
-      - name: Verify bundled CLI assets
-        run: npm run verify:cli-bundle -- ${{ matrix.args }}
-
       # 3. Handle macOS architecture renaming (Solve 422 Already Exists)
       - name: Rename macOS assets for architecture
         if: matrix.platform == 'macos-latest'

@@ -34,12 +34,8 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": {
-      "binaries/cli-runtime/": ""
-    },
     "externalBin": [
-      "binaries/ffmpeg",
-      "binaries/sona-cli"
+      "binaries/ffmpeg"
     ],
     "targets": [
       "app",

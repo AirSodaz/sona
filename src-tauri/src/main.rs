@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::process::ExitCode;
+
 #[cfg(target_os = "windows")]
 fn fix_console() {
     unsafe {
@@ -25,12 +27,26 @@ fn fix_console() {
     }
 }
 
-/// Entry point for the Tauri application.
-///
-/// Delegates execution to the `run` function in the library crate.
-fn main() {
+#[tokio::main]
+async fn main() -> ExitCode {
+    let args: Vec<_> = std::env::args_os().collect();
+
+    if tauri_appsona_lib::cli::should_run_cli(args.get(1..).unwrap_or(&[])) {
+        #[cfg(target_os = "windows")]
+        fix_console();
+
+        return match tauri_appsona_lib::cli::run_cli_from_args(args).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
     #[cfg(target_os = "windows")]
     fix_console();
 
-    tauri_appsona_lib::run()
+    tauri_appsona_lib::run();
+    ExitCode::SUCCESS
 }

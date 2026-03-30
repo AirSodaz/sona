@@ -33,8 +33,8 @@ Key product modes:
 - `cargo test --manifest-path src-tauri/Cargo.toml test_name` — run a specific Rust test
 
 ### CLI and packaging helpers
-- `cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` — run the offline CLI from source
-- `npm run verify:cli-bundle` — verify the packaged CLI bundle
+- `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` — run the offline CLI from source
+- `npm run verify:cli-bundle` — verify the packaged app bundle artifacts
 
 ### Notes
 - There is currently no verified `lint` script in the root `package.json`.

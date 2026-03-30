@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -6,7 +5,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
-const runtimeDir = path.resolve(repoRoot, 'src-tauri', 'binaries', 'cli-runtime');
 const tauriBinary = path.resolve(
   repoRoot,
   'node_modules',
@@ -16,8 +14,6 @@ const tauriBinary = path.resolve(
 
 const args = process.argv.slice(2);
 const command = args[0];
-
-fs.mkdirSync(runtimeDir, { recursive: true });
 
 if (command === 'build' || command === 'bundle') {
   const setupFfmpegResult = spawnSync(
@@ -31,19 +27,6 @@ if (command === 'build' || command === 'bundle') {
 
   if (setupFfmpegResult.status !== 0) {
     process.exit(setupFfmpegResult.status ?? 1);
-  }
-
-  const prepareResult = spawnSync(
-    process.execPath,
-    [path.resolve(__dirname, 'prepare-cli-sidecar.js'), ...args],
-    {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    }
-  );
-
-  if (prepareResult.status !== 0) {
-    process.exit(prepareResult.status ?? 1);
   }
 }
 

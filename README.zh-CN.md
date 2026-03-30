@@ -26,19 +26,19 @@
 
 ### CLI
 
-Sona 现在也会随桌面版安装包一起提供一个离线批量转写 CLI。GitHub Release 中的安装器和应用包都会包含 `sona-cli`，但默认不会帮您写入系统 `PATH`。
+Sona 现在通过桌面主程序直接提供离线批量转写命令。安装包里的 CLI 子命令由主程序二进制承载，但默认不会帮您写入系统 `PATH`。
 
 安装包内的常见位置：
 
-- Windows：在 `Sona.exe` 同级目录直接运行 `sona-cli.exe`
-- macOS：运行 `/Applications/Sona.app/Contents/Resources/sona-cli`
-- Linux：从 Tauri 资源目录运行，通常是 `/usr/lib/Sona/sona-cli`
-- AppImage：从挂载后的 AppImage 资源目录运行，通常是 `${APPDIR}/usr/lib/Sona/sona-cli`
+- Windows：在安装目录运行 `Sona.exe transcribe ...`
+- macOS：运行 `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
+- Linux：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
+- AppImage：运行挂载后的 AppImage 可执行文件并附带 CLI 子命令
 
 如果您是从源码构建，也仍然可以直接通过 Cargo 运行 CLI：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
+cargo run --manifest-path src-tauri/Cargo.toml -- \
   transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt
 ```
 
@@ -46,7 +46,7 @@ cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- \
 
 - 单文件离线转写
 - 导出到 `json`、`txt`、`srt`、`vtt`
-- 会随桌面应用一起打包，但不会注册到 `PATH`
+- 通过桌面主程序提供，但不会注册到 `PATH`
 
 完整 CLI 说明和最小 TOML 示例请查看 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
 

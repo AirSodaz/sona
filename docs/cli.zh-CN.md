@@ -1,6 +1,6 @@
 # Sona CLI
 
-`sona-cli` 是 Sona 提供的离线批量转写命令行入口。Release 安装包和应用包会直接包含它，同时源码构建场景也仍然可以通过 Cargo 运行。
+`sona` 现在通过桌面主程序直接提供离线批量转写命令。安装包里的 CLI 子命令由主程序二进制承载，源码构建场景也可以通过 Cargo 运行同一套命令。
 
 当前 CLI 已覆盖两类核心工作流：
 
@@ -11,49 +11,48 @@
 
 ## 当前范围
 
-- 已随桌面版安装器和应用包一起提供
-- 在 `src-tauri/` 目录内已支持：`cargo run --bin sona-cli -- ...`
-- 在 `src-tauri/` 目录内已支持：`cargo build --release --bin sona-cli`
+- 已通过桌面主程序随安装器和应用包一起提供
+- 源码运行方式已支持：`cargo run -- ...`
 - 暂不包含：系统 `PATH` 注册、实时录音、LLM 润色、LLM 翻译
 
 ## 安装包内的位置
 
-`sona-cli` 会随桌面应用一起打包，但默认不会注册进 `PATH`。
+CLI 通过已安装的应用主程序提供，但默认不会注册进 `PATH`。
 
-- Windows：在 `Sona.exe` 同级目录直接运行 `sona-cli.exe`
-- macOS：运行 `/Applications/Sona.app/Contents/Resources/sona-cli`
-- Linux 安装包：从 Tauri 资源目录运行，通常是 `/usr/lib/Sona/sona-cli`
-- AppImage：从挂载后的 AppImage 资源目录运行，通常是 `${APPDIR}/usr/lib/Sona/sona-cli`
+- Windows：在安装目录运行 `Sona.exe transcribe ...`
+- macOS：运行 `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
+- Linux 安装包：从安装位置运行 `Sona` 主程序并附带 CLI 子命令
+- AppImage：运行挂载后的 AppImage 可执行文件并附带 CLI 子命令
 
 ## 常见命令
 
 ### 转写文件
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \
+cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```
 
-如果不传 `--output`，`sona-cli` 会把 `json` 输出到 `stdout`。
+如果不传 `--output`，`sona` 会把 `json` 输出到 `stdout`。
 
 ### 列出模型
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list
+cargo run --manifest-path src-tauri/Cargo.toml -- models list
 ```
 
 常见筛选：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --mode offline --type whisper
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --language zh --installed
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --mode offline --type whisper
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --language zh --installed
 ```
 
 ### 下载模型
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download sherpa-onnx-whisper-turbo
+cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
 ```
 
 如果模型要求伴随模型，CLI 会自动一起下载：
@@ -64,7 +63,7 @@ cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download
 也可以显式指定模型目录：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download silero-vad --models-dir ./models
+cargo run --manifest-path src-tauri/Cargo.toml -- models download silero-vad --models-dir ./models
 ```
 
 ## 配置文件
@@ -120,7 +119,7 @@ format = "srt"
 ### `transcribe`
 
 ```text
-sona-cli transcribe <input>
+sona transcribe <input>
   --config <path>
   --output <path>
   --format <json|txt|srt|vtt>
@@ -141,7 +140,7 @@ sona-cli transcribe <input>
 ### `models list`
 
 ```text
-sona-cli models list
+sona models list
   --models-dir <path>
   --mode <streaming|offline>
   --type <type>
@@ -158,7 +157,7 @@ sona-cli models list
 ### `models download`
 
 ```text
-sona-cli models download <model_id>
+sona models download <model_id>
   --models-dir <path>
   --quiet
 ```
@@ -166,11 +165,14 @@ sona-cli models download <model_id>
 ## help 示例
 
 ```bash
-sona-cli --help
-sona-cli transcribe --help
-sona-cli models --help
-sona-cli models list --help
-sona-cli models download --help
+sona --help
+sona -h
+sona --version
+sona -V
+sona transcribe --help
+sona models --help
+sona models list --help
+sona models download --help
 ```
 
 ## 手工验收
@@ -178,7 +180,7 @@ sona-cli models download --help
 ### 验证模型列表
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --type whisper --language zh
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --type whisper --language zh
 ```
 
 预期结果：
@@ -189,7 +191,7 @@ cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --t
 ### 验证模型下载
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download sherpa-onnx-whisper-turbo
+cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
 ```
 
 预期结果：
@@ -200,10 +202,10 @@ cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download
 
 ### 验证转写
 
-在本机已经安装桌面版模型的前提下，可以这样验证。只要 `models_dir` 指向桌面版模型目录，这个流程既适用于源码构建，也适用于安装包中的 CLI：
+在本机已经安装桌面版模型的前提下，可以这样验证。只要 `models_dir` 指向桌面版模型目录，这个流程既适用于源码构建，也适用于安装包中的主程序 CLI：
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \
+cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```

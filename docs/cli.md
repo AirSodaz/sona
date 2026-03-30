@@ -1,6 +1,6 @@
 # Sona CLI
 
-`sona-cli` is Sona's command line entry point for offline batch transcription. Release installers and app bundles include it, and source builds can still run it directly with Cargo.
+`sona` supports offline batch transcription commands directly from the main desktop executable. Packaged installs expose CLI subcommands through the app binary, and source builds can run the same commands with Cargo.
 
 The current CLI covers two core workflows:
 
@@ -11,49 +11,48 @@ The current CLI covers two core workflows:
 
 ## Current Scope
 
-- Included in desktop installers and app bundles
-- Supported inside `src-tauri/`: `cargo run --bin sona-cli -- ...`
-- Supported inside `src-tauri/`: `cargo build --release --bin sona-cli`
+- Included in desktop installers and app bundles through the main executable
+- Supported from source with `cargo run -- ...`
 - Not included yet: shell `PATH` registration, live recording, LLM polish, LLM translate
 
 ## Installed Locations
 
-`sona-cli` is packaged with the desktop app, but it is not registered on `PATH`.
+The CLI is available through the packaged app binary, but it is not registered on `PATH`.
 
-- Windows: run `sona-cli.exe` from the same installation directory as `Sona.exe`
-- macOS: run `/Applications/Sona.app/Contents/Resources/sona-cli`
-- Linux packages: run `sona-cli` from the Tauri resource directory, typically `/usr/lib/Sona/sona-cli`
-- AppImage: run `sona-cli` from the mounted AppImage resource directory, typically `${APPDIR}/usr/lib/Sona/sona-cli`
+- Windows: run `Sona.exe transcribe ...` from the same installation directory
+- macOS: run `/Applications/Sona.app/Contents/MacOS/Sona transcribe ...`
+- Linux packages: run the packaged `Sona` binary with CLI subcommands from the install location
+- AppImage: run the mounted AppImage executable with CLI subcommands
 
 ## Common Commands
 
 ### Transcribe a file
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \
+cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```
 
-Without `--output`, `sona-cli` writes JSON to `stdout`.
+Without `--output`, `sona` writes JSON to `stdout`.
 
 ### List models
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list
+cargo run --manifest-path src-tauri/Cargo.toml -- models list
 ```
 
 Common filters:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --mode offline --type whisper
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --language zh --installed
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --mode offline --type whisper
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --language zh --installed
 ```
 
 ### Download a model
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download sherpa-onnx-whisper-turbo
+cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
 ```
 
 If the preset requires companion models, the CLI downloads them automatically:
@@ -64,7 +63,7 @@ If the preset requires companion models, the CLI downloads them automatically:
 You can also override the models directory explicitly:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download silero-vad --models-dir ./models
+cargo run --manifest-path src-tauri/Cargo.toml -- models download silero-vad --models-dir ./models
 ```
 
 ## Config File
@@ -120,7 +119,7 @@ For `transcribe`:
 ### `transcribe`
 
 ```text
-sona-cli transcribe <input>
+sona transcribe <input>
   --config <path>
   --output <path>
   --format <json|txt|srt|vtt>
@@ -141,7 +140,7 @@ sona-cli transcribe <input>
 ### `models list`
 
 ```text
-sona-cli models list
+sona models list
   --models-dir <path>
   --mode <streaming|offline>
   --type <type>
@@ -158,7 +157,7 @@ Notes:
 ### `models download`
 
 ```text
-sona-cli models download <model_id>
+sona models download <model_id>
   --models-dir <path>
   --quiet
 ```
@@ -166,11 +165,11 @@ sona-cli models download <model_id>
 ## Help Commands
 
 ```bash
-sona-cli --help
-sona-cli transcribe --help
-sona-cli models --help
-sona-cli models list --help
-sona-cli models download --help
+sona --help
+sona transcribe --help
+sona models --help
+sona models list --help
+sona models download --help
 ```
 
 ## Manual Verification
@@ -178,7 +177,7 @@ sona-cli models download --help
 ### Verify model listing
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models list --type whisper --language zh
+cargo run --manifest-path src-tauri/Cargo.toml -- models list --type whisper --language zh
 ```
 
 Expected result:
@@ -189,7 +188,7 @@ Expected result:
 ### Verify model download
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- models download sherpa-onnx-whisper-turbo
+cargo run --manifest-path src-tauri/Cargo.toml -- models download sherpa-onnx-whisper-turbo
 ```
 
 Expected result:
@@ -203,7 +202,7 @@ Expected result:
 With locally installed desktop models, verify the CLI manually. This works for both source builds and packaged installs as long as `models_dir` points at the desktop model directory:
 
 ```bash
-cargo run --manifest-path src-tauri/Cargo.toml --bin sona-cli -- transcribe ./sample.mp4 \
+cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 \
   --config ./sona-cli.toml \
   --output ./sample.srt
 ```
