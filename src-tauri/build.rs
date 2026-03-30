@@ -20,6 +20,7 @@ fn main() {
 
             let required_files = [
                 "sherpa-onnx-c-api.lib",
+                "onnxruntime.lib",
                 "sherpa-onnx-c-api.dll",
                 "onnxruntime.dll",
             ];

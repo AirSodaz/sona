@@ -237,6 +237,7 @@ function validateBuildEnvironment(target, platform, profile) {
 
   const requiredFiles = [
     'sherpa-onnx-c-api.lib',
+    'onnxruntime.lib',
     'sherpa-onnx-c-api.dll',
     'onnxruntime.dll',
   ];

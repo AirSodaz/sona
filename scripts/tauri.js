@@ -20,6 +20,19 @@ const command = args[0];
 fs.mkdirSync(runtimeDir, { recursive: true });
 
 if (command === 'build' || command === 'bundle') {
+  const setupFfmpegResult = spawnSync(
+    process.execPath,
+    [path.resolve(__dirname, 'setup-ffmpeg.js')],
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    }
+  );
+
+  if (setupFfmpegResult.status !== 0) {
+    process.exit(setupFfmpegResult.status ?? 1);
+  }
+
   const prepareResult = spawnSync(
     process.execPath,
     [path.resolve(__dirname, 'prepare-cli-sidecar.js'), ...args],

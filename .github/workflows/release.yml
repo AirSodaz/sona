@@ -89,27 +89,6 @@ jobs:
           $libDir = Join-Path $env:GITHUB_WORKSPACE 'sherpa-onnx-v1.12.34-win-arm64-shared-MT-Release\lib'
           "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
 
-      - name: Validate sherpa-onnx Windows libraries
-        if: startsWith(matrix.platform, 'windows')
-        shell: pwsh
-        run: |
-          Write-Host "SHERPA_ONNX_LIB_DIR=$env:SHERPA_ONNX_LIB_DIR"
-          if (-not $env:SHERPA_ONNX_LIB_DIR) {
-            throw 'SHERPA_ONNX_LIB_DIR was not exported to the workflow environment.'
-          }
-
-          if (-not (Test-Path $env:SHERPA_ONNX_LIB_DIR -PathType Container)) {
-            throw "SHERPA_ONNX_LIB_DIR does not exist: $env:SHERPA_ONNX_LIB_DIR"
-          }
-
-          $requiredFiles = @('sherpa-onnx-c-api.lib', 'sherpa-onnx-c-api.dll', 'onnxruntime.dll')
-          foreach ($file in $requiredFiles) {
-            $filePath = Join-Path $env:SHERPA_ONNX_LIB_DIR $file
-            if (-not (Test-Path $filePath -PathType Leaf)) {
-              throw "Missing required sherpa-onnx file: $filePath"
-            }
-          }
-
       - name: Configure RUSTFLAGS
         if: startsWith(matrix.platform, 'ubuntu') || startsWith(matrix.platform, 'macos')
         run: echo "RUSTFLAGS=-C link-arg=-Wl,-rpath,$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
