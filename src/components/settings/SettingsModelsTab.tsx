@@ -109,16 +109,15 @@ export function SettingsModelsTab({
                 return;
             }
 
-            for (const model of PRESET_MODELS) {
-                if (model.modes?.includes('streaming')) {
-                    const path = await modelService.getModelPath(model.id);
-                    if (path === streamingModelPath) {
-                        setSelectedStreamingModelId(model.id);
-                        return;
-                    }
-                }
+            const streamingModels = PRESET_MODELS.filter(m => m.modes?.includes('streaming'));
+            const paths = await Promise.all(streamingModels.map(m => modelService.getModelPath(m.id)));
+
+            const index = paths.findIndex(path => path === streamingModelPath);
+            if (index !== -1) {
+                setSelectedStreamingModelId(streamingModels[index].id);
+            } else {
+                setSelectedStreamingModelId('');
             }
-            setSelectedStreamingModelId('');
         };
         findModel();
     }, [streamingModelPath]);
@@ -131,16 +130,15 @@ export function SettingsModelsTab({
                 return;
             }
 
-            for (const model of PRESET_MODELS) {
-                if (model.modes?.includes('offline')) {
-                    const path = await modelService.getModelPath(model.id);
-                    if (path === offlineModelPath) {
-                        setSelectedOfflineModelId(model.id);
-                        return;
-                    }
-                }
+            const offlineModels = PRESET_MODELS.filter(m => m.modes?.includes('offline'));
+            const paths = await Promise.all(offlineModels.map(m => modelService.getModelPath(m.id)));
+
+            const index = paths.findIndex(path => path === offlineModelPath);
+            if (index !== -1) {
+                setSelectedOfflineModelId(offlineModels[index].id);
+            } else {
+                setSelectedOfflineModelId('');
             }
-            setSelectedOfflineModelId('');
         };
         findModel();
     }, [offlineModelPath]);
