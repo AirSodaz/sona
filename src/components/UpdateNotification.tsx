@@ -4,14 +4,14 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { useTranslation } from 'react-i18next';
 import { Download, X } from 'lucide-react';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { useDialogStore } from '../stores/dialogStore';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { buildErrorDialogOptions } from '../utils/errorUtils';
+import { buildErrorDialogViewModel } from '../utils/errorUtils';
 
 export function UpdateNotification(): React.JSX.Element | null {
     const { t } = useTranslation();
     const config = useTranscriptStore((state) => state.config);
-    const confirm = useDialogStore((state) => state.confirm);
+    const showError = useErrorDialogStore((state) => state.showError);
     const [updateAvailable, setUpdateAvailable] = useState<any>(null);
     const [isInstalling, setIsInstalling] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -51,20 +51,14 @@ export function UpdateNotification(): React.JSX.Element | null {
         } catch (err: any) {
             console.error('Update failed:', err);
             setIsInstalling(false);
-            const { title, message, details } = buildErrorDialogOptions(t, {
+            const result = await showError(buildErrorDialogViewModel(t, {
                 code: 'update.failed',
                 messageKey: 'errors.update.failed',
                 cause: err,
-            });
-            const shouldDownload = await confirm(message, {
-                title,
-                details,
-                variant: 'error',
-                confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
-                cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
-            });
+                primaryActionLabelKey: 'settings.update_download_manually',
+            }));
 
-            if (shouldDownload) {
+            if (result === 'primary') {
                 try {
                     await openUrl('https://github.com/AirSodaz/sona/releases/latest');
                 } catch (openErr) {

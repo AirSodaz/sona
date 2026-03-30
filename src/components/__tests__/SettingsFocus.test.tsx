@@ -8,6 +8,10 @@ vi.mock('react-i18next', () => ({
         t: (key: string) => key,
         i18n: { changeLanguage: vi.fn() },
     }),
+    initReactI18next: {
+        type: '3rdParty',
+        init: () => undefined,
+    },
 }));
 
 const setActiveTabMock = vi.fn();

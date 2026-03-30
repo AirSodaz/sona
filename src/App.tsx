@@ -13,6 +13,7 @@ import { LiveRecord } from './components/LiveRecord';
 import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
+import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
 import { UpdateNotification } from './components/UpdateNotification';
@@ -135,6 +136,7 @@ function App(): React.JSX.Element {
       {/* Settings Modal */}
       <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />
       <GlobalDialog />
+      <ErrorDialog />
       <FirstRunGuide />
       <UpdateNotification />
     </div>

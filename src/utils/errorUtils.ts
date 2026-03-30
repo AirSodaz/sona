@@ -10,6 +10,17 @@ export interface AppErrorInput {
   cause?: unknown;
   showCause?: boolean;
   titleKey?: string;
+  primaryActionLabelKey?: string;
+  cancelLabelKey?: string;
+}
+
+export interface ErrorDialogViewModel {
+  title: string;
+  message: string;
+  details?: string;
+  primaryLabel: string;
+  cancelLabel?: string;
+  hasPrimaryAction: boolean;
 }
 
 interface BuiltErrorDialogOptions {
@@ -67,6 +78,24 @@ export function buildErrorDialogOptions(t: TranslateFn, input: AppErrorInput): B
     title,
     message,
     details: details && details !== message ? details : undefined,
+  };
+}
+
+export function buildErrorDialogViewModel(t: TranslateFn, input: AppErrorInput): ErrorDialogViewModel {
+  const { title, message, details } = buildErrorDialogOptions(t, input);
+  const hasPrimaryAction = Boolean(input.primaryActionLabelKey);
+
+  return {
+    title,
+    message,
+    details,
+    primaryLabel: hasPrimaryAction
+      ? t(input.primaryActionLabelKey!, { defaultValue: 'Continue' })
+      : t('common.ok', { defaultValue: 'OK' }),
+    cancelLabel: hasPrimaryAction
+      ? t(input.cancelLabelKey ?? 'common.cancel', { defaultValue: 'Cancel' })
+      : undefined,
+    hasPrimaryAction,
   };
 }
 

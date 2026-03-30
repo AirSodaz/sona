@@ -42,6 +42,10 @@ vi.mock('react-virtuoso', async () => {
 // Mock i18n
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (key: string) => key }),
+    initReactI18next: {
+        type: '3rdParty',
+        init: () => undefined,
+    },
 }));
 
 // Mock dialog

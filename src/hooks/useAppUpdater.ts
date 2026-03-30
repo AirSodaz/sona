@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
-import { useDialogStore } from '../stores/dialogStore';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useTranslation } from 'react-i18next';
-import { buildErrorDialogOptions } from '../utils/errorUtils';
+import { buildErrorDialogViewModel } from '../utils/errorUtils';
 
 export type UpdateStatus =
     | 'idle'
@@ -29,24 +29,18 @@ export function useAppUpdater(): UseAppUpdaterReturn {
     const [error, setError] = useState<string | null>(null);
     const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
     const [progress, setProgress] = useState<number>(0);
-    const confirm = useDialogStore((state) => state.confirm);
+    const showError = useErrorDialogStore((state) => state.showError);
     const { t } = useTranslation();
 
     const showErrorPopup = async (err: unknown) => {
-        const { title, message, details } = buildErrorDialogOptions(t, {
+        const result = await showError(buildErrorDialogViewModel(t, {
             code: 'update.failed',
             messageKey: 'errors.update.failed',
             cause: err,
-        });
-        const shouldDownload = await confirm(message, {
-            title,
-            details,
-            variant: 'error',
-            confirmLabel: t('settings.update_download_manually', { defaultValue: 'Download Manually' }),
-            cancelLabel: t('common.cancel', { defaultValue: 'Cancel' })
-        });
+            primaryActionLabelKey: 'settings.update_download_manually',
+        }));
 
-        if (shouldDownload) {
+        if (result === 'primary') {
             try {
                 await openUrl('https://github.com/AirSodaz/sona/releases/latest');
             } catch (openErr) {
@@ -82,7 +76,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
                 setStatus('error');
             }
         }
-    }, [confirm, t]);
+    }, [showError, t]);
 
     const installUpdate = useCallback(async () => {
         if (!updateInfo) return;
@@ -117,7 +111,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
             setStatus('idle');
             await showErrorPopup(err);
         }
-    }, [updateInfo, confirm, t]);
+    }, [updateInfo, showError, t]);
 
     return {
         status,

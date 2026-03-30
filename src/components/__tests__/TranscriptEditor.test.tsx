@@ -36,6 +36,10 @@ vi.mock('react-i18next', () => ({
     useTranslation: () => ({
         t,
     }),
+    initReactI18next: {
+        type: '3rdParty',
+        init: () => undefined,
+    },
 }));
 
 // Mock dialog

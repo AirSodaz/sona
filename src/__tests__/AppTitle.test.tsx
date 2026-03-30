@@ -16,6 +16,7 @@ vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</
 vi.mock('../components/HistoryView', () => ({ HistoryView: () => <div>HistoryView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
+vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
 vi.mock('../components/Icons', () => ({ SettingsIcon: () => <span>SettingsIcon</span>, WaveformIcon: () => <span>WaveformIcon</span> }));
@@ -35,7 +36,11 @@ vi.mock('../stores/transcriptStore', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key
-  })
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 describe('App Title Logic', () => {
