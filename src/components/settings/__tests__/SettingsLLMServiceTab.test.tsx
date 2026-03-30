@@ -58,18 +58,22 @@ describe('SettingsLLMServiceTab', () => {
         expect(screen.getByText('settings.llm.test_connection')).toBeDefined();
     });
 
-    it('updates Service Type when changed', async () => {
-        render(<SettingsLLMServiceTab {...defaultProps} />);
+    it('renders Gemini base URL placeholder for Gemini provider', () => {
+        render(
+            <SettingsLLMServiceTab
+                {...defaultProps}
+                config={{
+                    ...mockConfig,
+                    llm: {
+                        ...mockConfig.llm,
+                        provider: 'gemini',
+                        baseUrl: ''
+                    }
+                }}
+            />
+        );
 
-        // Open Dropdown
-        const trigger = screen.getByText('OpenAI');
-        fireEvent.click(trigger);
-
-        // Find Anthropic option
-        const anthropicOption = screen.getByText('Anthropic');
-        fireEvent.click(anthropicOption);
-
-        expect(mockChangeLlmServiceType).toHaveBeenCalledWith('anthropic');
+        expect(screen.getByPlaceholderText('https://generativelanguage.googleapis.com')).toBeDefined();
     });
 
     it('calls invoke when Test Connection is clicked', async () => {

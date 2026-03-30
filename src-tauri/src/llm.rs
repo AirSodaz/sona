@@ -74,7 +74,15 @@ struct GeminiModelsResponse {
 
 fn clean_gemini_base_url(base_url: &str) -> &str {
     let base = base_url.trim_end_matches('/');
-    let suffixes = ["/v1beta/models", "/models", "/v1beta", "/v1"];
+    let suffixes = [
+        "/v1beta/models",
+        "/v1/models",
+        "/v1beta/openai",
+        "/v1/openai",
+        "/models",
+        "/v1beta",
+        "/v1",
+    ];
 
     for suffix in suffixes {
         if let Some(stripped) = base.strip_suffix(suffix) {
@@ -83,6 +91,12 @@ fn clean_gemini_base_url(base_url: &str) -> &str {
     }
 
     base
+}
+
+fn format_gemini_models_url(base_url: &str, api_key: &str) -> String {
+    let cleaned_base = clean_gemini_base_url(base_url);
+
+    format!("{}/v1beta/models?key={}", cleaned_base, api_key)
 }
 
 fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
@@ -100,9 +114,7 @@ fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
 }
 
 async fn get_gemini_models(client: &Client, api_key: &str, base_url: &str) -> Result<Vec<String>, String> {
-    let cleaned_base = clean_gemini_base_url(base_url);
-    let url = format!("{}/v1beta/models?key={}", cleaned_base, api_key);
-
+    let url = format_gemini_models_url(base_url, api_key);
     let res = client
         .get(&url)
         .header("Content-Type", "application/json")
@@ -368,6 +380,26 @@ mod tests {
         assert_eq!(
             clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/models"),
             "https://generativelanguage.googleapis.com"
+        );
+        assert_eq!(
+            clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/openai"),
+            "https://generativelanguage.googleapis.com"
+        );
+        assert_eq!(
+            clean_gemini_base_url("https://generativelanguage.googleapis.com/v1/openai/"),
+            "https://generativelanguage.googleapis.com"
+        );
+        assert_eq!(
+            clean_gemini_base_url("https://generativelanguage.googleapis.com"),
+            "https://generativelanguage.googleapis.com"
+        );
+    }
+
+    #[test]
+    fn gemini_models_url_accepts_common_inputs() {
+        assert_eq!(
+            format_gemini_models_url("https://generativelanguage.googleapis.com/v1beta/openai", "test-key"),
+            "https://generativelanguage.googleapis.com/v1beta/models?key=test-key"
         );
     }
 

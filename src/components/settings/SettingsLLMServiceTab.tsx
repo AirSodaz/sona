@@ -6,6 +6,17 @@ import { List, Loader2, Check, X } from 'lucide-react';
 import { AppConfig, LlmConfig, LlmProvider } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
 
+const DEFAULT_LLM_URLS: Record<LlmProvider, string> = {
+    open_ai: 'https://api.openai.com/v1',
+    anthropic: 'https://api.anthropic.com',
+    ollama: 'http://localhost:11434/v1',
+    gemini: 'https://generativelanguage.googleapis.com',
+    deep_seek: 'https://api.deepseek.com',
+    kimi: 'https://api.moonshot.cn/v1',
+    silicon_flow: 'https://api.siliconflow.cn/v1',
+    open_ai_compatible: ''
+};
+
 interface SettingsLLMServiceTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
@@ -31,6 +42,10 @@ const DEFAULT_LLM_CONFIG: LlmConfig = {
     temperature: 0.7
 };
 
+function getBaseUrlPlaceholder(provider: LlmProvider): string {
+    return DEFAULT_LLM_URLS[provider] || '';
+}
+
 export function SettingsLLMServiceTab({
     config,
     updateConfig,
@@ -51,6 +66,7 @@ export function SettingsLLMServiceTab({
     const llmApiKey = llm.apiKey || '';
     const llmModel = llm.model || '';
     const llmTemperature = llm.temperature ?? 0.7;
+    const baseUrlPlaceholder = getBaseUrlPlaceholder(llmServiceType);
 
     const handleServiceTypeChange = (type: string) => {
         changeLlmServiceType(type as LlmProvider);
@@ -161,7 +177,7 @@ export function SettingsLLMServiceTab({
                     className="settings-input"
                     value={llmBaseUrl}
                     onChange={(e) => updateLlmSetting('baseUrl', e.target.value)}
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={baseUrlPlaceholder}
                 />
             </div>
 

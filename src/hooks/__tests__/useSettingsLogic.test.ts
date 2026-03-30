@@ -68,13 +68,13 @@ describe('useSettingsLogic', () => {
     });
 
     it('should expose changeLlmServiceType for switching services', () => {
-        const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn()));
 
         expect(typeof result.current.changeLlmServiceType).toBe('function');
     });
 
     it('should update llm config directly', () => {
-        const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn()));
 
         const newUrl = 'https://custom.openai.com';
 
@@ -93,7 +93,7 @@ describe('useSettingsLogic', () => {
     });
 
     it('should replace llm config when switching provider', () => {
-        const { result } = renderHook(() => useSettingsLogic(true, vi.fn()));
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn()));
 
         act(() => {
             result.current.changeLlmServiceType('anthropic');
@@ -103,6 +103,23 @@ describe('useSettingsLogic', () => {
             llm: expect.objectContaining({
                 provider: 'anthropic',
                 baseUrl: 'https://api.anthropic.com',
+                apiKey: '',
+                model: ''
+            })
+        }));
+    });
+
+    it('should reset Gemini to the default base URL when switching provider', () => {
+        const { result } = renderHook(() => useSettingsLogic(false, vi.fn()));
+
+        act(() => {
+            result.current.changeLlmServiceType('gemini');
+        });
+
+        expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
+            llm: expect.objectContaining({
+                provider: 'gemini',
+                baseUrl: 'https://generativelanguage.googleapis.com',
                 apiKey: '',
                 model: ''
             })
