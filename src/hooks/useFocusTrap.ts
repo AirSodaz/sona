@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useDialogStore } from '../stores/dialogStore';
 
 /**
@@ -13,6 +13,12 @@ export function useFocusTrap(
     onClose: () => void,
     containerRef: React.RefObject<HTMLElement | null>
 ) {
+    const onCloseRef = useRef(onClose);
+
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
     useEffect(() => {
         if (isOpen) {
             const previousFocus = document.activeElement as HTMLElement;
@@ -25,7 +31,7 @@ export function useFocusTrap(
                 if (e.key === 'Escape') {
                     // Only close if no other dialog is open (GlobalDialog)
                     if (useDialogStore.getState().isOpen) return;
-                    onClose();
+                    onCloseRef.current();
                     return;
                 }
 
@@ -61,5 +67,5 @@ export function useFocusTrap(
                 previousFocus?.focus();
             };
         }
-    }, [isOpen, onClose, containerRef]);
+    }, [isOpen, containerRef]);
 }
