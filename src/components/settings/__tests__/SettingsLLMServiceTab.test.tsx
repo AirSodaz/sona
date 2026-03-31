@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 import * as tauriApi from '@tauri-apps/api/core';
-import { AppConfig, LlmConfig } from '../../../types/transcript';
+import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
+import { AppConfig, LlmProvider } from '../../../types/transcript';
+import { buildLlmConfigPatch, createLlmSettings, updateProviderSetting } from '../../../services/llmConfig';
 
-// Mock dependencies
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
         t: (key: string) => key,
@@ -15,90 +15,107 @@ vi.mock('@tauri-apps/api/core', () => ({
     invoke: vi.fn(),
 }));
 
-describe('SettingsLLMServiceTab', () => {
-    const mockUpdateConfig = vi.fn();
-    const mockChangeLlmServiceType = vi.fn();
-
-    const mockConfig: AppConfig = {
+function buildConfig(provider: LlmProvider = 'open_ai'): AppConfig {
+    const baseConfig: AppConfig = {
         streamingModelPath: '/path/to/model',
         offlineModelPath: '',
         language: 'auto',
         appLanguage: 'auto',
-        llm: {
-            provider: 'open_ai',
-            baseUrl: 'https://api.openai.com/v1',
-            apiKey: 'test-key',
-            model: 'gpt-4o',
-            temperature: 0.7
-        }
+        llmSettings: createLlmSettings(provider),
     };
 
-    const defaultProps = {
-        config: mockConfig,
-        updateConfig: mockUpdateConfig,
-        changeLlmServiceType: mockChangeLlmServiceType
-    };
-
-    const geminiConfig: LlmConfig = {
-        provider: 'gemini',
-        baseUrl: '',
-        apiKey: mockConfig.llm?.apiKey ?? '',
-        model: mockConfig.llm?.model ?? '',
-        temperature: mockConfig.llm?.temperature,
-    };
-
-    it('renders all fields with correct localization keys', () => {
-        render(<SettingsLLMServiceTab {...defaultProps} />);
-
-        expect(screen.getByText('settings.llm.service_type')).toBeDefined();
-        // Dropdown value (selected option label)
-        expect(screen.getByText('OpenAI')).toBeDefined();
-
-        expect(screen.getByText('settings.llm.base_url')).toBeDefined();
-        expect(screen.getByDisplayValue('https://api.openai.com/v1')).toBeDefined();
-
-        expect(screen.getByText('settings.llm.api_key')).toBeDefined();
-        expect(screen.getByDisplayValue('test-key')).toBeDefined();
-
-        expect(screen.getByText('settings.llm.model_name')).toBeDefined();
-        expect(screen.getByDisplayValue('gpt-4o')).toBeDefined();
-
-        expect(screen.getByText('settings.llm.test_connection')).toBeDefined();
+    const llmSettings = updateProviderSetting(baseConfig.llmSettings, provider, {
+        apiKey: 'test-key',
+        model: provider === 'azure_openai' ? 'deployment-1' : 'gpt-4o',
     });
 
-    it('renders Gemini base URL placeholder for Gemini provider', () => {
+    return {
+        ...baseConfig,
+        ...buildLlmConfigPatch(llmSettings),
+    };
+}
+
+describe('SettingsLLMServiceTab', () => {
+    const mockUpdateConfig = vi.fn();
+    const mockChangeLlmServiceType = vi.fn();
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(tauriApi.invoke).mockResolvedValue([]);
+    });
+
+    it('renders active provider fields from llmSettings', () => {
         render(
             <SettingsLLMServiceTab
-                {...defaultProps}
-                config={{
-                    ...mockConfig,
-                    llm: geminiConfig
-                }}
-            />
+                config={buildConfig()}
+                updateConfig={mockUpdateConfig}
+                changeLlmServiceType={mockChangeLlmServiceType}
+            />,
         );
 
-        expect(screen.getByPlaceholderText('https://generativelanguage.googleapis.com')).toBeDefined();
+        expect(screen.getByText('settings.llm.service_type')).toBeDefined();
+        expect(screen.getByText('OpenAI')).toBeDefined();
+        expect(screen.getByDisplayValue('https://api.openai.com')).toBeDefined();
+        expect(screen.getByDisplayValue('test-key')).toBeDefined();
+        expect(screen.getByDisplayValue('gpt-4o')).toBeDefined();
     });
 
-    it('calls invoke when Test Connection is clicked', async () => {
-        vi.mocked(tauriApi.invoke).mockResolvedValue('OK');
+    it('fills Gemini host with the Chatbox default host', () => {
+        render(
+            <SettingsLLMServiceTab
+                config={buildConfig('gemini')}
+                updateConfig={mockUpdateConfig}
+                changeLlmServiceType={mockChangeLlmServiceType}
+            />,
+        );
 
-        render(<SettingsLLMServiceTab {...defaultProps} />);
+        expect(screen.getByDisplayValue('https://generativelanguage.googleapis.com')).toBeDefined();
+    });
 
-        const testBtn = screen.getByText('settings.llm.test_connection');
-        fireEvent.click(testBtn);
+    it('renders Azure-specific labels and version field', () => {
+        render(
+            <SettingsLLMServiceTab
+                config={buildConfig('azure_openai')}
+                updateConfig={mockUpdateConfig}
+                changeLlmServiceType={mockChangeLlmServiceType}
+            />,
+        );
+
+        expect(screen.getByText('Endpoint')).toBeDefined();
+        expect(screen.getByText('Deployment Name')).toBeDefined();
+        expect(screen.getByText('settings.llm.api_version')).toBeDefined();
+        expect(screen.getByDisplayValue('2024-10-21')).toBeDefined();
+    });
+
+    it('calls invoke when test connection is clicked', async () => {
+        vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+            if (command === 'generate_llm_text') return 'OK';
+            return [];
+        });
+
+        render(
+            <SettingsLLMServiceTab
+                config={buildConfig()}
+                updateConfig={mockUpdateConfig}
+                changeLlmServiceType={mockChangeLlmServiceType}
+            />,
+        );
+
+        fireEvent.click(screen.getByText('settings.llm.test_connection'));
 
         expect(tauriApi.invoke).toHaveBeenCalledWith('generate_llm_text', {
             request: {
                 config: {
                     provider: 'open_ai',
-                    baseUrl: 'https://api.openai.com/v1',
+                    baseUrl: 'https://api.openai.com',
                     apiKey: 'test-key',
                     model: 'gpt-4o',
-                    temperature: 0.7
+                    apiPath: undefined,
+                    apiVersion: undefined,
+                    temperature: 0.7,
                 },
-                input: 'Hello, this is a connection test.'
-            }
+                input: 'Hello, this is a connection test.',
+            },
         });
 
         await waitFor(() => {
@@ -107,13 +124,23 @@ describe('SettingsLLMServiceTab', () => {
         });
     });
 
-    it('displays normalized error message when connection fails', async () => {
-        vi.mocked(tauriApi.invoke).mockRejectedValue('error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error');
+    it('surfaces normalized connection errors', async () => {
+        vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+            if (command === 'generate_llm_text') {
+                throw 'error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error';
+            }
+            return [];
+        });
 
-        render(<SettingsLLMServiceTab {...defaultProps} />);
+        render(
+            <SettingsLLMServiceTab
+                config={buildConfig()}
+                updateConfig={mockUpdateConfig}
+                changeLlmServiceType={mockChangeLlmServiceType}
+            />,
+        );
 
-        const testBtn = screen.getByText('settings.llm.test_connection');
-        fireEvent.click(testBtn);
+        fireEvent.click(screen.getByText('settings.llm.test_connection'));
 
         await waitFor(() => {
             expect(screen.getByText('settings.llm.connection_failed')).toBeDefined();

@@ -300,11 +300,17 @@
             "service_type": "LLM 服务类型",
             "base_url": "基础 URL",
             "api_key": "API 密钥",
+            "optional_api_key": "可选",
+            "api_version": "API 版本",
+            "api_path": "API 路径",
             "model_name": "模型名称",
             "test_connection": "测试连接",
             "testing": "测试中...",
             "connection_success": "连接成功！响应：",
             "connection_failed": "连接失败：",
+            "loading_models": "加载模型中...",
+            "type_manually": "手动输入...",
+            "back_to_list": "返回列表",
             "temperature": "温度"
         }
     },

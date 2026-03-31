@@ -35,13 +35,59 @@ export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 
 
 export type LlmProvider =
   | 'open_ai'
+  | 'open_ai_responses'
+  | 'azure_openai'
   | 'anthropic'
   | 'gemini'
   | 'ollama'
   | 'deep_seek'
   | 'kimi'
   | 'silicon_flow'
+  | 'qwen'
+  | 'qwen_portal'
+  | 'minimax_global'
+  | 'minimax_cn'
+  | 'openrouter'
+  | 'lm_studio'
+  | 'groq'
+  | 'x_ai'
+  | 'mistral_ai'
+  | 'perplexity'
+  | 'volcengine'
+  | 'chatglm'
   | 'open_ai_compatible';
+
+export type LlmProviderStrategy =
+  | 'openai_compatible'
+  | 'anthropic'
+  | 'gemini'
+  | 'ollama'
+  | 'azure_openai'
+  | 'openai_responses'
+  | 'openai_compatible_custom_path'
+  | 'perplexity';
+
+export interface LlmProviderSetting {
+  /** Provider API host or endpoint. */
+  apiHost: string;
+  /** Provider API key or token. */
+  apiKey: string;
+  /** Model name or deployment name. */
+  model: string;
+  /** Optional provider-specific API path override. */
+  apiPath?: string;
+  /** Optional provider-specific API version. */
+  apiVersion?: string;
+  /** Temperature (0.0 to 2.0). */
+  temperature?: number;
+}
+
+export interface LlmSettings {
+  /** Currently active provider. */
+  activeProvider: LlmProvider;
+  /** Per-provider saved settings. */
+  providers: Partial<Record<LlmProvider, LlmProviderSetting>>;
+}
 
 export interface LlmConfig {
   /** LLM provider kind. */
@@ -52,6 +98,10 @@ export interface LlmConfig {
   apiKey: string;
   /** LLM model name. */
   model: string;
+  /** Optional provider-specific path. */
+  apiPath?: string;
+  /** Optional provider-specific API version. */
+  apiVersion?: string;
   /** LLM temperature (0.0 to 2.0). */
   temperature?: number;
 }
@@ -112,6 +162,8 @@ export interface AppConfig {
   captionFontColor?: string;
   /** LLM configuration. */
   llm?: LlmConfig;
+  /** LLM provider settings keyed by provider. */
+  llmSettings?: LlmSettings;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */

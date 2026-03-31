@@ -5,7 +5,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
 import { LlmProvider } from '../types/transcript';
-import { getDefaultLlmConfig } from '../services/llmConfig';
+import { buildLlmConfigPatch, ensureLlmState, setActiveProvider } from '../services/llmConfig';
 
 /**
  * Custom hook managing the business logic for the Settings dialog.
@@ -110,9 +110,9 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     };
 
     const changeLlmServiceType = (provider: LlmProvider) => {
-        updateConfig({
-            llm: getDefaultLlmConfig(provider)
-        });
+        const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings, llm: config.llm } : ensureLlmState(config as typeof config & Record<string, any>);
+        const nextLlmSettings = setActiveProvider(currentLlmState.llmSettings, provider);
+        updateConfig(buildLlmConfigPatch(nextLlmSettings));
     };
 
     function handleCancelDownload(modelId: string) {

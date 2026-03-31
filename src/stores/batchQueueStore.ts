@@ -7,6 +7,7 @@ import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { modelService } from '../services/modelService';
 import { polishService } from '../services/polishService';
+import { getActiveLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 import { useTranscriptStore } from './transcriptStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { tempDir, join } from '@tauri-apps/api/path';
@@ -245,8 +246,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             const autoPolish = config.autoPolish ?? false;
             if (autoPolish && finalSegments.length > 0) {
                 // Check if LLM service is configured
-                const llm = config.llm;
-                if (llm?.apiKey && llm.baseUrl && llm.model && llm.provider) {
+                const llm = getActiveLlmConfig(config);
+                if (isLlmConfigComplete(llm)) {
                     try {
                         // Indicate polishing (keep at 99% or similar)
                         get().updateItemStatus(itemId, 'processing', 99);

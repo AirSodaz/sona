@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import i18n from '../i18n';
+import { ensureLlmState } from '../services/llmConfig';
 
 /**
  * Hook to handle application initialization.
@@ -23,7 +24,8 @@ export function useAppInitialization() {
             try {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
-                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language) {
+                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language || parsed.llmSettings || parsed.llm) {
+                    const { llmSettings, llm } = ensureLlmState(parsed);
                     const loadedConfig = {
                         streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
                         offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
@@ -50,25 +52,8 @@ export function useAppInitialization() {
                         captionWindowWidth: parsed.captionWindowWidth || 800,
                         captionFontSize: parsed.captionFontSize || 24,
                         captionFontColor: parsed.captionFontColor || '#ffffff',
-                        llm: parsed.llm || {
-                            provider: parsed.llmServiceType === 'anthropic'
-                                ? 'anthropic'
-                                : parsed.llmServiceType === 'gemini'
-                                    ? 'gemini'
-                                    : parsed.llmServiceType === 'ollama'
-                                        ? 'ollama'
-                                        : parsed.llmServiceType === 'deepseek'
-                                            ? 'deep_seek'
-                                            : parsed.llmServiceType === 'siliconflow'
-                                                ? 'silicon_flow'
-                                                : parsed.llmServiceType === 'kimi'
-                                                    ? 'kimi'
-                                                    : 'open_ai',
-                            baseUrl: parsed.llmBaseUrl || parsed.aiBaseUrl || '',
-                            apiKey: parsed.llmApiKey || parsed.aiApiKey || '',
-                            model: parsed.llmModel || parsed.aiModel || '',
-                            temperature: parsed.llmTemperature ?? parsed.aiTemperature ?? 0.7,
-                        },
+                        llmSettings,
+                        llm,
                         translationLanguage: parsed.translationLanguage || 'zh',
                         polishKeywords: parsed.polishKeywords || '',
                         polishContext: parsed.polishContext || '',
@@ -165,6 +150,7 @@ export function useAppInitialization() {
                 captionWindowWidth: config.captionWindowWidth,
                 captionFontSize: config.captionFontSize,
                 captionFontColor: config.captionFontColor,
+                llmSettings: config.llmSettings,
                 llm: config.llm,
                 translationLanguage: config.translationLanguage,
                 polishKeywords: config.polishKeywords,

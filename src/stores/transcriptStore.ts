@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
+import { createLlmSettings, DEFAULT_LLM_CONFIG } from '../services/llmConfig';
 
 /** State interface for the transcript store. */
 interface TranscriptState {
@@ -268,13 +269,8 @@ const DEFAULT_CONFIG: AppConfig = {
     captionWindowWidth: 800,
     captionFontSize: 24,
     captionFontColor: '#ffffff',
-    llm: {
-        provider: 'open_ai',
-        baseUrl: 'https://api.openai.com/v1',
-        apiKey: '',
-        model: '',
-        temperature: 0.7,
-    },
+    llmSettings: createLlmSettings(),
+    llm: DEFAULT_LLM_CONFIG,
     translationLanguage: 'zh',
     autoPolish: false,
     autoPolishFrequency: 5,

@@ -5,6 +5,7 @@ use rig::completion::CompletionModel;
 use rig::providers::{anthropic, deepseek, gemini, moonshot, ollama, openai};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
 const DEFAULT_SEGMENT_CHUNK_SIZE: usize = 30;
@@ -15,12 +16,27 @@ const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 #[serde(rename_all = "snake_case")]
 pub enum LlmProvider {
     OpenAi,
+    OpenAiResponses,
+    #[serde(rename = "azure_openai")]
+    AzureOpenAi,
     Anthropic,
     Gemini,
     Ollama,
     DeepSeek,
     Kimi,
     SiliconFlow,
+    Qwen,
+    QwenPortal,
+    MinimaxGlobal,
+    MinimaxCn,
+    OpenRouter,
+    LmStudio,
+    Groq,
+    XAi,
+    MistralAi,
+    Perplexity,
+    Volcengine,
+    Chatglm,
     OpenAiCompatible,
 }
 
@@ -38,6 +54,8 @@ pub struct LlmConfig {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    pub api_path: Option<String>,
+    pub api_version: Option<String>,
     pub temperature: Option<f32>,
 }
 
@@ -248,7 +266,13 @@ async fn get_openai_models(
 }
 
 fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
-    !matches!(provider, LlmProvider::Anthropic)
+    !matches!(
+        provider,
+        LlmProvider::Anthropic
+            | LlmProvider::AzureOpenAi
+            | LlmProvider::Volcengine
+            | LlmProvider::Perplexity
+    )
 }
 
 fn extract_text_response(
@@ -267,6 +291,245 @@ fn extract_text_response(
     }
 
     Ok(parts.join("\n"))
+}
+
+fn join_url(base_url: &str, path: &str) -> String {
+    format!(
+        "{}/{}",
+        base_url.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    )
+}
+
+fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            if !text.is_empty() {
+                parts.push(text.clone());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                extract_text_parts(item, parts);
+            }
+        }
+        Value::Object(map) => {
+            if let Some(text) = map.get("output_text").and_then(Value::as_str) {
+                if !text.is_empty() {
+                    parts.push(text.to_string());
+                }
+            }
+
+            if let Some(text) = map.get("text").and_then(Value::as_str) {
+                if !text.is_empty() {
+                    parts.push(text.to_string());
+                    return;
+                }
+            }
+
+            if let Some(content) = map.get("content") {
+                extract_text_parts(content, parts);
+                return;
+            }
+
+            if let Some(message) = map.get("message") {
+                extract_text_parts(message, parts);
+                return;
+            }
+
+            if let Some(output) = map.get("output") {
+                extract_text_parts(output, parts);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
+    let mut parts = Vec::new();
+
+    if let Some(output_text) = response.get("output_text").and_then(Value::as_str) {
+        if !output_text.is_empty() {
+            return Ok(output_text.to_string());
+        }
+    }
+
+    if let Some(choices) = response.get("choices") {
+        extract_text_parts(choices, &mut parts);
+    }
+
+    if parts.is_empty() {
+        if let Some(output) = response.get("output") {
+            extract_text_parts(output, &mut parts);
+        }
+    }
+
+    if parts.is_empty() {
+        extract_text_parts(response, &mut parts);
+    }
+
+    let text = parts
+        .into_iter()
+        .map(|part| part.trim().to_string())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if text.is_empty() {
+        return Err("LLM response did not contain text output".to_string());
+    }
+
+    Ok(text)
+}
+
+async fn post_json_request(
+    url: &str,
+    headers: Vec<(&str, String)>,
+    body: Value,
+) -> Result<Value, String> {
+    let client = Client::new();
+    let mut request = client.post(url).header("Content-Type", "application/json");
+
+    for (key, value) in headers {
+        if !value.is_empty() {
+            request = request.header(key, value);
+        }
+    }
+
+    let response = request
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let status = response.status();
+    let text = response.text().await.map_err(|error| error.to_string())?;
+
+    if !status.is_success() {
+        return Err(format!("LLM API Error: {} {}", status, text));
+    }
+
+    serde_json::from_str(&text).map_err(|error| error.to_string())
+}
+
+async fn generate_with_openai_chat_api(
+    url: &str,
+    api_key: &str,
+    model: &str,
+    input: &str,
+    temperature: Option<f32>,
+    extra_headers: Vec<(&str, String)>,
+) -> Result<String, String> {
+    let mut headers = vec![];
+    if !api_key.is_empty() {
+        headers.push(("Authorization", format!("Bearer {}", api_key)));
+    }
+    headers.extend(extra_headers);
+
+    let payload = json!({
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": input,
+            }
+        ],
+        "temperature": temperature.unwrap_or(0.7),
+    });
+
+    let response = post_json_request(url, headers, payload).await?;
+    extract_text_from_json_response(&response)
+}
+
+async fn generate_with_openai_responses_api(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    input: &str,
+    temperature: Option<f32>,
+    api_path: Option<&str>,
+) -> Result<String, String> {
+    let url = join_url(base_url, api_path.unwrap_or("/v1/responses"));
+    let payload = json!({
+        "model": model,
+        "input": input,
+        "temperature": temperature.unwrap_or(0.7),
+    });
+
+    let response = post_json_request(
+        &url,
+        vec![("Authorization", format!("Bearer {}", api_key))],
+        payload,
+    )
+    .await?;
+
+    extract_text_from_json_response(&response)
+}
+
+async fn generate_with_azure_openai(
+    base_url: &str,
+    api_key: &str,
+    deployment: &str,
+    input: &str,
+    temperature: Option<f32>,
+    api_version: Option<&str>,
+) -> Result<String, String> {
+    let version = api_version.unwrap_or("2024-10-21");
+    let deployment = deployment.trim();
+    let endpoint = format!(
+        "{}/openai/deployments/{}/chat/completions?api-version={}",
+        base_url.trim_end_matches('/'),
+        deployment,
+        version
+    );
+
+    let payload = json!({
+        "messages": [
+            {
+                "role": "user",
+                "content": input,
+            }
+        ],
+        "temperature": temperature.unwrap_or(0.7),
+    });
+
+    let response = post_json_request(
+        &endpoint,
+        vec![("api-key", api_key.to_string())],
+        payload,
+    )
+    .await?;
+
+    extract_text_from_json_response(&response)
+}
+
+async fn generate_with_openai_custom_path(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    input: &str,
+    temperature: Option<f32>,
+    api_path: Option<&str>,
+) -> Result<String, String> {
+    let url = join_url(base_url, api_path.unwrap_or("/v1/chat/completions"));
+    generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
+}
+
+async fn generate_with_perplexity(
+    api_key: &str,
+    model: &str,
+    input: &str,
+    temperature: Option<f32>,
+) -> Result<String, String> {
+    generate_with_openai_chat_api(
+        "https://api.perplexity.ai/chat/completions",
+        api_key,
+        model,
+        input,
+        temperature,
+        vec![],
+    )
+    .await
 }
 
 async fn generate_with_openai_compatible(
@@ -388,7 +651,21 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String
     let config = request.config;
 
     match config.provider {
-        LlmProvider::OpenAi | LlmProvider::OpenAiCompatible | LlmProvider::SiliconFlow => {
+        LlmProvider::OpenAi
+        | LlmProvider::DeepSeek
+        | LlmProvider::Kimi
+        | LlmProvider::SiliconFlow
+        | LlmProvider::Qwen
+        | LlmProvider::QwenPortal
+        | LlmProvider::MinimaxGlobal
+        | LlmProvider::MinimaxCn
+        | LlmProvider::OpenRouter
+        | LlmProvider::LmStudio
+        | LlmProvider::Groq
+        | LlmProvider::XAi
+        | LlmProvider::MistralAi
+        | LlmProvider::Chatglm
+        | LlmProvider::OpenAiCompatible => {
             generate_with_openai_compatible(
                 &config.base_url,
                 &config.api_key,
@@ -427,9 +704,30 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String
             )
             .await
         }
-        LlmProvider::DeepSeek => {
-            generate_with_deepseek(
+        LlmProvider::OpenAiResponses => {
+            generate_with_openai_responses_api(
                 &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+                config.api_path.as_deref(),
+            )
+            .await
+        }
+        LlmProvider::AzureOpenAi => {
+            generate_with_azure_openai(
+                &config.base_url,
+                &config.api_key,
+                &config.model,
+                &request.input,
+                config.temperature,
+                config.api_version.as_deref(),
+            )
+            .await
+        }
+        LlmProvider::Perplexity => {
+            generate_with_perplexity(
                 &config.api_key,
                 &config.model,
                 &request.input,
@@ -437,13 +735,14 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String
             )
             .await
         }
-        LlmProvider::Kimi => {
-            generate_with_kimi(
+        LlmProvider::Volcengine => {
+            generate_with_openai_custom_path(
                 &config.base_url,
                 &config.api_key,
                 &config.model,
                 &request.input,
                 config.temperature,
+                config.api_path.as_deref(),
             )
             .await
         }
@@ -912,7 +1211,60 @@ mod tests {
     #[test]
     fn anthropic_listing_is_disabled() {
         assert!(!provider_supports_model_listing(&LlmProvider::Anthropic));
+        assert!(!provider_supports_model_listing(&LlmProvider::AzureOpenAi));
+        assert!(!provider_supports_model_listing(&LlmProvider::Volcengine));
         assert!(provider_supports_model_listing(&LlmProvider::OpenAi));
+    }
+
+    #[test]
+    fn join_url_trims_duplicate_slashes() {
+        assert_eq!(
+            join_url("https://api.openai.com/", "/v1/responses"),
+            "https://api.openai.com/v1/responses"
+        );
+        assert_eq!(
+            join_url("https://ark.cn-beijing.volces.com", "api/v3/chat/completions"),
+            "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        );
+    }
+
+    #[test]
+    fn extract_text_from_chat_completions_response() {
+        let response = json!({
+            "choices": [
+                {
+                    "message": {
+                        "content": "Hello from chat completions"
+                    }
+                }
+            ]
+        });
+
+        assert_eq!(
+            extract_text_from_json_response(&response).unwrap(),
+            "Hello from chat completions"
+        );
+    }
+
+    #[test]
+    fn extract_text_from_responses_api_payload() {
+        let response = json!({
+            "output": [
+                {
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "Hello from responses"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        assert_eq!(
+            extract_text_from_json_response(&response).unwrap(),
+            "Hello from responses"
+        );
     }
 
     #[test]
