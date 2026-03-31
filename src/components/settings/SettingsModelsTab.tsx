@@ -101,49 +101,57 @@ export function SettingsModelsTab({
     const streamingModelPath = config.streamingModelPath;
     const offlineModelPath = config.offlineModelPath;
 
-    // Sync streamingModelPath with selected model ID
-    useEffect(() => {
-        const findModel = async () => {
-            if (!streamingModelPath) {
-                setSelectedStreamingModelId('');
-                return;
-            }
+    // Memoize the mapping between paths and model IDs in state to trigger re-renders
+    const [pathMap, setPathMap] = useState<Map<string, string>>(new Map());
 
-            for (const model of PRESET_MODELS) {
-                if (model.modes?.includes('streaming')) {
-                    const path = await modelService.getModelPath(model.id);
-                    if (path === streamingModelPath) {
-                        setSelectedStreamingModelId(model.id);
-                        return;
+    // Initialize mapping of paths to model IDs efficiently
+    useEffect(() => {
+        const initPathMap = async () => {
+            const map = new Map<string, string>();
+
+            // Resolve all model paths concurrently to avoid sequential IPC/FS delays
+            await Promise.all(
+                PRESET_MODELS.map(async (model) => {
+                    if (model.modes?.includes('streaming') || model.modes?.includes('offline')) {
+                        try {
+                            const path = await modelService.getModelPath(model.id);
+                            map.set(path, model.id);
+                        } catch (e) {
+                            console.error(`Failed to resolve path for model ${model.id}`, e);
+                        }
                     }
-                }
-            }
+                })
+            );
+
+            setPathMap(map);
+        };
+
+        initPathMap();
+    }, []); // Only run once on mount
+
+    // Sync selected streaming model when the path config or the map changes
+    useEffect(() => {
+        if (!streamingModelPath) {
             setSelectedStreamingModelId('');
-        };
-        findModel();
-    }, [streamingModelPath]);
+            return;
+        }
 
-    // Sync offlineModelPath with selected model ID
+        if (pathMap.size > 0) {
+            setSelectedStreamingModelId(pathMap.get(streamingModelPath) || '');
+        }
+    }, [streamingModelPath, pathMap]);
+
+    // Sync selected offline model when the path config or the map changes
     useEffect(() => {
-        const findModel = async () => {
-            if (!offlineModelPath) {
-                setSelectedOfflineModelId('');
-                return;
-            }
-
-            for (const model of PRESET_MODELS) {
-                if (model.modes?.includes('offline')) {
-                    const path = await modelService.getModelPath(model.id);
-                    if (path === offlineModelPath) {
-                        setSelectedOfflineModelId(model.id);
-                        return;
-                    }
-                }
-            }
+        if (!offlineModelPath) {
             setSelectedOfflineModelId('');
-        };
-        findModel();
-    }, [offlineModelPath]);
+            return;
+        }
+
+        if (pathMap.size > 0) {
+            setSelectedOfflineModelId(pathMap.get(offlineModelPath) || '');
+        }
+    }, [offlineModelPath, pathMap]);
 
     const applyModelRules = async (modelId: string) => {
         try {
