@@ -5,17 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { List, Loader2, Check, X } from 'lucide-react';
 import { AppConfig, LlmConfig, LlmProvider } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
-
-const DEFAULT_LLM_URLS: Record<LlmProvider, string> = {
-    open_ai: 'https://api.openai.com/v1',
-    anthropic: 'https://api.anthropic.com',
-    ollama: 'http://localhost:11434/v1',
-    gemini: 'https://generativelanguage.googleapis.com',
-    deep_seek: 'https://api.deepseek.com',
-    kimi: 'https://api.moonshot.cn/v1',
-    silicon_flow: 'https://api.siliconflow.cn/v1',
-    open_ai_compatible: ''
-};
+import { DEFAULT_LLM_CONFIG, DEFAULT_LLM_URLS } from '../../services/llmConfig';
 
 interface SettingsLLMServiceTabProps {
     config: AppConfig;
@@ -33,14 +23,6 @@ const PROVIDER_OPTIONS: { value: LlmProvider; label: string }[] = [
     { value: 'silicon_flow', label: 'SiliconFlow' },
     { value: 'open_ai_compatible', label: 'OpenAI Compatible' }
 ];
-
-const DEFAULT_LLM_CONFIG: LlmConfig = {
-    provider: 'open_ai',
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: '',
-    temperature: 0.7
-};
 
 function getBaseUrlPlaceholder(provider: LlmProvider): string {
     return DEFAULT_LLM_URLS[provider] || '';

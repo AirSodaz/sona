@@ -5,17 +5,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
 import { LlmProvider } from '../types/transcript';
-
-const DEFAULT_LLM_URLS: Record<LlmProvider, string> = {
-    open_ai: 'https://api.openai.com/v1',
-    anthropic: 'https://api.anthropic.com',
-    ollama: 'http://localhost:11434/v1',
-    gemini: 'https://generativelanguage.googleapis.com',
-    deep_seek: 'https://api.deepseek.com',
-    kimi: 'https://api.moonshot.cn/v1',
-    silicon_flow: 'https://api.siliconflow.cn/v1',
-    open_ai_compatible: ''
-};
+import { getDefaultLlmConfig } from '../services/llmConfig';
 
 /**
  * Custom hook managing the business logic for the Settings dialog.
@@ -121,13 +111,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
 
     const changeLlmServiceType = (provider: LlmProvider) => {
         updateConfig({
-            llm: {
-                provider,
-                baseUrl: DEFAULT_LLM_URLS[provider] || '',
-                apiKey: '',
-                model: '',
-                temperature: 0.7
-            }
+            llm: getDefaultLlmConfig(provider)
         });
     };
 
