@@ -40,7 +40,6 @@ export function useTranscriptionServiceSync() {
                 }
 
                 await transcriptionService.prepare();
-                await captionTranscriptionService.prepare();
             } catch (err) {
                 console.error('[useTranscriptionServiceSync] Failed to prepare transcription service:', err);
             }
