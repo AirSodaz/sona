@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
 import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
