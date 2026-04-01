@@ -252,6 +252,7 @@ impl Recognizer {
         num_threads: i32,
         itn_model: Option<String>,
     ) -> Result<Self, String> {
+        info!("[Recognizer::new] start model_type={:?} num_threads={num_threads} itn_model={:?}", model_type, itn_model);
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -259,6 +260,7 @@ impl Recognizer {
                 joiner,
                 tokens,
             } => {
+                info!("[Recognizer::new] branch=OnlineTransducer");
                 let mut config = get_base_online_config(num_threads, &tokens, itn_model);
                 config.model_config.model_type = Some("transducer".to_string());
                 config.model_config.transducer.encoder =
@@ -278,6 +280,7 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
+                info!("[Recognizer::new] branch=OnlineParaformer");
                 let mut config = get_base_online_config(num_threads, &tokens, itn_model);
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
@@ -296,6 +299,7 @@ impl Recognizer {
                 language,
                 use_itn,
             } => {
+                info!("[Recognizer::new] branch=OfflineSenseVoice");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
@@ -313,6 +317,7 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
+                info!("[Recognizer::new] branch=OfflineWhisper");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
@@ -332,6 +337,7 @@ impl Recognizer {
                 tokens,
                 language,
             } => {
+                info!("[Recognizer::new] branch=OfflineFunASRNano");
                 let mut config = get_base_offline_config(num_threads, tokens.as_deref(), itn_model);
                 config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
@@ -350,6 +356,7 @@ impl Recognizer {
                 decoder,
                 tokens,
             } => {
+                info!("[Recognizer::new] branch=OfflineFireRedAsr");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
@@ -364,6 +371,7 @@ impl Recognizer {
                 model,
                 tokens,
             } => {
+                info!("[Recognizer::new] branch=OfflineDolphin");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
 
@@ -379,6 +387,7 @@ impl Recognizer {
                 decoder,
                 tokenizer,
             } => {
+                info!("[Recognizer::new] branch=OfflineQwen3Asr");
                 let mut config = get_base_offline_config(num_threads, None, itn_model);
                 config.model_config.qwen3_asr.conv_frontend =
                     Some(conv_frontend.to_string_lossy().to_string());
@@ -787,8 +796,15 @@ pub async fn init_recognizer(
     model_type: String,
     file_config: Option<ModelFileConfig>,
 ) -> Result<(), String> {
+    info!(
+        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer}",
+        punctuation_model,
+        vad_model
+    );
     let valid_itn = get_valid_itn_paths(itn_model);
+    info!("[init_recognizer] valid ITN paths: {:?}", valid_itn);
 
+    info!("[init_recognizer] before build_model_config");
     let config_type = build_model_config(
         Path::new(&model_path),
         &model_type,
@@ -796,11 +812,22 @@ pub async fn init_recognizer(
         enable_itn,
         &language,
     )?;
+    info!("[init_recognizer] after build_model_config: {:?}", config_type);
 
+    info!("[init_recognizer] before Recognizer::new");
     let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
+    info!("[init_recognizer] after Recognizer::new");
 
+    info!("[init_recognizer] before load_punctuation");
     let punctuation = load_punctuation(punctuation_model);
+    info!(
+        "[init_recognizer] after load_punctuation loaded={}",
+        punctuation.is_some()
+    );
+
+    info!("[init_recognizer] before load_vad");
     let vad = load_vad(vad_model.clone());
+    info!("[init_recognizer] after load_vad loaded={}", vad.is_some());
 
     let mut instances = state.instances.lock().await;
     let instance = instances
