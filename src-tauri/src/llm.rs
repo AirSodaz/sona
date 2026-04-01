@@ -1,8 +1,8 @@
 use futures_util::future::BoxFuture;
 use reqwest::Client;
-use rig::client::CompletionClient;
+use rig::client::{CompletionClient, Nothing};
 use rig::completion::CompletionModel;
-use rig::providers::{anthropic, deepseek, gemini, moonshot, ollama, openai};
+use rig::providers::{anthropic, gemini, ollama, openai};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -159,6 +159,8 @@ struct OllamaTagsResponse {
 #[derive(Deserialize)]
 struct GeminiModel {
     name: String,
+    #[serde(rename = "supportedGenerationMethods")]
+    supported_generation_methods: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -191,6 +193,14 @@ fn format_gemini_models_url(base_url: &str, api_key: &str) -> String {
     let cleaned_base = clean_gemini_base_url(base_url);
 
     format!("{}/v1beta/models?key={}", cleaned_base, api_key)
+}
+
+fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
+    model
+        .supported_generation_methods
+        .as_ref()
+        .map(|methods| methods.iter().any(|method| method == "generateContent"))
+        .unwrap_or(true)
 }
 
 fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
@@ -230,6 +240,7 @@ async fn get_gemini_models(
         .models
         .unwrap_or_default()
         .into_iter()
+        .filter(is_gemini_text_generation_model)
         .map(|m| m.name.trim_start_matches("models/").to_string())
         .collect())
 }
@@ -539,7 +550,11 @@ async fn generate_with_openai_compatible(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let client = openai::Client::from_url(api_key, base_url);
+    let client = openai::Client::builder()
+        .api_key(api_key)
+        .base_url(base_url)
+        .build()
+        .map_err(|error| error.to_string())?;
     let response = client
         .completion_model(model)
         .completion_request(input)
@@ -558,9 +573,11 @@ async fn generate_with_anthropic(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let client = anthropic::ClientBuilder::new(api_key)
+    let client = anthropic::Client::builder()
+        .api_key(api_key)
         .base_url(base_url)
-        .build();
+        .build()
+        .map_err(|error| error.to_string())?;
     let response = client
         .completion_model(model)
         .completion_request(input)
@@ -579,7 +596,11 @@ async fn generate_with_gemini(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let client = gemini::Client::from_url(api_key, clean_gemini_base_url(base_url));
+    let client = gemini::Client::builder()
+        .api_key(api_key)
+        .base_url(clean_gemini_base_url(base_url))
+        .build()
+        .map_err(|error| error.to_string())?;
     let response = client
         .completion_model(model)
         .completion_request(input)
@@ -597,45 +618,11 @@ async fn generate_with_ollama(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<String, String> {
-    let client = ollama::Client::from_url(base_url.trim_end_matches("/v1"));
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
+    let client = ollama::Client::builder()
+        .api_key(Nothing)
+        .base_url(base_url.trim_end_matches("/v1"))
+        .build()
         .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
-async fn generate_with_deepseek(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = deepseek::Client::from_url(api_key, base_url);
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
-async fn generate_with_kimi(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = moonshot::Client::from_url(api_key, base_url);
     let response = client
         .completion_model(model)
         .completion_request(input)
@@ -1206,6 +1193,26 @@ mod tests {
             ),
             "https://generativelanguage.googleapis.com/v1beta/models?key=test-key"
         );
+    }
+
+    #[test]
+    fn gemini_model_filter_keeps_generate_content_models() {
+        let text_model = GeminiModel {
+            name: "models/gemini-2.5-flash".to_string(),
+            supported_generation_methods: Some(vec!["generateContent".to_string()]),
+        };
+        let embedding_model = GeminiModel {
+            name: "models/text-embedding-004".to_string(),
+            supported_generation_methods: Some(vec!["embedContent".to_string()]),
+        };
+        let legacy_model = GeminiModel {
+            name: "models/gemini-pro".to_string(),
+            supported_generation_methods: None,
+        };
+
+        assert!(is_gemini_text_generation_model(&text_model));
+        assert!(!is_gemini_text_generation_model(&embedding_model));
+        assert!(is_gemini_text_generation_model(&legacy_model));
     }
 
     #[test]
