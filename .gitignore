@@ -32,3 +32,5 @@ test-results/
 # Local worktrees
 .worktrees/
 docs/superpowers
+
+.env
