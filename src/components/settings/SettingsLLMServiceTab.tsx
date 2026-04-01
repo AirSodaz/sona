@@ -319,13 +319,21 @@ export function SettingsLLMServiceTab({
                     </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
-                    <label className="settings-label" style={{ marginBottom: 0, minWidth: 'fit-content' }}>
+                <div
+                    style={{
+                        alignItems: 'center',
+                        display: 'grid',
+                        gap: '8px',
+                        gridTemplateColumns: '1fr 180px 60px',
+                        marginTop: '16px',
+                    }}
+                >
+                    <label className="settings-label" style={{ marginBottom: 0, justifySelf: 'start' }}>
                         {t('settings.llm.temperature')}
                     </label>
                     <input
                         type="range"
-                        style={{ flex: 1, margin: 0 }}
+                        style={{ justifySelf: 'end', margin: 0, width: '180px' }}
                         min={0}
                         max={2}
                         step={0.05}
@@ -335,7 +343,7 @@ export function SettingsLLMServiceTab({
                     <input
                         type="number"
                         className="settings-input"
-                        style={{ width: '60px', padding: '2px 4px', textAlign: 'center' }}
+                        style={{ padding: '2px 4px', textAlign: 'center', width: '60px' }}
                         min={0}
                         max={2}
                         step={0.05}

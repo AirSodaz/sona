@@ -311,7 +311,7 @@
             "loading_models": "加载模型中...",
             "type_manually": "手动输入...",
             "back_to_list": "返回列表",
-            "temperature": "温度"
+            "temperature": "Temperature"
         }
     },
     "shortcuts": {
