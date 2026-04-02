@@ -319,12 +319,16 @@
             "unassigned": "Unassigned",
             "test_connection": "Test Connection",
             "testing": "Testing...",
-            "connection_success": "Connection successful! Response: ",
-            "connection_failed": "Connection failed: ",
+            "connection_success": "Connection successful",
+            "connection_failed": "Connection failed",
             "loading_models": "Loading models...",
+            "candidate_load_failed": "Could not load model candidates. You can still type a model name manually.",
             "type_manually": "Type manually...",
             "back_to_list": "Back to list",
-            "temperature": "Temperature"
+            "temperature": "Temperature",
+            "status_ready": "Ready",
+            "status_missing_api_key": "Missing API Key",
+            "status_missing_model": "Missing model"
         }
     },
     "shortcuts": {

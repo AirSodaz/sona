@@ -319,12 +319,16 @@
             "unassigned": "未指定",
             "test_connection": "测试连接",
             "testing": "测试中...",
-            "connection_success": "连接成功！响应：",
-            "connection_failed": "连接失败：",
+            "connection_success": "连接成功",
+            "connection_failed": "连接失败",
             "loading_models": "加载模型中...",
+            "candidate_load_failed": "无法加载模型候选，仍可手动输入模型名称。",
             "type_manually": "手动输入...",
             "back_to_list": "返回列表",
-            "temperature": "Temperature"
+            "temperature": "Temperature",
+            "status_ready": "可用",
+            "status_missing_api_key": "缺 API Key",
+            "status_missing_model": "缺模型"
         }
     },
     "shortcuts": {

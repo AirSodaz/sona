@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { Check, Loader2, Trash2, X } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
   getFeatureModelId,
   getOrderedLlmModels,
   getProviderDefinition,
+  isLlmConfigComplete,
   LLM_PROVIDER_DEFINITIONS,
   removeLlmModel,
   setFeatureModelSelection,
@@ -79,6 +80,14 @@ export function SettingsLLMServiceTab({
   const [testingModelId, setTestingModelId] = useState<string | null>(null);
   const [newModelProvider, setNewModelProvider] = useState<LlmProvider>(getActiveProvider(config));
   const [newModelName, setNewModelName] = useState('');
+  const [isModelInputFocused, setIsModelInputFocused] = useState(false);
+  const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
+  const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
+  const [modelCandidates, setModelCandidates] = useState<string[]>([]);
+  const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+  const [candidateLoadError, setCandidateLoadError] = useState('');
+  const candidateContainerRef = useRef<HTMLDivElement>(null);
+  const candidateListId = 'llm-model-candidate-list';
 
   const activeProvider = getActiveProvider(config);
   const providerDefinition = getProviderDefinition(activeProvider);
@@ -102,6 +111,106 @@ export function SettingsLLMServiceTab({
     value: entry.id,
     label: `${getProviderDefinition(entry.provider).label} / ${entry.model}`,
   })), [models]);
+
+  const filteredCandidates = useMemo(() => {
+    const query = newModelName.trim().toLowerCase();
+    if (!query) {
+      return modelCandidates;
+    }
+    return modelCandidates.filter((candidate) => candidate.toLowerCase().includes(query));
+  }, [modelCandidates, newModelName]);
+
+  const activeCandidateId = highlightedCandidateIndex >= 0
+    ? `${candidateListId}-${highlightedCandidateIndex}`
+    : undefined;
+
+  const providerStatus = providerDefinition.requiresApiKey && !llmApiKey.trim()
+    ? t('settings.llm.status_missing_api_key')
+    : t('settings.llm.status_ready');
+
+  const getFeatureStatus = (feature: 'polish' | 'translation') => {
+    const modelId = feature === 'polish' ? polishModelId : translationModelId;
+    if (!modelId) {
+      return t('settings.llm.status_missing_model');
+    }
+
+    const entry = config.llmSettings?.models[modelId];
+    if (!entry) {
+      return t('settings.llm.status_missing_model');
+    }
+
+    const setting = config.llmSettings?.providers[entry.provider]
+      || getActiveProviderSetting({ llmSettings: ensureLlmState(config as AppConfig & Record<string, any>).llmSettings });
+
+    return isLlmConfigComplete(buildModelConfig(entry.provider, setting, entry.model))
+      ? t('settings.llm.status_ready')
+      : t('settings.llm.status_missing_api_key');
+  };
+
+  const fetchModelCandidates = async (provider: LlmProvider, setting: LlmProviderSetting) => {
+    if (!getProviderDefinition(provider).supportsModelListing) {
+      setModelCandidates([]);
+      setCandidateLoadError('');
+      setIsLoadingCandidates(false);
+      return;
+    }
+
+    setIsLoadingCandidates(true);
+    setCandidateLoadError('');
+
+    try {
+      const result = await invoke<string[]>('list_llm_models', {
+        request: {
+          provider,
+          baseUrl: setting.apiHost,
+          apiKey: setting.apiKey,
+        },
+      });
+      setModelCandidates(Array.isArray(result) ? result : []);
+    } catch (_error) {
+      setModelCandidates([]);
+      setCandidateLoadError(t('settings.llm.candidate_load_failed'));
+    } finally {
+      setIsLoadingCandidates(false);
+    }
+  };
+
+  useEffect(() => {
+    setNewModelProvider(activeProvider);
+    setNewModelName('');
+    setIsModelInputFocused(false);
+    setIsCandidateMenuOpen(false);
+    setHighlightedCandidateIndex(-1);
+    fetchModelCandidates(activeProvider, providerSetting);
+  }, [activeProvider, providerSetting.apiHost, providerSetting.apiKey]);
+
+  useEffect(() => {
+    if (!isModelInputFocused) {
+      setIsCandidateMenuOpen(false);
+      setHighlightedCandidateIndex(-1);
+      return;
+    }
+
+    if (filteredCandidates.length > 0) {
+      setIsCandidateMenuOpen(true);
+      setHighlightedCandidateIndex(0);
+      return;
+    }
+
+    setIsCandidateMenuOpen(false);
+    setHighlightedCandidateIndex(-1);
+  }, [filteredCandidates, isModelInputFocused]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!candidateContainerRef.current?.contains(event.target as Node)) {
+        setIsModelInputFocused(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   const applyProviderSettingUpdates = (updates: Partial<LlmProviderSetting>) => {
     const currentLlmState = config.llmSettings
@@ -133,6 +242,58 @@ export function SettingsLLMServiceTab({
     });
     applyLlmSettings(nextLlmSettings);
     setNewModelName('');
+    setIsModelInputFocused(false);
+    setIsCandidateMenuOpen(false);
+    setHighlightedCandidateIndex(-1);
+  };
+
+  const handleCandidateSelect = (candidate: string) => {
+    setNewModelName(candidate);
+    setIsCandidateMenuOpen(false);
+    setHighlightedCandidateIndex(-1);
+  };
+
+  const handleModelNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      if (!isCandidateMenuOpen && filteredCandidates.length > 0) {
+        event.preventDefault();
+        setIsCandidateMenuOpen(true);
+        setHighlightedCandidateIndex(0);
+        return;
+      }
+      if (filteredCandidates.length > 0) {
+        event.preventDefault();
+        setHighlightedCandidateIndex((prev) => (prev + 1) % filteredCandidates.length);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowUp' && isCandidateMenuOpen && filteredCandidates.length > 0) {
+      event.preventDefault();
+      setHighlightedCandidateIndex((prev) => (prev <= 0 ? filteredCandidates.length - 1 : prev - 1));
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      setIsCandidateMenuOpen(false);
+      setHighlightedCandidateIndex(-1);
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      setIsCandidateMenuOpen(false);
+      setHighlightedCandidateIndex(-1);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (isCandidateMenuOpen && highlightedCandidateIndex >= 0 && filteredCandidates[highlightedCandidateIndex]) {
+        handleCandidateSelect(filteredCandidates[highlightedCandidateIndex]);
+        return;
+      }
+      handleAddModel();
+    }
   };
 
   const handleRemoveModel = (modelId: string) => {
@@ -180,7 +341,7 @@ export function SettingsLLMServiceTab({
         },
       });
       setTestStatus('success');
-      setTestMessage(response);
+      setTestMessage(`${getProviderDefinition(entry.provider).label} / ${entry.model}`);
     } catch (error) {
       setTestStatus('error');
       setTestMessage(normalizeError(error).message);
@@ -200,6 +361,9 @@ export function SettingsLLMServiceTab({
           options={providerOptions}
           style={{ width: '100%' }}
         />
+        <div className="settings-hint" style={{ marginTop: '8px' }}>
+          {providerStatus}
+        </div>
       </div>
 
       <div className="settings-item">
@@ -304,13 +468,57 @@ export function SettingsLLMServiceTab({
             options={providerOptions}
             style={{ width: '100%' }}
           />
-          <input
-            type="text"
-            className="settings-input"
-            value={newModelName}
-            onChange={(e) => setNewModelName(e.target.value)}
-            placeholder={getModelPlaceholder(newModelProvider)}
-          />
+          <div ref={candidateContainerRef} className="dropdown-container">
+            <input
+              type="text"
+              className="settings-input"
+              value={newModelName}
+              onChange={(e) => setNewModelName(e.target.value)}
+              onFocus={() => {
+                setIsModelInputFocused(true);
+              }}
+              onBlur={(e) => {
+                if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
+                  setIsModelInputFocused(false);
+                }
+              }}
+              onKeyDown={handleModelNameKeyDown}
+              placeholder={getModelPlaceholder(newModelProvider)}
+              role="combobox"
+              aria-expanded={isCandidateMenuOpen && filteredCandidates.length > 0}
+              aria-controls={candidateListId}
+              aria-activedescendant={activeCandidateId}
+            />
+            {isLoadingCandidates && (
+              <div className="settings-hint" style={{ marginTop: '8px' }}>
+                {t('settings.llm.loading_models')}
+              </div>
+            )}
+            {!isLoadingCandidates && candidateLoadError && (
+              <div className="settings-hint" style={{ marginTop: '8px' }}>
+                {candidateLoadError}
+              </div>
+            )}
+            {!isLoadingCandidates && !candidateLoadError && isCandidateMenuOpen && filteredCandidates.length > 0 && (
+              <div id={candidateListId} className="dropdown-menu" role="listbox">
+                {filteredCandidates.slice(0, 8).map((candidate, index) => (
+                  <button
+                    id={`${candidateListId}-${index}`}
+                    key={candidate}
+                    type="button"
+                    className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
+                    role="option"
+                    aria-selected={index === highlightedCandidateIndex}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setHighlightedCandidateIndex(index)}
+                    onClick={() => handleCandidateSelect(candidate)}
+                  >
+                    {candidate}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className="btn btn-primary"
             onClick={handleAddModel}
@@ -397,6 +605,9 @@ export function SettingsLLMServiceTab({
               placeholder={t('settings.llm.unassigned')}
               style={{ width: '100%' }}
             />
+            <div className="settings-hint" style={{ marginTop: '8px' }}>
+              {getFeatureStatus('polish')}
+            </div>
           </div>
           <div>
             <label className="settings-label">{t('settings.llm.translation_model')}</label>
@@ -408,6 +619,9 @@ export function SettingsLLMServiceTab({
               placeholder={t('settings.llm.unassigned')}
               style={{ width: '100%' }}
             />
+            <div className="settings-hint" style={{ marginTop: '8px' }}>
+              {getFeatureStatus('translation')}
+            </div>
           </div>
         </div>
 

@@ -21,7 +21,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-function buildConfig(provider: LlmProvider = 'open_ai'): AppConfig {
+function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): AppConfig {
   const baseConfig: AppConfig = {
     streamingModelPath: '/path/to/model',
     offlineModelPath: '',
@@ -31,7 +31,7 @@ function buildConfig(provider: LlmProvider = 'open_ai'): AppConfig {
   } as AppConfig;
 
   let llmSettings = updateProviderSetting(baseConfig.llmSettings, provider, {
-    apiKey: 'test-key',
+    apiKey: includeApiKey ? 'test-key' : '',
   });
   llmSettings = addLlmModel(llmSettings, {
     provider,
@@ -52,10 +52,15 @@ describe('SettingsLLMServiceTab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(tauriApi.invoke).mockResolvedValue('OK');
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return ['gpt-4o', 'gpt-4.1-mini'];
+      }
+      return 'OK';
+    });
   });
 
-  it('renders active provider fields from llmSettings', () => {
+  it('renders active provider fields from llmSettings', async () => {
     render(
       <SettingsLLMServiceTab
         config={buildConfig()}
@@ -69,6 +74,30 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getByDisplayValue('https://api.openai.com')).toBeDefined();
     expect(screen.getByDisplayValue('test-key')).toBeDefined();
     expect(screen.getAllByText('OpenAI / gpt-4o').length).toBeGreaterThan(0);
+
+    await waitFor(() => {
+      expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', {
+        request: {
+          provider: 'open_ai',
+          baseUrl: 'https://api.openai.com',
+          apiKey: 'test-key',
+        },
+      });
+    });
+  });
+
+  it('shows simple provider readiness status', async () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig('open_ai', false)}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('settings.llm.status_missing_api_key').length).toBeGreaterThan(0);
+    });
   });
 
   it('fills Gemini host with the Chatbox default host', () => {
@@ -98,7 +127,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getAllByText('Azure OpenAI / deployment-1').length).toBeGreaterThan(0);
   });
 
-  it('adds a model through the manual model pool flow', () => {
+  it('shows candidates only while the model input is focused', async () => {
     render(
       <SettingsLLMServiceTab
         config={buildConfig()}
@@ -107,11 +136,69 @@ describe('SettingsLLMServiceTab', () => {
       />,
     );
 
-    const inputs = screen.getAllByRole('textbox');
-    fireEvent.change(inputs[inputs.length - 1], { target: { value: 'claude-3-7-sonnet' } });
+    const modelInput = screen.getByRole('combobox');
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    fireEvent.focus(modelInput);
+
+    await waitFor(() => {
+      expect(screen.getByRole('listbox')).toBeDefined();
+      expect(screen.getByRole('option', { name: 'gpt-4.1-mini' })).toBeDefined();
+    });
+
+    fireEvent.blur(modelInput);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+  });
+
+  it('adds a model through the searchable model input flow', async () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig()}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    const modelInput = screen.getByRole('combobox');
+    fireEvent.focus(modelInput);
+    fireEvent.change(modelInput, { target: { value: 'gpt-4.1' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'gpt-4.1-mini' })).toBeDefined();
+    });
+
+    fireEvent.keyDown(modelInput, { key: 'ArrowDown' });
+    fireEvent.keyDown(modelInput, { key: 'Enter' });
     fireEvent.click(screen.getByText('settings.llm.add_model'));
 
     expect(mockUpdateConfig).toHaveBeenCalled();
+  });
+
+  it('shows missing model status when a feature is unassigned', () => {
+    const config = buildConfig();
+    if (config.llmSettings) {
+      config.llmSettings = {
+        ...config.llmSettings,
+        selections: {
+          ...config.llmSettings.selections,
+          translationModelId: undefined,
+        },
+      };
+    }
+
+    render(
+      <SettingsLLMServiceTab
+        config={config}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    expect(screen.getByText('settings.llm.status_missing_model')).toBeDefined();
   });
 
   it('tests a configured model entry', async () => {
@@ -144,9 +231,12 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('surfaces normalized connection errors', async () => {
-    vi.mocked(tauriApi.invoke).mockRejectedValue(
-      'error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error',
-    );
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return ['gpt-4o'];
+      }
+      throw 'error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error';
+    });
 
     render(
       <SettingsLLMServiceTab
