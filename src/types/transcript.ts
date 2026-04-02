@@ -67,13 +67,13 @@ export type LlmProviderStrategy =
   | 'openai_compatible_custom_path'
   | 'perplexity';
 
+export type LlmFeature = 'polish' | 'translation';
+
 export interface LlmProviderSetting {
   /** Provider API host or endpoint. */
   apiHost: string;
   /** Provider API key or token. */
   apiKey: string;
-  /** Model name or deployment name. */
-  model: string;
   /** Optional provider-specific API path override. */
   apiPath?: string;
   /** Optional provider-specific API version. */
@@ -82,11 +82,33 @@ export interface LlmProviderSetting {
   temperature?: number;
 }
 
+export interface LlmModelEntry {
+  /** Stable identifier for the configured model entry. */
+  id: string;
+  /** Provider used for this model entry. */
+  provider: LlmProvider;
+  /** Model name or deployment name. */
+  model: string;
+}
+
+export interface LlmFeatureSelections {
+  /** Selected model entry for polish. */
+  polishModelId?: string;
+  /** Selected model entry for translation. */
+  translationModelId?: string;
+}
+
 export interface LlmSettings {
   /** Currently active provider. */
   activeProvider: LlmProvider;
   /** Per-provider saved settings. */
   providers: Partial<Record<LlmProvider, LlmProviderSetting>>;
+  /** Added models keyed by ID. */
+  models: Record<string, LlmModelEntry>;
+  /** Ordered list of added model IDs. */
+  modelOrder: string[];
+  /** Feature-specific model selections. */
+  selections: LlmFeatureSelections;
 }
 
 export interface LlmConfig {
@@ -160,8 +182,6 @@ export interface AppConfig {
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
-  /** LLM configuration. */
-  llm?: LlmConfig;
   /** LLM provider settings keyed by provider. */
   llmSettings?: LlmSettings;
   /** Target translation language. Default: 'zh'. */

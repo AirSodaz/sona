@@ -25,7 +25,7 @@ export function useAppInitialization() {
                 const parsed = JSON.parse(saved);
                 // Check if valid config object
                 if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language || parsed.llmSettings || parsed.llm) {
-                    const { llmSettings, llm } = ensureLlmState(parsed);
+                    const { llmSettings } = ensureLlmState(parsed);
                     const loadedConfig = {
                         streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
                         offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
@@ -53,7 +53,6 @@ export function useAppInitialization() {
                         captionFontSize: parsed.captionFontSize || 24,
                         captionFontColor: parsed.captionFontColor || '#ffffff',
                         llmSettings,
-                        llm,
                         translationLanguage: parsed.translationLanguage || 'zh',
                         polishKeywords: parsed.polishKeywords || '',
                         polishContext: parsed.polishContext || '',
@@ -151,7 +150,6 @@ export function useAppInitialization() {
                 captionFontSize: config.captionFontSize,
                 captionFontColor: config.captionFontColor,
                 llmSettings: config.llmSettings,
-                llm: config.llm,
                 translationLanguage: config.translationLanguage,
                 polishKeywords: config.polishKeywords,
                 polishContext: config.polishContext,

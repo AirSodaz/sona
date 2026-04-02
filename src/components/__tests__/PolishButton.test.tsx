@@ -35,12 +35,26 @@ describe('PolishButton', () => {
             ],
             llmStates: {},
             config: {
-                llm: {
-                    provider: 'open_ai',
-                    baseUrl: 'https://api.test',
-                    apiKey: 'test-key',
-                    model: 'test-model',
-                    temperature: 0.7,
+                llmSettings: {
+                    activeProvider: 'open_ai',
+                    providers: {
+                        open_ai: {
+                            apiHost: 'https://api.test',
+                            apiKey: 'test-key',
+                            temperature: 0.7,
+                        },
+                    },
+                    models: {
+                        'open-ai-test': {
+                            id: 'open-ai-test',
+                            provider: 'open_ai',
+                            model: 'test-model',
+                        },
+                    },
+                    modelOrder: ['open-ai-test'],
+                    selections: {
+                        polishModelId: 'open-ai-test',
+                    },
                 },
             } as any
         });

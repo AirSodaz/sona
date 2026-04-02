@@ -4,7 +4,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
-import { getActiveLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 
 const LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 
@@ -123,11 +123,11 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const handleStartTranslation = async () => {
         if (isTranslating) return;
 
-        const llm = getActiveLlmConfig(config);
+        const llm = getFeatureLlmConfig(config, 'translation');
         if (!isLlmConfigComplete(llm)) {
             await showError({
-                code: 'config.llm_missing',
-                messageKey: 'errors.config.llm_missing',
+                code: 'config.translation_model_missing',
+                messageKey: 'errors.config.translation_model_missing',
                 showCause: false,
             });
             return;

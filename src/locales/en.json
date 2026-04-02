@@ -37,6 +37,8 @@
         },
         "config": {
             "llm_missing": "Please configure the LLM service in Settings first.",
+            "polish_model_missing": "Please assign a model for polishing in Settings > LLM Service first.",
+            "translation_model_missing": "Please assign a model for translation in Settings > LLM Service first.",
             "offline_model_missing": "Please configure an offline model in Settings first."
         },
         "batch": {
@@ -305,6 +307,16 @@
             "api_version": "API Version",
             "api_path": "API Path",
             "model_name": "Model Name",
+            "added_models": "Added Models",
+            "add_model": "Add Model",
+            "no_models_added": "No models added yet.",
+            "feature_models": "Feature Models",
+            "feature_models_hint": "Assign models for polish and translation before using those features.",
+            "polish_model": "Polish Model",
+            "translation_model": "Translation Model",
+            "used_for_polish": "Used for polish",
+            "used_for_translation": "Used for translation",
+            "unassigned": "Unassigned",
             "test_connection": "Test Connection",
             "testing": "Testing...",
             "connection_success": "Connection successful! Response: ",

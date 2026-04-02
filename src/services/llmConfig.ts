@@ -1,6 +1,8 @@
 import {
   AppConfig,
   LlmConfig,
+  LlmFeature,
+  LlmModelEntry,
   LlmProvider,
   LlmProviderSetting,
   LlmProviderStrategy,
@@ -255,7 +257,6 @@ export function createProviderSetting(provider: LlmProvider): LlmProviderSetting
   return {
     apiHost: definition.defaultApiHost,
     apiKey: '',
-    model: '',
     apiPath: definition.defaultApiPath,
     apiVersion: definition.defaultApiVersion,
     temperature: DEFAULT_LLM_TEMPERATURE,
@@ -272,10 +273,110 @@ function sanitizeProviderSetting(
     ...(setting ?? {}),
     apiHost: setting?.apiHost ?? defaults.apiHost,
     apiKey: setting?.apiKey ?? defaults.apiKey,
-    model: setting?.model ?? defaults.model,
     apiPath: setting?.apiPath ?? defaults.apiPath,
     apiVersion: setting?.apiVersion ?? defaults.apiVersion,
     temperature: setting?.temperature ?? defaults.temperature,
+  };
+}
+
+function createEmptyModelState() {
+  return {
+    models: {} as Record<string, LlmModelEntry>,
+    modelOrder: [] as string[],
+    selections: {} as LlmSettings['selections'],
+  };
+}
+
+function createModelId(provider: LlmProvider, model: string): string {
+  const normalizedModel = model.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalizedModel ? `${provider}-${normalizedModel}` : `${provider}-model`;
+}
+
+function ensureUniqueModelId(models: Record<string, LlmModelEntry>, baseId: string): string {
+  if (!models[baseId]) {
+    return baseId;
+  }
+
+  let suffix = 2;
+  while (models[`${baseId}-${suffix}`]) {
+    suffix += 1;
+  }
+  return `${baseId}-${suffix}`;
+}
+
+function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): LlmModelEntry | null {
+  if (!entry) {
+    return null;
+  }
+
+  const provider = normalizeProvider(entry.provider);
+  const model = typeof entry.model === 'string' ? entry.model.trim() : '';
+  const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+  if (!id || !model) {
+    return null;
+  }
+
+  return {
+    id,
+    provider,
+    model,
+  };
+}
+
+function normalizeStoredModels(rawModels: unknown): Record<string, LlmModelEntry> {
+  if (!rawModels || typeof rawModels !== 'object') {
+    return {};
+  }
+
+  const models: Record<string, LlmModelEntry> = {};
+  for (const rawEntry of Object.values(rawModels as Record<string, unknown>)) {
+    const entry = sanitizeModelEntry(rawEntry as Partial<LlmModelEntry>);
+    if (entry) {
+      models[entry.id] = entry;
+    }
+  }
+  return models;
+}
+
+function normalizeStoredModelOrder(rawOrder: unknown, models: Record<string, LlmModelEntry>): string[] {
+  const seen = new Set<string>();
+  const modelIds = Object.keys(models);
+  const ordered: string[] = [];
+
+  if (Array.isArray(rawOrder)) {
+    for (const value of rawOrder) {
+      if (typeof value === 'string' && models[value] && !seen.has(value)) {
+        seen.add(value);
+        ordered.push(value);
+      }
+    }
+  }
+
+  for (const modelId of modelIds) {
+    if (!seen.has(modelId)) {
+      seen.add(modelId);
+      ordered.push(modelId);
+    }
+  }
+
+  return ordered;
+}
+
+function normalizeStoredSelections(rawSelections: unknown, models: Record<string, LlmModelEntry>) {
+  if (!rawSelections || typeof rawSelections !== 'object') {
+    return {};
+  }
+
+  const selections = rawSelections as Record<string, unknown>;
+  return {
+    polishModelId:
+      typeof selections.polishModelId === 'string' && models[selections.polishModelId]
+        ? selections.polishModelId
+        : undefined,
+    translationModelId:
+      typeof selections.translationModelId === 'string' && models[selections.translationModelId]
+        ? selections.translationModelId
+        : undefined,
   };
 }
 
@@ -285,6 +386,7 @@ export function createLlmSettings(activeProvider: LlmProvider = DEFAULT_LLM_PROV
     providers: {
       [activeProvider]: createProviderSetting(activeProvider),
     },
+    ...createEmptyModelState(),
   };
 }
 
@@ -301,6 +403,7 @@ export function setActiveProvider(
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   return {
+    ...current,
     activeProvider: provider,
     providers: {
       ...current.providers,
@@ -316,6 +419,7 @@ export function updateProviderSetting(
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(provider);
   return {
+    ...current,
     activeProvider: current.activeProvider,
     providers: {
       ...current.providers,
@@ -327,12 +431,117 @@ export function updateProviderSetting(
   };
 }
 
+export function addLlmModel(
+  llmSettings: LlmSettings | undefined,
+  entry: Pick<LlmModelEntry, 'provider' | 'model'>,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings(entry.provider);
+  const model = entry.model.trim();
+  if (!model) {
+    return current;
+  }
+
+  const existingId = current.modelOrder.find((modelId) => {
+    const existing = current.models[modelId];
+    return existing?.provider === entry.provider && existing.model === model;
+  });
+  if (existingId) {
+    return current;
+  }
+
+  const nextId = ensureUniqueModelId(current.models, createModelId(entry.provider, model));
+  return {
+    ...current,
+    models: {
+      ...current.models,
+      [nextId]: {
+        id: nextId,
+        provider: entry.provider,
+        model,
+      },
+    },
+    modelOrder: [...current.modelOrder, nextId],
+  };
+}
+
+export function removeLlmModel(
+  llmSettings: LlmSettings | undefined,
+  modelId: string,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  if (!current.models[modelId]) {
+    return current;
+  }
+
+  const nextModels = { ...current.models };
+  delete nextModels[modelId];
+
+  return {
+    ...current,
+    models: nextModels,
+    modelOrder: current.modelOrder.filter((id) => id !== modelId),
+    selections: {
+      polishModelId: current.selections.polishModelId === modelId ? undefined : current.selections.polishModelId,
+      translationModelId:
+        current.selections.translationModelId === modelId ? undefined : current.selections.translationModelId,
+    },
+  };
+}
+
+export function setFeatureModelSelection(
+  llmSettings: LlmSettings | undefined,
+  feature: LlmFeature,
+  modelId: string | undefined,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const key = feature === 'polish' ? 'polishModelId' : 'translationModelId';
+  return {
+    ...current,
+    selections: {
+      ...current.selections,
+      [key]: modelId && current.models[modelId] ? modelId : undefined,
+    },
+  };
+}
+
+export function getOrderedLlmModels(llmSettings: LlmSettings | undefined): LlmModelEntry[] {
+  const current = llmSettings ?? createLlmSettings();
+  return current.modelOrder
+    .map((modelId) => current.models[modelId])
+    .filter((entry): entry is LlmModelEntry => Boolean(entry));
+}
+
+export function getFeatureModelId(
+  config: Pick<AppConfig, 'llmSettings'>,
+  feature: LlmFeature,
+): string | undefined {
+  if (!config.llmSettings) {
+    return undefined;
+  }
+
+  return feature === 'polish'
+    ? config.llmSettings.selections.polishModelId
+    : config.llmSettings.selections.translationModelId;
+}
+
+export function getFeatureModelEntry(
+  config: Pick<AppConfig, 'llmSettings'>,
+  feature: LlmFeature,
+): LlmModelEntry | null {
+  if (!config.llmSettings) {
+    return null;
+  }
+
+  const modelId = getFeatureModelId(config, feature);
+  return modelId ? config.llmSettings.models[modelId] ?? null : null;
+}
+
 export function buildLlmConfig(provider: LlmProvider, setting: LlmProviderSetting): LlmConfig {
   return {
     provider,
     baseUrl: setting.apiHost,
     apiKey: setting.apiKey,
-    model: setting.model,
+    model: '',
     apiPath: setting.apiPath,
     apiVersion: setting.apiVersion,
     temperature: setting.temperature ?? DEFAULT_LLM_TEMPERATURE,
@@ -349,7 +558,8 @@ function extractLegacyProviderSetting(source: Record<string, any>): Partial<LlmP
   return {
     apiHost: source.llmBaseUrl || source.aiBaseUrl || source.baseUrl || undefined,
     apiKey: source.llmApiKey || source.aiApiKey || source.apiKey || undefined,
-    model: source.llmModel || source.aiModel || source.model || undefined,
+    apiPath: source.llmApiPath || source.aiApiPath || source.apiPath || undefined,
+    apiVersion: source.llmApiVersion || source.aiApiVersion || source.apiVersion || undefined,
     temperature:
       typeof source.llmTemperature === 'number'
         ? source.llmTemperature
@@ -361,6 +571,24 @@ function extractLegacyProviderSetting(source: Record<string, any>): Partial<LlmP
   };
 }
 
+function extractLegacyModel(source: Record<string, any>): { provider: LlmProvider; model: string } | null {
+  const provider = normalizeProvider(
+    source.llmSettings?.activeProvider ?? source.llm?.provider ?? source.llmServiceType,
+  );
+  const model =
+    typeof source.llm?.model === 'string' && source.llm.model.trim()
+      ? source.llm.model.trim()
+      : typeof source.llmModel === 'string' && source.llmModel.trim()
+        ? source.llmModel.trim()
+        : typeof source.aiModel === 'string' && source.aiModel.trim()
+          ? source.aiModel.trim()
+          : typeof source.model === 'string' && source.model.trim()
+            ? source.model.trim()
+            : '';
+
+  return model ? { provider, model } : null;
+}
+
 function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProvider, LlmProviderSetting>> {
   if (!rawProviders || typeof rawProviders !== 'object') {
     return {};
@@ -370,7 +598,14 @@ function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProv
 
   for (const [rawProvider, rawSetting] of Object.entries(rawProviders as Record<string, unknown>)) {
     const provider = normalizeProvider(rawProvider);
-    providers[provider] = sanitizeProviderSetting(provider, rawSetting as Partial<LlmProviderSetting>);
+    const setting = rawSetting as Partial<LlmProviderSetting> & { model?: string };
+    providers[provider] = sanitizeProviderSetting(provider, {
+      apiHost: setting.apiHost,
+      apiKey: setting.apiKey,
+      apiPath: setting.apiPath,
+      apiVersion: setting.apiVersion,
+      temperature: setting.temperature,
+    });
   }
 
   return providers;
@@ -378,12 +613,12 @@ function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProv
 
 export function ensureLlmState(
   source?: Partial<AppConfig> & Record<string, any>,
-): { llmSettings: LlmSettings; llm: LlmConfig } {
+): { llmSettings: LlmSettings } {
   const candidate = source ?? {};
   const currentProvider = normalizeProvider(
     candidate.llmSettings?.activeProvider ??
-      candidate.llm?.provider ??
-      candidate.llmServiceType,
+      candidate.llmServiceType ??
+      candidate.llm?.provider,
   );
 
   const providers = normalizeStoredProviders(candidate.llmSettings?.providers);
@@ -393,14 +628,19 @@ export function ensureLlmState(
     providers[provider] = sanitizeProviderSetting(provider, {
       apiHost: candidate.llm.baseUrl || undefined,
       apiKey: candidate.llm.apiKey || undefined,
-      model: candidate.llm.model || undefined,
       apiPath: candidate.llm.apiPath || undefined,
       apiVersion: candidate.llm.apiVersion || undefined,
       temperature: candidate.llm.temperature,
     });
   } else {
     const legacySetting = extractLegacyProviderSetting(candidate);
-    if (legacySetting.apiHost || legacySetting.apiKey || legacySetting.model || legacySetting.temperature !== undefined) {
+    if (
+      legacySetting.apiHost ||
+      legacySetting.apiKey ||
+      legacySetting.apiPath ||
+      legacySetting.apiVersion ||
+      legacySetting.temperature !== undefined
+    ) {
       providers[currentProvider] = sanitizeProviderSetting(currentProvider, {
         ...legacySetting,
         ...(providers[currentProvider] ?? {}),
@@ -408,48 +648,80 @@ export function ensureLlmState(
     }
   }
 
-  const llmSettings: LlmSettings = {
+  const storedModels = normalizeStoredModels(candidate.llmSettings?.models);
+  const storedModelOrder = normalizeStoredModelOrder(candidate.llmSettings?.modelOrder, storedModels);
+  const storedSelections = normalizeStoredSelections(candidate.llmSettings?.selections, storedModels);
+
+  let llmSettings: LlmSettings = {
     activeProvider: currentProvider,
     providers: {
       ...providers,
       [currentProvider]: sanitizeProviderSetting(currentProvider, providers[currentProvider]),
     },
+    models: storedModels,
+    modelOrder: storedModelOrder,
+    selections: storedSelections,
   };
+
+  const legacyStoredProviderModel = Object.entries(candidate.llmSettings?.providers ?? {}).find(([, rawSetting]) => {
+    const model = (rawSetting as { model?: string } | undefined)?.model;
+    return typeof model === 'string' && model.trim();
+  });
+
+  const legacyModel = legacyStoredProviderModel
+    ? {
+        provider: normalizeProvider(legacyStoredProviderModel[0]),
+        model: ((legacyStoredProviderModel[1] as { model?: string }).model || '').trim(),
+      }
+    : extractLegacyModel(candidate);
+
+  if (llmSettings.modelOrder.length === 0 && legacyModel) {
+    llmSettings = addLlmModel(llmSettings, legacyModel);
+    const migratedModelId = llmSettings.modelOrder[0];
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', migratedModelId);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', migratedModelId);
+  }
 
   return {
     llmSettings,
-    llm: buildLlmConfig(currentProvider, ensureProviderSetting(llmSettings, currentProvider)),
   };
 }
 
-export function getActiveProvider(config: Pick<AppConfig, 'llmSettings' | 'llm'>): LlmProvider {
-  return normalizeProvider(config.llmSettings?.activeProvider ?? config.llm?.provider);
+export function getActiveProvider(config: Pick<AppConfig, 'llmSettings'>): LlmProvider {
+  return normalizeProvider(config.llmSettings?.activeProvider);
 }
 
-export function getActiveProviderSetting(config: Pick<AppConfig, 'llmSettings' | 'llm'>): LlmProviderSetting {
+export function getActiveProviderSetting(config: Pick<AppConfig, 'llmSettings'>): LlmProviderSetting {
   const provider = getActiveProvider(config);
-  if (config.llmSettings) {
-    return ensureProviderSetting(config.llmSettings, provider);
-  }
-
-  return sanitizeProviderSetting(provider, config.llm
-    ? {
-        apiHost: config.llm.baseUrl || undefined,
-        apiKey: config.llm.apiKey || undefined,
-        model: config.llm.model || undefined,
-        apiPath: config.llm.apiPath || undefined,
-        apiVersion: config.llm.apiVersion || undefined,
-        temperature: config.llm.temperature,
-      }
-    : undefined);
+  return ensureProviderSetting(config.llmSettings, provider);
 }
 
-export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings' | 'llm'>): LlmConfig {
+export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings'>): LlmConfig {
   const provider = getActiveProvider(config);
   return buildLlmConfig(provider, getActiveProviderSetting(config));
 }
 
-export function isLlmConfigComplete(llmConfig: LlmConfig): boolean {
+export function getFeatureLlmConfig(
+  config: Pick<AppConfig, 'llmSettings'>,
+  feature: LlmFeature,
+): LlmConfig | null {
+  const modelEntry = getFeatureModelEntry(config, feature);
+  if (!modelEntry) {
+    return null;
+  }
+
+  const setting = ensureProviderSetting(config.llmSettings, modelEntry.provider);
+  return {
+    ...buildLlmConfig(modelEntry.provider, setting),
+    model: modelEntry.model,
+  };
+}
+
+export function isLlmConfigComplete(llmConfig: LlmConfig | null): boolean {
+  if (!llmConfig) {
+    return false;
+  }
+
   const definition = getProviderDefinition(llmConfig.provider);
   const hasApiHost = Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(llmConfig.apiKey?.trim());
@@ -458,14 +730,17 @@ export function isLlmConfigComplete(llmConfig: LlmConfig): boolean {
   return hasApiHost && hasApiKey && hasModel;
 }
 
+export function isFeatureLlmConfigComplete(
+  config: Pick<AppConfig, 'llmSettings'>,
+  feature: LlmFeature,
+): boolean {
+  return isLlmConfigComplete(getFeatureLlmConfig(config, feature));
+}
+
 export function buildLlmConfigPatch(
   nextLlmSettings: LlmSettings,
-): Pick<AppConfig, 'llmSettings' | 'llm'> {
+): Pick<AppConfig, 'llmSettings'> {
   return {
     llmSettings: nextLlmSettings,
-    llm: buildLlmConfig(
-      nextLlmSettings.activeProvider,
-      ensureProviderSetting(nextLlmSettings, nextLlmSettings.activeProvider),
-    ),
   };
 }

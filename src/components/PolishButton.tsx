@@ -6,7 +6,7 @@ import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
 import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
-import { getActiveLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 
 /** Props for PolishButton. */
 interface PolishButtonProps {
@@ -161,11 +161,11 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const handleStartPolish = async () => {
         if (isPolishing) return;
 
-        const llm = getActiveLlmConfig(config);
+        const llm = getFeatureLlmConfig(config, 'polish');
         if (!isLlmConfigComplete(llm)) {
             await showError({
-                code: 'config.llm_missing',
-                messageKey: 'errors.config.llm_missing',
+                code: 'config.polish_model_missing',
+                messageKey: 'errors.config.polish_model_missing',
                 showCause: false,
             });
             return;

@@ -37,6 +37,8 @@
         },
         "config": {
             "llm_missing": "请先在设置中配置 LLM 服务。",
+            "polish_model_missing": "请先在 设置 > LLM 服务 中为润色指定模型。",
+            "translation_model_missing": "请先在 设置 > LLM 服务 中为翻译指定模型。",
             "offline_model_missing": "请先在设置中配置离线模型。"
         },
         "batch": {
@@ -305,6 +307,16 @@
             "api_version": "API 版本",
             "api_path": "API 路径",
             "model_name": "模型名称",
+            "added_models": "已添加模型",
+            "add_model": "添加模型",
+            "no_models_added": "尚未添加模型。",
+            "feature_models": "功能模型绑定",
+            "feature_models_hint": "使用润色和翻译前，请先分别指定对应模型。",
+            "polish_model": "润色模型",
+            "translation_model": "翻译模型",
+            "used_for_polish": "用于润色",
+            "used_for_translation": "用于翻译",
+            "unassigned": "未指定",
             "test_connection": "测试连接",
             "testing": "测试中...",
             "connection_success": "连接成功！响应：",

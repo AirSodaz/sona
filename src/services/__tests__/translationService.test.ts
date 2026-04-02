@@ -44,12 +44,26 @@ describe('TranslationService', () => {
   it('translates the active transcript incrementally and toggles visibility when finished', async () => {
     const mockStore = {
       config: {
-        llm: {
-          provider: 'open_ai',
-          baseUrl: 'test-url',
-          apiKey: 'test-key',
-          model: 'test-model',
-          temperature: 0.7,
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            translationModelId: 'open-ai-test',
+          },
         },
         translationLanguage: 'ja',
       },
@@ -100,12 +114,26 @@ describe('TranslationService', () => {
   it('falls back to final result when no chunk event arrives', async () => {
     const mockStore = {
       config: {
-        llm: {
-          provider: 'open_ai',
-          baseUrl: 'test-url',
-          apiKey: 'test-key',
-          model: 'test-model',
-          temperature: 0.7,
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            translationModelId: 'open-ai-test',
+          },
         },
         translationLanguage: 'ja',
       },
@@ -127,12 +155,26 @@ describe('TranslationService', () => {
   it('updates background history when the active record changes mid-translation', async () => {
     const activeStore = {
       config: {
-        llm: {
-          provider: 'open_ai',
-          baseUrl: 'test-url',
-          apiKey: 'test-key',
-          model: 'test-model',
-          temperature: 0.7,
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            translationModelId: 'open-ai-test',
+          },
         },
         translationLanguage: 'zh',
       },

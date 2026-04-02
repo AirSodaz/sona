@@ -3,7 +3,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
-import { getActiveLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
 import {
   createLlmTaskId,
   listenToLlmTaskChunks,
@@ -17,7 +17,7 @@ class TranslationService {
   async translateCurrentTranscript() {
     const store = useTranscriptStore.getState();
     const config = store.config;
-    const llm = getActiveLlmConfig(config);
+    const llm = getFeatureLlmConfig(config, 'translation');
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
@@ -77,7 +77,7 @@ class TranslationService {
 
     return {
       taskId,
-      config: getActiveLlmConfig(store.config),
+      config: getFeatureLlmConfig(store.config, 'translation')!,
       segments: store.segments.map(({ id, text }) => ({ id, text })),
       targetLanguage: store.config.translationLanguage || 'zh',
     };

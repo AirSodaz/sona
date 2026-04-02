@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
-import { createLlmSettings, DEFAULT_LLM_CONFIG } from '../services/llmConfig';
+import { createLlmSettings } from '../services/llmConfig';
 
 /** State interface for the transcript store. */
 interface TranscriptState {
@@ -270,7 +270,6 @@ const DEFAULT_CONFIG: AppConfig = {
     captionFontSize: 24,
     captionFontColor: '#ffffff',
     llmSettings: createLlmSettings(),
-    llm: DEFAULT_LLM_CONFIG,
     translationLanguage: 'zh',
     autoPolish: false,
     autoPolishFrequency: 5,

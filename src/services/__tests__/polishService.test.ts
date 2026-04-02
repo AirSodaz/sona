@@ -35,12 +35,26 @@ describe('PolishService', () => {
 
     (useTranscriptStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       config: {
-        llm: {
-          provider: 'open_ai',
-          baseUrl: 'test-url',
-          apiKey: 'test-key',
-          model: 'test-model',
-          temperature: 0.7,
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
         },
         polishScenario: 'custom',
         polishContext: '',
@@ -133,12 +147,26 @@ describe('PolishService', () => {
 
     const mockStore = {
       config: {
-        llm: {
-          provider: 'open_ai',
-          baseUrl: 'test-url',
-          apiKey: 'test-key',
-          model: 'test-model',
-          temperature: 0.7,
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
         },
         polishScenario: 'custom',
         polishContext: '',

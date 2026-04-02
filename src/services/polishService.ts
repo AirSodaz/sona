@@ -6,7 +6,7 @@ import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
-import { getActiveLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
 import {
   createLlmTaskId,
   listenToLlmTaskChunks,
@@ -22,7 +22,7 @@ class PolishService {
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
   ): Promise<void> {
     const store = useTranscriptStore.getState();
-    const llm = getActiveLlmConfig(store.config);
+    const llm = getFeatureLlmConfig(store.config, 'polish');
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
@@ -115,7 +115,7 @@ class PolishService {
 
     return {
       taskId,
-      config: getActiveLlmConfig(config),
+      config: getFeatureLlmConfig(config, 'polish')!,
       segments: segments.map(({ id, text }) => ({ id, text })),
       context: scenario === 'custom' ? (config.polishContext || '') : '',
       keywords: config.polishKeywords || '',

@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addLlmModel,
   ensureLlmState,
-  getActiveLlmConfig,
+  getFeatureLlmConfig,
   createLlmSettings,
   updateProviderSetting,
   buildLlmConfigPatch,
+  removeLlmModel,
+  setFeatureModelSelection,
 } from '../llmConfig';
 
 describe('llmConfig', () => {
   it('migrates legacy llm config into llmSettings without losing values', () => {
-    const { llmSettings, llm } = ensureLlmState({
+    const { llmSettings } = ensureLlmState({
       llm: {
         provider: 'open_ai',
         baseUrl: 'https://api.openai.com',
@@ -23,19 +26,26 @@ describe('llmConfig', () => {
     expect(llmSettings.providers.open_ai).toEqual(expect.objectContaining({
       apiHost: 'https://api.openai.com',
       apiKey: 'legacy-key',
-      model: 'gpt-4o',
       temperature: 0.2,
     }));
-    expect(llm).toEqual(expect.objectContaining({
+    expect(llmSettings.modelOrder).toHaveLength(1);
+    expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
+      provider: 'open_ai',
+      model: 'gpt-4o',
+    }));
+    expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
+    expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
+    expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
       provider: 'open_ai',
       baseUrl: 'https://api.openai.com',
       apiKey: 'legacy-key',
       model: 'gpt-4o',
+      temperature: 0.2,
     }));
   });
 
   it('restores the Chatbox default host when migrating an empty Gemini host', () => {
-    const { llmSettings, llm } = ensureLlmState({
+    const { llmSettings } = ensureLlmState({
       llm: {
         provider: 'gemini',
         baseUrl: '',
@@ -48,37 +58,48 @@ describe('llmConfig', () => {
     expect(llmSettings.providers.gemini).toEqual(expect.objectContaining({
       apiHost: 'https://generativelanguage.googleapis.com',
     }));
-    expect(llm.baseUrl).toBe('https://generativelanguage.googleapis.com');
+    expect(getFeatureLlmConfig({ llmSettings }, 'polish')?.baseUrl).toBe('https://generativelanguage.googleapis.com');
   });
 
-  it('derives active llm config from the active provider entry', () => {
-    const baseConfig: any = {
-      llmSettings: createLlmSettings(),
-    };
-    let llmSettings = updateProviderSetting(baseConfig.llmSettings, 'open_ai', {
+  it('resolves feature configs independently', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
       apiHost: 'https://api.openai.com',
       apiKey: 'openai-key',
+    });
+    llmSettings = updateProviderSetting(llmSettings, 'anthropic', {
+      apiHost: 'https://api.anthropic.com',
+      apiKey: 'anthropic-key',
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'anthropic', model: 'claude-sonnet-4-20250514' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[1]);
+
+    const config = buildLlmConfigPatch(llmSettings);
+
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
+      provider: 'open_ai',
+      apiKey: 'openai-key',
       model: 'gpt-4o-mini',
-    });
-    llmSettings = updateProviderSetting(llmSettings, 'azure_openai', {
-      apiHost: 'https://example.openai.azure.com',
-      apiKey: 'azure-key',
-      model: 'deployment-1',
-      apiVersion: '2024-10-21',
-    });
-    llmSettings.activeProvider = 'azure_openai';
-
-    const config = {
-      ...baseConfig,
-      ...buildLlmConfigPatch(llmSettings),
-    };
-
-    expect(getActiveLlmConfig(config)).toEqual(expect.objectContaining({
-      provider: 'azure_openai',
-      baseUrl: 'https://example.openai.azure.com',
-      apiKey: 'azure-key',
-      model: 'deployment-1',
-      apiVersion: '2024-10-21',
     }));
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
+      provider: 'anthropic',
+      apiKey: 'anthropic-key',
+      model: 'claude-sonnet-4-20250514',
+    }));
+  });
+
+  it('clears feature selections when removing a selected model', () => {
+    let llmSettings = addLlmModel(createLlmSettings(), { provider: 'open_ai', model: 'gpt-4o-mini' });
+    const modelId = llmSettings.modelOrder[0];
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', modelId);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', modelId);
+
+    const nextSettings = removeLlmModel(llmSettings, modelId);
+
+    expect(nextSettings.modelOrder).toEqual([]);
+    expect(nextSettings.selections.polishModelId).toBeUndefined();
+    expect(nextSettings.selections.translationModelId).toBeUndefined();
   });
 });

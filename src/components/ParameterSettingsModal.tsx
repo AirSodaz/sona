@@ -4,7 +4,7 @@ import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { XIcon } from './Icons';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { getActiveLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { isFeatureLlmConfigComplete } from '../services/llmConfig';
 
 interface ParameterSettingsModalProps {
     isOpen: boolean;
@@ -33,8 +33,7 @@ export function ParameterSettingsModal({
     const language = config.language;
     const autoPolish = config.autoPolish ?? false;
     const autoPolishFrequency = config.autoPolishFrequency ?? 5;
-    const llm = getActiveLlmConfig(config);
-    const isLlmConfigured = isLlmConfigComplete(llm);
+    const isLlmConfigured = isFeatureLlmConfigComplete(config, 'polish');
 
     // Focus management
     useEffect(() => {

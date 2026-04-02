@@ -14,7 +14,6 @@ function createMockConfig() {
     const llmSettings = updateProviderSetting(baseConfig.llmSettings, 'open_ai', {
         apiHost: 'https://api.openai.com',
         apiKey: 'openai-key',
-        model: 'gpt-4o-mini',
     });
 
     return {
@@ -76,15 +75,12 @@ describe('useSettingsLogic', () => {
 
         act(() => {
             result.current.updateConfig({
-                llm: {
-                    ...mockConfig.llm,
-                    model: 'gpt-4.1',
-                },
+                language: 'en',
             });
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
-            llm: expect.objectContaining({ model: 'gpt-4.1' }),
+            language: 'en',
         }));
     });
 
@@ -102,18 +98,12 @@ describe('useSettingsLogic', () => {
                     open_ai: expect.objectContaining({
                         apiHost: 'https://api.openai.com',
                         apiKey: 'openai-key',
-                        model: 'gpt-4o-mini',
                     }),
                     azure_openai: expect.objectContaining({
                         apiHost: '',
                         apiVersion: '2024-10-21',
                     }),
                 }),
-            }),
-            llm: expect.objectContaining({
-                provider: 'azure_openai',
-                baseUrl: '',
-                apiVersion: '2024-10-21',
             }),
         }));
     });
@@ -126,9 +116,13 @@ describe('useSettingsLogic', () => {
         });
 
         expect(mockSetConfig).toHaveBeenCalledWith(expect.objectContaining({
-            llm: expect.objectContaining({
-                provider: 'gemini',
-                baseUrl: 'https://generativelanguage.googleapis.com',
+            llmSettings: expect.objectContaining({
+                activeProvider: 'gemini',
+                providers: expect.objectContaining({
+                    gemini: expect.objectContaining({
+                        apiHost: 'https://generativelanguage.googleapis.com',
+                    }),
+                }),
             }),
         }));
     });

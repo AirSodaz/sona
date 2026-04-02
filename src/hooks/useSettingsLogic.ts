@@ -110,7 +110,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     };
 
     const changeLlmServiceType = (provider: LlmProvider) => {
-        const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings, llm: config.llm } : ensureLlmState(config as typeof config & Record<string, any>);
+        const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as typeof config & Record<string, any>);
         const nextLlmSettings = setActiveProvider(currentLlmState.llmSettings, provider);
         updateConfig(buildLlmConfigPatch(nextLlmSettings));
     };
