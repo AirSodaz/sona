@@ -18,6 +18,7 @@ import {
   LLM_PROVIDER_DEFINITIONS,
   removeLlmModel,
   setFeatureModelSelection,
+  setFeatureTemperature,
   updateProviderSetting,
 } from '../../services/llmConfig';
 
@@ -98,7 +99,8 @@ export function SettingsLLMServiceTab({
 
   const llmBaseUrl = providerSetting.apiHost || providerDefinition.defaultApiHost;
   const llmApiKey = providerSetting.apiKey || '';
-  const llmTemperature = providerSetting.temperature ?? 0.7;
+  const polishTemperature = config.llmSettings?.selections.polishTemperature ?? (providerSetting.temperature ?? 0.7);
+  const translationTemperature = config.llmSettings?.selections.translationTemperature ?? (providerSetting.temperature ?? 0.7);
   const llmApiPath = providerSetting.apiPath || providerDefinition.defaultApiPath || '';
   const llmApiVersion = providerSetting.apiVersion || providerDefinition.defaultApiVersion || '';
 
@@ -316,6 +318,57 @@ export function SettingsLLMServiceTab({
     applyLlmSettings(setFeatureModelSelection(currentLlmState, feature, modelId || undefined));
   };
 
+  const handleFeatureTemperatureChange = (feature: 'polish' | 'translation', temperature: number) => {
+    const currentLlmState = config.llmSettings
+      ? config.llmSettings
+      : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+    applyLlmSettings(setFeatureTemperature(currentLlmState, feature, temperature));
+  };
+
+  const renderTemperatureControl = (
+    value: number,
+    onChange: (value: number) => void,
+    testId?: string,
+  ) => (
+    <div
+      style={{
+        alignItems: 'center',
+        display: 'grid',
+        gap: '8px',
+        gridTemplateColumns: '1fr 180px 60px',
+        marginTop: '8px',
+      }}
+    >
+      <div />
+      <input
+        data-testid={testId ? `${testId}-range` : undefined}
+        type="range"
+        style={{ justifySelf: 'end', margin: 0, width: '180px' }}
+        min={0}
+        max={2}
+        step={0.05}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+      <input
+        data-testid={testId ? `${testId}-number` : undefined}
+        type="number"
+        className="settings-input"
+        style={{ padding: '2px 4px', textAlign: 'center', width: '60px' }}
+        min={0}
+        max={2}
+        step={0.05}
+        value={value}
+        onChange={(e) => {
+          const nextValue = parseFloat(e.target.value);
+          if (!Number.isNaN(nextValue) && nextValue >= 0 && nextValue <= 2) {
+            onChange(nextValue);
+          }
+        }}
+      />
+    </div>
+  );
+
   const handleTestConnection = async (modelId: string) => {
     const entry = config.llmSettings?.models[modelId];
     if (!entry) {
@@ -419,44 +472,6 @@ export function SettingsLLMServiceTab({
           />
         </div>
       )}
-
-      <div className="settings-item with-divider">
-        <label className="settings-label">{t('settings.llm.temperature')}</label>
-        <div
-          style={{
-            alignItems: 'center',
-            display: 'grid',
-            gap: '8px',
-            gridTemplateColumns: '1fr 180px 60px',
-          }}
-        >
-          <div />
-          <input
-            type="range"
-            style={{ justifySelf: 'end', margin: 0, width: '180px' }}
-            min={0}
-            max={2}
-            step={0.05}
-            value={llmTemperature}
-            onChange={(e) => applyProviderSettingUpdates({ temperature: parseFloat(e.target.value) })}
-          />
-          <input
-            type="number"
-            className="settings-input"
-            style={{ padding: '2px 4px', textAlign: 'center', width: '60px' }}
-            min={0}
-            max={2}
-            step={0.05}
-            value={llmTemperature}
-            onChange={(e) => {
-              const value = parseFloat(e.target.value);
-              if (!Number.isNaN(value) && value >= 0 && value <= 2) {
-                applyProviderSettingUpdates({ temperature: value });
-              }
-            }}
-          />
-        </div>
-      </div>
 
       <div className="settings-item with-divider">
         <label className="settings-label">{t('settings.llm.added_models')}</label>
@@ -608,6 +623,12 @@ export function SettingsLLMServiceTab({
             <div className="settings-hint" style={{ marginTop: '8px' }}>
               {getFeatureStatus('polish')}
             </div>
+            <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.polish_temperature')}</label>
+            {renderTemperatureControl(
+              polishTemperature,
+              (value) => handleFeatureTemperatureChange('polish', value),
+              'polish-temperature',
+            )}
           </div>
           <div>
             <label className="settings-label">{t('settings.llm.translation_model')}</label>
@@ -622,6 +643,12 @@ export function SettingsLLMServiceTab({
             <div className="settings-hint" style={{ marginTop: '8px' }}>
               {getFeatureStatus('translation')}
             </div>
+            <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.translation_temperature')}</label>
+            {renderTemperatureControl(
+              translationTemperature,
+              (value) => handleFeatureTemperatureChange('translation', value),
+              'translation-temperature',
+            )}
           </div>
         </div>
 

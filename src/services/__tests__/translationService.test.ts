@@ -98,7 +98,7 @@ describe('TranslationService', () => {
     expect(invoke).toHaveBeenCalledWith('translate_transcript_segments', {
       request: {
         taskId: 'translate-task-id',
-        config: expect.objectContaining({ apiKey: 'test-key' }),
+        config: expect.objectContaining({ apiKey: 'test-key', temperature: 0.7 }),
         segments: [{ id: '1', text: 'hello' }],
         targetLanguage: 'ja',
       },

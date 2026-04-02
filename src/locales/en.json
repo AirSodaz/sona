@@ -326,6 +326,8 @@
             "type_manually": "Type manually...",
             "back_to_list": "Back to list",
             "temperature": "Temperature",
+            "polish_temperature": "Polish Temperature",
+            "translation_temperature": "Translation Temperature",
             "status_ready": "Ready",
             "status_missing_api_key": "Missing API Key",
             "status_missing_model": "Missing model"

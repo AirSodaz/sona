@@ -96,6 +96,10 @@ export interface LlmFeatureSelections {
   polishModelId?: string;
   /** Selected model entry for translation. */
   translationModelId?: string;
+  /** Temperature override for polish. */
+  polishTemperature?: number;
+  /** Temperature override for translation. */
+  translationTemperature?: number;
 }
 
 export interface LlmSettings {

@@ -8,6 +8,7 @@ import {
   buildLlmConfigPatch,
   removeLlmModel,
   setFeatureModelSelection,
+  setFeatureTemperature,
 } from '../llmConfig';
 
 describe('llmConfig', () => {
@@ -90,7 +91,79 @@ describe('llmConfig', () => {
     }));
   });
 
-  it('clears feature selections when removing a selected model', () => {
+  it('resolves feature-specific temperatures before provider defaults', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
+      apiHost: 'https://api.openai.com',
+      apiKey: 'openai-key',
+      temperature: 0.7,
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureTemperature(llmSettings, 'polish', 0.2);
+    llmSettings = setFeatureTemperature(llmSettings, 'translation', 1.1);
+
+    const config = buildLlmConfigPatch(llmSettings);
+
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
+      temperature: 0.2,
+    }));
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
+      temperature: 1.1,
+    }));
+  });
+
+  it('falls back to provider temperature when feature temperature is unset', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
+      apiHost: 'https://api.openai.com',
+      apiKey: 'openai-key',
+      temperature: 0.65,
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+
+    const config = buildLlmConfigPatch(llmSettings);
+
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
+      temperature: 0.65,
+    }));
+  });
+
+  it('ignores invalid stored feature temperatures', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'open_ai',
+        providers: {
+          open_ai: {
+            apiHost: 'https://api.openai.com',
+            apiKey: 'openai-key',
+            temperature: 0.55,
+          },
+        },
+        models: {
+          'open-ai-test': {
+            id: 'open-ai-test',
+            provider: 'open_ai',
+            model: 'gpt-4o-mini',
+          },
+        },
+        modelOrder: ['open-ai-test'],
+        selections: {
+          polishModelId: 'open-ai-test',
+          polishTemperature: 9,
+        },
+      },
+    } as any);
+
+    expect(llmSettings.selections.polishTemperature).toBeUndefined();
+    expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
+      temperature: 0.55,
+    }));
+  });
+
+  it('clears feature selections when removing the selected model', () => {
     let llmSettings = addLlmModel(createLlmSettings(), { provider: 'open_ai', model: 'gpt-4o-mini' });
     const modelId = llmSettings.modelOrder[0];
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', modelId);

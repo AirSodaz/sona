@@ -178,6 +178,60 @@ describe('SettingsLLMServiceTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalled();
   });
 
+  it('renders only feature-specific temperature controls', () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig()}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
+    expect(screen.getByText('settings.llm.polish_temperature')).toBeDefined();
+    expect(screen.getByText('settings.llm.translation_temperature')).toBeDefined();
+  });
+
+  it('updates polish temperature independently', () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig()}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId('polish-temperature-number'), { target: { value: '0.25' } });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        selections: expect.objectContaining({
+          polishTemperature: 0.25,
+        }),
+      }),
+    }));
+  });
+
+  it('updates translation temperature independently', () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig()}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId('translation-temperature-number'), { target: { value: '1.1' } });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        selections: expect.objectContaining({
+          translationTemperature: 1.1,
+        }),
+      }),
+    }));
+  });
+
   it('shows missing model status when a feature is unassigned', () => {
     const config = buildConfig();
     if (config.llmSettings) {

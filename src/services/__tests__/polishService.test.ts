@@ -98,7 +98,7 @@ describe('PolishService', () => {
     expect(invoke).toHaveBeenCalledWith('polish_transcript_segments', {
       request: {
         taskId: 'polish-task-id',
-        config: expect.objectContaining({ apiKey: 'test-key' }),
+        config: expect.objectContaining({ apiKey: 'test-key', temperature: 0.7 }),
         segments: [
           { id: '1', text: 'hello' },
           { id: '2', text: 'world' },

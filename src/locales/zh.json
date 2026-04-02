@@ -326,6 +326,8 @@
             "type_manually": "手动输入...",
             "back_to_list": "返回列表",
             "temperature": "Temperature",
+            "polish_temperature": "润色 Temperature",
+            "translation_temperature": "翻译 Temperature",
             "status_ready": "可用",
             "status_missing_api_key": "缺 API Key",
             "status_missing_model": "缺模型"
