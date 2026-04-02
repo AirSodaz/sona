@@ -95,6 +95,7 @@ export function ModelCard({
                                     {baseModel.modes.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)).join(',')}
                                 </span>
                             )}
+                            {baseModel.isRecommended && <span className="model-tag">{t('common.recommended')}</span>}
                         </div>
                     </div>
                     <div className="model-description">{t(baseModel.description)}</div>

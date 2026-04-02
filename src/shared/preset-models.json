@@ -8,6 +8,7 @@
     "modes": ["streaming", "offline"],
     "language": "zh,en,ja,ko,yue",
     "size": "~155 MB",
+    "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -19,6 +20,30 @@
     },
     "groupId": "sensevoice",
     "versionLabel": "Int8"
+  },
+  {
+    "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
+    "name": "Qwen3 ASR",
+    "description": "settings.descriptions.qwen3_asr",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
+    "type": "qwen3-asr",
+    "modes": ["offline"],
+    "language": "multi",
+    "size": "827 MB",
+    "isRecommended": true,
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false
+    },
+    "fileConfig": {
+      "convFrontend": "conv_frontend.onnx",
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokenizer": "tokenizer"
+    },
+    "groupId": "qwen3-asr",
+    "versionLabel": "0.6B Int8"
   },
   {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
@@ -236,29 +261,6 @@
       "decoder": "decoder.int8.onnx",
       "tokens": "tokens.txt"
     }
-  },
-  {
-    "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
-    "name": "Qwen3 ASR",
-    "description": "settings.descriptions.qwen3_asr",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
-    "type": "qwen3-asr",
-    "modes": ["offline"],
-    "language": "multi",
-    "size": "827 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false
-    },
-    "fileConfig": {
-      "convFrontend": "conv_frontend.onnx",
-      "encoder": "encoder.int8.onnx",
-      "decoder": "decoder.int8.onnx",
-      "tokenizer": "tokenizer"
-    },
-    "groupId": "qwen3-asr",
-    "versionLabel": "0.6B Int8"
   },
   {
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",

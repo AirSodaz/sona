@@ -46,6 +46,8 @@ export interface ModelInfo {
     language: string;
     /** Display size of the model (e.g., "~100 MB"). */
     size: string;
+    /** Whether the model should be highlighted as recommended. */
+    isRecommended?: boolean;
     /** Whether the download is an archive that needs extraction. Defaults to true. */
     isArchive?: boolean;
     /** Specific filename to look for or save as. */
