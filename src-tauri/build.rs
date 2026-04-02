@@ -1,63 +1,70 @@
 use std::env;
-use std::fs;
 use std::path::Path;
+
+const SHERPA_ONNX_STATIC_LIBS: &[&str] = &[
+    "sherpa-onnx-c-api",
+    "sherpa-onnx-core",
+    "kaldi-decoder-core",
+    "sherpa-onnx-kaldifst-core",
+    "sherpa-onnx-fstfar",
+    "sherpa-onnx-fst",
+    "kaldi-native-fbank-core",
+    "kissfft-float",
+    "piper_phonemize",
+    "espeak-ng",
+    "ucd",
+    "onnxruntime",
+    "ssentencepiece_core",
+];
 
 fn main() {
     println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
     if let Ok(lib_dir) = env::var("SHERPA_ONNX_LIB_DIR") {
         println!("cargo:rustc-link-search=native={}", lib_dir);
-        println!("cargo:rustc-link-lib=dylib=sherpa-onnx-c-api");
 
         let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-        if target_os == "linux" || target_os == "macos" {
-            println!("cargo:rustc-link-lib=dylib=onnxruntime");
-            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir);
-        } else if target_os == "windows" {
-            let lib_path = Path::new(&lib_dir);
-            if !lib_path.exists() {
-                panic!("SHERPA_ONNX_LIB_DIR does not exist: {}", lib_dir);
-            }
-
-            let required_files = [
-                "sherpa-onnx-c-api.lib",
-                "onnxruntime.lib",
-                "sherpa-onnx-c-api.dll",
-                "onnxruntime.dll",
-            ];
-            for file_name in required_files {
-                let file_path = lib_path.join(file_name);
-                if !file_path.exists() {
-                    panic!(
-                        "Missing required sherpa-onnx Windows file: {}",
-                        file_path.display()
-                    );
-                }
-            }
-
-            // Copy dlls to the output directory
-            let out_dir = env::var("OUT_DIR").unwrap();
-            let out_path = Path::new(&out_dir)
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap();
-
-            for dll in ["sherpa-onnx-c-api.dll", "onnxruntime.dll"] {
-                let source_path = lib_path.join(dll);
-                let dest_path = out_path.join(dll);
-                fs::copy(&source_path, &dest_path).unwrap_or_else(|error| {
-                    panic!(
-                        "Failed to copy {} to {}: {}",
-                        source_path.display(),
-                        dest_path.display(),
-                        error
-                    )
-                });
-            }
+        if target_os == "linux" || target_os == "macos" || target_os == "windows" {
+            configure_static_sherpa_linking(&lib_dir, &target_os);
         }
     }
 
     tauri_build::build()
+}
+
+fn configure_static_sherpa_linking(lib_dir: &str, target_os: &str) {
+    let lib_path = Path::new(lib_dir);
+    if !lib_path.exists() {
+        panic!("SHERPA_ONNX_LIB_DIR does not exist: {}", lib_dir);
+    }
+
+    let extension = if target_os == "windows" { "lib" } else { "a" };
+    for lib in SHERPA_ONNX_STATIC_LIBS {
+        let lib_file = lib_path.join(format!("lib{lib}.{extension}"));
+        let lib_file = if target_os == "windows" {
+            lib_path.join(format!("{lib}.{extension}"))
+        } else {
+            lib_file
+        };
+        if !lib_file.exists() {
+            panic!(
+                "Missing required sherpa-onnx static library: {}",
+                lib_file.display()
+            );
+        }
+        println!("cargo:rustc-link-lib=static={lib}");
+    }
+
+    match target_os {
+        "linux" => {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+            println!("cargo:rustc-link-lib=dylib=m");
+            println!("cargo:rustc-link-lib=dylib=pthread");
+            println!("cargo:rustc-link-lib=dylib=dl");
+        }
+        "macos" => {
+            println!("cargo:rustc-link-lib=dylib=c++");
+            println!("cargo:rustc-link-lib=framework=Foundation");
+        }
+        _ => {}
+    }
 }
