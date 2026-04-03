@@ -1,5 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Keyboard } from 'lucide-react';
+import { SettingsTabContainer, SettingsSection } from './SettingsLayout';
 
 interface ShortcutItem {
     key: string;
@@ -52,16 +54,21 @@ export function SettingsShortcutsTab(): React.JSX.Element {
     ];
 
     return (
-        <div className="settings-tab-content">
-            <div className="shortcuts-grid">
+        <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
+            <SettingsSection
+                title={t('settings.shortcuts_title', { defaultValue: 'Keyboard Shortcuts' })}
+                icon={<Keyboard size={20} />}
+                description={t('settings.shortcuts_description', { defaultValue: 'View and customize application hotkeys.' })}
+            >
                 {sections.map((section, index) => (
-                    <div key={index} className="shortcut-section mb-6">
-                        <h4 className="text-sm font-semibold text-muted mb-3 uppercase tracking-wider">
+                    <div key={index} className="shortcut-group-wrapper" style={{ padding: '0 24px' }}>
+                        <h4 className="shortcut-group-title">
                             {section.title}
                         </h4>
                         <div className="shortcut-list">
                             {section.items.map((item, i) => (
                                 <div key={i} className="shortcut-item">
+                                    <span className="shortcut-desc">{item.description}</span>
                                     <div className="shortcut-keys">
                                         {item.key.split(' / ').map((k, kIndex, arr) => (
                                             <React.Fragment key={kIndex}>
@@ -70,27 +77,31 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                                             </React.Fragment>
                                         ))}
                                     </div>
-                                    <span className="shortcut-desc">{item.description}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 ))}
-            </div>
+            </SettingsSection>
 
             <style>{`
-                .shortcuts-grid {
-                    display: grid;
-                    gap: 24px;
+                .shortcut-group-wrapper:first-child {
+                    padding-top: 24px !important;
                 }
-                
-                .shortcut-section {
-                    background: var(--color-bg-elevated);
-                    border: 1px solid var(--color-border);
-                    border-radius: var(--radius-lg);
-                    padding: 16px;
+                .shortcut-group-wrapper:last-child {
+                    padding-bottom: 24px !important;
                 }
-
+                .shortcut-group-wrapper + .shortcut-group-wrapper {
+                    margin-top: 24px;
+                }
+                .shortcut-group-title {
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    color: var(--color-text-muted);
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 12px;
+                }
                 .shortcut-list {
                     display: flex;
                     flex-direction: column;
@@ -125,20 +136,13 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 }
 
                 .shortcut-desc {
-                    color: var(--color-text-muted);
-                    font-size: 0.8rem;
+                    color: var(--color-text-primary);
+                    font-size: 0.9rem;
                 }
 
-                .uppercase { text-transform: uppercase; }
-                .tracking-wider { letter-spacing: 0.05em; }
-                .font-semibold { font-weight: 600; }
-                .text-sm { font-size: 0.875rem; }
                 .text-muted { color: var(--color-text-muted); }
-                .mb-3 { margin-bottom: 0.75rem; }
-                .mb-4 { margin-bottom: 1rem; }
-                .mb-6 { margin-bottom: 1.5rem; }
                 .mx-1 { margin-left: 0.25rem; margin-right: 0.25rem; }
             `}</style>
-        </div>
+        </SettingsTabContainer>
     );
 }

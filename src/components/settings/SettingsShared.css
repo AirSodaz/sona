@@ -1,0 +1,171 @@
+/* =========================================================================
+   Settings UI - Warm Minimalism
+   ========================================================================= */
+
+.settings-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl, 32px);
+  padding: 0 0 var(--spacing-xl, 32px) 0;
+  animation: fadeIn var(--transition-normal, 0.2s) ease-in-out;
+  max-width: 800px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Section --- */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.settings-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.settings-section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  color: var(--color-text-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.settings-section-icon {
+  color: var(--color-text-muted);
+}
+
+.settings-section-description {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.settings-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px; /* Divider space */
+  background: var(--color-border); /* Acts as the divider color */
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  overflow: hidden;
+}
+
+/* --- Item --- */
+.settings-item-container {
+  display: flex;
+  background: var(--color-bg-primary); /* Blend with main background or use secondary */
+  padding: var(--spacing-lg, 24px);
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+/* For nested layout options */
+.settings-item-container.layout-horizontal {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xl, 32px);
+}
+
+.settings-item-container.layout-vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-md, 16px);
+}
+
+.settings-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0; /* Prevent flex overflow */
+}
+
+.settings-item-title {
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.settings-item-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.settings-item-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.settings-item-container.layout-vertical .settings-item-action {
+  width: 100%;
+}
+
+/* Remove internal border logic from individual tabs, standardizing input sizes */
+.settings-item-container input.settings-input,
+.settings-item-container .dropdown-container {
+  border-radius: var(--radius-sm, 8px);
+}
+
+/* --- Accordion --- */
+.accordion-wrapper {
+  background: var(--color-bg-primary);
+}
+
+.accordion-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+.accordion-header-btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.accordion-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+}
+
+.accordion-chevron {
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.accordion-chevron.open {
+  transform: rotate(90deg);
+}
+
+.accordion-header-status {
+  display: flex;
+  align-items: center;
+}
+
+.accordion-content-panel {
+  padding: var(--spacing-lg, 24px);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}

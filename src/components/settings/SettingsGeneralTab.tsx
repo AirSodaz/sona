@@ -1,8 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Settings } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
+import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
     config: AppConfig;
@@ -30,35 +32,34 @@ export function SettingsGeneralTab({
     const autoCheckUpdates = config.autoCheckUpdates ?? true;
 
     return (
-        <div
-            className="settings-group"
-            role="tabpanel"
-            id="settings-panel-general"
-            aria-labelledby="settings-tab-general"
-            tabIndex={0}
-        >
-            <div className="settings-item">
-                <label htmlFor="settings-language" className="settings-label">{t('settings.language')}</label>
-                <div style={{ width: '100%', maxWidth: 420 }}>
-                    <Dropdown
-                        id="settings-language"
-                        value={appLanguage}
-                        onChange={(value) => updateConfig({ appLanguage: value as 'auto' | 'en' | 'zh' })}
-                        options={[
-                            { value: 'auto', label: t('common.auto') },
-                            { value: 'en', label: 'English' },
-                            { value: 'zh', label: '中文' }
-                        ]}
-                    />
-                </div>
-                <div className="settings-hint">
-                    {t('settings.language_hint', { defaultValue: '' })}
-                </div>
-            </div>
+        <SettingsTabContainer id="settings-panel-general" ariaLabelledby="settings-tab-general">
+            <SettingsSection
+                title={t('settings.general_title', { defaultValue: 'General Preferences' })}
+                icon={<Settings size={20} />}
+                description={t('settings.general_description', { defaultValue: 'Manage basic application behaviors and appearance.' })}
+            >
+                <SettingsItem
+                    title={t('settings.language')}
+                    hint={t('settings.language_hint', { defaultValue: 'Change the display language.' })}
+                >
+                    <div style={{ width: '200px' }}>
+                        <Dropdown
+                            id="settings-language"
+                            value={appLanguage}
+                            onChange={(value) => updateConfig({ appLanguage: value as 'auto' | 'en' | 'zh' })}
+                            options={[
+                                { value: 'auto', label: t('common.auto') },
+                                { value: 'en', label: 'English' },
+                                { value: 'zh', label: '中文' }
+                            ]}
+                        />
+                    </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <label htmlFor="settings-theme" className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
-                <div style={{ width: '100%', maxWidth: 680 }}>
+                <SettingsItem
+                    title={t('settings.theme', { defaultValue: 'Theme' })}
+                    layout="vertical"
+                >
                     <div className="theme-selector-container">
                         <button
                             className={`theme-card ${theme === 'light' ? 'active' : ''}`}
@@ -114,53 +115,50 @@ export function SettingsGeneralTab({
                             <span className="theme-label">{t('common.auto')}</span>
                         </button>
                     </div>
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <label htmlFor="settings-font" className="settings-label">{t('settings.font', { defaultValue: 'Font' })}</label>
-                <div style={{ width: '100%', maxWidth: 420 }}>
-                    <Dropdown
-                        id="settings-font"
-                        value={font}
-                        onChange={(value) => updateConfig({ font: value as any })}
-                        options={[
-                            { value: 'system', label: t('settings.font_system', { defaultValue: 'System Default' }), style: { fontFamily: 'inherit' } },
-                            { value: 'serif', label: 'Serif (Merriweather)', style: { fontFamily: 'serif' } },
-                            { value: 'sans', label: 'Sans Serif (Inter)', style: { fontFamily: 'sans-serif' } },
-                            { value: 'mono', label: 'Monospace (JetBrains Mono)', style: { fontFamily: 'monospace' } },
-                            { value: 'arial', label: 'Arial', style: { fontFamily: 'Arial' } },
-                            { value: 'georgia', label: 'Georgia', style: { fontFamily: 'Georgia' } }
-                        ]}
-                        style={{ fontFamily: getFontFamily(font) }}
-                    />
-                </div>
-            </div>
-
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <div>
-                        <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}</div>
-                        <div className="settings-hint">
-                            {t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
-                        </div>
+                <SettingsItem
+                    title={t('settings.font', { defaultValue: 'Font Family' })}
+                >
+                    <div style={{ width: '240px' }}>
+                        <Dropdown
+                            id="settings-font"
+                            value={font}
+                            onChange={(value) => updateConfig({ font: value as any })}
+                            options={[
+                                { value: 'system', label: t('settings.font_system', { defaultValue: 'System Default' }), style: { fontFamily: 'inherit' } },
+                                { value: 'serif', label: 'Serif (Merriweather)', style: { fontFamily: 'serif' } },
+                                { value: 'sans', label: 'Sans Serif (Inter)', style: { fontFamily: 'sans-serif' } },
+                                { value: 'mono', label: 'Monospace (JetBrains Mono)', style: { fontFamily: 'monospace' } },
+                                { value: 'arial', label: 'Arial', style: { fontFamily: 'Arial' } },
+                                { value: 'georgia', label: 'Georgia', style: { fontFamily: 'Georgia' } }
+                            ]}
+                            style={{ fontFamily: getFontFamily(font) }}
+                        />
                     </div>
+                </SettingsItem>
+            </SettingsSection>
+
+            <SettingsSection>
+                <SettingsItem
+                    title={t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}
+                    hint={t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
+                >
                     <Switch
                         checked={minimizeToTrayOnExit}
                         onChange={(enabled) => updateConfig({ minimizeToTrayOnExit: enabled })}
                     />
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <div className="settings-label" style={{ marginBottom: 0 }}>{t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}</div>
+                <SettingsItem
+                    title={t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}
+                >
                     <Switch
                         checked={autoCheckUpdates}
                         onChange={(enabled) => updateConfig({ autoCheckUpdates: enabled })}
                     />
-                </div>
-            </div>
-        </div>
+                </SettingsItem>
+            </SettingsSection>
+        </SettingsTabContainer>
     );
 }

@@ -1,7 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Subtitles, Monitor } from 'lucide-react';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
+import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
 
 interface SettingsSubtitleTabProps {
     config: AppConfig;
@@ -22,63 +24,51 @@ export function SettingsSubtitleTab({
     const captionFontColor = config.captionFontColor || '#ffffff';
 
     return (
-        <div className="settings-group" role="tabpanel">
-            <div className="settings-item">
-                <div className="settings-item-row">
-                    <div>
-                        <div className="settings-label" style={{ marginBottom: 0 }}>
-                            {t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
-                        </div>
-                        <div className="settings-hint">
-                            {t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
-                        </div>
-                    </div>
+        <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
+            <SettingsSection
+                title={t('settings.subtitle_behavior_title', { defaultValue: 'Window Behavior' })}
+                icon={<Monitor size={20} />}
+                description={t('settings.subtitle_behavior_desc', { defaultValue: 'Control how the live caption window behaves.' })}
+            >
+                <SettingsItem
+                    title={t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
+                    hint={t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
+                >
                     <Switch
                         checked={startOnLaunch}
                         onChange={(enabled) => updateConfig({ startOnLaunch: enabled })}
                     />
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <div>
-                        <div className="settings-label" style={{ marginBottom: 0 }}>
-                            {t('live.lock_window', { defaultValue: 'Lock Window' })}
-                        </div>
-                        <div className="settings-hint">
-                            {t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
-                        </div>
-                    </div>
-                    <Switch
-                        checked={lockWindow}
-                        onChange={(enabled) => updateConfig({ lockWindow: enabled })}
-                    />
-                </div>
-            </div>
-
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <div>
-                        <div className="settings-label" style={{ marginBottom: 0 }}>
-                            {t('live.always_on_top', { defaultValue: 'Always on Top' })}
-                        </div>
-                        <div className="settings-hint">
-                            {t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
-                        </div>
-                    </div>
+                <SettingsItem
+                    title={t('live.always_on_top', { defaultValue: 'Always on Top' })}
+                    hint={t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
+                >
                     <Switch
                         checked={alwaysOnTop}
                         onChange={(enabled) => updateConfig({ alwaysOnTop: enabled })}
                     />
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.window_width', { defaultValue: 'Floating Window Width' })}
-                    </span>
+                <SettingsItem
+                    title={t('live.lock_window', { defaultValue: 'Lock Window' })}
+                    hint={t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
+                >
+                    <Switch
+                        checked={lockWindow}
+                        onChange={(enabled) => updateConfig({ lockWindow: enabled })}
+                    />
+                </SettingsItem>
+            </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.subtitle_appearance_title', { defaultValue: 'Appearance' })}
+                icon={<Subtitles size={20} />}
+                description={t('settings.subtitle_appearance_desc', { defaultValue: 'Customize the look of your live captions.' })}
+            >
+                <SettingsItem
+                    title={t('live.window_width', { defaultValue: 'Floating Window Width' })}
+                >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <input
                             type="number"
@@ -88,17 +78,14 @@ export function SettingsSubtitleTab({
                             value={captionWindowWidth}
                             onChange={(e) => updateConfig({ captionWindowWidth: Number(e.target.value) })}
                             className="settings-input"
-                            style={{ width: '100px' }}
+                            style={{ width: '100px', textAlign: 'center' }}
                         />
                     </div>
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.font_size', { defaultValue: 'Font Size' })}
-                    </span>
+                <SettingsItem
+                    title={t('live.font_size', { defaultValue: 'Font Size' })}
+                >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <input
                             type="number"
@@ -108,17 +95,14 @@ export function SettingsSubtitleTab({
                             value={captionFontSize}
                             onChange={(e) => updateConfig({ captionFontSize: Number(e.target.value) })}
                             className="settings-input"
-                            style={{ width: '100px' }}
+                            style={{ width: '100px', textAlign: 'center' }}
                         />
                     </div>
-                </div>
-            </div>
+                </SettingsItem>
 
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <span className="settings-label" style={{ marginBottom: 0 }}>
-                        {t('live.font_color', { defaultValue: 'Font Color' })}
-                    </span>
+                <SettingsItem
+                    title={t('live.font_color', { defaultValue: 'Font Color' })}
+                >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div
                             style={{
@@ -154,11 +138,11 @@ export function SettingsSubtitleTab({
                             maxLength={7}
                             aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}
                             className="settings-input"
-                            style={{ width: '100px', fontFamily: 'monospace' }}
+                            style={{ width: '100px', fontFamily: 'monospace', textAlign: 'center' }}
                         />
                     </div>
-                </div>
-            </div>
-        </div>
+                </SettingsItem>
+            </SettingsSection>
+        </SettingsTabContainer>
     );
 }

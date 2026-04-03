@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Mic, Volume2 } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { invoke } from '@tauri-apps/api/core';
@@ -12,6 +13,7 @@ import {
     listMicrophoneDeviceOptions,
     listSystemAudioDeviceOptions,
 } from '../../services/audioDeviceService';
+import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
 
 interface SettingsMicrophoneTabProps {
     config: AppConfig;
@@ -228,131 +230,121 @@ export function SettingsMicrophoneTab({
         startedMicCaptureRef.current = false;
     }
 
-
     return (
-        <div
-            className="settings-group"
-            role="tabpanel"
-            id="settings-panel-microphone"
-            aria-labelledby="settings-tab-microphone"
-            tabIndex={0}
-        >
-            <div className="settings-item">
-                <label htmlFor="settings-mic-select" className="settings-label">
-                    {t('settings.microphone_selection')}
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
-                        <Dropdown
-                            id="settings-mic-select"
-                            value={microphoneId}
-                            onChange={(val) => updateConfig({ microphoneId: val })}
-                            options={devices}
-                        />
-                    </div>
-
-                    <div style={{
-                        width: '120px',
-                        height: '36px',
-                        backgroundColor: 'var(--color-bg-secondary)',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        border: '1px solid var(--color-border)'
-                    }}>
-                        <canvas
-                            ref={canvasRef}
-                            width={120}
-                            height={36}
-                            className="visualizer-canvas"
-                            style={{ display: 'block', width: '100%', height: '100%' }}
-                        />
-                    </div>
-                </div>
-                <div className="settings-hint">
-                    {t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
-                </div>
-            </div>
-
-            <div className="settings-item">
-                <label htmlFor="settings-system-audio-select" className="settings-label">
-                    {t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
-                        <Dropdown
-                            id="settings-system-audio-select"
-                            value={systemAudioDeviceId}
-                            onChange={(val) => updateConfig({ systemAudioDeviceId: val })}
-                            options={systemDevices}
-                        />
-                    </div>
-                    <div style={{
-                        width: '120px',
-                        height: '36px',
-                        backgroundColor: 'var(--color-bg-secondary)',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
-                        border: '1px solid var(--color-border)'
-                    }}>
-                        <canvas
-                            ref={systemCanvasRef}
-                            width={120}
-                            height={36}
-                            className="visualizer-canvas"
-                            style={{ display: 'block', width: '100%', height: '100%' }}
-                        />
-                    </div>
-                </div>
-                <div className="settings-hint">
-                    {t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
-                </div>
-            </div>
-
-            <div className="settings-item">
-                <label htmlFor="settings-mic-boost" className="settings-label">
-                    {t('settings.microphone_boost', { defaultValue: 'Microphone Boost' })}
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                        id="settings-mic-boost"
-                        type="number"
-                        min="1.0"
-                        max="5.0"
-                        step="0.1"
-                        value={microphoneBoost}
-                        onChange={(e) => {
-                            let val = parseFloat(e.target.value);
-                            if (isNaN(val)) return;
-                            val = Math.max(1.0, Math.min(5.0, val));
-                            updateConfig({ microphoneBoost: val });
-                        }}
-                        className="sona-input"
-                        style={{ width: '80px' }}
-                    />
-                    <span className="settings-hint" style={{ marginTop: 0 }}>x</span>
-                </div>
-                <div className="settings-hint">
-                    {t('settings.microphone_boost_hint', { defaultValue: 'Amplify microphone volume (1.0 to 5.0). Useful for quiet microphones.' })}
-                </div>
-            </div>
-
-            <div className="settings-item with-divider">
-                <div className="settings-item-row">
-                    <div>
-                        <div className="settings-label" style={{ marginBottom: 0 }}>
-                            {t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
+        <SettingsTabContainer id="settings-panel-microphone" ariaLabelledby="settings-tab-microphone">
+            <SettingsSection
+                title={t('settings.microphone_title', { defaultValue: 'Microphone' })}
+                icon={<Mic size={20} />}
+                description={t('settings.microphone_description', { defaultValue: 'Configure input devices for voice recording.' })}
+            >
+                <SettingsItem
+                    title={t('settings.microphone_selection')}
+                    hint={t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
+                    layout="vertical"
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
+                            <Dropdown
+                                id="settings-mic-select"
+                                value={microphoneId}
+                                onChange={(val) => updateConfig({ microphoneId: val })}
+                                options={devices}
+                            />
                         </div>
-                        <div className="settings-hint">
-                            {t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
+
+                        <div style={{
+                            width: '120px',
+                            height: '36px',
+                            backgroundColor: 'var(--color-bg-secondary)',
+                            borderRadius: 'var(--radius-sm)',
+                            overflow: 'hidden',
+                            border: '1px solid var(--color-border)'
+                        }}>
+                            <canvas
+                                ref={canvasRef}
+                                width={120}
+                                height={36}
+                                className="visualizer-canvas"
+                                style={{ display: 'block', width: '100%', height: '100%' }}
+                            />
                         </div>
                     </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.microphone_boost', { defaultValue: 'Microphone Boost' })}
+                    hint={t('settings.microphone_boost_hint', { defaultValue: 'Amplify microphone volume (1.0 to 5.0). Useful for quiet microphones.' })}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                            id="settings-mic-boost"
+                            type="number"
+                            min="1.0"
+                            max="5.0"
+                            step="0.1"
+                            value={microphoneBoost}
+                            onChange={(e) => {
+                                let val = parseFloat(e.target.value);
+                                if (isNaN(val)) return;
+                                val = Math.max(1.0, Math.min(5.0, val));
+                                updateConfig({ microphoneBoost: val });
+                            }}
+                            className="settings-input"
+                            style={{ width: '80px', textAlign: 'center' }}
+                        />
+                        <span className="settings-hint" style={{ marginTop: 0 }}>x</span>
+                    </div>
+                </SettingsItem>
+            </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.system_audio_title', { defaultValue: 'System Audio' })}
+                icon={<Volume2 size={20} />}
+                description={t('settings.system_audio_description', { defaultValue: 'Configure capture of the speaker loopback.' })}
+            >
+                <SettingsItem
+                    title={t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
+                    hint={t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
+                    layout="vertical"
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
+                            <Dropdown
+                                id="settings-system-audio-select"
+                                value={systemAudioDeviceId}
+                                onChange={(val) => updateConfig({ systemAudioDeviceId: val })}
+                                options={systemDevices}
+                            />
+                        </div>
+                        <div style={{
+                            width: '120px',
+                            height: '36px',
+                            backgroundColor: 'var(--color-bg-secondary)',
+                            borderRadius: 'var(--radius-sm)',
+                            overflow: 'hidden',
+                            border: '1px solid var(--color-border)'
+                        }}>
+                            <canvas
+                                ref={systemCanvasRef}
+                                width={120}
+                                height={36}
+                                className="visualizer-canvas"
+                                style={{ display: 'block', width: '100%', height: '100%' }}
+                            />
+                        </div>
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
+                    hint={t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
+                >
                     <Switch
                         checked={muteDuringRecording}
                         onChange={(enabled) => updateConfig({ muteDuringRecording: enabled })}
                     />
-                </div>
-            </div>
-
-        </div>
+                </SettingsItem>
+            </SettingsSection>
+        </SettingsTabContainer>
     );
 }
