@@ -1176,15 +1176,15 @@ input[type="radio"]:focus {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: var(--spacing-md);
 }
 
 .settings-modal {
   background: var(--color-bg-primary);
   border-radius: var(--radius-lg);
-  width: 800px;
-  height: 550px;
-  max-width: 90vw;
-  max-height: 85vh;
+  width: min(1120px, 92vw);
+  height: min(780px, 88vh);
+  min-height: 550px;
   display: flex;
   flex-direction: row;
   box-shadow: var(--shadow-xl);
@@ -1193,7 +1193,7 @@ input[type="radio"]:focus {
 }
 
 .settings-sidebar {
-  width: 220px;
+  width: clamp(220px, 22vw, 280px);
   background: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border);
   padding: var(--spacing-md);
@@ -1300,6 +1300,55 @@ input[type="radio"]:focus {
   padding: var(--spacing-md) var(--spacing-lg);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-primary);
+}
+
+@media (min-width: 1400px) {
+  .settings-modal {
+    width: min(1200px, 90vw);
+    height: min(840px, 88vh);
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-overlay {
+    padding: var(--spacing-sm);
+  }
+
+  .settings-modal {
+    width: min(96vw, 760px);
+    height: 92vh;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .settings-sidebar {
+    width: 100%;
+    gap: var(--spacing-md);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--spacing-sm);
+  }
+
+  .settings-tabs-container {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .settings-tab-btn {
+    width: auto;
+    min-width: fit-content;
+    flex-shrink: 0;
+  }
+
+  .settings-close-btn-container {
+    padding: var(--spacing-sm) var(--spacing-md) 0;
+  }
+
+  .settings-content-scroll {
+    padding: 0 var(--spacing-md) var(--spacing-md);
+  }
 }
 
 /* Model List */
@@ -2209,6 +2258,7 @@ input[type="radio"]:focus {
   display: flex;
   gap: 16px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .theme-card {
@@ -2934,6 +2984,7 @@ input[type="radio"]:focus {
   justify-content: space-between;
   width: 100%;
   gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
 .animate-spin {

@@ -241,8 +241,8 @@ export function SettingsMicrophoneTab({
                 <label htmlFor="settings-mic-select" className="settings-label">
                     {t('settings.microphone_selection')}
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-                    <div style={{ flex: 1, maxWidth: 300 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
                         <Dropdown
                             id="settings-mic-select"
                             value={microphoneId}
@@ -277,8 +277,8 @@ export function SettingsMicrophoneTab({
                 <label htmlFor="settings-system-audio-select" className="settings-label">
                     {t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-                    <div style={{ flex: 1, maxWidth: 300 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 320px', minWidth: 0, maxWidth: 520 }}>
                         <Dropdown
                             id="settings-system-audio-select"
                             value={systemAudioDeviceId}

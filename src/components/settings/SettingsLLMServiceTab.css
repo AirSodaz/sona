@@ -29,6 +29,10 @@
   .feature-cards-grid {
     grid-template-columns: 1fr;
   }
+
+  .feature-card-header {
+    flex-wrap: wrap;
+  }
 }
 
 .feature-card {

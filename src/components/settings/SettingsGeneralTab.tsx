@@ -39,7 +39,7 @@ export function SettingsGeneralTab({
         >
             <div className="settings-item">
                 <label htmlFor="settings-language" className="settings-label">{t('settings.language')}</label>
-                <div style={{ maxWidth: 300 }}>
+                <div style={{ width: '100%', maxWidth: 420 }}>
                     <Dropdown
                         id="settings-language"
                         value={appLanguage}
@@ -58,7 +58,7 @@ export function SettingsGeneralTab({
 
             <div className="settings-item with-divider">
                 <label htmlFor="settings-theme" className="settings-label">{t('settings.theme', { defaultValue: 'Theme' })}</label>
-                <div style={{ maxWidth: 400 }}>
+                <div style={{ width: '100%', maxWidth: 680 }}>
                     <div className="theme-selector-container">
                         <button
                             className={`theme-card ${theme === 'light' ? 'active' : ''}`}
@@ -119,7 +119,7 @@ export function SettingsGeneralTab({
 
             <div className="settings-item with-divider">
                 <label htmlFor="settings-font" className="settings-label">{t('settings.font', { defaultValue: 'Font' })}</label>
-                <div style={{ maxWidth: 300 }}>
+                <div style={{ width: '100%', maxWidth: 420 }}>
                     <Dropdown
                         id="settings-font"
                         value={font}

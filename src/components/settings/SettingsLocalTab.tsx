@@ -63,7 +63,7 @@ export function SettingsLocalTab({
         >
             <div className="settings-item">
                 <label htmlFor="settings-vad-buffer" className="settings-label">{t('settings.vad_buffer_size')}</label>
-                <div style={{ maxWidth: 300 }}>
+                <div style={{ width: '100%', maxWidth: 420 }}>
                     <input
                         id="settings-vad-buffer"
                         type="number"
@@ -83,7 +83,7 @@ export function SettingsLocalTab({
 
             <div className="settings-item">
                 <label htmlFor="settings-max-concurrent" className="settings-label">{t('settings.max_concurrent_label', { defaultValue: 'Max Concurrent Transcriptions' })}</label>
-                <div style={{ maxWidth: 300 }}>
+                <div style={{ width: '100%', maxWidth: 420 }}>
                     <input
                         id="settings-max-concurrent"
                         type="number"
