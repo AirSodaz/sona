@@ -201,3 +201,38 @@
   border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
   border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
 }
+
+/* --- Page Header (Top level tab header) --- */
+.settings-page-header {
+  padding-bottom: var(--spacing-lg, 24px);
+}
+
+.settings-page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs, 4px) 0;
+  letter-spacing: -0.01em;
+}
+
+.settings-page-icon {
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.settings-page-description {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 var(--spacing-lg, 24px) 0;
+  line-height: 1.5;
+}
+
+.settings-page-header .settings-divider {
+  height: 1px;
+  background: var(--color-border);
+  width: 100%;
+}

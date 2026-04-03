@@ -208,25 +208,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
-                        <div className="settings-section-header">
-                            <h3 className="settings-section-title">
-                                {(() => {
-                                    switch (activeTab) {
-                                        case 'general': return t('settings.general');
-                                        case 'microphone': return t('settings.input_device');
-                                        case 'subtitle': return t('live.subtitle_settings');
-                                        case 'models': return t('settings.model_hub');
-                                        case 'local': return t('settings.local_path');
-                                        case 'llm_service': return t('settings.llm.title');
-                                        case 'shortcuts': return t('shortcuts.title');
-                                        case 'about': return t('settings.about');
-                                        default: return '';
-                                    }
-                                })()}
-                            </h3>
-                            <div className="settings-divider" />
-                        </div>
-
                         {(() => {
                             switch (activeTab) {
                                 case 'general':

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Subtitles, Monitor } from 'lucide-react';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsSubtitleTabProps {
     config: AppConfig;
@@ -25,10 +25,13 @@ export function SettingsSubtitleTab({
 
     return (
         <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
+            <SettingsPageHeader 
+                icon={<Monitor size={28} />} 
+                title={t('live.subtitle_settings')} 
+                description={t('settings.subtitle_behavior_desc')} 
+            />
             <SettingsSection
                 title={t('settings.subtitle_behavior_title')}
-                icon={<Monitor size={20} />}
-                description={t('settings.subtitle_behavior_desc')}
             >
                 <SettingsItem
                     title={t('live.start_on_launch')}

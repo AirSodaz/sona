@@ -19,6 +19,29 @@ export function SettingsTabContainer({ children, id, ariaLabelledby }: { childre
     );
 }
 
+export interface SettingsPageHeaderProps {
+    title: string | ReactNode;
+    description?: string | ReactNode;
+    icon?: ReactNode;
+}
+
+export function SettingsPageHeader({ title, description, icon }: SettingsPageHeaderProps) {
+    return (
+        <div className="settings-page-header">
+            <h2 className="settings-page-title">
+                {icon && <span className="settings-page-icon">{icon}</span>}
+                {title}
+            </h2>
+            {description && (
+                <p className="settings-page-description">
+                    {description}
+                </p>
+            )}
+            <div className="settings-divider" />
+        </div>
+    );
+}
+
 /**
  * A grouped section of settings with an optional title, icon, and description.
  */

@@ -6,7 +6,7 @@ import { ItnModelList } from './ItnModelList';
 import { ModelInfo } from '../../services/modelService';
 import { RestoreIcon } from '../Icons';
 import { AppConfig } from '../../types/transcript';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsLocalTabProps {
     config: AppConfig;
@@ -57,6 +57,11 @@ export function SettingsLocalTab({
 
     return (
         <SettingsTabContainer id="settings-panel-local" ariaLabelledby="settings-tab-local">
+            <SettingsPageHeader 
+                icon={<HardDrive size={28} />} 
+                title={t('settings.local_path')} 
+                description={t('settings.local_path_description', { defaultValue: 'Configure local transcription and ITN parameters.' })} 
+            />
             <SettingsSection
                 title={t('settings.transcription_settings')}
                 icon={<PlaySquare size={20} />}

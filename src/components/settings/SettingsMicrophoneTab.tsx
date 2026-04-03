@@ -13,7 +13,7 @@ import {
     listMicrophoneDeviceOptions,
     listSystemAudioDeviceOptions,
 } from '../../services/audioDeviceService';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsMicrophoneTabProps {
     config: AppConfig;
@@ -232,10 +232,13 @@ export function SettingsMicrophoneTab({
 
     return (
         <SettingsTabContainer id="settings-panel-microphone" ariaLabelledby="settings-tab-microphone">
+            <SettingsPageHeader 
+                icon={<Mic size={28} />} 
+                title={t('settings.input_device')} 
+                description={t('settings.microphone_description')} 
+            />
             <SettingsSection
                 title={t('settings.microphone_title')}
-                icon={<Mic size={20} />}
-                description={t('settings.microphone_description')}
             >
                 <SettingsItem
                     title={t('settings.microphone_selection')}

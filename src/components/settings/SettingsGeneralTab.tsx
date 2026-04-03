@@ -4,7 +4,7 @@ import { Settings } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
     config: AppConfig;
@@ -33,10 +33,13 @@ export function SettingsGeneralTab({
 
     return (
         <SettingsTabContainer id="settings-panel-general" ariaLabelledby="settings-tab-general">
+            <SettingsPageHeader 
+                icon={<Settings size={28} />} 
+                title={t('settings.general')} 
+                description={t('settings.general_description')} 
+            />
             <SettingsSection
                 title={t('settings.general_title')}
-                icon={<Settings size={20} />}
-                description={t('settings.general_description')}
             >
                 <SettingsItem
                     title={t('settings.language')}

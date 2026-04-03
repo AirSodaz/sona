@@ -22,6 +22,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  background: var(--color-bg-primary, #ffffff);
+  padding: var(--spacing-lg, 24px);
 }
 
 @media (max-width: 768px) {
@@ -71,6 +73,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: var(--color-bg-primary, #ffffff);
+  padding: var(--spacing-lg, 24px);
 }
 
 .accordion-item {

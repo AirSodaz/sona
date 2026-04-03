@@ -4,7 +4,7 @@ import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelServ
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { AppConfig } from '../../types/transcript';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Layers, Mic, Type, Activity } from 'lucide-react';
 
 interface ModelSectionProps {
@@ -250,10 +250,13 @@ export function SettingsModelsTab({
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
+            <SettingsPageHeader 
+                icon={<Layers size={28} />} 
+                title={t('settings.model_hub')} 
+                description={t('settings.model_selection_desc')} 
+            />
             <SettingsSection
                 title={t('settings.model_selection')}
-                icon={<Layers size={20} />}
-                description={t('settings.model_selection_desc')}
             >
                 <SettingsItem
                     title={t('settings.streaming_model_label')}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'lucide-react';
-import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface ShortcutItem {
     key: string;
@@ -55,14 +55,11 @@ export function SettingsShortcutsTab(): React.JSX.Element {
 
     return (
         <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
-            <div className="settings-tab-header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 16px' }}>
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'var(--color-text-primary)' }}>
-                    <Keyboard size={24} /> {t('settings.shortcuts_title')}
-                </h2>
-                <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
-                    {t('settings.shortcuts_description')}
-                </p>
-            </div>
+            <SettingsPageHeader 
+                icon={<Keyboard size={28} />} 
+                title={t('shortcuts.title')} 
+                description={t('settings.shortcuts_description')} 
+            />
 
             {sections.map((section, index) => (
                 <SettingsSection key={index} title={section.title}>

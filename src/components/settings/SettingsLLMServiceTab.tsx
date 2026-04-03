@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe } from 'lucide-react';
+import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, Bot } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
 import { AppConfig, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
@@ -19,6 +19,7 @@ import {
   isFeatureLlmConfigComplete,
   buildLlmConfig,
 } from '../../services/llmConfig';
+import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
 
 interface SettingsLLMServiceTabProps {
@@ -486,17 +487,19 @@ export function SettingsLLMServiceTab({
   }, [activeProviders, expandedProvider]);
 
   return (
-    <div className="settings-group llm-tab-container" role="tabpanel">
+    <SettingsTabContainer id="settings-panel-llm" ariaLabelledby="settings-tab-llm">
+      <SettingsPageHeader 
+          icon={<Bot size={28} />} 
+          title={t('settings.llm.title')} 
+          description={t('settings.llm.description', { defaultValue: 'Configure LLM providers and models used for polishing and translating transcripts.' })} 
+      />
       
       {/* 1. Feature Cards Section */}
-      <section>
-        <div className="section-title">
-          <Settings2 size={20} />
-          {t('settings.llm.feature_models')}
-        </div>
-        <div className="settings-hint" style={{ marginBottom: '16px' }}>
-          {t('settings.llm.feature_models_runtime_hint')}
-        </div>
+      <SettingsSection 
+        title={t('settings.llm.feature_models')}
+        description={t('settings.llm.feature_models_runtime_hint')}
+        icon={<Settings2 size={20} />}
+      >
         <div className="feature-cards-grid">
            <FeatureCard
              featureId="polish"
@@ -515,17 +518,13 @@ export function SettingsLLMServiceTab({
              t={t}
            />
         </div>
-      </section>
+      </SettingsSection>
 
       {/* 2. Provider Credentials Section */}
-      <section style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px' }}>
-        <div className="section-title">
-           {t('settings.llm.credentials_section')}
-        </div>
-        <div className="settings-hint" style={{ marginBottom: '16px' }}>
-          {t('settings.llm.credentials_hint')}
-        </div>
-        
+      <SettingsSection 
+        title={t('settings.llm.credentials_section')}
+        description={t('settings.llm.credentials_hint')}
+      >
         <div className="accordion-container">
           {LLM_PROVIDER_DEFINITIONS.map(def => def)
            .sort((a, b) => {
@@ -548,8 +547,7 @@ export function SettingsLLMServiceTab({
            ))
           }
         </div>
-      </section>
-      
-    </div>
+      </SettingsSection>
+    </SettingsTabContainer>
   );
 }
