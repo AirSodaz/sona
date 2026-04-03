@@ -4,9 +4,13 @@ import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelServ
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { AppConfig } from '../../types/transcript';
+import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
+import { Layers, Mic, Type, Activity } from 'lucide-react';
 
 interface ModelSectionProps {
     title: string;
+    description?: string;
+    icon?: React.ReactNode;
     type: 'asr' | 'punctuation' | 'vad';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
@@ -17,6 +21,8 @@ interface ModelSectionProps {
 
 function ModelSection({
     title,
+    description,
+    icon,
     type,
     installedModels,
     downloads,
@@ -53,10 +59,7 @@ function ModelSection({
     }, [type]);
 
     return (
-        <>
-            <div className="settings-label">
-                {title}
-            </div>
+        <SettingsSection title={title} description={description} icon={icon}>
             {groupedModels.map(group => {
                 const key = group[0].groupId || group[0].id;
                 return (
@@ -71,7 +74,7 @@ function ModelSection({
                     />
                 );
             })}
-        </>
+        </SettingsSection>
     );
 }
 
@@ -246,45 +249,65 @@ export function SettingsModelsTab({
     }, [getModelLabel, installedModels]);
 
     return (
-        <div
-            className="model-list"
-            role="tabpanel"
-            id="settings-panel-models"
-            aria-labelledby="settings-tab-models"
-            tabIndex={0}
-        >
-            <div className="settings-item" style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
-                <label htmlFor="settings-streaming-path" className="settings-label" style={{ display: 'block' }}>{t('settings.streaming_model_label', { defaultValue: 'Live Record Model' })}</label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: '16px' }}>
-                    <Dropdown
-                        id="settings-streaming-path"
-                        value={selectedStreamingModelId}
-                        onChange={(value) => handleModelChange('streaming', value)}
-                        placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
-                        options={streamingOptions}
-                        style={{ flex: 1 }}
-                    />
-                </div>
+        <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
+            <SettingsSection
+                title={t('settings.model_selection', { defaultValue: 'Default Models' })}
+                icon={<Layers size={20} />}
+                description={t('settings.model_selection_desc', { defaultValue: 'Choose which models to use for transcription.' })}
+            >
+                <SettingsItem
+                    title={t('settings.streaming_model_label', { defaultValue: 'Live Record Model' })}
+                    hint={t('settings.streaming_model_hint', { defaultValue: 'Used for real-time microphone transcription.' })}
+                >
+                    <div style={{ width: '220px' }}>
+                        <Dropdown
+                            id="settings-streaming-path"
+                            value={selectedStreamingModelId}
+                            onChange={(value) => handleModelChange('streaming', value)}
+                            placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
+                            options={streamingOptions}
+                            style={{ flex: 1 }}
+                        />
+                    </div>
+                </SettingsItem>
 
-                <label htmlFor="settings-offline-path" className="settings-label" style={{ display: 'block' }}>{t('settings.offline_model_label', { defaultValue: 'Batch Import Model' })}</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <Dropdown
-                        id="settings-offline-path"
-                        value={selectedOfflineModelId}
-                        onChange={(value) => handleModelChange('offline', value)}
-                        placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
-                        options={offlineOptions}
-                        style={{ flex: 1 }}
-                    />
-                </div>
-            </div>
+                <SettingsItem
+                    title={t('settings.offline_model_label', { defaultValue: 'Batch Import Model' })}
+                    hint={t('settings.offline_model_hint', { defaultValue: 'Used for processing audio/video files.' })}
+                >
+                    <div style={{ width: '220px' }}>
+                        <Dropdown
+                            id="settings-offline-path"
+                            value={selectedOfflineModelId}
+                            onChange={(value) => handleModelChange('offline', value)}
+                            placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
+                            options={offlineOptions}
+                            style={{ flex: 1 }}
+                        />
+                    </div>
+                </SettingsItem>
+            </SettingsSection>
 
-            {/* Streaming models removed */}
-            <ModelSection title={t('settings.recognition_models')} type="asr" {...sectionProps} />
+            <ModelSection 
+                title={t('settings.recognition_models')} 
+                type="asr" 
+                icon={<Mic size={20} />}
+                {...sectionProps} 
+            />
 
-            {/* Punctuation and VAD models restored */}
-            <ModelSection title={t('settings.punctuation_models', { defaultValue: 'Punctuation Models' })} type="punctuation" {...sectionProps} />
-            <ModelSection title={t('settings.vad_models', { defaultValue: 'Voice Activity Detection (VAD) Models' })} type="vad" {...sectionProps} />
-        </div>
+            <ModelSection 
+                title={t('settings.punctuation_models', { defaultValue: 'Punctuation Models' })} 
+                type="punctuation" 
+                icon={<Type size={20} />}
+                {...sectionProps} 
+            />
+            
+            <ModelSection 
+                title={t('settings.vad_models', { defaultValue: 'Voice Activity Detection (VAD) Models' })} 
+                type="vad" 
+                icon={<Activity size={20} />}
+                {...sectionProps} 
+            />
+        </SettingsTabContainer>
     );
 }

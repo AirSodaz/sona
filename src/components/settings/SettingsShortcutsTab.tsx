@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'lucide-react';
-import { SettingsTabContainer, SettingsSection } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem } from './SettingsLayout';
 
 interface ShortcutItem {
     key: string;
@@ -55,91 +55,46 @@ export function SettingsShortcutsTab(): React.JSX.Element {
 
     return (
         <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
-            <SettingsSection
-                title={t('settings.shortcuts_title', { defaultValue: 'Keyboard Shortcuts' })}
-                icon={<Keyboard size={20} />}
-                description={t('settings.shortcuts_description', { defaultValue: 'View and customize application hotkeys.' })}
-            >
-                {sections.map((section, index) => (
-                    <div key={index} className="shortcut-group-wrapper" style={{ padding: '0 24px' }}>
-                        <h4 className="shortcut-group-title">
-                            {section.title}
-                        </h4>
-                        <div className="shortcut-list">
-                            {section.items.map((item, i) => (
-                                <div key={i} className="shortcut-item">
-                                    <span className="shortcut-desc">{item.description}</span>
-                                    <div className="shortcut-keys">
-                                        {item.key.split(' / ').map((k, kIndex, arr) => (
-                                            <React.Fragment key={kIndex}>
-                                                <kbd className="kbd">{k}</kbd>
-                                                {kIndex < arr.length - 1 && <span className="mx-1 text-muted">/</span>}
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-            </SettingsSection>
+            <div className="settings-tab-header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 16px' }}>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'var(--color-text-primary)' }}>
+                    <Keyboard size={24} /> {t('settings.shortcuts_title', { defaultValue: 'Keyboard Shortcuts' })}
+                </h2>
+                <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
+                    {t('settings.shortcuts_description', { defaultValue: 'View and customize application hotkeys.' })}
+                </p>
+            </div>
+
+            {sections.map((section, index) => (
+                <SettingsSection key={index} title={section.title}>
+                    {section.items.map((item, i) => (
+                        <SettingsItem key={i} title={item.description}>
+                            <div className="shortcut-keys" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {item.key.split(' / ').map((k, kIndex, arr) => (
+                                    <React.Fragment key={kIndex}>
+                                        <kbd className="kbd">{k}</kbd>
+                                        {kIndex < arr.length - 1 && <span className="text-muted mx-1">/</span>}
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        </SettingsItem>
+                    ))}
+                </SettingsSection>
+            ))}
 
             <style>{`
-                .shortcut-group-wrapper:first-child {
-                    padding-top: 24px !important;
-                }
-                .shortcut-group-wrapper:last-child {
-                    padding-bottom: 24px !important;
-                }
-                .shortcut-group-wrapper + .shortcut-group-wrapper {
-                    margin-top: 24px;
-                }
-                .shortcut-group-title {
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    color: var(--color-text-muted);
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    margin-bottom: 12px;
-                }
-                .shortcut-list {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-
-                .shortcut-item {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 4px 0;
-                }
-
-                .shortcut-keys {
-                    display: flex;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 4px;
-                }
-
                 .kbd {
                     background: var(--color-bg-secondary);
                     border: 1px solid var(--color-border);
-                    border-radius: 4px;
-                    padding: 2px 6px;
-                    font-family: monospace;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    font-family: var(--font-mono, monospace);
                     font-size: 0.85rem;
                     color: var(--color-text-primary);
-                    box-shadow: 0 1px 0 var(--color-border);
-                    min-width: 20px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05), inset 0 -1px 0 var(--color-border);
+                    min-width: 24px;
                     text-align: center;
+                    font-weight: 500;
                 }
-
-                .shortcut-desc {
-                    color: var(--color-text-primary);
-                    font-size: 0.9rem;
-                }
-
                 .text-muted { color: var(--color-text-muted); }
                 .mx-1 { margin-left: 0.25rem; margin-right: 0.25rem; }
             `}</style>
