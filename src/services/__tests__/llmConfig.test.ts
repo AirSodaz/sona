@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addLlmModel,
+  DEFAULT_LLM_TEMPERATURE,
   ensureLlmState,
   getFeatureLlmConfig,
   createLlmSettings,
@@ -27,7 +28,6 @@ describe('llmConfig', () => {
     expect(llmSettings.providers.open_ai).toEqual(expect.objectContaining({
       apiHost: 'https://api.openai.com',
       apiKey: 'legacy-key',
-      temperature: 0.2,
     }));
     expect(llmSettings.modelOrder).toHaveLength(1);
     expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
@@ -91,12 +91,11 @@ describe('llmConfig', () => {
     }));
   });
 
-  it('resolves feature-specific temperatures before provider defaults', () => {
+  it('resolves feature-specific temperatures independently', () => {
     let llmSettings = createLlmSettings();
     llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
       apiHost: 'https://api.openai.com',
       apiKey: 'openai-key',
-      temperature: 0.7,
     });
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
@@ -114,12 +113,11 @@ describe('llmConfig', () => {
     }));
   });
 
-  it('falls back to provider temperature when feature temperature is unset', () => {
+  it('falls back to the global default temperature when feature temperature is unset', () => {
     let llmSettings = createLlmSettings();
     llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
       apiHost: 'https://api.openai.com',
       apiKey: 'openai-key',
-      temperature: 0.65,
     });
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
@@ -127,7 +125,37 @@ describe('llmConfig', () => {
     const config = buildLlmConfigPatch(llmSettings);
 
     expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      temperature: 0.65,
+      temperature: DEFAULT_LLM_TEMPERATURE,
+    }));
+  });
+
+  it('ignores provider temperature when feature temperature is unset', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'open_ai',
+        providers: {
+          open_ai: {
+            apiHost: 'https://api.openai.com',
+            apiKey: 'openai-key',
+            temperature: 0.55,
+          },
+        },
+        models: {
+          'open-ai-test': {
+            id: 'open-ai-test',
+            provider: 'open_ai',
+            model: 'gpt-4o-mini',
+          },
+        },
+        modelOrder: ['open-ai-test'],
+        selections: {
+          polishModelId: 'open-ai-test',
+        },
+      },
+    } as any);
+
+    expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
+      temperature: DEFAULT_LLM_TEMPERATURE,
     }));
   });
 
@@ -159,7 +187,7 @@ describe('llmConfig', () => {
 
     expect(llmSettings.selections.polishTemperature).toBeUndefined();
     expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
-      temperature: 0.55,
+      temperature: DEFAULT_LLM_TEMPERATURE,
     }));
   });
 

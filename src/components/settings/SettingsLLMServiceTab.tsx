@@ -8,6 +8,7 @@ import { normalizeError } from '../../utils/errorUtils';
 import {
   addLlmModel,
   buildLlmConfigPatch,
+  DEFAULT_LLM_TEMPERATURE,
   ensureLlmState,
   getActiveProvider,
   getActiveProviderSetting,
@@ -66,8 +67,22 @@ function buildModelConfig(provider: LlmProvider, setting: LlmProviderSetting, mo
     model,
     apiPath: setting.apiPath,
     apiVersion: setting.apiVersion,
-    temperature: setting.temperature ?? 0.7,
+    temperature: DEFAULT_LLM_TEMPERATURE,
   };
+}
+
+function getSetupStatusLabel(
+  t: (key: string) => string,
+  status: 'ready' | 'missing_api_key' | 'missing_model',
+): string {
+  switch (status) {
+    case 'ready':
+      return t('settings.llm.status_ready');
+    case 'missing_api_key':
+      return t('settings.llm.status_missing_api_key');
+    default:
+      return t('settings.llm.status_missing_model');
+  }
 }
 
 export function SettingsLLMServiceTab({
@@ -99,8 +114,8 @@ export function SettingsLLMServiceTab({
 
   const llmBaseUrl = providerSetting.apiHost || providerDefinition.defaultApiHost;
   const llmApiKey = providerSetting.apiKey || '';
-  const polishTemperature = config.llmSettings?.selections.polishTemperature ?? (providerSetting.temperature ?? 0.7);
-  const translationTemperature = config.llmSettings?.selections.translationTemperature ?? (providerSetting.temperature ?? 0.7);
+  const polishTemperature = config.llmSettings?.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE;
+  const translationTemperature = config.llmSettings?.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE;
   const llmApiPath = providerSetting.apiPath || providerDefinition.defaultApiPath || '';
   const llmApiVersion = providerSetting.apiVersion || providerDefinition.defaultApiVersion || '';
 
@@ -126,28 +141,35 @@ export function SettingsLLMServiceTab({
     ? `${candidateListId}-${highlightedCandidateIndex}`
     : undefined;
 
-  const providerStatus = providerDefinition.requiresApiKey && !llmApiKey.trim()
-    ? t('settings.llm.status_missing_api_key')
-    : t('settings.llm.status_ready');
-
-  const getFeatureStatus = (feature: 'polish' | 'translation') => {
+  const getFeatureStatus = (feature: 'polish' | 'translation'): 'ready' | 'missing_api_key' | 'missing_model' => {
     const modelId = feature === 'polish' ? polishModelId : translationModelId;
     if (!modelId) {
-      return t('settings.llm.status_missing_model');
+      return 'missing_model';
     }
 
     const entry = config.llmSettings?.models[modelId];
     if (!entry) {
-      return t('settings.llm.status_missing_model');
+      return 'missing_model';
     }
 
     const setting = config.llmSettings?.providers[entry.provider]
       || getActiveProviderSetting({ llmSettings: ensureLlmState(config as AppConfig & Record<string, any>).llmSettings });
 
     return isLlmConfigComplete(buildModelConfig(entry.provider, setting, entry.model))
-      ? t('settings.llm.status_ready')
-      : t('settings.llm.status_missing_api_key');
+      ? 'ready'
+      : 'missing_api_key';
   };
+
+  const providerStatus = providerDefinition.requiresApiKey && !llmApiKey.trim() ? 'missing_api_key' : 'ready';
+  const polishStatus = getFeatureStatus('polish');
+  const translationStatus = getFeatureStatus('translation');
+  const nextSetupAction = providerStatus === 'missing_api_key'
+    ? t('settings.llm.setup_action_api_key')
+    : polishStatus === 'missing_model'
+      ? t('settings.llm.setup_action_polish_model')
+      : translationStatus === 'missing_model'
+        ? t('settings.llm.setup_action_translation_model')
+        : null;
 
   const fetchModelCandidates = async (provider: LlmProvider, setting: LlmProviderSetting) => {
     if (!getProviderDefinition(provider).supportsModelListing) {
@@ -406,7 +428,28 @@ export function SettingsLLMServiceTab({
   return (
     <div className="settings-group" role="tabpanel">
       <div className="settings-item">
-        <label className="settings-label">{t('settings.llm.service_type')}</label>
+        <label className="settings-label">{t('settings.llm.setup_summary')}</label>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <div className="settings-hint">{t('settings.llm.setup_provider')}: {getSetupStatusLabel(t, providerStatus)}</div>
+          <div className="settings-hint">{t('settings.llm.setup_polish')}: {getSetupStatusLabel(t, polishStatus)}</div>
+          <div className="settings-hint">{t('settings.llm.setup_translation')}: {getSetupStatusLabel(t, translationStatus)}</div>
+          {nextSetupAction && (
+            <div className="settings-hint" style={{ fontWeight: 600 }}>
+              {nextSetupAction}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="settings-item with-divider">
+        <label className="settings-label">{t('settings.llm.credentials_section')}</label>
+        <div className="settings-hint" style={{ marginBottom: '8px' }}>
+          {t('settings.llm.credentials_hint')}
+        </div>
+      </div>
+
+      <div className="settings-item">
+        <label className="settings-label">{t('settings.llm.credential_provider')}</label>
         <Dropdown
           id="llm-service-type"
           value={activeProvider}
@@ -415,7 +458,7 @@ export function SettingsLLMServiceTab({
           style={{ width: '100%' }}
         />
         <div className="settings-hint" style={{ marginTop: '8px' }}>
-          {providerStatus}
+          {getSetupStatusLabel(t, providerStatus)}
         </div>
       </div>
 
@@ -474,7 +517,7 @@ export function SettingsLLMServiceTab({
       )}
 
       <div className="settings-item with-divider">
-        <label className="settings-label">{t('settings.llm.added_models')}</label>
+        <label className="settings-label">{t('settings.llm.model_library')}</label>
         <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '180px 1fr auto' }}>
           <Dropdown
             id="llm-model-provider"
@@ -579,6 +622,20 @@ export function SettingsLLMServiceTab({
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleFeatureSelection('polish', entry.id)}
+                    >
+                      {t('settings.llm.assign_to_polish')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleFeatureSelection('translation', entry.id)}
+                    >
+                      {t('settings.llm.assign_to_translation')}
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-secondary btn-loading-wrapper"
                       onClick={() => handleTestConnection(entry.id)}
                       disabled={isTesting}
@@ -609,6 +666,9 @@ export function SettingsLLMServiceTab({
 
       <div className="settings-item with-divider">
         <label className="settings-label">{t('settings.llm.feature_models')}</label>
+        <div className="settings-hint" style={{ marginBottom: '12px' }}>
+          {t('settings.llm.feature_models_runtime_hint')}
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label className="settings-label">{t('settings.llm.polish_model')}</label>
@@ -621,7 +681,7 @@ export function SettingsLLMServiceTab({
               style={{ width: '100%' }}
             />
             <div className="settings-hint" style={{ marginTop: '8px' }}>
-              {getFeatureStatus('polish')}
+              {getSetupStatusLabel(t, polishStatus)}
             </div>
             <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.polish_temperature')}</label>
             {renderTemperatureControl(
@@ -641,7 +701,7 @@ export function SettingsLLMServiceTab({
               style={{ width: '100%' }}
             />
             <div className="settings-hint" style={{ marginTop: '8px' }}>
-              {getFeatureStatus('translation')}
+              {getSetupStatusLabel(t, translationStatus)}
             </div>
             <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.translation_temperature')}</label>
             {renderTemperatureControl(

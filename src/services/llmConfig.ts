@@ -259,7 +259,6 @@ export function createProviderSetting(provider: LlmProvider): LlmProviderSetting
     apiKey: '',
     apiPath: definition.defaultApiPath,
     apiVersion: definition.defaultApiVersion,
-    temperature: DEFAULT_LLM_TEMPERATURE,
   };
 }
 
@@ -275,7 +274,6 @@ function sanitizeProviderSetting(
     apiKey: setting?.apiKey ?? defaults.apiKey,
     apiPath: setting?.apiPath ?? defaults.apiPath,
     apiVersion: setting?.apiVersion ?? defaults.apiVersion,
-    temperature: setting?.temperature ?? defaults.temperature,
   };
 }
 
@@ -383,6 +381,25 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
         : undefined,
     polishTemperature: normalizeTemperature(selections.polishTemperature),
     translationTemperature: normalizeTemperature(selections.translationTemperature),
+  };
+}
+
+function applyLegacyTemperature(
+  llmSettings: LlmSettings,
+  legacyTemperature: unknown,
+): LlmSettings {
+  const normalizedTemperature = normalizeTemperature(legacyTemperature);
+  if (normalizedTemperature === undefined) {
+    return llmSettings;
+  }
+
+  return {
+    ...llmSettings,
+    selections: {
+      ...llmSettings.selections,
+      polishTemperature: llmSettings.selections.polishTemperature ?? normalizedTemperature,
+      translationTemperature: llmSettings.selections.translationTemperature ?? normalizedTemperature,
+    },
   };
 }
 
@@ -568,7 +585,7 @@ export function buildLlmConfig(provider: LlmProvider, setting: LlmProviderSettin
     model: '',
     apiPath: setting.apiPath,
     apiVersion: setting.apiVersion,
-    temperature: setting.temperature ?? DEFAULT_LLM_TEMPERATURE,
+    temperature: DEFAULT_LLM_TEMPERATURE,
   };
 }
 
@@ -584,14 +601,6 @@ function extractLegacyProviderSetting(source: Record<string, any>): Partial<LlmP
     apiKey: source.llmApiKey || source.aiApiKey || source.apiKey || undefined,
     apiPath: source.llmApiPath || source.aiApiPath || source.apiPath || undefined,
     apiVersion: source.llmApiVersion || source.aiApiVersion || source.apiVersion || undefined,
-    temperature:
-      typeof source.llmTemperature === 'number'
-        ? source.llmTemperature
-        : typeof source.aiTemperature === 'number'
-          ? source.aiTemperature
-          : typeof source.temperature === 'number'
-            ? source.temperature
-            : undefined,
   };
 }
 
@@ -628,7 +637,6 @@ function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProv
       apiKey: setting.apiKey,
       apiPath: setting.apiPath,
       apiVersion: setting.apiVersion,
-      temperature: setting.temperature,
     });
   }
 
@@ -654,7 +662,6 @@ export function ensureLlmState(
       apiKey: candidate.llm.apiKey || undefined,
       apiPath: candidate.llm.apiPath || undefined,
       apiVersion: candidate.llm.apiVersion || undefined,
-      temperature: candidate.llm.temperature,
     });
   } else {
     const legacySetting = extractLegacyProviderSetting(candidate);
@@ -662,8 +669,7 @@ export function ensureLlmState(
       legacySetting.apiHost ||
       legacySetting.apiKey ||
       legacySetting.apiPath ||
-      legacySetting.apiVersion ||
-      legacySetting.temperature !== undefined
+      legacySetting.apiVersion
     ) {
       providers[currentProvider] = sanitizeProviderSetting(currentProvider, {
         ...legacySetting,
@@ -706,6 +712,8 @@ export function ensureLlmState(
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', migratedModelId);
   }
 
+  llmSettings = applyLegacyTemperature(llmSettings, candidate.llm?.temperature);
+
   return {
     llmSettings,
   };
@@ -733,17 +741,7 @@ function getFeatureTemperature(
     ? config.llmSettings?.selections.polishTemperature
     : config.llmSettings?.selections.translationTemperature;
 
-  if (selectionTemperature !== undefined) {
-    return selectionTemperature;
-  }
-
-  const modelEntry = getFeatureModelEntry(config, feature);
-  if (!modelEntry) {
-    return undefined;
-  }
-
-  const setting = ensureProviderSetting(config.llmSettings, modelEntry.provider);
-  return setting.temperature ?? DEFAULT_LLM_TEMPERATURE;
+  return selectionTemperature ?? DEFAULT_LLM_TEMPERATURE;
 }
 
 export function getFeatureLlmConfig(

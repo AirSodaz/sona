@@ -50,7 +50,6 @@ describe('TranslationService', () => {
             open_ai: {
               apiHost: 'test-url',
               apiKey: 'test-key',
-              temperature: 0.7,
             },
           },
           models: {
@@ -120,7 +119,6 @@ describe('TranslationService', () => {
             open_ai: {
               apiHost: 'test-url',
               apiKey: 'test-key',
-              temperature: 0.7,
             },
           },
           models: {
@@ -161,7 +159,6 @@ describe('TranslationService', () => {
             open_ai: {
               apiHost: 'test-url',
               apiKey: 'test-key',
-              temperature: 0.7,
             },
           },
           models: {

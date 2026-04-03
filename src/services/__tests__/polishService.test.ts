@@ -41,7 +41,6 @@ describe('PolishService', () => {
             open_ai: {
               apiHost: 'test-url',
               apiKey: 'test-key',
-              temperature: 0.7,
             },
           },
           models: {
@@ -153,7 +152,6 @@ describe('PolishService', () => {
             open_ai: {
               apiHost: 'test-url',
               apiKey: 'test-key',
-              temperature: 0.7,
             },
           },
           models: {

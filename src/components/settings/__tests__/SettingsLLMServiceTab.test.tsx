@@ -69,7 +69,7 @@ describe('SettingsLLMServiceTab', () => {
       />,
     );
 
-    expect(screen.getByText('settings.llm.service_type')).toBeDefined();
+    expect(screen.getByText('settings.llm.credential_provider')).toBeDefined();
     expect(screen.getAllByText('OpenAI').length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue('https://api.openai.com')).toBeDefined();
     expect(screen.getByDisplayValue('test-key')).toBeDefined();
@@ -86,6 +86,24 @@ describe('SettingsLLMServiceTab', () => {
     });
   });
 
+  it('renders setup summary, credential copy, and quick assign actions', () => {
+    render(
+      <SettingsLLMServiceTab
+        config={buildConfig()}
+        updateConfig={mockUpdateConfig}
+        changeLlmServiceType={mockChangeLlmServiceType}
+      />,
+    );
+
+    expect(screen.getByText('settings.llm.setup_summary')).toBeDefined();
+    expect(screen.getByText('settings.llm.credentials_section')).toBeDefined();
+    expect(screen.getByText('settings.llm.credential_provider')).toBeDefined();
+    expect(screen.getByText('settings.llm.model_library')).toBeDefined();
+    expect(screen.getByText('settings.llm.feature_models_runtime_hint')).toBeDefined();
+    expect(screen.getByText('settings.llm.assign_to_polish')).toBeDefined();
+    expect(screen.getByText('settings.llm.assign_to_translation')).toBeDefined();
+  });
+
   it('shows simple provider readiness status', async () => {
     render(
       <SettingsLLMServiceTab
@@ -97,6 +115,7 @@ describe('SettingsLLMServiceTab', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('settings.llm.status_missing_api_key').length).toBeGreaterThan(0);
+      expect(screen.getByText('settings.llm.setup_action_api_key')).toBeDefined();
     });
   });
 
@@ -253,9 +272,10 @@ describe('SettingsLLMServiceTab', () => {
     );
 
     expect(screen.getByText('settings.llm.status_missing_model')).toBeDefined();
+    expect(screen.getByText('settings.llm.setup_action_translation_model')).toBeDefined();
   });
 
-  it('tests a configured model entry', async () => {
+  it('assigns a model to a feature from the library shortcut', () => {
     render(
       <SettingsLLMServiceTab
         config={buildConfig()}
@@ -264,24 +284,15 @@ describe('SettingsLLMServiceTab', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText('settings.llm.test_connection')[0]);
+    fireEvent.click(screen.getByText('settings.llm.assign_to_translation'));
 
-    await waitFor(() => {
-      expect(tauriApi.invoke).toHaveBeenCalledWith('generate_llm_text', {
-        request: {
-          config: {
-            provider: 'open_ai',
-            baseUrl: 'https://api.openai.com',
-            apiKey: 'test-key',
-            model: 'gpt-4o',
-            apiPath: undefined,
-            apiVersion: undefined,
-            temperature: 0.7,
-          },
-          input: 'Hello, this is a connection test.',
-        },
-      });
-    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        selections: expect.objectContaining({
+          translationModelId: 'open_ai-gpt-4o',
+        }),
+      }),
+    }));
   });
 
   it('surfaces normalized connection errors', async () => {

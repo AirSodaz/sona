@@ -78,8 +78,6 @@ export interface LlmProviderSetting {
   apiPath?: string;
   /** Optional provider-specific API version. */
   apiVersion?: string;
-  /** Temperature (0.0 to 2.0). */
-  temperature?: number;
 }
 
 export interface LlmModelEntry {
