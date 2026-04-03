@@ -227,7 +227,7 @@ export function SettingsModelsTab({
             label += ` (${model.versionLabel})`;
         }
         if (!installedModels.has(model.id)) {
-            label += t('settings.not_installed', { defaultValue: ' (Not Downloaded)' });
+            label += t('settings.not_installed');
         }
         return label;
     }, [installedModels, t]);
@@ -251,20 +251,20 @@ export function SettingsModelsTab({
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
             <SettingsSection
-                title={t('settings.model_selection', { defaultValue: 'Default Models' })}
+                title={t('settings.model_selection')}
                 icon={<Layers size={20} />}
-                description={t('settings.model_selection_desc', { defaultValue: 'Choose which models to use for transcription.' })}
+                description={t('settings.model_selection_desc')}
             >
                 <SettingsItem
-                    title={t('settings.streaming_model_label', { defaultValue: 'Live Record Model' })}
-                    hint={t('settings.streaming_model_hint', { defaultValue: 'Used for real-time microphone transcription.' })}
+                    title={t('settings.streaming_model_label')}
+                    hint={t('settings.streaming_model_hint')}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
                             id="settings-streaming-path"
                             value={selectedStreamingModelId}
                             onChange={(value) => handleModelChange('streaming', value)}
-                            placeholder={t('settings.select_streaming_model', { defaultValue: 'Select streaming model...' })}
+                            placeholder={t('settings.select_streaming_model')}
                             options={streamingOptions}
                             style={{ flex: 1 }}
                         />
@@ -272,15 +272,15 @@ export function SettingsModelsTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.offline_model_label', { defaultValue: 'Batch Import Model' })}
-                    hint={t('settings.offline_model_hint', { defaultValue: 'Used for processing audio/video files.' })}
+                    title={t('settings.offline_model_label')}
+                    hint={t('settings.offline_model_hint')}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
                             id="settings-offline-path"
                             value={selectedOfflineModelId}
                             onChange={(value) => handleModelChange('offline', value)}
-                            placeholder={t('settings.select_offline_model', { defaultValue: 'Select offline model...' })}
+                            placeholder={t('settings.select_offline_model')}
                             options={offlineOptions}
                             style={{ flex: 1 }}
                         />
@@ -295,16 +295,16 @@ export function SettingsModelsTab({
                 {...sectionProps} 
             />
 
-            <ModelSection 
-                title={t('settings.punctuation_models', { defaultValue: 'Punctuation Models' })} 
-                type="punctuation" 
+            <ModelSection
+                title={t('settings.punctuation_models')}
+                type="punctuation"
                 icon={<Type size={20} />}
                 {...sectionProps} 
             />
             
-            <ModelSection 
-                title={t('settings.vad_models', { defaultValue: 'Voice Activity Detection (VAD) Models' })} 
-                type="vad" 
+            <ModelSection
+                title={t('settings.vad_models')}
+                type="vad"
                 icon={<Activity size={20} />}
                 {...sectionProps} 
             />

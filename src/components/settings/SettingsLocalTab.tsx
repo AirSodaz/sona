@@ -58,9 +58,9 @@ export function SettingsLocalTab({
     return (
         <SettingsTabContainer id="settings-panel-local" ariaLabelledby="settings-tab-local">
             <SettingsSection
-                title={t('settings.transcription_settings', { defaultValue: 'Transcription Settings' })}
+                title={t('settings.transcription_settings')}
                 icon={<PlaySquare size={20} />}
-                description={t('settings.transcription_settings_hint', { defaultValue: 'Configure local processing behavior.' })}
+                description={t('settings.transcription_settings_hint')}
             >
                 <SettingsItem
                     title={t('settings.vad_buffer_size')}
@@ -82,8 +82,8 @@ export function SettingsLocalTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.max_concurrent_label', { defaultValue: 'Max Concurrent Transcriptions' })}
-                    hint={t('settings.max_concurrent_hint', { defaultValue: 'Number of files to transcribe in parallel (1-4).' })}
+                    title={t('settings.max_concurrent_label')}
+                    hint={t('settings.max_concurrent_hint')}
                 >
                     <div style={{ width: '120px' }}>
                         <input
@@ -107,13 +107,13 @@ export function SettingsLocalTab({
             </SettingsSection>
 
             <SettingsSection
-                title={t('settings.itn_title', { defaultValue: 'Inverse Text Normalization (ITN)' })}
+                title={t('settings.itn_title')}
                 icon={<HardDrive size={20} />}
-                description={t('settings.itn_description', { defaultValue: 'Convert spoken numbers and formats into standardized written forms.' })}
+                description={t('settings.itn_description')}
             >
                 <SettingsItem
-                    title={t('settings.enable_itn', { defaultValue: 'Enable ITN' })}
-                    hint={t('settings.enable_itn_hint', { defaultValue: 'Apply normalization rules globally.' })}
+                    title={t('settings.enable_itn')}
+                    hint={t('settings.enable_itn_hint')}
                 >
                     <Switch
                         checked={enableITN}

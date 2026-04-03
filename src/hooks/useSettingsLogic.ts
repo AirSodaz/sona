@@ -211,8 +211,11 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
         const { compatible, reason } = await modelService.checkHardware(model.id);
         if (!compatible) {
             const confirmed = await confirm(
-                `${reason}\n\nDo you want to download it anyway?`,
-                { title: 'Hardware Warning', variant: 'warning' }
+                t('settings.hardware_warning_confirm', { reason }),
+                {
+                    title: t('settings.hardware_warning_title'),
+                    variant: 'warning'
+                }
             );
             if (!confirmed) return;
         }

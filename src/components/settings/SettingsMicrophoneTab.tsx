@@ -233,13 +233,13 @@ export function SettingsMicrophoneTab({
     return (
         <SettingsTabContainer id="settings-panel-microphone" ariaLabelledby="settings-tab-microphone">
             <SettingsSection
-                title={t('settings.microphone_title', { defaultValue: 'Microphone' })}
+                title={t('settings.microphone_title')}
                 icon={<Mic size={20} />}
-                description={t('settings.microphone_description', { defaultValue: 'Configure input devices for voice recording.' })}
+                description={t('settings.microphone_description')}
             >
                 <SettingsItem
                     title={t('settings.microphone_selection')}
-                    hint={t('settings.mic_auto_hint', { defaultValue: 'Select which microphone to use for recording.' })}
+                    hint={t('settings.mic_auto_hint')}
                     layout="vertical"
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
@@ -272,8 +272,8 @@ export function SettingsMicrophoneTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.microphone_boost', { defaultValue: 'Microphone Boost' })}
-                    hint={t('settings.microphone_boost_hint', { defaultValue: 'Amplify microphone volume (1.0 to 5.0). Useful for quiet microphones.' })}
+                    title={t('settings.microphone_boost')}
+                    hint={t('settings.microphone_boost_hint')}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <input
@@ -298,13 +298,13 @@ export function SettingsMicrophoneTab({
             </SettingsSection>
 
             <SettingsSection
-                title={t('settings.system_audio_title', { defaultValue: 'System Audio' })}
+                title={t('settings.system_audio_title')}
                 icon={<Volume2 size={20} />}
-                description={t('settings.system_audio_description', { defaultValue: 'Configure capture of the speaker loopback.' })}
+                description={t('settings.system_audio_description')}
             >
                 <SettingsItem
-                    title={t('settings.system_audio_selection', { defaultValue: 'System Audio Selection' })}
-                    hint={t('settings.system_audio_hint', { defaultValue: 'Select the system audio device for capture.' })}
+                    title={t('settings.system_audio_selection')}
+                    hint={t('settings.system_audio_hint')}
                     layout="vertical"
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%', flexWrap: 'wrap' }}>
@@ -336,8 +336,8 @@ export function SettingsMicrophoneTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.mute_during_recording', { defaultValue: 'Mute during recording' })}
-                    hint={t('settings.mute_during_recording_hint', { defaultValue: 'Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.' })}
+                    title={t('settings.mute_during_recording')}
+                    hint={t('settings.mute_during_recording_hint')}
                 >
                     <Switch
                         checked={muteDuringRecording}

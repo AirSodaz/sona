@@ -213,8 +213,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 {(() => {
                                     switch (activeTab) {
                                         case 'general': return t('settings.general');
-                                        case 'microphone': return t('settings.input_device', { defaultValue: 'Input Device' });
-                                        case 'subtitle': return t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' });
+                                        case 'microphone': return t('settings.input_device');
+                                        case 'subtitle': return t('live.subtitle_settings');
                                         case 'models': return t('settings.model_hub');
                                         case 'local': return t('settings.local_path');
                                         case 'llm_service': return t('settings.llm.title');

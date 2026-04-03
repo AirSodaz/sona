@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { logger } from "../utils/logger";
 import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
@@ -128,7 +129,7 @@ class ModelService {
         outputPath: string,
         onProgress?: ProgressCallback,
         signal?: AbortSignal,
-        label: string = 'Downloading'
+        label: string = i18n.t('settings.model_download_status.download_label')
     ): Promise<void> {
         // Mirrors to try in order
         const mirrors = [
@@ -198,7 +199,12 @@ class ModelService {
                         const percentage = Math.round((downloaded / total) * 100);
                         const downloadedMB = Math.round(downloaded / 1024 / 1024);
                         const totalMB = Math.round(total / 1024 / 1024);
-                        onProgress(percentage, `${label}... ${downloadedMB}MB / ${totalMB}MB (${speedStr})`);
+                        onProgress(percentage, i18n.t('settings.model_download_status.downloading', {
+                            label,
+                            downloadedMB,
+                            totalMB,
+                            speed: speedStr,
+                        }));
                     }
                 }
             });
@@ -212,7 +218,12 @@ class ModelService {
                     const downloadUrl = mirror ? `${mirror}${url}` : url;
 
                     if (onProgress) {
-                        onProgress(0, mirror ? `${label} from mirror...` : `${label}...`);
+                        onProgress(0, i18n.t(
+                            mirror
+                                ? 'settings.model_download_status.downloading_from_mirror'
+                                : 'settings.model_download_status.downloading_only',
+                            { label }
+                        ));
                     }
 
                     logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
@@ -264,7 +275,7 @@ class ModelService {
         await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
 
         if (model.isArchive === false) {
-            onProgress?.(100, 'Done');
+            onProgress?.(100, i18n.t('settings.model_download_status.done'));
             return tempFilePath;
         }
 
@@ -272,7 +283,7 @@ class ModelService {
 
         // No manual saving needed, Rust did it directly
 
-        onProgress?.(100, 'Extracting (this may take a while)...');
+        onProgress?.(100, i18n.t('settings.model_download_status.extracting'));
 
         let extractUnlisten: (() => void) | undefined;
         if (onProgress) {
@@ -280,7 +291,9 @@ class ModelService {
                 const filename = event.payload;
                 // Truncate filename if too long
                 const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
-                onProgress(100, `Extracting: ${displayFilename}`);
+                onProgress(100, i18n.t('settings.model_download_status.extracting_file', {
+                    filename: displayFilename,
+                }));
             });
         }
 
@@ -297,7 +310,7 @@ class ModelService {
         // Clean up archive
         await remove(tempFilePath);
 
-        onProgress?.(100, 'Done');
+        onProgress?.(100, i18n.t('settings.model_download_status.done'));
 
         if (model.filename) {
             return await join(modelsDir, model.filename);

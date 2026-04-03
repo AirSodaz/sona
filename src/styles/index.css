@@ -1636,7 +1636,6 @@ input[type="radio"]:focus {
   gap: var(--spacing-lg);
   max-width: 480px;
   margin: 0 auto;
-  animation: aboutFadeIn 400ms ease-out;
 }
 
 @keyframes aboutFadeIn {

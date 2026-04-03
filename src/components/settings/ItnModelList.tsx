@@ -174,7 +174,7 @@ export function ItnModelList({
                                                         // disabled={!!downloadingId} // Allow parallel
                                                         >
                                                             <DownloadIcon />
-                                                            Download
+                                                            {t('common.download')}
                                                         </button>
                                                     )}
                                                 </>

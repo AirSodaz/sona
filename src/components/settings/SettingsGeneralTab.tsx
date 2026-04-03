@@ -34,13 +34,13 @@ export function SettingsGeneralTab({
     return (
         <SettingsTabContainer id="settings-panel-general" ariaLabelledby="settings-tab-general">
             <SettingsSection
-                title={t('settings.general_title', { defaultValue: 'General Preferences' })}
+                title={t('settings.general_title')}
                 icon={<Settings size={20} />}
-                description={t('settings.general_description', { defaultValue: 'Manage basic application behaviors and appearance.' })}
+                description={t('settings.general_description')}
             >
                 <SettingsItem
                     title={t('settings.language')}
-                    hint={t('settings.language_hint', { defaultValue: 'Change the display language.' })}
+                    hint={t('settings.language_hint')}
                 >
                     <div style={{ width: '200px' }}>
                         <Dropdown
@@ -49,22 +49,22 @@ export function SettingsGeneralTab({
                             onChange={(value) => updateConfig({ appLanguage: value as 'auto' | 'en' | 'zh' })}
                             options={[
                                 { value: 'auto', label: t('common.auto') },
-                                { value: 'en', label: 'English' },
-                                { value: 'zh', label: '中文' }
+                                { value: 'en', label: t('settings.language_en') },
+                                { value: 'zh', label: t('settings.language_zh') }
                             ]}
                         />
                     </div>
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.theme', { defaultValue: 'Theme' })}
+                    title={t('settings.theme')}
                     layout="vertical"
                 >
                     <div className="theme-selector-container">
                         <button
                             className={`theme-card ${theme === 'light' ? 'active' : ''}`}
                             onClick={() => updateConfig({ theme: 'light' })}
-                            aria-label={t('settings.theme_light', { defaultValue: 'Light' })}
+                            aria-label={t('settings.theme_light')}
                             aria-pressed={theme === 'light'}
                         >
                             <div className="theme-preview light">
@@ -76,13 +76,13 @@ export function SettingsGeneralTab({
                                     <div className="theme-preview-sidebar"></div>
                                 </div>
                             </div>
-                            <span className="theme-label">{t('settings.theme_light', { defaultValue: 'Light' })}</span>
+                            <span className="theme-label">{t('settings.theme_light')}</span>
                         </button>
 
                         <button
                             className={`theme-card ${theme === 'dark' ? 'active' : ''}`}
                             onClick={() => updateConfig({ theme: 'dark' })}
-                            aria-label={t('settings.theme_dark', { defaultValue: 'Dark' })}
+                            aria-label={t('settings.theme_dark')}
                             aria-pressed={theme === 'dark'}
                         >
                             <div className="theme-preview dark">
@@ -94,7 +94,7 @@ export function SettingsGeneralTab({
                                     <div className="theme-preview-sidebar"></div>
                                 </div>
                             </div>
-                            <span className="theme-label">{t('settings.theme_dark', { defaultValue: 'Dark' })}</span>
+                            <span className="theme-label">{t('settings.theme_dark')}</span>
                         </button>
 
                         <button
@@ -118,7 +118,7 @@ export function SettingsGeneralTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.font', { defaultValue: 'Font Family' })}
+                    title={t('settings.font')}
                 >
                     <div style={{ width: '240px' }}>
                         <Dropdown
@@ -126,12 +126,12 @@ export function SettingsGeneralTab({
                             value={font}
                             onChange={(value) => updateConfig({ font: value as any })}
                             options={[
-                                { value: 'system', label: t('settings.font_system', { defaultValue: 'System Default' }), style: { fontFamily: 'inherit' } },
-                                { value: 'serif', label: 'Serif (Merriweather)', style: { fontFamily: 'serif' } },
-                                { value: 'sans', label: 'Sans Serif (Inter)', style: { fontFamily: 'sans-serif' } },
-                                { value: 'mono', label: 'Monospace (JetBrains Mono)', style: { fontFamily: 'monospace' } },
-                                { value: 'arial', label: 'Arial', style: { fontFamily: 'Arial' } },
-                                { value: 'georgia', label: 'Georgia', style: { fontFamily: 'Georgia' } }
+                                { value: 'system', label: t('settings.font_system'), style: { fontFamily: 'inherit' } },
+                                { value: 'serif', label: t('settings.font_serif'), style: { fontFamily: 'serif' } },
+                                { value: 'sans', label: t('settings.font_sans'), style: { fontFamily: 'sans-serif' } },
+                                { value: 'mono', label: t('settings.font_mono'), style: { fontFamily: 'monospace' } },
+                                { value: 'arial', label: t('settings.font_arial'), style: { fontFamily: 'Arial' } },
+                                { value: 'georgia', label: t('settings.font_georgia'), style: { fontFamily: 'Georgia' } }
                             ]}
                             style={{ fontFamily: getFontFamily(font) }}
                         />
@@ -141,8 +141,8 @@ export function SettingsGeneralTab({
 
             <SettingsSection>
                 <SettingsItem
-                    title={t('settings.minimize_to_tray', { defaultValue: 'Minimize to tray on exit' })}
-                    hint={t('settings.minimize_to_tray_hint', { defaultValue: 'When enabled, closing the window will minimize the application to the system tray instead of quitting.' })}
+                    title={t('settings.minimize_to_tray')}
+                    hint={t('settings.minimize_to_tray_hint')}
                 >
                     <Switch
                         checked={minimizeToTrayOnExit}
@@ -151,7 +151,7 @@ export function SettingsGeneralTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('settings.auto_check_updates', { defaultValue: 'Automatically check for updates' })}
+                    title={t('settings.auto_check_updates')}
                 >
                     <Switch
                         checked={autoCheckUpdates}

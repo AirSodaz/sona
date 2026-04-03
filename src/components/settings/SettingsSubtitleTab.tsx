@@ -26,13 +26,13 @@ export function SettingsSubtitleTab({
     return (
         <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
             <SettingsSection
-                title={t('settings.subtitle_behavior_title', { defaultValue: 'Window Behavior' })}
+                title={t('settings.subtitle_behavior_title')}
                 icon={<Monitor size={20} />}
-                description={t('settings.subtitle_behavior_desc', { defaultValue: 'Control how the live caption window behaves.' })}
+                description={t('settings.subtitle_behavior_desc')}
             >
                 <SettingsItem
-                    title={t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
-                    hint={t('live.start_on_launch_hint', { defaultValue: 'Automatically start Live Caption when the program opens' })}
+                    title={t('live.start_on_launch')}
+                    hint={t('live.start_on_launch_hint')}
                 >
                     <Switch
                         checked={startOnLaunch}
@@ -41,8 +41,8 @@ export function SettingsSubtitleTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('live.always_on_top', { defaultValue: 'Always on Top' })}
-                    hint={t('live.always_on_top_hint', { defaultValue: 'Keep window above others' })}
+                    title={t('live.always_on_top')}
+                    hint={t('live.always_on_top_hint')}
                 >
                     <Switch
                         checked={alwaysOnTop}
@@ -51,8 +51,8 @@ export function SettingsSubtitleTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('live.lock_window', { defaultValue: 'Lock Window' })}
-                    hint={t('live.lock_window_hint', { defaultValue: 'Make window click-through' })}
+                    title={t('live.lock_window')}
+                    hint={t('live.lock_window_hint')}
                 >
                     <Switch
                         checked={lockWindow}
@@ -62,12 +62,12 @@ export function SettingsSubtitleTab({
             </SettingsSection>
 
             <SettingsSection
-                title={t('settings.subtitle_appearance_title', { defaultValue: 'Appearance' })}
+                title={t('settings.subtitle_appearance_title')}
                 icon={<Subtitles size={20} />}
-                description={t('settings.subtitle_appearance_desc', { defaultValue: 'Customize the look of your live captions.' })}
+                description={t('settings.subtitle_appearance_desc')}
             >
                 <SettingsItem
-                    title={t('live.window_width', { defaultValue: 'Floating Window Width' })}
+                    title={t('live.window_width')}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <input
@@ -84,7 +84,7 @@ export function SettingsSubtitleTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('live.font_size', { defaultValue: 'Font Size' })}
+                    title={t('live.font_size')}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <input
@@ -101,7 +101,7 @@ export function SettingsSubtitleTab({
                 </SettingsItem>
 
                 <SettingsItem
-                    title={t('live.font_color', { defaultValue: 'Font Color' })}
+                    title={t('live.font_color')}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div
@@ -118,7 +118,7 @@ export function SettingsSubtitleTab({
                                 type="color"
                                 value={captionFontColor}
                                 onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
-                                aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
+                                aria-label={t('live.font_color')}
                                 style={{
                                     width: '150%',
                                     height: '150%',
@@ -134,9 +134,9 @@ export function SettingsSubtitleTab({
                             type="text"
                             value={captionFontColor}
                             onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
-                            placeholder="#RRGGBB"
+                            placeholder={t('live.font_color_hex_placeholder')}
                             maxLength={7}
-                            aria-label={t('live.font_color_hex', { defaultValue: 'Hex color code' })}
+                            aria-label={t('live.font_color_hex')}
                             className="settings-input"
                             style={{ width: '100px', fontFamily: 'monospace', textAlign: 'center' }}
                         />
