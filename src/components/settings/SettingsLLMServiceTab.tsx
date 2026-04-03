@@ -1,27 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, Trash2, X } from 'lucide-react';
+import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
-import { AppConfig, LlmConfig, LlmProvider, LlmProviderSetting } from '../../types/transcript';
+import { AppConfig, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
 import {
   addLlmModel,
   buildLlmConfigPatch,
   DEFAULT_LLM_TEMPERATURE,
   ensureLlmState,
-  getActiveProvider,
-  getActiveProviderSetting,
-  getFeatureModelId,
-  getOrderedLlmModels,
+  getFeatureModelEntry,
   getProviderDefinition,
-  isLlmConfigComplete,
   LLM_PROVIDER_DEFINITIONS,
-  removeLlmModel,
   setFeatureModelSelection,
   setFeatureTemperature,
   updateProviderSetting,
+  isFeatureLlmConfigComplete,
+  buildLlmConfig,
 } from '../../services/llmConfig';
+import './SettingsLLMServiceTab.css';
 
 interface SettingsLLMServiceTabProps {
   config: AppConfig;
@@ -31,711 +29,527 @@ interface SettingsLLMServiceTabProps {
 
 function getModelPlaceholder(provider: LlmProvider): string {
   switch (provider) {
-    case 'azure_openai':
-      return 'gpt-4o-deployment';
-    case 'anthropic':
-      return 'claude-sonnet-4-20250514';
-    case 'gemini':
-      return 'gemini-2.5-flash';
-    case 'ollama':
-      return 'qwen3:8b';
-    case 'deep_seek':
-      return 'deepseek-chat';
-    case 'kimi':
-      return 'moonshot-v1-8k';
+    case 'azure_openai': return 'gpt-4o-deployment';
+    case 'anthropic': return 'claude-sonnet-4-20250514';
+    case 'gemini': return 'gemini-2.5-flash';
+    case 'ollama': return 'qwen3:8b';
+    case 'deep_seek': return 'deepseek-chat';
+    case 'kimi': return 'moonshot-v1-8k';
     case 'qwen':
-    case 'qwen_portal':
-      return 'qwen-max';
-    case 'groq':
-      return 'llama-3.3-70b-versatile';
-    case 'x_ai':
-      return 'grok-3-mini';
-    case 'mistral_ai':
-      return 'mistral-large-latest';
-    case 'perplexity':
-      return 'sonar';
-    default:
-      return 'gpt-4.1-mini';
+    case 'qwen_portal': return 'qwen-max';
+    case 'groq': return 'llama-3.3-70b-versatile';
+    case 'x_ai': return 'grok-3-mini';
+    case 'mistral_ai': return 'mistral-large-latest';
+    case 'perplexity': return 'sonar';
+    default: return 'gpt-4o-mini';
   }
 }
 
-function buildModelConfig(provider: LlmProvider, setting: LlmProviderSetting, model: string): LlmConfig {
-  return {
-    provider,
-    baseUrl: setting.apiHost,
-    apiKey: setting.apiKey,
-    model,
-    apiPath: setting.apiPath,
-    apiVersion: setting.apiVersion,
-    temperature: DEFAULT_LLM_TEMPERATURE,
-  };
+function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting | undefined): boolean {
+  if (!setting) return false;
+  const def = getProviderDefinition(provider);
+  if (def.requiresApiKey && !(setting.apiKey || '').trim()) return false;
+  return true;
 }
 
-function getSetupStatusLabel(
-  t: (key: string) => string,
-  status: 'ready' | 'missing_api_key' | 'missing_model',
-): string {
-  switch (status) {
-    case 'ready':
-      return t('settings.llm.status_ready');
-    case 'missing_api_key':
-      return t('settings.llm.status_missing_api_key');
-    default:
-      return t('settings.llm.status_missing_model');
-  }
+// ------ FEATURE CARD COMPONENT ------
+interface FeatureCardProps {
+  featureId: 'polish' | 'translation';
+  title: string;
+  icon: React.ReactNode;
+  config: AppConfig;
+  applyLlmSettings: (s: AppConfig['llmSettings']) => void;
+  t: (key: string) => string;
 }
 
-export function SettingsLLMServiceTab({
-  config,
-  updateConfig,
-  changeLlmServiceType,
-}: SettingsLLMServiceTabProps): React.JSX.Element {
-  const { t } = useTranslation();
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
-  const [testingModelId, setTestingModelId] = useState<string | null>(null);
-  const [newModelProvider, setNewModelProvider] = useState<LlmProvider>(getActiveProvider(config));
-  const [newModelName, setNewModelName] = useState('');
-  const [isModelInputFocused, setIsModelInputFocused] = useState(false);
-  const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
-  const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
+function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: FeatureCardProps) {
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  const modelEntry = getFeatureModelEntry(config, featureId);
+  const selectedProvider = modelEntry?.provider || 'open_ai';
+  const selectedModel = modelEntry?.model || '';
+  const temperature = featureId === 'polish' 
+    ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
+    : (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE);
+
+  const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
+  const [localModelName, setLocalModelName] = useState<string>(selectedModel);
+
+  // Sync state if external changes happen
+  useEffect(() => {
+    setLocalProvider(selectedProvider);
+    setLocalModelName(selectedModel);
+  }, [selectedProvider, selectedModel]);
+
+  // Candidates logic
   const [modelCandidates, setModelCandidates] = useState<string[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
-  const [candidateLoadError, setCandidateLoadError] = useState('');
+  const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
+  const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
-  const candidateListId = 'llm-model-candidate-list';
-
-  const activeProvider = getActiveProvider(config);
-  const providerDefinition = getProviderDefinition(activeProvider);
-  const providerSetting = getActiveProviderSetting(config);
-  const models = getOrderedLlmModels(config.llmSettings);
-  const polishModelId = getFeatureModelId(config, 'polish') || '';
-  const translationModelId = getFeatureModelId(config, 'translation') || '';
-
-  const llmBaseUrl = providerSetting.apiHost || providerDefinition.defaultApiHost;
-  const llmApiKey = providerSetting.apiKey || '';
-  const polishTemperature = config.llmSettings?.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE;
-  const translationTemperature = config.llmSettings?.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE;
-  const llmApiPath = providerSetting.apiPath || providerDefinition.defaultApiPath || '';
-  const llmApiVersion = providerSetting.apiVersion || providerDefinition.defaultApiVersion || '';
-
-  const providerOptions = useMemo(() => LLM_PROVIDER_DEFINITIONS.map((provider) => ({
-    value: provider.id,
-    label: provider.label,
+  
+  const providerOptions = useMemo(() => LLM_PROVIDER_DEFINITIONS.map((p) => ({
+    value: p.id,
+    label: p.label,
   })), []);
-
-  const modelOptions = useMemo(() => models.map((entry) => ({
-    value: entry.id,
-    label: `${getProviderDefinition(entry.provider).label} / ${entry.model}`,
-  })), [models]);
-
+  
   const filteredCandidates = useMemo(() => {
-    const query = newModelName.trim().toLowerCase();
-    if (!query) {
-      return modelCandidates;
-    }
-    return modelCandidates.filter((candidate) => candidate.toLowerCase().includes(query));
-  }, [modelCandidates, newModelName]);
+    const query = localModelName.trim().toLowerCase();
+    if (!query) return modelCandidates;
+    return modelCandidates.filter((c) => c.toLowerCase().includes(query));
+  }, [modelCandidates, localModelName]);
 
-  const activeCandidateId = highlightedCandidateIndex >= 0
-    ? `${candidateListId}-${highlightedCandidateIndex}`
-    : undefined;
-
-  const getFeatureStatus = (feature: 'polish' | 'translation'): 'ready' | 'missing_api_key' | 'missing_model' => {
-    const modelId = feature === 'polish' ? polishModelId : translationModelId;
-    if (!modelId) {
-      return 'missing_model';
-    }
-
-    const entry = config.llmSettings?.models[modelId];
-    if (!entry) {
-      return 'missing_model';
-    }
-
-    const setting = config.llmSettings?.providers[entry.provider]
-      || getActiveProviderSetting({ llmSettings: ensureLlmState(config as AppConfig & Record<string, any>).llmSettings });
-
-    return isLlmConfigComplete(buildModelConfig(entry.provider, setting, entry.model))
-      ? 'ready'
-      : 'missing_api_key';
-  };
-
-  const providerStatus = providerDefinition.requiresApiKey && !llmApiKey.trim() ? 'missing_api_key' : 'ready';
-  const polishStatus = getFeatureStatus('polish');
-  const translationStatus = getFeatureStatus('translation');
-  const nextSetupAction = providerStatus === 'missing_api_key'
-    ? t('settings.llm.setup_action_api_key')
-    : polishStatus === 'missing_model'
-      ? t('settings.llm.setup_action_polish_model')
-      : translationStatus === 'missing_model'
-        ? t('settings.llm.setup_action_translation_model')
-        : null;
-
-  const fetchModelCandidates = async (provider: LlmProvider, setting: LlmProviderSetting) => {
-    if (!getProviderDefinition(provider).supportsModelListing) {
+  const fetchModelCandidates = async (provider: LlmProvider) => {
+    const setting = currentLlmState.providers[provider];
+    if (!getProviderDefinition(provider).supportsModelListing || !setting) {
       setModelCandidates([]);
-      setCandidateLoadError('');
       setIsLoadingCandidates(false);
       return;
     }
-
     setIsLoadingCandidates(true);
-    setCandidateLoadError('');
-
     try {
       const result = await invoke<string[]>('list_llm_models', {
-        request: {
-          provider,
-          baseUrl: setting.apiHost,
-          apiKey: setting.apiKey,
-        },
+        request: { provider, baseUrl: setting.apiHost, apiKey: setting.apiKey },
       });
       setModelCandidates(Array.isArray(result) ? result : []);
     } catch (_error) {
       setModelCandidates([]);
-      setCandidateLoadError(t('settings.llm.candidate_load_failed'));
     } finally {
       setIsLoadingCandidates(false);
     }
   };
 
   useEffect(() => {
-    setNewModelProvider(activeProvider);
-    setNewModelName('');
-    setIsModelInputFocused(false);
-    setIsCandidateMenuOpen(false);
-    setHighlightedCandidateIndex(-1);
-    fetchModelCandidates(activeProvider, providerSetting);
-  }, [activeProvider, providerSetting.apiHost, providerSetting.apiKey]);
+    fetchModelCandidates(localProvider);
+  }, [localProvider, currentLlmState.providers[localProvider]?.apiHost, currentLlmState.providers[localProvider]?.apiKey]);
 
-  useEffect(() => {
-    if (!isModelInputFocused) {
-      setIsCandidateMenuOpen(false);
-      setHighlightedCandidateIndex(-1);
-      return;
-    }
-
-    if (filteredCandidates.length > 0) {
-      setIsCandidateMenuOpen(true);
-      setHighlightedCandidateIndex(0);
-      return;
-    }
-
-    setIsCandidateMenuOpen(false);
-    setHighlightedCandidateIndex(-1);
-  }, [filteredCandidates, isModelInputFocused]);
-
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!candidateContainerRef.current?.contains(event.target as Node)) {
-        setIsModelInputFocused(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, []);
-
-  const applyProviderSettingUpdates = (updates: Partial<LlmProviderSetting>) => {
-    const currentLlmState = config.llmSettings
-      ? { llmSettings: config.llmSettings }
-      : ensureLlmState(config as AppConfig & Record<string, any>);
-    const nextLlmSettings = updateProviderSetting(currentLlmState.llmSettings, activeProvider, updates);
-    updateConfig(buildLlmConfigPatch(nextLlmSettings));
-  };
-
-  const applyLlmSettings = (nextLlmSettings: AppConfig['llmSettings']) => {
-    if (!nextLlmSettings) {
-      return;
-    }
-    updateConfig(buildLlmConfigPatch(nextLlmSettings));
-  };
-
-  const handleAddModel = () => {
-    const trimmedModel = newModelName.trim();
+  const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
+    const trimmedModel = modelToSave.trim();
     if (!trimmedModel) {
-      return;
+       // if they clear it, optionally unassign the feature model
+       return; 
     }
-
-    const currentLlmState = config.llmSettings
-      ? config.llmSettings
-      : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
-    const nextLlmSettings = addLlmModel(currentLlmState, {
-      provider: newModelProvider,
-      model: trimmedModel,
+    
+    // Add explicitly to model library and assign
+    let nextState = addLlmModel(currentLlmState, { provider: providerToSave, model: trimmedModel });
+    
+    // Find the newly added item id
+    const entryId = nextState.modelOrder.find((id) => {
+      const existing = nextState.models[id];
+      return existing?.provider === providerToSave && existing.model === trimmedModel;
     });
-    applyLlmSettings(nextLlmSettings);
-    setNewModelName('');
-    setIsModelInputFocused(false);
-    setIsCandidateMenuOpen(false);
-    setHighlightedCandidateIndex(-1);
+
+    if (entryId) {
+      nextState = setFeatureModelSelection(nextState, featureId, entryId);
+      applyLlmSettings(nextState);
+    }
   };
 
-  const handleCandidateSelect = (candidate: string) => {
-    setNewModelName(candidate);
-    setIsCandidateMenuOpen(false);
-    setHighlightedCandidateIndex(-1);
+  const handleProviderChange = (newProvider: string) => {
+    const p = newProvider as LlmProvider;
+    setLocalProvider(p);
+    // don't commit it until they select a model. Just clear the UI model
+    setLocalModelName('');
   };
 
-  const handleModelNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleModelSelect = (candidate: string) => {
+    setLocalModelName(candidate);
+    setIsCandidateMenuOpen(false);
+    commitModelChange(localProvider, candidate);
+  };
+
+  const handleInputBlur = (e: React.FocusEvent) => {
+    if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsCandidateMenuOpen(false);
+      if (localModelName !== selectedModel) {
+        commitModelChange(localProvider, localModelName);
+      }
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       if (!isCandidateMenuOpen && filteredCandidates.length > 0) {
-        event.preventDefault();
-        setIsCandidateMenuOpen(true);
-        setHighlightedCandidateIndex(0);
-        return;
+        event.preventDefault(); setIsCandidateMenuOpen(true); setHighlightedCandidateIndex(0); return;
       }
       if (filteredCandidates.length > 0) {
-        event.preventDefault();
-        setHighlightedCandidateIndex((prev) => (prev + 1) % filteredCandidates.length);
+        event.preventDefault(); setHighlightedCandidateIndex((prev) => (prev + 1) % filteredCandidates.length);
       }
       return;
     }
-
     if (event.key === 'ArrowUp' && isCandidateMenuOpen && filteredCandidates.length > 0) {
-      event.preventDefault();
-      setHighlightedCandidateIndex((prev) => (prev <= 0 ? filteredCandidates.length - 1 : prev - 1));
-      return;
+      event.preventDefault(); setHighlightedCandidateIndex((prev) => (prev <= 0 ? filteredCandidates.length - 1 : prev - 1)); return;
     }
-
-    if (event.key === 'Escape') {
-      setIsCandidateMenuOpen(false);
-      setHighlightedCandidateIndex(-1);
-      return;
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      setIsCandidateMenuOpen(false); setHighlightedCandidateIndex(-1); return;
     }
-
-    if (event.key === 'Tab') {
-      setIsCandidateMenuOpen(false);
-      setHighlightedCandidateIndex(-1);
-      return;
-    }
-
     if (event.key === 'Enter') {
       event.preventDefault();
       if (isCandidateMenuOpen && highlightedCandidateIndex >= 0 && filteredCandidates[highlightedCandidateIndex]) {
-        handleCandidateSelect(filteredCandidates[highlightedCandidateIndex]);
+        handleModelSelect(filteredCandidates[highlightedCandidateIndex]);
         return;
       }
-      handleAddModel();
+      setIsCandidateMenuOpen(false);
+      commitModelChange(localProvider, localModelName);
     }
   };
 
-  const handleRemoveModel = (modelId: string) => {
-    const currentLlmState = config.llmSettings
-      ? config.llmSettings
-      : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
-    applyLlmSettings(removeLlmModel(currentLlmState, modelId));
-
-    if (testingModelId === modelId) {
-      setTestingModelId(null);
-      setTestStatus('idle');
-      setTestMessage('');
-    }
+  const handleTempChange = (val: number) => {
+    applyLlmSettings(setFeatureTemperature(currentLlmState, featureId, val));
   };
+  
+  const isComplete = isFeatureLlmConfigComplete(config, featureId);
 
-  const handleFeatureSelection = (feature: 'polish' | 'translation', modelId: string) => {
-    const currentLlmState = config.llmSettings
-      ? config.llmSettings
-      : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
-    applyLlmSettings(setFeatureModelSelection(currentLlmState, feature, modelId || undefined));
-  };
+  return (
+    <div className="feature-card">
+      <div className="feature-card-header">
+        <span className="feature-card-icon">{icon}</span>
+        {title}
+        <div style={{ marginLeft: 'auto' }}>
+          {isComplete ? (
+            <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
+          ) : (
+             <span className="status-badge missing">
+               <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
+             </span>
+          )}
+        </div>
+      </div>
+      
+      <div>
+        <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t('settings.llm.credential_provider')}</label>
+        <Dropdown
+          id={`provider-${featureId}`}
+          value={localProvider}
+          onChange={handleProviderChange}
+          options={providerOptions}
+          style={{ width: '100%' }}
+        />
+      </div>
 
-  const handleFeatureTemperatureChange = (feature: 'polish' | 'translation', temperature: number) => {
-    const currentLlmState = config.llmSettings
-      ? config.llmSettings
-      : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
-    applyLlmSettings(setFeatureTemperature(currentLlmState, feature, temperature));
-  };
+      <div ref={candidateContainerRef} className="model-combobox-wrapper">
+        <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t('settings.llm.model_library')}</label>
+        <div className="dropdown-container" style={{ margin: 0 }}>
+          <input
+            type="text"
+            className="settings-input"
+            value={localModelName}
+            onChange={(e) => setLocalModelName(e.target.value)}
+            onFocus={() => setIsCandidateMenuOpen(true)}
+            onBlur={handleInputBlur}
+            onKeyDown={handleKeyDown}
+            placeholder={getModelPlaceholder(localProvider)}
+          />
+          {isLoadingCandidates && (
+            <div className="settings-hint" style={{ position: 'absolute', right: 12, top: 10 }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+            </div>
+          )}
+          {isCandidateMenuOpen && filteredCandidates.length > 0 && (
+            <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
+              {filteredCandidates.slice(0, 8).map((candidate, index) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setHighlightedCandidateIndex(index)}
+                  onClick={() => handleModelSelect(candidate)}
+                >
+                  {candidate}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-  const renderTemperatureControl = (
-    value: number,
-    onChange: (value: number) => void,
-    testId?: string,
-  ) => (
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'grid',
-        gap: '8px',
-        gridTemplateColumns: '1fr 180px 60px',
-        marginTop: '8px',
-      }}
-    >
-      <div />
-      <input
-        data-testid={testId ? `${testId}-range` : undefined}
-        type="range"
-        style={{ justifySelf: 'end', margin: 0, width: '180px' }}
-        min={0}
-        max={2}
-        step={0.05}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-      <input
-        data-testid={testId ? `${testId}-number` : undefined}
-        type="number"
-        className="settings-input"
-        style={{ padding: '2px 4px', textAlign: 'center', width: '60px' }}
-        min={0}
-        max={2}
-        step={0.05}
-        value={value}
-        onChange={(e) => {
-          const nextValue = parseFloat(e.target.value);
-          if (!Number.isNaN(nextValue) && nextValue >= 0 && nextValue <= 2) {
-            onChange(nextValue);
-          }
-        }}
-      />
+      <div>
+         <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
+         <div className="feature-temperature-container">
+           <input
+             type="range"
+             className="feature-temperature-slider"
+             min={0}
+             max={2}
+             step={0.05}
+             value={temperature}
+             onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+           />
+           <input
+             type="number"
+             className="settings-input"
+             style={{ padding: '4px 6px', textAlign: 'center' }}
+             min={0}
+             max={2}
+             step={0.05}
+             value={temperature}
+             onChange={(e) => {
+               const val = parseFloat(e.target.value);
+               if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
+             }}
+           />
+         </div>
+      </div>
     </div>
   );
+}
 
-  const handleTestConnection = async (modelId: string) => {
-    const entry = config.llmSettings?.models[modelId];
-    if (!entry) {
-      return;
-    }
+// ------ ACCORDION ITEM COMPONENT ------
+interface AccordionItemProps {
+  provider: LlmProvider;
+  config: AppConfig;
+  isOpen: boolean;
+  onToggle: () => void;
+  applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
+  t: (key: string) => string;
+}
 
-    const setting = config.llmSettings?.providers[entry.provider];
-    const providerConfig = buildModelConfig(
-      entry.provider,
-      setting || getActiveProviderSetting({ llmSettings: ensureLlmState(config as AppConfig & Record<string, any>).llmSettings }),
-      entry.model,
-    );
+function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProviderUpdates, t }: AccordionItemProps) {
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  const def = getProviderDefinition(provider);
+  const setting = currentLlmState.providers[provider];
+  
+  const isConfigured = isProviderConfigured(provider, setting);
+  
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
 
-    setTestingModelId(modelId);
+  const handleTestConnection = async () => {
+    if (!setting) return;
     setTestStatus('loading');
     setTestMessage('');
-
     try {
-      const response = await invoke<string>('generate_llm_text', {
-        request: {
-          config: providerConfig,
-          input: 'Hello, this is a connection test.',
-        },
+      const providerConfig = buildLlmConfig(provider, setting || { apiHost: def.defaultApiHost, apiKey: '' });
+      // Get a model to test
+      const entryId = currentLlmState.modelOrder.find(id => currentLlmState.models[id].provider === provider);
+      const testModel = entryId ? currentLlmState.models[entryId].model : getModelPlaceholder(provider);
+      
+      const testProviderConfig = { ...providerConfig, model: testModel };
+
+      await invoke<string>('generate_llm_text', {
+        request: { config: testProviderConfig, input: 'Hello, this is a connection test.' },
       });
       setTestStatus('success');
-      setTestMessage(`${getProviderDefinition(entry.provider).label} / ${entry.model}`);
+      setTestMessage(testModel);
     } catch (error) {
       setTestStatus('error');
       setTestMessage(normalizeError(error).message);
     }
   };
 
-  const apiHostLabel = providerDefinition.apiHostLabel || t('settings.llm.base_url');
+  return (
+    <div className="accordion-item">
+      <div className="accordion-header" onClick={onToggle}>
+        <div className="accordion-title-container">
+          {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          <span>{def.label}</span>
+        </div>
+        <div className="accordion-header-status">
+          {isConfigured && (
+            <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
+          )}
+          {!isConfigured && def.requiresApiKey && (
+             <span className="status-badge missing"><X size={12}/> {t('settings.llm.status_missing_api_key')}</span>
+          )}
+        </div>
+      </div>
+      {isOpen && (
+        <div className="accordion-content">
+           <div className="settings-item">
+             <label className="settings-label">{def.apiHostLabel || t('settings.llm.base_url')}</label>
+             {def.editableApiHost === false ? (
+               <div className="settings-input" style={{ alignItems: 'center', display: 'flex', minHeight: 40, opacity: 0.75 }}>
+                 {setting?.apiHost || def.defaultApiHost}
+               </div>
+             ) : (
+               <input
+                 type="text"
+                 className="settings-input"
+                 value={setting?.apiHost || ''}
+                 onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
+                 placeholder={def.defaultApiHost}
+               />
+             )}
+           </div>
+
+           <div className="settings-item">
+             <label className="settings-label">{t('settings.llm.api_key')}</label>
+             <input
+               type="password"
+               className="settings-input"
+               value={setting?.apiKey || ''}
+               onChange={(e) => applyProviderUpdates({ apiKey: e.target.value })}
+               placeholder={def.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
+             />
+           </div>
+
+           {setting?.apiVersion !== undefined && (
+             <div className="settings-item">
+               <label className="settings-label">{t('settings.llm.api_version')}</label>
+               <input
+                 type="text"
+                 className="settings-input"
+                 value={setting.apiVersion}
+                 onChange={(e) => applyProviderUpdates({ apiVersion: e.target.value })}
+                 placeholder={def.defaultApiVersion || ''}
+               />
+             </div>
+           )}
+
+           {setting?.apiPath !== undefined && (
+             <div className="settings-item">
+               <label className="settings-label">{t('settings.llm.api_path')}</label>
+               <input
+                 type="text"
+                 className="settings-input"
+                 value={setting.apiPath}
+                 onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
+                 readOnly={provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
+               />
+             </div>
+           )}
+           
+           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+              <button
+                 type="button"
+                 className="btn btn-secondary btn-loading-wrapper"
+                 onClick={handleTestConnection}
+                 disabled={testStatus === 'loading'}
+               >
+                 <span className={testStatus === 'loading' ? 'btn-text-hidden' : ''}>{t('settings.llm.test_connection')}</span>
+                 {testStatus === 'loading' && (
+                   <div className="btn-spinner-overlay"><Loader2 className="animate-spin" size={16} /></div>
+                 )}
+              </button>
+              
+              {testMessage && (
+                <div className={`connection-status ${testStatus === 'error' ? 'error' : 'success'}`} style={{ margin: 0, padding: 0 }}>
+                  {testStatus === 'error' ? <X size={16} style={{ marginTop: 2, marginRight: 4 }} /> : <Check size={16} style={{ marginTop: 2, marginRight: 4 }} />}
+                  <span style={{ fontSize: '0.85rem' }}>
+                     {testStatus === 'error' ? t('settings.llm.connection_failed') : t('settings.llm.connection_success')}
+                     {testStatus === 'error' && testMessage ? `: ${testMessage}` : ''}
+                  </span>
+                </div>
+              )}
+           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------ MAIN TAB COMPONENT ------
+export function SettingsLLMServiceTab({
+  config,
+  updateConfig,
+}: SettingsLLMServiceTabProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const [expandedProvider, setExpandedProvider] = useState<LlmProvider | null>(null);
+
+  const applyLlmSettings = useCallback((nextLlmSettings: AppConfig['llmSettings']) => {
+    if (!nextLlmSettings) return;
+    updateConfig(buildLlmConfigPatch(nextLlmSettings));
+  }, [updateConfig]);
+
+  const applyProviderUpdates = useCallback((provider: LlmProvider, updates: Partial<LlmProviderSetting>) => {
+    const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as AppConfig & Record<string, any>);
+    const nextLlmSettings = updateProviderSetting(currentLlmState.llmSettings, provider, updates);
+    updateConfig(buildLlmConfigPatch(nextLlmSettings));
+  }, [config, updateConfig]);
+
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  
+  const activeProviders = useMemo(() => {
+    const active = new Set<LlmProvider>();
+    const polishModel = getFeatureModelEntry(config, 'polish');
+    if (polishModel) active.add(polishModel.provider);
+    
+    const translationModel = getFeatureModelEntry(config, 'translation');
+    if (translationModel) active.add(translationModel.provider);
+
+    LLM_PROVIDER_DEFINITIONS.forEach(def => {
+       const key = currentLlmState.providers[def.id]?.apiKey;
+       if (key && key.trim()) {
+          active.add(def.id);
+       }
+    });
+    
+    return Array.from(active);
+  }, [config, currentLlmState]);
+
+  useEffect(() => {
+    if (!expandedProvider && activeProviders.length > 0) {
+      setExpandedProvider(activeProviders[0]);
+    } else if (!expandedProvider) {
+      setExpandedProvider(LLM_PROVIDER_DEFINITIONS[0].id);
+    }
+  }, [activeProviders, expandedProvider]);
 
   return (
-    <div className="settings-group" role="tabpanel">
-      <div className="settings-item">
-        <label className="settings-label">{t('settings.llm.setup_summary')}</label>
-        <div style={{ display: 'grid', gap: '8px' }}>
-          <div className="settings-hint">{t('settings.llm.setup_provider')}: {getSetupStatusLabel(t, providerStatus)}</div>
-          <div className="settings-hint">{t('settings.llm.setup_polish')}: {getSetupStatusLabel(t, polishStatus)}</div>
-          <div className="settings-hint">{t('settings.llm.setup_translation')}: {getSetupStatusLabel(t, translationStatus)}</div>
-          {nextSetupAction && (
-            <div className="settings-hint" style={{ fontWeight: 600 }}>
-              {nextSetupAction}
-            </div>
-          )}
+    <div className="settings-group llm-tab-container" role="tabpanel">
+      
+      {/* 1. Feature Cards Section */}
+      <section>
+        <div className="section-title">
+          <Settings2 size={20} />
+          {t('settings.llm.feature_models')}
         </div>
-      </div>
-
-      <div className="settings-item with-divider">
-        <label className="settings-label">{t('settings.llm.credentials_section')}</label>
-        <div className="settings-hint" style={{ marginBottom: '8px' }}>
-          {t('settings.llm.credentials_hint')}
-        </div>
-      </div>
-
-      <div className="settings-item">
-        <label className="settings-label">{t('settings.llm.credential_provider')}</label>
-        <Dropdown
-          id="llm-service-type"
-          value={activeProvider}
-          onChange={(value) => changeLlmServiceType(value as LlmProvider)}
-          options={providerOptions}
-          style={{ width: '100%' }}
-        />
-        <div className="settings-hint" style={{ marginTop: '8px' }}>
-          {getSetupStatusLabel(t, providerStatus)}
-        </div>
-      </div>
-
-      <div className="settings-item">
-        <label className="settings-label">{apiHostLabel}</label>
-        {providerDefinition.editableApiHost === false ? (
-          <div className="settings-input" style={{ alignItems: 'center', display: 'flex', minHeight: 40, opacity: 0.75 }}>
-            {llmBaseUrl}
-          </div>
-        ) : (
-          <input
-            type="text"
-            className="settings-input"
-            value={providerSetting.apiHost}
-            onChange={(e) => applyProviderSettingUpdates({ apiHost: e.target.value })}
-            placeholder={providerDefinition.defaultApiHost}
-          />
-        )}
-      </div>
-
-      <div className="settings-item">
-        <label className="settings-label">{t('settings.llm.api_key')}</label>
-        <input
-          type="password"
-          className="settings-input"
-          value={llmApiKey}
-          onChange={(e) => applyProviderSettingUpdates({ apiKey: e.target.value })}
-          placeholder={providerDefinition.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
-        />
-      </div>
-
-      {llmApiVersion && (
-        <div className="settings-item">
-          <label className="settings-label">{t('settings.llm.api_version')}</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={llmApiVersion}
-            onChange={(e) => applyProviderSettingUpdates({ apiVersion: e.target.value })}
-            placeholder={providerDefinition.defaultApiVersion || ''}
-          />
-        </div>
-      )}
-
-      {llmApiPath && (
-        <div className="settings-item">
-          <label className="settings-label">{t('settings.llm.api_path')}</label>
-          <input
-            type="text"
-            className="settings-input"
-            value={llmApiPath}
-            onChange={(e) => applyProviderSettingUpdates({ apiPath: e.target.value })}
-            readOnly={activeProvider === 'open_ai_responses' || activeProvider === 'volcengine' || activeProvider === 'perplexity'}
-          />
-        </div>
-      )}
-
-      <div className="settings-item with-divider">
-        <label className="settings-label">{t('settings.llm.model_library')}</label>
-        <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '180px 1fr auto' }}>
-          <Dropdown
-            id="llm-model-provider"
-            value={newModelProvider}
-            onChange={(value) => setNewModelProvider(value as LlmProvider)}
-            options={providerOptions}
-            style={{ width: '100%' }}
-          />
-          <div ref={candidateContainerRef} className="dropdown-container">
-            <input
-              type="text"
-              className="settings-input"
-              value={newModelName}
-              onChange={(e) => setNewModelName(e.target.value)}
-              onFocus={() => {
-                setIsModelInputFocused(true);
-              }}
-              onBlur={(e) => {
-                if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
-                  setIsModelInputFocused(false);
-                }
-              }}
-              onKeyDown={handleModelNameKeyDown}
-              placeholder={getModelPlaceholder(newModelProvider)}
-              role="combobox"
-              aria-expanded={isCandidateMenuOpen && filteredCandidates.length > 0}
-              aria-controls={candidateListId}
-              aria-activedescendant={activeCandidateId}
-            />
-            {isLoadingCandidates && (
-              <div className="settings-hint" style={{ marginTop: '8px' }}>
-                {t('settings.llm.loading_models')}
-              </div>
-            )}
-            {!isLoadingCandidates && candidateLoadError && (
-              <div className="settings-hint" style={{ marginTop: '8px' }}>
-                {candidateLoadError}
-              </div>
-            )}
-            {!isLoadingCandidates && !candidateLoadError && isCandidateMenuOpen && filteredCandidates.length > 0 && (
-              <div id={candidateListId} className="dropdown-menu" role="listbox">
-                {filteredCandidates.slice(0, 8).map((candidate, index) => (
-                  <button
-                    id={`${candidateListId}-${index}`}
-                    key={candidate}
-                    type="button"
-                    className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
-                    role="option"
-                    aria-selected={index === highlightedCandidateIndex}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setHighlightedCandidateIndex(index)}
-                    onClick={() => handleCandidateSelect(candidate)}
-                  >
-                    {candidate}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button
-            className="btn btn-primary"
-            onClick={handleAddModel}
-            disabled={!newModelName.trim()}
-            type="button"
-          >
-            {t('settings.llm.add_model')}
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-          {models.length === 0 ? (
-            <div className="settings-hint">{t('settings.llm.no_models_added')}</div>
-          ) : (
-            models.map((entry) => {
-              const isTesting = testingModelId === entry.id && testStatus === 'loading';
-              const providerLabel = getProviderDefinition(entry.provider).label;
-              const usedBy: string[] = [];
-              if (polishModelId === entry.id) usedBy.push(t('settings.llm.used_for_polish'));
-              if (translationModelId === entry.id) usedBy.push(t('settings.llm.used_for_translation'));
-
-              return (
-                <div
-                  key={entry.id}
-                  style={{
-                    alignItems: 'center',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    display: 'grid',
-                    gap: '12px',
-                    gridTemplateColumns: '1fr auto',
-                    padding: '12px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{providerLabel} / {entry.model}</div>
-                    {usedBy.length > 0 && (
-                      <div style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginTop: '4px' }}>
-                        {usedBy.join(' · ')}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleFeatureSelection('polish', entry.id)}
-                    >
-                      {t('settings.llm.assign_to_polish')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleFeatureSelection('translation', entry.id)}
-                    >
-                      {t('settings.llm.assign_to_translation')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-loading-wrapper"
-                      onClick={() => handleTestConnection(entry.id)}
-                      disabled={isTesting}
-                    >
-                      <span className={isTesting ? 'btn-text-hidden' : ''}>{t('settings.llm.test_connection')}</span>
-                      {isTesting && (
-                        <div className="btn-spinner-overlay">
-                          <Loader2 className="animate-spin" size={16} />
-                        </div>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-icon"
-                      onClick={() => handleRemoveModel(entry.id)}
-                      aria-label={t('common.delete_item', { item: entry.model })}
-                      title={t('common.delete_item', { item: entry.model })}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      <div className="settings-item with-divider">
-        <label className="settings-label">{t('settings.llm.feature_models')}</label>
-        <div className="settings-hint" style={{ marginBottom: '12px' }}>
+        <div className="settings-hint" style={{ marginBottom: '16px' }}>
           {t('settings.llm.feature_models_runtime_hint')}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label className="settings-label">{t('settings.llm.polish_model')}</label>
-            <Dropdown
-              id="llm-polish-model"
-              value={polishModelId}
-              onChange={(value) => handleFeatureSelection('polish', value)}
-              options={modelOptions}
-              placeholder={t('settings.llm.unassigned')}
-              style={{ width: '100%' }}
-            />
-            <div className="settings-hint" style={{ marginTop: '8px' }}>
-              {getSetupStatusLabel(t, polishStatus)}
-            </div>
-            <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.polish_temperature')}</label>
-            {renderTemperatureControl(
-              polishTemperature,
-              (value) => handleFeatureTemperatureChange('polish', value),
-              'polish-temperature',
-            )}
-          </div>
-          <div>
-            <label className="settings-label">{t('settings.llm.translation_model')}</label>
-            <Dropdown
-              id="llm-translation-model"
-              value={translationModelId}
-              onChange={(value) => handleFeatureSelection('translation', value)}
-              options={modelOptions}
-              placeholder={t('settings.llm.unassigned')}
-              style={{ width: '100%' }}
-            />
-            <div className="settings-hint" style={{ marginTop: '8px' }}>
-              {getSetupStatusLabel(t, translationStatus)}
-            </div>
-            <label className="settings-label" style={{ marginTop: '12px' }}>{t('settings.llm.translation_temperature')}</label>
-            {renderTemperatureControl(
-              translationTemperature,
-              (value) => handleFeatureTemperatureChange('translation', value),
-              'translation-temperature',
-            )}
-          </div>
+        <div className="feature-cards-grid">
+           <FeatureCard
+             featureId="polish"
+             title={t('settings.llm.polish_model')}
+             icon={<Sparkles size={20} color="var(--color-primary, #646cff)" />}
+             config={config}
+             applyLlmSettings={applyLlmSettings}
+             t={t}
+           />
+           <FeatureCard
+             featureId="translation"
+             title={t('settings.llm.translation_model')}
+             icon={<Globe size={20} color="var(--color-primary, #646cff)" />}
+             config={config}
+             applyLlmSettings={applyLlmSettings}
+             t={t}
+           />
         </div>
+      </section>
 
-        {(!polishModelId || !translationModelId) && (
-          <div className="settings-hint" style={{ marginTop: '12px' }}>
-            {t('settings.llm.feature_models_hint')}
-          </div>
-        )}
-
-        {testMessage && (
-          <div className={`connection-status ${testStatus === 'error' ? 'error' : 'success'}`} style={{ marginTop: '16px' }}>
-            {testStatus === 'error' ? (
-              <X size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-            ) : (
-              <Check size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-            )}
-            <div>
-              <strong>
-                {testStatus === 'error'
-                  ? t('settings.llm.connection_failed')
-                  : t('settings.llm.connection_success')}
-              </strong>
-              <div style={{ marginTop: 4, opacity: 0.9 }}>{testMessage}</div>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* 2. Provider Credentials Section */}
+      <section style={{ borderTop: '1px solid var(--color-border)', paddingTop: '24px' }}>
+        <div className="section-title">
+           {t('settings.llm.credentials_section')}
+        </div>
+        <div className="settings-hint" style={{ marginBottom: '16px' }}>
+          {t('settings.llm.credentials_hint')}
+        </div>
+        
+        <div className="accordion-container">
+          {LLM_PROVIDER_DEFINITIONS.map(def => def)
+           .sort((a, b) => {
+             const aActive = activeProviders.includes(a.id as LlmProvider);
+             const bActive = activeProviders.includes(b.id as LlmProvider);
+             if (aActive && !bActive) return -1;
+             if (!aActive && bActive) return 1;
+             return 0;
+           })
+           .map(def => (
+             <ProviderAccordionItem
+               key={def.id}
+               provider={def.id}
+               config={config}
+               isOpen={expandedProvider === def.id}
+               onToggle={() => setExpandedProvider(expandedProvider === def.id ? null : def.id)}
+               applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
+               t={t}
+             />
+           ))
+          }
+        </div>
+      </section>
+      
     </div>
   );
 }
