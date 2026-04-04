@@ -4,6 +4,7 @@ import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { XIcon } from './Icons';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { isFeatureLlmConfigComplete } from '../services/llmConfig';
 
 interface ParameterSettingsModalProps {
@@ -25,7 +26,7 @@ export function ParameterSettingsModal({
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 
     // Get config and setters from store
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
 
     // Derived values

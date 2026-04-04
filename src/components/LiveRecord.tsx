@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { polishService } from '../services/polishService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { splitByPunctuation } from '../utils/segmentUtils';
@@ -67,7 +68,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Caption Mode
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
 
     // Initialize dedicated caption session hook
     useCaptionSession(config, isCaptionMode);
@@ -106,7 +107,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             }
 
             // Auto-Polish Logic
-            const config = useTranscriptStore.getState().config;
+            const config = useConfigStore.getState().config;
             const autoPolish = config.autoPolish ?? false;
             const frequency = config.autoPolishFrequency ?? 5;
 

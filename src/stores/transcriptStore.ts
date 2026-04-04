@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
+import { useConfigStore, DEFAULT_CONFIG } from './configStore';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
-import { createLlmSettings } from '../services/llmConfig';
+// createLlmSettings is now used in configStore
 
 /** State interface for the transcript store. */
 interface TranscriptState {
@@ -244,37 +245,6 @@ const DEFAULT_LLM_STATE: LlmState = {
     retranscribeProgress: 0,
 };
 
-const DEFAULT_CONFIG: AppConfig = {
-    streamingModelPath: '',
-    offlineModelPath: '',
-    language: 'auto',
-    appLanguage: 'auto',
-    enabledITNModels: ['itn-zh-number'], // Default to having the number ITN enabled
-    itnRulesOrder: ['itn-zh-number'],
-    enableITN: true, // Keep for legacy check
-    enableTimeline: false,
-    punctuationModelPath: '',
-    vadModelPath: '',
-    theme: 'auto',
-    font: 'system',
-    vadBufferSize: 5,
-    maxConcurrent: 2,
-    minimizeToTrayOnExit: true,
-    lockWindow: false,
-    alwaysOnTop: true,
-    microphoneId: 'default',
-    systemAudioDeviceId: 'default',
-    muteDuringRecording: false,
-    startOnLaunch: false,
-    captionWindowWidth: 800,
-    captionFontSize: 24,
-    captionFontColor: '#ffffff',
-    llmSettings: createLlmSettings(),
-    translationLanguage: 'zh',
-    autoPolish: false,
-    autoPolishFrequency: 5,
-    autoCheckUpdates: true,
-};
 
 /**
  * Zustand store for managing transcript data, audio state, and application configuration.
@@ -505,13 +475,19 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
-    // Config actions
-    setConfig: (config) => {
-        set((state) => ({
-            config: { ...state.config, ...config },
-        }));
+    // Config actions (delegated to configStore, synced back for reactivity)
+    setConfig: (patch) => {
+        useConfigStore.getState().setConfig(patch);
+        // Sync: update local copy so useTranscriptStore(s => s.config) re-renders
+        set((state) => ({ config: { ...state.config, ...patch } }));
     },
 }));
+
+// Keep transcriptStore.config in sync with configStore (for backward compatibility).
+// New code should use useConfigStore / domain hooks directly.
+useConfigStore.subscribe((state) => {
+    useTranscriptStore.setState({ config: state.config });
+});
 
 /**
  * Calculates the new segments array and the index of the updated/inserted segment.

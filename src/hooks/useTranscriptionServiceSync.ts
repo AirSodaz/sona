@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { transcriptionService, captionTranscriptionService } from '../services/transcriptionService';
 import { modelService } from '../services/modelService';
 
 export function useTranscriptionServiceSync() {
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const isRecording = useTranscriptStore((state) => state.isRecording);
 
     useEffect(() => {

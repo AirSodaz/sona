@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Event } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -126,7 +126,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     const addFiles = useBatchQueueStore((state) => state.addFiles);
 
     // Transcript store
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();

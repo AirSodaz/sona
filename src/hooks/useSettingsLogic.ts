@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
@@ -18,8 +18,8 @@ import { buildLlmConfigPatch, ensureLlmState, setActiveProvider } from '../servi
  * @param initialTab
  */
 export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initialTab?: string) {
-    const config = useTranscriptStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+    const config = useConfigStore((state) => state.config);
+    const setConfig = useConfigStore((state) => state.setConfig);
     const confirm = useDialogStore((state) => state.confirm);
     const showError = useDialogStore((state) => state.showError);
     const { t, i18n } = useTranslation();

@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CloseIcon } from './Icons';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -12,7 +12,7 @@ import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/
  */
 export function OnboardingReminderBanner(): React.JSX.Element | null {
   const { t } = useTranslation();
-  const config = useTranscriptStore((state) => state.config);
+  const config = useConfigStore((state) => state.config);
   const confirm = useDialogStore((state) => state.confirm);
   const { isOpen, persistedState, dismissReminder, reopen } = useOnboardingStore(
     useShallow((state) => ({

@@ -4,6 +4,7 @@ import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -103,7 +104,7 @@ function OnboardingActions({
 export function FirstRunGuide(): React.JSX.Element | null {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
-  const config = useTranscriptStore((state) => state.config);
+  const config = useConfigStore((state) => state.config);
   const setConfig = useTranscriptStore((state) => state.setConfig);
   const setMode = useTranscriptStore((state) => state.setMode);
   const {

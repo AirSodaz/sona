@@ -3,14 +3,14 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { useTranslation } from 'react-i18next';
 import { Download, X } from 'lucide-react';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { buildErrorDialogViewModel } from '../utils/errorUtils';
 
 export function UpdateNotification(): React.JSX.Element | null {
     const { t } = useTranslation();
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const showError = useErrorDialogStore((state) => state.showError);
     const [updateAvailable, setUpdateAvailable] = useState<any>(null);
     const [isInstalling, setIsInstalling] = useState(false);

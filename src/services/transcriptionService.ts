@@ -2,7 +2,7 @@ import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
@@ -140,7 +140,7 @@ export class TranscriptionService {
             logger.info(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
 
             // Fetch app config for VAD/Punctuation paths
-            const appConfig = useTranscriptStore.getState().config;
+            const appConfig = useConfigStore.getState().config;
 
             // Determine rules based on the streaming model ID
             let punctuationPathToUse = '';
@@ -240,7 +240,7 @@ export class TranscriptionService {
         if (this.language !== this.runningConfig.language) return false;
 
         // Compare dynamically resolved VAD and Punctuation against what is running
-        const appConfig = useTranscriptStore.getState().config;
+        const appConfig = useConfigStore.getState().config;
         let punctuationPathToUse = '';
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;
@@ -392,7 +392,7 @@ export class TranscriptionService {
                 });
             }
 
-            const appConfig = useTranscriptStore.getState().config;
+            const appConfig = useConfigStore.getState().config;
             let punctuationPathToUse = '';
             let vadPathToUse = '';
             let vadBufferToUse = 5.0;

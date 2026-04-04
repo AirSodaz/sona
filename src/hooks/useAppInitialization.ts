@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore, useUIConfig } from '../stores/configStore';
 import i18n from '../i18n';
 import { ensureLlmState } from '../services/llmConfig';
 
@@ -10,12 +11,16 @@ import { ensureLlmState } from '../services/llmConfig';
  * - Loads configuration from localStorage.
  * - Applies theme settings.
  * - Applies font settings.
+ * - Persists config changes (debounced).
  */
 export function useAppInitialization() {
-    const config = useTranscriptStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+    const config = useConfigStore((state) => state.config);
+    const setConfig = useConfigStore((state) => state.setConfig);
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const [isLoaded, setIsLoaded] = useState(false);
+
+    // Domain-specific selectors for fine-grained dependency tracking
+    const { theme, font, minimizeToTrayOnExit } = useUIConfig();
 
     // Initialize config from localStorage
     useEffect(() => {
@@ -85,7 +90,7 @@ export function useAppInitialization() {
 
     // Apply theme
     useEffect(() => {
-        const theme = config.theme || 'auto';
+        const currentTheme = theme || 'auto';
         const root = document.documentElement;
 
         const applyTheme = (targetTheme: string) => {
@@ -100,7 +105,7 @@ export function useAppInitialization() {
             }
         };
 
-        if (theme === 'auto') {
+        if (currentTheme === 'auto') {
             const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
             // Initial check
@@ -114,51 +119,16 @@ export function useAppInitialization() {
             mediaQuery.addEventListener('change', handleChange);
             return () => mediaQuery.removeEventListener('change', handleChange);
         } else {
-            applyTheme(theme);
+            applyTheme(currentTheme);
         }
-    }, [config.theme]);
+    }, [theme]);
 
-    // Persist config changes
+    // Persist config changes to localStorage (debounced)
     useEffect(() => {
         if (!isLoaded) return;
 
         const timeoutId = setTimeout(() => {
-            const configToSave = {
-                streamingModelPath: config.streamingModelPath,
-                offlineModelPath: config.offlineModelPath,
-                punctuationModelPath: config.punctuationModelPath,
-                vadModelPath: config.vadModelPath,
-                vadBufferSize: config.vadBufferSize,
-                maxConcurrent: config.maxConcurrent,
-                enabledITNModels: config.enabledITNModels,
-                itnRulesOrder: config.itnRulesOrder,
-                enableITN: config.enableITN,
-                appLanguage: config.appLanguage,
-                theme: config.theme,
-                font: config.font,
-                language: config.language,
-                enableTimeline: config.enableTimeline,
-                minimizeToTrayOnExit: config.minimizeToTrayOnExit,
-                lockWindow: config.lockWindow,
-                alwaysOnTop: config.alwaysOnTop,
-                microphoneId: config.microphoneId,
-                microphoneBoost: config.microphoneBoost,
-                systemAudioDeviceId: config.systemAudioDeviceId,
-                muteDuringRecording: config.muteDuringRecording,
-                startOnLaunch: config.startOnLaunch,
-                captionWindowWidth: config.captionWindowWidth,
-                captionFontSize: config.captionFontSize,
-                captionFontColor: config.captionFontColor,
-                llmSettings: config.llmSettings,
-                translationLanguage: config.translationLanguage,
-                polishKeywords: config.polishKeywords,
-                polishContext: config.polishContext,
-                polishScenario: config.polishScenario,
-                autoPolish: config.autoPolish,
-                autoPolishFrequency: config.autoPolishFrequency,
-                autoCheckUpdates: config.autoCheckUpdates,
-            };
-            localStorage.setItem('sona-config', JSON.stringify(configToSave));
+            localStorage.setItem('sona-config', JSON.stringify(config));
         }, 500);
 
         return () => clearTimeout(timeoutId);
@@ -167,13 +137,13 @@ export function useAppInitialization() {
     // Sync minimize to tray setting with backend
     useEffect(() => {
         if (!isLoaded) return;
-        invoke('set_minimize_to_tray', { enabled: config.minimizeToTrayOnExit ?? true })
+        invoke('set_minimize_to_tray', { enabled: minimizeToTrayOnExit ?? true })
             .catch(e => console.error('Failed to set minimize to tray:', e));
-    }, [config.minimizeToTrayOnExit, isLoaded]);
+    }, [minimizeToTrayOnExit, isLoaded]);
 
     // Apply font
     useEffect(() => {
-        const font = config.font || 'system';
+        const currentFont = font || 'system';
         const root = document.documentElement;
 
         const setFontVars = (fontFamily: string) => {
@@ -188,7 +158,7 @@ export function useAppInitialization() {
             root.style.removeProperty('--font-mono');
         };
 
-        switch (font) {
+        switch (currentFont) {
             case 'serif':
                 setFontVars('Merriweather, serif');
                 break;
@@ -209,5 +179,5 @@ export function useAppInitialization() {
                 removeFontVars();
                 break;
         }
-    }, [config.font]);
+    }, [font]);
 }

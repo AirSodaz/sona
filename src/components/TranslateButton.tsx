@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
@@ -37,7 +38,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
 
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const segments = useTranscriptStore((state) => state.segments);
 

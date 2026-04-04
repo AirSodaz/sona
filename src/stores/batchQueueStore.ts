@@ -9,6 +9,7 @@ import { modelService } from '../services/modelService';
 import { polishService } from '../services/polishService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 import { useTranscriptStore } from './transcriptStore';
+import { useConfigStore } from './configStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { tempDir, join } from '@tauri-apps/api/path';
 import { remove } from '@tauri-apps/plugin-fs';
@@ -121,7 +122,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     processQueue: async () => {
         const state = get();
         // Derived from transcript store (default 2)
-        const maxConcurrent = useTranscriptStore.getState().config.maxConcurrent || 2;
+        const maxConcurrent = useConfigStore.getState().config.maxConcurrent || 2;
 
         // Count how many are currently processing
         const processingCount = state.queueItems.filter(i => i.status === 'processing').length;
@@ -131,7 +132,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             return;
         }
 
-        const config = useTranscriptStore.getState().config;
+        const config = useConfigStore.getState().config;
         // Don't error out if config is not yet loaded in tests
         if (!config.offlineModelPath && !process.env.VITEST) {
             console.error('[BatchQueue] No model path configured');
@@ -189,7 +190,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const item = state.queueItems.find(i => i.id === itemId);
         if (!item || item.status !== 'pending') return;
 
-        const config = useTranscriptStore.getState().config;
+        const config = useConfigStore.getState().config;
         const enableTimeline = config.enableTimeline ?? false;
         const language = config.language;
 
@@ -221,7 +222,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
                         if (currentItem) {
                             // Process the buffered segments
-                            const config = useTranscriptStore.getState().config;
+                            const config = useConfigStore.getState().config;
                             const enableTimeline = config.enableTimeline ?? false;
                             const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
 

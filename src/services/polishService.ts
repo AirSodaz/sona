@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { TranscriptSegment } from '../types/transcript';
 import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 import { historyService } from './historyService';
@@ -110,7 +111,7 @@ class PolishService {
   }
 
   private buildRequest(taskId: string, segments: TranscriptSegment[]): PolishSegmentsRequest {
-    const config = useTranscriptStore.getState().config;
+    const config = useConfigStore.getState().config;
     const scenario = config.polishScenario || 'custom';
 
     return {

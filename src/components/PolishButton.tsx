@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
@@ -42,7 +43,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = llmState;
     const updateLlmState = useTranscriptStore((state) => state.updateLlmState);
 
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
     const setSegments = useTranscriptStore((state) => state.setSegments);
     const segments = useTranscriptStore((state) => state.segments);

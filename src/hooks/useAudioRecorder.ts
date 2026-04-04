@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -38,7 +39,7 @@ export function getSupportedMimeType(): string {
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
     // Store Access
-    const config = useTranscriptStore((state) => state.config);
+    const config = useConfigStore((state) => state.config);
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
     const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
