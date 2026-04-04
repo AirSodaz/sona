@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, Bot } from 'lucide-react';
+import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe } from 'lucide-react';
+import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { AppConfig, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
@@ -489,7 +490,7 @@ export function SettingsLLMServiceTab({
   return (
     <SettingsTabContainer id="settings-panel-llm" ariaLabelledby="settings-tab-llm">
       <SettingsPageHeader 
-          icon={<Bot size={28} />} 
+          icon={<RobotIcon width={28} height={28} />}
           title={t('settings.llm.title')} 
           description={t('settings.llm.description', { defaultValue: 'Configure LLM providers and models used for polishing and translating transcripts.' })} 
       />
@@ -521,9 +522,10 @@ export function SettingsLLMServiceTab({
       </SettingsSection>
 
       {/* 2. Provider Credentials Section */}
-      <SettingsSection 
+      <SettingsSection
         title={t('settings.llm.credentials_section')}
         description={t('settings.llm.credentials_hint')}
+        icon={<Settings2 size={20} />}
       >
         <div className="accordion-container">
           {LLM_PROVIDER_DEFINITIONS.map(def => def)

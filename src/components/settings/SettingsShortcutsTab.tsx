@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard } from 'lucide-react';
+import { Play, Mic, Search, FilePenLine } from 'lucide-react';
+import { KeyboardIcon } from '../Icons';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface ShortcutItem {
@@ -10,6 +11,7 @@ interface ShortcutItem {
 
 interface ShortcutSection {
     title: string;
+    icon?: React.JSX.Element;
     items: ShortcutItem[];
 }
 
@@ -19,6 +21,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
     const sections: ShortcutSection[] = [
         {
             title: t('shortcuts.section_playback'),
+            icon: <Play size={20} />,
             items: [
                 { key: 'Space / K', description: t('shortcuts.play_pause') },
                 { key: '← / →', description: `${t('shortcuts.seek_backward')} / ${t('shortcuts.seek_forward')}` },
@@ -28,6 +31,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         },
         {
             title: t('shortcuts.section_live'),
+            icon: <Mic size={20} />,
             items: [
                 { key: 'Ctrl + Space', description: t('shortcuts.record_start_stop') },
                 { key: 'Space', description: t('shortcuts.record_pause_resume') },
@@ -35,6 +39,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         },
         {
             title: t('shortcuts.section_search'),
+            icon: <Search size={20} />,
             items: [
                 { key: 'Ctrl + F', description: t('shortcuts.find') },
                 { key: 'Enter', description: t('shortcuts.next_match') },
@@ -44,6 +49,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         },
         {
             title: t('shortcuts.section_editor'),
+            icon: <FilePenLine size={20} />,
             items: [
                 { key: 'Ctrl + B', description: t('shortcuts.editor_bold') },
                 { key: 'Ctrl + I', description: t('shortcuts.editor_italic') },
@@ -56,13 +62,13 @@ export function SettingsShortcutsTab(): React.JSX.Element {
     return (
         <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
             <SettingsPageHeader 
-                icon={<Keyboard size={28} />} 
+                icon={<KeyboardIcon width={28} height={28} />}
                 title={t('shortcuts.title')} 
                 description={t('settings.shortcuts_description')} 
             />
 
             {sections.map((section, index) => (
-                <SettingsSection key={index} title={section.title}>
+                <SettingsSection key={index} title={section.title} icon={section.icon}>
                     {section.items.map((item, i) => (
                         <SettingsItem key={i} title={item.description}>
                             <div className="shortcut-keys" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>

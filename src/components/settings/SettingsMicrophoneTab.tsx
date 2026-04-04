@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, Volume2 } from 'lucide-react';
+import { Volume2, SlidersHorizontal } from 'lucide-react';
+import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { invoke } from '@tauri-apps/api/core';
@@ -233,12 +234,13 @@ export function SettingsMicrophoneTab({
     return (
         <SettingsTabContainer id="settings-panel-microphone" ariaLabelledby="settings-tab-microphone">
             <SettingsPageHeader 
-                icon={<Mic size={28} />} 
+                icon={<MicIcon width={28} height={28} />}
                 title={t('settings.input_device')} 
                 description={t('settings.microphone_description')} 
             />
             <SettingsSection
                 title={t('settings.microphone_title')}
+                icon={<SlidersHorizontal size={20} />}
             >
                 <SettingsItem
                     title={t('settings.microphone_selection')}

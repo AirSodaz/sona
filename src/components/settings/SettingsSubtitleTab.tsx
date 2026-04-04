@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Subtitles, Monitor } from 'lucide-react';
+import { Subtitles, Monitor, SlidersHorizontal } from 'lucide-react';
+import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
@@ -26,12 +27,13 @@ export function SettingsSubtitleTab({
     return (
         <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
             <SettingsPageHeader 
-                icon={<Monitor size={28} />} 
+                icon={<SubtitleIcon width={28} height={28} />}
                 title={t('live.subtitle_settings')} 
                 description={t('settings.subtitle_behavior_desc')} 
             />
             <SettingsSection
                 title={t('settings.subtitle_behavior_title')}
+                icon={<SlidersHorizontal size={20} />}
             >
                 <SettingsItem
                     title={t('live.start_on_launch')}

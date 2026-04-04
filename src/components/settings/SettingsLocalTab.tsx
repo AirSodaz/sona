@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HardDrive, PlaySquare } from 'lucide-react';
-import { Switch } from '../Switch';
-import { ItnModelList } from './ItnModelList';
-import { ModelInfo } from '../../services/modelService';
-import { RestoreIcon } from '../Icons';
+import { LocalIcon, RestoreIcon } from '../Icons';
 import { AppConfig } from '../../types/transcript';
+import { ModelInfo } from '../../services/modelService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { ItnModelList } from './ItnModelList';
+import { Switch } from '../Switch';
 
 interface SettingsLocalTabProps {
     config: AppConfig;
@@ -58,7 +58,7 @@ export function SettingsLocalTab({
     return (
         <SettingsTabContainer id="settings-panel-local" ariaLabelledby="settings-tab-local">
             <SettingsPageHeader 
-                icon={<HardDrive size={28} />} 
+                icon={<LocalIcon width={28} height={28} />}
                 title={t('settings.local_path')} 
                 description={t('settings.local_path_description', { defaultValue: 'Configure local transcription and ITN parameters.' })} 
             />

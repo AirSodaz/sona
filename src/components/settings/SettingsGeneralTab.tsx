@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings } from 'lucide-react';
+import { Languages } from 'lucide-react';
+import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { AppConfig } from '../../types/transcript';
@@ -34,12 +35,13 @@ export function SettingsGeneralTab({
     return (
         <SettingsTabContainer id="settings-panel-general" ariaLabelledby="settings-tab-general">
             <SettingsPageHeader 
-                icon={<Settings size={28} />} 
+                icon={<GeneralIcon width={28} height={28} />}
                 title={t('settings.general')} 
                 description={t('settings.general_description')} 
             />
             <SettingsSection
                 title={t('settings.general_title')}
+                icon={<Languages size={20} />}
             >
                 <SettingsItem
                     title={t('settings.language')}
