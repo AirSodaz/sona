@@ -20,33 +20,31 @@ vi.mock('../../hooks/useSettingsLogic', () => ({
     useSettingsLogic: () => ({
         activeTab: 'general',
         setActiveTab: setActiveTabMock,
-        appLanguage: 'auto',
-        theme: 'auto',
-        font: 'system',
-        streamingModelPath: '',
-        offlineModelPath: '',
-        punctuationModelPath: '',
-        vadModelPath: '',
-        vadBufferSize: 5,
-        translationLanguage: 'zh',
-        itnRulesOrder: [],
-        enabledITNModels: new Set(),
-        installedITNModels: new Set(),
-        downloadingId: null,
+        config: {
+            appLanguage: 'auto',
+            language: 'auto',
+        },
+        updateConfig: vi.fn(),
+    })
+}));
+
+vi.mock('../../hooks/useModelManager', () => ({
+    useModelManager: () => ({
         deletingId: null,
-        progress: 0,
-        statusMessage: '',
+        downloads: {},
         installedModels: new Set(),
-        handleSave: vi.fn(),
-        handleBrowse: vi.fn(),
         handleDownload: vi.fn(),
-        handleDownloadITN: vi.fn(),
         handleCancelDownload: vi.fn(),
         handleLoad: vi.fn(),
         handleDelete: vi.fn(),
         isModelSelected: vi.fn(),
-        maxConcurrent: 2,
-        setMaxConcurrent: vi.fn(),
+        restoreDefaultModelSettings: vi.fn(),
+    })
+}));
+
+vi.mock('../../hooks/useLlmConfig', () => ({
+    useLlmConfig: () => ({
+        changeLlmServiceType: vi.fn(),
     })
 }));
 

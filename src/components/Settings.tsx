@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
+import { useModelManager } from '../hooks/useModelManager';
+import { useLlmConfig } from '../hooks/useLlmConfig';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
@@ -47,16 +49,18 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setActiveTab,
         config,
         updateConfig,
-        changeLlmServiceType,
+    } = useSettingsLogic(isOpen, onClose, initialTab);
 
+    const {
         downloads,
         installedModels,
-
         handleDownload,
         handleCancelDownload,
         handleDelete,
-        restoreDefaultModelSettings
-    } = useSettingsLogic(isOpen, onClose, initialTab);
+        restoreDefaultModelSettings,
+    } = useModelManager(isOpen);
+
+    const { changeLlmServiceType } = useLlmConfig();
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
