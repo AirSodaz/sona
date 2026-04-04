@@ -242,12 +242,13 @@ describe('LiveRecord', () => {
         })) as any;
 
         // Setup store config
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
         const { useConfigStore } = await import('../../stores/configStore');
         act(() => {
             useConfigStore.setState({
-                config: { ...useConfigStore.getState().config, streamingModelPath: "/path/to/model",
-                offlineModelPath: '/path/to/model' }
+                config: {
+                    ...useConfigStore.getState().config, streamingModelPath: "/path/to/model",
+                    offlineModelPath: '/path/to/model'
+                }
             });
             useOnboardingStore.setState({
                 persistedState: { version: 1, status: 'pending' },
@@ -429,7 +430,6 @@ describe('LiveRecord', () => {
     });
 
     it('should mute system audio when recording starts if configured', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
         const { useConfigStore } = await import('../../stores/configStore');
 
         // Enable mute setting
@@ -438,7 +438,7 @@ describe('LiveRecord', () => {
                 config: {
                     ...useConfigStore.getState().config,
                     streamingModelPath: "/path/to/model",
-                offlineModelPath: '/path/to/model',
+                    offlineModelPath: '/path/to/model',
                     muteDuringRecording: true
                 }
             });
