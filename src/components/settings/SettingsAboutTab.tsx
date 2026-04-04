@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import packageJson from '../../../package.json';
-import { WaveformIcon, GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, InfoIcon } from '../Icons';
+import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, InfoIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
 
 /**
@@ -116,7 +116,7 @@ export function SettingsAboutTab(): React.JSX.Element {
             {/* Hero Section */}
             <div className="about-header">
                 <div className="about-logo">
-                <InfoIcon width={28} height={28} />
+                    <InfoIcon width={28} height={28} />
                 </div>
                 <div className="about-title">
                     <h2>Sona</h2>
