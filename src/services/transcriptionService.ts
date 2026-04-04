@@ -148,14 +148,27 @@ export class TranscriptionService {
             let vadBufferToUse = 5.0;
 
             const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
-            if (streamingModel) {
+
+            if (!streamingModel) {
+                logger.warn(`[TranscriptionService:${this.instanceId}] Could not identify model from path: "${this.modelPath}". Using fallback type "sensevoice". Transcription may fail.`);
+            } else {
+                logger.info(`[TranscriptionService:${this.instanceId}] Identified model: ${streamingModel.id} (type=${streamingModel.type})`);
                 const rules = modelService.getModelRules(streamingModel.id);
                 if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
                     punctuationPathToUse = appConfig.punctuationModelPath;
                 }
-                if (rules.requiresVad && appConfig.vadModelPath) {
-                    vadPathToUse = appConfig.vadModelPath;
-                    vadBufferToUse = appConfig.vadBufferSize || 5.0;
+                if (rules.requiresVad) {
+                    if (appConfig.vadModelPath) {
+                        vadPathToUse = appConfig.vadModelPath;
+                        vadBufferToUse = appConfig.vadBufferSize || 5.0;
+                    } else {
+                        // CRITICAL: This model requires VAD but none is configured.
+                        // The Rust backend will reject every audio chunk, producing zero transcription output.
+                        logger.error(`[TranscriptionService:${this.instanceId}] Model "${streamingModel.id}" requires a VAD model, but vadModelPath is not configured! Live transcription will NOT work. Please download and configure the Silero VAD model in Settings.`);
+                        if (this.onError) {
+                            this.onError('VAD model not configured. Please download the Silero VAD model in Settings → Model Center.');
+                        }
+                    }
                 }
             }
 
@@ -170,6 +183,8 @@ export class TranscriptionService {
                 modelType: streamingModel?.type || 'sensevoice',
                 fileConfig: streamingModel?.fileConfig
             };
+
+            logger.info(`[TranscriptionService:${this.instanceId}] Calling init_recognizer with modelType=${configToUse.modelType}, vadModel=${vadPathToUse || 'none'}, punctuationModel=${punctuationPathToUse || 'none'}`);
 
             try {
                 await invoke('init_recognizer', {
@@ -187,7 +202,7 @@ export class TranscriptionService {
                 });
 
                 this.runningConfig = configToUse;
-                logger.info(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized`);
+                logger.info(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized successfully`);
 
             } catch (error) {
                 logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize recognizer:`, error);

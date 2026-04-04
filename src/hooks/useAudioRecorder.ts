@@ -85,20 +85,34 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, []);
 
     // Initialize Native Session
-    const initializeNativeSession = async () => {
+    // IMPORTANT: This must be called BEFORE starting audio capture to avoid a race
+    // condition where audio is fed to Sherpa before the recognizer is initialized.
+    const initializeNativeSession = useCallback(async () => {
+        console.log('[useAudioRecorder] Initializing transcription service (native)...');
         await transcriptionService.start(
             onSegment,
-            (error) => { console.error('Transcription error:', error); }
+            (error) => { console.error('[useAudioRecorder] Transcription error:', error); }
         );
-    };
+        console.log('[useAudioRecorder] Transcription service ready.');
+    }, [onSegment]);
 
     // Initialize Audio Session (Web API)
-    const initializeAudioSession = async (stream: MediaStream) => {
+    const initializeAudioSession = useCallback(async (stream: MediaStream) => {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
             audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         } else if (audioContextRef.current.state === 'suspended') {
             await audioContextRef.current.resume();
         }
+
+        // CRITICAL: Initialize transcription service BEFORE connecting the audio graph.
+        // This ensures isRunning=true before any audio samples arrive via onmessage,
+        // preventing initial audio data from being silently dropped.
+        console.log('[useAudioRecorder] Initializing transcription service (web audio)...');
+        await transcriptionService.start(
+            onSegment,
+            (error) => { console.error('[useAudioRecorder] Transcription error:', error); }
+        );
+        console.log('[useAudioRecorder] Transcription service ready.');
 
         const source = audioContextRef.current.createMediaStreamSource(stream);
 
@@ -121,12 +135,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         source.connect(processor);
         processor.connect(audioContextRef.current.destination);
-
-        await transcriptionService.start(
-            onSegment,
-            (error) => { console.error('Transcription error:', error); }
-        );
-    };
+    }, [onSegment, setPeakFromInt16]);
 
     // File Recording (MediaRecorder)
     const startFileRecording = useCallback(() => {
@@ -212,6 +221,11 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 let nativeSuccess = false;
                 try {
                     console.log('[useAudioRecorder] Attempting native system audio capture...');
+
+                    // CRITICAL: Initialize recognizer BEFORE starting capture to avoid
+                    // a race condition where audio feeds Sherpa before it is ready.
+                    await initializeNativeSession();
+
                     await invoke('start_system_audio_capture', {
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
                         instanceId: 'record'
@@ -231,10 +245,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
 
-                    await initializeNativeSession();
-
                 } catch (e) {
                     console.warn('[useAudioRecorder] Native capture failed, fallback to Web API:', e);
+                    // If the session was partially initialized, roll it back so the
+                    // Web API fallback path starts fresh.
+                    await transcriptionService.softStop().catch(() => {});
+                    usingNativeCaptureRef.current = false;
                 }
 
                 if (!nativeSuccess) {
@@ -264,6 +280,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                         console.warn('[useAudioRecorder] Failed to set initial microphone boost:', err);
                     });
 
+                    // CRITICAL: Initialize recognizer BEFORE starting capture to avoid
+                    // a race condition where audio feeds Sherpa before it is ready.
+                    await initializeNativeSession();
+
                     await invoke('start_microphone_capture', {
                         deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
                         instanceId: 'record'
@@ -283,8 +303,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
 
-                    await initializeNativeSession();
-
                     if (config.muteDuringRecording) {
                         invoke('set_system_audio_mute', { mute: true })
                             .catch(err => console.error('Failed to mute system audio:', err));
@@ -292,6 +310,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
                 } catch (e) {
                     console.warn('[useAudioRecorder] Native microphone capture failed, fallback to Web API:', e);
+                    // If the session was partially initialized, roll it back so the
+                    // Web API fallback path starts fresh.
+                    await transcriptionService.softStop().catch(() => {});
+                    usingNativeCaptureRef.current = false;
                 }
 
                 if (!nativeSuccess) {
@@ -332,6 +354,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return true;
 
         } catch (error) {
+            // Clean up any partially initialized state to ensure the next attempt starts fresh.
+            if (usingNativeCaptureRef.current) {
+                if (nativeAudioUnlistenRef.current) {
+                    nativeAudioUnlistenRef.current();
+                    nativeAudioUnlistenRef.current = null;
+                }
+                const stopCmd = activeInputSourceRef.current === 'desktop'
+                    ? 'stop_system_audio_capture'
+                    : 'stop_microphone_capture';
+                invoke(stopCmd, { instanceId: 'record' }).catch(() => {});
+                usingNativeCaptureRef.current = false;
+            }
+            await transcriptionService.softStop().catch(() => {});
+
             await showError({
                 code: inputSource === 'microphone' ? 'audio.microphone_failed' : 'audio.capture_failed',
                 messageKey: inputSource === 'microphone' ? 'errors.audio.microphone_failed' : 'errors.audio.capture_failed',
@@ -341,7 +377,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         } finally {
             setIsInitializing(false);
         }
-    }, [config, inputSource, showError, startFileRecording, initializeNativeSession, initializeAudioSession]); // Added deps
+    }, [config, inputSource, showError, startFileRecording, initializeNativeSession, initializeAudioSession]);
 
 
     // Stop Recording

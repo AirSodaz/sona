@@ -92,7 +92,10 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Segment Handler
     const onSegment = useCallback((segment: any) => {
-        if (isRecordingRef.current) {
+        // Read isRecording directly from the store (synchronous, always up-to-date) rather
+        // than the ref, which is synced via useEffect and can be stale for the very first
+        // segments that arrive right after the recognizer starts.
+        if (useTranscriptStore.getState().isRecording) {
             if (enableTimelineRef.current && segment.isFinal) {
                 const parts = splitByPunctuation([segment]);
                 if (parts.length > 0) {
