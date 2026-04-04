@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { transcriptionService } from '../../services/transcriptionService';
-import { useTranscriptStore } from '../transcriptStore';
+import { useConfigStore } from '../configStore';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
@@ -53,9 +53,9 @@ describe('batchQueueStore Concurrency', () => {
             activeItemId: null,
             isQueueProcessing: false
         });
-        useTranscriptStore.setState({
+        useConfigStore.setState({
             config: {
-
+                ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
                 offlineModelPath: '/mock/model',
                 language: 'en',
@@ -131,9 +131,9 @@ describe('batchQueueStore Concurrency', () => {
     });
 
     it('should respect maxConcurrent config change', async () => {
-        useTranscriptStore.setState({
+        useConfigStore.setState({
             config: {
-                ...useTranscriptStore.getState().config,
+                ...useConfigStore.getState().config,
                 maxConcurrent: 3
             }
         });

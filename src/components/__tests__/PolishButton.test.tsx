@@ -2,14 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PolishButton } from '../PolishButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useConfigStore } from '../../stores/configStore';
 import { polishService } from '../../services/polishService';
 
 // Mock dependencies
-vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string) => key,
-    }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('react-i18next')>();
+    return {
+        ...actual,
+        useTranslation: () => ({
+            t: (key: string) => key,
+        }),
+    };
+});
 
 vi.mock('../../services/polishService', () => ({
     polishService: {
@@ -34,7 +39,11 @@ describe('PolishButton', () => {
                 { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
             ],
             llmStates: {},
+        });
+
+        useConfigStore.setState({
             config: {
+                ...useConfigStore.getState().config,
                 llmSettings: {
                     activeProvider: 'open_ai',
                     providers: {

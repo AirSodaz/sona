@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FirstRunGuide } from '../FirstRunGuide';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import {
   downloadRecommendedOnboardingModels,
@@ -97,8 +98,10 @@ describe('FirstRunGuide', () => {
 
     useTranscriptStore.setState({
       mode: 'batch',
+    });
+    useConfigStore.setState({
       config: {
-        ...useTranscriptStore.getState().config,
+        ...useConfigStore.getState().config,
         streamingModelPath: '',
         offlineModelPath: '',
         microphoneId: 'default',
@@ -153,9 +156,9 @@ describe('FirstRunGuide', () => {
       fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
     });
 
-    expect(useTranscriptStore.getState().config.streamingModelPath).toBe('/models/live');
-    expect(useTranscriptStore.getState().config.offlineModelPath).toBe('/models/offline');
-    expect(useTranscriptStore.getState().config.microphoneId).toBe('desk-mic');
+    expect(useConfigStore.getState().config.streamingModelPath).toBe('/models/live');
+    expect(useConfigStore.getState().config.offlineModelPath).toBe('/models/offline');
+    expect(useConfigStore.getState().config.microphoneId).toBe('desk-mic');
     expect(useTranscriptStore.getState().mode).toBe('live');
     expect(useOnboardingStore.getState().persistedState.status).toBe('completed');
     expect(useOnboardingStore.getState().isOpen).toBe(false);
@@ -185,8 +188,10 @@ describe('FirstRunGuide', () => {
   it('shows later, back, and finish on the microphone step, and can navigate back', async () => {
     useTranscriptStore.setState({
       mode: 'batch',
+    });
+    useConfigStore.setState({
       config: {
-        ...useTranscriptStore.getState().config,
+        ...useConfigStore.getState().config,
         streamingModelPath: '/models/live',
         offlineModelPath: '/models/offline',
         microphoneId: 'default',

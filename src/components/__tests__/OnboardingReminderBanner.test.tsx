@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OnboardingReminderBanner } from '../OnboardingReminderBanner';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 
@@ -19,9 +19,9 @@ describe('OnboardingReminderBanner', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
-    useTranscriptStore.setState({
+    useConfigStore.setState({
       config: {
-        ...useTranscriptStore.getState().config,
+        ...useConfigStore.getState().config,
         streamingModelPath: '',
         offlineModelPath: '',
       },
@@ -82,9 +82,9 @@ describe('OnboardingReminderBanner', () => {
   });
 
   it('hides after models are configured manually', () => {
-    useTranscriptStore.setState({
+    useConfigStore.setState({
       config: {
-        ...useTranscriptStore.getState().config,
+        ...useConfigStore.getState().config,
         streamingModelPath: '/models/live',
         offlineModelPath: '/models/offline',
       },

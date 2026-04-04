@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { polishService } from '../polishService';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useConfigStore } from '../../stores/configStore';
 import { TranscriptSegment } from '../../types/transcript';
 
 const mockListenToLlmTaskChunks = vi.fn();
@@ -20,6 +21,14 @@ vi.mock('../llmTaskService', () => ({
 
 vi.mock('../../stores/transcriptStore', () => ({
   useTranscriptStore: {
+    getState: vi.fn(),
+    setState: vi.fn(),
+    subscribe: vi.fn(),
+  },
+}));
+
+vi.mock('../../stores/configStore', () => ({
+  useConfigStore: {
     getState: vi.fn(),
     setState: vi.fn(),
     subscribe: vi.fn(),
@@ -63,6 +72,34 @@ describe('PolishService', () => {
       updateSegment: vi.fn(),
       updateLlmState: vi.fn(),
       sourceHistoryId: null,
+    });
+
+    (useConfigStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      config: {
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
+        },
+        polishScenario: 'custom',
+        polishContext: '',
+        polishKeywords: '',
+      },
     });
   });
 
@@ -176,7 +213,36 @@ describe('PolishService', () => {
       sourceHistoryId: null,
     };
 
+    const mockConfigStore = {
+      config: {
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
+        },
+        polishScenario: 'custom',
+        polishContext: '',
+        polishKeywords: '',
+      },
+    };
+
     (useTranscriptStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockStore);
+    (useConfigStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockConfigStore);
     mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
       onProgress({ taskId: 'polish-task-id', taskType: 'polish', completedChunks: 1, totalChunks: 2 });
       return vi.fn();

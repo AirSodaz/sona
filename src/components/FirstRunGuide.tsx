@@ -105,7 +105,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const config = useConfigStore((state) => state.config);
-  const setConfig = useTranscriptStore((state) => state.setConfig);
+  const setConfig = useConfigStore((state) => state.setConfig);
   const setMode = useTranscriptStore((state) => state.setMode);
   const {
     isOpen,

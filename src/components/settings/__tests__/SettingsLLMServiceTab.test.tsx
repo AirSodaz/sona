@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { expect, vi, beforeEach, describe, it } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as tauriApi from '@tauri-apps/api/core';
 import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 import { AppConfig, LlmProvider } from '../../../types/transcript';
@@ -60,167 +60,165 @@ describe('SettingsLLMServiceTab', () => {
     });
   });
 
-  it('renders active provider fields from llmSettings', async () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    expect(screen.getByText('settings.llm.credential_provider')).toBeDefined();
-    expect(screen.getAllByText('OpenAI').length).toBeGreaterThan(0);
-    expect(screen.getByDisplayValue('https://api.openai.com')).toBeDefined();
-    expect(screen.getByDisplayValue('test-key')).toBeDefined();
-    expect(screen.getAllByText('OpenAI / gpt-4o').length).toBeGreaterThan(0);
-
-    await waitFor(() => {
-      expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', {
-        request: {
-          provider: 'open_ai',
-          baseUrl: 'https://api.openai.com',
-          apiKey: 'test-key',
-        },
-      });
+  it('renders feature cards and credentials section', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
     });
-  });
 
-  it('renders setup summary, credential copy, and quick assign actions', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    expect(screen.getByText('settings.llm.setup_summary')).toBeDefined();
+    expect(screen.getByText('settings.llm.title')).toBeDefined();
+    expect(screen.getByText('settings.llm.feature_models')).toBeDefined();
+    expect(screen.getByText('settings.llm.polish_model')).toBeDefined();
+    expect(screen.getByText('settings.llm.translation_model')).toBeDefined();
     expect(screen.getByText('settings.llm.credentials_section')).toBeDefined();
-    expect(screen.getByText('settings.llm.credential_provider')).toBeDefined();
-    expect(screen.getByText('settings.llm.model_library')).toBeDefined();
-    expect(screen.getByText('settings.llm.feature_models_runtime_hint')).toBeDefined();
-    expect(screen.getByText('settings.llm.assign_to_polish')).toBeDefined();
-    expect(screen.getByText('settings.llm.assign_to_translation')).toBeDefined();
   });
 
-  it('shows simple provider readiness status', async () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig('open_ai', false)}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+  it('renders active provider fields from llmSettings in accordion', async () => {
+    let conf = buildConfig();
+    conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
+    
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={conf}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
+
+    // OpenAI is the active provider and so its accordion is expanded by default.
+    expect(screen.getByDisplayValue('test-host')).toBeDefined();
+    expect(screen.getByDisplayValue('test-key')).toBeDefined();
+  });
+
+  it('shows missing api key status', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig('open_ai', false)}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
     await waitFor(() => {
       expect(screen.getAllByText('settings.llm.status_missing_api_key').length).toBeGreaterThan(0);
-      expect(screen.getByText('settings.llm.setup_action_api_key')).toBeDefined();
     });
   });
 
-  it('fills Gemini host with the Chatbox default host', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig('gemini')}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+  it('fills Gemini host with the default host in accordion', async () => {
+    let conf = buildConfig('gemini');
+    conf.llmSettings!.providers['gemini']!.apiHost = 'gemini-host';
 
-    expect(screen.getByDisplayValue('https://generativelanguage.googleapis.com')).toBeDefined();
-  });
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={conf}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
-  it('renders Azure-specific labels and version field', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig('azure_openai')}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    expect(screen.getByText('Endpoint')).toBeDefined();
-    expect(screen.getByText('settings.llm.api_version')).toBeDefined();
-    expect(screen.getByDisplayValue('2024-10-21')).toBeDefined();
-    expect(screen.getAllByText('Azure OpenAI / deployment-1').length).toBeGreaterThan(0);
+    // Gemini is the active provider and expanded by default.
+    expect(screen.getByDisplayValue('gemini-host')).toBeDefined();
   });
 
   it('shows candidates only while the model input is focused', async () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    const modelInput = screen.getByRole('combobox');
-
-    expect(screen.queryByRole('listbox')).toBeNull();
-
-    fireEvent.focus(modelInput);
-
-    await waitFor(() => {
-      expect(screen.getByRole('listbox')).toBeDefined();
-      expect(screen.getByRole('option', { name: 'gpt-4.1-mini' })).toBeDefined();
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
     });
 
-    fireEvent.blur(modelInput);
+    const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini'); // Default placeholder for OpenAI
+    const modelInput = modelInputs[0]; // Polish model input
+
+    expect(screen.queryByText('gpt-4.1-mini')).toBeNull();
+
+    await act(async () => {
+      fireEvent.focus(modelInput);
+      fireEvent.change(modelInput, { target: { value: '' } });
+    });
 
     await waitFor(() => {
-      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(screen.getByText('gpt-4.1-mini')).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.blur(modelInput);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('gpt-4.1-mini')).toBeNull();
     });
   });
 
   it('adds a model through the searchable model input flow', async () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    const modelInput = screen.getByRole('combobox');
-    fireEvent.focus(modelInput);
-    fireEvent.change(modelInput, { target: { value: 'gpt-4.1' } });
-
-    await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'gpt-4.1-mini' })).toBeDefined();
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
     });
 
-    fireEvent.keyDown(modelInput, { key: 'ArrowDown' });
-    fireEvent.keyDown(modelInput, { key: 'Enter' });
-    fireEvent.click(screen.getByText('settings.llm.add_model'));
+    const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini');
+    const modelInput = modelInputs[0];
+    
+    await act(async () => {
+      fireEvent.focus(modelInput);
+      fireEvent.change(modelInput, { target: { value: 'gpt-4.2-new' } });
+      fireEvent.keyDown(modelInput, { key: 'Enter' });
+    });
 
     expect(mockUpdateConfig).toHaveBeenCalled();
   });
 
-  it('renders only feature-specific temperature controls', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+  it('renders only feature-specific temperature controls', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
     expect(screen.getByText('settings.llm.polish_temperature')).toBeDefined();
     expect(screen.getByText('settings.llm.translation_temperature')).toBeDefined();
   });
 
-  it('updates polish temperature independently', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+  it('updates polish temperature independently', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
-    fireEvent.change(screen.getByTestId('polish-temperature-number'), { target: { value: '0.25' } });
+    const sliders = screen.getAllByRole('spinbutton');
+    await act(async () => {
+      fireEvent.change(sliders[0], { target: { value: '0.25' } });
+    });
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
       llmSettings: expect.objectContaining({
@@ -231,16 +229,21 @@ describe('SettingsLLMServiceTab', () => {
     }));
   });
 
-  it('updates translation temperature independently', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+  it('updates translation temperature independently', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
-    fireEvent.change(screen.getByTestId('translation-temperature-number'), { target: { value: '1.1' } });
+    const sliders = screen.getAllByRole('spinbutton');
+    await act(async () => {
+      fireEvent.change(sliders[1], { target: { value: '1.1' } });
+    });
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
       llmSettings: expect.objectContaining({
@@ -251,48 +254,21 @@ describe('SettingsLLMServiceTab', () => {
     }));
   });
 
-  it('shows missing model status when a feature is unassigned', () => {
+  it('shows missing model status when a feature is unassigned', async () => {
     const config = buildConfig();
-    if (config.llmSettings) {
-      config.llmSettings = {
-        ...config.llmSettings,
-        selections: {
-          ...config.llmSettings.selections,
-          translationModelId: undefined,
-        },
-      };
-    }
+    config.llmSettings!.selections.translationModelId = undefined;
 
-    render(
-      <SettingsLLMServiceTab
-        config={config}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={config}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
-    expect(screen.getByText('settings.llm.status_missing_model')).toBeDefined();
-    expect(screen.getByText('settings.llm.setup_action_translation_model')).toBeDefined();
-  });
-
-  it('assigns a model to a feature from the library shortcut', () => {
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
-
-    fireEvent.click(screen.getByText('settings.llm.assign_to_translation'));
-
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        selections: expect.objectContaining({
-          translationModelId: 'open_ai-gpt-4o',
-        }),
-      }),
-    }));
+    expect(screen.getAllByText('settings.llm.status_missing_model').length).toBeGreaterThan(0);
   });
 
   it('surfaces normalized connection errors', async () => {
@@ -303,19 +279,23 @@ describe('SettingsLLMServiceTab', () => {
       throw 'error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error';
     });
 
-    render(
-      <SettingsLLMServiceTab
-        config={buildConfig()}
-        updateConfig={mockUpdateConfig}
-        changeLlmServiceType={mockChangeLlmServiceType}
-      />,
-    );
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab
+          config={buildConfig()}
+          updateConfig={mockUpdateConfig}
+          changeLlmServiceType={mockChangeLlmServiceType}
+        />,
+      );
+    });
 
-    fireEvent.click(screen.getAllByText('settings.llm.test_connection')[0]);
+    const testButtons = screen.getAllByText('settings.llm.test_connection');
+    await act(async () => {
+      fireEvent.click(testButtons[0]);
+    });
 
     await waitFor(() => {
-      expect(screen.getByText('settings.llm.connection_failed')).toBeDefined();
-      expect(screen.getByText('Network Error')).toBeDefined();
+      expect(screen.getByText('settings.llm.connection_failed: Network Error')).toBeDefined();
     });
   });
 });

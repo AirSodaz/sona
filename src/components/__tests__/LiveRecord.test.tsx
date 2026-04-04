@@ -243,9 +243,10 @@ describe('LiveRecord', () => {
 
         // Setup store config
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useConfigStore } = await import('../../stores/configStore');
         act(() => {
-            useTranscriptStore.setState({
-                config: { ...useTranscriptStore.getState().config, streamingModelPath: "/path/to/model",
+            useConfigStore.setState({
+                config: { ...useConfigStore.getState().config, streamingModelPath: "/path/to/model",
                 offlineModelPath: '/path/to/model' }
             });
             useOnboardingStore.setState({
@@ -403,10 +404,11 @@ describe('LiveRecord', () => {
 
     it('reopens onboarding instead of starting recording when no live model is configured', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useConfigStore } = await import('../../stores/configStore');
         act(() => {
-            useTranscriptStore.setState({
+            useConfigStore.setState({
                 config: {
-                    ...useTranscriptStore.getState().config,
+                    ...useConfigStore.getState().config,
                     streamingModelPath: '',
                     offlineModelPath: ''
                 }
@@ -428,12 +430,13 @@ describe('LiveRecord', () => {
 
     it('should mute system audio when recording starts if configured', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useConfigStore } = await import('../../stores/configStore');
 
         // Enable mute setting
         act(() => {
-            useTranscriptStore.setState({
+            useConfigStore.setState({
                 config: {
-                    ...useTranscriptStore.getState().config,
+                    ...useConfigStore.getState().config,
                     streamingModelPath: "/path/to/model",
                 offlineModelPath: '/path/to/model',
                     muteDuringRecording: true

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore } from '../transcriptStore';
+import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
 
@@ -56,8 +57,9 @@ describe('batchQueueStore History Integration', () => {
         useBatchQueueStore.getState().clearQueue();
         useTranscriptStore.getState().setAudioUrl(null);
         useTranscriptStore.getState().clearSegments();
-        useTranscriptStore.setState({
+        useConfigStore.setState({
             config: {
+                ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
                 offlineModelPath: '/path/to/model',
                 language: 'en',
@@ -73,9 +75,9 @@ describe('batchQueueStore History Integration', () => {
     });
 
     it('should save to history after successful transcription', async () => {
-        useTranscriptStore.setState({
+        useConfigStore.setState({
             config: {
-                ...useTranscriptStore.getState().config,
+                ...useConfigStore.getState().config,
                 enableTimeline: false
             }
         });

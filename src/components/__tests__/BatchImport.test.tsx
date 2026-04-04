@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { BatchImport } from '../BatchImport';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { transcriptionService } from '../../services/transcriptionService';
@@ -85,8 +86,13 @@ describe('BatchImport Integration', () => {
         localStorage.clear();
         // Reset stores
         useTranscriptStore.setState({
-            config: {
+            segments: [],
+            audioUrl: null
+        });
 
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
                 offlineModelPath: '/mock/offline/model',
                 punctuationModelPath: '',
@@ -97,9 +103,7 @@ describe('BatchImport Integration', () => {
                 font: 'system',
                 language: 'en',
                 appLanguage: 'auto'
-            },
-            segments: [],
-            audioUrl: null
+            }
         });
 
         useBatchQueueStore.setState({
@@ -263,9 +267,9 @@ describe('BatchImport Integration', () => {
     });
 
     it('reopens onboarding when selecting a file without an offline model', async () => {
-        useTranscriptStore.setState({
+        useConfigStore.setState({
             config: {
-                ...useTranscriptStore.getState().config,
+                ...useConfigStore.getState().config,
                 offlineModelPath: '',
             },
         });
