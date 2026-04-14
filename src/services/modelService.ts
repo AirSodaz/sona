@@ -73,6 +73,11 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 /** List of pre-defined models available for download. */
 export const PRESET_MODELS: ModelInfo[] = presetModelsData as ModelInfo[];
 
+/** Map of pre-defined models keyed by their ID for O(1) lookups. */
+export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
+    PRESET_MODELS.map(model => [model.id, model])
+);
+
 /**
  * Callback function for reporting download or extraction progress.
  *
@@ -109,7 +114,7 @@ class ModelService {
      * @return A promise resolving to an object with compatibility status and optional reason.
      */
     async checkHardware(modelId: string): Promise<{ compatible: boolean, reason?: string }> {
-        const model = PRESET_MODELS.find(m => m.id === modelId);
+        const model = PRESET_MODELS_MAP.get(modelId);
         if (!model) return { compatible: false, reason: 'Model not found' };
 
         return { compatible: true };
@@ -265,7 +270,7 @@ class ModelService {
      * @throws {Error} If the model is not found or download fails.
      */
     async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const model = PRESET_MODELS.find(m => m.id === modelId);
+        const model = PRESET_MODELS_MAP.get(modelId);
         if (!model) throw new Error('Model not found');
 
         const modelsDir = await this.getModelsDir();
@@ -331,7 +336,7 @@ class ModelService {
      * @return A promise resolving to the model's path.
      */
     async getModelPath(modelId: string): Promise<string> {
-        const model = PRESET_MODELS.find(m => m.id === modelId);
+        const model = PRESET_MODELS_MAP.get(modelId);
         const modelsDir = await this.getModelsDir();
         if (model && model.filename) {
             return await join(modelsDir, model.filename);
@@ -384,7 +389,7 @@ class ModelService {
 
         // Parallelize file system checks
         const results = await Promise.all(allModelsToCheck.map(async (id) => {
-            const model = PRESET_MODELS.find(m => m.id === id);
+            const model = PRESET_MODELS_MAP.get(id);
             if (!model) return null;
 
             // Construct path manually to avoid re-calling getModelsDir
@@ -435,7 +440,7 @@ class ModelService {
      * @returns The ModelRules for the model.
      */
     getModelRules(modelId: string): ModelRules {
-        const model = PRESET_MODELS.find(m => m.id === modelId);
+        const model = PRESET_MODELS_MAP.get(modelId);
         if (model && model.rules) {
             return model.rules;
         }
