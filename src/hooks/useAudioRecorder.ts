@@ -89,12 +89,24 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // condition where audio is fed to Sherpa before the recognizer is initialized.
     const initializeNativeSession = useCallback(async () => {
         console.log('[useAudioRecorder] Initializing transcription service (native)...');
-        await transcriptionService.start(
-            onSegment,
-            (error) => { console.error('[useAudioRecorder] Transcription error:', error); }
-        );
-        console.log('[useAudioRecorder] Transcription service ready.');
-    }, [onSegment]);
+        try {
+            await transcriptionService.start(
+                onSegment,
+                (error) => {
+                    console.error('[useAudioRecorder] Transcription error callback:', error);
+                    showError({
+                        code: 'transcription.service_error',
+                        messageKey: 'errors.transcription.service_error',
+                        cause: error,
+                    });
+                }
+            );
+            console.log('[useAudioRecorder] Transcription service ready.');
+        } catch (err) {
+            console.error('[useAudioRecorder] Failed to start transcription service:', err);
+            throw err; // Re-throw to be caught by startRecording
+        }
+    }, [onSegment, showError]);
 
     // Initialize Audio Session (Web API)
     const initializeAudioSession = useCallback(async (stream: MediaStream) => {

@@ -550,7 +550,7 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
 
     let silero_vad = SileroVadModelConfig {
         model: Some(v_path),
-        threshold: 0.35,
+        threshold: 0.30,
         min_silence_duration: 0.5,
         min_speech_duration: 0.25,
         window_size: 512,
@@ -742,18 +742,32 @@ fn run_offline_inference<R: tauri::Runtime>(
         full_audio.extend_from_slice(chunk);
     }
     let stream = r.create_stream();
-    debug!("FFI: Calling accept_waveform (Offline)");
+    debug!("[Offline] FFI: Calling accept_waveform (Offline) with {} samples", full_audio.len());
     stream.accept_waveform(16000, &full_audio);
-    debug!("FFI: Successfully returned from accept_waveform (Offline)");
+    
+    debug!("[Offline] FFI: Calling decode");
     r.decode(&stream);
+    debug!("[Offline] FFI: Decode finished");
 
     if let Some(result) = stream.get_result() {
-        if !result.text.trim().is_empty() {
-            let text = if is_final {
+        let raw_text = result.text.trim();
+        if !raw_text.is_empty() {
+            let mut text = if is_final {
                 format_transcript(&result.text, punctuation)
             } else {
                 result.text.clone()
             };
+
+            // Simple tag cleanup for intermediate SenseVoice results to avoid confusing UI
+            if !is_final && text.starts_with("<|") && text.contains("|>") {
+                if let Some(pos) = text.find("|>") {
+                    text = text[pos + 2..].trim().to_string();
+                }
+            }
+
+            if text.is_empty() && !is_final {
+                 return;
+            }
 
             let global_end = global_start + (full_audio.len() as f64 / 16000.0);
             let timestamps_abs: Option<Vec<f32>> = result
@@ -1017,12 +1031,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
         RecognizerInner::Offline(_) => {
             // Offline + VAD (pseudo-streaming)
             let Some(SafeVad(vad)) = instance.vad.as_ref() else {
-                return Err("VAD model is required for offline pseudo-streaming".to_string());
+                return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
             };
 
-            debug!("FFI: Calling vad.accept_waveform");
             vad.accept_waveform(samples);
-            debug!("FFI: Successfully returned from vad.accept_waveform");
             let currently_speaking = vad.detected();
 
             // Ensure segment ID exists
@@ -1171,9 +1183,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                 .as_ref()
                 .ok_or("Stream not initialized for online model")?;
 
-            debug!("FFI: Calling accept_waveform (Online, samples)");
             st.0.accept_waveform(16000, samples);
-            debug!("FFI: Successfully returned from accept_waveform (Online, samples)");
             instance.total_samples += samples.len();
 
             while r.0.is_ready(&st.0) {

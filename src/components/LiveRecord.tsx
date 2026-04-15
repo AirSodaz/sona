@@ -92,16 +92,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Segment Handler
     const onSegment = useCallback((segment: any) => {
-        // Read isRecording directly from the store (synchronous, always up-to-date) rather
-        // than the ref, which is synced via useEffect and can be stale for the very first
-        // segments that arrive right after the recognizer starts.
-        if (useTranscriptStore.getState().isRecording) {
-            if (enableTimelineRef.current && segment.isFinal) {
+        const storeState = useTranscriptStore.getState();
+
+        if (storeState.isRecording) {
+            if (enableTimeline && segment.isFinal) {
                 const parts = splitByPunctuation([segment]);
                 if (parts.length > 0) {
-                    useTranscriptStore.getState().deleteSegment(segment.id);
-                    parts.forEach(part => useTranscriptStore.getState().upsertSegment(part));
-                    useTranscriptStore.getState().setActiveSegmentId(parts[parts.length - 1].id);
+                    storeState.deleteSegment(segment.id);
+                    parts.forEach(part => storeState.upsertSegment(part));
+                    storeState.setActiveSegmentId(parts[parts.length - 1].id);
                 } else {
                     upsertSegmentAndSetActive(segment);
                 }
@@ -115,7 +114,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             const frequency = config.autoPolishFrequency ?? 5;
 
             if (autoPolish && frequency > 0) {
-                const allSegments = useTranscriptStore.getState().segments;
+                const allSegments = storeState.segments;
                 const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
 
                 if (unpolished.length >= frequency) {
@@ -131,7 +130,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 }
             }
         }
-    }, [upsertSegmentAndSetActive]);
+    }, [upsertSegmentAndSetActive, enableTimeline]);
 
     // Audio Recorder Hook
     const {

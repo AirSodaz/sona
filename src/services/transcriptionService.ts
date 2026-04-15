@@ -4,12 +4,12 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
 import { useConfigStore } from '../stores/configStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
+
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
 
-/** Configuration used to start the backend recognizer. */
 interface ServiceConfig {
     modelPath: string;
     itnModelPaths: string[];
@@ -24,107 +24,82 @@ interface ServiceConfig {
 
 /**
  * Service to manage the transcription process via the Rust backend.
- *
- * Handles starting, communicating, and lifecycle of the recognizer instance.
+ * Uses a Global Bus pattern for event reliability.
  */
 export class TranscriptionService {
-    /** Indicates if the recognizer is currently running. */
+    private static globalListeners: Map<string, UnlistenFn> = new Map();
+    private static instanceCallbacks: Map<string, { onSegment: TranscriptionCallback, onError: ErrorCallback }> = new Map();
+
+    /** Ensures the global listener is active for a specific instance. */
+    private static async ensureGlobalBusFor(instanceId: string) {
+        if (this.globalListeners.has(instanceId)) return;
+
+        const eventName = `recognizer-output-${instanceId}`;
+        const unlisten = await listen<TranscriptSegment>(eventName, (event) => {
+            const segment = event.payload;
+            const instance = this.instanceCallbacks.get(instanceId);
+            if (instance) {
+                try {
+                    instance.onSegment(segment);
+                } catch (e) {
+                    logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
+                }
+            }
+        });
+
+        this.globalListeners.set(instanceId, unlisten);
+    }
+
     private isRunning: boolean = false;
-    /** Function to stop listening for recognizer events. */
-    private unlistenOutput: UnlistenFn | null = null;
-    /** Path to the main ASR model. */
     private modelPath: string = '';
-    /** List of paths to Inverse Text Normalization (ITN) models. */
     private itnModelPaths: string[] = [];
-    /** Whether to enable Inverse Text Normalization. */
     private enableITN: boolean = true;
-    /** Callback for new transcript segments. */
     private onSegment: TranscriptionCallback | null = null;
-    /** Callback for error reporting. */
     private onError: ErrorCallback | null = null;
-    /** Promise to track active starting to prevent race conditions. */
     private startingPromise: Promise<void> | null = null;
-    /** Configuration of the currently running recognizer. */
     private runningConfig: ServiceConfig | null = null;
-    /** Language code for transcription. */
     private language: string = 'auto';
-    /** Unique ID for the recognizer instance. */
     private instanceId: string;
 
-    /**
-     * Initializes a new instance of the TranscriptionService.
-     * @param instanceId A unique string identifier for this instance.
-     */
     constructor(instanceId: string = 'default') {
         this.instanceId = instanceId;
     }
 
-    /**
-     * Sets the path to the main ASR model.
-     *
-     * @param path The absolute path to the model file or directory.
-     */
     setModelPath(path: string): void {
-        logger.info('[TranscriptionService] Setting model path:', path);
         this.modelPath = path;
     }
 
-    /**
-     * Sets the language for transcription.
-     *
-     * @param language The language code (e.g., 'en', 'zh', 'auto').
-     */
     setLanguage(language: string): void {
         this.language = language;
     }
 
-    /**
-     * Sets the paths for Inverse Text Normalization (ITN) models.
-     *
-     * @param paths A list of absolute paths to ITN models.
-     */
     setITNModelPaths(paths: string[]): void {
         this.itnModelPaths = paths;
     }
 
-    /**
-     * Enables or disables Inverse Text Normalization (ITN).
-     *
-     * @param enabled True to enable ITN, or false to disable it.
-     */
     setEnableITN(enabled: boolean): void {
         this.enableITN = enabled;
     }
 
-    /**
-     * Initializes the recognizer models in the background.
-     */
     async prepare(): Promise<void> {
-        if (this._isConfigMatch()) {
-            return;
-        }
-
-        if (!this.modelPath) {
-            logger.warn('[TranscriptionService] Model path not configured, cannot prepare backend');
-            return;
-        }
-
-        logger.info('[TranscriptionService] Initializing recognizer models...');
+        if (this._isConfigMatch()) return;
+        if (!this.modelPath) return;
         return this._initBackend();
     }
 
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
         this.onSegment = onSegment;
         this.onError = onError;
+        TranscriptionService.instanceCallbacks.set(this.instanceId, { onSegment, onError });
 
         if (!this.modelPath) {
             onError('Model path not configured');
             return;
         }
 
-        // If config changed, re-initialize first
+        await TranscriptionService.ensureGlobalBusFor(this.instanceId);
+
         if (!this._isConfigMatch()) {
-            logger.info('[TranscriptionService] Configuration changed, re-initializing backend for start...');
             await this._initBackend();
         }
 
@@ -132,27 +107,17 @@ export class TranscriptionService {
     }
 
     private async _initBackend(): Promise<void> {
-        if (this.startingPromise) {
-            return this.startingPromise;
-        }
+        if (this.startingPromise) return this.startingPromise;
 
         this.startingPromise = (async () => {
-            logger.info(`[TranscriptionService:${this.instanceId}] Initializing Rust backend recognizer with model: ${this.modelPath}`);
-
-            // Fetch app config for VAD/Punctuation paths
             const appConfig = useConfigStore.getState().config;
-
-            // Determine rules based on the streaming model ID
             let punctuationPathToUse = '';
             let vadPathToUse = '';
             let vadBufferToUse = 5.0;
 
             const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
 
-            if (!streamingModel) {
-                logger.warn(`[TranscriptionService:${this.instanceId}] Could not identify model from path: "${this.modelPath}". Using fallback type "sensevoice". Transcription may fail.`);
-            } else {
-                logger.info(`[TranscriptionService:${this.instanceId}] Identified model: ${streamingModel.id} (type=${streamingModel.type})`);
+            if (streamingModel) {
                 const rules = modelService.getModelRules(streamingModel.id);
                 if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
                     punctuationPathToUse = appConfig.punctuationModelPath;
@@ -162,12 +127,9 @@ export class TranscriptionService {
                         vadPathToUse = appConfig.vadModelPath;
                         vadBufferToUse = appConfig.vadBufferSize || 5.0;
                     } else {
-                        // CRITICAL: This model requires VAD but none is configured.
-                        // The Rust backend will reject every audio chunk, producing zero transcription output.
-                        logger.error(`[TranscriptionService:${this.instanceId}] Model "${streamingModel.id}" requires a VAD model, but vadModelPath is not configured! Live transcription will NOT work. Please download and configure the Silero VAD model in Settings.`);
-                        if (this.onError) {
-                            this.onError('VAD model not configured. Please download the Silero VAD model in Settings → Model Center.');
-                        }
+                        const errorMsg = 'VAD model not configured. Please download the Silero VAD model in Settings → Model Center.';
+                        if (this.onError) this.onError(errorMsg);
+                        throw new Error(errorMsg);
                     }
                 }
             }
@@ -184,8 +146,6 @@ export class TranscriptionService {
                 fileConfig: streamingModel?.fileConfig
             };
 
-            logger.info(`[TranscriptionService:${this.instanceId}] Calling init_recognizer with modelType=${configToUse.modelType}, vadModel=${vadPathToUse || 'none'}, punctuationModel=${punctuationPathToUse || 'none'}`);
-
             try {
                 await invoke('init_recognizer', {
                     instanceId: this.instanceId,
@@ -200,12 +160,9 @@ export class TranscriptionService {
                     modelType: configToUse.modelType,
                     fileConfig: configToUse.fileConfig
                 });
-
                 this.runningConfig = configToUse;
-                logger.info(`[TranscriptionService:${this.instanceId}] Rust Recognizer initialized successfully`);
-
             } catch (error) {
-                logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize recognizer:`, error);
+                logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize:`, error);
                 if (this.onError) this.onError(`Failed to initialize: ${error}`);
                 this.runningConfig = null;
                 throw error;
@@ -221,263 +178,115 @@ export class TranscriptionService {
 
     private async _startStream(): Promise<void> {
         try {
-            if (!this.unlistenOutput) {
-                const eventName = `recognizer-output-${this.instanceId}`;
-                this.unlistenOutput = await listen<TranscriptSegment>(eventName, (event) => {
-                    const segment = event.payload;
-                    if (this.onSegment) {
-                        this.onSegment(segment);
-                    }
-                });
-            }
-
             await invoke('start_recognizer', { instanceId: this.instanceId });
-
             this.isRunning = true;
-            logger.info('[TranscriptionService] Rust Recognizer stream started');
-
         } catch (error) {
-            logger.error('Failed to start recognizer stream:', error);
+            logger.error(`[TranscriptionService:${this.instanceId}] Failed to start stream:`, error);
             if (this.onError) this.onError(`Failed to start stream: ${error}`);
             this.isRunning = false;
             throw error;
         }
     }
 
-    /**
-     * Checks if the current configuration matches the running configuration.
-     */
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
-
         if (this.modelPath !== this.runningConfig.modelPath) return false;
         if (this.enableITN !== this.runningConfig.enableITN) return false;
         if (this.language !== this.runningConfig.language) return false;
 
-        // Compare dynamically resolved VAD and Punctuation against what is running
         const appConfig = useConfigStore.getState().config;
-        let punctuationPathToUse = '';
         let vadPathToUse = '';
-        let vadBufferToUse = 5.0;
-
         const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
         if (streamingModel) {
             const rules = modelService.getModelRules(streamingModel.id);
-            if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
-                punctuationPathToUse = appConfig.punctuationModelPath;
-            }
             if (rules.requiresVad && appConfig.vadModelPath) {
                 vadPathToUse = appConfig.vadModelPath;
-                vadBufferToUse = appConfig.vadBufferSize || 5.0;
             }
         }
-
-        if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) return false;
         if (vadPathToUse !== this.runningConfig.vadModelPath) return false;
-        if (vadBufferToUse !== this.runningConfig.vadBufferSize) return false;
-        if (streamingModel?.type !== this.runningConfig.modelType) return false;
-        if (JSON.stringify(streamingModel?.fileConfig) !== JSON.stringify(this.runningConfig.fileConfig)) return false;
-
-
-        // Compare ITN model paths (array)
-        if (this.itnModelPaths.length !== this.runningConfig.itnModelPaths.length) return false;
-        // Assuming order matters as it affects rule application order
-        for (let i = 0; i < this.itnModelPaths.length; i++) {
-            if (this.itnModelPaths[i] !== this.runningConfig.itnModelPaths[i]) return false;
-        }
-
         return true;
     }
 
-    /**
-     * Stops the transcription process.
-     */
     async stop(): Promise<void> {
         if (!this.isRunning) return;
-
         try {
             await invoke('stop_recognizer', { instanceId: this.instanceId });
-        } catch (error) {
-            logger.error(`[TranscriptionService:${this.instanceId}] Failed to stop recognizer:`, error);
         } finally {
-            logger.info(`[TranscriptionService:${this.instanceId}] Recognizer stopped`);
             this.isRunning = false;
-            // We intentionally do NOT set this.runningConfig = null here.
-            // Keeping the runningConfig allows subsequent starts with the same config
-            // to bypass the expensive _initBackend() call, as the Rust backend keeps the models loaded.
-            if (this.unlistenOutput) {
-                this.unlistenOutput();
-                this.unlistenOutput = null;
-            }
         }
     }
 
-
-    /**
-     * Stops the transcription gracefully by sending an end-of-stream signal.
-     *
-     * This allows the model to finish the last segment and add punctuation.
-     */
     async softStop(): Promise<void> {
         if (this.isRunning) {
             try {
                 await invoke('flush_recognizer', { instanceId: this.instanceId });
             } catch (error) {
-                logger.error(`[TranscriptionService:${this.instanceId}] Failed to flush recognizer:`, error);
+                logger.error('Flush failed:', error);
             }
         }
         await this.stop();
     }
 
-    /**
-     * Completely terminates the process.
-     */
     async terminate(): Promise<void> {
         await this.stop();
     }
 
-    /**
-     * Sends audio samples to the transcription process.
-     *
-     * @param samples An array of Int16 audio samples.
-     */
     async sendAudioInt16(samples: Int16Array): Promise<void> {
         if (!this.isRunning) return;
-
         try {
-            // Send the raw bytes of the Int16Array to match the new backend signature (Vec<u8>)
             const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
             await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: bytes });
         } catch (error) {
-            logger.error(`[TranscriptionService:${this.instanceId}] Failed to feed audio to backend:`, error);
+            logger.error('Feed audio failed:', error);
         }
     }
 
-    /**
-     * Transcribes an audio file.
-     *
-     * If CoreML fails, this method tries again using the CPU.
-     *
-     * @param filePath The absolute path to the audio file.
-     * @param onProgress An optional callback for progress (0-100).
-     * @param onSegment An optional callback for each transcribed segment.
-     * @param language The language code (e.g., 'en', 'zh'). Defaults to 'auto'.
-     * @param saveToPath Optional path to save the processed audio file (WAV format).
-     * @return A promise that resolves to a list of all transcript segments.
-     */
     async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
         try {
             return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language, saveToPath);
         } catch (error: any) {
-            // Check if the error message contains 'COREML_FAILURE' inside the wrapped error
             if (error.message && error.message.includes('COREML_FAILURE')) {
-                logger.warn('[TranscriptionService] CoreML failure detected. Retrying with CPU...');
                 return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language, saveToPath);
             }
             throw error;
         }
     }
 
-    /**
-     * Transcribes a file using a specific execution provider.
-     *
-     * @param filePath The absolute path to the audio file.
-     * @param provider The execution provider (e.g., 'cpu'). If undefined, it uses 'auto'.
-     * @param onProgress A callback for progress updates.
-     * @param onSegment A callback for new segments.
-     * @param language The language code.
-     * @param saveToPath Optional path to save the processed audio file (WAV format).
-     * @return A promise that resolves to the list of segments.
-     */
     private async _transcribeFileInternal(filePath: string, _provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, _saveToPath?: string): Promise<TranscriptSegment[]> {
-        if (!this.modelPath) {
-            throw new Error('Model path not configured');
+        if (!this.modelPath) throw new Error('Model path not configured');
+
+        const appConfig = useConfigStore.getState().config;
+        let punctuationPathToUse = '';
+        let vadPathToUse = '';
+        let vadBufferToUse = 5.0;
+
+        const offlineModel = PRESET_MODELS.find(m => m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
+        if (offlineModel) {
+            const rules = modelService.getModelRules(offlineModel.id);
+            if (rules.requiresPunctuation && appConfig.punctuationModelPath) punctuationPathToUse = appConfig.punctuationModelPath;
+            if (rules.requiresVad && appConfig.vadModelPath) {
+                vadPathToUse = appConfig.vadModelPath;
+                vadBufferToUse = appConfig.vadBufferSize || 5.0;
+            }
         }
 
-        logger.info(`[TranscriptionService] Starting batch transcription for: ${filePath} via Rust backend`);
+        const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
+            filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
+            language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
+            vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',
+            fileConfig: offlineModel?.fileConfig
+        });
 
-        try {
-            let progressUnlisten: UnlistenFn | undefined;
-            if (onProgress) {
-                progressUnlisten = await listen<[string, number]>('batch-progress', (event) => {
-                    const [eventFilePath, progress] = event.payload;
-                    if (eventFilePath === filePath) {
-                        onProgress(progress);
-                    }
-                });
-            }
-
-            const appConfig = useConfigStore.getState().config;
-            let punctuationPathToUse = '';
-            let vadPathToUse = '';
-            let vadBufferToUse = 5.0;
-
-            const offlineModel = PRESET_MODELS.find(m => m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
-            if (offlineModel) {
-                const rules = modelService.getModelRules(offlineModel.id);
-                if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
-                    punctuationPathToUse = appConfig.punctuationModelPath;
-                }
-                if (rules.requiresVad && appConfig.vadModelPath) {
-                    vadPathToUse = appConfig.vadModelPath;
-                    vadBufferToUse = appConfig.vadBufferSize || 5.0;
-                }
-            }
-
-            const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
-                filePath: filePath,
-                saveToPath: _saveToPath || null,
-                modelPath: this.modelPath,
-                numThreads: 4,
-                enableItn: this.enableITN,
-                language: language || this.language || 'auto',
-                itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
-                punctuationModel: punctuationPathToUse || null,
-                vadModel: vadPathToUse || null,
-                vadBuffer: vadBufferToUse,
-                modelType: offlineModel?.type || 'sensevoice',
-                fileConfig: offlineModel?.fileConfig
-            });
-
-            if (progressUnlisten) {
-                progressUnlisten();
-            }
-
-            if (onProgress) {
-                onProgress(100);
-            }
-
-            if (onSegment) {
-                segments.forEach(seg => {
-                    // Filter out single period segments when final if needed (similar to _createSegment)
-                    if (seg.isFinal) {
-                        const trimmedText = seg.text.trim();
-                        if (trimmedText === '.' || trimmedText === '。') {
-                            return;
-                        }
-                    }
-                    onSegment(seg);
-                });
-            }
-
-            return segments;
-        } catch (error) {
-            logger.error('[TranscriptionService] Batch transcription failed:', error);
-            throw new Error(`Process error: ${error}`);
-        }
+        if (onProgress) onProgress(100);
+        if (onSegment) segments.forEach(seg => onSegment(seg));
+        return segments;
     }
 
-    /**
-     * Emits a segment as if it came from the backend.
-     * Useful for testing.
-     * @internal
-     */
     emitSegment(segment: TranscriptSegment): void {
         if (this.onSegment) {
             this.onSegment(segment);
         }
     }
-
 }
 
 export const transcriptionService = new TranscriptionService('record');
