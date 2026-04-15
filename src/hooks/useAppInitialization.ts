@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore, useUIConfig } from '../stores/configStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import i18n from '../i18n';
 import { ensureLlmState } from '../services/llmConfig';
+import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../services/storageService';
+import { migrateOnboardingState, LEGACY_FIRST_RUN_KEY, ONBOARDING_STORAGE_KEY } from '../utils/onboarding';
+import { AppConfig } from '../types/config';
 
 /**
  * Hook to handle application initialization.
  *
- * - Loads configuration from localStorage.
+ * - Loads configuration from Tauri store (or migrates from localStorage).
+ * - Loads onboarding state from Tauri store (or migrates from localStorage).
  * - Applies theme settings.
  * - Applies font settings.
  * - Persists config changes (debounced).
@@ -17,76 +22,135 @@ export function useAppInitialization() {
     const config = useConfigStore((state) => state.config);
     const setConfig = useConfigStore((state) => state.setConfig);
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
+    const setPersistedState = useOnboardingStore((state) => state.setPersistedState);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Domain-specific selectors for fine-grained dependency tracking
     const { theme, font, minimizeToTrayOnExit } = useUIConfig();
 
-    // Initialize config from localStorage
+    // Initialize config and onboarding state
     useEffect(() => {
-        const saved = localStorage.getItem('sona-config');
-        if (saved) {
+        async function initialize() {
             try {
-                const parsed = JSON.parse(saved);
-                // Check if valid config object
-                if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language || parsed.llmSettings || parsed.llm) {
-                    const { llmSettings } = ensureLlmState(parsed);
-                    const loadedConfig = {
-                        streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
-                        offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
-                        punctuationModelPath: parsed.punctuationModelPath || '',
-                        vadModelPath: parsed.vadModelPath || '',
-                        enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
-                        itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
-                        enableITN: parsed.enableITN ?? ((parsed.enabledITNModels?.length ?? 0) > 0),
-                        vadBufferSize: parsed.vadBufferSize || 5,
-                        maxConcurrent: parsed.maxConcurrent || 2,
-                        appLanguage: parsed.appLanguage || 'auto',
-                        theme: parsed.theme || 'auto',
-                        font: parsed.font || 'system',
-                        language: parsed.language || 'auto',
-                        enableTimeline: parsed.enableTimeline ?? false,
-                        minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
-                        lockWindow: parsed.lockWindow ?? false,
-                        alwaysOnTop: parsed.alwaysOnTop ?? true,
-                        microphoneId: parsed.microphoneId || 'default',
-                        microphoneBoost: parsed.microphoneBoost ?? 1.0,
-                        systemAudioDeviceId: parsed.systemAudioDeviceId || 'default',
-                        muteDuringRecording: parsed.muteDuringRecording ?? false,
-                        startOnLaunch: parsed.startOnLaunch ?? false,
-                        captionWindowWidth: parsed.captionWindowWidth || 800,
-                        captionFontSize: parsed.captionFontSize || 24,
-                        captionFontColor: parsed.captionFontColor || '#ffffff',
-                        llmSettings,
-                        translationLanguage: parsed.translationLanguage || 'zh',
-                        polishKeywords: parsed.polishKeywords || '',
-                        polishContext: parsed.polishContext || '',
-                        polishScenario: parsed.polishScenario || '',
-                        autoPolish: parsed.autoPolish ?? false,
-                        autoPolishFrequency: parsed.autoPolishFrequency || 5,
-                        autoCheckUpdates: parsed.autoCheckUpdates ?? true,
-                    };
+                // 1. Load config
+                let savedConfig = await settingsStore.get<AppConfig>(STORE_KEY_CONFIG);
+                let configToLoad: any = savedConfig;
+                let isConfigMigrated = false;
 
-                    setConfig(loadedConfig);
-
-                    // Auto-start caption mode if configured
-                    if (loadedConfig.startOnLaunch) {
-                        setIsCaptionMode(true);
-                    }
-
-                    // Apply language immediately
-                    if (parsed.appLanguage && parsed.appLanguage !== 'auto') {
-                        i18n.changeLanguage(parsed.appLanguage);
-                    } else {
-                        i18n.changeLanguage(navigator.language);
+                if (!savedConfig) {
+                    // Try to migrate from localStorage
+                    const legacyConfig = localStorage.getItem('sona-config');
+                    if (legacyConfig) {
+                        try {
+                            configToLoad = JSON.parse(legacyConfig);
+                            isConfigMigrated = true;
+                        } catch (e) {
+                            console.error('Failed to parse legacy config:', e);
+                        }
                     }
                 }
+
+                if (configToLoad) {
+                    const parsed = configToLoad;
+                    if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language || parsed.llmSettings || parsed.llm) {
+                        const { llmSettings } = ensureLlmState(parsed);
+                        const loadedConfig = {
+                            streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
+                            offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
+                            punctuationModelPath: parsed.punctuationModelPath || '',
+                            vadModelPath: parsed.vadModelPath || '',
+                            enabledITNModels: parsed.enabledITNModels || (parsed.enableITN ? ['itn-zh-number'] : []),
+                            itnRulesOrder: parsed.itnRulesOrder || ['itn-zh-number'],
+                            enableITN: parsed.enableITN ?? ((parsed.enabledITNModels?.length ?? 0) > 0),
+                            vadBufferSize: parsed.vadBufferSize || 5,
+                            maxConcurrent: parsed.maxConcurrent || 2,
+                            appLanguage: parsed.appLanguage || 'auto',
+                            theme: parsed.theme || 'auto',
+                            font: parsed.font || 'system',
+                            language: parsed.language || 'auto',
+                            enableTimeline: parsed.enableTimeline ?? false,
+                            minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
+                            lockWindow: parsed.lockWindow ?? false,
+                            alwaysOnTop: parsed.alwaysOnTop ?? true,
+                            microphoneId: parsed.microphoneId || 'default',
+                            microphoneBoost: parsed.microphoneBoost ?? 1.0,
+                            systemAudioDeviceId: parsed.systemAudioDeviceId || 'default',
+                            muteDuringRecording: parsed.muteDuringRecording ?? false,
+                            startOnLaunch: parsed.startOnLaunch ?? false,
+                            captionWindowWidth: parsed.captionWindowWidth || 800,
+                            captionFontSize: parsed.captionFontSize || 24,
+                            captionFontColor: parsed.captionFontColor || '#ffffff',
+                            llmSettings,
+                            translationLanguage: parsed.translationLanguage || 'zh',
+                            polishKeywords: parsed.polishKeywords || '',
+                            polishContext: parsed.polishContext || '',
+                            polishScenario: parsed.polishScenario || '',
+                            autoPolish: parsed.autoPolish ?? false,
+                            autoPolishFrequency: parsed.autoPolishFrequency || 5,
+                            autoCheckUpdates: parsed.autoCheckUpdates ?? true,
+                        };
+
+                        setConfig(loadedConfig);
+
+                        if (isConfigMigrated) {
+                            await settingsStore.set(STORE_KEY_CONFIG, loadedConfig);
+                            localStorage.removeItem('sona-config');
+                        }
+
+                        if (loadedConfig.startOnLaunch) {
+                            setIsCaptionMode(true);
+                        }
+
+                        if (parsed.appLanguage && parsed.appLanguage !== 'auto') {
+                            i18n.changeLanguage(parsed.appLanguage);
+                        } else {
+                            i18n.changeLanguage(navigator.language);
+                        }
+                    }
+                }
+
+                // 2. Load onboarding state
+                let savedOnboarding = await settingsStore.get<any>(STORE_KEY_ONBOARDING);
+                let isOnboardingMigrated = false;
+
+                if (!savedOnboarding) {
+                    // Try to migrate from localStorage
+                    const legacyOnboarding = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+                    const legacyFirstRun = localStorage.getItem(LEGACY_FIRST_RUN_KEY);
+                    
+                    if (legacyOnboarding || legacyFirstRun || isConfigMigrated) {
+                        const legacyConfig = localStorage.getItem('sona-config') || (isConfigMigrated ? JSON.stringify(configToLoad) : null);
+                        savedOnboarding = migrateOnboardingState(legacyOnboarding, legacyConfig, legacyFirstRun);
+                        isOnboardingMigrated = true;
+                    }
+                }
+
+                if (savedOnboarding) {
+                    setPersistedState(savedOnboarding, !!(configToLoad?.streamingModelPath && configToLoad?.offlineModelPath));
+                    
+                    if (isOnboardingMigrated) {
+                        await settingsStore.set(STORE_KEY_ONBOARDING, savedOnboarding);
+                        localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+                        localStorage.removeItem(LEGACY_FIRST_RUN_KEY);
+                    }
+                } else {
+                    // Default fallback
+                    setPersistedState({ version: 1, status: 'pending' }, false);
+                }
+
+                if (isConfigMigrated || isOnboardingMigrated) {
+                    await settingsStore.save();
+                }
             } catch (e) {
-                console.error('Failed to parse saved config:', e);
+                console.error('Failed to initialize app state:', e);
+            } finally {
+                setIsLoaded(true);
             }
         }
-        setIsLoaded(true);
-    }, [setConfig]);
+
+        initialize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Run once on mount
 
     // Apply theme
     useEffect(() => {
@@ -123,12 +187,17 @@ export function useAppInitialization() {
         }
     }, [theme]);
 
-    // Persist config changes to localStorage (debounced)
+    // Persist config changes to Tauri store (debounced)
     useEffect(() => {
         if (!isLoaded) return;
 
-        const timeoutId = setTimeout(() => {
-            localStorage.setItem('sona-config', JSON.stringify(config));
+        const timeoutId = setTimeout(async () => {
+            try {
+                await settingsStore.set(STORE_KEY_CONFIG, config);
+                await settingsStore.save();
+            } catch (e) {
+                console.error('Failed to save config to store:', e);
+            }
         }, 500);
 
         return () => clearTimeout(timeoutId);
@@ -180,4 +249,6 @@ export function useAppInitialization() {
                 break;
         }
     }, [font]);
+
+    return { isLoaded };
 }

@@ -57,7 +57,7 @@ function App(): React.JSX.Element {
   const { t } = useTranslation();
 
   // Run application initialization logic
-  useAppInitialization();
+  const { isLoaded } = useAppInitialization();
 
   // Initialize auto-save hook
   useAutoSaveTranscript();
@@ -67,6 +67,10 @@ function App(): React.JSX.Element {
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
+
+  if (!isLoaded) {
+    return <></>; // Wait for config and onboarding state to load
+  }
 
   const panelTitle = getPanelTitle(mode, t);
 

@@ -165,33 +165,3 @@ export function migrateOnboardingState(
 
   return createState('pending');
 }
-
-/**
- * Reads onboarding state from browser storage with legacy migration support.
- */
-export function readOnboardingState(storage?: Pick<Storage, 'getItem'> | null): OnboardingState {
-  if (!storage) {
-    return createState('pending');
-  }
-
-  return migrateOnboardingState(
-    storage.getItem(ONBOARDING_STORAGE_KEY),
-    storage.getItem('sona-config'),
-    storage.getItem(LEGACY_FIRST_RUN_KEY),
-  );
-}
-
-/**
- * Persists onboarding state and removes the legacy first-run key.
- */
-export function writeOnboardingState(
-  state: OnboardingState,
-  storage?: Pick<Storage, 'setItem' | 'removeItem'> | null,
-): void {
-  if (!storage) {
-    return;
-  }
-
-  storage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(state));
-  storage.removeItem(LEGACY_FIRST_RUN_KEY);
-}
