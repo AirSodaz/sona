@@ -58,6 +58,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   polishScenario: undefined,
   autoPolish: false,
   autoPolishFrequency: 5,
+
+  // Vocabulary
+  textReplacements: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -112,6 +115,10 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'autoPolish', 'autoPolishFrequency',
 ];
 
+const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
+  'textReplacements',
+];
+
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -144,6 +151,11 @@ export function useCaptionConfig(): CaptionConfig {
 /** Transcription engine parameters. */
 export function useTranscriptionConfig(): TranscriptionConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, TRANSCRIPTION_KEYS)));
+}
+
+/** Vocabulary and custom dictionary settings. */
+export function useVocabularyConfig(): VocabularyConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, VOCABULARY_KEYS)));
 }
 
 /** LLM assistant and auto-polish settings. */

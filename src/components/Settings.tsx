@@ -12,6 +12,7 @@ import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
 import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
+import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import {
     GeneralIcon,
@@ -22,14 +23,15 @@ import {
     LocalIcon,
     KeyboardIcon,
     InfoIcon,
-    XIcon
+    XIcon,
+    BookIcon
 } from './Icons';
 
 /** Props for the Settings modal. */
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTab?: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'shortcuts' | 'about';
+    initialTab?: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'llm_service' | 'shortcuts' | 'vocabulary' | 'about';
 }
 
 /**
@@ -66,7 +68,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     useFocusTrap(isOpen, onClose, modalRef);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'llm_service', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'llm_service', 'vocabulary', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
@@ -169,6 +171,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'local' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="vocabulary"
+                            label={t('settings.vocabulary')}
+                            Icon={BookIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'vocabulary' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="llm_service"
                             label={t('settings.llm.title')}
                             Icon={RobotIcon}
@@ -259,6 +269,13 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                             onCancelDownload={handleCancelDownload}
                                             installedModels={installedModels}
                                             onRestoreDefaults={restoreDefaultModelSettings}
+                                        />
+                                    );
+                                case 'vocabulary':
+                                    return (
+                                        <SettingsVocabularyTab
+                                            config={config}
+                                            updateConfig={updateConfig}
                                         />
                                     );
                                 case 'llm_service':

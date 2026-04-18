@@ -4,6 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
 import { useConfigStore } from '../stores/configStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
+import { applyTextReplacements } from '../utils/textProcessing';
 
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
@@ -271,15 +272,26 @@ export class TranscriptionService {
 
         // Filter segments: some models (like Whisper) occasionally produce single "." segments
         const filteredSegments = segments.filter(seg => !(seg.text === '.' && seg.isFinal));
+        
+        // Apply text replacements
+        const processedSegments = filteredSegments.map(seg => ({
+            ...seg,
+            text: applyTextReplacements(seg.text, appConfig.textReplacements)
+        }));
 
         if (onProgress) onProgress(100);
-        if (onSegment) filteredSegments.forEach(seg => onSegment(seg));
-        return filteredSegments;
+        if (onSegment) processedSegments.forEach(seg => onSegment(seg));
+        return processedSegments;
     }
 
     emitSegment(segment: TranscriptSegment): void {
         if (this.onSegment) {
-            this.onSegment(segment);
+            const appConfig = useConfigStore.getState().config;
+            const processedSegment = {
+                ...segment,
+                text: applyTextReplacements(segment.text, appConfig.textReplacements)
+            };
+            this.onSegment(processedSegment);
         }
     }
 }

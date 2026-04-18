@@ -119,6 +119,30 @@ export interface LlmAssistantConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Vocabulary / Text Replacement
+// ---------------------------------------------------------------------------
+
+/** A single text replacement rule. */
+export interface TextReplacementRule {
+  /** Unique ID for the rule. */
+  id: string;
+  /** Text to find. */
+  from: string;
+  /** Text to replace with. */
+  to: string;
+  /** Whether the rule is currently active. */
+  enabled: boolean;
+  /** Whether to ignore case during matching. */
+  ignoreCase?: boolean;
+}
+
+/** Vocabulary and custom dictionary settings. */
+export interface VocabularyConfig {
+  /** List of text replacement rules. */
+  textReplacements?: TextReplacementRule[];
+}
+
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -134,4 +158,5 @@ export type AppConfig =
   ModelConfig &
   CaptionConfig &
   TranscriptionConfig &
+  VocabularyConfig &
   LlmAssistantConfig;
