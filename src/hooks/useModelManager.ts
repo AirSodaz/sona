@@ -190,13 +190,7 @@ export function useModelManager(isOpen: boolean) {
             model.id,
             (id, cb, sig) => modelService.downloadModel(id, cb, sig),
             (path) => {
-                if (model.type === 'itn') {
-                    const current = new Set(config.enabledITNModels || []);
-                    current.add(model.id);
-                    updateConfig({ enabledITNModels: Array.from(current) });
-                } else {
-                    setModelPath(model, path);
-                }
+                setModelPath(model, path);
             }
         );
     }
@@ -289,8 +283,6 @@ export function useModelManager(isOpen: boolean) {
                 vadBufferSize: 5,
                 maxConcurrent: 2,
                 enableITN: true,
-                enabledITNModels: [],
-                itnRulesOrder: [],
             });
         } catch (e) {
             console.warn('Failed to resolve default onboarding model paths', e);

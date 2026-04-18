@@ -254,10 +254,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                         <SettingsLocalTab
                                             config={config}
                                             updateConfig={updateConfig}
-                                            downloads={downloads}
-                                            onDownloadITN={handleDownload}
-                                            onCancelDownload={handleCancelDownload}
-                                            installedModels={installedModels}
                                             onRestoreDefaults={restoreDefaultModelSettings}
                                         />
                                     );

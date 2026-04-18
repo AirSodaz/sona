@@ -12,7 +12,6 @@ export type ErrorCallback = (error: string) => void;
 
 interface ServiceConfig {
     modelPath: string;
-    itnModelPaths: string[];
     punctuationModelPath: string;
     vadModelPath: string;
     vadBufferSize: number;
@@ -52,7 +51,6 @@ export class TranscriptionService {
 
     private isRunning: boolean = false;
     private modelPath: string = '';
-    private itnModelPaths: string[] = [];
     private enableITN: boolean = true;
     private onSegment: TranscriptionCallback | null = null;
     private onError: ErrorCallback | null = null;
@@ -71,10 +69,6 @@ export class TranscriptionService {
 
     setLanguage(language: string): void {
         this.language = language;
-    }
-
-    setITNModelPaths(paths: string[]): void {
-        this.itnModelPaths = paths;
     }
 
     setEnableITN(enabled: boolean): void {
@@ -136,7 +130,6 @@ export class TranscriptionService {
 
             const configToUse: ServiceConfig = {
                 modelPath: this.modelPath,
-                itnModelPaths: [...this.itnModelPaths],
                 punctuationModelPath: punctuationPathToUse,
                 vadModelPath: vadPathToUse,
                 vadBufferSize: vadBufferToUse,
@@ -153,7 +146,6 @@ export class TranscriptionService {
                     numThreads: 4,
                     enableItn: this.enableITN,
                     language: this.language,
-                    itnModel: this.itnModelPaths.length > 0 ? this.itnModelPaths.join(',') : null,
                     punctuationModel: punctuationPathToUse || null,
                     vadModel: vadPathToUse || null,
                     vadBuffer: vadBufferToUse,
@@ -277,9 +269,12 @@ export class TranscriptionService {
             fileConfig: offlineModel?.fileConfig
         });
 
+        // Filter segments: some models (like Whisper) occasionally produce single "." segments
+        const filteredSegments = segments.filter(seg => !(seg.text === '.' && seg.isFinal));
+
         if (onProgress) onProgress(100);
-        if (onSegment) segments.forEach(seg => onSegment(seg));
-        return segments;
+        if (onSegment) filteredSegments.forEach(seg => onSegment(seg));
+        return filteredSegments;
     }
 
     emitSegment(segment: TranscriptSegment): void {

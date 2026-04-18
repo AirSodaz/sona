@@ -22,7 +22,9 @@ vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBan
 vi.mock('../components/Icons', () => ({ SettingsIcon: () => <span>SettingsIcon</span>, WaveformIcon: () => <span>WaveformIcon</span> }));
 
 // Mock hooks
-vi.mock('../hooks/useAppInitialization', () => ({ useAppInitialization: vi.fn() }));
+vi.mock('../hooks/useAppInitialization', () => ({
+  useAppInitialization: () => ({ isLoaded: true })
+}));
 vi.mock('../hooks/useAutoSaveTranscript', () => ({ useAutoSaveTranscript: vi.fn() }));
 vi.mock('../hooks/useTrayHandling', () => ({ useTrayHandling: vi.fn() }));
 

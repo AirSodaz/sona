@@ -369,41 +369,6 @@ class ModelService {
     }
 
     /**
-     * Efficiently resolves paths for all enabled ITN models in parallel, respecting preference order.
-     *
-     * @param enabledModels A set of enabled model IDs.
-     * @param order The preferred order of model IDs.
-     * @return A promise resolving to an array of valid file paths.
-     */
-    async getEnabledITNModelPaths(enabledModels: Set<string>, order: string[]): Promise<string[]> {
-        const modelsDir = await this.getModelsDir();
-
-        // 1. Models in the specified order
-        const orderedModels = order.filter(id => enabledModels.has(id));
-
-        // 2. Any other enabled models not in the order (fallback)
-        const orderSet = new Set(order);
-        const remainingModels = Array.from(enabledModels).filter(id => !orderSet.has(id));
-
-        const allModelsToCheck = [...orderedModels, ...remainingModels];
-
-        // Parallelize file system checks
-        const results = await Promise.all(allModelsToCheck.map(async (id) => {
-            const model = PRESET_MODELS_MAP.get(id);
-            if (!model) return null;
-
-            // Construct path manually to avoid re-calling getModelsDir
-            const path = await join(modelsDir, model.filename || id);
-            if (await exists(path)) {
-                return path;
-            }
-            return null;
-        }));
-
-        return results.filter((p): p is string => p !== null);
-    }
-
-    /**
      * Extracts an archive using the Rust backend.
      *
      * @param archivePath The path to the archive file.

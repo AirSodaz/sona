@@ -97,8 +97,6 @@ describe('BatchImport Integration', () => {
                 offlineModelPath: '/mock/offline/model',
                 punctuationModelPath: '',
                 enableITN: false,
-                enabledITNModels: [],
-                itnRulesOrder: [],
                 theme: 'auto',
                 font: 'system',
                 language: 'en',
