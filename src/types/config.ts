@@ -130,16 +130,28 @@ export interface TextReplacementRule {
   from: string;
   /** Text to replace with. */
   to: string;
-  /** Whether the rule is currently active. */
+}
+
+/** A collection of text replacement rules with shared settings. */
+export interface TextReplacementRuleSet {
+  /** Unique ID for the rule set. */
+  id: string;
+  /** Display name for the rule set. */
+  name: string;
+  /** Whether the rule set is currently active. */
   enabled: boolean;
-  /** Whether to ignore case during matching. */
-  ignoreCase?: boolean;
+  /** Whether to ignore case during matching for all rules in this set. */
+  ignoreCase: boolean;
+  /** List of rules in this set. */
+  rules: TextReplacementRule[];
 }
 
 /** Vocabulary and custom dictionary settings. */
 export interface VocabularyConfig {
-  /** List of text replacement rules. */
-  textReplacements?: TextReplacementRule[];
+  /** List of text replacement rule sets. */
+  textReplacementSets?: TextReplacementRuleSet[];
+  /** Deprecated: use textReplacementSets instead. */
+  textReplacements?: any[];
 }
 
 // ---------------------------------------------------------------------------

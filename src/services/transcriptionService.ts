@@ -43,12 +43,11 @@ export class TranscriptionService {
                     // Apply text replacements from global config
                     const appConfig = useConfigStore.getState().config;
                     const originalText = segment.text;
-                    const processedText = applyTextReplacements(originalText, appConfig.textReplacements);
-                    
+                    const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);     
+
                     if (originalText !== processedText) {
                         logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
-                    }
-                    
+                    }                    
                     const processedSegment = {
                         ...segment,
                         text: processedText
@@ -289,7 +288,7 @@ export class TranscriptionService {
         // Apply text replacements
         const processedSegments = filteredSegments.map(seg => ({
             ...seg,
-            text: applyTextReplacements(seg.text, appConfig.textReplacements)
+            text: applyTextReplacements(seg.text, appConfig.textReplacementSets)
         }));
 
         if (onProgress) onProgress(100);

@@ -1,5 +1,6 @@
 {
     "common": {
+        "add": "Add",
         "cancel": "Cancel",
         "save": "Save",
         "delete": "Delete",
@@ -215,6 +216,12 @@
         "find_placeholder": "e.g. sona",
         "replace_placeholder": "e.g. Sona",
         "no_rules": "No replacement rules defined.",
+        "no_rule_sets": "No rule sets defined.",
+        "rule_set_name": "Rule Set Name",
+        "rule_set_name_placeholder": "e.g. Technical Terms",
+        "default_rule_set_name": "Default Rules",
+        "add_rule_set": "Add Set",
+        "rules_count": "rules",
         "ignore_case": "Ignore Case",
         "streaming_model_label": "Live Record Model",
         "streaming_model_hint": "Used for real-time microphone transcription.",

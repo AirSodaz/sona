@@ -60,7 +60,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoPolishFrequency: 5,
 
   // Vocabulary
-  textReplacements: [],
+  textReplacementSets: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
 ];
 
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
-  'textReplacements',
+  'textReplacementSets',
 ];
 
 /** Pick a subset of keys from the config. */

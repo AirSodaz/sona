@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, MoveRight } from 'lucide-react';
+import { Plus, Trash2, MoveRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { BookIcon } from '../Icons';
-import { AppConfig, TextReplacementRule } from '../../types/config';
-import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { AppConfig, TextReplacementRuleSet, TextReplacementRule } from '../../types/config';
+import { SettingsTabContainer, SettingsSection, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -17,51 +17,85 @@ export function SettingsVocabularyTab({
     updateConfig
 }: SettingsVocabularyTabProps): React.JSX.Element {
     const { t } = useTranslation();
-    const [newFrom, setNewFrom] = useState('');
-    const [newTo, setNewTo] = useState('');
-    const [newIgnoreCase, setNewIgnoreCase] = useState(false);
+    const [newSetName, setNewSetName] = useState('');
+    const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
 
-    const replacements = config.textReplacements || [];
+    const sets = config.textReplacementSets || [];
 
-    const handleAddRule = () => {
-        if (!newFrom.trim()) return;
+    const toggleSetExpanded = (id: string) => {
+        const newExpanded = new Set(expandedSets);
+        if (newExpanded.has(id)) {
+            newExpanded.delete(id);
+        } else {
+            newExpanded.add(id);
+        }
+        setExpandedSets(newExpanded);
+    };
 
-        const newRule: TextReplacementRule = {
+    const handleAddSet = () => {
+        if (!newSetName.trim()) return;
+
+        const newSet: TextReplacementRuleSet = {
             id: uuidv4(),
-            from: newFrom.trim(),
-            to: newTo.trim(),
+            name: newSetName.trim(),
             enabled: true,
-            ignoreCase: newIgnoreCase
+            ignoreCase: false,
+            rules: []
         };
 
         updateConfig({
-            textReplacements: [...replacements, newRule]
+            textReplacementSets: [...sets, newSet]
         });
 
-        setNewFrom('');
-        setNewTo('');
-        setNewIgnoreCase(false);
+        setNewSetName('');
+        setExpandedSets(prev => new Set(prev).add(newSet.id));
     };
 
-    const handleToggleRule = (id: string) => {
+    const handleUpdateSet = (id: string, updates: Partial<TextReplacementRuleSet>) => {
         updateConfig({
-            textReplacements: replacements.map(r => 
-                r.id === id ? { ...r, enabled: !r.enabled } : r
-            )
+            textReplacementSets: sets.map(s => s.id === id ? { ...s, ...updates } : s)
         });
     };
 
-    const handleDeleteRule = (id: string) => {
+    const handleDeleteSet = (id: string) => {
         updateConfig({
-            textReplacements: replacements.filter(r => r.id !== id)
+            textReplacementSets: sets.filter(s => s.id !== id)
         });
     };
 
-    const handleUpdateRule = (id: string, updates: Partial<TextReplacementRule>) => {
+    const handleAddRuleToSet = (setId: string) => {
         updateConfig({
-            textReplacements: replacements.map(r => 
-                r.id === id ? { ...r, ...updates } : r
-            )
+            textReplacementSets: sets.map(s => {
+                if (s.id !== setId) return s;
+                return {
+                    ...s,
+                    rules: [...s.rules, { id: uuidv4(), from: '', to: '' }]
+                };
+            })
+        });
+    };
+
+    const handleUpdateRuleInSet = (setId: string, ruleId: string, updates: Partial<TextReplacementRule>) => {
+        updateConfig({
+            textReplacementSets: sets.map(s => {
+                if (s.id !== setId) return s;
+                return {
+                    ...s,
+                    rules: s.rules.map(r => r.id === ruleId ? { ...r, ...updates } : r)
+                };
+            })
+        });
+    };
+
+    const handleDeleteRuleFromSet = (setId: string, ruleId: string) => {
+        updateConfig({
+            textReplacementSets: sets.map(s => {
+                if (s.id !== setId) return s;
+                return {
+                    ...s,
+                    rules: s.rules.filter(r => r.id !== ruleId)
+                };
+            })
         });
     };
 
@@ -76,129 +110,168 @@ export function SettingsVocabularyTab({
             <SettingsSection
                 title={t('settings.text_replacement_title', { defaultValue: 'Text Replacement' })}
                 icon={<BookIcon size={20} />}
-                description={t('settings.text_replacement_description', { defaultValue: 'Automatically replace specific words or phrases in transcription results.' })}
+                description={t('settings.text_replacement_description', { defaultValue: 'Group rules into sets to easily enable or disable them.' })}
             >
-                {/* Add New Rule */}
+                {/* Add New Set */}
                 <div style={{ 
                     display: 'flex', 
-                    flexDirection: 'column',
-                    gap: '16px', 
+                    gap: '12px', 
                     padding: '24px',
                     background: 'var(--color-bg-primary)',
+                    alignItems: 'flex-end',
+                    borderBottom: '1px solid var(--color-border-subtle)'
                 }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
-                                {t('settings.find', { defaultValue: 'Find' })}
-                            </label>
-                            <input
-                                type="text"
-                                className="settings-input"
-                                value={newFrom}
-                                onChange={(e) => setNewFrom(e.target.value)}
-                                placeholder={t('settings.find_placeholder', { defaultValue: 'e.g. sona' })}
-                                style={{ width: '100%' }}
-                            />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
-                                {t('settings.replace_with', { defaultValue: 'Replace with' })}
-                            </label>
-                            <input
-                                type="text"
-                                className="settings-input"
-                                value={newTo}
-                                onChange={(e) => setNewTo(e.target.value)}
-                                placeholder={t('settings.replace_placeholder', { defaultValue: 'e.g. Sona' })}
-                                style={{ width: '100%' }}
-                            />
-                        </div>
-                        <button 
-                            className="btn btn-primary" 
-                            onClick={handleAddRule}
-                            disabled={!newFrom.trim()}
-                            style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
-                        >
-                            <Plus size={18} />
-                            {t('common.add', { defaultValue: 'Add' })}
-                        </button>
-                    </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Switch 
-                            checked={newIgnoreCase} 
-                            onChange={(checked) => setNewIgnoreCase(checked)} 
+                    <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
+                            {t('settings.rule_set_name', { defaultValue: 'Rule Set Name' })}
+                        </label>
+                        <input
+                            type="text"
+                            className="settings-input"
+                            value={newSetName}
+                            onChange={(e) => setNewSetName(e.target.value)}
+                            placeholder={t('settings.rule_set_name_placeholder', { defaultValue: 'e.g. Technical Terms' })}
+                            style={{ width: '100%' }}
                         />
-                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                            {t('settings.ignore_case', { defaultValue: 'Ignore Case' })}
-                        </span>
                     </div>
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={handleAddSet}
+                        disabled={!newSetName.trim()}
+                        style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
+                    >
+                        <Plus size={18} />
+                        {t('settings.add_rule_set', { defaultValue: 'Add Set' })}
+                    </button>
                 </div>
 
-                {/* Rules List */}
+                {/* Sets List */}
                 <div className="settings-list" style={{ background: 'var(--color-bg-primary)' }}>
-                    {replacements.length === 0 ? (
+                    {sets.length === 0 ? (
                         <div style={{ 
                             padding: '48px 24px', 
                             textAlign: 'center', 
                             color: 'var(--color-text-muted)',
                             background: 'var(--color-bg-primary)'
                         }}>
-                            {t('settings.no_rules', { defaultValue: 'No replacement rules defined.' })}
+                            {t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
                         </div>
                     ) : (
-                        replacements.map((rule) => (
-                            <div key={rule.id} style={{ 
-                                display: 'flex', 
-                                flexDirection: 'column',
-                                gap: '12px',
-                                padding: '20px 24px',
-                                borderTop: '1px solid var(--color-border-subtle)',
-                                opacity: rule.enabled ? 1 : 0.6,
-                                transition: 'opacity 0.2s ease'
+                        sets.map((set) => (
+                            <div key={set.id} style={{ 
+                                borderBottom: '1px solid var(--color-border-subtle)',
+                                background: set.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <Switch 
-                                            checked={rule.enabled} 
-                                            onChange={() => handleToggleRule(rule.id)} 
-                                        />
+                                {/* Set Header */}
+                                <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '12px',
+                                    padding: '16px 24px',
+                                    cursor: 'pointer'
+                                }} onClick={() => toggleSetExpanded(set.id)}>
+                                    <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
+                                        {expandedSets.has(set.id) ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                                     </div>
-                                    <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    
+                                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <input
                                             type="text"
                                             className="settings-input-minimal"
-                                            value={rule.from}
-                                            onChange={(e) => handleUpdateRule(rule.id, { from: e.target.value })}
-                                            style={{ fontWeight: 600, fontSize: '0.95rem' }}
+                                            value={set.name}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => handleUpdateSet(set.id, { name: e.target.value })}
+                                            style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
                                         />
-                                        <MoveRight size={16} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                                        <input
-                                            type="text"
-                                            className="settings-input-minimal"
-                                            value={rule.to}
-                                            onChange={(e) => handleUpdateRule(rule.id, { to: e.target.value })}
-                                            style={{ fontSize: '0.95rem' }}
-                                        />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                                            {set.rules.length} {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
+                                        </span>
                                     </div>
-                                    <button 
-                                        className="btn btn-icon btn-danger-soft"
-                                        onClick={() => handleDeleteRule(rule.id)}
-                                        title={t('common.delete')}
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }} onClick={(e) => e.stopPropagation()}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Switch 
+                                                checked={set.ignoreCase} 
+                                                onChange={(checked) => handleUpdateSet(set.id, { ignoreCase: checked })} 
+                                                style={{ transform: 'scale(0.8)' }}
+                                            />
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                                                {t('settings.ignore_case')}
+                                            </span>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Switch 
+                                                checked={set.enabled} 
+                                                onChange={(checked) => handleUpdateSet(set.id, { enabled: checked })} 
+                                            />
+                                        </div>
+
+                                        <button 
+                                            className="btn btn-icon btn-danger-soft"
+                                            onClick={() => handleDeleteSet(set.id)}
+                                            title={t('common.delete')}
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style={{ marginLeft: '48px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Switch 
-                                        checked={!!rule.ignoreCase} 
-                                        onChange={(checked) => handleUpdateRule(rule.id, { ignoreCase: checked })} 
-                                        style={{ transform: 'scale(0.8)' }}
-                                    />
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                                        {t('settings.ignore_case', { defaultValue: 'Ignore Case' })}
-                                    </span>
-                                </div>
+
+                                {/* Rules under this set */}
+                                {expandedSets.has(set.id) && (
+                                    <div style={{ 
+                                        padding: '0 24px 24px 56px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '8px'
+                                    }}>
+                                        {set.rules.map((rule) => (
+                                            <div key={rule.id} style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '12px',
+                                                padding: '8px 12px',
+                                                background: 'var(--color-bg-secondary)',
+                                                borderRadius: 'var(--radius-md)'
+                                            }}>
+                                                <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                                    <input
+                                                        type="text"
+                                                        className="settings-input-minimal"
+                                                        value={rule.from}
+                                                        onChange={(e) => handleUpdateRuleInSet(set.id, rule.id, { from: e.target.value })}
+                                                        placeholder={t('settings.find')}
+                                                        style={{ fontWeight: 500 }}
+                                                    />
+                                                    <MoveRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                                                    <input
+                                                        type="text"
+                                                        className="settings-input-minimal"
+                                                        value={rule.to}
+                                                        onChange={(e) => handleUpdateRuleInSet(set.id, rule.id, { to: e.target.value })}
+                                                        placeholder={t('settings.replace_with')}
+                                                    />
+                                                </div>
+                                                <button 
+                                                    className="btn btn-icon btn-danger-soft"
+                                                    onClick={() => handleDeleteRuleFromSet(set.id, rule.id)}
+                                                    style={{ padding: '4px' }}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        
+                                        <button 
+                                            className="btn btn-secondary-soft" 
+                                            onClick={() => handleAddRuleToSet(set.id)}
+                                            style={{ alignSelf: 'flex-start', marginTop: '4px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 16px' }}
+                                        >
+                                            <Plus size={16} />
+                                            {t('common.add')}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))
                     )}

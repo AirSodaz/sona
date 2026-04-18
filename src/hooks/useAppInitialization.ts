@@ -86,8 +86,24 @@ export function useAppInitialization() {
                             autoPolish: parsed.autoPolish ?? false,
                             autoPolishFrequency: parsed.autoPolishFrequency || 5,
                             autoCheckUpdates: parsed.autoCheckUpdates ?? true,
-                            textReplacements: parsed.textReplacements || [],
+                            textReplacementSets: parsed.textReplacementSets || [],
                         };
+
+                        // Migration: textReplacements -> textReplacementSets
+                        if (parsed.textReplacements && parsed.textReplacements.length > 0 && loadedConfig.textReplacementSets.length === 0) {
+                            const defaultSet = {
+                                id: 'default-set',
+                                name: i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
+                                enabled: true,
+                                ignoreCase: false,
+                                rules: parsed.textReplacements.map((r: any) => ({
+                                    id: r.id,
+                                    from: r.from,
+                                    to: r.to
+                                }))
+                            };
+                            loadedConfig.textReplacementSets = [defaultSet];
+                        }
 
                         setConfig(loadedConfig);
 

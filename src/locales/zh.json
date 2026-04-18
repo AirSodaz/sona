@@ -1,5 +1,6 @@
 {
     "common": {
+        "add": "添加",
         "cancel": "取消",
         "save": "保存",
         "delete": "删除",
@@ -215,6 +216,12 @@
         "find_placeholder": "例：sona",
         "replace_placeholder": "例：Sona",
         "no_rules": "未定义替换规则。",
+        "no_rule_sets": "未定义规则集。",
+        "rule_set_name": "规则集名称",
+        "rule_set_name_placeholder": "例如：专业术语",
+        "default_rule_set_name": "默认规则",
+        "add_rule_set": "新建集",
+        "rules_count": "条规则",
         "ignore_case": "忽略大小写",
         "streaming_model_label": "实时录音模型",
         "streaming_model_hint": "用于实时麦克风转录。",
