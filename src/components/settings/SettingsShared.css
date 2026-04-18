@@ -37,10 +37,13 @@
   color: var(--color-text-primary);
   font-size: 1.1rem;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .settings-section-icon {
   color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
 }
 
 .settings-section-description {
@@ -216,6 +219,7 @@
   color: var(--color-text-primary);
   margin: 0 0 var(--spacing-xs, 4px) 0;
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .settings-page-icon {
