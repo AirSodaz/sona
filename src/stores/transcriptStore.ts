@@ -132,6 +132,12 @@ interface TranscriptState {
      */
     loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null) => void;
 
+    /**
+     * Mark the last segment as final if it isn't already.
+     * Useful when stopping a recording.
+     */
+    finalizeLastSegment: () => void;
+
     /** Clears all segments and resets segment-related state. */
     clearSegments: () => void;
 
@@ -365,6 +371,19 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             activeSegmentIndex: -1,
             activeSegmentId: null,
             editingSegmentId: null
+        });
+    },
+
+    finalizeLastSegment: () => {
+        set((state) => {
+            if (state.segments.length === 0) return {};
+            const lastIndex = state.segments.length - 1;
+            const lastSegment = state.segments[lastIndex];
+            if (lastSegment.isFinal) return {};
+
+            const newSegments = [...state.segments];
+            newSegments[lastIndex] = { ...lastSegment, isFinal: true };
+            return { segments: newSegments };
         });
     },
 

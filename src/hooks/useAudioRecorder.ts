@@ -44,6 +44,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const isPaused = useTranscriptStore((state) => state.isPaused);
     const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
+    const finalizeLastSegment = useTranscriptStore((state) => state.finalizeLastSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
     const showError = useDialogStore((state) => state.showError);
 
@@ -423,6 +424,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         // Soft stop service
         await transcriptionService.softStop();
+        finalizeLastSegment();
 
         // Finalize Native Recording
         if (usingNativeCaptureRef.current) {
