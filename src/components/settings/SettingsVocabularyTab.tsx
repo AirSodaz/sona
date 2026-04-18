@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, BookA } from 'lucide-react';
+import { Plus, Trash2, MoveRight } from 'lucide-react';
+import { BookIcon } from '../Icons';
 import { AppConfig, TextReplacementRule } from '../../types/config';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
@@ -67,14 +68,14 @@ export function SettingsVocabularyTab({
     return (
         <SettingsTabContainer id="settings-panel-vocabulary" ariaLabelledby="settings-tab-vocabulary">
             <SettingsPageHeader 
-                icon={<BookA size={28} />}
+                icon={<BookIcon width={28} height={28} />}
                 title={t('settings.vocabulary')} 
                 description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary and text replacement rules.' })} 
             />
 
             <SettingsSection
                 title={t('settings.text_replacement_title', { defaultValue: 'Text Replacement' })}
-                icon={<BookA size={20} />}
+                icon={<BookIcon size={20} />}
                 description={t('settings.text_replacement_description', { defaultValue: 'Automatically replace specific words or phrases in transcription results.' })}
             >
                 {/* Add New Rule */}
@@ -82,10 +83,8 @@ export function SettingsVocabularyTab({
                     display: 'flex', 
                     flexDirection: 'column',
                     gap: '16px', 
-                    marginBottom: '24px', 
-                    padding: '16px',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
+                    padding: '24px',
+                    background: 'var(--color-bg-primary)',
                 }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
                         <div style={{ flex: 1 }}>
@@ -98,6 +97,7 @@ export function SettingsVocabularyTab({
                                 value={newFrom}
                                 onChange={(e) => setNewFrom(e.target.value)}
                                 placeholder={t('settings.find_placeholder', { defaultValue: 'e.g. sona' })}
+                                style={{ width: '100%' }}
                             />
                         </div>
                         <div style={{ flex: 1 }}>
@@ -110,13 +110,14 @@ export function SettingsVocabularyTab({
                                 value={newTo}
                                 onChange={(e) => setNewTo(e.target.value)}
                                 placeholder={t('settings.replace_placeholder', { defaultValue: 'e.g. Sona' })}
+                                style={{ width: '100%' }}
                             />
                         </div>
                         <button 
                             className="btn btn-primary" 
                             onClick={handleAddRule}
                             disabled={!newFrom.trim()}
-                            style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
                         >
                             <Plus size={18} />
                             {t('common.add', { defaultValue: 'Add' })}
@@ -128,19 +129,20 @@ export function SettingsVocabularyTab({
                             checked={newIgnoreCase} 
                             onChange={(checked) => setNewIgnoreCase(checked)} 
                         />
-                        <span style={{ fontSize: '0.875rem' }}>{t('settings.ignore_case', { defaultValue: 'Ignore Case' })}</span>
+                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                            {t('settings.ignore_case', { defaultValue: 'Ignore Case' })}
+                        </span>
                     </div>
                 </div>
 
                 {/* Rules List */}
-                <div className="settings-list">
+                <div className="settings-list" style={{ background: 'var(--color-bg-primary)' }}>
                     {replacements.length === 0 ? (
                         <div style={{ 
-                            padding: '32px', 
+                            padding: '48px 24px', 
                             textAlign: 'center', 
                             color: 'var(--color-text-muted)',
-                            border: '1px dashed var(--color-border)',
-                            borderRadius: 'var(--radius-md)'
+                            background: 'var(--color-bg-primary)'
                         }}>
                             {t('settings.no_rules', { defaultValue: 'No replacement rules defined.' })}
                         </div>
@@ -149,32 +151,34 @@ export function SettingsVocabularyTab({
                             <div key={rule.id} style={{ 
                                 display: 'flex', 
                                 flexDirection: 'column',
-                                gap: '8px',
-                                padding: '12px',
-                                borderBottom: '1px solid var(--color-border-subtle)',
-                                opacity: rule.enabled ? 1 : 0.6
+                                gap: '12px',
+                                padding: '20px 24px',
+                                borderTop: '1px solid var(--color-border-subtle)',
+                                opacity: rule.enabled ? 1 : 0.6,
+                                transition: 'opacity 0.2s ease'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center' }}>
                                         <Switch 
                                             checked={rule.enabled} 
                                             onChange={() => handleToggleRule(rule.id)} 
                                         />
                                     </div>
-                                    <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
                                         <input
                                             type="text"
                                             className="settings-input-minimal"
                                             value={rule.from}
                                             onChange={(e) => handleUpdateRule(rule.id, { from: e.target.value })}
-                                            style={{ fontWeight: 500 }}
+                                            style={{ fontWeight: 600, fontSize: '0.95rem' }}
                                         />
-                                        <span style={{ color: 'var(--color-text-muted)' }}>鈫</span>
+                                        <MoveRight size={16} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                                         <input
                                             type="text"
                                             className="settings-input-minimal"
                                             value={rule.to}
                                             onChange={(e) => handleUpdateRule(rule.id, { to: e.target.value })}
+                                            style={{ fontSize: '0.95rem' }}
                                         />
                                     </div>
                                     <button 
@@ -185,13 +189,13 @@ export function SettingsVocabularyTab({
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
-                                <div style={{ marginLeft: '44px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ marginLeft: '48px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <Switch 
                                         checked={!!rule.ignoreCase} 
                                         onChange={(checked) => handleUpdateRule(rule.id, { ignoreCase: checked })} 
                                         style={{ transform: 'scale(0.8)' }}
                                     />
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
                                         {t('settings.ignore_case', { defaultValue: 'Ignore Case' })}
                                     </span>
                                 </div>

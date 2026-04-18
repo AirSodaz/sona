@@ -86,6 +86,7 @@ export function useAppInitialization() {
                             autoPolish: parsed.autoPolish ?? false,
                             autoPolishFrequency: parsed.autoPolishFrequency || 5,
                             autoCheckUpdates: parsed.autoCheckUpdates ?? true,
+                            textReplacements: parsed.textReplacements || [],
                         };
 
                         setConfig(loadedConfig);

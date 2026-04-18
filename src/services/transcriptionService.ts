@@ -40,7 +40,20 @@ export class TranscriptionService {
             const instance = this.instanceCallbacks.get(instanceId);
             if (instance) {
                 try {
-                    instance.onSegment(segment);
+                    // Apply text replacements from global config
+                    const appConfig = useConfigStore.getState().config;
+                    const originalText = segment.text;
+                    const processedText = applyTextReplacements(originalText, appConfig.textReplacements);
+                    
+                    if (originalText !== processedText) {
+                        logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
+                    }
+                    
+                    const processedSegment = {
+                        ...segment,
+                        text: processedText
+                    };
+                    instance.onSegment(processedSegment);
                 } catch (e) {
                     logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
                 }
@@ -282,17 +295,6 @@ export class TranscriptionService {
         if (onProgress) onProgress(100);
         if (onSegment) processedSegments.forEach(seg => onSegment(seg));
         return processedSegments;
-    }
-
-    emitSegment(segment: TranscriptSegment): void {
-        if (this.onSegment) {
-            const appConfig = useConfigStore.getState().config;
-            const processedSegment = {
-                ...segment,
-                text: applyTextReplacements(segment.text, appConfig.textReplacements)
-            };
-            this.onSegment(processedSegment);
-        }
     }
 }
 
