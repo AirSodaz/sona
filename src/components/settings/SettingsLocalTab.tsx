@@ -1,30 +1,20 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { HardDrive, PlaySquare } from 'lucide-react';
+import { PlaySquare } from 'lucide-react';
 import { LocalIcon, RestoreIcon } from '../Icons';
 import { AppConfig } from '../../types/transcript';
-import { ModelInfo } from '../../services/modelService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
-import { ItnModelList } from './ItnModelList';
 import { Switch } from '../Switch';
 
 interface SettingsLocalTabProps {
     config: AppConfig;
     updateConfig: (updates: Partial<AppConfig>) => void;
-    downloads: Record<string, { progress: number; status: string }>;
-    onDownloadITN: (model: ModelInfo) => void;
-    onCancelDownload: (modelId: string) => void;
-    installedModels: Set<string>;
     onRestoreDefaults: () => void;
 }
 
 export function SettingsLocalTab({
     config,
     updateConfig,
-    downloads,
-    onDownloadITN,
-    onCancelDownload,
-    installedModels,
     onRestoreDefaults
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
@@ -32,28 +22,6 @@ export function SettingsLocalTab({
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
     const enableITN = config.enableITN ?? true;
-    const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-
-    const enabledITNModels = useMemo(() => new Set(config.enabledITNModels || []), [config.enabledITNModels]);
-
-    const setEnabledITNModels = (action: React.SetStateAction<Set<string>>) => {
-        const currentSet = new Set(config.enabledITNModels || []);
-        const newSet = typeof action === 'function'
-            ? (action as (prev: Set<string>) => Set<string>)(currentSet)
-            : action;
-
-        updateConfig({
-            enabledITNModels: Array.from(newSet)
-        });
-    };
-
-    const setItnRulesOrder = (action: React.SetStateAction<string[]>) => {
-        const currentOrder = config.itnRulesOrder || ['itn-zh-number'];
-        const newOrder = typeof action === 'function'
-            ? (action as (prev: string[]) => string[])(currentOrder)
-            : action;
-        updateConfig({ itnRulesOrder: newOrder });
-    };
 
     return (
         <SettingsTabContainer id="settings-panel-local" ariaLabelledby="settings-tab-local">
@@ -67,6 +35,16 @@ export function SettingsLocalTab({
                 icon={<PlaySquare size={20} />}
                 description={t('settings.transcription_settings_hint')}
             >
+                <SettingsItem
+                    title={t('settings.enable_itn')}
+                    hint={t('settings.enable_itn_hint')}
+                >
+                    <Switch
+                        checked={enableITN}
+                        onChange={(c) => updateConfig({ enableITN: c })}
+                    />
+                </SettingsItem>
+
                 <SettingsItem
                     title={t('settings.vad_buffer_size')}
                     hint={t('settings.vad_buffer_hint')}
@@ -111,35 +89,6 @@ export function SettingsLocalTab({
                 </SettingsItem>
             </SettingsSection>
 
-            <SettingsSection
-                title={t('settings.itn_title')}
-                icon={<HardDrive size={20} />}
-                description={t('settings.itn_description')}
-            >
-                <SettingsItem
-                    title={t('settings.enable_itn')}
-                    hint={t('settings.enable_itn_hint')}
-                >
-                    <Switch
-                        checked={enableITN}
-                        onChange={(c) => updateConfig({ enableITN: c })}
-                    />
-                </SettingsItem>
-
-                <div style={{ padding: '0 24px 24px 24px', background: 'var(--color-bg-primary)' }}>
-                    <ItnModelList
-                        itnRulesOrder={itnRulesOrder}
-                        setItnRulesOrder={setItnRulesOrder}
-                        enabledITNModels={enabledITNModels}
-                        setEnabledITNModels={setEnabledITNModels}
-                        installedITNModels={installedModels}
-                        downloads={downloads}
-                        onDownload={onDownloadITN}
-                        onCancelDownload={onCancelDownload}
-                    />
-                </div>
-            </SettingsSection>
-
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
                 <button
                     className="btn btn-restore-defaults"
@@ -153,3 +102,4 @@ export function SettingsLocalTab({
         </SettingsTabContainer>
     );
 }
+

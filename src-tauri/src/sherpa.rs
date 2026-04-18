@@ -210,10 +210,8 @@ pub struct Recognizer {
 fn get_base_online_config(
     num_threads: i32,
     tokens: &Path,
-    itn_model: Option<String>,
 ) -> OnlineRecognizerConfig {
     let mut config = OnlineRecognizerConfig {
-        rule_fsts: itn_model,
         rule1_min_trailing_silence: 1.2,
         rule2_min_trailing_silence: 1.2,
         rule3_min_utterance_length: 300.0,
@@ -232,12 +230,8 @@ fn get_base_online_config(
 fn get_base_offline_config(
     num_threads: i32,
     tokens: Option<&Path>,
-    itn_model: Option<String>,
 ) -> OfflineRecognizerConfig {
-    let mut config = OfflineRecognizerConfig {
-        rule_fsts: itn_model,
-        ..Default::default()
-    };
+    let mut config = OfflineRecognizerConfig::default();
     config.model_config.tokens = tokens.map(|path| path.to_string_lossy().to_string());
     config.model_config.num_threads = num_threads;
     config.model_config.provider = Some("cpu".to_string());
@@ -250,9 +244,8 @@ impl Recognizer {
     pub fn new(
         model_type: ModelType,
         num_threads: i32,
-        itn_model: Option<String>,
     ) -> Result<Self, String> {
-        info!("[Recognizer::new] start model_type={:?} num_threads={num_threads} itn_model={:?}", model_type, itn_model);
+        info!("[Recognizer::new] start model_type={:?} num_threads={num_threads}", model_type);
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -261,7 +254,7 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OnlineTransducer");
-                let mut config = get_base_online_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_online_config(num_threads, &tokens);
                 config.model_config.model_type = Some("transducer".to_string());
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
@@ -281,7 +274,7 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OnlineParaformer");
-                let mut config = get_base_online_config(num_threads, &tokens, itn_model);
+                let mut config = get_base_online_config(num_threads, &tokens);
                 config.model_config.paraformer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.paraformer.decoder =
@@ -300,7 +293,7 @@ impl Recognizer {
                 use_itn,
             } => {
                 info!("[Recognizer::new] branch=OfflineSenseVoice");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens));
                 config.model_config.sense_voice.model = Some(model.to_string_lossy().to_string());
                 config.model_config.sense_voice.language = Some(language);
                 config.model_config.sense_voice.use_itn = use_itn;
@@ -318,7 +311,7 @@ impl Recognizer {
                 language,
             } => {
                 info!("[Recognizer::new] branch=OfflineWhisper");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens));
                 config.model_config.whisper.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.whisper.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.whisper.language = Some(language);
@@ -338,7 +331,7 @@ impl Recognizer {
                 language,
             } => {
                 info!("[Recognizer::new] branch=OfflineFunASRNano");
-                let mut config = get_base_offline_config(num_threads, tokens.as_deref(), itn_model);
+                let mut config = get_base_offline_config(num_threads, tokens.as_deref());
                 config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
                 config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
@@ -357,7 +350,7 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OfflineFireRedAsr");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens));
                 config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
                 config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
 
@@ -372,7 +365,7 @@ impl Recognizer {
                 tokens,
             } => {
                 info!("[Recognizer::new] branch=OfflineDolphin");
-                let mut config = get_base_offline_config(num_threads, Some(&tokens), itn_model);
+                let mut config = get_base_offline_config(num_threads, Some(&tokens));
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
@@ -388,7 +381,7 @@ impl Recognizer {
                 tokenizer,
             } => {
                 info!("[Recognizer::new] branch=OfflineQwen3Asr");
-                let mut config = get_base_offline_config(num_threads, None, itn_model);
+                let mut config = get_base_offline_config(num_threads, None);
                 config.model_config.qwen3_asr.conv_frontend =
                     Some(conv_frontend.to_string_lossy().to_string());
                 config.model_config.qwen3_asr.encoder =
@@ -648,7 +641,6 @@ pub struct BatchTranscriptionRequest {
     pub num_threads: i32,
     pub enable_itn: bool,
     pub language: String,
-    pub itn_model: Option<String>,
     pub punctuation_model: Option<String>,
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
@@ -667,21 +659,6 @@ pub struct TranscriptSegment {
     pub tokens: Option<Vec<String>>,
     pub timestamps: Option<Vec<f32>>,
     pub durations: Option<Vec<f32>>,
-}
-
-fn get_valid_itn_paths(itn_model: Option<String>) -> Option<String> {
-    itn_model.and_then(|m| {
-        let valid_paths: Vec<&str> = m
-            .split(',')
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty() && Path::new(p).exists())
-            .collect();
-        if valid_paths.is_empty() {
-            None
-        } else {
-            Some(valid_paths.join(","))
-        }
-    })
 }
 
 fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
@@ -803,7 +780,6 @@ pub async fn init_recognizer(
     num_threads: i32,
     enable_itn: bool,
     language: String,
-    itn_model: Option<String>,
     punctuation_model: Option<String>,
     vad_model: Option<String>,
     vad_buffer: f32,
@@ -815,8 +791,6 @@ pub async fn init_recognizer(
         punctuation_model,
         vad_model
     );
-    let valid_itn = get_valid_itn_paths(itn_model);
-    info!("[init_recognizer] valid ITN paths: {:?}", valid_itn);
 
     info!("[init_recognizer] before build_model_config");
     let config_type = build_model_config(
@@ -829,8 +803,9 @@ pub async fn init_recognizer(
     info!("[init_recognizer] after build_model_config: {:?}", config_type);
 
     info!("[init_recognizer] before Recognizer::new");
-    let recognizer = Recognizer::new(config_type, num_threads, valid_itn)?;
+    let recognizer = Recognizer::new(config_type, num_threads)?;
     info!("[init_recognizer] after Recognizer::new");
+
 
     info!("[init_recognizer] before load_punctuation");
     let punctuation = load_punctuation(punctuation_model);
@@ -1291,7 +1266,6 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     num_threads: i32,
     enable_itn: bool,
     language: String,
-    itn_model: Option<String>,
     punctuation_model: Option<String>,
     vad_model: Option<String>,
     vad_buffer: f32,
@@ -1305,7 +1279,6 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         num_threads,
         enable_itn,
         language,
-        itn_model,
         punctuation_model,
         vad_model,
         vad_buffer,
@@ -1334,7 +1307,6 @@ where
         crate::pipeline::save_wav_file(&samples, 16000, path).map_err(|e| e.to_string())?;
     }
 
-    let valid_itn = get_valid_itn_paths(request.itn_model.clone());
     let config_type = build_model_config(
         Path::new(&request.model_path),
         &request.model_type,
@@ -1342,8 +1314,9 @@ where
         request.enable_itn,
         &request.language,
     )?;
-    let recognizer = Recognizer::new(config_type, request.num_threads, valid_itn)?;
+    let recognizer = Recognizer::new(config_type, request.num_threads)?;
     let punctuation = load_punctuation(request.punctuation_model.clone());
+
 
     match &recognizer.inner {
         RecognizerInner::Offline(r) => {

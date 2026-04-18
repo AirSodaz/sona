@@ -17,8 +17,11 @@ describe('TranscriptionService', () => {
         vi.clearAllMocks();
         // Reset internal states using public methods before each test
         transcriptionService.setModelPath('/mock/model/path');
-        transcriptionService.setITNModelPaths([]);
         transcriptionService.setEnableITN(true);
+        
+        // Reset static global listeners to ensure listen is called in each test
+        (transcriptionService.constructor as any).globalListeners.clear();
+        (transcriptionService.constructor as any).instanceCallbacks.clear();
     });
 
     afterEach(async () => {
@@ -38,7 +41,6 @@ describe('TranscriptionService', () => {
             numThreads: 4,
             enableItn: true,
             language: 'auto',
-            itnModel: null,
             punctuationModel: null,
             vadModel: null,
             vadBuffer: 5,
@@ -82,7 +84,15 @@ describe('TranscriptionService', () => {
         const onError = vi.fn();
         await transcriptionService.start(onSegment, onError);
 
-        const listenCallback = vi.mocked(listen).mock.calls[0][1] as Function;
+        // TranscriptionService ensures global bus, so listen is called
+        const listenCalls = vi.mocked(listen).mock.calls;
+        const listenCall = listenCalls.find(call => call[0] === 'recognizer-output-record');
+        
+        if (!listenCall) {
+            throw new Error('listen was not called with recognizer-output-record');
+        }
+        
+        const listenCallback = listenCall[1] as Function;
 
         const segmentData = {
             id: 'seg-1',
@@ -196,7 +206,8 @@ describe('TranscriptionService', () => {
     describe('Filtering', () => {
         it('filters out segments with only a single period "." and isFinal: true in batch', async () => {
             const mockSegments = [
-                { id: '1', text: '.', start: 0, end: 1, isFinal: true }
+                { id: '1', text: '.', start: 0, end: 1, isFinal: true },
+                { id: '2', text: 'Valid', start: 1, end: 2, isFinal: true }
             ];
 
             vi.mocked(invoke).mockImplementation((cmd) => {
@@ -205,10 +216,13 @@ describe('TranscriptionService', () => {
             });
 
             const onSegment = vi.fn();
-            await transcriptionService.transcribeFile('file', undefined, onSegment);
+            const results = await transcriptionService.transcribeFile('file', undefined, onSegment);
 
-            // Should NOT be called
-            expect(onSegment).not.toHaveBeenCalled();
+            // Should filter out the first segment
+            expect(results).toHaveLength(1);
+            expect(results[0].text).toBe('Valid');
+            expect(onSegment).toHaveBeenCalledTimes(1);
+            expect(onSegment).toHaveBeenCalledWith(expect.objectContaining({ text: 'Valid' }));
         });
     });
 });

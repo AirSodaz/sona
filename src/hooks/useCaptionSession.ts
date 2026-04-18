@@ -292,9 +292,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         config.punctuationModelPath,
         config.vadModelPath,
         config.vadBufferSize,
-        // Use JSON stringify for deep comparison of arrays/sets
-        JSON.stringify(config.enabledITNModels),
-        JSON.stringify(config.itnRulesOrder),
         isCaptionMode,
         isInitializing,
         getCaptionService

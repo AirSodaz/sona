@@ -29,17 +29,6 @@ export function useTranscriptionServiceSync() {
                 captionTranscriptionService.setLanguage(config.language);
                 captionTranscriptionService.setEnableITN(config.enableITN ?? false);
 
-                const enabledITNModels = new Set(config.enabledITNModels || []);
-                const itnRulesOrder = config.itnRulesOrder || ['itn-zh-number'];
-                if (enabledITNModels.size > 0) {
-                    const paths = await modelService.getEnabledITNModelPaths(enabledITNModels, itnRulesOrder);
-                    transcriptionService.setITNModelPaths(paths);
-                    captionTranscriptionService.setITNModelPaths(paths);
-                } else {
-                    transcriptionService.setITNModelPaths([]);
-                    captionTranscriptionService.setITNModelPaths([]);
-                }
-
                 await transcriptionService.prepare();
                 await captionTranscriptionService.prepare();
             } catch (err) {
@@ -55,8 +44,6 @@ export function useTranscriptionServiceSync() {
         config.punctuationModelPath,
         config.vadModelPath,
         config.vadBufferSize,
-        config.enabledITNModels,
-        config.itnRulesOrder,
         isRecording
     ]);
 }

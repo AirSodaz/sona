@@ -325,17 +325,5 @@
     "isArchive": false,
     "filename": "silero_vad.onnx",
     "engine": "sherpa-onnx"
-  },
-  {
-    "id": "itn-zh-number",
-    "name": "Chinese Number ITN",
-    "description": "settings.descriptions.itn_zh",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/itn_zh_number.fst",
-    "type": "itn",
-    "language": "zh",
-    "filename": "itn_zh_number.fst",
-    "size": "< 1 MB",
-    "engine": "sherpa-onnx",
-    "isArchive": false
   }
 ]

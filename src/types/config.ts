@@ -90,10 +90,6 @@ export interface TranscriptionConfig {
   enableTimeline?: boolean;
   /** Enable Inverse Text Normalization. */
   enableITN?: boolean;
-  /** IDs of enabled ITN models. */
-  enabledITNModels?: string[];
-  /** Order of ITN models (IDs) for sorting. */
-  itnRulesOrder?: string[];
   /** VAD buffer size in seconds. Default: 5. */
   vadBufferSize?: number;
   /** Max concurrent transcription tasks. Default: 2. */

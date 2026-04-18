@@ -1,10 +1,19 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useOnboardingStore } from '../onboardingStore';
-import { ONBOARDING_STORAGE_KEY } from '../../utils/onboarding';
+
+// Mock storage service
+vi.mock('../../services/storageService', () => ({
+  settingsStore: {
+    set: vi.fn().mockResolvedValue(undefined),
+    save: vi.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(null),
+  },
+  STORE_KEY_ONBOARDING: 'sona-onboarding',
+}));
 
 describe('onboardingStore', () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
     useOnboardingStore.setState({
       persistedState: { version: 1, status: 'deferred' },
       currentStep: 'models',
@@ -14,15 +23,19 @@ describe('onboardingStore', () => {
     });
   });
 
-  it('dismissReminder preserves onboarding status and writes reminderDismissedAt', () => {
-    useOnboardingStore.getState().dismissReminder();
+  it('dismissReminder preserves onboarding status and writes reminderDismissedAt', async () => {
+    await useOnboardingStore.getState().dismissReminder();
 
     const persistedState = useOnboardingStore.getState().persistedState;
-    const storedState = JSON.parse(localStorage.getItem(ONBOARDING_STORAGE_KEY) || '{}');
 
     expect(persistedState.status).toBe('deferred');
     expect(persistedState.reminderDismissedAt).toBeDefined();
-    expect(storedState.status).toBe('deferred');
-    expect(storedState.reminderDismissedAt).toBe(persistedState.reminderDismissedAt);
+    
+    // Verify it was saved to storage
+    const { settingsStore, STORE_KEY_ONBOARDING } = await import('../../services/storageService');
+    expect(settingsStore.set).toHaveBeenCalledWith(STORE_KEY_ONBOARDING, expect.objectContaining({
+      status: 'deferred',
+      reminderDismissedAt: persistedState.reminderDismissedAt
+    }));
   });
 });

@@ -142,9 +142,6 @@ struct TranscribeArgs {
     /// Punctuation preset model id.
     #[arg(long, value_name = "MODEL_ID", help = "Punctuation companion model id when required by the main model")]
     punctuation_model_id: Option<String>,
-    /// ITN preset model id. Can be passed multiple times.
-    #[arg(long = "itn-model-id", value_name = "MODEL_ID", help = "ITN companion model id. Pass multiple times to chain ITN models")]
-    itn_model_ids: Vec<String>,
     /// Number of recognizer threads.
     #[arg(long, value_name = "N", help = "Recognizer thread count")]
     threads: Option<i32>,
@@ -192,7 +189,6 @@ pub struct CliConfigFile {
     pub model_id: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
-    pub itn_model_ids: Option<Vec<String>>,
     pub language: Option<String>,
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
@@ -211,13 +207,13 @@ pub struct TranscribeCliOptions {
     pub models_dir: Option<PathBuf>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
-    pub itn_model_ids: Vec<String>,
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
     pub vad_buffer: Option<f32>,
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
 }
+
 
 /// Output target resolved from CLI arguments and config.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,11 +293,6 @@ pub fn resolve_transcribe_options(
 
     let vad_model_id = cli.vad_model_id.or(config.vad_model_id);
     let punctuation_model_id = cli.punctuation_model_id.or(config.punctuation_model_id);
-    let itn_model_ids = if cli.itn_model_ids.is_empty() {
-        config.itn_model_ids.unwrap_or_default()
-    } else {
-        cli.itn_model_ids
-    };
 
     let enable_itn = cli.enable_itn.or(config.enable_itn).unwrap_or(false);
     let threads = cli.threads.or(config.threads).unwrap_or(DEFAULT_THREADS);
@@ -342,11 +333,6 @@ pub fn resolve_transcribe_options(
     } else {
         optional_installed_companion(punctuation_model_id.as_deref(), &models_dir)?
     };
-    let itn_model = if enable_itn && !itn_model_ids.is_empty() {
-        Some(resolve_itn_models(&itn_model_ids, &models_dir)?.join(","))
-    } else {
-        None
-    };
 
     Ok(ResolvedTranscribeOptions {
         export_format,
@@ -361,7 +347,6 @@ pub fn resolve_transcribe_options(
             num_threads: threads,
             enable_itn,
             language,
-            itn_model,
             punctuation_model,
             vad_model,
             vad_buffer,
@@ -489,7 +474,6 @@ async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
             models_dir: args.models_dir,
             vad_model_id: args.vad_model_id,
             punctuation_model_id: args.punctuation_model_id,
-            itn_model_ids: args.itn_model_ids,
             threads: args.threads,
             enable_itn,
             vad_buffer: args.vad_buffer,
@@ -783,13 +767,6 @@ fn optional_installed_companion(
         .transpose()
 }
 
-fn resolve_itn_models(model_ids: &[String], models_dir: &Path) -> Result<Vec<String>, String> {
-    model_ids
-        .iter()
-        .map(|model_id| require_installed_companion(model_id, models_dir))
-        .collect()
-}
-
 fn default_models_dir() -> Option<PathBuf> {
     default_models_dir_candidates()
         .into_iter()
@@ -850,7 +827,6 @@ mod tests {
             models_dir: None,
             vad_model_id: None,
             punctuation_model_id: None,
-            itn_model_ids: Vec::new(),
             threads: None,
             enable_itn: None,
             vad_buffer: None,
