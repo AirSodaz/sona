@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Terracotta & Cream background -->
+  <rect width="512" height="512" rx="112" fill="#f9f5f0" />
+  
+  <g transform="translate(256, 256)" stroke="#5c4d43" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Abstract "S" formed by an audio wave. 
+         Starting from top right, curving down left (top half of S), 
+         curving down right (middle wave), curving down left (bottom half of S).
+    -->
+    <path d="M64 -144 
+             C16 -144 -64 -144 -64 -64 
+             C-64 16 64 -16 64 64 
+             C64 144 -16 144 -64 144" />
+             
+    <!-- Accent audio bar 1 (Left) -->
+    <path d="M-128 -32 L-128 32" stroke-width="32" opacity="0.6" />
+    
+    <!-- Accent audio bar 2 (Right) -->
+    <path d="M128 -32 L128 32" stroke-width="32" opacity="0.6" />
+  </g>
+</svg>

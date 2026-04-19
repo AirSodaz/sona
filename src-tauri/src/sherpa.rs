@@ -266,7 +266,7 @@ impl Recognizer {
                     Some(decoder.to_string_lossy().to_string());
                 config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
 
-                if let Some(hw) = hotwords {
+                if let Some(_hw) = hotwords {
                     // For Transducer, sherpa-onnx usually supports hotwords via modified_beam_search
                     config.decoding_method = Some("modified_beam_search".to_string());
                     // Note: In some versions/bindings, transducer hotwords might require a file path.
