@@ -1,10 +1,8 @@
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
 };
-use std::ffi::{c_char, CStr, CString};
-use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
@@ -414,108 +412,34 @@ unsafe impl Send for SafeVad {}
 unsafe impl Sync for SafeVad {}
 
 // -----------------------------------------------------------------------------------------
-// Punctuation FFI
+// Punctuation
 // -----------------------------------------------------------------------------------------
-#[repr(C)]
-pub struct SherpaOnnxOfflinePunctuationModelConfig {
-    pub ct_transformer: *const c_char,
-    pub num_threads: i32,
-    pub debug: i32,
-    pub provider: *const c_char,
-}
-
-#[repr(C)]
-pub struct SherpaOnnxOfflinePunctuationConfig {
-    pub model: SherpaOnnxOfflinePunctuationModelConfig,
-}
-
-pub enum SherpaOnnxOfflinePunctuation {}
-
-#[link(name = "sherpa-onnx-c-api")]
-extern "C" {
-    pub fn SherpaOnnxCreateOfflinePunctuation(
-        config: *const SherpaOnnxOfflinePunctuationConfig,
-    ) -> *const SherpaOnnxOfflinePunctuation;
-
-    pub fn SherpaOnnxDestroyOfflinePunctuation(punct: *const SherpaOnnxOfflinePunctuation);
-
-    pub fn SherpaOfflinePunctuationAddPunct(
-        punct: *const SherpaOnnxOfflinePunctuation,
-        text: *const c_char,
-    ) -> *const c_char;
-
-    pub fn SherpaOfflinePunctuationFreeText(text: *const c_char);
-}
-
 pub struct Punctuation {
-    ptr: *const SherpaOnnxOfflinePunctuation,
+    inner: sherpa_onnx::OfflinePunctuation,
 }
 
 impl Punctuation {
     pub fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
-        debug!("Allocating CString for ct_transformer path: {}", model_path);
-        let ct_transformer = CString::new(model_path).map_err(|e| {
-            error!("Memory allocation failed for CString (NulError): {}", e);
-            e.to_string()
-        })?;
-        debug!("Allocating CString for provider: cpu");
-        let provider = CString::new("cpu").map_err(|e| {
-            error!("Memory allocation failed for CString (NulError): {}", e);
-            e.to_string()
-        })?;
-
-        let model_config = SherpaOnnxOfflinePunctuationModelConfig {
-            ct_transformer: ct_transformer.as_ptr(),
-            num_threads,
-            debug: 0,
-            provider: provider.as_ptr(),
+        let config = sherpa_onnx::OfflinePunctuationConfig {
+            model: sherpa_onnx::OfflinePunctuationModelConfig {
+                ct_transformer: Some(model_path.to_string()),
+                num_threads,
+                debug: false,
+                provider: Some("cpu".to_string()),
+            },
         };
 
-        let config = SherpaOnnxOfflinePunctuationConfig {
-            model: model_config,
-        };
+        let inner = sherpa_onnx::OfflinePunctuation::create(&config)
+            .ok_or("Failed to create OfflinePunctuation")?;
 
-        debug!("FFI: Calling SherpaOnnxCreateOfflinePunctuation");
-        let ptr = unsafe { SherpaOnnxCreateOfflinePunctuation(&config) };
-        debug!("FFI: Successfully returned from SherpaOnnxCreateOfflinePunctuation");
-
-        // Ensure CStrings are kept alive until here
-        drop(ct_transformer);
-        drop(provider);
-
-        if ptr.is_null() {
-            Err("Failed to create OfflinePunctuation".to_string())
-        } else {
-            Ok(Self { ptr })
-        }
+        Ok(Self { inner })
     }
 
     pub fn add_punct(&self, text: &str) -> String {
-        debug!("Allocating CString for punctuation text: {}", text);
-        let c_text = CString::new(text).unwrap_or_default();
-        unsafe {
-            debug!("FFI: Calling SherpaOnnxOfflinePunctuationAddPunct");
-            let res_ptr = SherpaOfflinePunctuationAddPunct(self.ptr, c_text.as_ptr());
-            debug!("FFI: Successfully returned from SherpaOnnxOfflinePunctuationAddPunct");
-            if res_ptr.is_null() {
-                return text.to_string();
-            }
-            let res_str = CStr::from_ptr(res_ptr).to_string_lossy().into_owned();
-            SherpaOfflinePunctuationFreeText(res_ptr);
-            res_str
-        }
+        self.inner.add_punctuation(text).unwrap_or_else(|| text.to_string())
     }
 }
 
-impl Drop for Punctuation {
-    fn drop(&mut self) {
-        unsafe {
-            debug!("FFI: Calling SherpaOnnxDestroyOfflinePunctuation");
-            SherpaOnnxDestroyOfflinePunctuation(self.ptr);
-            debug!("FFI: Successfully returned from SherpaOnnxDestroyOfflinePunctuation");
-        }
-    }
-}
 unsafe impl Send for Punctuation {}
 unsafe impl Sync for Punctuation {}
 
