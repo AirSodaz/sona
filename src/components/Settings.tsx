@@ -1,17 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
-import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
-import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
-import { SettingsModelsTab } from './settings/SettingsModelsTab';
-import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
-import { SettingsLocalTab } from './settings/SettingsLocalTab';
-import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
-import { SettingsAboutTab } from './settings/SettingsAboutTab';
-import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsTab } from '../hooks/useSettingsLogic';
 import './settings/Settings.css';
@@ -27,6 +19,16 @@ import {
     XIcon,
     BookIcon
 } from './Icons';
+
+// Lazy load non-default and heavy tab components
+const SettingsMicrophoneTab = React.lazy(() => import('./settings/SettingsMicrophoneTab').then(m => ({ default: m.SettingsMicrophoneTab })));
+const SettingsSubtitleTab = React.lazy(() => import('./settings/SettingsSubtitleTab').then(m => ({ default: m.SettingsSubtitleTab })));
+const SettingsModelsTab = React.lazy(() => import('./settings/SettingsModelsTab').then(m => ({ default: m.SettingsModelsTab })));
+const SettingsLLMServiceTab = React.lazy(() => import('./settings/SettingsLLMServiceTab').then(m => ({ default: m.SettingsLLMServiceTab })));
+const SettingsLocalTab = React.lazy(() => import('./settings/SettingsLocalTab').then(m => ({ default: m.SettingsLocalTab })));
+const SettingsShortcutsTab = React.lazy(() => import('./settings/SettingsShortcutsTab').then(m => ({ default: m.SettingsShortcutsTab })));
+const SettingsAboutTab = React.lazy(() => import('./settings/SettingsAboutTab').then(m => ({ default: m.SettingsAboutTab })));
+const SettingsVocabularyTab = React.lazy(() => import('./settings/SettingsVocabularyTab').then(m => ({ default: m.SettingsVocabularyTab })));
 
 /** Props for the Settings modal. */
 interface SettingsProps {
@@ -213,35 +215,37 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
                         <ModelManagerContext.Provider value={modelManager}>
-                            {(() => {
-                                switch (activeTab) {
-                                    case 'general':
-                                        return <SettingsGeneralTab />;
-                                    case 'microphone':
-                                        return (
-                                            <SettingsMicrophoneTab
-                                                isActiveTab={activeTab === 'microphone'}
-                                                isOpen={isOpen}
-                                            />
-                                        );
-                                    case 'subtitle':
-                                        return <SettingsSubtitleTab />;
-                                    case 'models':
-                                        return <SettingsModelsTab />;
-                                    case 'local':
-                                        return <SettingsLocalTab />;
-                                    case 'vocabulary':
-                                        return <SettingsVocabularyTab />;
-                                    case 'llm_service':
-                                        return <SettingsLLMServiceTab />;
-                                    case 'shortcuts':
-                                        return <SettingsShortcutsTab />;
-                                    case 'about':
-                                        return <SettingsAboutTab />;
-                                    default:
-                                        return null;
-                                }
-                            })()}
+                            <Suspense fallback={<div className="settings-tab-loading">{t('common.loading', { defaultValue: 'Loading...' })}</div>}>
+                                {(() => {
+                                    switch (activeTab) {
+                                        case 'general':
+                                            return <SettingsGeneralTab />;
+                                        case 'microphone':
+                                            return (
+                                                <SettingsMicrophoneTab
+                                                    isActiveTab={activeTab === 'microphone'}
+                                                    isOpen={isOpen}
+                                                />
+                                            );
+                                        case 'subtitle':
+                                            return <SettingsSubtitleTab />;
+                                        case 'models':
+                                            return <SettingsModelsTab />;
+                                        case 'local':
+                                            return <SettingsLocalTab />;
+                                        case 'vocabulary':
+                                            return <SettingsVocabularyTab />;
+                                        case 'llm_service':
+                                            return <SettingsLLMServiceTab />;
+                                        case 'shortcuts':
+                                            return <SettingsShortcutsTab />;
+                                        case 'about':
+                                            return <SettingsAboutTab />;
+                                        default:
+                                            return null;
+                                    }
+                                })()}
+                            </Suspense>
                         </ModelManagerContext.Provider>
                     </div>
 
