@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
 import packageJson from '../../../package.json';
-import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, InfoIcon, BookIcon } from '../Icons';
+import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
 import { logger } from '../../utils/logger';
 
@@ -126,7 +126,7 @@ export function SettingsAboutTab(): React.JSX.Element {
             {/* Hero Section */}
             <div className="about-header">
                 <div className="about-logo">
-                    <InfoIcon width={28} height={28} />
+                    <img src="/sona.svg" alt="Sona Logo" style={{ width: '100%', height: '100%', borderRadius: 'inherit' }} />
                 </div>
                 <div className="about-title">
                     <h2>Sona</h2>
