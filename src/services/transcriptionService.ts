@@ -141,6 +141,12 @@ export class TranscriptionService {
                     }
                 }
 
+                const enabledHotwords = appConfig.hotwordSets
+                    ?.filter(set => set.enabled)
+                    .flatMap(set => set.rules.map(r => r.text))
+                    .filter(text => text.trim() !== '') || [];
+                const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
+
                 const configToUse: ServiceConfig = {
                     modelPath: this.modelPath,
                     punctuationModelPath: punctuationPathToUse,
@@ -150,7 +156,7 @@ export class TranscriptionService {
                     language: this.language,
                     modelType: streamingModel?.type || 'sensevoice',
                     fileConfig: streamingModel?.fileConfig,
-                    hotwords: appConfig.hotwords?.join(',')
+                    hotwords: hotwordsStr
                 };
 
                 await invoke('init_recognizer', {
@@ -277,12 +283,18 @@ export class TranscriptionService {
             }
         }
 
+        const enabledHotwords = appConfig.hotwordSets
+            ?.filter(set => set.enabled)
+            .flatMap(set => set.rules.map(r => r.text))
+            .filter(text => text.trim() !== '') || [];
+        const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : null;
+
         const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
             filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
             language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
             vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',
             fileConfig: offlineModel?.fileConfig,
-            hotwords: appConfig.hotwords?.join(',') || null
+            hotwords: hotwordsStr
         });
 
         // Filter segments: some models (like Whisper) occasionally produce single "." segments

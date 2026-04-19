@@ -231,6 +231,8 @@
         "add_rule_set": "新建集",
         "rules_count": "条规则",
         "ignore_case": "忽略大小写",
+        "rules_placeholder": "例如：查找内容 => 替换内容",
+        "rules_hint": "使用 \" => \" 分隔查找和替换内容。每行一条规则。",
         "hotwords_title": "热词",
         "hotwords_description": "提升特定词汇的识别率，每行一个。（目前支持 Transducer 和 Qwen3 ASR 模型）",
         "hotwords_placeholder": "例如：\nChatGPT\n通义千问 :2.0",

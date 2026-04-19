@@ -83,6 +83,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     autoPolishFrequency: parsed.autoPolishFrequency || 5,
     autoCheckUpdates: parsed.autoCheckUpdates ?? true,
     textReplacementSets: parsed.textReplacementSets || [],
+    hotwordSets: parsed.hotwordSets || [],
     hotwords: parsed.hotwords || [],
     liveRecordShortcut: parsed.liveRecordShortcut || 'Ctrl + Space',
   };
@@ -101,6 +102,21 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       }))
     };
     upgradedConfig.textReplacementSets = [defaultSet];
+  }
+
+  // Migration: hotwords -> hotwordSets
+  if (parsed.hotwords && parsed.hotwords.length > 0 && upgradedConfig.hotwordSets!.length === 0) {
+    const defaultHotwordSet = {
+      id: 'default-hotword-set',
+      name: i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
+      enabled: true,
+      rules: parsed.hotwords.map((word: string, index: number) => ({
+        id: `hw-${index}`,
+        text: word
+      }))
+    };
+    upgradedConfig.hotwordSets = [defaultHotwordSet];
+    // Keep hotwords as is for backwards compatibility, but use hotwordSets going forward.
   }
 
   // 5. Persist the upgraded config to Tauri store

@@ -231,6 +231,8 @@
         "add_rule_set": "Add Set",
         "rules_count": "rules",
         "ignore_case": "Ignore Case",
+        "rules_placeholder": "e.g. Find => Replace With",
+        "rules_hint": "Use \" => \" to separate find and replace text. One rule per line.",
         "hotwords_title": "Hotwords",
         "hotwords_description": "Enhance recognition for specific terms. One per line. (Currently supported by Transducer and Qwen3 ASR models)",
         "hotwords_placeholder": "e.g.\nChatGPT\nSherpa-onnx :2.0",

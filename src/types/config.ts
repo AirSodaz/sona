@@ -158,11 +158,25 @@ export interface TextReplacementRuleSet {
   rules: TextReplacementRule[];
 }
 
+export interface HotwordRule {
+  id: string;
+  text: string;
+}
+
+export interface HotwordRuleSet {
+  id: string;
+  name: string;
+  enabled: boolean;
+  rules: HotwordRule[];
+}
+
 /** Vocabulary and custom dictionary settings. */
 export interface VocabularyConfig {
   /** List of text replacement rule sets. */
   textReplacementSets?: TextReplacementRuleSet[];
-  /** Custom hotwords for ASR (supported by Transducer and Qwen3 models). */
+  /** List of hotword rule sets. */
+  hotwordSets?: HotwordRuleSet[];
+  /** Deprecated: Custom hotwords for ASR. Use hotwordSets instead. */
   hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */
   textReplacements?: any[];
