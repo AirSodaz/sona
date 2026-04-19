@@ -252,13 +252,23 @@ export const historyService = {
                 const audioPath = `${HISTORY_DIR}/${itemToDelete.audioPath}`;
                 const transcriptPath = `${HISTORY_DIR}/${itemToDelete.transcriptPath}`;
 
-                if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
-                    await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
-                }
+                const safeRemove = async (path: string) => {
+                    try {
+                        await remove(path, { baseDir: BaseDirectory.AppLocalData });
+                    } catch (e: any) {
+                        // Ignore file not found errors, but log others
+                        const errMsg = String(e);
+                        if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
+                            logger.error(`[History] Failed to remove file at ${path}:`, e);
+                            throw e;
+                        }
+                    }
+                };
 
-                if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
-                    await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
-                }
+                await Promise.all([
+                    safeRemove(audioPath),
+                    safeRemove(transcriptPath)
+                ]);
             }
 
             const newItems = items.filter(item => item.id !== id);
@@ -288,17 +298,23 @@ export const historyService = {
                     const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
                     const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
 
-                    try {
-                        if (await exists(audioPath, { baseDir: BaseDirectory.AppLocalData })) {
-                            await remove(audioPath, { baseDir: BaseDirectory.AppLocalData });
+                    const safeRemove = async (path: string) => {
+                        try {
+                            await remove(path, { baseDir: BaseDirectory.AppLocalData });
+                        } catch (e: any) {
+                            // Ignore file not found errors, but log others
+                            const errMsg = String(e);
+                            if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
+                                logger.error(`[History] Failed to remove file at ${path}:`, e);
+                                throw e; // Rethrow so Promise.allSettled can catch it
+                            }
                         }
-                        if (await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })) {
-                            await remove(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
-                        }
-                    } catch (e) {
-                        logger.error(`Failed to delete files for item ${item.id}`, e);
-                        throw e; // Promise.allSettled will catch this
-                    }
+                    };
+
+                    await Promise.all([
+                        safeRemove(audioPath),
+                        safeRemove(transcriptPath)
+                    ]);
                 }));
             }
 
