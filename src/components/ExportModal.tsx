@@ -148,7 +148,13 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                     <h3 id="export-modal-title" style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
                         {t('export.modal_title')}
                     </h3>
-                    <button className="btn btn-icon" onClick={onClose} aria-label={t('common.close')}>
+                    <button
+                        className="btn btn-icon"
+                        onClick={onClose}
+                        aria-label={t('common.close')}
+                        data-tooltip={t('common.close')}
+                        data-tooltip-pos="bottom-left"
+                    >
                         <XIcon />
                     </button>
                 </div>
