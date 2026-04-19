@@ -450,10 +450,10 @@ pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation
         return None;
     }
 
-    let entries = fs::read_dir(&p_path).ok()?;
+    let entries = std::fs::read_dir(&p_path).ok()?;
     let onnx_file = entries
         .flatten()
-        .find(|e| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
+        .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
 
     Punctuation::new(&onnx_file.path().to_string_lossy(), 1).ok()
 }
