@@ -1184,6 +1184,7 @@ pub async fn translate_transcript_segments(
     let chunk_app = app.clone();
 
     if config.provider == LlmProvider::GoogleTranslate || config.provider == LlmProvider::GoogleTranslateFree {
+        let client = Client::new();
         return run_segment_task(
             &request.task_id,
             LlmTaskType::Translate,
@@ -1253,6 +1254,7 @@ pub async fn translate_transcript_segments(
             move |prompt| {
                 let config = config.clone();
                 let target_language = target_language.clone();
+                let client = client.clone();
                 Box::pin(async move {
                     let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
                     
@@ -1268,7 +1270,6 @@ pub async fn translate_transcript_segments(
                             config.base_url.trim_end_matches('/'),
                             config.api_key
                         );
-                        let client = Client::new();
                         let response = client
                             .post(&url)
                             .json(&payload)
@@ -1286,7 +1287,6 @@ pub async fn translate_transcript_segments(
                         Ok(text)
                     } else {
                         // Parallel free requests for the chunk
-                        let client = Client::new();
                         let futures = texts.into_iter().map(|text| {
                             let client = client.clone();
                             let target = target_language.clone();
