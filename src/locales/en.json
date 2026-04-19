@@ -402,6 +402,7 @@
             "unassigned": "Unassigned",
             "test_connection": "Test Connection",
             "testing": "Testing...",
+            "free_service_hint": "This is a free service and does not require an API key.",
             "connection_success": "Connection successful",
             "connection_failed": "Connection failed",
             "loading_models": "Loading models...",

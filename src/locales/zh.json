@@ -402,6 +402,7 @@
             "unassigned": "未指定",
             "test_connection": "测试连接",
             "testing": "测试中...",
+            "free_service_hint": "这是一个免费服务，无需 API 密钥。",
             "connection_success": "连接成功",
             "connection_failed": "连接失败",
             "loading_models": "加载模型中...",

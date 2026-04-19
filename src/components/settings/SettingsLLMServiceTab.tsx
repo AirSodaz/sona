@@ -51,10 +51,18 @@ function getModelPlaceholder(provider: LlmProvider): string {
 }
 
 function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting | undefined): boolean {
-  if (provider === 'google_translate_free') return true;
-  if (!setting) return false;
   const def = getProviderDefinition(provider);
-  if (def.requiresApiKey && !(setting.apiKey || '').trim()) return false;
+  
+  // 1. Check API Key if required
+  if (def.requiresApiKey) {
+    if (!setting || !(setting.apiKey || '').trim()) return false;
+  }
+  
+  // 2. Check Base URL (API Host)
+  // If there is no default host and no user-provided host, it's not ready for selection
+  const effectiveHost = setting?.apiHost || def.defaultApiHost;
+  if (!effectiveHost || !effectiveHost.trim()) return false;
+  
   return true;
 }
 
@@ -94,15 +102,25 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   const candidateContainerRef = useRef<HTMLDivElement>(null);
   
   const providerOptions = useMemo(() => {
-    let filtered = LLM_PROVIDER_DEFINITIONS;
-    if (featureId === 'polish') {
-      filtered = filtered.filter(p => p.id !== 'google_translate' && p.id !== 'google_translate_free');
-    }
+    let filtered = LLM_PROVIDER_DEFINITIONS.filter(p => {
+      // Always show the currently selected provider to avoid empty selection state
+      if (p.id === selectedProvider) return true;
+      
+      // Feature-specific exclusions
+      if (featureId === 'polish' && (p.id === 'google_translate' || p.id === 'google_translate_free')) {
+        return false;
+      }
+
+      // Filter by configuration status
+      const setting = currentLlmState.providers[p.id as LlmProvider];
+      return isProviderConfigured(p.id as LlmProvider, setting);
+    });
+
     return filtered.map((p) => ({
       value: p.id,
       label: p.label,
     }));
-  }, [featureId]);
+  }, [featureId, currentLlmState.providers, selectedProvider]);
   
   const filteredCandidates = useMemo(() => {
     const query = localModelName.trim().toLowerCase();
@@ -387,7 +405,7 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
         <div className="accordion-content">
            {def.id === 'google_translate_free' ? (
              <div className="settings-hint" style={{ color: 'var(--color-success)', marginBottom: '12px', fontSize: '0.95rem' }}>
-               {t('settings.llm.free_service_hint', 'This is a free service and does not require an API key.')}
+               {t('settings.llm.free_service_hint')}
              </div>
            ) : (
            <>
@@ -466,7 +484,7 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
                      ) : null}
                      
                      <span>
-                       {testStatus === 'loading' ? t('settings.llm.testing', 'Testing...') : 
+                       {testStatus === 'loading' ? t('settings.llm.testing') : 
                         testStatus === 'success' ? t('settings.llm.connection_success') : 
                         testStatus === 'error' ? t('settings.llm.connection_failed') : 
                         t('settings.llm.test_connection')}

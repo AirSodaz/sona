@@ -227,27 +227,28 @@ export function SettingsModelsTab({
         if (model.versionLabel) {
             label += ` (${model.versionLabel})`;
         }
-        if (!installedModels.has(model.id)) {
-            label += t('settings.not_installed');
-        }
         return label;
-    }, [installedModels, t]);
+    }, []);
 
     const streamingOptions = useMemo(() => {
-        return PRESET_MODELS.filter(m => m.modes?.includes('streaming')).map(model => ({
-            value: model.id,
-            label: getModelLabel(model),
-            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
-        }));
-    }, [getModelLabel, installedModels]);
+        return PRESET_MODELS
+            .filter(m => m.modes?.includes('streaming'))
+            .filter(m => installedModels.has(m.id) || m.id === selectedStreamingModelId)
+            .map(model => ({
+                value: model.id,
+                label: getModelLabel(model)
+            }));
+    }, [getModelLabel, installedModels, selectedStreamingModelId]);
 
     const offlineOptions = useMemo(() => {
-        return PRESET_MODELS.filter(m => m.modes?.includes('offline')).map(model => ({
-            value: model.id,
-            label: getModelLabel(model),
-            style: !installedModels.has(model.id) ? { color: 'var(--color-text-muted)', cursor: 'not-allowed', pointerEvents: 'none' } as React.CSSProperties : undefined
-        }));
-    }, [getModelLabel, installedModels]);
+        return PRESET_MODELS
+            .filter(m => m.modes?.includes('offline'))
+            .filter(m => installedModels.has(m.id) || m.id === selectedOfflineModelId)
+            .map(model => ({
+                value: model.id,
+                label: getModelLabel(model)
+            }));
+    }, [getModelLabel, installedModels, selectedOfflineModelId]);
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
