@@ -274,7 +274,7 @@ export const historyService = {
 
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
-            console.time('deleteRecordings');
+            // console.time('deleteRecordings');
             const items = await this.getAll();
             const idSet = new Set(ids);
             const itemsToDelete = items.filter(item => idSet.has(item.id));

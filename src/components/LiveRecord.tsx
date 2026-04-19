@@ -14,6 +14,7 @@ import { useCaptionSession } from '../hooks/useCaptionSession';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { logger } from '../utils/logger';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -86,8 +87,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [enableTimeline]);
 
     useEffect(() => {
-        captionWindowService.setClickThrough(lockWindow).catch(console.error);
-        captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(console.error);
+        captionWindowService.setClickThrough(lockWindow).catch(logger.error);
+        captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
     }, [lockWindow, alwaysOnTop]);
 
     // Segment Handler
@@ -125,7 +126,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                         const store = useTranscriptStore.getState();
                         chunk.forEach(p => store.updateSegment(p.id, { text: p.text }));
                     }).catch(err => {
-                        console.error('[LiveRecord] Auto-polish failed:', err);
+                        logger.error('[LiveRecord] Auto-polish failed:', err);
                     });
                 }
             }

@@ -4,6 +4,7 @@ import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useTranslation } from 'react-i18next';
 import { buildErrorDialogViewModel } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 
 export type UpdateStatus =
     | 'idle'
@@ -44,7 +45,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
             try {
                 await openUrl('https://github.com/AirSodaz/sona/releases/latest');
             } catch (openErr) {
-                console.error('Failed to open URL:', openErr);
+                logger.error('Failed to open URL:', openErr);
             }
         }
     };
@@ -63,7 +64,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
                 setStatus('uptodate');
             }
         } catch (err) {
-            console.error('Update check failed:', err);
+            logger.error('Update check failed:', err);
             if (manual) {
                 setStatus('idle');
                 await showErrorPopup(err);
@@ -107,7 +108,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
             setStatus('downloaded');
 
         } catch (err) {
-            console.error('Update installation failed:', err);
+            logger.error('Update installation failed:', err);
             setStatus('idle');
             await showErrorPopup(err);
         }

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 import { transcriptionService, captionTranscriptionService } from '../services/transcriptionService';
+import { logger } from '../utils/logger';
 
 export function useTranscriptionServiceSync() {
     const config = useConfigStore((state) => state.config);
@@ -31,7 +32,7 @@ export function useTranscriptionServiceSync() {
                 await transcriptionService.prepare();
                 await captionTranscriptionService.prepare();
             } catch (err) {
-                console.error('[useTranscriptionServiceSync] Failed to prepare transcription service:', err);
+                logger.error('[useTranscriptionServiceSync] Failed to prepare transcription service:', err);
             }
         };
 

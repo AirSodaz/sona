@@ -7,6 +7,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { buildErrorDialogViewModel } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 
 export function UpdateNotification(): React.JSX.Element | null {
     const { t } = useTranslation();
@@ -28,7 +29,7 @@ export function UpdateNotification(): React.JSX.Element | null {
                     setIsVisible(true);
                 }
             } catch (err) {
-                console.error('Failed to check for updates:', err);
+                logger.error('Failed to check for updates:', err);
                 // Do not show error to user on auto-check to avoid annoyance
             }
         };
@@ -49,7 +50,7 @@ export function UpdateNotification(): React.JSX.Element | null {
             await updateAvailable.downloadAndInstall();
             await relaunch();
         } catch (err: any) {
-            console.error('Update failed:', err);
+            logger.error('Update failed:', err);
             setIsInstalling(false);
             const result = await showError(buildErrorDialogViewModel(t, {
                 code: 'update.failed',
@@ -62,7 +63,7 @@ export function UpdateNotification(): React.JSX.Element | null {
                 try {
                     await openUrl('https://github.com/AirSodaz/sona/releases/latest');
                 } catch (openErr) {
-                    console.error('Failed to open URL:', openErr);
+                    logger.error('Failed to open URL:', openErr);
                 }
             }
         }

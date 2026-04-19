@@ -8,6 +8,7 @@ import { migrateConfig } from '../services/configMigrationService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../services/storageService';
 import { migrateOnboardingState, LEGACY_FIRST_RUN_KEY, ONBOARDING_STORAGE_KEY } from '../utils/onboarding';
 import { AppConfig } from '../types/config';
+import { logger } from '../utils/logger';
 
 /**
  * Hook to handle application initialization.
@@ -81,7 +82,7 @@ export function useAppInitialization() {
                     await settingsStore.save();
                 }
             } catch (e) {
-                console.error('Failed to initialize app state:', e);
+                logger.error('Failed to initialize app state:', e);
             } finally {
                 setIsLoaded(true);
             }
@@ -135,7 +136,7 @@ export function useAppInitialization() {
                 await settingsStore.set(STORE_KEY_CONFIG, config);
                 await settingsStore.save();
             } catch (e) {
-                console.error('Failed to save config to store:', e);
+                logger.error('Failed to save config to store:', e);
             }
         }, 500);
 
@@ -146,7 +147,7 @@ export function useAppInitialization() {
     useEffect(() => {
         if (!isLoaded) return;
         invoke('set_minimize_to_tray', { enabled: minimizeToTrayOnExit ?? true })
-            .catch(e => console.error('Failed to set minimize to tray:', e));
+            .catch(e => logger.error('Failed to set minimize to tray:', e));
     }, [minimizeToTrayOnExit, isLoaded]);
 
     // Apply font

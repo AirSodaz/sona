@@ -9,6 +9,7 @@ import { CloseIcon, FolderIcon, HistoryIcon } from './Icons';
 import { Virtuoso } from 'react-virtuoso';
 import { HistoryItem } from './history/HistoryItem';
 import { useDialogStore } from '../stores/dialogStore';
+import { logger } from '../utils/logger';
 
 type FilterType = 'all' | 'recording' | 'batch';
 type DateFilter = 'all' | 'today' | 'week' | 'month';
@@ -92,7 +93,7 @@ export function HistoryView() {
 
             // Check if both are missing
             if (!segments && !url) {
-                console.warn('[History] Both transcript and audio are missing for item:', item.id);
+                logger.warn('[History] Both transcript and audio are missing for item:', item.id);
                 await showError({
                     code: 'history.missing_files_deleted',
                     messageKey: 'errors.history.missing_files_deleted',
@@ -104,13 +105,13 @@ export function HistoryView() {
 
             // If transcript missing but audio exists, initialize empty segments (load audio only)
             if (!segments) {
-                console.warn('[History] Transcript missing, loading audio only.');
+                logger.warn('[History] Transcript missing, loading audio only.');
                 segments = [];
             }
 
             // If audio missing but transcript exists, url is null (load text only)
             if (!url) {
-                console.warn('[History] Audio missing, loading text only.');
+                logger.warn('[History] Audio missing, loading text only.');
             }
 
             // Use atomic load to prevent auto-save from seeing mixed state (new segments + old ID)

@@ -2,6 +2,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { TranscriptSegment } from '../types/transcript';
 import { exportSegments, getFileExtension, ExportFormat, ExportMode } from './exportFormats';
+import { logger } from './logger';
 
 interface ExportOptions {
     /** The transcript segments to export. */
@@ -25,7 +26,7 @@ export async function exportToPath(content: string, filePath: string): Promise<v
     try {
         await writeTextFile(filePath, content);
     } catch (error) {
-        console.error('Failed to write file to path:', filePath, error);
+        logger.error('Failed to write file to path:', filePath, error);
         throw error;
     }
 }
@@ -70,7 +71,7 @@ export async function saveTranscript(options: ExportOptions): Promise<boolean> {
 
         return true;
     } catch (error) {
-        console.error('Failed to export transcript:', error);
+        logger.error('Failed to export transcript:', error);
         throw error;
     }
 }

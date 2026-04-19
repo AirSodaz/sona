@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 
 interface AudioDevice {
   name: string;
@@ -41,7 +42,7 @@ export async function requestMicrophonePermission(): Promise<boolean> {
     stream.getTracks().forEach((track) => track.stop());
     return true;
   } catch (error) {
-    console.warn('[AudioDeviceService] Microphone permission denied:', error);
+    logger.warn('[AudioDeviceService] Microphone permission denied:', error);
     return false;
   }
 }
@@ -62,7 +63,7 @@ export async function listMicrophoneDeviceOptions(defaultLabel: string): Promise
       ]);
     }
   } catch (error) {
-    console.warn('[AudioDeviceService] Native microphone lookup failed, falling back:', error);
+    logger.warn('[AudioDeviceService] Native microphone lookup failed, falling back:', error);
   }
 
   if (!navigator.mediaDevices?.enumerateDevices) {
@@ -81,7 +82,7 @@ export async function listMicrophoneDeviceOptions(defaultLabel: string): Promise
 
     return toBrowserDeviceOptions(audioInputs, defaultLabel);
   } catch (error) {
-    console.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
+    logger.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
     return [{ label: defaultLabel, value: 'default' }];
   }
 }
@@ -104,7 +105,7 @@ export async function listSystemAudioDeviceOptions(defaultLabel: string): Promis
       })),
     ]);
   } catch (error) {
-    console.error('[AudioDeviceService] Failed to get system audio devices:', error);
+    logger.error('[AudioDeviceService] Failed to get system audio devices:', error);
     return [{ label: defaultLabel, value: 'default' }];
   }
 }

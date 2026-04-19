@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { logger } from '../utils/logger';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -37,26 +38,26 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     }, [isRecording]);
 
     const stopCaptionSession = useCallback(async () => {
-        console.log('[CaptionSession] Stopping session...');
+        logger.info('[CaptionSession] Stopping session...');
 
         // Close Window
         try {
             await captionWindowService.close();
-        } catch (e) { console.error(e); }
+        } catch (e) { logger.error('Error:', e); }
 
         // Stop Native Capture
         if (usingNativeCaptureRef.current) {
             try {
                 const savedWavPath = await invoke<string>('stop_system_audio_capture', { instanceId: 'caption' });
                 if (savedWavPath) {
-                    console.log('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
+                    logger.info('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
                     try {
                         await remove(savedWavPath);
                     } catch (err) {
-                        console.error('[CaptionSession] Failed to delete native capture file:', err);
+                        logger.error('[CaptionSession] Failed to delete native capture file:', err);
                     }
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { logger.error('Error:', e); }
             usingNativeCaptureRef.current = false;
         }
 
@@ -69,7 +70,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         if (audioContextRef.current) {
             try {
                 await audioContextRef.current.close();
-            } catch (e) { console.error(e); }
+            } catch (e) { logger.error('Error:', e); }
             audioContextRef.current = null;
         }
 
@@ -90,7 +91,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
     const startCaptionSession = useCallback(async () => {
         if (!config.streamingModelPath) {
-            console.warn('Cannot start caption: streaming model path is not set.');
+            logger.warn('Cannot start caption: streaming model path is not set.');
             return;
         }
 
@@ -104,7 +105,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
         try {
             setIsInitializing(true);
-            console.log('[CaptionSession] Starting caption session...');
+            logger.info('[CaptionSession] Starting caption session...');
 
             if (!activeRef.current) return;
 
@@ -115,7 +116,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             if (!streamRef.current && !usingNativeCaptureRef.current) {
                 let nativeSuccess = false;
                 try {
-                    console.log('[CaptionSession] Attempting native system audio capture...');
+                    logger.info('[CaptionSession] Attempting native system audio capture...');
                     await invoke('start_system_audio_capture', {
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
                         instanceId: 'caption'
@@ -126,9 +127,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     systemAudioUnlistenRef.current = unlisten;
                     usingNativeCaptureRef.current = true;
                     nativeSuccess = true;
-                    console.log('[CaptionSession] Native capture started.');
+                    logger.info('[CaptionSession] Native capture started.');
                 } catch (e) {
-                    console.warn('[CaptionSession] Native capture failed, falling back to Web API:', e);
+                    logger.warn('[CaptionSession] Native capture failed, falling back to Web API:', e);
                 }
 
                 if (!nativeSuccess) {
@@ -164,12 +165,12 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         streamRef.current = stream;
 
                         stream.getAudioTracks()[0].onended = () => {
-                            console.log('[CaptionSession] Stream ended by user.');
+                            logger.info('[CaptionSession] Stream ended by user.');
                             stopCaptionSession();
                         };
                     } catch (err) {
                         if (!activeRef.current) return;
-                        console.error('[CaptionSession] Failed to get display media:', err);
+                        logger.error('[CaptionSession] Failed to get display media:', err);
                         throw err;
                     }
                 }
@@ -208,10 +209,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             // 3. Start Service (Configuration is already handled globally)
             await captionService.start(
                 (segment: any) => {
-                    captionWindowService.sendSegments([segment]).catch(console.error);
+                    captionWindowService.sendSegments([segment]).catch(logger.error);
                 },
                 (error: any) => {
-                    console.error('[CaptionSession] Service error:', error);
+                    logger.error('[CaptionSession] Service error:', error);
                 }
             );
 
@@ -229,7 +230,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 processorRef.current = processor;
 
                 processor.port.onmessage = (e) => {
-                    captionService.sendAudioInt16(e.data).catch(console.error);
+                    captionService.sendAudioInt16(e.data).catch(logger.error);
                 };
 
                 source.connect(processor);
@@ -249,7 +250,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             });
 
         } catch (error) {
-            console.error('[CaptionSession] Error starting session:', error);
+            logger.error('[CaptionSession] Error starting session:', error);
             stopCaptionSession();
         } finally {
             setIsInitializing(false);
@@ -279,8 +280,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 const captionService = getCaptionService();
                 activeServiceRef.current = captionService;
                 await captionService.start(
-                    (segment: any) => captionWindowService.sendSegments([segment]).catch(console.error),
-                    (error: any) => console.error('[CaptionSession] Service error:', error)
+                    (segment: any) => captionWindowService.sendSegments([segment]).catch(logger.error),
+                    (error: any) => logger.error('[CaptionSession] Service error:', error)
                 );
             }
         };
@@ -306,7 +307,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 fontSize: config.captionFontSize,
                 color: config.captionFontColor,
                 backgroundOpacity: config.captionBackgroundOpacity
-            }).catch(console.error);
+            }).catch(logger.error);
         }
     }, [config.captionWindowWidth, config.captionFontSize, config.captionFontColor, config.captionBackgroundOpacity, isCaptionMode, isInitializing]);
 

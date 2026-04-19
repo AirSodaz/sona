@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { logger } from '../utils/logger';
 
 /** Props for useAudioSync hook. */
 interface UseAudioSyncProps {
@@ -41,7 +42,7 @@ export function useAudioSync({
         if (!audio) return;
 
         if (isPlaying) {
-            audio.play().catch(console.error);
+            audio.play().catch(logger.error);
         } else {
             audio.pause();
         }
@@ -95,7 +96,7 @@ export function useAudioSync({
         };
 
         const handleError = (e: Event) => {
-            console.error('[AudioPlayer] Error event:', e);
+            logger.error('[AudioPlayer] Error event:', e);
         };
 
         audio.addEventListener('timeupdate', handleTimeUpdate);

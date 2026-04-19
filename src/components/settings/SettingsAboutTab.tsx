@@ -1,9 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
 import packageJson from '../../../package.json';
-import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, InfoIcon } from '../Icons';
+import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, InfoIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
+import { logger } from '../../utils/logger';
 
 /**
  * Redesigned About page with centered card-based layout.
@@ -26,7 +28,15 @@ export function SettingsAboutTab(): React.JSX.Element {
         try {
             await openUrl('https://github.com/AirSodaz/sona');
         } catch (error) {
-            console.error('Failed to open homepage:', error);
+            logger.error('Failed to open homepage:', error);
+        }
+    };
+
+    const handleOpenLogFolder = async () => {
+        try {
+            await invoke('open_log_folder');
+        } catch (error) {
+            logger.error('Failed to open log folder:', error);
         }
     };
 
@@ -140,6 +150,23 @@ export function SettingsAboutTab(): React.JSX.Element {
                     <div className="about-card-content">
                         <div className="about-card-title">{t('settings.about_source_code')}</div>
                         <div className="about-card-subtitle">github.com/AirSodaz/sona</div>
+                    </div>
+                    <div className="about-card-arrow">
+                        <ExternalLinkIcon />
+                    </div>
+                </button>
+
+                <button
+                    className="about-card about-card-clickable"
+                    onClick={handleOpenLogFolder}
+                    aria-label={t('settings.about_open_logs')}
+                >
+                    <div className="about-card-icon">
+                        <BookIcon />
+                    </div>
+                    <div className="about-card-content">
+                        <div className="about-card-title">{t('settings.about_open_logs')}</div>
+                        <div className="about-card-subtitle">{t('settings.about_open_logs_desc')}</div>
                     </div>
                     <div className="about-card-arrow">
                         <ExternalLinkIcon />

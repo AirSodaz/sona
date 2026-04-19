@@ -4,6 +4,7 @@ import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
 import { TranscriptSegment } from '../types/transcript';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
+import { logger } from '../utils/logger';
 
 /**
  * Hook to auto-save transcript changes to the history file.
@@ -36,7 +37,7 @@ export function useAutoSaveTranscript() {
 
                         // Flush save for PREVIOUS item using PREVIOUS segments
                         const prevSegments = prevState.segments;
-                        console.log('[AutoSave] Switching items, flushing save for:', prevId);
+                        logger.info('[AutoSave] Switching items, flushing save for:', prevId);
                         saveToHistory(prevId, prevSegments);
                     }
 
@@ -61,7 +62,7 @@ export function useAutoSaveTranscript() {
                             }
 
                             timeoutRef.current = setTimeout(() => {
-                                console.log('[AutoSave] Debounce triggered for:', currentId);
+                                logger.info('[AutoSave] Debounce triggered for:', currentId);
                                 saveToHistory(currentId, state.segments);
                             }, 2000);
                         }
@@ -84,7 +85,7 @@ export function useAutoSaveTranscript() {
 
         try {
             isSavingRef.current = true;
-            console.log('[AutoSave] Saving transcript...', historyId);
+            logger.info('[AutoSave] Saving transcript...', historyId);
 
             // 1. Persist to disk
             await historyService.updateTranscript(historyId, segments);
@@ -107,7 +108,7 @@ export function useAutoSaveTranscript() {
             });
 
         } catch (err) {
-            console.error('[AutoSave] Failed to save:', err);
+            logger.error('[AutoSave] Failed to save:', err);
         } finally {
             isSavingRef.current = false;
         }

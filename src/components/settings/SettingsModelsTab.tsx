@@ -7,6 +7,7 @@ import { AppConfig } from '../../types/transcript';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Mic, Type, Activity, Settings2 } from 'lucide-react';
 import { ModelIcon } from '../Icons';
+import { logger } from '../../utils/logger';
 
 interface ModelSectionProps {
     title: string;
@@ -121,7 +122,7 @@ export function SettingsModelsTab({
                             const path = await modelService.getModelPath(model.id);
                             map.set(path, model.id);
                         } catch (e) {
-                            console.error(`Failed to resolve path for model ${model.id}`, e);
+                            logger.error(`Failed to resolve path for model ${model.id}`, e);
                         }
                     }
                 })
@@ -187,7 +188,7 @@ export function SettingsModelsTab({
                 }
             }
         } catch (e) {
-            console.error('Failed to apply model rules', e);
+            logger.error('Failed to apply model rules', e);
         }
     };
 
@@ -210,7 +211,7 @@ export function SettingsModelsTab({
             updateConfig({ [configKey]: path });
             await applyModelRules(modelId);
         } catch (e) {
-            console.error(`Failed to get ${type} model path`, e);
+            logger.error(`Failed to get ${type} model path`, e);
         }
     };
 

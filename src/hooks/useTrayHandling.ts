@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { SettingsTab } from './useSettingsLogic';
+import { logger } from '../utils/logger';
 
 /**
  * Hook to handle system tray events.
@@ -35,7 +36,7 @@ export function useTrayHandling(
                     captionChecked: isCaptionMode
                 });
             } catch (err) {
-                console.warn('Failed to update tray menu language:', err);
+                logger.warn('Failed to update tray menu language:', err);
             }
         };
         updateTray();
@@ -86,7 +87,7 @@ export function useTrayHandling(
                     try {
                         hasDownloads = await invoke<boolean>('has_active_downloads');
                     } catch (e) {
-                        console.error('Failed to check downloads:', e);
+                        logger.error('Failed to check downloads:', e);
                     }
 
                     if (isRecording || isProcessing || hasDownloads) {
@@ -111,7 +112,7 @@ export function useTrayHandling(
                 else unlistenRequestQuit();
 
             } catch (error) {
-                console.error('Failed to setup tray listeners:', error);
+                logger.error('Failed to setup tray listeners:', error);
             }
         };
 

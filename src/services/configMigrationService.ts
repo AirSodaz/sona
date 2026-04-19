@@ -3,6 +3,7 @@ import { ensureLlmState } from './llmConfig';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import i18n from '../i18n';
 import { DEFAULT_CONFIG } from '../stores/configStore';
+import { logger } from '../utils/logger';
 
 export interface MigrationResult {
   config: AppConfig;
@@ -25,7 +26,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
         configToLoad = JSON.parse(legacyConfig);
         isConfigMigrated = true;
       } catch (e) {
-        console.error('Failed to parse legacy config:', e);
+        logger.error('Failed to parse legacy config:', e);
       }
     }
   }
@@ -111,7 +112,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       localStorage.removeItem('sona-config');
     }
   } catch (e) {
-    console.error('Failed to save upgraded config to Tauri store:', e);
+    logger.error('Failed to save upgraded config to Tauri store:', e);
   }
 
   return { config: upgradedConfig, migrated: true };

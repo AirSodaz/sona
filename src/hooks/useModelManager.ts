@@ -4,6 +4,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
+import { logger } from '../utils/logger';
 
 type DownloadState = {
     progress: number;
@@ -65,7 +66,7 @@ export function useModelManager(isOpen: boolean) {
                         await checkInstalledModels();
                         setModelPath(model, path);
                     } catch (e) {
-                        console.error(`Background download failed for ${modelId}:`, e);
+                        logger.error(`Background download failed for ${modelId}:`, e);
                     }
                 }
             }
@@ -134,7 +135,7 @@ export function useModelManager(isOpen: boolean) {
 
         } catch (error: any) {
             if (error.message === 'Download cancelled') {
-                console.log('Download cancelled by user');
+                logger.info('Download cancelled by user');
             } else {
                 await showError({
                     code: 'model.download_failed',
@@ -285,7 +286,7 @@ export function useModelManager(isOpen: boolean) {
                 enableITN: true,
             });
         } catch (e) {
-            console.warn('Failed to resolve default onboarding model paths', e);
+            logger.warn('Failed to resolve default onboarding model paths', e);
         }
     }
 

@@ -9,6 +9,7 @@ import { exportSegments, getFileExtension, ExportFormat, ExportMode } from '../u
 import { exportToPath } from '../utils/fileExport';
 import { Dropdown } from './Dropdown';
 import { XIcon, FolderIcon } from './Icons';
+import { logger } from '../utils/logger';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -77,7 +78,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                 localStorage.setItem('sona_last_export_dir', selected);
             }
         } catch (error) {
-            console.error('Failed to open directory picker:', error);
+            logger.error('Failed to open directory picker:', error);
         }
     };
 

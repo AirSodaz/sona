@@ -401,16 +401,41 @@ async fn download_file<R: tauri::Runtime>(
     result
 }
 
+#[tauri::command]
+async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e: tauri::Error| e.to_string())?;
+    
+    // Ensure directory exists
+    if !log_dir.exists() {
+        std::fs::create_dir_all(&log_dir).map_err(|e: std::io::Error| e.to_string())?;
+    }
+
+    app.opener().open_path(log_dir.to_string_lossy(), None::<&str>).map_err(|e: tauri_plugin_opener::Error| e.to_string())?;
+    Ok(())
+}
+
 /// Initializes and runs the Tauri application.
 ///
 /// Sets up the download state, plugins (opener, dialog, fs, shell, http),
 /// and registers invoke handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let log_level = if cfg!(debug_assertions) {
+        tauri_plugin_log::log::LevelFilter::Debug
+    } else {
+        tauri_plugin_log::log::LevelFilter::Info
+    };
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Debug)
+                .level(log_level)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .max_file_size(10 * 1024 * 1024) // 10MB
                 .clear_targets()
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
@@ -419,12 +444,20 @@ pub fn run() {
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                 ])
                 .format(|out, message, record| {
-                    let formatted = serde_json::json!({
-                        "level": record.level().to_string(),
-                        "target": record.target(),
-                        "message": message.to_string(),
-                    });
-                    out.finish(format_args!("{}", formatted));
+                    out.finish(format_args!(
+                        "{}",
+                        serde_json::json!({
+                            "time": std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+                            "level": record.level().to_string(),
+                            "target": record.target(),
+                            "file": record.file(),
+                            "line": record.line(),
+                            "message": message.to_string(),
+                        })
+                    ));
                 })
                 .build(),
         )
@@ -592,6 +625,7 @@ pub fn run() {
             update_tray_menu,
             set_minimize_to_tray,
             set_system_audio_mute,
+            open_log_folder,
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,

@@ -18,6 +18,7 @@ import {
   getRecommendedOnboardingModels,
 } from '../services/onboardingService';
 import { hasRequiredOnboardingModels } from '../utils/onboarding';
+import { logger } from '../utils/logger';
 
 type ModelStepStatus = 'idle' | 'downloading' | 'error';
 type PermissionState = 'idle' | 'granted' | 'denied';
@@ -216,7 +217,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
       setModelStepStatus('idle');
       setStep('microphone');
     } catch (error) {
-      console.error('[Onboarding] Failed to download recommended models:', error);
+      logger.error('[Onboarding] Failed to download recommended models:', error);
       setModelStepStatus('error');
       setModelError(
         error instanceof Error ? error.message : t('first_run.models.error_detail'),

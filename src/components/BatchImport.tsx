@@ -11,6 +11,7 @@ import { FileQueueSidebar } from './FileQueueSidebar';
 import { UploadIcon } from './Icons';
 import { TranscriptionOptions } from './TranscriptionOptions';
 import { getResumeOnboardingStep } from '../utils/onboarding';
+import { logger } from '../utils/logger';
 
 
 
@@ -213,7 +214,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 addFiles(validFiles);
             }
         } else {
-            console.warn('File drop event received but payload is empty or invalid.');
+            logger.warn('File drop event received but payload is empty or invalid.');
         }
         setIsDragOver(false);
     };

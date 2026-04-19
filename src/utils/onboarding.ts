@@ -1,4 +1,5 @@
 import { AppConfig } from '../types/transcript';
+import { logger } from './logger';
 import {
   OnboardingEntryContext,
   OnboardingState,
@@ -72,7 +73,7 @@ export function parseStoredConfig(rawValue: string | null): Partial<AppConfig> {
       microphoneId: config.microphoneId || 'default',
     };
   } catch (error) {
-    console.error('[Onboarding] Failed to parse stored config:', error);
+    logger.error('[Onboarding] Failed to parse stored config:', error);
     return {};
   }
 }
@@ -150,7 +151,7 @@ export function migrateOnboardingState(
         });
       }
     } catch (error) {
-      console.error('[Onboarding] Failed to parse onboarding state:', error);
+      logger.error('[Onboarding] Failed to parse onboarding state:', error);
     }
   }
 

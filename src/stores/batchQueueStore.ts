@@ -12,6 +12,7 @@ import { useConfigStore } from './configStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { tempDir, join } from '@tauri-apps/api/path';
 import { remove } from '@tauri-apps/plugin-fs';
+import { logger } from '../utils/logger';
 
 /** State interface for the batch queue store. */
 interface BatchQueueState {
@@ -134,7 +135,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const config = useConfigStore.getState().config;
         // Don't error out if config is not yet loaded in tests
         if (!config.offlineModelPath && !process.env.VITEST) {
-            console.error('[BatchQueue] No model path configured');
+            logger.error('[BatchQueue] No model path configured');
             return;
         }
 
@@ -254,7 +255,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                             get().updateItemSegments(itemId, updatedSegments);
                         });
                     } catch (polishError) {
-                        console.error('[BatchQueue] Auto-LLM polish failed:', polishError);
+                        logger.error('[BatchQueue] Auto-LLM polish failed:', polishError);
                         // Don't fail the whole file, just log error
                     }
                 }
@@ -282,7 +283,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     }
                 }
             } catch (err) {
-                console.error('[BatchQueue] Failed to save to history:', err);
+                logger.error('[BatchQueue] Failed to save to history:', err);
             }
 
             // Cleanup temp file
@@ -290,14 +291,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 try {
                     await remove(tempWavPath);
                 } catch (e) {
-                    console.warn('[BatchQueue] Failed to remove temp file:', e);
+                    logger.warn('[BatchQueue] Failed to remove temp file:', e);
                 }
             }
 
             get().updateItemStatus(itemId, 'complete', 100);
 
         } catch (error) {
-            console.error(`[BatchQueue] Failed to transcribe ${item.filename}:`, error);
+            logger.error(`[BatchQueue] Failed to transcribe ${item.filename}:`, error);
             get().setItemError(itemId, String(error));
         } finally {
             // Trigger next items in queue

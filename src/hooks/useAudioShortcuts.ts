@@ -1,4 +1,5 @@
 import { useEffect, RefObject } from 'react';
+import { logger } from '../utils/logger';
 
 interface AudioShortcutsProps {
     audioRef: RefObject<HTMLAudioElement | null>;
@@ -44,7 +45,7 @@ export function useAudioShortcuts({
                 case 'k': // YouTube style pause
                     e.preventDefault();
                     if (audio.paused) {
-                        audio.play().catch(console.error);
+                        audio.play().catch(logger.error);
                         setIsPlaying(true);
                     } else {
                         audio.pause();

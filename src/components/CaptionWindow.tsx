@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 
 import { TranscriptSegment } from '../types/transcript';
 import '../styles/index.css'; // Import styles to ensure variables are available
+import { logger } from '../utils/logger';
 
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
 const CAPTION_EVENT_CLOSE = 'caption:close';
@@ -71,7 +72,7 @@ export function CaptionWindow() {
     // Listen for close command
     useEffect(() => {
         const unlistenPromise = listen(CAPTION_EVENT_CLOSE, () => {
-            console.log('[CaptionWindow] Received close command, closing window');
+            logger.info('[CaptionWindow] Received close command, closing window');
             getCurrentWindow().close();
         });
 
@@ -137,7 +138,7 @@ export function CaptionWindow() {
                         await currentWindow.setSize(targetSize);
                     }
                 } catch (e) {
-                    console.error("[CaptionWindow] Failed to resize window:", e);
+                    logger.error("[CaptionWindow] Failed to resize window:", e);
                 }
             }, 50);
         });

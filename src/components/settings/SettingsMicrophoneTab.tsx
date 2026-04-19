@@ -15,6 +15,7 @@ import {
     listSystemAudioDeviceOptions,
 } from '../../services/audioDeviceService';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { logger } from '../../utils/logger';
 
 interface SettingsMicrophoneTabProps {
     config: AppConfig;
@@ -77,7 +78,7 @@ export function SettingsMicrophoneTab({
                     setDevices(options);
                 }
             } catch (err) {
-                console.error('Error enumerating devices:', err);
+                logger.error('Error enumerating devices:', err);
             }
         }
 
@@ -99,7 +100,7 @@ export function SettingsMicrophoneTab({
                     setSystemDevices(devs);
                 }
             } catch (err) {
-                console.error('Error getting system audio devices:', err);
+                logger.error('Error getting system audio devices:', err);
             }
         }
 
@@ -134,7 +135,7 @@ export function SettingsMicrophoneTab({
                 systemUnlistenRef.current = unlisten;
                 startSystemWaveAnimation();
             } catch (err) {
-                console.error('Error starting system visualizer:', err);
+                logger.error('Error starting system visualizer:', err);
             }
         }
 
@@ -155,10 +156,10 @@ export function SettingsMicrophoneTab({
                 invoke<string>('stop_system_audio_capture', { instanceId: 'test_system' })
                     .then((path) => {
                         if (path) {
-                            remove(path).catch(console.error);
+                            remove(path).catch(logger.error);
                         }
                     })
-                    .catch(console.error);
+                    .catch(logger.error);
                 startedSystemCaptureRef.current = false;
             }
         };
@@ -166,7 +167,7 @@ export function SettingsMicrophoneTab({
 
     // Sync Microphone Boost to Rust backend
     useEffect(() => {
-        invoke('set_microphone_boost', { boost: microphoneBoost }).catch(console.error);
+        invoke('set_microphone_boost', { boost: microphoneBoost }).catch(logger.error);
     }, [microphoneBoost]);
 
     // Mic Visualizer Logic
@@ -206,7 +207,7 @@ export function SettingsMicrophoneTab({
 
             startMicWaveAnimation();
         } catch (err) {
-            console.warn('Native microphone visualizer failed:', err);
+            logger.warn('Native microphone visualizer failed:', err);
             stopMicWaveAnimation();
         }
     }
@@ -222,10 +223,10 @@ export function SettingsMicrophoneTab({
             invoke<string>('stop_microphone_capture')
                 .then((path) => {
                     if (path) {
-                        remove(path).catch(console.error);
+                        remove(path).catch(logger.error);
                     }
                 })
-                .catch(console.error);
+                .catch(logger.error);
         }
         usingNativeMicRef.current = false;
         startedMicCaptureRef.current = false;

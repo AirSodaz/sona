@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { HistoryItem } from '../types/history';
 import { historyService } from '../services/historyService';
 import { useTranscriptStore } from './transcriptStore';
+import { logger } from '../utils/logger';
 
 interface HistoryState {
     items: HistoryItem[];
@@ -34,7 +35,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const items = await historyService.getAll();
             set({ items: items || [] }); // Ensure array
         } catch (err: any) {
-            console.error('Failed to load history items:', err);
+            logger.error('Failed to load history items:', err);
             set({ error: err.message || 'Failed to load history' });
         } finally {
             set({ isLoading: false });
@@ -66,7 +67,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                 transcriptStore.setSourceHistoryId(null);
             }
         } catch (err: any) {
-            console.error('Failed to delete history item:', err);
+            logger.error('Failed to delete history item:', err);
             // Revert
             set({ items: originalItems, error: 'Failed to delete item' });
         }
@@ -90,7 +91,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                 transcriptStore.setSourceHistoryId(null);
             }
         } catch (err: any) {
-            console.error('Failed to delete history items:', err);
+            logger.error('Failed to delete history items:', err);
             set({ items: originalItems, error: 'Failed to delete items' });
         }
     },

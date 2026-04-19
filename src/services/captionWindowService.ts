@@ -1,6 +1,7 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { emit } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
+import { logger } from '../utils/logger';
 
 const CAPTION_WINDOW_LABEL = 'caption';
 const CAPTION_EVENT_SEGMENTS = 'caption:segments';
@@ -65,7 +66,7 @@ class CaptionWindowService {
 
         // Wait for window to be created
         this.windowInstance.once('tauri://created', async () => {
-            console.log('Caption window created successfully');
+            logger.info('Caption window created successfully');
             // Position at bottom center (manual calculation or let OS handle initial place)
             // For now we let it float, user can drag it.
 
@@ -76,7 +77,7 @@ class CaptionWindowService {
         });
 
         this.windowInstance.once('tauri://error', (e) => {
-            console.error('Error creating caption window:', e);
+            logger.error('Error creating caption window:', e);
             this.windowInstance = null;
         });
     }
@@ -85,25 +86,25 @@ class CaptionWindowService {
      * Closes the caption window if it exists.
      */
     async close() {
-        console.log('[CaptionWindowService] Requested to close caption window');
+        logger.info('[CaptionWindowService] Requested to close caption window');
 
         // Robust close: Emit event first to ensure internal listener triggers close
         try {
-            console.log('[CaptionWindowService] Emitting close event to window');
+            logger.info('[CaptionWindowService] Emitting close event to window');
             await emit(CAPTION_EVENT_CLOSE);
         } catch (e) {
-            console.error('[CaptionWindowService] Error emitting close event:', e);
+            logger.error('[CaptionWindowService] Error emitting close event:', e);
         }
 
         // Ensure instance is closed if we have it
         if (this.windowInstance) {
             try {
-                console.log('[CaptionWindowService] Closing cached window instance');
+                logger.info('[CaptionWindowService] Closing cached window instance');
                 await this.windowInstance.close();
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 if (!msg.includes('window not found')) {
-                    console.error('[CaptionWindowService] Error closing cached window instance:', e);
+                    logger.error('[CaptionWindowService] Error closing cached window instance:', e);
                 }
             }
             this.windowInstance = null;
@@ -113,17 +114,17 @@ class CaptionWindowService {
         try {
             const w = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
             if (w) {
-                console.log('[CaptionWindowService] Found window by label, closing it');
+                logger.info('[CaptionWindowService] Found window by label, closing it');
                 await w.close();
             } else {
-                console.log('[CaptionWindowService] No window found by label to close');
+                logger.info('[CaptionWindowService] No window found by label to close');
             }
         } catch (e) {
             // Ignore error if window not found or already closed (common in Tauri)
             // But log if it's something else
             const msg = e instanceof Error ? e.message : String(e);
             if (!msg.includes('window not found')) {
-                console.error('[CaptionWindowService] Error finding/closing caption window by label:', e);
+                logger.error('[CaptionWindowService] Error finding/closing caption window by label:', e);
             }
         }
     }
@@ -191,7 +192,7 @@ class CaptionWindowService {
 
                     await win.setSize(newSize);
                 } catch (e) {
-                    console.error('[CaptionWindowService] Failed to resize window:', e);
+                    logger.error('[CaptionWindowService] Failed to resize window:', e);
                 }
             }
         }
