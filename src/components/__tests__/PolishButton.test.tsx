@@ -163,4 +163,14 @@ describe('PolishButton', () => {
         // Verify segments restored to Polished
         expect(useTranscriptStore.getState().segments).toEqual(polishedSegments);
     });
+
+    it('opens advanced settings modal when clicked', () => {
+        render(<PolishButton />);
+        fireEvent.click(screen.getByRole('button', { expanded: false }));
+        fireEvent.click(screen.getByText('polish.advanced_settings'));
+
+        // Check if modal elements appear (using localized keys from mock)
+        expect(screen.getByText('polish.keywords')).toBeDefined();
+        expect(screen.getByText('polish.scenario_label')).toBeDefined();
+    });
 });

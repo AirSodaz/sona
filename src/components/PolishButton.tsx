@@ -5,9 +5,10 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
-import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon } from './Icons';
+import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon, SettingsIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { PolishSettingsModal } from './PolishSettingsModal';
 
 /** Props for PolishButton. */
 interface PolishButtonProps {
@@ -26,7 +27,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const showError = useDialogStore((state) => state.showError);
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
-    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -339,74 +340,23 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                setShowAdvanced(!showAdvanced);
+                                setIsSettingsOpen(true);
+                                setIsOpen(false);
                             }}
                             role="menuitem"
                             tabIndex={-1}
-                            style={{ justifyContent: 'space-between' }}
                         >
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {showAdvanced ? <ChevronDownIcon /> : <ChevronRightIcon />}
-                                {t('polish.advanced_settings')}
-                            </span>
+                            <SettingsIcon />
+                            <span>{t('polish.advanced_settings')}</span>
                         </button>
-
-                        {showAdvanced && (
-                            <div style={{ padding: '0 12px 12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                        {t('polish.keywords')}
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="settings-input"
-                                        style={{ fontSize: '0.8rem', padding: '4px 8px' }}
-                                        placeholder={t('polish.keywords_placeholder')}
-                                        value={config.polishKeywords || ''}
-                                        onChange={(e) => setConfig({ polishKeywords: e.target.value })}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                        {t('polish.scenario_label')}
-                                    </label>
-                                    <select
-                                        className="settings-input"
-                                        style={{ fontSize: '0.8rem', padding: '4px 8px' }}
-                                        value={config.polishScenario || 'custom'}
-                                        onChange={(e) => setConfig({ polishScenario: e.target.value })}
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <option value="customer_service">{t('polish.scenarios.customer_service')}</option>
-                                        <option value="meeting">{t('polish.scenarios.meeting')}</option>
-                                        <option value="interview">{t('polish.scenarios.interview')}</option>
-                                        <option value="lecture">{t('polish.scenarios.lecture')}</option>
-                                        <option value="podcast">{t('polish.scenarios.podcast')}</option>
-                                        <option value="custom">{t('polish.scenarios.custom')}</option>
-                                    </select>
-                                </div>
-
-                                {(config.polishScenario === 'custom' || !config.polishScenario) && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                            {t('polish.custom_context')}
-                                        </label>
-                                        <textarea
-                                            className="settings-input"
-                                            style={{ fontSize: '0.8rem', padding: '4px 8px', minHeight: '60px', resize: 'vertical' }}
-                                            placeholder={t('polish.context_placeholder')}
-                                            value={config.polishContext || ''}
-                                            onChange={(e) => setConfig({ polishContext: e.target.value })}
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </div>
             )}
+
+            <PolishSettingsModal 
+                isOpen={isSettingsOpen} 
+                onClose={() => setIsSettingsOpen(false)} 
+            />
         </div>
     );
 }
