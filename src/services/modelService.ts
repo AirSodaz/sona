@@ -83,8 +83,9 @@ export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
  *
  * @param percentage The progress percentage (0-100).
  * @param status A short description of the current status.
+ * @param isFinished Whether the entire process is complete.
  */
-export type ProgressCallback = (percentage: number, status: string) => void;
+export type ProgressCallback = (percentage: number, status: string, isFinished?: boolean) => void;
 
 /**
  * Service for managing AI models (downloading, verifying, path resolution).
@@ -280,7 +281,7 @@ class ModelService {
         await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
 
         if (model.isArchive === false) {
-            onProgress?.(100, i18n.t('settings.model_download_status.done'));
+            onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
             return tempFilePath;
         }
 
@@ -288,7 +289,7 @@ class ModelService {
 
         // No manual saving needed, Rust did it directly
 
-        onProgress?.(100, i18n.t('settings.model_download_status.extracting'));
+        onProgress?.(100, i18n.t('settings.model_download_status.extracting'), false);
 
         let extractUnlisten: (() => void) | undefined;
         if (onProgress) {
@@ -298,7 +299,7 @@ class ModelService {
                 const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
                 onProgress(100, i18n.t('settings.model_download_status.extracting_file', {
                     filename: displayFilename,
-                }));
+                }), false);
             });
         }
 
@@ -315,7 +316,7 @@ class ModelService {
         // Clean up archive
         await remove(tempFilePath);
 
-        onProgress?.(100, i18n.t('settings.model_download_status.done'));
+        onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
 
         if (model.filename) {
             return await join(modelsDir, model.filename);

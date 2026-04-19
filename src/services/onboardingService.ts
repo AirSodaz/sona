@@ -9,6 +9,7 @@ export interface OnboardingDownloadUpdate {
   modelId: string;
   percentage: number;
   status: string;
+  isFinished?: boolean;
 }
 
 export interface RecommendedOnboardingPaths {
@@ -68,11 +69,12 @@ export async function downloadRecommendedOnboardingModels(
     getRecommendedOnboardingModels().map(async (model) => {
       const path = await modelService.downloadModel(
         model.id,
-        (percentage, status) => {
+        (percentage, status, isFinished) => {
           onUpdate?.({
             modelId: model.id,
             percentage,
             status,
+            isFinished,
           });
         },
         signal,

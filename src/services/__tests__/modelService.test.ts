@@ -74,7 +74,7 @@ describe('ModelService', () => {
                 url: expect.stringContaining('http'),
                 outputPath: expect.stringContaining('/app/data/models/'),
             }));
-            expect(onProgress).toHaveBeenCalledWith(100, 'Done');
+            expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
         });
     });
 

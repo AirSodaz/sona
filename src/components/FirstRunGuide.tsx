@@ -25,6 +25,7 @@ type PermissionState = 'idle' | 'granted' | 'denied';
 interface DownloadProgressState {
   percentage: number;
   status: string;
+  isFinished?: boolean;
 }
 
 interface OnboardingActionsProps {
@@ -206,6 +207,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
           [update.modelId]: {
             percentage: update.percentage,
             status: update.status,
+            isFinished: update.isFinished,
           },
         }));
       });
@@ -372,7 +374,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
               <div className="onboarding-model-list" role="list">
                 {recommendedModels.map((model) => {
                   const downloadState = downloads[model.id];
-                  const isDone = downloadState?.percentage === 100;
+                  const isDone = downloadState?.isFinished;
                   return (
                     <div className="onboarding-model-card" role="listitem" key={model.id}>
                       <div className="onboarding-model-meta">
