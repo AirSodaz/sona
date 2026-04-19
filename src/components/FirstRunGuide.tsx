@@ -260,14 +260,23 @@ export function FirstRunGuide(): React.JSX.Element | null {
     return null;
   }
 
-  const activeStepIndex = currentStep === 'welcome' ? 0 : currentStep === 'models' ? 1 : 2;
+  const activeStepIndex = (() => {
+    switch (currentStep) {
+      case 'welcome': return 0;
+      case 'models': return 1;
+      case 'microphone': return 2;
+      default: return 0;
+    }
+  })();
+
   const isMicrophoneReady = permissionState === 'granted' && deviceOptions.length > 0;
-  const areSecondaryActionsDisabled =
-    currentStep === 'models'
-      ? modelStepStatus === 'downloading'
-      : currentStep === 'microphone'
-        ? isLoadingDevices
-        : false;
+
+  let areSecondaryActionsDisabled = false;
+  if (currentStep === 'models') {
+    areSecondaryActionsDisabled = modelStepStatus === 'downloading';
+  } else if (currentStep === 'microphone') {
+    areSecondaryActionsDisabled = isLoadingDevices;
+  }
 
   return (
     <div className="settings-overlay" style={{ zIndex: 2100 }}>

@@ -463,30 +463,39 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
            
            <div className="feature-field">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button
-                   type="button"
-                   className={`btn ${testStatus === 'success' ? 'btn-success-flash' : testStatus === 'error' ? 'btn-error-flash' : 'btn-secondary'} btn-loading-wrapper`}
-                   style={{ width: 'fit-content', minWidth: '120px' }}
-                   onClick={handleTestConnection}
-                   disabled={testStatus === 'loading'}
-                 >
-                   <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                     {testStatus === 'loading' ? (
-                       <Loader2 className="animate-spin" size={16} />
-                     ) : testStatus === 'success' ? (
-                       <Check size={16} />
-                     ) : testStatus === 'error' ? (
-                       <X size={16} />
-                     ) : null}
-                     
-                     <span>
-                       {testStatus === 'loading' ? t('settings.llm.testing') : 
-                        testStatus === 'success' ? t('settings.llm.connection_success') : 
-                        testStatus === 'error' ? t('settings.llm.connection_failed') : 
-                        t('settings.llm.test_connection')}
-                     </span>
-                   </div>
-                </button>
+                {(() => {
+                  let testBtnClass = 'btn-secondary';
+                  let icon = null;
+                  let label = t('settings.llm.test_connection');
+
+                  if (testStatus === 'loading') {
+                    icon = <Loader2 className="animate-spin" size={16} />;
+                    label = t('settings.llm.testing');
+                  } else if (testStatus === 'success') {
+                    testBtnClass = 'btn-success-flash';
+                    icon = <Check size={16} />;
+                    label = t('settings.llm.connection_success');
+                  } else if (testStatus === 'error') {
+                    testBtnClass = 'btn-error-flash';
+                    icon = <X size={16} />;
+                    label = t('settings.llm.connection_failed');
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      className={`btn ${testBtnClass} btn-loading-wrapper`}
+                      style={{ width: 'fit-content', minWidth: '120px' }}
+                      onClick={handleTestConnection}
+                      disabled={testStatus === 'loading'}
+                    >
+                      <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        {icon}
+                        <span>{label}</span>
+                      </div>
+                    </button>
+                  );
+                })()}
                 
                 {testStatus === 'error' && testMessage && (
                   <div className="connection-error-detail">
