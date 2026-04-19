@@ -101,10 +101,11 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                     {/* Auto Polish Frequency */}
                     {autoPolish && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+                            <label htmlFor="auto-polish-frequency" style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
                                 {t('batch.auto_polish_frequency', { defaultValue: 'Auto-Polish Frequency' })}
                             </label>
                             <input
+                                id="auto-polish-frequency"
                                 type="number"
                                 min={1}
                                 max={100}
@@ -133,10 +134,11 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
 
                     {/* Keywords */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
-                        <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+                        <label htmlFor="polish-keywords" style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
                             {t('polish.keywords')}
                         </label>
                         <input
+                            id="polish-keywords"
                             type="text"
                             value={config.polishKeywords || ''}
                             onChange={(e) => setConfig({ polishKeywords: e.target.value })}
@@ -168,10 +170,11 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                     {/* Custom Context */}
                     {(config.polishScenario === 'custom' || !config.polishScenario) && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
-                            <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+                            <label htmlFor="polish-custom-context" style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
                                 {t('polish.custom_context')}
                             </label>
                             <textarea
+                                id="polish-custom-context"
                                 value={config.polishContext || ''}
                                 onChange={(e) => setConfig({ polishContext: e.target.value })}
                                 style={{
