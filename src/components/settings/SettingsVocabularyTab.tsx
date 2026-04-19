@@ -157,9 +157,9 @@ export function SettingsVocabularyTab({
                             {t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
                         </div>
                     ) : (
-                        sets.map((set) => (
+                        sets.map((set, index) => (
                             <div key={set.id} style={{ 
-                                borderBottom: '1px solid var(--color-border-subtle)',
+                                borderBottom: index === sets.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
                                 background: set.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
                             }}>
                                 {/* Set Header */}

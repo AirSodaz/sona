@@ -66,13 +66,15 @@
    But here we use it as it's more reliable for most browsers. 
    If dropdowns are cut off, we should use portals for them. */
 .settings-section-content > :first-child {
-  border-top-left-radius: var(--radius-lg, 16px);
-  border-top-right-radius: var(--radius-lg, 16px);
+  border-top-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-top-right-radius: calc(var(--radius-lg, 16px) - 1px);
+  overflow: hidden;
 }
 
 .settings-section-content > :last-child {
-  border-bottom-left-radius: var(--radius-lg, 16px);
-  border-bottom-right-radius: var(--radius-lg, 16px);
+  border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
+  overflow: hidden;
 }
 
 /* --- Item --- */
