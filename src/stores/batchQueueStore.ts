@@ -5,7 +5,6 @@ import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import { TranscriptSegment } from '../types/transcript';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
-import { modelService } from '../services/modelService';
 import { polishService } from '../services/polishService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 import { useTranscriptStore } from './transcriptStore';

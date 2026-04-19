@@ -65,7 +65,6 @@ export class TranscriptionService {
     private isRunning: boolean = false;
     private modelPath: string = '';
     private enableITN: boolean = true;
-    private onSegment: TranscriptionCallback | null = null;
     private onError: ErrorCallback | null = null;
     private startingPromise: Promise<void> | null = null;
     private runningConfig: ServiceConfig | null = null;
@@ -95,7 +94,6 @@ export class TranscriptionService {
     }
 
     async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
-        this.onSegment = onSegment;
         this.onError = onError;
         TranscriptionService.instanceCallbacks.set(this.instanceId, { onSegment, onError });
 

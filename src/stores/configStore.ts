@@ -8,6 +8,7 @@ import type {
   ModelConfig,
   CaptionConfig,
   TranscriptionConfig,
+  VocabularyConfig,
   LlmAssistantConfig,
 } from '../types/config';
 

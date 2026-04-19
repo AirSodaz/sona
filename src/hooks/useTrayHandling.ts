@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { SettingsTab } from './useSettingsLogic';
 
 /**
  * Hook to handle system tray events.
@@ -15,7 +16,7 @@ import { useDialogStore } from '../stores/dialogStore';
  */
 export function useTrayHandling(
     setIsSettingsOpen: (open: boolean) => void,
-    setSettingsInitialTab: (tab: 'general' | 'about') => void
+    setSettingsInitialTab: (tab: SettingsTab) => void
 ) {
     const { confirm } = useDialogStore();
     const { t, i18n } = useTranslation();

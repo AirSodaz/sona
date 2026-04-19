@@ -182,7 +182,14 @@
         "failed": "导出转录失败",
         "mode_original": "原文",
         "mode_translation": "译文",
-        "mode_bilingual": "双语"
+        "mode_bilingual": "双语",
+        "modal_title": "导出转录",
+        "filename": "文件名",
+        "directory": "导出目录",
+        "format": "格式",
+        "select_directory": "选择目录",
+        "success": "导出成功",
+        "invalid_filename": "文件名无效"
     },
     "history": {
         "title": "历史记录",

@@ -15,8 +15,25 @@ interface ExportOptions {
 }
 
 /**
- * Opens a save dialog and exports the transcript segments to the selected file.
+ * Writes the content to the specified file path directly.
  *
+ * @param content The content to write.
+ * @param filePath The destination file path.
+ * @throws {Error} If writing the file fails.
+ */
+export async function exportToPath(content: string, filePath: string): Promise<void> {
+    try {
+        await writeTextFile(filePath, content);
+    } catch (error) {
+        console.error('Failed to write file to path:', filePath, error);
+        throw error;
+    }
+}
+
+/**
+ * Opens a save dialog and exports the transcript segments to the selected file.
+...
+
  * @param options The export options containing segments, format, mode, and optional filename.
  * @return A promise that resolves to true if the file was saved, false if cancelled.
  * @throws {Error} If writing the file fails.

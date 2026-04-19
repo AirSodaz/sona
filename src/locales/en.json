@@ -182,7 +182,14 @@
         "failed": "Failed to export transcript",
         "mode_original": "Original",
         "mode_translation": "Translation",
-        "mode_bilingual": "Bilingual"
+        "mode_bilingual": "Bilingual",
+        "modal_title": "Export Transcript",
+        "filename": "Filename",
+        "directory": "Export Directory",
+        "format": "Format",
+        "select_directory": "Select Directory",
+        "success": "Export successful",
+        "invalid_filename": "Invalid filename"
     },
     "history": {
         "title": "History",

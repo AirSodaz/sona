@@ -109,7 +109,7 @@ export function SettingsVocabularyTab({
 
             <SettingsSection
                 title={t('settings.text_replacement_title', { defaultValue: 'Text Replacement' })}
-                icon={<BookIcon size={20} />}
+                icon={<BookIcon width={20} height={20} />}
                 description={t('settings.text_replacement_description', { defaultValue: 'Group rules into sets to easily enable or disable them.' })}
             >
                 {/* Add New Set */}

@@ -24,6 +24,7 @@ import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
+import { SettingsTab } from './hooks/useSettingsLogic';
 
 /**
  * Helper to determine the title of the left panel based on the current mode.
@@ -40,16 +41,9 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
   }
 }
 
-/**
- * Main application component.
- *
- * Handles layout, initialization of config, theme, and language.
- *
- * @return The root application element.
- */
 function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'models' | 'local' | 'shortcuts' | 'about'>('general');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   // const isRecording = useTranscriptStore((state) => state.isRecording);

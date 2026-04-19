@@ -1,12 +1,13 @@
 import React from 'react';
+import { SettingsTab } from '../../hooks/useSettingsLogic';
 
 /** Props for the SettingsTabButton component. */
 export interface SettingsTabButtonProps {
-    id: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'shortcuts' | 'about' | 'llm_service' | 'vocabulary';
+    id: SettingsTab;
     label: string;
     Icon: () => React.JSX.Element;
-    activeTab: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'shortcuts' | 'about' | 'llm_service' | 'vocabulary';
-    setActiveTab: (id: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'shortcuts' | 'about' | 'llm_service' | 'vocabulary') => void;
+    activeTab: SettingsTab;
+    setActiveTab: (id: SettingsTab) => void;
     /** Optional tabIndex for keyboard navigation management. */
     tabIndex?: number;
 }

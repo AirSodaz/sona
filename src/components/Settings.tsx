@@ -14,6 +14,7 @@ import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
+import { SettingsTab } from '../hooks/useSettingsLogic';
 import {
     GeneralIcon,
     MicIcon,
@@ -31,7 +32,7 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTab?: 'general' | 'microphone' | 'subtitle' | 'models' | 'local' | 'llm_service' | 'shortcuts' | 'vocabulary' | 'about';
+    initialTab?: SettingsTab;
 }
 
 /**
@@ -264,10 +265,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                         <SettingsLocalTab
                                             config={config}
                                             updateConfig={updateConfig}
-                                            downloads={downloads}
-                                            onDownloadITN={handleDownload}
-                                            onCancelDownload={handleCancelDownload}
-                                            installedModels={installedModels}
                                             onRestoreDefaults={restoreDefaultModelSettings}
                                         />
                                     );
