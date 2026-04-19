@@ -3,19 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Subtitles, SlidersHorizontal } from 'lucide-react';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
-import { AppConfig } from '../../types/transcript';
+import { useCaptionConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
-interface SettingsSubtitleTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
-}
-
-export function SettingsSubtitleTab({
-    config,
-    updateConfig
-}: SettingsSubtitleTabProps): React.JSX.Element {
+export function SettingsSubtitleTab(): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useCaptionConfig();
+    const updateConfig = useSetConfig();
 
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;

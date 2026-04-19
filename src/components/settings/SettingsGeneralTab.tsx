@@ -4,13 +4,8 @@ import { Languages } from 'lucide-react';
 import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
-import { AppConfig } from '../../types/transcript';
+import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
-
-interface SettingsGeneralTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
-}
 
 function getFontFamily(fontValue: string): string {
     switch (fontValue) {
@@ -20,11 +15,10 @@ function getFontFamily(fontValue: string): string {
     }
 }
 
-export function SettingsGeneralTab({
-    config,
-    updateConfig
-}: SettingsGeneralTabProps): React.JSX.Element {
+export function SettingsGeneralTab(): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useUIConfig();
+    const updateConfig = useSetConfig();
 
     const appLanguage = config.appLanguage || 'auto';
     const theme = config.theme || 'auto';

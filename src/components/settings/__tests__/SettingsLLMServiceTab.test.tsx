@@ -48,7 +48,6 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
 
 describe('SettingsLLMServiceTab', () => {
   const mockUpdateConfig = vi.fn();
-  const mockChangeLlmServiceType = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,11 +62,7 @@ describe('SettingsLLMServiceTab', () => {
   it('renders feature cards and credentials section', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -84,11 +79,7 @@ describe('SettingsLLMServiceTab', () => {
     
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={conf}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -100,11 +91,7 @@ describe('SettingsLLMServiceTab', () => {
   it('shows missing api key status', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig('open_ai', false)}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -119,11 +106,7 @@ describe('SettingsLLMServiceTab', () => {
 
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={conf}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -134,11 +117,7 @@ describe('SettingsLLMServiceTab', () => {
   it('shows candidates only while the model input is focused', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -168,11 +147,7 @@ describe('SettingsLLMServiceTab', () => {
   it('adds a model through the searchable model input flow', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -191,11 +166,7 @@ describe('SettingsLLMServiceTab', () => {
   it('renders only feature-specific temperature controls', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -207,11 +178,7 @@ describe('SettingsLLMServiceTab', () => {
   it('updates polish temperature independently', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -232,11 +199,7 @@ describe('SettingsLLMServiceTab', () => {
   it('updates translation temperature independently', async () => {
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -260,11 +223,7 @@ describe('SettingsLLMServiceTab', () => {
 
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={config}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 
@@ -281,11 +240,7 @@ describe('SettingsLLMServiceTab', () => {
 
     await act(async () => {
       render(
-        <SettingsLLMServiceTab
-          config={buildConfig()}
-          updateConfig={mockUpdateConfig}
-          changeLlmServiceType={mockChangeLlmServiceType}
-        />,
+        <SettingsLLMServiceTab />,
       );
     });
 

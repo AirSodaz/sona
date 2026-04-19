@@ -2,21 +2,16 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List } from 'lucide-react';
 import { BookIcon } from '../Icons';
-import { AppConfig, TextReplacementRuleSet, TextReplacementRule, HotwordRuleSet, HotwordRule } from '../../types/config';
+import { TextReplacementRuleSet, TextReplacementRule, HotwordRuleSet, HotwordRule } from '../../types/config';
+import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { v4 as uuidv4 } from 'uuid';
 
-interface SettingsVocabularyTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
-}
-
-export function SettingsVocabularyTab({
-    config,
-    updateConfig
-}: SettingsVocabularyTabProps): React.JSX.Element {
+export function SettingsVocabularyTab(): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useVocabularyConfig();
+    const updateConfig = useSetConfig();
     
     // State for Text Replacement Sets
     const [newSetName, setNewSetName] = useState('');

@@ -7,7 +7,7 @@ import { Switch } from '../Switch';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
-import { AppConfig } from '../../types/transcript';
+import { useAudioConfig, useSetConfig } from '../../stores/configStore';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
 import { remove } from '@tauri-apps/plugin-fs';
 import {
@@ -18,19 +18,17 @@ import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader
 import { logger } from '../../utils/logger';
 
 interface SettingsMicrophoneTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
     isActiveTab?: boolean;
     isOpen?: boolean;
 }
 
 export function SettingsMicrophoneTab({
-    config,
-    updateConfig,
     isActiveTab = true,
     isOpen = true
 }: SettingsMicrophoneTabProps): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useAudioConfig();
+    const updateConfig = useSetConfig();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
     const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
 

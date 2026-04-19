@@ -2,22 +2,20 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlaySquare } from 'lucide-react';
 import { LocalIcon, RestoreIcon } from '../Icons';
-import { AppConfig } from '../../types/transcript';
-import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
+import { useTranscriptionConfig, useSetConfig } from '../../stores/configStore';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsLocalTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
     onRestoreDefaults: () => void;
 }
 
 export function SettingsLocalTab({
-    config,
-    updateConfig,
     onRestoreDefaults
 }: SettingsLocalTabProps): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useTranscriptionConfig();
+    const updateConfig = useSetConfig();
 
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;

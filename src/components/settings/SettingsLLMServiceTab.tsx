@@ -4,7 +4,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe } from 'lucide-react';
 import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
-import { AppConfig, LlmProvider, LlmProviderSetting } from '../../types/transcript';
+import { LlmProvider, LlmProviderSetting } from '../../types/transcript';
+import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
+import { LlmAssistantConfig } from '../../types/config';
 import { normalizeError } from '../../utils/errorUtils';
 import {
   addLlmModel,
@@ -23,12 +25,6 @@ import {
 } from '../../services/llmConfig';
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
-
-interface SettingsLLMServiceTabProps {
-  config: AppConfig;
-  updateConfig: (updates: Partial<AppConfig>) => void;
-  changeLlmServiceType: (type: LlmProvider) => void;
-}
 
 function getModelPlaceholder(provider: LlmProvider): string {
   switch (provider) {
@@ -71,13 +67,13 @@ interface FeatureCardProps {
   featureId: 'polish' | 'translation';
   title: string;
   icon: React.ReactNode;
-  config: AppConfig;
-  applyLlmSettings: (s: AppConfig['llmSettings']) => void;
+  config: LlmAssistantConfig;
+  applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string) => string;
 }
 
 function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: FeatureCardProps) {
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
@@ -340,7 +336,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
 // ------ ACCORDION ITEM COMPONENT ------
 interface AccordionItemProps {
   provider: LlmProvider;
-  config: AppConfig;
+  config: LlmAssistantConfig;
   isOpen: boolean;
   onToggle: () => void;
   applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
@@ -348,7 +344,7 @@ interface AccordionItemProps {
 }
 
 function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProviderUpdates, t }: AccordionItemProps) {
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
   const def = getProviderDefinition(provider);
   const setting = currentLlmState.providers[provider];
   
@@ -507,25 +503,24 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
 }
 
 // ------ MAIN TAB COMPONENT ------
-export function SettingsLLMServiceTab({
-  config,
-  updateConfig,
-}: SettingsLLMServiceTabProps): React.JSX.Element {
+export function SettingsLLMServiceTab(): React.JSX.Element {
   const { t } = useTranslation();
+  const config = useLlmAssistantConfig();
+  const updateConfig = useSetConfig();
   const [expandedProvider, setExpandedProvider] = useState<LlmProvider | null>(null);
 
-  const applyLlmSettings = useCallback((nextLlmSettings: AppConfig['llmSettings']) => {
+  const applyLlmSettings = useCallback((nextLlmSettings: LlmAssistantConfig['llmSettings']) => {
     if (!nextLlmSettings) return;
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
   }, [updateConfig]);
 
   const applyProviderUpdates = useCallback((provider: LlmProvider, updates: Partial<LlmProviderSetting>) => {
-    const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as AppConfig & Record<string, any>);
+    const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as any);
     const nextLlmSettings = updateProviderSetting(currentLlmState.llmSettings, provider, updates);
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
   }, [config, updateConfig]);
 
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as AppConfig & Record<string, any>).llmSettings;
+  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
   
   const activeProviders = useMemo(() => {
     const active = new Set<LlmProvider>();

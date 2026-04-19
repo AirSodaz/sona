@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
-import { AppConfig } from '../../types/transcript';
+import { useModelConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Mic, Type, Activity, Settings2 } from 'lucide-react';
 import { ModelIcon } from '../Icons';
@@ -81,8 +81,6 @@ function ModelSection({
 }
 
 interface SettingsModelsTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -91,8 +89,6 @@ interface SettingsModelsTabProps {
 }
 
 export function SettingsModelsTab({
-    config,
-    updateConfig,
     installedModels,
     downloads,
     onDelete,
@@ -100,6 +96,9 @@ export function SettingsModelsTab({
     onCancelDownload
 }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useModelConfig();
+    const updateConfig = useSetConfig();
+
     const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
     const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
 

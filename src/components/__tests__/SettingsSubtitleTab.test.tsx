@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SettingsSubtitleTab } from '../settings/SettingsSubtitleTab';
-import { AppConfig } from '../../types/transcript';
 
 // Mock translation
 vi.mock('react-i18next', () => ({
@@ -12,26 +11,9 @@ vi.mock('react-i18next', () => ({
 
 describe('SettingsSubtitleTab', () => {
     const mockUpdateConfig = vi.fn();
-    const mockConfig: AppConfig = {
-        streamingModelPath: "/path/to/model",
-                offlineModelPath: '',
-        language: 'auto',
-        appLanguage: 'auto',
-        lockWindow: false,
-        alwaysOnTop: false,
-        startOnLaunch: false,
-        captionWindowWidth: 1000,
-        captionFontSize: 24,
-        captionFontColor: '#ffffff',
-    };
-
-    const defaultProps = {
-        config: mockConfig,
-        updateConfig: mockUpdateConfig
-    };
 
     it('renders all controls', () => {
-        render(<SettingsSubtitleTab {...defaultProps} />);
+        render(<SettingsSubtitleTab />);
 
         expect(screen.getByText('live.start_on_launch')).toBeDefined();
         expect(screen.getByText('live.lock_window')).toBeDefined();
@@ -42,7 +24,7 @@ describe('SettingsSubtitleTab', () => {
     });
 
     it('renders width input with correct values and classes', () => {
-        render(<SettingsSubtitleTab {...defaultProps} />);
+        render(<SettingsSubtitleTab />);
 
         const numberInput = screen.getByDisplayValue('1000');
 
@@ -57,7 +39,7 @@ describe('SettingsSubtitleTab', () => {
     });
 
     it('calls updateConfig when inputs change', () => {
-        render(<SettingsSubtitleTab {...defaultProps} />);
+        render(<SettingsSubtitleTab />);
 
         const numberInput = screen.getByDisplayValue('1000');
 
@@ -66,7 +48,7 @@ describe('SettingsSubtitleTab', () => {
     });
 
     it('renders font size input with correct classes', () => {
-        render(<SettingsSubtitleTab {...defaultProps} />);
+        render(<SettingsSubtitleTab />);
 
         const numberInput = screen.getByDisplayValue('24');
 
@@ -81,7 +63,7 @@ describe('SettingsSubtitleTab', () => {
     });
 
     it('renders color picker with correct structure and labels', () => {
-        render(<SettingsSubtitleTab {...defaultProps} />);
+        render(<SettingsSubtitleTab />);
 
         const colorInput = screen.getByLabelText('live.font_color');
         expect(colorInput.getAttribute('type')).toBe('color');

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Play, Mic, Search, FilePenLine } from 'lucide-react';
 import { KeyboardIcon } from '../Icons';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
-import { AppConfig } from '../../types/config';
+import { useShortcutConfig, useSetConfig } from '../../stores/configStore';
 
 interface ShortcutInputProps {
     value: string;
@@ -70,13 +70,10 @@ interface ShortcutSection {
     items: ShortcutItem[];
 }
 
-interface SettingsShortcutsTabProps {
-    config: AppConfig;
-    updateConfig: (updates: Partial<AppConfig>) => void;
-}
-
-export function SettingsShortcutsTab({ config, updateConfig }: SettingsShortcutsTabProps): React.JSX.Element {
+export function SettingsShortcutsTab(): React.JSX.Element {
     const { t } = useTranslation();
+    const config = useShortcutConfig();
+    const updateConfig = useSetConfig();
 
     const sections: ShortcutSection[] = [
         {

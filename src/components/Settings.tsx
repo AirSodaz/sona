@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useModelManager } from '../hooks/useModelManager';
-import { useLlmConfig } from '../hooks/useLlmConfig';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
@@ -50,8 +49,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     const {
         activeTab,
         setActiveTab,
-        config,
-        updateConfig,
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
     const {
@@ -63,7 +60,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         restoreDefaultModelSettings,
     } = useModelManager(isOpen);
 
-    const { changeLlmServiceType } = useLlmConfig();
+
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
@@ -227,32 +224,22 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             switch (activeTab) {
                                 case 'general':
                                     return (
-                                        <SettingsGeneralTab
-                                            config={config}
-                                            updateConfig={updateConfig}
-                                        />
+                                        <SettingsGeneralTab />
                                     );
                                 case 'microphone':
                                     return (
                                         <SettingsMicrophoneTab
-                                            config={config}
-                                            updateConfig={updateConfig}
                                             isActiveTab={activeTab === 'microphone'}
                                             isOpen={isOpen}
                                         />
                                     );
                                 case 'subtitle':
                                     return (
-                                        <SettingsSubtitleTab
-                                            config={config}
-                                            updateConfig={updateConfig}
-                                        />
+                                        <SettingsSubtitleTab />
                                     );
                                 case 'models':
                                     return (
                                         <SettingsModelsTab
-                                            config={config}
-                                            updateConfig={updateConfig}
                                             installedModels={installedModels}
                                             downloads={downloads}
                                             onDelete={handleDelete}
@@ -263,29 +250,20 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 case 'local':
                                     return (
                                         <SettingsLocalTab
-                                            config={config}
-                                            updateConfig={updateConfig}
                                             onRestoreDefaults={restoreDefaultModelSettings}
                                         />
                                     );
                                 case 'vocabulary':
                                     return (
-                                        <SettingsVocabularyTab
-                                            config={config}
-                                            updateConfig={updateConfig}
-                                        />
+                                        <SettingsVocabularyTab />
                                     );
                                 case 'llm_service':
                                     return (
-                                        <SettingsLLMServiceTab
-                                            config={config}
-                                            updateConfig={updateConfig}
-                                            changeLlmServiceType={changeLlmServiceType}
-                                        />
+                                        <SettingsLLMServiceTab />
                                     );
                                 case 'shortcuts':
                                     return (
-                                        <SettingsShortcutsTab config={config} updateConfig={updateConfig} />
+                                        <SettingsShortcutsTab />
                                     );
                                 case 'about':
                                     return (
@@ -300,6 +278,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
