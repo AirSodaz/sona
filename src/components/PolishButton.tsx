@@ -246,19 +246,25 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                 data-tooltip-pos="bottom"
                 aria-label={tooltipText}
             >
-                {isRetranscribing ? (
-                    <>
-                        <ProcessingIcon />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{Math.floor(retranscribeProgress)}%</span>
-                    </>
-                ) : isPolishing ? (
-                    <>
-                        <ProcessingIcon />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{polishProgress}%</span>
-                    </>
-                ) : (
-                    <SparklesIcon />
-                )}
+                {(() => {
+                    if (isRetranscribing) {
+                        return (
+                            <>
+                                <ProcessingIcon />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{Math.floor(retranscribeProgress)}%</span>
+                            </>
+                        );
+                    }
+                    if (isPolishing) {
+                        return (
+                            <>
+                                <ProcessingIcon />
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{polishProgress}%</span>
+                            </>
+                        );
+                    }
+                    return <SparklesIcon />;
+                })()}
                 <ChevronDownIcon />
             </button>
 

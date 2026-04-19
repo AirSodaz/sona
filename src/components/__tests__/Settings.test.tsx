@@ -114,7 +114,7 @@ describe('Settings', () => {
         // Let's rely on previous test logic.
         // ModelCard uses t('common.download') + ' ' + model.name if not installed.
         // Mock t returns key. So "common.download Test Model".
-        const downloadBtn = screen.getByLabelText('common.download Test Model');
+        const downloadBtn = await screen.findByLabelText('common.download Test Model');
 
         // Simulate download
         vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
