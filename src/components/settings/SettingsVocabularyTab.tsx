@@ -292,6 +292,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             className="btn btn-icon btn-secondary-soft"
                                             onClick={() => toggleBatchMode(set.id)}
                                             title={batchEditingSets.has(set.id) ? t('settings.switch_to_list', { defaultValue: 'Switch to List' }) : t('settings.switch_to_text', { defaultValue: 'Switch to Text' })}
+                                            aria-label={batchEditingSets.has(set.id) ? t('settings.switch_to_list', { defaultValue: 'Switch to List' }) : t('settings.switch_to_text', { defaultValue: 'Switch to Text' })}
                                         >
                                             {batchEditingSets.has(set.id) ? <List size={18} /> : <FileText size={18} />}
                                         </button>
@@ -318,6 +319,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             className="btn btn-icon btn-danger-soft"
                                             onClick={() => handleDeleteSet(set.id)}
                                             title={t('common.delete')}
+                                            aria-label={t('common.delete')}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -392,6 +394,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                                             className="btn btn-icon btn-danger-soft"
                                                             onClick={() => handleDeleteRuleFromSet(set.id, rule.id)}
                                                             style={{ padding: '4px' }}
+                                                            aria-label={t('common.delete')}
+                                                            title={t('common.delete')}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
@@ -502,6 +506,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             className="btn btn-icon btn-secondary-soft"
                                             onClick={() => toggleHotwordBatchMode(set.id)}
                                             title={batchEditingHotwordSets.has(set.id) ? t('settings.switch_to_list', { defaultValue: 'Switch to List' }) : t('settings.switch_to_text', { defaultValue: 'Switch to Text' })}
+                                            aria-label={batchEditingHotwordSets.has(set.id) ? t('settings.switch_to_list', { defaultValue: 'Switch to List' }) : t('settings.switch_to_text', { defaultValue: 'Switch to Text' })}
                                         >
                                             {batchEditingHotwordSets.has(set.id) ? <List size={18} /> : <FileText size={18} />}
                                         </button>
@@ -517,6 +522,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             className="btn btn-icon btn-danger-soft"
                                             onClick={() => handleDeleteHotwordSet(set.id)}
                                             title={t('common.delete')}
+                                            aria-label={t('common.delete')}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -583,6 +589,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                                             className="btn btn-icon btn-danger-soft"
                                                             onClick={() => handleDeleteHotwordFromSet(set.id, rule.id)}
                                                             style={{ padding: '4px' }}
+                                                            aria-label={t('common.delete')}
+                                                            title={t('common.delete')}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
