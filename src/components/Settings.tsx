@@ -14,6 +14,7 @@ import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsTab } from '../hooks/useSettingsLogic';
+import './settings/Settings.css';
 import {
     GeneralIcon,
     MicIcon,
