@@ -28,19 +28,23 @@ vi.mock('../../hooks/useSettingsLogic', () => ({
     })
 }));
 
-vi.mock('../../hooks/useModelManager', () => ({
-    useModelManager: () => ({
-        deletingId: null,
-        downloads: {},
-        installedModels: new Set(),
-        handleDownload: vi.fn(),
-        handleCancelDownload: vi.fn(),
-        handleLoad: vi.fn(),
-        handleDelete: vi.fn(),
-        isModelSelected: vi.fn(),
-        restoreDefaultModelSettings: vi.fn(),
-    })
-}));
+vi.mock('../../hooks/useModelManager', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../hooks/useModelManager')>();
+    return {
+        ...actual,
+        useModelManager: () => ({
+            deletingId: null,
+            downloads: {},
+            installedModels: new Set(),
+            handleDownload: vi.fn(),
+            handleCancelDownload: vi.fn(),
+            handleLoad: vi.fn(),
+            handleDelete: vi.fn(),
+            isModelSelected: vi.fn(),
+            restoreDefaultModelSettings: vi.fn(),
+        })
+    };
+});
 
 vi.mock('../../hooks/useLlmConfig', () => ({
     useLlmConfig: () => ({

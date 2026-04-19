@@ -8,6 +8,7 @@ import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader
 import { Mic, Type, Activity, Settings2 } from 'lucide-react';
 import { ModelIcon } from '../Icons';
 import { logger } from '../../utils/logger';
+import { useModelManagerContext } from '../../hooks/useModelManager';
 
 interface ModelSectionProps {
     title: string;
@@ -80,24 +81,17 @@ function ModelSection({
     );
 }
 
-interface SettingsModelsTabProps {
-    installedModels: Set<string>;
-    downloads: Record<string, { progress: number; status: string }>;
-    onDelete: (model: ModelInfo) => void;
-    onDownload: (model: ModelInfo) => void;
-    onCancelDownload: (modelId: string) => void;
-}
-
-export function SettingsModelsTab({
-    installedModels,
-    downloads,
-    onDelete,
-    onDownload,
-    onCancelDownload
-}: SettingsModelsTabProps): React.JSX.Element {
+export function SettingsModelsTab(): React.JSX.Element {
     const { t } = useTranslation();
     const config = useModelConfig();
     const updateConfig = useSetConfig();
+    const {
+        installedModels,
+        downloads,
+        handleDelete,
+        handleDownload,
+        handleCancelDownload
+    } = useModelManagerContext();
 
     const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
     const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
@@ -217,9 +211,9 @@ export function SettingsModelsTab({
     const sectionProps = {
         installedModels,
         downloads,
-        onDelete,
-        onDownload,
-        onCancelDownload
+        onDelete: handleDelete,
+        onDownload: handleDownload,
+        onCancelDownload: handleCancelDownload
     };
 
     const getModelLabel = useCallback((model: ModelInfo) => {

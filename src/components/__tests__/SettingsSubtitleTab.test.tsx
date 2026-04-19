@@ -9,8 +9,25 @@ vi.mock('react-i18next', () => ({
     }),
 }));
 
+const mockUpdateConfig = vi.fn();
+
+vi.mock('../../stores/configStore', () => ({
+    useCaptionConfig: () => ({
+        lockWindow: false,
+        alwaysOnTop: true,
+        startOnLaunch: false,
+        captionWindowWidth: 800,
+        captionFontSize: 24,
+        captionFontColor: '#ffffff',
+        captionBackgroundOpacity: 0.6,
+    }),
+    useSetConfig: () => mockUpdateConfig,
+}));
+
 describe('SettingsSubtitleTab', () => {
-    const mockUpdateConfig = vi.fn();
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
 
     it('renders all controls', () => {
         render(<SettingsSubtitleTab />);
@@ -26,7 +43,7 @@ describe('SettingsSubtitleTab', () => {
     it('renders width input with correct values and classes', () => {
         render(<SettingsSubtitleTab />);
 
-        const numberInput = screen.getByDisplayValue('1000');
+        const numberInput = screen.getByDisplayValue('800');
 
         expect(numberInput).toBeDefined();
         expect(numberInput.tagName).toBe('INPUT');
@@ -34,14 +51,14 @@ describe('SettingsSubtitleTab', () => {
         expect(numberInput.classList.contains('settings-input')).toBe(true);
 
         // Ensure range slider is removed
-        const widthRange = document.querySelector('input[type="range"][value="1000"]');
+        const widthRange = document.querySelector('input[type="range"][value="800"]');
         expect(widthRange).toBeNull();
     });
 
     it('calls updateConfig when inputs change', () => {
         render(<SettingsSubtitleTab />);
 
-        const numberInput = screen.getByDisplayValue('1000');
+        const numberInput = screen.getByDisplayValue('800');
 
         fireEvent.change(numberInput, { target: { value: '1200' } });
         expect(mockUpdateConfig).toHaveBeenCalledWith({ captionWindowWidth: 1200 });

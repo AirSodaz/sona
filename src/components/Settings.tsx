@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
-import { useModelManager } from '../hooks/useModelManager';
+import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
@@ -51,16 +51,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
         setActiveTab,
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
-    const {
-        downloads,
-        installedModels,
-        handleDownload,
-        handleCancelDownload,
-        handleDelete,
-        restoreDefaultModelSettings,
-    } = useModelManager(isOpen);
-
-
+    const modelManager = useModelManager(isOpen);
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
@@ -220,60 +211,37 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
-                        {(() => {
-                            switch (activeTab) {
-                                case 'general':
-                                    return (
-                                        <SettingsGeneralTab />
-                                    );
-                                case 'microphone':
-                                    return (
-                                        <SettingsMicrophoneTab
-                                            isActiveTab={activeTab === 'microphone'}
-                                            isOpen={isOpen}
-                                        />
-                                    );
-                                case 'subtitle':
-                                    return (
-                                        <SettingsSubtitleTab />
-                                    );
-                                case 'models':
-                                    return (
-                                        <SettingsModelsTab
-                                            installedModels={installedModels}
-                                            downloads={downloads}
-                                            onDelete={handleDelete}
-                                            onDownload={handleDownload}
-                                            onCancelDownload={handleCancelDownload}
-                                        />
-                                    );
-                                case 'local':
-                                    return (
-                                        <SettingsLocalTab
-                                            onRestoreDefaults={restoreDefaultModelSettings}
-                                        />
-                                    );
-                                case 'vocabulary':
-                                    return (
-                                        <SettingsVocabularyTab />
-                                    );
-                                case 'llm_service':
-                                    return (
-                                        <SettingsLLMServiceTab />
-                                    );
-                                case 'shortcuts':
-                                    return (
-                                        <SettingsShortcutsTab />
-                                    );
-                                case 'about':
-                                    return (
-                                        <SettingsAboutTab />
-                                    );
-                                default:
-                                    return null;
-                            }
-                        })()}
-
+                        <ModelManagerContext.Provider value={modelManager}>
+                            {(() => {
+                                switch (activeTab) {
+                                    case 'general':
+                                        return <SettingsGeneralTab />;
+                                    case 'microphone':
+                                        return (
+                                            <SettingsMicrophoneTab
+                                                isActiveTab={activeTab === 'microphone'}
+                                                isOpen={isOpen}
+                                            />
+                                        );
+                                    case 'subtitle':
+                                        return <SettingsSubtitleTab />;
+                                    case 'models':
+                                        return <SettingsModelsTab />;
+                                    case 'local':
+                                        return <SettingsLocalTab />;
+                                    case 'vocabulary':
+                                        return <SettingsVocabularyTab />;
+                                    case 'llm_service':
+                                        return <SettingsLLMServiceTab />;
+                                    case 'shortcuts':
+                                        return <SettingsShortcutsTab />;
+                                    case 'about':
+                                        return <SettingsAboutTab />;
+                                    default:
+                                        return null;
+                                }
+                            })()}
+                        </ModelManagerContext.Provider>
                     </div>
 
                 </div>

@@ -5,17 +5,13 @@ import { LocalIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { useTranscriptionConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { useModelManagerContext } from '../../hooks/useModelManager';
 
-interface SettingsLocalTabProps {
-    onRestoreDefaults: () => void;
-}
-
-export function SettingsLocalTab({
-    onRestoreDefaults
-}: SettingsLocalTabProps): React.JSX.Element {
+export function SettingsLocalTab(): React.JSX.Element {
     const { t } = useTranslation();
     const config = useTranscriptionConfig();
     const updateConfig = useSetConfig();
+    const { restoreDefaultModelSettings } = useModelManagerContext();
 
     const vadBufferSize = config.vadBufferSize || 5;
     const maxConcurrent = config.maxConcurrent || 2;
@@ -90,7 +86,7 @@ export function SettingsLocalTab({
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
                 <button
                     className="btn btn-restore-defaults"
-                    onClick={onRestoreDefaults}
+                    onClick={restoreDefaultModelSettings}
                     aria-label={t('settings.restore_defaults')}
                 >
                     <RestoreIcon />

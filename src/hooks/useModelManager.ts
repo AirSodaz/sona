@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -11,6 +11,18 @@ type DownloadState = {
     status: string;
     controller: AbortController;
 };
+
+export type ModelManagerContextType = ReturnType<typeof useModelManager>;
+
+export const ModelManagerContext = createContext<ModelManagerContextType | null>(null);
+
+export function useModelManagerContext() {
+    const context = useContext(ModelManagerContext);
+    if (!context) {
+        throw new Error('useModelManagerContext must be used within a ModelManagerContext.Provider');
+    }
+    return context;
+}
 
 /**
  * Hook encapsulating all model lifecycle operations:
