@@ -199,13 +199,6 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                         </div>
                     )}
                 </div>
-
-                {/* Footer */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-md)' }}>
-                    <button className="btn btn-primary" onClick={onClose}>
-                        {t('common.close')}
-                    </button>
-                </div>
             </div>
         </div>
     );

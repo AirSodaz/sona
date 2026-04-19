@@ -245,13 +245,12 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 </div>
 
                 {/* Sets List */}
-                <div className="settings-list" style={{ background: 'var(--color-bg-primary)' }}>
+                <div className="settings-list" style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}>
                     {sets.length === 0 ? (
                         <div style={{ 
                             padding: '48px 24px', 
                             textAlign: 'center', 
-                            color: 'var(--color-text-muted)',
-                            background: 'var(--color-bg-primary)'
+                            color: 'var(--color-text-muted)'
                         }}>
                             {t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
                         </div>
@@ -458,13 +457,12 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 </div>
 
                 {/* Hotword Sets List */}
-                <div className="settings-list" style={{ background: 'var(--color-bg-primary)' }}>
+                <div className="settings-list" style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}>
                     {hotwordSets.length === 0 ? (
                         <div style={{ 
                             padding: '48px 24px', 
                             textAlign: 'center', 
-                            color: 'var(--color-text-muted)',
-                            background: 'var(--color-bg-primary)'
+                            color: 'var(--color-text-muted)'
                         }}>
                             {t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
                         </div>
