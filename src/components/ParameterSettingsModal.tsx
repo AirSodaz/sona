@@ -102,6 +102,8 @@ export function ParameterSettingsModal({
                         className="btn btn-icon"
                         onClick={onClose}
                         aria-label={t('common.close')}
+                        data-tooltip={t('common.close')}
+                        data-tooltip-pos="bottom-left"
                     >
                         <XIcon />
                     </button>

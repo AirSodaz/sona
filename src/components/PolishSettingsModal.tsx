@@ -74,7 +74,13 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                     <h3 id="polish-settings-modal-title" style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
                         {t('polish.advanced_settings')}
                     </h3>
-                    <button className="btn btn-icon" onClick={onClose} aria-label={t('common.close')}>
+                    <button
+                        className="btn btn-icon"
+                        onClick={onClose}
+                        aria-label={t('common.close')}
+                        data-tooltip={t('common.close')}
+                        data-tooltip-pos="bottom-left"
+                    >
                         <XIcon />
                     </button>
                 </div>
