@@ -109,6 +109,7 @@
         "font_color": "Font Color",
         "font_color_hex": "Hex color code",
         "font_color_hex_placeholder": "#RRGGBB",
+        "background_opacity": "Background Opacity",
         "subtitle_settings": "Subtitle Settings"
     },
     "batch": {

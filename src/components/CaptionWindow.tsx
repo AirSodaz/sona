@@ -17,6 +17,7 @@ export function CaptionWindow() {
     const [segments, setSegments] = useState<TranscriptSegment[]>([]);
     const [fontSize, setFontSize] = useState(24);
     const [fontColor, setFontColor] = useState('#ffffff');
+    const [backgroundOpacity, setBackgroundOpacity] = useState(0.6);
     // Track target width to enforce it during height resizing
     const [targetWidth, setTargetWidth] = useState(800);
 
@@ -29,15 +30,18 @@ export function CaptionWindow() {
         const w = params.get('width');
         const fs = params.get('fontSize');
         const c = params.get('color');
+        const op = params.get('opacity');
         if (w) setTargetWidth(parseInt(w, 10));
         if (fs) setFontSize(parseInt(fs, 10));
         if (c) setFontColor(c);
+        if (op) setBackgroundOpacity(parseFloat(op));
 
         // Listen for style updates
-        const unlistenPromise = listen<{ width?: number, fontSize?: number, color?: string }>(CAPTION_EVENT_STYLE, (event) => {
+        const unlistenPromise = listen<{ width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }>(CAPTION_EVENT_STYLE, (event) => {
             if (event.payload.width) setTargetWidth(event.payload.width);
             if (event.payload.fontSize) setFontSize(event.payload.fontSize);
             if (event.payload.color) setFontColor(event.payload.color);
+            if (event.payload.backgroundOpacity !== undefined) setBackgroundOpacity(event.payload.backgroundOpacity);
         });
 
         return () => {
@@ -158,7 +162,8 @@ export function CaptionWindow() {
                 height: 'auto',
                 minHeight: 'auto',
                 userSelect: 'none',
-                cursor: 'default'
+                cursor: 'default',
+                background: `rgba(0, 0, 0, ${backgroundOpacity})`
             }}
         >
             {/* Drag region for moving the window */}

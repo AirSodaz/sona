@@ -14,7 +14,7 @@ class CaptionWindowService {
      * Opens the always-on-top caption window.
      * If it already exists, it focuses it.
      */
-    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number, color?: string }) {
+    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }) {
         // Check if window already exists
         const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
         if (existingWindow) {
@@ -27,8 +27,13 @@ class CaptionWindowService {
             if (options?.lockWindow !== undefined) {
                 await this.setClickThrough(options.lockWindow);
             }
-            if (options?.width || options?.fontSize || options?.color) {
-                await this.updateStyle({ width: options.width, fontSize: options.fontSize, color: options.color });
+            if (options?.width || options?.fontSize || options?.color || options?.backgroundOpacity !== undefined) {
+                await this.updateStyle({
+                    width: options.width,
+                    fontSize: options.fontSize,
+                    color: options.color,
+                    backgroundOpacity: options.backgroundOpacity
+                });
             }
             return;
         }
@@ -36,10 +41,11 @@ class CaptionWindowService {
         const width = options?.width || 800;
         const fontSize = options?.fontSize || 24;
         const color = options?.color ? encodeURIComponent(options.color) : 'white';
+        const backgroundOpacity = options?.backgroundOpacity ?? 0.6;
 
         // specific creation options for caption window
         this.windowInstance = new WebviewWindow(CAPTION_WINDOW_LABEL, {
-            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}&color=${color}`,
+            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}&color=${color}&opacity=${backgroundOpacity}`,
             title: 'Sona Live Caption',
             alwaysOnTop: options?.alwaysOnTop ?? true,
             decorations: false,
@@ -166,7 +172,7 @@ class CaptionWindowService {
      * Updates the caption window style (width and font size).
      * @param style Style object containing width and fontSize.
      */
-    async updateStyle(style: { width?: number, fontSize?: number, color?: string }) {
+    async updateStyle(style: { width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }) {
         await emit(CAPTION_EVENT_STYLE, style);
 
         // Also update window size if width is provided

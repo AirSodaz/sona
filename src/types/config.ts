@@ -86,6 +86,8 @@ export interface CaptionConfig {
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
+  /** Background opacity of the caption window (0.0 to 1.0). Default: 0.6. */
+  captionBackgroundOpacity?: number;
 }
 
 // ---------------------------------------------------------------------------

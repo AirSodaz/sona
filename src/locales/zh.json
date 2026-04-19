@@ -109,6 +109,7 @@
         "font_color": "字体颜色",
         "font_color_hex": "十六进制颜色代码",
         "font_color_hex_placeholder": "#RRGGBB",
+        "background_opacity": "背景透明度",
         "subtitle_settings": "字幕设置"
     },
     "batch": {

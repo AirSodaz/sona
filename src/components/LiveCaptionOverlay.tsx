@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useShallow } from 'zustand/react/shallow';
+import { useCaptionConfig } from '../stores/configStore';
 
 /** Props for the LiveCaptionOverlay component. */
 interface LiveCaptionOverlayProps {
@@ -23,6 +24,7 @@ export function LiveCaptionOverlay({ maxLines = 3 }: LiveCaptionOverlayProps): R
     const visibleSegments = useTranscriptStore(
         useShallow((state) => state.segments.slice(-maxLines))
     );
+    const { captionBackgroundOpacity = 0.6 } = useCaptionConfig();
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom when new segments arrive
@@ -37,7 +39,13 @@ export function LiveCaptionOverlay({ maxLines = 3 }: LiveCaptionOverlayProps): R
     }
 
     return (
-        <div className="live-caption-overlay" ref={containerRef} role="status" aria-live="polite">
+        <div
+            className="live-caption-overlay"
+            ref={containerRef}
+            role="status"
+            aria-live="polite"
+            style={{ background: `rgba(0, 0, 0, ${captionBackgroundOpacity + 0.18})` }}
+        >
             {visibleSegments.map((seg) => (
                 <p
                     key={seg.id}

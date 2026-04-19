@@ -50,6 +50,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionWindowWidth: 800,
   captionFontSize: 24,
   captionFontColor: '#ffffff',
+  captionBackgroundOpacity: 0.6,
 
   // Transcription
   language: 'auto',
@@ -113,7 +114,7 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
 
 const CAPTION_KEYS: (keyof CaptionConfig)[] = [
   'lockWindow', 'alwaysOnTop', 'startOnLaunch',
-  'captionWindowWidth', 'captionFontSize', 'captionFontColor',
+  'captionWindowWidth', 'captionFontSize', 'captionFontColor', 'captionBackgroundOpacity',
 ];
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [

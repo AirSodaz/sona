@@ -23,6 +23,7 @@ export function SettingsSubtitleTab({
     const captionWindowWidth = config.captionWindowWidth ?? 800;
     const captionFontSize = config.captionFontSize ?? 24;
     const captionFontColor = config.captionFontColor || '#ffffff';
+    const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
 
     return (
         <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
@@ -145,6 +146,26 @@ export function SettingsSubtitleTab({
                             className="settings-input"
                             style={{ width: '100px', fontFamily: 'monospace', textAlign: 'center' }}
                         />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('live.background_opacity')}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={Math.round(captionBackgroundOpacity * 100)}
+                            onChange={(e) => updateConfig({ captionBackgroundOpacity: Number(e.target.value) / 100 })}
+                            className="settings-slider"
+                            style={{ flex: 1 }}
+                        />
+                        <span style={{ width: '40px', textAlign: 'right', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                            {Math.round(captionBackgroundOpacity * 100)}%
+                        </span>
                     </div>
                 </SettingsItem>
             </SettingsSection>

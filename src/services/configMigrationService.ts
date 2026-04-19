@@ -72,6 +72,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     captionWindowWidth: parsed.captionWindowWidth || 800,
     captionFontSize: parsed.captionFontSize || 24,
     captionFontColor: parsed.captionFontColor || '#ffffff',
+    captionBackgroundOpacity: parsed.captionBackgroundOpacity ?? 0.6,
     llmSettings,
     translationLanguage: parsed.translationLanguage || 'zh',
     polishKeywords: parsed.polishKeywords || '',
