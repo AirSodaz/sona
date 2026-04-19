@@ -45,7 +45,8 @@ describe('TranscriptionService', () => {
             vadModel: null,
             vadBuffer: 5,
             modelType: 'sensevoice',
-            fileConfig: undefined
+            fileConfig: undefined,
+            hotwords: null
         });
         expect(invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });

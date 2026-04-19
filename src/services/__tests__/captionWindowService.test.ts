@@ -49,7 +49,7 @@ describe('CaptionWindowService', () => {
         await captionWindowService.open();
 
         expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
-            url: '/index.html?window=caption&width=800&fontSize=24&color=white',
+            url: '/index.html?window=caption&width=800&fontSize=24&color=white&opacity=0.6',
             resizable: true,
             maximizable: false,
             minimizable: false,
@@ -64,7 +64,7 @@ describe('CaptionWindowService', () => {
 
         const encodedColor = encodeURIComponent('#ff0000');
         expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
-            url: `/index.html?window=caption&width=1000&fontSize=32&color=${encodedColor}`,
+            url: `/index.html?window=caption&width=1000&fontSize=32&color=${encodedColor}&opacity=0.6`,
             width: 1000,
         }));
     });

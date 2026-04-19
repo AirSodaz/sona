@@ -46,11 +46,18 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
   };
 }
 
-describe('SettingsLLMServiceTab', () => {
-  const mockUpdateConfig = vi.fn();
+const mockUpdateConfig = vi.fn();
+let currentConfig = buildConfig();
 
+vi.mock('../../../stores/configStore', () => ({
+  useLlmAssistantConfig: () => currentConfig,
+  useSetConfig: () => mockUpdateConfig,
+}));
+
+describe('SettingsLLMServiceTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    currentConfig = buildConfig();
     vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
       if (command === 'list_llm_models') {
         return ['gpt-4o', 'gpt-4.1-mini'];
@@ -76,6 +83,7 @@ describe('SettingsLLMServiceTab', () => {
   it('renders active provider fields from llmSettings in accordion', async () => {
     let conf = buildConfig();
     conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
+    currentConfig = conf;
     
     await act(async () => {
       render(
@@ -103,6 +111,7 @@ describe('SettingsLLMServiceTab', () => {
   it('fills Gemini host with the default host in accordion', async () => {
     let conf = buildConfig('gemini');
     conf.llmSettings!.providers['gemini']!.apiHost = 'gemini-host';
+    currentConfig = conf;
 
     await act(async () => {
       render(
@@ -220,6 +229,7 @@ describe('SettingsLLMServiceTab', () => {
   it('shows missing model status when a feature is unassigned', async () => {
     const config = buildConfig();
     config.llmSettings!.selections.translationModelId = undefined;
+    currentConfig = config;
 
     await act(async () => {
       render(
@@ -250,7 +260,8 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('settings.llm.connection_failed: Network Error')).toBeDefined();
+      expect(screen.getByText('settings.llm.connection_failed')).toBeDefined();
+      expect(screen.getByText('Network Error')).toBeDefined();
     });
   });
 });
