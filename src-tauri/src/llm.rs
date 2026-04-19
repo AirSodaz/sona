@@ -944,22 +944,22 @@ where
 
 fn parse_polish_chunk(
     response_text: &str,
-    expected: &[LlmSegmentInput],
+    expected: Vec<LlmSegmentInput>,
     chunk_number: usize,
 ) -> Result<Vec<PolishedSegment>, String> {
     let parsed = parse_json_array::<PolishedSegment>(response_text, LlmTaskType::Polish, chunk_number)?;
-    validate_segment_ids(&parsed, expected, LlmTaskType::Polish, chunk_number, |item| &item.id)?;
+    validate_segment_ids(&parsed, &expected, LlmTaskType::Polish, chunk_number, |item| &item.id)?;
     Ok(parsed)
 }
 
 fn parse_translate_chunk(
     response_text: &str,
-    expected: &[LlmSegmentInput],
+    expected: Vec<LlmSegmentInput>,
     chunk_number: usize,
 ) -> Result<Vec<TranslatedSegment>, String> {
     let parsed =
         parse_json_array::<TranslatedSegment>(response_text, LlmTaskType::Translate, chunk_number)?;
-    validate_segment_ids(&parsed, expected, LlmTaskType::Translate, chunk_number, |item| &item.id)?;
+    validate_segment_ids(&parsed, &expected, LlmTaskType::Translate, chunk_number, |item| &item.id)?;
     Ok(parsed)
 }
 
@@ -1050,7 +1050,7 @@ Input:\n\
 async fn run_segment_task<Output, BuildPrompt, ParseChunk, GenerateFn, EmitChunkFn, EmitProgressFn>(
     task_id: &str,
     task_type: LlmTaskType,
-    segments: &[LlmSegmentInput],
+    mut segments: Vec<LlmSegmentInput>,
     chunk_size: Option<usize>,
     mut build_prompt: BuildPrompt,
     mut parse_chunk: ParseChunk,
@@ -1061,7 +1061,7 @@ async fn run_segment_task<Output, BuildPrompt, ParseChunk, GenerateFn, EmitChunk
 where
     Output: Serialize + Clone,
     BuildPrompt: FnMut(&[LlmSegmentInput]) -> String,
-    ParseChunk: FnMut(&str, &[LlmSegmentInput], usize) -> Result<Vec<Output>, String>,
+    ParseChunk: FnMut(&str, Vec<LlmSegmentInput>, usize) -> Result<Vec<Output>, String>,
     GenerateFn: FnMut(String) -> BoxFuture<'static, Result<String, String>>,
     EmitChunkFn: FnMut(LlmTaskChunkPayload<Output>) -> Result<(), String>,
     EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String>,
@@ -1074,13 +1074,19 @@ where
     let total_chunks = (segments.len() + normalized_chunk_size - 1) / normalized_chunk_size;
     let mut results = Vec::with_capacity(segments.len());
 
-    for (chunk_index, chunk) in segments.chunks(normalized_chunk_size).enumerate() {
+
+    let mut chunk_index = 0;
+    while !segments.is_empty() {
         let chunk_number = chunk_index + 1;
-        let prompt = build_prompt(chunk);
+        let chunk_len = std::cmp::min(normalized_chunk_size, segments.len());
+        let chunk: Vec<_> = segments.drain(..chunk_len).collect();
+
+        let prompt = build_prompt(&chunk);
         let response_text = generate_text(prompt)
             .await
             .map_err(|error| chunk_error(task_type, chunk_number, error))?;
         let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
+
 
         emit_chunk(LlmTaskChunkPayload {
             task_id: task_id.to_string(),
@@ -1098,6 +1104,7 @@ where
         })?;
 
         results.extend(parsed);
+        chunk_index += 1;
     }
 
     Ok(results)
@@ -1134,7 +1141,7 @@ pub async fn polish_transcript_segments(
     run_segment_task(
         &request.task_id,
         LlmTaskType::Polish,
-        &request.segments,
+        request.segments,
         request.chunk_size,
         move |chunk| {
             build_polish_prompt(
@@ -1188,7 +1195,7 @@ pub async fn translate_transcript_segments(
         return run_segment_task(
             &request.task_id,
             LlmTaskType::Translate,
-            &request.segments,
+            request.segments,
             request.chunk_size,
             move |chunk| {
                 let texts: Vec<String> = chunk.iter().map(|s| s.text.clone()).collect();
@@ -1218,13 +1225,10 @@ pub async fn translate_transcript_segments(
                         ));
                     }
 
-                    let mut translated_segments = Vec::with_capacity(chunk.len());
-                    for (index, translation) in parsed.data.translations.into_iter().enumerate() {
-                        translated_segments.push(TranslatedSegment {
-                            id: chunk[index].id.clone(),
-                            translation: translation.translated_text,
-                        });
-                    }
+                    let translated_segments: Vec<_> = chunk.into_iter().zip(parsed.data.translations).map(|(s, t)| TranslatedSegment {
+                        id: s.id,
+                        translation: t.translated_text,
+                    }).collect();
 
                     Ok(translated_segments)
                 } else {
@@ -1245,8 +1249,8 @@ pub async fn translate_transcript_segments(
                         ));
                     }
 
-                    Ok(chunk.iter().zip(translations).map(|(s, t)| TranslatedSegment {
-                        id: s.id.clone(),
+                    Ok(chunk.into_iter().zip(translations).map(|(s, t)| TranslatedSegment {
+                        id: s.id,
                         translation: t,
                     }).collect())
                 }
@@ -1345,7 +1349,7 @@ pub async fn translate_transcript_segments(
     run_segment_task(
         &request.task_id,
         LlmTaskType::Translate,
-        &request.segments,
+        request.segments,
         request.chunk_size,
         move |chunk| build_translate_prompt(chunk, &target_language),
         parse_translate_chunk,
@@ -1549,7 +1553,7 @@ mod tests {
     fn parse_polish_chunk_rejects_length_mismatch() {
         let err = parse_polish_chunk(
             r#"[{"id":"1","text":"Hello"}]"#,
-            &sample_segments()[..2],
+            sample_segments()[..2].to_vec(),
             1,
         )
         .expect_err("length mismatch should fail");
@@ -1562,7 +1566,7 @@ mod tests {
     fn parse_translate_chunk_rejects_id_order_mismatch() {
         let err = parse_translate_chunk(
             r#"[{"id":"2","translation":"B"},{"id":"1","translation":"A"}]"#,
-            &sample_segments()[..2],
+            sample_segments()[..2].to_vec(),
             2,
         )
         .expect_err("id order mismatch should fail");
@@ -1627,7 +1631,7 @@ mod tests {
         let result = run_segment_task(
             "task-1",
             LlmTaskType::Polish,
-            &segments,
+            segments,
             Some(2),
             |chunk| serde_json::to_string(chunk).unwrap(),
             parse_polish_chunk,
@@ -1731,7 +1735,7 @@ mod tests {
         let err = run_segment_task(
             "task-2",
             LlmTaskType::Translate,
-            &segments,
+            segments,
             Some(2),
             |chunk| serde_json::to_string(chunk).unwrap(),
             parse_translate_chunk,
