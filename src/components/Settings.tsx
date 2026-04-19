@@ -285,7 +285,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                     );
                                 case 'shortcuts':
                                     return (
-                                        <SettingsShortcutsTab />
+                                        <SettingsShortcutsTab config={config} updateConfig={updateConfig} />
                                     );
                                 case 'about':
                                     return (

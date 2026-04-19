@@ -4,6 +4,7 @@ import { createLlmSettings } from '../services/llmConfig';
 import type {
   AppConfig,
   UIConfig,
+  ShortcutConfig,
   AudioConfig,
   ModelConfig,
   CaptionConfig,
@@ -23,6 +24,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   font: 'system',
   minimizeToTrayOnExit: true,
   autoCheckUpdates: true,
+
+  // Shortcuts
+  liveRecordShortcut: 'Ctrl + Space',
 
   // Audio
   microphoneId: 'default',
@@ -92,6 +96,10 @@ const UI_KEYS: (keyof UIConfig)[] = [
   'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates',
 ];
 
+const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [
+  'liveRecordShortcut',
+];
+
 const AUDIO_KEYS: (keyof AudioConfig)[] = [
   'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording',
 ];
@@ -132,6 +140,11 @@ function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pi
 /** UI preferences (theme, font, language, tray, updates). */
 export function useUIConfig(): UIConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, UI_KEYS)));
+}
+
+/** Customizable keyboard shortcuts. */
+export function useShortcutConfig(): ShortcutConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, SHORTCUT_KEYS)));
 }
 
 /** Audio input device settings. */

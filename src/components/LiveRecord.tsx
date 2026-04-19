@@ -193,9 +193,37 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.code === 'Space') {
+            const shortcutStr = config.liveRecordShortcut || 'Ctrl + Space';
+            const parts = shortcutStr.split(' + ').map(p => p.trim());
+            
+            const needsCtrl = parts.includes('Ctrl');
+            const needsAlt = parts.includes('Alt');
+            const needsShift = parts.includes('Shift');
+            const needsMeta = parts.includes('Meta');
+            const mainKeyPart = parts[parts.length - 1];
+            
+            let eventKey = e.key;
+            if (eventKey === ' ') eventKey = 'Space';
+            else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
+
+            const isStartStopMatch = 
+                e.ctrlKey === needsCtrl &&
+                e.altKey === needsAlt &&
+                e.shiftKey === needsShift &&
+                e.metaKey === needsMeta &&
+                (eventKey === mainKeyPart || e.code === mainKeyPart || e.code === `Key${mainKeyPart}`);
+
+            if (isStartStopMatch) {
                 e.preventDefault();
                 handleToggleRecording();
+            } else if (e.code === 'Space' && !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space') {
+                // If the user mapped start/stop to just "Space", we don't handle pause with "Space" 
+                // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
+                // Wait, if it didn't match start/stop, we can check for pause.
+                if (isRecordingRef.current) {
+                    e.preventDefault();
+                    handleTogglePause();
+                }
             } else if (e.code === 'Space' && isRecordingRef.current) {
                 e.preventDefault();
                 handleTogglePause();
@@ -204,7 +232,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleToggleRecording, handleTogglePause]);
+    }, [handleToggleRecording, handleTogglePause, config.liveRecordShortcut]);
 
     return (
         <div className={`live-record-container ${className}`}>

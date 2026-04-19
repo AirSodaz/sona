@@ -27,6 +27,16 @@ export interface UIConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Shortcuts
+// ---------------------------------------------------------------------------
+
+/** Customizable keyboard shortcuts. */
+export interface ShortcutConfig {
+  /** Shortcut to start/stop live recording. Default: 'Ctrl + Space'. */
+  liveRecordShortcut?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Audio / input devices
 // ---------------------------------------------------------------------------
 
@@ -166,6 +176,7 @@ export interface VocabularyConfig {
  */
 export type AppConfig =
   UIConfig &
+  ShortcutConfig &
   AudioConfig &
   ModelConfig &
   CaptionConfig &

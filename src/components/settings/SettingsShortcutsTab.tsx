@@ -1,12 +1,67 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Play, Mic, Search, FilePenLine } from 'lucide-react';
 import { KeyboardIcon } from '../Icons';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { AppConfig } from '../../types/config';
+
+interface ShortcutInputProps {
+    value: string;
+    onChange: (newValue: string) => void;
+}
+
+function ShortcutInput({ value, onChange }: ShortcutInputProps) {
+    const [isRecording, setIsRecording] = useState(false);
+    const { t } = useTranslation();
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (!isRecording) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === 'Escape') {
+            setIsRecording(false);
+            return;
+        }
+
+        const keys: string[] = [];
+        if (e.ctrlKey) keys.push('Ctrl');
+        if (e.altKey) keys.push('Alt');
+        if (e.shiftKey) keys.push('Shift');
+        if (e.metaKey) keys.push('Meta');
+
+        // Filter out isolated modifier key presses
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+            return;
+        }
+
+        let mainKey = e.key;
+        if (mainKey === ' ') mainKey = 'Space';
+        else if (mainKey.length === 1) mainKey = mainKey.toUpperCase();
+
+        keys.push(mainKey);
+        onChange(keys.join(' + '));
+        setIsRecording(false);
+    };
+
+    return (
+        <button
+            className={`btn ${isRecording ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ minWidth: '120px', display: 'flex', justifyContent: 'center' }}
+            onClick={() => setIsRecording(true)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setIsRecording(false)}
+        >
+            {isRecording ? t('common.recording', { defaultValue: 'Recording...' }) : value}
+        </button>
+    );
+}
 
 interface ShortcutItem {
+    id?: string;
     key: string;
     description: string;
+    editable?: boolean;
 }
 
 interface ShortcutSection {
@@ -15,10 +70,23 @@ interface ShortcutSection {
     items: ShortcutItem[];
 }
 
-export function SettingsShortcutsTab(): React.JSX.Element {
+interface SettingsShortcutsTabProps {
+    config: AppConfig;
+    updateConfig: (updates: Partial<AppConfig>) => void;
+}
+
+export function SettingsShortcutsTab({ config, updateConfig }: SettingsShortcutsTabProps): React.JSX.Element {
     const { t } = useTranslation();
 
     const sections: ShortcutSection[] = [
+        {
+            title: t('shortcuts.section_live'),
+            icon: <Mic size={20} />,
+            items: [
+                { id: 'liveRecordShortcut', key: config.liveRecordShortcut || 'Ctrl + Space', description: t('shortcuts.record_start_stop'), editable: true },
+                { key: 'Space', description: t('shortcuts.record_pause_resume') },
+            ]
+        },
         {
             title: t('shortcuts.section_playback'),
             icon: <Play size={20} />,
@@ -27,14 +95,6 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 { key: '← / →', description: `${t('shortcuts.seek_backward')} / ${t('shortcuts.seek_forward')}` },
                 { key: '↑ / ↓', description: `${t('shortcuts.volume_up')} / ${t('shortcuts.volume_down')}` },
                 { key: 'M', description: t('shortcuts.toggle_mute') },
-            ]
-        },
-        {
-            title: t('shortcuts.section_live'),
-            icon: <Mic size={20} />,
-            items: [
-                { key: 'Ctrl + Space', description: t('shortcuts.record_start_stop') },
-                { key: 'Space', description: t('shortcuts.record_pause_resume') },
             ]
         },
         {
@@ -71,14 +131,21 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 <SettingsSection key={index} title={section.title} icon={section.icon}>
                     {section.items.map((item, i) => (
                         <SettingsItem key={i} title={item.description}>
-                            <div className="shortcut-keys" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {item.key.split(' / ').map((k, kIndex, arr) => (
-                                    <React.Fragment key={kIndex}>
-                                        <kbd className="kbd">{k}</kbd>
-                                        {kIndex < arr.length - 1 && <span className="text-muted mx-1">/</span>}
-                                    </React.Fragment>
-                                ))}
-                            </div>
+                            {item.editable && item.id === 'liveRecordShortcut' ? (
+                                <ShortcutInput 
+                                    value={config.liveRecordShortcut || 'Ctrl + Space'}
+                                    onChange={(val) => updateConfig({ liveRecordShortcut: val })}
+                                />
+                            ) : (
+                                <div className="shortcut-keys" style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    {item.key.split(' / ').map((k, kIndex, arr) => (
+                                        <React.Fragment key={kIndex}>
+                                            <kbd className="kbd">{k}</kbd>
+                                            {kIndex < arr.length - 1 && <span className="text-muted mx-1">/</span>}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                            )}
                         </SettingsItem>
                     ))}
                 </SettingsSection>

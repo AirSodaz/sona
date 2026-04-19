@@ -61,6 +61,15 @@ vi.mock('../../services/audioDeviceService', () => ({
   listMicrophoneDeviceOptions: vi.fn(),
 }));
 
+vi.mock('../../services/storageService', () => ({
+  settingsStore: {
+    set: vi.fn(),
+    save: vi.fn(),
+    get: vi.fn(),
+  },
+  STORE_KEY_ONBOARDING: 'sona_onboarding',
+}));
+
 describe('FirstRunGuide', () => {
   beforeEach(() => {
     localStorage.clear();

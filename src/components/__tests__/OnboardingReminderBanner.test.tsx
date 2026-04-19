@@ -15,6 +15,15 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
+vi.mock('../../services/storageService', () => ({
+  settingsStore: {
+    set: vi.fn(),
+    save: vi.fn(),
+    get: vi.fn(),
+  },
+  STORE_KEY_ONBOARDING: 'sona_onboarding',
+}));
+
 describe('OnboardingReminderBanner', () => {
   beforeEach(() => {
     localStorage.clear();
