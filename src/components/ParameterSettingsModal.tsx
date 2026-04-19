@@ -5,7 +5,6 @@ import { Switch } from './Switch';
 import { XIcon } from './Icons';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
-import { isFeatureLlmConfigComplete } from '../services/llmConfig';
 
 interface ParameterSettingsModalProps {
     isOpen: boolean;
@@ -32,9 +31,6 @@ export function ParameterSettingsModal({
     // Derived values
     const enableTimeline = config.enableTimeline ?? false;
     const language = config.language;
-    const autoPolish = config.autoPolish ?? false;
-    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
-    const isLlmConfigured = isFeatureLlmConfigComplete(config, 'polish');
 
     // Focus management
     useEffect(() => {
@@ -146,54 +142,6 @@ export function ParameterSettingsModal({
                             style={dropdownStyle}
                         />
                     </div>
-
-                    {/* Auto Polish */}
-                    <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div className="options-label">
-                            <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.auto_polish', { defaultValue: 'Auto-Polish' })}</span>
-                            <span className="options-hint">
-                                {isLlmConfigured
-                                    ? t('batch.auto_polish_hint', { defaultValue: 'Automatically polish text with LLM' })
-                                    : t('polish.error_config_missing', { defaultValue: 'Please configure LLM service first' })}
-                            </span>
-                        </div>
-                        <Switch
-                            checked={autoPolish}
-                            onChange={(val) => !disabled && isLlmConfigured && setConfig({ autoPolish: val })}
-                            disabled={disabled || !isLlmConfigured}
-                        />
-                    </div>
-
-                    {/* Auto Polish Frequency */}
-                    {autoPolish && (
-                        <div className="options-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div className="options-label">
-                                <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t('batch.auto_polish_frequency', { defaultValue: 'Auto-Polish Frequency' })}</span>
-                            </div>
-                            <input
-                                type="number"
-                                min={1}
-                                max={100}
-                                value={autoPolishFrequency}
-                                onChange={(e) => {
-                                    const val = parseInt(e.target.value, 10);
-                                    if (!isNaN(val) && val > 0) {
-                                        setConfig({ autoPolishFrequency: val });
-                                    }
-                                }}
-                                disabled={disabled}
-                                style={{
-                                    width: '100px',
-                                    padding: '8px',
-                                    borderRadius: '4px',
-                                    border: '1px solid var(--color-border)',
-                                    backgroundColor: 'var(--color-bg-input)',
-                                    color: 'var(--color-text)',
-                                    textAlign: 'center'
-                                }}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
