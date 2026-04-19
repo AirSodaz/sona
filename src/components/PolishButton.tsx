@@ -45,7 +45,6 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const updateLlmState = useTranscriptStore((state) => state.updateLlmState);
 
     const config = useConfigStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
     const setSegments = useTranscriptStore((state) => state.setSegments);
     const segments = useTranscriptStore((state) => state.segments);
 
