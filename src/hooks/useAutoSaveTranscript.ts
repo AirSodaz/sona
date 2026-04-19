@@ -15,7 +15,7 @@ import { logger } from '../utils/logger';
  */
 export function useAutoSaveTranscript() {
     const isSavingRef = useRef(false);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFingerprintRef = useRef<string>('');
     const updateItemMeta = useHistoryStore(state => state.updateItemMeta);
 

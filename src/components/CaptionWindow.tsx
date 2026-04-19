@@ -106,7 +106,7 @@ export function CaptionWindow() {
     useEffect(() => {
         if (!rootRef.current) return;
 
-        let resizeTimeout: NodeJS.Timeout;
+        let resizeTimeout: ReturnType<typeof setTimeout>;
 
         const observer = new ResizeObserver(() => {
             // Debounce the resize to prevent spamming IPC calls and ensure final size applies
