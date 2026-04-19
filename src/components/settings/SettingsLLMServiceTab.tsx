@@ -19,6 +19,7 @@ import {
   updateProviderSetting,
   isFeatureLlmConfigComplete,
   buildLlmConfig,
+  createProviderSetting,
 } from '../../services/llmConfig';
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
@@ -43,11 +44,14 @@ function getModelPlaceholder(provider: LlmProvider): string {
     case 'x_ai': return 'grok-3-mini';
     case 'mistral_ai': return 'mistral-large-latest';
     case 'perplexity': return 'sonar';
+    case 'google_translate':
+    case 'google_translate_free': return 'default';
     default: return 'gpt-4o-mini';
   }
 }
 
 function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting | undefined): boolean {
+  if (provider === 'google_translate_free') return true;
   if (!setting) return false;
   const def = getProviderDefinition(provider);
   if (def.requiresApiKey && !(setting.apiKey || '').trim()) return false;
@@ -89,10 +93,16 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
   
-  const providerOptions = useMemo(() => LLM_PROVIDER_DEFINITIONS.map((p) => ({
-    value: p.id,
-    label: p.label,
-  })), []);
+  const providerOptions = useMemo(() => {
+    let filtered = LLM_PROVIDER_DEFINITIONS;
+    if (featureId === 'polish') {
+      filtered = filtered.filter(p => p.id !== 'google_translate' && p.id !== 'google_translate_free');
+    }
+    return filtered.map((p) => ({
+      value: p.id,
+      label: p.label,
+    }));
+  }, [featureId]);
   
   const filteredCandidates = useMemo(() => {
     const query = localModelName.trim().toLowerCase();
@@ -149,8 +159,13 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
     setLocalProvider(p);
-    // don't commit it until they select a model. Just clear the UI model
-    setLocalModelName('');
+    if (p === 'google_translate' || p === 'google_translate_free') {
+      setLocalModelName('default');
+      commitModelChange(p, 'default');
+    } else {
+      // don't commit it until they select a model. Just clear the UI model
+      setLocalModelName('');
+    }
   };
 
   const handleModelSelect = (candidate: string) => {
@@ -204,9 +219,11 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   return (
     <div className="feature-card">
       <div className="feature-card-header">
-        <span className="feature-card-icon">{icon}</span>
-        {title}
-        <div style={{ marginLeft: 'auto' }}>
+        <div className="feature-card-title-group">
+          <span className="feature-card-icon">{icon}</span>
+          <span>{title}</span>
+        </div>
+        <div className="feature-card-status">
           {isComplete ? (
             <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
           ) : (
@@ -217,80 +234,86 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
         </div>
       </div>
       
-      <div>
-        <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t('settings.llm.credential_provider')}</label>
-        <Dropdown
-          id={`provider-${featureId}`}
-          value={localProvider}
-          onChange={handleProviderChange}
-          options={providerOptions}
-          style={{ width: '100%' }}
-        />
-      </div>
-
-      <div ref={candidateContainerRef} className="model-combobox-wrapper">
-        <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t('settings.llm.model_library')}</label>
-        <div className="dropdown-container" style={{ margin: 0 }}>
-          <input
-            type="text"
-            className="settings-input"
-            value={localModelName}
-            onChange={(e) => setLocalModelName(e.target.value)}
-            onFocus={() => setIsCandidateMenuOpen(true)}
-            onBlur={handleInputBlur}
-            onKeyDown={handleKeyDown}
-            placeholder={getModelPlaceholder(localProvider)}
+      <div className="feature-card-content">
+        <div className="feature-field">
+          <label className="settings-label">{t('settings.llm.credential_provider')}</label>
+          <Dropdown
+            id={`provider-${featureId}`}
+            value={localProvider}
+            onChange={handleProviderChange}
+            options={providerOptions}
+            style={{ width: '100%' }}
           />
-          {isLoadingCandidates && (
-            <div className="settings-hint" style={{ position: 'absolute', right: 12, top: 10 }}>
-              <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
-            </div>
-          )}
-          {isCandidateMenuOpen && filteredCandidates.length > 0 && (
-            <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
-              {filteredCandidates.slice(0, 8).map((candidate, index) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onMouseEnter={() => setHighlightedCandidateIndex(index)}
-                  onClick={() => handleModelSelect(candidate)}
-                >
-                  {candidate}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-      </div>
 
-      <div>
-         <label className="settings-label" style={{ marginBottom: 4, display: 'block', fontSize: '0.9rem' }}>{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
-         <div className="feature-temperature-container">
-           <input
-             type="range"
-             className="feature-temperature-slider"
-             min={0}
-             max={2}
-             step={0.05}
-             value={temperature}
-             onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-           />
-           <input
-             type="number"
-             className="settings-input"
-             style={{ padding: '4px 6px', textAlign: 'center' }}
-             min={0}
-             max={2}
-             step={0.05}
-             value={temperature}
-             onChange={(e) => {
-               const val = parseFloat(e.target.value);
-               if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
-             }}
-           />
-         </div>
+        {localProvider !== 'google_translate' && (
+        <>
+        <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
+          <label className="settings-label">{t('settings.llm.model_library')}</label>
+          <div className="dropdown-container" style={{ margin: 0 }}>
+            <input
+              type="text"
+              className="settings-input"
+              value={localModelName}
+              onChange={(e) => setLocalModelName(e.target.value)}
+              onFocus={() => setIsCandidateMenuOpen(true)}
+              onBlur={handleInputBlur}
+              onKeyDown={handleKeyDown}
+              placeholder={getModelPlaceholder(localProvider)}
+            />
+            {isLoadingCandidates && (
+              <div className="settings-hint" style={{ position: 'absolute', right: 12, top: 10 }}>
+                <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+              </div>
+            )}
+            {isCandidateMenuOpen && filteredCandidates.length > 0 && (
+              <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
+                {filteredCandidates.slice(0, 8).map((candidate, index) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setHighlightedCandidateIndex(index)}
+                    onClick={() => handleModelSelect(candidate)}
+                  >
+                    {candidate}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="feature-field">
+           <label className="settings-label">{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
+           <div className="feature-temperature-container">
+             <input
+               type="range"
+               className="feature-temperature-slider"
+               min={0}
+               max={2}
+               step={0.05}
+               value={temperature}
+               onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+             />
+             <input
+               type="number"
+               className="settings-input"
+               style={{ padding: '4px 6px', textAlign: 'center', width: '60px' }}
+               min={0}
+               max={2}
+               step={0.05}
+               value={temperature}
+               onChange={(e) => {
+                 const val = parseFloat(e.target.value);
+                 if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
+               }}
+             />
+           </div>
+        </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -317,11 +340,11 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
   const [testMessage, setTestMessage] = useState('');
 
   const handleTestConnection = async () => {
-    if (!setting) return;
+    const effectiveSetting = setting || createProviderSetting(provider);
     setTestStatus('loading');
     setTestMessage('');
     try {
-      const providerConfig = buildLlmConfig(provider, setting || { apiHost: def.defaultApiHost, apiKey: '' });
+      const providerConfig = buildLlmConfig(provider, effectiveSetting);
       // Get a model to test
       const entryId = currentLlmState.modelOrder.find(id => currentLlmState.models[id].provider === provider);
       const testModel = entryId ? currentLlmState.models[entryId].model : getModelPlaceholder(provider);
@@ -333,6 +356,11 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
       });
       setTestStatus('success');
       setTestMessage(testModel);
+      // Reset back to idle after 3 seconds
+      setTimeout(() => {
+        setTestStatus('idle');
+        setTestMessage('');
+      }, 3000);
     } catch (error) {
       setTestStatus('error');
       setTestMessage(normalizeError(error).message);
@@ -357,6 +385,12 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
       </div>
       {isOpen && (
         <div className="accordion-content">
+           {def.id === 'google_translate_free' ? (
+             <div className="settings-hint" style={{ color: 'var(--color-success)', marginBottom: '12px', fontSize: '0.95rem' }}>
+               {t('settings.llm.free_service_hint', 'This is a free service and does not require an API key.')}
+             </div>
+           ) : (
+           <>
            <div className="settings-item">
              <label className="settings-label">{def.apiHostLabel || t('settings.llm.base_url')}</label>
              {def.editableApiHost === false ? (
@@ -410,29 +444,43 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
                />
              </div>
            )}
+           </>
+           )}
            
-           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-              <button
-                 type="button"
-                 className="btn btn-secondary btn-loading-wrapper"
-                 onClick={handleTestConnection}
-                 disabled={testStatus === 'loading'}
-               >
-                 <span className={testStatus === 'loading' ? 'btn-text-hidden' : ''}>{t('settings.llm.test_connection')}</span>
-                 {testStatus === 'loading' && (
-                   <div className="btn-spinner-overlay"><Loader2 className="animate-spin" size={16} /></div>
-                 )}
-              </button>
-              
-              {testMessage && (
-                <div className={`connection-status ${testStatus === 'error' ? 'error' : 'success'}`} style={{ margin: 0, padding: 0 }}>
-                  {testStatus === 'error' ? <X size={16} style={{ marginTop: 2, marginRight: 4 }} /> : <Check size={16} style={{ marginTop: 2, marginRight: 4 }} />}
-                  <span style={{ fontSize: '0.85rem' }}>
-                     {testStatus === 'error' ? t('settings.llm.connection_failed') : t('settings.llm.connection_success')}
-                     {testStatus === 'error' && testMessage ? `: ${testMessage}` : ''}
-                  </span>
-                </div>
-              )}
+           <div className="feature-field">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                   type="button"
+                   className={`btn ${testStatus === 'success' ? 'btn-success-flash' : testStatus === 'error' ? 'btn-error-flash' : 'btn-secondary'} btn-loading-wrapper`}
+                   style={{ width: 'fit-content', minWidth: '120px' }}
+                   onClick={handleTestConnection}
+                   disabled={testStatus === 'loading'}
+                 >
+                   <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                     {testStatus === 'loading' ? (
+                       <Loader2 className="animate-spin" size={16} />
+                     ) : testStatus === 'success' ? (
+                       <Check size={16} />
+                     ) : testStatus === 'error' ? (
+                       <X size={16} />
+                     ) : null}
+                     
+                     <span>
+                       {testStatus === 'loading' ? t('settings.llm.testing', 'Testing...') : 
+                        testStatus === 'success' ? t('settings.llm.connection_success') : 
+                        testStatus === 'error' ? t('settings.llm.connection_failed') : 
+                        t('settings.llm.test_connection')}
+                     </span>
+                   </div>
+                </button>
+                
+                {testStatus === 'error' && testMessage && (
+                  <div className="connection-error-detail">
+                    <X size={12} />
+                    <span>{testMessage}</span>
+                  </div>
+                )}
+              </div>
            </div>
         </div>
       )}

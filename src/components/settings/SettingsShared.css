@@ -59,7 +59,7 @@
   background: var(--color-border); /* Acts as the divider color */
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg, 16px);
-  overflow: hidden; /* Standard approach for rounding children */
+  overflow: visible; /* Allow dropdowns to pop out */
 }
 
 /* Manually round the children only if overflow: hidden is not used. 

@@ -37,7 +37,34 @@ pub enum LlmProvider {
     Perplexity,
     Volcengine,
     Chatglm,
+    #[serde(rename = "google_translate")]
+    GoogleTranslate,
+    #[serde(rename = "google_translate_free")]
+    GoogleTranslateFree,
     OpenAiCompatible,
+}
+
+#[derive(Serialize)]
+struct GoogleTranslateRequest {
+    q: Vec<String>,
+    target: String,
+    format: String,
+}
+
+#[derive(Deserialize)]
+struct GoogleTranslateTranslation {
+    #[serde(rename = "translatedText")]
+    translated_text: String,
+}
+
+#[derive(Deserialize)]
+struct GoogleTranslateData {
+    translations: Vec<GoogleTranslateTranslation>,
+}
+
+#[derive(Deserialize)]
+struct GoogleTranslateResponse {
+    data: GoogleTranslateData,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -283,6 +310,8 @@ fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
             | LlmProvider::AzureOpenAi
             | LlmProvider::Volcengine
             | LlmProvider::Perplexity
+            | LlmProvider::GoogleTranslate
+            | LlmProvider::GoogleTranslateFree
     )
 }
 
@@ -733,6 +762,77 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String
             )
             .await
         }
+        LlmProvider::GoogleTranslate => {
+            let payload = GoogleTranslateRequest {
+                q: vec![request.input.clone()],
+                target: "en".to_string(),
+                format: "text".to_string(),
+            };
+
+            let url = format!(
+                "{}?key={}",
+                config.base_url.trim_end_matches('/'),
+                config.api_key
+            );
+            let client = Client::new();
+            let response = client
+                .post(&url)
+                .json(&payload)
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+
+            if !status.is_success() {
+                return Err(format!("Google Translate API Error: {} {}", status, text));
+            }
+
+            let parsed: GoogleTranslateResponse =
+                serde_json::from_str(&text).map_err(|e| format!("invalid JSON: {}", e))?;
+
+            parsed
+                .data
+                .translations
+                .into_iter()
+                .next()
+                .map(|t| t.translated_text)
+                .ok_or_else(|| "No translation returned".to_string())
+        }
+        LlmProvider::GoogleTranslateFree => {
+            let url = format!(
+                "{}?client=gtx&sl=auto&tl=en&dt=t&q={}",
+                config.base_url.trim_end_matches('/'),
+                urlencoding::encode(&request.input)
+            );
+            let client = Client::new();
+            let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+            let status = response.status();
+            if !status.is_success() {
+                return Err(format!("Google Translate Free API Error: {}", status));
+            }
+
+            let body: Value = response.json().await.map_err(|e| e.to_string())?;
+            let mut result = String::new();
+
+            if let Some(outer_arr) = body.as_array() {
+                if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
+                    for part in inner_arr {
+                        if let Some(text) = part.get(0).and_then(|v| v.as_str()) {
+                            result.push_str(text);
+                        }
+                    }
+                }
+            }
+
+            if result.is_empty() {
+                return Err("No translation returned from Free API".to_string());
+            }
+
+            Ok(result)
+        }
     }
 }
 
@@ -1021,6 +1121,10 @@ pub async fn polish_transcript_segments(
 ) -> Result<Vec<PolishedSegment>, String> {
     validate_task_request(&request.task_id, &request.config)?;
 
+    if request.config.provider == LlmProvider::GoogleTranslate {
+        return Err("Google Translate does not support transcript polishing".to_string());
+    }
+
     let config = request.config.clone();
     let context = request.context.clone();
     let keywords = request.keywords.clone();
@@ -1078,6 +1182,165 @@ pub async fn translate_transcript_segments(
     let config = request.config.clone();
     let target_language = request.target_language.clone();
     let chunk_app = app.clone();
+
+    if config.provider == LlmProvider::GoogleTranslate || config.provider == LlmProvider::GoogleTranslateFree {
+        return run_segment_task(
+            &request.task_id,
+            LlmTaskType::Translate,
+            &request.segments,
+            request.chunk_size,
+            move |chunk| {
+                let texts: Vec<String> = chunk.iter().map(|s| s.text.clone()).collect();
+                serde_json::to_string(&texts).unwrap_or_default()
+            },
+            move |response_text, chunk, chunk_number| {
+                if config.provider == LlmProvider::GoogleTranslate {
+                    let parsed: GoogleTranslateResponse = serde_json::from_str(response_text).map_err(
+                        |error| {
+                            chunk_error(
+                                LlmTaskType::Translate,
+                                chunk_number,
+                                format!("invalid JSON response: {error}"),
+                            )
+                        },
+                    )?;
+
+                    if parsed.data.translations.len() != chunk.len() {
+                        return Err(chunk_error(
+                            LlmTaskType::Translate,
+                            chunk_number,
+                            format!(
+                                "expected {} objects but received {}",
+                                chunk.len(),
+                                parsed.data.translations.len()
+                            ),
+                        ));
+                    }
+
+                    let mut translated_segments = Vec::with_capacity(chunk.len());
+                    for (index, translation) in parsed.data.translations.into_iter().enumerate() {
+                        translated_segments.push(TranslatedSegment {
+                            id: chunk[index].id.clone(),
+                            translation: translation.translated_text,
+                        });
+                    }
+
+                    Ok(translated_segments)
+                } else {
+                    // GoogleTranslateFree returns raw JSON array of translations
+                    let translations: Vec<String> = serde_json::from_str(response_text).map_err(|e| {
+                        chunk_error(
+                            LlmTaskType::Translate,
+                            chunk_number,
+                            format!("invalid free translation JSON: {e}"),
+                        )
+                    })?;
+                    
+                    if translations.len() != chunk.len() {
+                        return Err(chunk_error(
+                            LlmTaskType::Translate,
+                            chunk_number,
+                            format!("expected {} translations but received {}", chunk.len(), translations.len()),
+                        ));
+                    }
+
+                    Ok(chunk.iter().zip(translations).map(|(s, t)| TranslatedSegment {
+                        id: s.id.clone(),
+                        translation: t,
+                    }).collect())
+                }
+            },
+            move |prompt| {
+                let config = config.clone();
+                let target_language = target_language.clone();
+                Box::pin(async move {
+                    let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
+                    
+                    if config.provider == LlmProvider::GoogleTranslate {
+                        let payload = GoogleTranslateRequest {
+                            q: texts,
+                            target: target_language,
+                            format: "text".to_string(),
+                        };
+
+                        let url = format!(
+                            "{}?key={}",
+                            config.base_url.trim_end_matches('/'),
+                            config.api_key
+                        );
+                        let client = Client::new();
+                        let response = client
+                            .post(&url)
+                            .json(&payload)
+                            .send()
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                        let status = response.status();
+                        let text = response.text().await.unwrap_or_default();
+
+                        if !status.is_success() {
+                            return Err(format!("Google Translate API Error: {} {}", status, text));
+                        }
+
+                        Ok(text)
+                    } else {
+                        // Parallel free requests for the chunk
+                        let client = Client::new();
+                        let futures = texts.into_iter().map(|text| {
+                            let client = client.clone();
+                            let target = target_language.clone();
+                            let base_url = config.base_url.clone();
+                            async move {
+                                let url = format!(
+                                    "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
+                                    base_url.trim_end_matches('/'),
+                                    target,
+                                    urlencoding::encode(&text)
+                                );
+                                let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+                                if !response.status().is_success() {
+                                    return Err(format!("Free API Error: {}", response.status()));
+                                }
+                                let body: Value = response.json().await.map_err(|e| e.to_string())?;
+                                let mut translated = String::new();
+                                if let Some(outer_arr) = body.as_array() {
+                                    if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
+                                        for part in inner_arr {
+                                            if let Some(t) = part.get(0).and_then(|v| v.as_str()) {
+                                                translated.push_str(t);
+                                            }
+                                        }
+                                    }
+                                }
+                                if translated.is_empty() {
+                                    return Err("Empty translation".to_string());
+                                }
+                                Ok(translated)
+                            }
+                        });
+                        
+                        let results = futures_util::future::join_all(futures).await;
+                        let mut translations = Vec::new();
+                        for r in results {
+                            translations.push(r?);
+                        }
+                        Ok(serde_json::to_string(&translations).unwrap_or_default())
+                    }
+                })
+            },
+            move |payload| {
+                chunk_app
+                    .emit(LLM_TASK_CHUNK_EVENT, payload)
+                    .map_err(|error| error.to_string())
+            },
+            move |payload| {
+                app.emit(LLM_TASK_PROGRESS_EVENT, payload)
+                    .map_err(|error| error.to_string())
+            },
+        )
+        .await;
+    }
 
     run_segment_task(
         &request.task_id,

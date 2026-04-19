@@ -24,9 +24,25 @@ export interface LlmProviderDefinition {
 }
 
 export const DEFAULT_LLM_TEMPERATURE = 0.7;
-export const DEFAULT_LLM_PROVIDER: LlmProvider = 'open_ai';
+export const DEFAULT_LLM_PROVIDER: LlmProvider = 'google_translate_free';
 
 export const LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
+  {
+    id: 'google_translate_free',
+    label: 'Google Translate (Free)',
+    strategy: 'google_translate_free',
+    defaultApiHost: 'https://translate.googleapis.com/translate_a/single',
+    supportsModelListing: false,
+    requiresApiKey: false,
+  },
+  {
+    id: 'google_translate',
+    label: 'Google Translate (API)',
+    strategy: 'google_translate',
+    defaultApiHost: 'https://translation.googleapis.com/language/translate/v2',
+    supportsModelListing: false,
+    requiresApiKey: true,
+  },
   {
     id: 'open_ai',
     label: 'OpenAI',
@@ -705,11 +721,18 @@ export function ensureLlmState(
       }
     : extractLegacyModel(candidate);
 
-  if (llmSettings.modelOrder.length === 0 && legacyModel) {
-    llmSettings = addLlmModel(llmSettings, legacyModel);
-    const migratedModelId = llmSettings.modelOrder[0];
-    llmSettings = setFeatureModelSelection(llmSettings, 'polish', migratedModelId);
-    llmSettings = setFeatureModelSelection(llmSettings, 'translation', migratedModelId);
+  if (llmSettings.modelOrder.length === 0) {
+    if (legacyModel) {
+      llmSettings = addLlmModel(llmSettings, legacyModel);
+      const migratedModelId = llmSettings.modelOrder[0];
+      llmSettings = setFeatureModelSelection(llmSettings, 'polish', migratedModelId);
+      llmSettings = setFeatureModelSelection(llmSettings, 'translation', migratedModelId);
+    } else {
+      // Default fallback for new users or fresh state
+      llmSettings = addLlmModel(llmSettings, { provider: 'google_translate_free', model: 'default' });
+      const defaultModelId = llmSettings.modelOrder[0];
+      llmSettings = setFeatureModelSelection(llmSettings, 'translation', defaultModelId);
+    }
   }
 
   llmSettings = applyLegacyTemperature(llmSettings, candidate.llm?.temperature);

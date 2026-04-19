@@ -55,6 +55,8 @@ export type LlmProvider =
   | 'perplexity'
   | 'volcengine'
   | 'chatglm'
+  | 'google_translate'
+  | 'google_translate_free'
   | 'open_ai_compatible';
 
 export type LlmProviderStrategy =
@@ -65,6 +67,8 @@ export type LlmProviderStrategy =
   | 'azure_openai'
   | 'openai_responses'
   | 'openai_compatible_custom_path'
+  | 'google_translate'
+  | 'google_translate_free'
   | 'perplexity';
 
 export type LlmFeature = 'polish' | 'translation';
