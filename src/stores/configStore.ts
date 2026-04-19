@@ -18,6 +18,9 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_CONFIG: AppConfig = {
+  // Base
+  configVersion: 1,
+
   // UI
   appLanguage: 'auto',
   theme: 'auto',

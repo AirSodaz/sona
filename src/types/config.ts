@@ -165,6 +165,16 @@ export interface VocabularyConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Base
+// ---------------------------------------------------------------------------
+
+/** Base application configuration fields. */
+export interface BaseConfig {
+  /** Schema version for the configuration file. Default: 1. */
+  configVersion?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -175,6 +185,7 @@ export interface VocabularyConfig {
  * Existing code that references `AppConfig` continues to work unchanged.
  */
 export type AppConfig =
+  BaseConfig &
   UIConfig &
   ShortcutConfig &
   AudioConfig &

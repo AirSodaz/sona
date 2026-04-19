@@ -1,0 +1,117 @@
+import { AppConfig } from '../types/config';
+import { ensureLlmState } from './llmConfig';
+import { settingsStore, STORE_KEY_CONFIG } from './storageService';
+import i18n from '../i18n';
+import { DEFAULT_CONFIG } from '../stores/configStore';
+
+export interface MigrationResult {
+  config: AppConfig;
+  migrated: boolean;
+}
+
+/**
+ * Handles migrating legacy configuration from localStorage or upgrading 
+ * older versions of the Tauri settings.json store to the latest format.
+ */
+export async function migrateConfig(savedConfig: AppConfig | null | undefined): Promise<MigrationResult> {
+  let configToLoad: any = savedConfig;
+  let isConfigMigrated = false;
+
+  // 1. Fallback to localStorage if no saved config in Tauri store
+  if (!savedConfig) {
+    const legacyConfig = localStorage.getItem('sona-config');
+    if (legacyConfig) {
+      try {
+        configToLoad = JSON.parse(legacyConfig);
+        isConfigMigrated = true;
+      } catch (e) {
+        console.error('Failed to parse legacy config:', e);
+      }
+    }
+  }
+
+  // 2. If we still have no config, use defaults and return
+  if (!configToLoad) {
+    return { config: { ...DEFAULT_CONFIG }, migrated: false };
+  }
+
+  // 3. Determine if an upgrade is needed based on version or missing keys
+  const needsUpgrade = isConfigMigrated || !configToLoad.configVersion || configToLoad.configVersion < 1;
+
+  if (!needsUpgrade) {
+    // If it's fully up to date and not from localStorage, just return it
+    return { config: configToLoad as AppConfig, migrated: false };
+  }
+
+  // 4. Perform Data Normalization & Structural Upgrades
+  const parsed = configToLoad;
+  const { llmSettings } = ensureLlmState(parsed);
+
+  const upgradedConfig: AppConfig = {
+    configVersion: 1, // Bump to latest version
+    streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
+    offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
+    punctuationModelPath: parsed.punctuationModelPath || '',
+    vadModelPath: parsed.vadModelPath || '',
+    enableITN: parsed.enableITN ?? true,
+    vadBufferSize: parsed.vadBufferSize || 5,
+    maxConcurrent: parsed.maxConcurrent || 2,
+    appLanguage: parsed.appLanguage || 'auto',
+    theme: parsed.theme || 'auto',
+    font: parsed.font || 'system',
+    language: parsed.language || 'auto',
+    enableTimeline: parsed.enableTimeline ?? false,
+    minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
+    lockWindow: parsed.lockWindow ?? false,
+    alwaysOnTop: parsed.alwaysOnTop ?? true,
+    microphoneId: parsed.microphoneId || 'default',
+    microphoneBoost: parsed.microphoneBoost ?? 1.0,
+    systemAudioDeviceId: parsed.systemAudioDeviceId || 'default',
+    muteDuringRecording: parsed.muteDuringRecording ?? false,
+    startOnLaunch: parsed.startOnLaunch ?? false,
+    captionWindowWidth: parsed.captionWindowWidth || 800,
+    captionFontSize: parsed.captionFontSize || 24,
+    captionFontColor: parsed.captionFontColor || '#ffffff',
+    llmSettings,
+    translationLanguage: parsed.translationLanguage || 'zh',
+    polishKeywords: parsed.polishKeywords || '',
+    polishContext: parsed.polishContext || '',
+    polishScenario: parsed.polishScenario || '',
+    autoPolish: parsed.autoPolish ?? false,
+    autoPolishFrequency: parsed.autoPolishFrequency || 5,
+    autoCheckUpdates: parsed.autoCheckUpdates ?? true,
+    textReplacementSets: parsed.textReplacementSets || [],
+    liveRecordShortcut: parsed.liveRecordShortcut || 'Ctrl + Space',
+  };
+
+  // Migration: textReplacements -> textReplacementSets
+  if (parsed.textReplacements && parsed.textReplacements.length > 0 && upgradedConfig.textReplacementSets!.length === 0) {
+    const defaultSet = {
+      id: 'default-set',
+      name: i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
+      enabled: true,
+      ignoreCase: false,
+      rules: parsed.textReplacements.map((r: any) => ({
+        id: r.id,
+        from: r.from,
+        to: r.to
+      }))
+    };
+    upgradedConfig.textReplacementSets = [defaultSet];
+  }
+
+  // 5. Persist the upgraded config to Tauri store
+  try {
+    await settingsStore.set(STORE_KEY_CONFIG, upgradedConfig);
+    await settingsStore.save();
+    
+    // Clean up localStorage if we migrated from it
+    if (isConfigMigrated) {
+      localStorage.removeItem('sona-config');
+    }
+  } catch (e) {
+    console.error('Failed to save upgraded config to Tauri store:', e);
+  }
+
+  return { config: upgradedConfig, migrated: true };
+}

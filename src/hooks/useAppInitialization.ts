@@ -4,7 +4,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore, useUIConfig } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import i18n from '../i18n';
-import { ensureLlmState } from '../services/llmConfig';
+import { migrateConfig } from '../services/configMigrationService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../services/storageService';
 import { migrateOnboardingState, LEGACY_FIRST_RUN_KEY, ONBOARDING_STORAGE_KEY } from '../utils/onboarding';
 import { AppConfig } from '../types/config';
@@ -34,94 +34,18 @@ export function useAppInitialization() {
             try {
                 // 1. Load config
                 let savedConfig = await settingsStore.get<AppConfig>(STORE_KEY_CONFIG);
-                let configToLoad: any = savedConfig;
-                let isConfigMigrated = false;
+                const { config: loadedConfig, migrated: isConfigMigrated } = await migrateConfig(savedConfig);
 
-                if (!savedConfig) {
-                    // Try to migrate from localStorage
-                    const legacyConfig = localStorage.getItem('sona-config');
-                    if (legacyConfig) {
-                        try {
-                            configToLoad = JSON.parse(legacyConfig);
-                            isConfigMigrated = true;
-                        } catch (e) {
-                            console.error('Failed to parse legacy config:', e);
-                        }
-                    }
+                setConfig(loadedConfig);
+
+                if (loadedConfig.startOnLaunch) {
+                    setIsCaptionMode(true);
                 }
 
-                if (configToLoad) {
-                    const parsed = configToLoad;
-                    if (parsed.streamingModelPath || parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || parsed.appLanguage || parsed.language || parsed.llmSettings || parsed.llm) {
-                        const { llmSettings } = ensureLlmState(parsed);
-                        const loadedConfig = {
-                            streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
-                            offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
-                            punctuationModelPath: parsed.punctuationModelPath || '',
-                            vadModelPath: parsed.vadModelPath || '',
-                            enableITN: parsed.enableITN ?? true,
-                            vadBufferSize: parsed.vadBufferSize || 5,
-                            maxConcurrent: parsed.maxConcurrent || 2,
-                            appLanguage: parsed.appLanguage || 'auto',
-                            theme: parsed.theme || 'auto',
-                            font: parsed.font || 'system',
-                            language: parsed.language || 'auto',
-                            enableTimeline: parsed.enableTimeline ?? false,
-                            minimizeToTrayOnExit: parsed.minimizeToTrayOnExit ?? true,
-                            lockWindow: parsed.lockWindow ?? false,
-                            alwaysOnTop: parsed.alwaysOnTop ?? true,
-                            microphoneId: parsed.microphoneId || 'default',
-                            microphoneBoost: parsed.microphoneBoost ?? 1.0,
-                            systemAudioDeviceId: parsed.systemAudioDeviceId || 'default',
-                            muteDuringRecording: parsed.muteDuringRecording ?? false,
-                            startOnLaunch: parsed.startOnLaunch ?? false,
-                            captionWindowWidth: parsed.captionWindowWidth || 800,
-                            captionFontSize: parsed.captionFontSize || 24,
-                            captionFontColor: parsed.captionFontColor || '#ffffff',
-                            llmSettings,
-                            translationLanguage: parsed.translationLanguage || 'zh',
-                            polishKeywords: parsed.polishKeywords || '',
-                            polishContext: parsed.polishContext || '',
-                            polishScenario: parsed.polishScenario || '',
-                            autoPolish: parsed.autoPolish ?? false,
-                            autoPolishFrequency: parsed.autoPolishFrequency || 5,
-                            autoCheckUpdates: parsed.autoCheckUpdates ?? true,
-                            textReplacementSets: parsed.textReplacementSets || [],
-                        };
-
-                        // Migration: textReplacements -> textReplacementSets
-                        if (parsed.textReplacements && parsed.textReplacements.length > 0 && loadedConfig.textReplacementSets.length === 0) {
-                            const defaultSet = {
-                                id: 'default-set',
-                                name: i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
-                                enabled: true,
-                                ignoreCase: false,
-                                rules: parsed.textReplacements.map((r: any) => ({
-                                    id: r.id,
-                                    from: r.from,
-                                    to: r.to
-                                }))
-                            };
-                            loadedConfig.textReplacementSets = [defaultSet];
-                        }
-
-                        setConfig(loadedConfig);
-
-                        if (isConfigMigrated) {
-                            await settingsStore.set(STORE_KEY_CONFIG, loadedConfig);
-                            localStorage.removeItem('sona-config');
-                        }
-
-                        if (loadedConfig.startOnLaunch) {
-                            setIsCaptionMode(true);
-                        }
-
-                        if (parsed.appLanguage && parsed.appLanguage !== 'auto') {
-                            i18n.changeLanguage(parsed.appLanguage);
-                        } else {
-                            i18n.changeLanguage(navigator.language);
-                        }
-                    }
+                if (loadedConfig.appLanguage && loadedConfig.appLanguage !== 'auto') {
+                    i18n.changeLanguage(loadedConfig.appLanguage);
+                } else {
+                    i18n.changeLanguage(navigator.language);
                 }
 
                 // 2. Load onboarding state
@@ -134,14 +58,14 @@ export function useAppInitialization() {
                     const legacyFirstRun = localStorage.getItem(LEGACY_FIRST_RUN_KEY);
                     
                     if (legacyOnboarding || legacyFirstRun || isConfigMigrated) {
-                        const legacyConfig = localStorage.getItem('sona-config') || (isConfigMigrated ? JSON.stringify(configToLoad) : null);
-                        savedOnboarding = migrateOnboardingState(legacyOnboarding, legacyConfig, legacyFirstRun);
+                        const legacyConfigString = JSON.stringify(loadedConfig);
+                        savedOnboarding = migrateOnboardingState(legacyOnboarding, legacyConfigString, legacyFirstRun);
                         isOnboardingMigrated = true;
                     }
                 }
 
                 if (savedOnboarding) {
-                    setPersistedState(savedOnboarding, !!(configToLoad?.streamingModelPath && configToLoad?.offlineModelPath));
+                    setPersistedState(savedOnboarding, !!(loadedConfig.streamingModelPath && loadedConfig.offlineModelPath));
                     
                     if (isOnboardingMigrated) {
                         await settingsStore.set(STORE_KEY_ONBOARDING, savedOnboarding);
