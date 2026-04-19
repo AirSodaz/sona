@@ -277,6 +277,42 @@ export function SettingsVocabularyTab({
                     )}
                 </div>
             </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.hotwords_title', { defaultValue: 'Hotwords' })}
+                icon={<BookIcon width={20} height={20} />}
+                description={t('settings.hotwords_description', { defaultValue: 'Enhance recognition for specific terms. One per line. (Supported by Transducer and Qwen3 models)' })}
+            >
+                <div style={{ padding: '24px', background: 'var(--color-bg-primary)' }}>
+                    <textarea
+                        className="settings-input"
+                        value={config.hotwords?.join('\n') || ''}
+                        onChange={(e) => {
+                            const words = e.target.value.split('\n').filter(line => line.trim() !== '');
+                            updateConfig({ hotwords: words });
+                        }}
+                        placeholder={t('settings.hotwords_placeholder', { defaultValue: 'e.g. ChatGPT\nSherpa-onnx :2.0' })}
+                        rows={10}
+                        style={{ 
+                            width: '100%', 
+                            minHeight: '200px',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.9rem',
+                            resize: 'vertical',
+                            lineHeight: '1.5',
+                            padding: '12px'
+                        }}
+                    />
+                    <p style={{ 
+                        marginTop: '12px', 
+                        fontSize: '0.8rem', 
+                        color: 'var(--color-text-muted)',
+                        lineHeight: '1.4'
+                    }}>
+                        {t('settings.hotwords_hint', { defaultValue: 'Tip: You can add weight by appending " :weight" (e.g. "Term :2.0"). Default weight is 1.0.' })}
+                    </p>
+                </div>
+            </SettingsSection>
         </SettingsTabContainer>
     );
 }

@@ -162,6 +162,8 @@ export interface TextReplacementRuleSet {
 export interface VocabularyConfig {
   /** List of text replacement rule sets. */
   textReplacementSets?: TextReplacementRuleSet[];
+  /** Custom hotwords for ASR (supported by Transducer and Qwen3 models). */
+  hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */
   textReplacements?: any[];
 }

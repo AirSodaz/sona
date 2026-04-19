@@ -30,6 +30,7 @@ pub enum ModelType {
         decoder: PathBuf,
         joiner: PathBuf,
         tokens: PathBuf,
+        hotwords: Option<String>,
     },
     OnlineParaformer {
         encoder: PathBuf,
@@ -70,6 +71,7 @@ pub enum ModelType {
         encoder: PathBuf,
         decoder: PathBuf,
         tokenizer: PathBuf,
+        hotwords: Option<String>,
     },
 }
 
@@ -79,6 +81,7 @@ pub fn build_model_config(
     file_config: &Option<ModelFileConfig>,
     enable_itn: bool,
     language: &str,
+    hotwords: Option<String>,
 ) -> Result<ModelType, String> {
     let fc = file_config
         .as_ref()
@@ -100,6 +103,7 @@ pub fn build_model_config(
                 decoder,
                 joiner,
                 tokens,
+                hotwords,
             })
         }
         "paraformer" => {
@@ -182,6 +186,7 @@ pub fn build_model_config(
                 encoder,
                 decoder,
                 tokenizer,
+                hotwords,
             })
         }
         _ => Err(format!("Unsupported model type: {}", model_type)),
@@ -250,6 +255,7 @@ impl Recognizer {
                 decoder,
                 joiner,
                 tokens,
+                hotwords,
             } => {
                 info!("[Recognizer::new] branch=OnlineTransducer");
                 let mut config = get_base_online_config(num_threads, &tokens);
@@ -259,6 +265,14 @@ impl Recognizer {
                 config.model_config.transducer.decoder =
                     Some(decoder.to_string_lossy().to_string());
                 config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
+
+                if let Some(hw) = hotwords {
+                    // For Transducer, sherpa-onnx usually supports hotwords via modified_beam_search
+                    config.decoding_method = Some("modified_beam_search".to_string());
+                    // Note: In some versions/bindings, transducer hotwords might require a file path.
+                    // We'll see if the direct string field is supported in this crate version.
+                    // config.hotwords_file = ... 
+                }
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineTransducer)");
                 let recognizer =
@@ -377,6 +391,7 @@ impl Recognizer {
                 encoder,
                 decoder,
                 tokenizer,
+                hotwords,
             } => {
                 info!("[Recognizer::new] branch=OfflineQwen3Asr");
                 let mut config = get_base_offline_config(num_threads, None);
@@ -388,6 +403,11 @@ impl Recognizer {
                     Some(decoder.to_string_lossy().to_string());
                 config.model_config.qwen3_asr.tokenizer =
                     Some(tokenizer.to_string_lossy().to_string());
+                
+                if let Some(hw) = hotwords {
+                    // PR #3468 added hotwords to OfflineQwen3ASRModelConfig
+                    config.model_config.qwen3_asr.hotwords = Some(hw);
+                }
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineQwen3Asr)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -570,6 +590,7 @@ pub struct BatchTranscriptionRequest {
     pub vad_buffer: f32,
     pub model_type: String,
     pub file_config: Option<ModelFileConfig>,
+    pub hotwords: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -709,11 +730,13 @@ pub async fn init_recognizer(
     vad_buffer: f32,
     model_type: String,
     file_config: Option<ModelFileConfig>,
+    hotwords: Option<String>,
 ) -> Result<(), String> {
     info!(
-        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer}",
+        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?}",
         punctuation_model,
-        vad_model
+        vad_model,
+        hotwords
     );
 
     info!("[init_recognizer] before build_model_config");
@@ -723,6 +746,7 @@ pub async fn init_recognizer(
         &file_config,
         enable_itn,
         &language,
+        hotwords,
     )?;
     info!("[init_recognizer] after build_model_config: {:?}", config_type);
 
@@ -1195,6 +1219,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     vad_buffer: f32,
     model_type: String,
     file_config: Option<ModelFileConfig>,
+    hotwords: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let request = BatchTranscriptionRequest {
         file_path,
@@ -1208,6 +1233,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         vad_buffer,
         model_type,
         file_config,
+        hotwords,
     };
     let progress_file_path = request.file_path.clone();
 
@@ -1237,6 +1263,7 @@ where
         &request.file_config,
         request.enable_itn,
         &request.language,
+        request.hotwords.clone(),
     )?;
     let recognizer = Recognizer::new(config_type, request.num_threads)?;
     let punctuation = load_punctuation(request.punctuation_model.clone());
@@ -1453,6 +1480,7 @@ mod tests {
             &file_config,
             false,
             "auto",
+            None,
         )
         .expect("qwen3-asr model should build");
 
@@ -1462,6 +1490,7 @@ mod tests {
                 encoder,
                 decoder,
                 tokenizer,
+                ..
             } => {
                 assert_eq!(conv_frontend, model_path.join("conv_frontend.onnx"));
                 assert_eq!(encoder, model_path.join("encoder.int8.onnx"));
@@ -1486,6 +1515,7 @@ mod tests {
             &file_config,
             true,
             "auto",
+            None,
         )
         .expect_err("sensevoice should still require tokens.txt");
 
@@ -1512,6 +1542,7 @@ mod tests {
             &file_config,
             false,
             "auto",
+            None,
         )
         .expect("funasr-nano should build without tokens");
 

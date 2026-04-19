@@ -83,6 +83,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     autoPolishFrequency: parsed.autoPolishFrequency || 5,
     autoCheckUpdates: parsed.autoCheckUpdates ?? true,
     textReplacementSets: parsed.textReplacementSets || [],
+    hotwords: parsed.hotwords || [],
     liveRecordShortcut: parsed.liveRecordShortcut || 'Ctrl + Space',
   };
 

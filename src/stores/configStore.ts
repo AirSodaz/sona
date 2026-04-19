@@ -70,6 +70,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 
   // Vocabulary
   textReplacementSets: [],
+  hotwords: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
 
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'textReplacementSets',
+  'hotwords',
 ];
 
 /** Pick a subset of keys from the config. */

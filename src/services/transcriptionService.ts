@@ -20,6 +20,7 @@ interface ServiceConfig {
     language: string;
     modelType: string;
     fileConfig?: ModelFileConfig;
+    hotwords?: string;
 }
 
 /**
@@ -115,54 +116,57 @@ export class TranscriptionService {
         if (this.startingPromise) return this.startingPromise;
 
         this.startingPromise = (async () => {
-            const appConfig = useConfigStore.getState().config;
-            let punctuationPathToUse = '';
-            let vadPathToUse = '';
-            let vadBufferToUse = 5.0;
+            try {
+                const appConfig = useConfigStore.getState().config;
+                let punctuationPathToUse = '';
+                let vadPathToUse = '';
+                let vadBufferToUse = 5.0;
 
-            const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+                const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
 
-            if (streamingModel) {
-                const rules = modelService.getModelRules(streamingModel.id);
-                if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
-                    punctuationPathToUse = appConfig.punctuationModelPath;
-                }
-                if (rules.requiresVad) {
-                    if (appConfig.vadModelPath) {
-                        vadPathToUse = appConfig.vadModelPath;
-                        vadBufferToUse = appConfig.vadBufferSize || 5.0;
-                    } else {
-                        const errorMsg = 'VAD model not configured. Please download the Silero VAD model in Settings → Model Center.';
-                        if (this.onError) this.onError(errorMsg);
-                        throw new Error(errorMsg);
+                if (streamingModel) {
+                    const rules = modelService.getModelRules(streamingModel.id);
+                    if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
+                        punctuationPathToUse = appConfig.punctuationModelPath;
+                    }
+                    if (rules.requiresVad) {
+                        if (appConfig.vadModelPath) {
+                            vadPathToUse = appConfig.vadModelPath;
+                            vadBufferToUse = appConfig.vadBufferSize || 5.0;
+                        } else {
+                            const errorMsg = 'VAD model not configured. Please download the Silero VAD model in Settings → Model Center.';
+                            if (this.onError) this.onError(errorMsg);
+                            throw new Error(errorMsg);
+                        }
                     }
                 }
-            }
 
-            const configToUse: ServiceConfig = {
-                modelPath: this.modelPath,
-                punctuationModelPath: punctuationPathToUse,
-                vadModelPath: vadPathToUse,
-                vadBufferSize: vadBufferToUse,
-                enableITN: this.enableITN,
-                language: this.language,
-                modelType: streamingModel?.type || 'sensevoice',
-                fileConfig: streamingModel?.fileConfig
-            };
+                const configToUse: ServiceConfig = {
+                    modelPath: this.modelPath,
+                    punctuationModelPath: punctuationPathToUse,
+                    vadModelPath: vadPathToUse,
+                    vadBufferSize: vadBufferToUse,
+                    enableITN: this.enableITN,
+                    language: this.language,
+                    modelType: streamingModel?.type || 'sensevoice',
+                    fileConfig: streamingModel?.fileConfig,
+                    hotwords: appConfig.hotwords?.join(',')
+                };
 
-            try {
                 await invoke('init_recognizer', {
                     instanceId: this.instanceId,
-                    modelPath: this.modelPath,
+                    modelPath: configToUse.modelPath,
                     numThreads: 4,
-                    enableItn: this.enableITN,
-                    language: this.language,
-                    punctuationModel: punctuationPathToUse || null,
-                    vadModel: vadPathToUse || null,
-                    vadBuffer: vadBufferToUse,
+                    enableItn: configToUse.enableITN,
+                    language: configToUse.language,
+                    punctuationModel: configToUse.punctuationModelPath || null,
+                    vadModel: configToUse.vadModelPath || null,
+                    vadBuffer: configToUse.vadBufferSize,
                     modelType: configToUse.modelType,
-                    fileConfig: configToUse.fileConfig
+                    fileConfig: configToUse.fileConfig,
+                    hotwords: configToUse.hotwords || null,
                 });
+
                 this.runningConfig = configToUse;
             } catch (error) {
                 logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize:`, error);
@@ -277,7 +281,8 @@ export class TranscriptionService {
             filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
             language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
             vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',
-            fileConfig: offlineModel?.fileConfig
+            fileConfig: offlineModel?.fileConfig,
+            hotwords: appConfig.hotwords?.join(',') || null
         });
 
         // Filter segments: some models (like Whisper) occasionally produce single "." segments

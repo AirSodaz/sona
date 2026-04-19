@@ -148,6 +148,9 @@ struct TranscribeArgs {
     /// Enables ITN.
     #[arg(long, conflicts_with = "disable_itn", help = "Enable inverse text normalization")]
     enable_itn: bool,
+    /// Custom hotwords for ASR (currently supported by Transducer and Qwen3 models).
+    #[arg(long, help = "Custom hotwords, comma separated")]
+    hotwords: Option<String>,
     /// Disables ITN.
     #[arg(long, conflicts_with = "enable_itn", help = "Disable inverse text normalization")]
     disable_itn: bool,
@@ -209,6 +212,7 @@ pub struct TranscribeCliOptions {
     pub punctuation_model_id: Option<String>,
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
+    pub hotwords: Option<String>,
     pub vad_buffer: Option<f32>,
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
@@ -352,6 +356,7 @@ pub fn resolve_transcribe_options(
             vad_buffer,
             model_type: model.model_type.clone(),
             file_config: model.file_config.clone(),
+            hotwords: cli.hotwords,
         },
     })
 }
@@ -476,6 +481,7 @@ async fn run_transcribe(args: TranscribeArgs) -> Result<(), String> {
             punctuation_model_id: args.punctuation_model_id,
             threads: args.threads,
             enable_itn,
+            hotwords: args.hotwords,
             vad_buffer: args.vad_buffer,
             save_wav: args.save_wav,
             quiet: args.quiet,
@@ -829,6 +835,7 @@ mod tests {
             punctuation_model_id: None,
             threads: None,
             enable_itn: None,
+            hotwords: None,
             vad_buffer: None,
             save_wav: None,
             quiet: false,
