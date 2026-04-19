@@ -566,7 +566,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
            <FeatureCard
              featureId="polish"
              title={t('settings.llm.polish_model')}
-             icon={<Sparkles size={20} color="var(--color-primary, #646cff)" />}
+             icon={<Sparkles size={20} />}
              config={config}
              applyLlmSettings={applyLlmSettings}
              t={t}
@@ -574,7 +574,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
            <FeatureCard
              featureId="translation"
              title={t('settings.llm.translation_model')}
-             icon={<Globe size={20} color="var(--color-primary, #646cff)" />}
+             icon={<Globe size={20} />}
              config={config}
              applyLlmSettings={applyLlmSettings}
              t={t}
