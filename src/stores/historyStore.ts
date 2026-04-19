@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { HistoryItem } from '../types/history';
 import { historyService } from '../services/historyService';
+import { useTranscriptStore } from './transcriptStore';
 
 interface HistoryState {
     items: HistoryItem[];
@@ -55,6 +56,15 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecording(id);
+            
+            // Clear current transcript if it matches the deleted item
+            const transcriptStore = useTranscriptStore.getState();
+            if (transcriptStore.sourceHistoryId === id) {
+                transcriptStore.clearSegments();
+                transcriptStore.setAudioUrl(null);
+                transcriptStore.setAudioFile(null);
+                transcriptStore.setSourceHistoryId(null);
+            }
         } catch (err: any) {
             console.error('Failed to delete history item:', err);
             // Revert
@@ -70,6 +80,15 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecordings(ids);
+            
+            // Clear current transcript if it matches any of the deleted items
+            const transcriptStore = useTranscriptStore.getState();
+            if (transcriptStore.sourceHistoryId && ids.includes(transcriptStore.sourceHistoryId)) {
+                transcriptStore.clearSegments();
+                transcriptStore.setAudioUrl(null);
+                transcriptStore.setAudioFile(null);
+                transcriptStore.setSourceHistoryId(null);
+            }
         } catch (err: any) {
             console.error('Failed to delete history items:', err);
             set({ items: originalItems, error: 'Failed to delete items' });
