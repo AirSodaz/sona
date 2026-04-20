@@ -203,20 +203,44 @@ export class TranscriptionService {
 
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
-        if (this.modelPath !== this.runningConfig.modelPath) return false;
-        if (this.enableITN !== this.runningConfig.enableITN) return false;
-        if (this.language !== this.runningConfig.language) return false;
 
         const appConfig = useConfigStore.getState().config;
         let vadPathToUse = '';
+        let punctuationPathToUse = '';
         const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+        
         if (streamingModel) {
             const rules = modelService.getModelRules(streamingModel.id);
             if (rules.requiresVad && appConfig.vadModelPath) {
                 vadPathToUse = appConfig.vadModelPath;
             }
+            if (rules.requiresPunctuation && appConfig.punctuationModelPath) {
+                punctuationPathToUse = appConfig.punctuationModelPath;
+            }
         }
-        if (vadPathToUse !== this.runningConfig.vadModelPath) return false;
+
+        const enabledHotwords = appConfig.hotwordSets
+            ?.filter(set => set.enabled)
+            .flatMap(set => set.rules.map(r => r.text))
+            .filter(text => text.trim() !== '') || [];
+        const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
+
+        const modelType = streamingModel?.type || 'sensevoice';
+
+        const mismatches: string[] = [];
+        if (this.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${this.modelPath} vs ${this.runningConfig.modelPath}`);
+        if (this.enableITN !== this.runningConfig.enableITN) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableITN}`);
+        if (this.language !== this.runningConfig.language) mismatches.push(`language: ${this.language} vs ${this.runningConfig.language}`);
+        if (vadPathToUse !== this.runningConfig.vadModelPath) mismatches.push(`vadModelPath: ${vadPathToUse} vs ${this.runningConfig.vadModelPath}`);
+        if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) mismatches.push(`punctuationModelPath: ${punctuationPathToUse} vs ${this.runningConfig.punctuationModelPath}`);
+        if (hotwordsStr !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${hotwordsStr} vs ${this.runningConfig.hotwords}`);
+        if (modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${modelType} vs ${this.runningConfig.modelType}`);
+
+        if (mismatches.length > 0) {
+            logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
+            return false;
+        }
+
         return true;
     }
 

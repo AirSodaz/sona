@@ -805,8 +805,15 @@ pub async fn start_recognizer(
     instance.offline_state = OfflineState::default();
     instance.current_segment_id = None;
 
-    // Reset VAD state by recreating it
-    instance.vad = load_vad(instance.vad_model.clone());
+    // Reset VAD state only if necessary. 
+    // Recreating VAD is used to reset its internal state (e.g., silence detection counters).
+    // If we already have a VAD and the model is the same, we still recreate it to reset state,
+    // but the OS file cache should make this fast. 
+    // However, to be extra safe, we could check if we can reuse the same model bytes.
+    // For now, let's just make sure we only do it if vad_model is set.
+    if instance.vad_model.is_some() {
+        instance.vad = load_vad(instance.vad_model.clone());
+    }
 
     Ok(())
 }

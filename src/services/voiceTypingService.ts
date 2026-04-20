@@ -191,22 +191,13 @@ class VoiceTypingService {
         const requestId = ++this.startRequestId;
         
         try {
-            const [x, y] = await this.getOverlayPosition();
-            await voiceTypingWindowService.open(x, y);
-            await voiceTypingWindowService.sendText(i18next.t('common.preparing'));
-
-            // Ensure model is ready
+            // 1. Prepare backend in parallel (non-blocking)
             const config = useConfigStore.getState().config;
             this.transcriptionService.setModelPath(config.streamingModelPath);
             this.transcriptionService.setLanguage(config.language);
             this.transcriptionService.setEnableITN(config.enableITN ?? true);
-            await this.transcriptionService.prepare();
 
-            // Ensure mic is started (should already be warmed up)
-            await this.ensureMicrophoneStarted();
-
-            // Start transcription
-            await this.transcriptionService.start(
+            const startPromise = this.transcriptionService.start(
                 async (segment) => {
                     const text = segment.text.trim();
                     if (segment.isFinal) {
@@ -232,11 +223,23 @@ class VoiceTypingService {
                 }
             );
 
+            // 2. Detect position and open window in parallel
+            const positionPromise = this.getOverlayPosition().then(async ([x, y]) => {
+                await voiceTypingWindowService.open(x, y);
+                await voiceTypingWindowService.sendText(i18next.t('common.preparing'));
+            });
+
+            // 3. Wait for basic readiness
+            await Promise.all([startPromise, positionPromise]);
+
             if (!this.isListening || requestId !== this.startRequestId) {
                 await this.transcriptionService.softStop();
                 await voiceTypingWindowService.close();
                 return;
             }
+
+            // Ensure mic is started (should already be warmed up)
+            await this.ensureMicrophoneStarted();
 
             // Successfully started recognition
             await voiceTypingWindowService.sendText(''); // Reset to "Listening..."
