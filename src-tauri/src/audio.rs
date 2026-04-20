@@ -8,13 +8,22 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use uuid::Uuid;
+
+pub enum RecorderCommand {
+    Start(String), // filepath
+    Stop(tokio::sync::oneshot::Sender<String>),
+}
 
 pub struct AudioState {
     system_stop_signal: Mutex<Option<Sender<()>>>,
     mic_stop_signal: Mutex<Option<Sender<()>>>,
-    system_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
-    mic_filepath_receiver: Mutex<Option<tokio::sync::oneshot::Receiver<String>>>,
     system_instance_ids: Mutex<HashSet<String>>,
+    mic_instance_ids: Mutex<HashSet<String>>,
+    system_recorder_tx: Mutex<Option<tokio::sync::mpsc::Sender<RecorderCommand>>>,
+    mic_recorder_tx: Mutex<Option<tokio::sync::mpsc::Sender<RecorderCommand>>>,
     mic_boost: Mutex<f32>,
 }
 
@@ -29,9 +38,10 @@ impl AudioState {
         Self {
             system_stop_signal: Mutex::new(None),
             mic_stop_signal: Mutex::new(None),
-            system_filepath_receiver: Mutex::new(None),
-            mic_filepath_receiver: Mutex::new(None),
             system_instance_ids: Mutex::new(HashSet::new()),
+            mic_instance_ids: Mutex::new(HashSet::new()),
+            system_recorder_tx: Mutex::new(None),
+            mic_recorder_tx: Mutex::new(None),
             mic_boost: Mutex::new(1.0),
         }
     }
@@ -64,48 +74,55 @@ pub fn start_system_audio_capture<R: Runtime>(
     device_name: Option<String>,
     instance_id: String,
 ) -> Result<(), String> {
-    let mut stop_signal_guard = state.system_stop_signal.lock().map_err(|e| e.to_string())?;
-    if stop_signal_guard.is_some() {
-        let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
-        instance_ids.insert(instance_id.clone());
+    let mut system_instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
+    let is_running = {
+        let guard = state.system_stop_signal.lock().map_err(|e| e.to_string())?;
+        guard.is_some()
+    };
+
+    if is_running {
+        system_instance_ids.insert(instance_id.clone());
         println!(
             "[Audio] System capture already running. Attached instance: {}",
             instance_id
         );
+
+        if instance_id == "record" {
+            if let Some(tx) = state.system_recorder_tx.lock().map_err(|e| e.to_string())?.as_ref() {
+                let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+                let history_dir = app_data_dir.join("history");
+                if !history_dir.exists() {
+                    std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+                }
+                let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
+                let wav_filepath = history_dir.join(&wav_filename);
+                let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+                let _ = tx.try_send(RecorderCommand::Start(wav_filepath_str));
+            }
+        }
         return Ok(());
     }
 
-    {
-        let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
-        instance_ids.clear();
-        instance_ids.insert(instance_id.clone());
-    }
+    system_instance_ids.clear();
+    system_instance_ids.insert(instance_id.clone());
 
     println!("[Audio] Starting system audio capture...");
 
-    // Create channel for stop signal
-    let (tx, rx) = channel::<()>();
-    *stop_signal_guard = Some(tx);
+    let (stop_tx, rx) = channel::<()>();
+    *state.system_stop_signal.lock().map_err(|e| e.to_string())? = Some(stop_tx);
 
-    // Channel for the Tokio task to send back the WAV filepath
-    let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
-    *state.system_filepath_receiver.lock().map_err(|e| e.to_string())? = Some(filepath_rx);
-
-    // Create a lock-free ring buffer for passing data to the Tokio task
-    // Calculate capacity for about 5 seconds of 16kHz audio
     let task_rb_capacity = 16000 * 5;
     let task_rb = HeapRb::<f32>::new(task_rb_capacity);
     let (mut task_producer, mut task_consumer) = task_rb.split();
 
-    // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
+
+    let (recorder_tx, mut recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(10);
+    *state.system_recorder_tx.lock().map_err(|e| e.to_string())? = Some(recorder_tx.clone());
 
     let is_test = instance_id.starts_with("test_");
 
-    let mut filepath_to_return = String::new();
-    let mut wav_filepath_str = String::new();
-
-    if !is_test {
+    if !is_test && instance_id == "record" {
         let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
         let history_dir = app_data_dir.join("history");
         if !history_dir.exists() {
@@ -113,55 +130,68 @@ pub fn start_system_audio_capture<R: Runtime>(
         }
         let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
         let wav_filepath = history_dir.join(&wav_filename);
-        wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
-        filepath_to_return = wav_filepath_str.clone();
+        let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+        let _ = recorder_tx.try_send(RecorderCommand::Start(wav_filepath_str));
     }
 
-    // Spawn Tokio task to feed Sherpa and write WAV
     let app_clone = app.clone();
 
     tauri::async_runtime::spawn(async move {
-        let mut writer = if !is_test {
-            let spec = hound::WavSpec {
-                channels: 1,
-                sample_rate: 16000,
-                bits_per_sample: 16,
-                sample_format: hound::SampleFormat::Int,
-            };
-            match hound::WavWriter::create(&wav_filepath_str, spec) {
-                Ok(w) => Some(w),
-                Err(e) => {
-                    eprintln!("[Audio] Failed to create WAV writer: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let mut writer: Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>> = None;
+        let mut current_filepath = String::new();
 
-        // Pre-allocate a buffer for pulling from the ring buffer
         let mut pull_buffer = vec![0.0; 16000];
 
-        // We wait for a signal that data might be available
-        while let Some(()) = data_rx.recv().await {
-            let len = task_consumer.pop_slice(&mut pull_buffer);
-            if len > 0 {
-                let chunk = &pull_buffer[..len];
+        loop {
+            tokio::select! {
+                cmd = recorder_rx.recv() => {
+                    match cmd {
+                        Some(RecorderCommand::Start(path)) => {
+                            if let Some(w) = writer.take() {
+                                let _ = w.finalize();
+                            }
+                            let spec = hound::WavSpec {
+                                channels: 1,
+                                sample_rate: 16000,
+                                bits_per_sample: 16,
+                                sample_format: hound::SampleFormat::Int,
+                            };
+                            match hound::WavWriter::create(&path, spec) {
+                                Ok(w) => {
+                                    writer = Some(w);
+                                    current_filepath = path;
+                                },
+                                Err(e) => eprintln!("[Audio] Failed to create system WAV writer: {}", e),
+                            }
+                        },
+                        Some(RecorderCommand::Stop(tx)) => {
+                            if let Some(w) = writer.take() {
+                                let _ = w.finalize();
+                            }
+                            let _ = tx.send(current_filepath.clone());
+                            current_filepath.clear();
+                        },
+                        None => break,
+                    }
+                },
+                _ = data_rx.recv() => {
+                    let len = task_consumer.pop_slice(&mut pull_buffer);
+                    if len > 0 {
+                        let chunk = &pull_buffer[..len];
 
-                // Write to WAV
-                if let Some(w) = writer.as_mut() {
-                    let amplitude = i16::MAX as f32;
-                    for &sample in chunk {
-                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                        if let Some(w) = writer.as_mut() {
+                            let amplitude = i16::MAX as f32;
+                            for &sample in chunk {
+                                let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                            }
+                        }
+
+                        feed_system_audio_to_instances(&app_clone, chunk).await;
                     }
                 }
-
-                // Feed to Sherpa
-                feed_system_audio_to_instances(&app_clone, chunk).await;
             }
         }
 
-        // Final pull to empty the buffer on shutdown
         loop {
             let len = task_consumer.pop_slice(&mut pull_buffer);
             if len == 0 {
@@ -169,7 +199,6 @@ pub fn start_system_audio_capture<R: Runtime>(
             }
             let chunk = &pull_buffer[..len];
 
-            // Write to WAV
             if let Some(w) = writer.as_mut() {
                 let amplitude = i16::MAX as f32;
                 for &sample in chunk {
@@ -177,17 +206,14 @@ pub fn start_system_audio_capture<R: Runtime>(
                 }
             }
 
-            // Feed to Sherpa
             feed_system_audio_to_instances(&app_clone, chunk).await;
         }
 
         if let Some(w) = writer {
             let _ = w.finalize();
         }
-        let _ = filepath_tx.send(filepath_to_return);
     });
 
-    // Spawn thread to handle audio stream
     thread::spawn(move || {
         let err_fn = |err| eprintln!("[Audio] Stream error: {}", err);
 
@@ -208,11 +234,6 @@ pub fn start_system_audio_capture<R: Runtime>(
             return;
         };
 
-        println!(
-            "[Audio] Device: {}",
-            device.name().unwrap_or("Unknown".into())
-        );
-
         let supported_config = match device.default_output_config() {
             Ok(c) => c,
             Err(e) => {
@@ -223,8 +244,6 @@ pub fn start_system_audio_capture<R: Runtime>(
 
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
-
-        println!("[Audio] Config: {:?}", config);
 
         let sample_rate = config.sample_rate.0;
         let channels = config.channels;
@@ -342,11 +361,9 @@ pub fn start_system_audio_capture<R: Runtime>(
 
         println!("[Audio] Capture started successfully on background thread.");
 
-        // Wait for stop signal
         let _ = rx.recv();
 
         println!("[Audio] Stop signal received. Dropping stream.");
-        // stream is dropped here, stopping capture
     });
 
     Ok(())
@@ -404,36 +421,55 @@ pub fn start_microphone_capture<R: Runtime>(
     device_name: Option<String>,
     instance_id: String,
 ) -> Result<(), String> {
-    let mut stop_signal_guard = state.mic_stop_signal.lock().map_err(|e| e.to_string())?;
-    if stop_signal_guard.is_some() {
-        println!("[Audio] Microphone capture already running.");
+    let mut mic_instance_ids = state.mic_instance_ids.lock().map_err(|e| e.to_string())?;
+    let is_running = {
+        let guard = state.mic_stop_signal.lock().map_err(|e| e.to_string())?;
+        guard.is_some()
+    };
+
+    if is_running {
+        mic_instance_ids.insert(instance_id.clone());
+        println!(
+            "[Audio] Microphone capture already running. Attached instance: {}",
+            instance_id
+        );
+
+        if instance_id != "voice-typing" && !instance_id.starts_with("test_") {
+            if let Some(tx) = state.mic_recorder_tx.lock().map_err(|e| e.to_string())?.as_ref() {
+                let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+                let history_dir = app_data_dir.join("history");
+                if !history_dir.exists() {
+                    std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+                }
+                let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
+                let wav_filepath = history_dir.join(&wav_filename);
+                let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+                let _ = tx.try_send(RecorderCommand::Start(wav_filepath_str));
+            }
+        }
         return Ok(());
     }
 
+    mic_instance_ids.clear();
+    mic_instance_ids.insert(instance_id.clone());
+
     println!("[Audio] Starting microphone capture...");
 
-    // Create channel for stop signal
-    let (tx, rx) = channel::<()>();
-    *stop_signal_guard = Some(tx);
+    let (stop_tx, rx) = channel::<()>();
+    *state.mic_stop_signal.lock().map_err(|e| e.to_string())? = Some(stop_tx);
 
-    // Channel for the Tokio task to send back the WAV filepath
-    let (filepath_tx, filepath_rx) = tokio::sync::oneshot::channel();
-    *state.mic_filepath_receiver.lock().map_err(|e| e.to_string())? = Some(filepath_rx);
-
-    // Create a lock-free ring buffer for passing data to the Tokio task
     let task_rb_capacity = 16000 * 5;
     let task_rb = HeapRb::<f32>::new(task_rb_capacity);
     let (mut task_producer, mut task_consumer) = task_rb.split();
 
-    // MPSC channel to send data from audio capture thread to Tokio task
     let (data_tx, mut data_rx) = tokio::sync::mpsc::channel::<()>(100);
+
+    let (recorder_tx, mut recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(10);
+    *state.mic_recorder_tx.lock().map_err(|e| e.to_string())? = Some(recorder_tx.clone());
 
     let is_test = instance_id.starts_with("test_");
 
-    let mut filepath_to_return = String::new();
-    let mut wav_filepath_str = String::new();
-
-    if !is_test {
+    if !is_test && instance_id != "voice-typing" {
         let app_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
         let history_dir = app_data_dir.join("history");
         if !history_dir.exists() {
@@ -441,67 +477,68 @@ pub fn start_microphone_capture<R: Runtime>(
         }
         let wav_filename = format!("{}.wav", uuid::Uuid::new_v4());
         let wav_filepath = history_dir.join(&wav_filename);
-        wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
-        filepath_to_return = wav_filepath_str.clone();
+        let wav_filepath_str = wav_filepath.to_string_lossy().into_owned();
+        let _ = recorder_tx.try_send(RecorderCommand::Start(wav_filepath_str));
     }
 
-    // Spawn Tokio task to feed Sherpa and write WAV
     let app_clone = app.clone();
-    let instance_id_clone = instance_id.clone();
 
     tauri::async_runtime::spawn(async move {
-        let mut writer = if !is_test && instance_id_clone != "voice-typing" {
-            let spec = hound::WavSpec {
-                channels: 1,
-                sample_rate: 16000,
-                bits_per_sample: 16,
-                sample_format: hound::SampleFormat::Int,
-            };
-            match hound::WavWriter::create(&wav_filepath_str, spec) {
-                Ok(w) => Some(w),
-                Err(e) => {
-                    eprintln!("[Audio] Failed to create mic WAV writer: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let mut writer: Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>> = None;
+        let mut current_filepath = String::new();
 
-        // Pre-allocate a buffer for pulling from the ring buffer
         let mut pull_buffer = vec![0.0; 16000];
 
-        while let Some(()) = data_rx.recv().await {
-            let len = task_consumer.pop_slice(&mut pull_buffer);
-            if len > 0 {
-                let chunk = &pull_buffer[..len];
-
-                // Write to WAV
-                if let Some(w) = writer.as_mut() {
-                    let amplitude = i16::MAX as f32;
-                    for &sample in chunk {
-                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+        loop {
+            tokio::select! {
+                cmd = recorder_rx.recv() => {
+                    match cmd {
+                        Some(RecorderCommand::Start(path)) => {
+                            if let Some(w) = writer.take() {
+                                let _ = w.finalize();
+                            }
+                            let spec = hound::WavSpec {
+                                channels: 1,
+                                sample_rate: 16000,
+                                bits_per_sample: 16,
+                                sample_format: hound::SampleFormat::Int,
+                            };
+                            match hound::WavWriter::create(&path, spec) {
+                                Ok(w) => {
+                                    writer = Some(w);
+                                    current_filepath = path;
+                                },
+                                Err(e) => eprintln!("[Audio] Failed to create mic WAV writer: {}", e),
+                            }
+                        },
+                        Some(RecorderCommand::Stop(tx)) => {
+                            if let Some(w) = writer.take() {
+                                let _ = w.finalize();
+                            }
+                            let _ = tx.send(current_filepath.clone());
+                            current_filepath.clear();
+                        },
+                        None => break,
                     }
-                }
+                },
+                _ = data_rx.recv() => {
+                    let len = task_consumer.pop_slice(&mut pull_buffer);
+                    if len > 0 {
+                        let chunk = &pull_buffer[..len];
 
-                // Feed to Sherpa
-                if !is_test {
-                    let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-                    if let Err(e) = crate::sherpa::feed_audio_samples(
-                        &app_clone,
-                        &sherpa_state,
-                        &instance_id_clone,
-                        chunk,
-                    )
-                    .await
-                    {
-                        eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
+                        if let Some(w) = writer.as_mut() {
+                            let amplitude = i16::MAX as f32;
+                            for &sample in chunk {
+                                let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                            }
+                        }
+
+                        feed_mic_audio_to_instances(&app_clone, chunk).await;
                     }
                 }
             }
         }
 
-        // Final pull to empty the buffer on shutdown
         loop {
             let len = task_consumer.pop_slice(&mut pull_buffer);
             if len == 0 {
@@ -509,7 +546,6 @@ pub fn start_microphone_capture<R: Runtime>(
             }
             let chunk = &pull_buffer[..len];
 
-            // Write to WAV
             if let Some(w) = writer.as_mut() {
                 let amplitude = i16::MAX as f32;
                 for &sample in chunk {
@@ -517,29 +553,14 @@ pub fn start_microphone_capture<R: Runtime>(
                 }
             }
 
-            // Feed to Sherpa
-            if !is_test {
-                let sherpa_state = app_clone.state::<crate::sherpa::SherpaState>();
-                if let Err(e) = crate::sherpa::feed_audio_samples(
-                    &app_clone,
-                    &sherpa_state,
-                    &instance_id_clone,
-                    chunk,
-                )
-                .await
-                {
-                    eprintln!("[Audio] Failed to feed mic audio to Sherpa: {}", e);
-                }
-            }
+            feed_mic_audio_to_instances(&app_clone, chunk).await;
         }
 
         if let Some(w) = writer {
             let _ = w.finalize();
         }
-        let _ = filepath_tx.send(filepath_to_return);
     });
 
-    // Spawn thread to handle audio stream
     thread::spawn(move || {
         let err_fn = |err| eprintln!("[Audio] Mic stream error: {}", err);
 
@@ -560,11 +581,6 @@ pub fn start_microphone_capture<R: Runtime>(
             return;
         };
 
-        println!(
-            "[Audio] Mic Device: {}",
-            device.name().unwrap_or("Unknown".into())
-        );
-
         let supported_config = match device.default_input_config() {
             Ok(c) => c,
             Err(e) => {
@@ -575,8 +591,6 @@ pub fn start_microphone_capture<R: Runtime>(
 
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
-
-        println!("[Audio] Mic Config: {:?}", config);
 
         let sample_rate = config.sample_rate.0;
         let channels = config.channels;
@@ -723,14 +737,42 @@ pub fn start_microphone_capture<R: Runtime>(
 
         println!("[Audio] Mic capture started successfully on background thread.");
 
-        // Wait for stop signal
         let _ = rx.recv();
 
         println!("[Audio] Mic stop signal received. Dropping stream.");
-        // stream is dropped here, stopping capture
     });
 
     Ok(())
+}
+
+async fn feed_mic_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f32]) {
+    let instance_ids: Vec<String> = {
+        let audio_state = app.state::<AudioState>();
+        let guard = match audio_state.mic_instance_ids.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        guard.iter().cloned().collect()
+    };
+
+    if instance_ids.is_empty() {
+        return;
+    }
+
+    let sherpa_state = app.state::<crate::sherpa::SherpaState>();
+    for instance_id in instance_ids {
+        if instance_id.starts_with("test_") {
+            continue;
+        }
+        if let Err(e) =
+            crate::sherpa::feed_audio_samples(app, &sherpa_state, &instance_id, chunk).await
+        {
+            eprintln!(
+                "[Audio] Failed to feed mic audio to Sherpa instance {}: {}",
+                instance_id, e
+            );
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -747,7 +789,6 @@ fn process_mic_audio<R: Runtime>(
     task_producer: &mut impl Producer<Item = f32>,
     boost: f32,
 ) {
-    // 1. Mix to Mono, Apply Boost & Limiter, and Push to RingBuffer
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
         for sample in frame {
@@ -755,7 +796,6 @@ fn process_mic_audio<R: Runtime>(
         }
         let mut mono_sample = sum / channels as f32;
 
-        // Apply boost and clamp between -1.0 and 1.0 (limiter)
         if (boost - 1.0).abs() > f32::EPSILON {
             mono_sample = (mono_sample * boost).clamp(-1.0, 1.0);
         }
@@ -763,7 +803,6 @@ fn process_mic_audio<R: Runtime>(
         let _ = producer.try_push(mono_sample);
     }
 
-    // 2. Process chunks if enough data
     while consumer.occupied_len() >= resampler.input_frames_next() {
         let input_frames_needed = resampler.input_frames_next();
         input_buffer[0].resize(input_frames_needed, 0.0);
@@ -777,11 +816,9 @@ fn process_mic_audio<R: Runtime>(
                 if out_len > 0 {
                     let output_f32 = &output_buffer[0][..out_len];
 
-                    // Push the full f32 stream to the task ring buffer
                     let _ = task_producer.push_slice(output_f32);
-                    let _ = data_tx.try_send(()); // Signal Tokio task
+                    let _ = data_tx.try_send(()); 
 
-                    // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
                     let mut max_abs = 0.0_f32;
                     for &sample in output_f32 {
                         let abs_val = sample.abs();
@@ -803,30 +840,60 @@ fn process_mic_audio<R: Runtime>(
 #[tauri::command]
 pub async fn stop_microphone_capture(
     state: tauri::State<'_, AudioState>,
+    instance_id: String,
 ) -> Result<String, String> {
-    // Drop the locks *before* calling await!
-    let rx = {
+    let (should_stop_hardware, was_recording) = {
+        let mut instance_ids = state.mic_instance_ids.lock().map_err(|e| e.to_string())?;
+        instance_ids.remove(&instance_id);
+
+        let was_recording = instance_id != "voice-typing" && !instance_id.starts_with("test_");
+
+        if instance_ids.is_empty() {
+            (true, was_recording)
+        } else {
+            println!(
+                "[Audio] Mic capture remains active for {} instance(s) after detaching {}",
+                instance_ids.len(),
+                instance_id
+            );
+            (false, was_recording)
+        }
+    };
+
+    let mut saved_path = String::new();
+    if was_recording {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let sent = {
+            if let Some(recorder_tx) = state.mic_recorder_tx.lock().map_err(|e| e.to_string())?.as_ref() {
+                recorder_tx.try_send(RecorderCommand::Stop(tx)).is_ok()
+            } else {
+                false
+            }
+        };
+        
+        if sent {
+            match rx.await {
+                Ok(path) => saved_path = path,
+                Err(_) => eprintln!("[Audio] Failed to receive mic WAV filepath from task"),
+            }
+        }
+    }
+
+    if !should_stop_hardware {
+        return Ok(saved_path);
+    }
+
+    {
         let mut stop_signal_guard = state.mic_stop_signal.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = stop_signal_guard.take() {
             println!("[Audio] Stopping microphone capture...");
             let _ = tx.send(());
         } else {
             println!("[Audio] Mic stop requested but not running");
-            return Err("Not running".to_string());
         }
-
-        let mut filepath_receiver_guard = state.mic_filepath_receiver.lock().map_err(|e| e.to_string())?;
-        filepath_receiver_guard.take()
-    };
-
-    if let Some(rx) = rx {
-        match rx.await {
-            Ok(path) => Ok(path),
-            Err(_) => Err("Failed to receive WAV filepath".to_string()),
-        }
-    } else {
-        Err("No filepath receiver found".to_string())
     }
+
+    Ok(saved_path)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -842,7 +909,6 @@ fn process_audio<R: Runtime>(
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
 ) {
-    // 1. Mix to Mono and Push to RingBuffer
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
         for sample in frame {
@@ -852,17 +918,12 @@ fn process_audio<R: Runtime>(
         let _ = producer.try_push(mono_sample);
     }
 
-    // 2. Process chunks if enough data
     while consumer.occupied_len() >= resampler.input_frames_next() {
         let input_frames_needed = resampler.input_frames_next();
         input_buffer[0].resize(input_frames_needed, 0.0);
         let chunk_slice = &mut input_buffer[0];
         let _read = consumer.pop_slice(chunk_slice);
 
-        // Use process_into_buffer
-        // Note: process_into_buffer takes &[Vec<T>], &mut [Vec<T>], Option...
-        // input_buffer is [Vec<T>; 1]. We need to pass it as slice.
-        // It returns Result<(usize, usize), ...>
         let result = resampler.process_into_buffer(input_buffer, output_buffer, None);
 
         match result {
@@ -870,11 +931,9 @@ fn process_audio<R: Runtime>(
                 if out_len > 0 {
                     let output_f32 = &output_buffer[0][..out_len];
 
-                    // Push the full f32 stream to the task ring buffer
                     let _ = task_producer.push_slice(output_f32);
-                    let _ = data_tx.try_send(()); // Signal Tokio task
+                    let _ = data_tx.try_send(()); 
 
-                    // Emit one UI peak per 1024-sample output chunk (~15.6 Hz at 16 kHz).
                     let mut max_abs = 0.0_f32;
                     for &sample in output_f32 {
                         let abs_val = sample.abs();
@@ -898,48 +957,58 @@ pub async fn stop_system_audio_capture(
     state: tauri::State<'_, AudioState>,
     instance_id: String,
 ) -> Result<String, String> {
-    let should_stop = {
+    let (should_stop_hardware, was_recording) = {
         let mut instance_ids = state.system_instance_ids.lock().map_err(|e| e.to_string())?;
         instance_ids.remove(&instance_id);
+
+        let was_recording = instance_id == "record";
+
         if instance_ids.is_empty() {
-            true
+            (true, was_recording)
         } else {
             println!(
                 "[Audio] System capture remains active for {} instance(s) after detaching {}",
                 instance_ids.len(),
                 instance_id
             );
-            false
+            (false, was_recording)
         }
     };
 
-    if !should_stop {
-        return Ok(String::new());
+    let mut saved_path = String::new();
+    if was_recording {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let sent = {
+            if let Some(recorder_tx) = state.system_recorder_tx.lock().map_err(|e| e.to_string())?.as_ref() {
+                recorder_tx.try_send(RecorderCommand::Stop(tx)).is_ok()
+            } else {
+                false
+            }
+        };
+        
+        if sent {
+            match rx.await {
+                Ok(path) => saved_path = path,
+                Err(_) => eprintln!("[Audio] Failed to receive system WAV filepath from task"),
+            }
+        }
     }
 
-    // Drop the locks *before* calling await!
-    let rx = {
+    if !should_stop_hardware {
+        return Ok(saved_path);
+    }
+
+    {
         let mut stop_signal_guard = state.system_stop_signal.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = stop_signal_guard.take() {
             println!("[Audio] Stopping system capture...");
             let _ = tx.send(());
         } else {
             println!("[Audio] Stop requested but not running");
-            return Err("Not running".to_string());
         }
-
-        let mut filepath_receiver_guard = state.system_filepath_receiver.lock().map_err(|e| e.to_string())?;
-        filepath_receiver_guard.take()
-    };
-
-    if let Some(rx) = rx {
-        match rx.await {
-            Ok(path) => Ok(path),
-            Err(_) => Err("Failed to receive WAV filepath".to_string()),
-        }
-    } else {
-        Err("No filepath receiver found".to_string())
     }
+
+    Ok(saved_path)
 }
 
 #[tauri::command]

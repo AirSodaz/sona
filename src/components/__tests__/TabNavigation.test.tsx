@@ -3,11 +3,15 @@ import { render, screen } from '@testing-library/react';
 import { TabNavigation } from '../TabNavigation';
 
 // Mock dependencies
-vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string) => key,
-    }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('react-i18next')>();
+    return {
+        ...actual,
+        useTranslation: () => ({
+            t: (key: string) => key,
+        }),
+    };
+});
 
 const mockSetMode = vi.fn();
 

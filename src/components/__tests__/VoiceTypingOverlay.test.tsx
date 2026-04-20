@@ -2,6 +2,16 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VoiceTypingOverlay } from '../VoiceTypingOverlay';
 
+vi.mock('react-i18next', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('react-i18next')>();
+    return {
+        ...actual,
+        useTranslation: () => ({
+            t: (key: string) => key === 'common.listening' ? '正在聆听...' : key,
+        }),
+    };
+});
+
 const mocks = vi.hoisted(() => {
     const listenCallbacks: Record<string, (event: any) => void> = {};
 

@@ -22,7 +22,7 @@ vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
 vi.mock('../voiceTypingWindowService', () => ({
     voiceTypingWindowService: {
         open: vi.fn(),
-        close: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined),
         sendText: vi.fn(),
     },
 }));
@@ -171,7 +171,7 @@ describe('voiceTypingService', () => {
 
         await (voiceTypingService as any).stopListening();
 
-        expect(invoke).toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'voice-typing' });
+        expect(invoke).not.toHaveBeenCalledWith('stop_microphone_capture', expect.anything());
         expect(mockSoftStop).toHaveBeenCalled();
         expect(voiceTypingWindowService.close).toHaveBeenCalled();
     });

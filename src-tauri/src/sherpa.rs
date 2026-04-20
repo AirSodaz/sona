@@ -267,11 +267,7 @@ impl Recognizer {
                 config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
 
                 if let Some(_hw) = hotwords {
-                    // For Transducer, sherpa-onnx usually supports hotwords via modified_beam_search
                     config.decoding_method = Some("modified_beam_search".to_string());
-                    // Note: In some versions/bindings, transducer hotwords might require a file path.
-                    // We'll see if the direct string field is supported in this crate version.
-                    // config.hotwords_file = ... 
                 }
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineTransducer)");
@@ -405,7 +401,6 @@ impl Recognizer {
                     Some(tokenizer.to_string_lossy().to_string());
                 
                 if let Some(hw) = hotwords {
-                    // PR #3468 added hotwords to OfflineQwen3ASRModelConfig
                     config.model_config.qwen3_asr.hotwords = Some(hw);
                 }
 
@@ -560,8 +555,19 @@ impl Default for SherpaInstance {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ModelConfigKey {
+    pub model_path: String,
+    pub model_type: String,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub hotwords: Option<String>,
+}
+
 pub struct SherpaState {
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
+    pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
 }
 
 impl Default for SherpaState {
@@ -574,6 +580,7 @@ impl SherpaState {
     pub fn new() -> Self {
         Self {
             instances: Mutex::new(HashMap::new()),
+            recognizer_pool: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -682,7 +689,6 @@ fn run_offline_inference<R: tauri::Runtime>(
                 result.text.clone()
             };
 
-            // Simple tag cleanup for intermediate SenseVoice results to avoid confusing UI
             if !is_final && text.starts_with("<|") && text.contains("|>") {
                 if let Some(pos) = text.find("|>") {
                     text = text[pos + 2..].trim().to_string();
@@ -741,39 +747,45 @@ pub async fn init_recognizer(
         hotwords
     );
 
-    info!("[init_recognizer] before build_model_config");
-    let config_type = build_model_config(
-        Path::new(&model_path),
-        &model_type,
-        &file_config,
+    let config_key = ModelConfigKey {
+        model_path: model_path.clone(),
+        model_type: model_type.clone(),
+        num_threads,
         enable_itn,
-        &language,
-        hotwords,
-    )?;
-    info!("[init_recognizer] after build_model_config: {:?}", config_type);
+        language: language.clone(),
+        hotwords: hotwords.clone(),
+    };
 
-    info!("[init_recognizer] before Recognizer::new");
-    let recognizer = Recognizer::new(config_type, num_threads)?;
-    info!("[init_recognizer] after Recognizer::new");
+    let recognizer = {
+        let mut pool = state.recognizer_pool.lock().await;
+        if let Some(r) = pool.get(&config_key) {
+            info!("[init_recognizer] Reusing existing recognizer from pool");
+            r.clone()
+        } else {
+            info!("[init_recognizer] Creating new recognizer and adding to pool");
+            let config_type = build_model_config(
+                Path::new(&model_path),
+                &model_type,
+                &file_config,
+                enable_itn,
+                &language,
+                hotwords,
+            )?;
+            let r = Arc::new(Recognizer::new(config_type, num_threads)?);
+            pool.insert(config_key, r.clone());
+            r
+        }
+    };
 
-
-    info!("[init_recognizer] before load_punctuation");
     let punctuation = load_punctuation(punctuation_model);
-    info!(
-        "[init_recognizer] after load_punctuation loaded={}",
-        punctuation.is_some()
-    );
-
-    info!("[init_recognizer] before load_vad");
     let vad = load_vad(vad_model.clone());
-    info!("[init_recognizer] after load_vad loaded={}", vad.is_some());
 
     let mut instances = state.instances.lock().await;
     let instance = instances
         .entry(instance_id)
         .or_insert_with(SherpaInstance::default);
 
-    instance.recognizer = Some(Arc::new(recognizer));
+    instance.recognizer = Some(recognizer);
     instance.vad = vad;
     instance.punctuation = punctuation.map(Arc::new);
     instance.vad_model = vad_model.clone();
@@ -808,12 +820,6 @@ pub async fn start_recognizer(
     instance.current_segment_id = None;
     instance.is_running = true;
 
-    // Reset VAD state only if necessary. 
-    // Recreating VAD is used to reset its internal state (e.g., silence detection counters).
-    // If we already have a VAD and the model is the same, we still recreate it to reset state,
-    // but the OS file cache should make this fast. 
-    // However, to be extra safe, we could check if we can reuse the same model bytes.
-    // For now, let's just make sure we only do it if vad_model is set.
     if instance.vad_model.is_some() {
         instance.vad = load_vad(instance.vad_model.clone());
     }
@@ -828,7 +834,6 @@ pub async fn stop_recognizer(
 ) -> Result<(), String> {
     let mut instances = state.instances.lock().await;
     if let Some(instance) = instances.get_mut(&instance_id) {
-        // Keep models loaded, but clear active recording state
         instance.stream = None;
         instance.total_samples = 0;
         instance.segment_start_time = 0.0;
@@ -851,7 +856,6 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
         .get_mut(&instance_id)
         .ok_or("Instance not found")?;
 
-    // Flush offline speech buffer
     if let Some(recognizer) = instance.recognizer.clone() {
         if let RecognizerInner::Offline(_) = &recognizer.inner {
             if !instance.offline_state.speech_buffer.is_empty() {
@@ -895,13 +899,11 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
         }
     }
 
-    // Flush online stream
     if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
     {
         if let RecognizerInner::Online(r) = &recognizer.inner {
             let current_time = instance.total_samples as f64 / 16000.0;
 
-            // Add tail padding to flush the decoder
             let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
             debug!("FFI: Calling accept_waveform (Online, tail_padding)");
             st.0.accept_waveform(16000, &tail_padding);
@@ -967,7 +969,6 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 
     match &recognizer.inner {
         RecognizerInner::Offline(_) => {
-            // Offline + VAD (pseudo-streaming)
             let Some(SafeVad(vad)) = instance.vad.as_ref() else {
                 return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
             };
@@ -975,18 +976,15 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             vad.accept_waveform(samples);
             let currently_speaking = vad.detected();
 
-            // Ensure segment ID exists
             if instance.current_segment_id.is_none() {
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
             }
             let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
             if currently_speaking && !instance.offline_state.is_speaking {
-                // Rising edge (silence -> speech)
                 instance.offline_state.is_speaking = true;
 
-                // Prepend Ring Buffer
-                let samples_to_keep = (16000.0 * 0.3) as usize; // 0.3s context
+                let samples_to_keep = (16000.0 * 0.3) as usize; 
                 let mut context_len = 0;
 
                 if !instance.offline_state.ring_buffer.is_empty() {
@@ -1049,7 +1047,6 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 
             if !currently_speaking {
                 if instance.offline_state.is_speaking {
-                    // Falling edge (speech -> silence)
                     instance.offline_state.is_speaking = false;
                     instance.offline_state.speech_buffer.push(samples.to_vec());
 
@@ -1079,11 +1076,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     });
 
                     instance.offline_state.speech_buffer.clear();
-                    // Generate new segment ID for the next utterance
                     instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
                 }
 
-                // Maintain Ring Buffer
                 instance
                     .offline_state
                     .ring_buffer
@@ -1115,7 +1110,6 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             Ok(())
         }
         RecognizerInner::Online(r) => {
-            // Online model processing
             let st = instance
                 .stream
                 .as_ref()
@@ -1188,7 +1182,6 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     }
                 }
 
-                // Always reset state after endpoint, regardless of text content
                 instance.current_segment_id = None;
                 r.0.reset(&st.0);
                 instance.segment_start_time = current_time;
@@ -1258,7 +1251,6 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     .await
 }
 
-/// Runs batch transcription without depending on Tauri runtime types.
 pub async fn transcribe_batch_with_progress<F>(
     request: &BatchTranscriptionRequest,
     mut on_progress: F,
