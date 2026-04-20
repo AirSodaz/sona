@@ -63,6 +63,10 @@ class VoiceTypingService {
                 this.lastEnabled = newEnabled;
                 this.lastShortcut = newShortcut;
                 this.updateShortcutRegistration(newEnabled, newShortcut);
+                
+                if (!newEnabled) {
+                    this.stopMicrophoneCapture();
+                }
             }
 
             if (newEnabled && (configChanged || newEnabled !== this.lastEnabled)) {
@@ -85,14 +89,46 @@ class VoiceTypingService {
         if (!config.voiceTypingEnabled || !config.streamingModelPath) return;
 
         try {
-            logger.info('[VoiceTypingService] Pre-warming transcription model...');
+            logger.info('[VoiceTypingService] Pre-warming transcription model and microphone...');
             this.transcriptionService.setModelPath(config.streamingModelPath);
             this.transcriptionService.setLanguage(config.language);
             this.transcriptionService.setEnableITN(config.enableITN ?? true);
             await this.transcriptionService.prepare();
-            logger.info('[VoiceTypingService] Model pre-warmed and ready.');
+            
+            // Warm up microphone
+            await this.ensureMicrophoneStarted();
+            
+            logger.info('[VoiceTypingService] Model and Mic pre-warmed and ready.');
         } catch (e) {
-            logger.error('[VoiceTypingService] Failed to pre-warm model:', e);
+            logger.error('[VoiceTypingService] Failed to pre-warm:', e);
+        }
+    }
+
+    private async ensureMicrophoneStarted() {
+        if (this.captureStarted) return;
+        
+        try {
+            const config = useConfigStore.getState().config;
+            logger.info('[VoiceTypingService] Starting microphone capture for pre-warming...');
+            await invoke('start_microphone_capture', {
+                deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
+                instanceId: 'voice-typing'
+            });
+            this.captureStarted = true;
+        } catch (e) {
+            logger.error('[VoiceTypingService] Failed to start microphone capture:', e);
+        }
+    }
+
+    private async stopMicrophoneCapture() {
+        if (!this.captureStarted) return;
+        
+        try {
+            logger.info('[VoiceTypingService] Stopping persistent microphone capture...');
+            await invoke('stop_microphone_capture', { instanceId: 'voice-typing' });
+            this.captureStarted = false;
+        } catch (e) {
+            logger.error('[VoiceTypingService] Failed to stop microphone capture:', e);
         }
     }
 
@@ -166,6 +202,9 @@ class VoiceTypingService {
             this.transcriptionService.setEnableITN(config.enableITN ?? true);
             await this.transcriptionService.prepare();
 
+            // Ensure mic is started (should already be warmed up)
+            await this.ensureMicrophoneStarted();
+
             // Start transcription
             await this.transcriptionService.start(
                 async (segment) => {
@@ -199,12 +238,7 @@ class VoiceTypingService {
                 return;
             }
 
-            // Start audio capture after the recognizer is ready to avoid dropping the first speech chunk.
-            await invoke('start_microphone_capture', {
-                deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
-                instanceId: 'voice-typing'
-            });
-            this.captureStarted = true;
+            // Successfully started recognition
             await voiceTypingWindowService.sendText(''); // Reset to "Listening..."
 
             if (!this.isListening || requestId !== this.startRequestId) {
@@ -214,7 +248,7 @@ class VoiceTypingService {
         } catch (e) {
             logger.error('Failed to start voice typing:', e);
             this.isListening = false;
-            this.captureStarted = false;
+            // Don't stop capture here as we want to keep it warmed up
             await this.transcriptionService.softStop().catch((stopError) => {
                 logger.error('Failed to roll back voice typing recognizer after start failure:', stopError);
             });
@@ -223,29 +257,20 @@ class VoiceTypingService {
     }
 
     private async stopListening() {
-        if (!this.isListening && !this.captureStarted) return;
+        if (!this.isListening) return;
         
         this.startRequestId += 1;
         this.isListening = false;
-        const shouldStopCapture = this.captureStarted;
-        this.captureStarted = false;
 
         // Immediately close the window as requested by the user
         voiceTypingWindowService.close().catch(e => logger.error('[VoiceTypingService] Failed to close window:', e));
 
-        try {
-            if (shouldStopCapture) {
-                await invoke('stop_microphone_capture', { instanceId: 'voice-typing' });
-            }
-        } catch (e) {
-            logger.error('Failed to stop voice typing:', e);
-        } finally {
-            // We still await softStop to ensure the flush_recognizer completes 
-            // and the final segments are emitted and injected.
-            await this.transcriptionService.softStop().catch((stopError) => {
-                logger.error('Failed to flush voice typing recognizer while stopping:', stopError);
-            });
-        }
+        // We still await softStop to ensure the flush_recognizer completes 
+        // and the final segments are emitted and injected.
+        // But we DO NOT stop the microphone capture to keep it warmed up.
+        await this.transcriptionService.softStop().catch((stopError) => {
+            logger.error('Failed to flush voice typing recognizer while stopping:', stopError);
+        });
     }
 
     private async getOverlayPosition(): Promise<[number, number]> {

@@ -450,7 +450,7 @@ pub fn start_microphone_capture<R: Runtime>(
     let instance_id_clone = instance_id.clone();
 
     tauri::async_runtime::spawn(async move {
-        let mut writer = if !is_test {
+        let mut writer = if !is_test && instance_id_clone != "voice-typing" {
             let spec = hound::WavSpec {
                 channels: 1,
                 sample_rate: 16000,
