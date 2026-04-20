@@ -141,13 +141,14 @@ export function migrateOnboardingState(
     try {
       const parsed = JSON.parse(storedOnboardingValue);
       if (isRecord(parsed) && isValidStatus(parsed.status)) {
+        const deferredAt = typeof parsed.deferredAt === 'string' ? parsed.deferredAt : undefined;
+        const completedAt = typeof parsed.completedAt === 'string' ? parsed.completedAt : undefined;
+        const reminderDismissedAt = typeof parsed.reminderDismissedAt === 'string' ? parsed.reminderDismissedAt : undefined;
+
         return createState(parsed.status, {
-          deferredAt: typeof parsed.deferredAt === 'string' ? parsed.deferredAt : undefined,
-          completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : undefined,
-          reminderDismissedAt:
-            typeof parsed.reminderDismissedAt === 'string'
-              ? parsed.reminderDismissedAt
-              : undefined,
+          deferredAt,
+          completedAt,
+          reminderDismissedAt,
         });
       }
     } catch (error) {
