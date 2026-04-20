@@ -35,7 +35,7 @@ export function useFocusTrap(
                     return;
                 }
 
-                if (e.key === 'Tab') {
+                if (e.key === 'Tab' && !e.ctrlKey) {
                     if (!containerRef.current) return;
 
                     // Trap focus inside modal

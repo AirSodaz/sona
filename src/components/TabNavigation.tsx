@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
+import { useDialogStore } from '../stores/dialogStore';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 
 import { MicIcon, FolderIcon, HistoryIcon } from './Icons';
 
@@ -26,6 +28,31 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     const handleTabChange = (newMode: AppMode) => {
         setMode(newMode);
     };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key === 'Tab') {
+                // Check if any modal/dialog is open
+                const isSettingsOpen = !!document.querySelector('.settings-overlay');
+                const isDialogOpen = useDialogStore.getState().isOpen;
+                const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
+
+                if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) return;
+
+                e.preventDefault();
+                const modes: AppMode[] = ['live', 'batch', 'history'];
+                const currentIndex = modes.indexOf(mode);
+                const nextIndex = e.shiftKey
+                    ? (currentIndex - 1 + modes.length) % modes.length
+                    : (currentIndex + 1) % modes.length;
+
+                handleTabChange(modes[nextIndex]);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mode]);
 
     return (
         <div

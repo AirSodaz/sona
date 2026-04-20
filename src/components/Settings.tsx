@@ -1,8 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useDialogStore } from '../stores/dialogStore';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
 import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
 import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
@@ -57,8 +59,40 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
 
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key === 'Tab') {
+                // If a dialog is open on top of settings, don't switch tabs
+                if (useDialogStore.getState().isOpen || useErrorDialogStore.getState().isOpen) {
+                    return;
+                }
+
+                e.preventDefault();
+                const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
+                const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
+                const nextIndex = e.shiftKey
+                    ? (currentIndex - 1 + tabs.length) % tabs.length
+                    : (currentIndex + 1) % tabs.length;
+
+                const nextTab = tabs[nextIndex];
+                setActiveTab(nextTab);
+
+                // Move focus to the new tab button
+                requestAnimationFrame(() => {
+                    const btn = document.getElementById(`settings-tab-${nextTab}`);
+                    btn?.focus();
+                });
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [isOpen, activeTab, setActiveTab]);
+
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'llm_service', 'vocabulary', 'shortcuts', 'about'] as const;
+        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
         const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
 
         let nextIndex = -1;
