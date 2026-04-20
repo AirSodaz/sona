@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { useTranslation } from 'react-i18next';
 import { VOICE_TYPING_EVENT_TEXT } from '../services/voiceTypingWindowService';
 import { Mic } from 'lucide-react';
 import '../styles/index.css';
 
 export function VoiceTypingOverlay() {
-    const [text, setText] = useState('正在聆听...');
+    const { t } = useTranslation();
+    const [text, setText] = useState(t('common.listening'));
 
     useEffect(() => {
         const unlistenPromise = listen<{ text: string }>(VOICE_TYPING_EVENT_TEXT, (event) => {
-            setText(event.payload.text || '正在聆听...');
+            const newText = event.payload.text;
+            if (newText === '' || !newText) {
+                setText(t('common.listening'));
+            } else {
+                setText(newText);
+            }
         });
 
         return () => {
             unlistenPromise.then(unlisten => unlisten());
         };
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         const previousDocumentBackground = document.documentElement.style.background;

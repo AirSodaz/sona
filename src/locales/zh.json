@@ -7,6 +7,8 @@
         "delete_item": "删除 {{item}}",
         "download": "下载",
         "loading": "加载中...",
+        "listening": "正在聆听...",
+        "preparing": "正在准备...",
         "error": "错误",
         "warning": "警告",
         "auto": "自动",

@@ -1,5 +1,6 @@
 import { register, unregister, isRegistered } from '@tauri-apps/plugin-global-shortcut';
 import { invoke } from '@tauri-apps/api/core';
+import i18next from 'i18next';
 import { TranscriptionService } from './transcriptionService';
 import { voiceTypingWindowService } from './voiceTypingWindowService';
 import { useConfigStore } from '../stores/configStore';
@@ -156,7 +157,7 @@ class VoiceTypingService {
         try {
             const [x, y] = await this.getOverlayPosition();
             await voiceTypingWindowService.open(x, y);
-            await voiceTypingWindowService.sendText('正在准备录音...');
+            await voiceTypingWindowService.sendText(i18next.t('common.preparing'));
 
             // Ensure model is ready
             const config = useConfigStore.getState().config;
@@ -168,22 +169,26 @@ class VoiceTypingService {
             // Start transcription
             await this.transcriptionService.start(
                 async (segment) => {
+                    const text = segment.text.trim();
                     if (segment.isFinal) {
-                        const finalSegmentText = segment.text.trim();
-                        if (finalSegmentText) {
-                            await voiceTypingWindowService.sendText(finalSegmentText);
-                            await invoke('inject_text', { text: finalSegmentText });
+                        if (text) {
+                            await voiceTypingWindowService.sendText(text);
+                            await invoke('inject_text', { text: text });
+                            // Reset to "Listening..." after a short delay for the next sentence
+                            setTimeout(() => {
+                                if (this.isListening && requestId === this.startRequestId) {
+                                    voiceTypingWindowService.sendText('');
+                                }
+                            }, 1000);
                         }
                     } else {
-                        const partialText = segment.text.trim();
-                        if (partialText) {
-                            await voiceTypingWindowService.sendText(partialText);
-                        }
+                        // For partials, we send them to the overlay as a preview
+                        await voiceTypingWindowService.sendText(text);
                     }
                 },
                 (error) => {
                     logger.error('Voice typing transcription error:', error);
-                    voiceTypingWindowService.sendText('语音识别出错: ' + error);
+                    voiceTypingWindowService.sendText(i18next.t('errors.common.operation_failed') + ': ' + error);
                     this.stopListening();
                 }
             );
@@ -200,6 +205,7 @@ class VoiceTypingService {
                 instanceId: 'voice-typing'
             });
             this.captureStarted = true;
+            await voiceTypingWindowService.sendText(''); // Reset to "Listening..."
 
             if (!this.isListening || requestId !== this.startRequestId) {
                 await this.stopListening();

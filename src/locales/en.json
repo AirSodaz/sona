@@ -7,6 +7,8 @@
         "delete_item": "Delete {{item}}",
         "download": "Download",
         "loading": "Loading...",
+        "listening": "Listening...",
+        "preparing": "Preparing...",
         "error": "Error",
         "warning": "Warning",
         "auto": "Automatic",
