@@ -630,6 +630,7 @@ pub fn run() {
             open_log_folder,
             system::inject_text,
             system::get_mouse_position,
+            system::get_text_cursor_position,
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,

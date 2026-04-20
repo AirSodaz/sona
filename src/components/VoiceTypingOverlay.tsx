@@ -17,6 +17,19 @@ export function VoiceTypingOverlay() {
         };
     }, []);
 
+    useEffect(() => {
+        const previousDocumentBackground = document.documentElement.style.background;
+        const previousBodyBackground = document.body.style.background;
+
+        document.documentElement.style.background = 'transparent';
+        document.body.style.background = 'transparent';
+
+        return () => {
+            document.documentElement.style.background = previousDocumentBackground;
+            document.body.style.background = previousBodyBackground;
+        };
+    }, []);
+
     return (
         <div style={{
             width: '100vw',
