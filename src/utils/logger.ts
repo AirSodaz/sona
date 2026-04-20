@@ -56,15 +56,19 @@ async function writeLog(level: LogLevel, message: string, ...args: any[]) {
  */
 export const logger = {
   debug: async (message: string, ...args: any[]) => {
+    console.debug(message, ...args);
     await writeLog('debug', message, ...args);
   },
   info: async (message: string, ...args: any[]) => {
+    console.info(message, ...args);
     await writeLog('info', message, ...args);
   },
   warn: async (message: string, ...args: any[]) => {
+    console.warn(message, ...args);
     await writeLog('warn', message, ...args);
   },
   error: async (message: string, ...args: any[]) => {
+    console.error(message, ...args);
     await writeLog('error', message, ...args);
   }
 };

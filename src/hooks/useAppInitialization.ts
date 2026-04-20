@@ -12,6 +12,7 @@ import { useThemeEffect } from './useThemeEffect';
 import { useFontEffect } from './useFontEffect';
 import { useConfigPersistence } from './useConfigPersistence';
 import { useTraySyncEffect } from './useTraySyncEffect';
+import { voiceTypingService } from '../services/voiceTypingService';
 
 /**
  * Hook to handle application initialization.
@@ -84,6 +85,10 @@ export function useAppInitialization() {
                 if (isConfigMigrated || isOnboardingMigrated) {
                     await settingsStore.save();
                 }
+
+                // Initialize Voice Typing shortcut listeners (Main Window Only)
+                voiceTypingService.init();
+
             } catch (e) {
                 logger.error('Failed to initialize app state:', e);
             } finally {

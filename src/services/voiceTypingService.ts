@@ -11,60 +11,96 @@ class VoiceTypingService {
     private transcriptionService: TranscriptionService;
     private currentShortcut: string | null = null;
 
+    private initialized = false;
+    private lastEnabled = false;
+    private lastShortcut = '';
+
     constructor() {
         this.transcriptionService = new TranscriptionService('voice-typing');
-        
+    }
+
+    public init() {
+        if (this.initialized) {
+            logger.info('[VoiceTypingService] Already initialized.');
+            return;
+        }
+        this.initialized = true;
+        logger.info('[VoiceTypingService] Initializing...');
+
+        const initialConfig = useConfigStore.getState().config;
+        this.lastEnabled = initialConfig.voiceTypingEnabled || false;
+        this.lastShortcut = initialConfig.voiceTypingShortcut || 'Alt+V';
+
+        logger.info(`[VoiceTypingService] Initial config - Enabled: ${this.lastEnabled}, Shortcut: ${this.lastShortcut}`);
+
         // Listen to config changes to update shortcuts
-        useConfigStore.subscribe((state, prev) => {
+        useConfigStore.subscribe((state) => {
             const newConfig = state.config;
-            const prevConfig = prev.config;
-            if (newConfig.voiceTypingEnabled !== prevConfig.voiceTypingEnabled ||
-                newConfig.voiceTypingShortcut !== prevConfig.voiceTypingShortcut) {
-                this.updateShortcutRegistration(newConfig.voiceTypingEnabled || false, newConfig.voiceTypingShortcut || 'Alt+V');
+            const newEnabled = newConfig.voiceTypingEnabled || false;
+            const newShortcut = newConfig.voiceTypingShortcut || 'Alt+V';
+
+            if (newEnabled !== this.lastEnabled || newShortcut !== this.lastShortcut) {
+                logger.info(`[VoiceTypingService] Config changed. New Enabled: ${newEnabled}, New Shortcut: ${newShortcut}`);
+                this.lastEnabled = newEnabled;
+                this.lastShortcut = newShortcut;
+                this.updateShortcutRegistration(newEnabled, newShortcut);
             }
         });
 
         // Initial setup
-        const config = useConfigStore.getState().config;
-        this.updateShortcutRegistration(config.voiceTypingEnabled || false, config.voiceTypingShortcut || 'Alt+V');
+        this.updateShortcutRegistration(this.lastEnabled, this.lastShortcut);
     }
 
     private async updateShortcutRegistration(enabled: boolean, shortcut: string) {
+        const normalizedShortcut = shortcut.replace(/\s+/g, '');
+        logger.info(`[VoiceTypingService] updateShortcutRegistration called. Enabled: ${enabled}, Shortcut: ${shortcut}, Normalized: ${normalizedShortcut}`);
+        
         try {
             if (this.isShortcutRegistered && this.currentShortcut) {
+                logger.info(`[VoiceTypingService] Checking if current shortcut ${this.currentShortcut} is registered...`);
                 const registered = await isRegistered(this.currentShortcut);
                 if (registered) {
+                    logger.info(`[VoiceTypingService] Unregistering old shortcut ${this.currentShortcut}...`);
                     await unregister(this.currentShortcut);
                 }
                 this.isShortcutRegistered = false;
             }
 
-            if (enabled && shortcut) {
-                await register(shortcut, (event) => {
+            if (enabled && normalizedShortcut) {
+                logger.info(`[VoiceTypingService] Attempting to register new shortcut ${normalizedShortcut}...`);
+                await register(normalizedShortcut, (event) => {
+                    logger.info(`[VoiceTypingService] Shortcut Event Triggered: ${event.shortcut}, State: ${event.state}`);
                     const mode = useConfigStore.getState().config.voiceTypingMode || 'hold';
+                    logger.info(`[VoiceTypingService] Current Mode: ${mode}, isListening: ${this.isListening}`);
                     
                     if (mode === 'hold') {
                         if (event.state === 'Pressed' && !this.isListening) {
+                            logger.info('[VoiceTypingService] Hold Mode -> Pressed -> Starting listen');
                             this.startListening();
                         } else if (event.state === 'Released' && this.isListening) {
+                            logger.info('[VoiceTypingService] Hold Mode -> Released -> Stopping listen');
                             this.stopListening();
                         }
                     } else if (mode === 'toggle') {
                         if (event.state === 'Released') {
                             if (this.isListening) {
+                                logger.info('[VoiceTypingService] Toggle Mode -> Released -> Stopping listen');
                                 this.stopListening();
                             } else {
+                                logger.info('[VoiceTypingService] Toggle Mode -> Released -> Starting listen');
                                 this.startListening();
                             }
                         }
                     }
                 });
                 this.isShortcutRegistered = true;
-                this.currentShortcut = shortcut;
-                logger.info(`Voice typing shortcut registered: ${shortcut}`);
+                this.currentShortcut = normalizedShortcut;
+                logger.info(`[VoiceTypingService] Successfully registered voice typing shortcut: ${normalizedShortcut}`);
+            } else {
+                logger.info(`[VoiceTypingService] Not registering shortcut (enabled: ${enabled}, shortcut: ${normalizedShortcut})`);
             }
         } catch (e) {
-            logger.error('Failed to update voice typing shortcut:', e);
+            logger.error('[VoiceTypingService] Failed to update voice typing shortcut:', e);
         }
     }
 
@@ -81,7 +117,7 @@ class VoiceTypingService {
 
             // Ensure model is ready
             const config = useConfigStore.getState().config;
-            this.transcriptionService.setModelPath(config.offlineModelPath);
+            this.transcriptionService.setModelPath(config.streamingModelPath);
             this.transcriptionService.setLanguage(config.language);
             this.transcriptionService.setEnableITN(config.enableITN ?? true);
             await this.transcriptionService.prepare();
