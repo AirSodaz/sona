@@ -439,6 +439,7 @@
     },
     "shortcuts": {
         "title": "快捷键",
+        "edit_manually": "手动输入",
         "section_playback": "播放控制",
         "section_search": "搜索",
         "section_general": "通用",

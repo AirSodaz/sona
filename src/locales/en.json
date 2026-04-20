@@ -439,6 +439,7 @@
     },
     "shortcuts": {
         "title": "Shortcuts",
+        "edit_manually": "Edit manually",
         "section_playback": "Playback",
         "section_search": "Search",
         "section_general": "General",

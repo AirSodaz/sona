@@ -133,7 +133,8 @@ function ShortcutInput({ value, onChange }: ShortcutInputProps) {
             </button>
             <button 
                 onClick={() => setIsEditing(true)}
-                title={t('common.edit', { defaultValue: 'Edit manually' })}
+                data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
+                data-tooltip-pos="top"
                 style={{ 
                     padding: '4px', 
                     background: 'transparent', 
