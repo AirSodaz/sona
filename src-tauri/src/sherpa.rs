@@ -539,6 +539,7 @@ pub struct SherpaInstance {
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub current_segment_id: Option<String>,
+    pub is_running: bool,
 }
 
 impl Default for SherpaInstance {
@@ -554,6 +555,7 @@ impl Default for SherpaInstance {
             vad_model: None,
             vad_buffer: 5.0,
             current_segment_id: None,
+            is_running: false,
         }
     }
 }
@@ -804,6 +806,7 @@ pub async fn start_recognizer(
     instance.segment_start_time = 0.0;
     instance.offline_state = OfflineState::default();
     instance.current_segment_id = None;
+    instance.is_running = true;
 
     // Reset VAD state only if necessary. 
     // Recreating VAD is used to reset its internal state (e.g., silence detection counters).
@@ -831,6 +834,7 @@ pub async fn stop_recognizer(
         instance.segment_start_time = 0.0;
         instance.offline_state = OfflineState::default();
         instance.current_segment_id = None;
+        instance.is_running = false;
     }
     Ok(())
 }
@@ -951,6 +955,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let mut instances = state.instances.lock().await;
     let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
+
+    if !instance.is_running {
+        return Ok(());
+    }
 
     let recognizer = instance
         .recognizer
