@@ -521,19 +521,24 @@ pub fn start_microphone_capture<R: Runtime>(
                         None => break,
                     }
                 },
-                _ = data_rx.recv() => {
-                    let len = task_consumer.pop_slice(&mut pull_buffer);
-                    if len > 0 {
-                        let chunk = &pull_buffer[..len];
+                opt = data_rx.recv() => {
+                    match opt {
+                        Some(()) => {
+                            let len = task_consumer.pop_slice(&mut pull_buffer);
+                            if len > 0 {
+                                let chunk = &pull_buffer[..len];
 
-                        if let Some(w) = writer.as_mut() {
-                            let amplitude = i16::MAX as f32;
-                            for &sample in chunk {
-                                let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                if let Some(w) = writer.as_mut() {
+                                    let amplitude = i16::MAX as f32;
+                                    for &sample in chunk {
+                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                    }
+                                }
+
+                                feed_mic_audio_to_instances(&app_clone, chunk).await;
                             }
-                        }
-
-                        feed_mic_audio_to_instances(&app_clone, chunk).await;
+                        },
+                        None => break,
                     }
                 }
             }
