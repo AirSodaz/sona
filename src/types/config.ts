@@ -193,6 +193,20 @@ export interface BaseConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Voice Typing
+// ---------------------------------------------------------------------------
+
+/** Voice Typing (dictation) settings. */
+export interface VoiceTypingConfig {
+  /** Whether voice typing feature is enabled. Default: false. */
+  voiceTypingEnabled?: boolean;
+  /** Global shortcut to trigger voice typing. Default: 'Alt+V'. */
+  voiceTypingShortcut?: string;
+  /** Interaction mode: 'hold' (Push-to-Talk) or 'toggle'. Default: 'hold'. */
+  voiceTypingMode?: 'hold' | 'toggle';
+}
+
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -211,4 +225,5 @@ export type AppConfig =
   CaptionConfig &
   TranscriptionConfig &
   VocabularyConfig &
+  VoiceTypingConfig &
   LlmAssistantConfig;

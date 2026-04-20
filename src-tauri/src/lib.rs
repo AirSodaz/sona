@@ -6,6 +6,7 @@ mod hardware;
 pub mod pipeline;
 pub mod preset_models;
 pub mod sherpa;
+pub mod system;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -614,6 +615,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             greet,
             extract_tar_bz2,
@@ -626,6 +628,8 @@ pub fn run() {
             set_minimize_to_tray,
             set_system_audio_mute,
             open_log_folder,
+            system::inject_text,
+            system::get_mouse_position,
             audio::get_system_audio_devices,
             audio::start_system_audio_capture,
             audio::stop_system_audio_capture,

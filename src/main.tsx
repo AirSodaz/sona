@@ -8,7 +8,9 @@ import { useDialogStore } from "./stores/dialogStore";
 import { useOnboardingStore } from "./stores/onboardingStore";
 import { transcriptionService } from "./services/transcriptionService";
 import { modelService } from "./services/modelService";
+import { voiceTypingService } from "./services/voiceTypingService";
 import { CaptionWindow } from "./components/CaptionWindow";
+import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
 
 // Expose stores and services for E2E testing
 if (import.meta.env.DEV) {
@@ -18,12 +20,14 @@ if (import.meta.env.DEV) {
   (window as any).useOnboardingStore = useOnboardingStore;
   (window as any).transcriptionService = transcriptionService;
   (window as any).modelService = modelService;
+  (window as any).voiceTypingService = voiceTypingService;
 }
 
 const isCaptionWindow = window.location.search.includes('window=caption');
+const isVoiceTypingWindow = window.location.search.includes('window=voice-typing');
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isCaptionWindow ? <CaptionWindow /> : <App />}
+    {isVoiceTypingWindow ? <VoiceTypingOverlay /> : (isCaptionWindow ? <CaptionWindow /> : <App />)}
   </React.StrictMode>,
 );

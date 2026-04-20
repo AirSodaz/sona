@@ -12,6 +12,7 @@
     "window-state:default",
     "updater:default",
     "process:default",
-    "store:default"
+    "store:default",
+    "global-shortcut:default"
   ]
 }

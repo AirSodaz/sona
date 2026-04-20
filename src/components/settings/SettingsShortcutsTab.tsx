@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Mic, Search, FilePenLine } from 'lucide-react';
+import { Play, Mic, Search, FilePenLine, Type } from 'lucide-react';
 import { KeyboardIcon } from '../Icons';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
-import { useShortcutConfig, useSetConfig } from '../../stores/configStore';
+import { useShortcutConfig, useVoiceTypingConfig, useSetConfig } from '../../stores/configStore';
+import { Switch } from '../Switch';
+import { Dropdown } from '../Dropdown';
 
 interface ShortcutInputProps {
     value: string;
@@ -116,6 +118,8 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         }
     ];
 
+    const vtConfig = useVoiceTypingConfig();
+
     return (
         <SettingsTabContainer id="settings-panel-shortcuts" ariaLabelledby="settings-tab-shortcuts">
             <SettingsPageHeader 
@@ -123,6 +127,45 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 title={t('shortcuts.title')} 
                 description={t('settings.shortcuts_description')} 
             />
+
+            <SettingsSection title={t('settings.voice_typing', 'Voice Typing')} icon={<Type size={20} />}>
+                <SettingsItem
+                    title={t('settings.enable_voice_typing', 'Enable Voice Typing')}
+                    hint={t('settings.enable_voice_typing_hint', 'Type text directly into any application using your voice')}
+                >
+                    <Switch
+                        checked={vtConfig.voiceTypingEnabled ?? false}
+                        onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+                    />
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.voice_typing_shortcut', 'Shortcut')}
+                    hint={t('settings.voice_typing_shortcut_hint', 'Global shortcut to activate voice typing')}
+                >
+                    <ShortcutInput
+                        value={vtConfig.voiceTypingShortcut || 'Alt+V'}
+                        onChange={(val) => updateConfig({ voiceTypingShortcut: val })}
+                    />
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.voice_typing_mode', 'Mode')}
+                    hint={t('settings.voice_typing_mode_hint', 'How the shortcut triggers listening')}
+                >
+                    <div style={{ width: '180px' }}>
+                        <Dropdown
+                            id="vt-mode-select"
+                            value={vtConfig.voiceTypingMode || 'hold'}
+                            onChange={(val) => updateConfig({ voiceTypingMode: val as any })}
+                            options={[
+                                { value: 'hold', label: t('settings.voice_typing_mode_hold', 'Push to Talk (Hold)') },
+                                { value: 'toggle', label: t('settings.voice_typing_mode_toggle', 'Toggle (Press once)') }
+                            ]}
+                        />
+                    </div>
+                </SettingsItem>
+            </SettingsSection>
 
             {sections.map((section, index) => (
                 <SettingsSection key={index} title={section.title} icon={section.icon}>

@@ -10,6 +10,7 @@ import type {
   CaptionConfig,
   TranscriptionConfig,
   VocabularyConfig,
+  VoiceTypingConfig,
   LlmAssistantConfig,
 } from '../types/config';
 
@@ -67,6 +68,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   polishScenario: undefined,
   autoPolish: false,
   autoPolishFrequency: 5,
+
+  // Voice Typing
+  voiceTypingEnabled: false,
+  voiceTypingShortcut: 'Alt+V',
+  voiceTypingMode: 'hold',
 
   // Vocabulary
   textReplacementSets: [],
@@ -136,6 +142,10 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'hotwords',
 ];
 
+const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
+  'voiceTypingEnabled', 'voiceTypingShortcut', 'voiceTypingMode'
+];
+
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -178,6 +188,11 @@ export function useTranscriptionConfig(): TranscriptionConfig {
 /** Vocabulary and custom dictionary settings. */
 export function useVocabularyConfig(): VocabularyConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, VOCABULARY_KEYS)));
+}
+
+/** Voice Typing (dictation) settings. */
+export function useVoiceTypingConfig(): VoiceTypingConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, VOICE_TYPING_KEYS)));
 }
 
 /** LLM assistant and auto-polish settings. */
