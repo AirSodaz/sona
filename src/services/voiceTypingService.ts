@@ -224,10 +224,14 @@ class VoiceTypingService {
 
     private async stopListening() {
         if (!this.isListening && !this.captureStarted) return;
+        
         this.startRequestId += 1;
         this.isListening = false;
         const shouldStopCapture = this.captureStarted;
         this.captureStarted = false;
+
+        // Immediately close the window as requested by the user
+        voiceTypingWindowService.close().catch(e => logger.error('[VoiceTypingService] Failed to close window:', e));
 
         try {
             if (shouldStopCapture) {
@@ -236,10 +240,11 @@ class VoiceTypingService {
         } catch (e) {
             logger.error('Failed to stop voice typing:', e);
         } finally {
+            // We still await softStop to ensure the flush_recognizer completes 
+            // and the final segments are emitted and injected.
             await this.transcriptionService.softStop().catch((stopError) => {
                 logger.error('Failed to flush voice typing recognizer while stopping:', stopError);
             });
-            await voiceTypingWindowService.close();
         }
     }
 
