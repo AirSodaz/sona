@@ -624,16 +624,16 @@ function extractLegacyModel(source: Record<string, any>): { provider: LlmProvide
   const provider = normalizeProvider(
     source.llmSettings?.activeProvider ?? source.llm?.provider ?? source.llmServiceType,
   );
-  const model =
-    typeof source.llm?.model === 'string' && source.llm.model.trim()
-      ? source.llm.model.trim()
-      : typeof source.llmModel === 'string' && source.llmModel.trim()
-        ? source.llmModel.trim()
-        : typeof source.aiModel === 'string' && source.aiModel.trim()
-          ? source.aiModel.trim()
-          : typeof source.model === 'string' && source.model.trim()
-            ? source.model.trim()
-            : '';
+  let model = '';
+  if (typeof source.llm?.model === 'string' && source.llm.model.trim()) {
+    model = source.llm.model.trim();
+  } else if (typeof source.llmModel === 'string' && source.llmModel.trim()) {
+    model = source.llmModel.trim();
+  } else if (typeof source.aiModel === 'string' && source.aiModel.trim()) {
+    model = source.aiModel.trim();
+  } else if (typeof source.model === 'string' && source.model.trim()) {
+    model = source.model.trim();
+  }
 
   return model ? { provider, model } : null;
 }

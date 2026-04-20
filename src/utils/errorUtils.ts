@@ -85,16 +85,20 @@ export function buildErrorDialogViewModel(t: TranslateFn, input: AppErrorInput):
   const { title, message, details } = buildErrorDialogOptions(t, input);
   const hasPrimaryAction = Boolean(input.primaryActionLabelKey);
 
+  const primaryLabel = hasPrimaryAction
+    ? t(input.primaryActionLabelKey!, { defaultValue: 'Continue' })
+    : t('common.ok', { defaultValue: 'OK' });
+
+  const cancelLabel = hasPrimaryAction
+    ? t(input.cancelLabelKey ?? 'common.cancel', { defaultValue: 'Cancel' })
+    : undefined;
+
   return {
     title,
     message,
     details,
-    primaryLabel: hasPrimaryAction
-      ? t(input.primaryActionLabelKey!, { defaultValue: 'Continue' })
-      : t('common.ok', { defaultValue: 'OK' }),
-    cancelLabel: hasPrimaryAction
-      ? t(input.cancelLabelKey ?? 'common.cancel', { defaultValue: 'Cancel' })
-      : undefined,
+    primaryLabel,
+    cancelLabel,
     hasPrimaryAction,
   };
 }
