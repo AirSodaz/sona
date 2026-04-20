@@ -238,17 +238,18 @@ class VoiceTypingService {
     }
 
     private async getOverlayPosition(): Promise<[number, number]> {
+        const MARGIN_COMPENSATION = 4;
         try {
             const cursorPosition = await invoke<[number, number] | null>('get_text_cursor_position');
             if (cursorPosition) {
-                return [cursorPosition[0], cursorPosition[1] + CURSOR_POSITION_OFFSET];
+                return [cursorPosition[0] - MARGIN_COMPENSATION, cursorPosition[1] + CURSOR_POSITION_OFFSET - MARGIN_COMPENSATION];
             }
         } catch (error) {
             logger.debug('[VoiceTypingService] Failed to get text cursor position, falling back to mouse.', error);
         }
 
         const [x, y] = await invoke<[number, number]>('get_mouse_position');
-        return [x, y + MOUSE_POSITION_OFFSET];
+        return [x - MARGIN_COMPENSATION, y + MOUSE_POSITION_OFFSET - MARGIN_COMPENSATION];
     }
 }
 

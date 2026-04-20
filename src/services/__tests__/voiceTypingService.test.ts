@@ -143,7 +143,7 @@ describe('voiceTypingService', () => {
 
         await (voiceTypingService as any).startListening();
 
-        expect(voiceTypingWindowService.open).toHaveBeenCalledWith(120, 292);
+        expect(voiceTypingWindowService.open).toHaveBeenCalledWith(116, 288);
         expect(callOrder.indexOf('start')).toBeGreaterThan(callOrder.indexOf('prepare'));
         expect(callOrder.indexOf('start_microphone_capture')).toBeGreaterThan(callOrder.indexOf('start'));
     });

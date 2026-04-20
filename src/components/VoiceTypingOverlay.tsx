@@ -35,8 +35,8 @@ export function VoiceTypingOverlay() {
             width: '100vw',
             height: '100vh',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
             background: 'transparent',
             overflow: 'hidden',
         }}>
@@ -49,6 +49,7 @@ export function VoiceTypingOverlay() {
                 WebkitBackdropFilter: 'blur(10px)',
                 color: 'white',
                 padding: '8px 16px',
+                margin: '4px',
                 borderRadius: '999px',
                 fontSize: '14px',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.1)',

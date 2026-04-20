@@ -37,7 +37,25 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
         let mut info = GUITHREADINFO::default();
         info.cbSize = size_of::<GUITHREADINFO>() as u32;
 
-        if GetGUIThreadInfo(thread_id, &mut info).is_err() || info.hwndCaret.0.is_null() {
+        if GetGUIThreadInfo(thread_id, &mut info).is_err() {
+            return Ok(None);
+        }
+
+        // Use hwndCaret if available, otherwise fallback to hwndFocus which many modern apps use
+        let hwnd = if !info.hwndCaret.0.is_null() {
+            info.hwndCaret
+        } else if !info.hwndFocus.0.is_null() {
+            info.hwndFocus
+        } else {
+            return Ok(None);
+        };
+
+        // If the caret rectangle is all zeros, it's likely not a valid caret position
+        if info.rcCaret.left == 0
+            && info.rcCaret.top == 0
+            && info.rcCaret.right == 0
+            && info.rcCaret.bottom == 0
+        {
             return Ok(None);
         }
 
@@ -46,7 +64,7 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
             y: info.rcCaret.bottom,
         };
 
-        if !ClientToScreen(info.hwndCaret, &mut caret_point).as_bool() {
+        if !ClientToScreen(hwnd, &mut caret_point).as_bool() {
             return Ok(None);
         }
 
