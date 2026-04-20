@@ -85,7 +85,6 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
     use windows::core::*;
     use windows::Win32::System::Com::*;
     use windows::Win32::UI::Accessibility::*;
-    use windows::Win32::System::Ole::*;
 
     // Initialize COM for this thread
     let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
