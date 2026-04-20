@@ -1,0 +1,3 @@
+## 2025-03-01 - Form Accessibility in Settings Tabs
+**Learning:** In complex configuration panels like `SettingsLLMServiceTab.tsx`, custom React form components and standard `<input>` elements often lack proper explicit DOM linkage. Screen readers cannot infer the association between a floating `<label>` and its adjacent `<input>` unless `htmlFor` and `id` match.
+**Action:** When implementing or refactoring settings pages, always ensure inputs have unique `id` attributes (e.g. using a provider prefix like `llm-${def.id}-api-key`) and that their companion `<label>` explicitly links via `htmlFor`. This also improves mouse UX since clicking the label will focus the input.

@@ -263,9 +263,10 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
         {localProvider !== 'google_translate' && (
         <>
         <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
-          <label className="settings-label">{t('settings.llm.model_library')}</label>
+          <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
           <div className="dropdown-container" style={{ margin: 0 }}>
             <input
+              id={`feature-model-${featureId}`}
               type="text"
               className="settings-input"
               value={localModelName}
@@ -300,7 +301,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
         </div>
 
         <div className="feature-field">
-           <label className="settings-label">{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
+           <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
            <div className="feature-temperature-container">
              <input
                type="range"
@@ -310,8 +311,10 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
                step={0.05}
                value={temperature}
                onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+               aria-label={t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}
              />
              <input
+               id={`feature-temp-${featureId}`}
                type="number"
                className="settings-input"
                style={{ padding: '4px 6px', textAlign: 'center', width: '60px' }}
@@ -406,13 +409,14 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
            ) : (
            <>
            <div className="settings-item">
-             <label className="settings-label">{def.apiHostLabel || t('settings.llm.base_url')}</label>
+             <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabel || t('settings.llm.base_url')}</label>
              {def.editableApiHost === false ? (
-               <div className="settings-input" style={{ alignItems: 'center', display: 'flex', minHeight: 40, opacity: 0.75 }}>
+               <div className="settings-input" style={{ alignItems: 'center', display: 'flex', minHeight: 40, opacity: 0.75 }} id={`llm-${def.id}-host`}>
                  {setting?.apiHost || def.defaultApiHost}
                </div>
              ) : (
                <input
+                 id={`llm-${def.id}-host`}
                  type="text"
                  className="settings-input"
                  value={setting?.apiHost || ''}
@@ -423,8 +427,9 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
            </div>
 
            <div className="settings-item">
-             <label className="settings-label">{t('settings.llm.api_key')}</label>
+             <label className="settings-label" htmlFor={`llm-${def.id}-key`}>{t('settings.llm.api_key')}</label>
              <input
+               id={`llm-${def.id}-key`}
                type="password"
                className="settings-input"
                value={setting?.apiKey || ''}
@@ -435,8 +440,9 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
 
            {setting?.apiVersion !== undefined && (
              <div className="settings-item">
-               <label className="settings-label">{t('settings.llm.api_version')}</label>
+               <label className="settings-label" htmlFor={`llm-${def.id}-version`}>{t('settings.llm.api_version')}</label>
                <input
+                 id={`llm-${def.id}-version`}
                  type="text"
                  className="settings-input"
                  value={setting.apiVersion}
@@ -448,8 +454,9 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
 
            {setting?.apiPath !== undefined && (
              <div className="settings-item">
-               <label className="settings-label">{t('settings.llm.api_path')}</label>
+               <label className="settings-label" htmlFor={`llm-${def.id}-path`}>{t('settings.llm.api_path')}</label>
                <input
+                 id={`llm-${def.id}-path`}
                  type="text"
                  className="settings-input"
                  value={setting.apiPath}
