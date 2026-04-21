@@ -3,10 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { voiceTypingService } from '../voiceTypingService';
 import { voiceTypingWindowService } from '../voiceTypingWindowService';
 
-const { mockPrepare, mockStart, mockSoftStop } = vi.hoisted(() => ({
+const { mockPrepare, mockStart, mockSoftStop, mockWindowPrepare } = vi.hoisted(() => ({
     mockPrepare: vi.fn(),
     mockStart: vi.fn(),
     mockSoftStop: vi.fn(),
+    mockWindowPrepare: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -21,9 +22,10 @@ vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
 
 vi.mock('../voiceTypingWindowService', () => ({
     voiceTypingWindowService: {
+        prepare: mockWindowPrepare,
         open: vi.fn(),
         close: vi.fn().mockResolvedValue(undefined),
-        sendText: vi.fn(),
+        sendState: vi.fn(),
     },
 }));
 
@@ -59,7 +61,7 @@ vi.mock('../../stores/configStore', () => ({
     },
 }));
 
-vi.mock('../utils/logger', () => ({
+vi.mock('../../utils/logger', () => ({
     logger: {
         info: vi.fn(),
         warn: vi.fn(),
@@ -70,10 +72,12 @@ vi.mock('../utils/logger', () => ({
 
 describe('voiceTypingService', () => {
     beforeEach(() => {
+        vi.useRealTimers();
         vi.clearAllMocks();
         mockPrepare.mockResolvedValue(undefined);
         mockSoftStop.mockResolvedValue(undefined);
         mockStart.mockResolvedValue(undefined);
+        mockWindowPrepare.mockResolvedValue(undefined);
 
         vi.mocked(invoke).mockImplementation(async (command) => {
             if (command === 'get_text_cursor_position') {
@@ -102,9 +106,16 @@ describe('voiceTypingService', () => {
         service.lastLanguage = '';
         service.lastEnableITN = true;
         service.startRequestId = 0;
+        service.activeSessionId = null;
+        service.activeSegmentId = null;
+        service.overlayVisible = false;
+        service.lastOverlayPosition = null;
+        service.lastOverlayPayload = null;
+        service.sessionState = 'idle';
+        service.listeningResetTimer = null;
     });
 
-    it('pre-warms the model during initialization if enabled', async () => {
+    it('pre-warms the model and overlay window during initialization if enabled', async () => {
         const { useConfigStore } = await import('../../stores/configStore');
         vi.mocked(useConfigStore.getState).mockReturnValue({
             config: {
@@ -116,8 +127,11 @@ describe('voiceTypingService', () => {
         } as any);
 
         voiceTypingService.init();
+        await Promise.resolve();
+        await Promise.resolve();
 
         expect(mockPrepare).toHaveBeenCalled();
+        expect(mockWindowPrepare).toHaveBeenCalledWith([0, 0]);
     });
 
     it('anchors the overlay to the text cursor and starts recognition before microphone capture', async () => {
@@ -146,9 +160,14 @@ describe('voiceTypingService', () => {
         expect(voiceTypingWindowService.open).toHaveBeenCalledWith(116, 288);
         expect(callOrder.indexOf('start')).toBeGreaterThan(callOrder.indexOf('prepare'));
         expect(callOrder.indexOf('start_microphone_capture')).toBeGreaterThan(callOrder.indexOf('start'));
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'preparing',
+            text: '',
+        });
     });
 
-    it('shows partial and final text, and injects the final transcript', async () => {
+    it('refreshes the candidate bar with sentence updates and injects the final transcript', async () => {
         let onSegment: ((segment: any) => Promise<void>) | undefined;
 
         mockStart.mockImplementation(async (segmentCallback) => {
@@ -157,13 +176,160 @@ describe('voiceTypingService', () => {
 
         await (voiceTypingService as any).startListening();
 
-        await onSegment?.({ text: '你好世', isFinal: false });
-        await onSegment?.({ text: '你好世界', isFinal: true });
+        await onSegment?.({ id: 'seg-1', text: '你好世', isFinal: false });
+        await onSegment?.({ id: 'seg-1', text: '你好世界', isFinal: true });
 
-        expect(voiceTypingWindowService.sendText).toHaveBeenCalledWith('你好世');
-        expect(voiceTypingWindowService.sendText).toHaveBeenCalledWith('你好世界');
-        expect(voiceTypingWindowService.sendText).not.toHaveBeenCalledWith('正在聆听...');
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'segment',
+            text: '你好世',
+            segmentId: 'seg-1',
+            isFinal: false,
+        });
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'segment',
+            text: '你好世界',
+            segmentId: 'seg-1',
+            isFinal: true,
+        });
         expect(invoke).toHaveBeenCalledWith('inject_text', { text: '你好世界' });
+    });
+
+    it('keeps the overlay open in toggle mode and returns to listening after a final segment', async () => {
+        let onSegment: ((segment: any) => Promise<void>) | undefined;
+        const { useConfigStore } = await import('../../stores/configStore');
+        vi.useFakeTimers();
+
+        vi.mocked(useConfigStore.getState).mockReturnValue({
+            config: {
+                voiceTypingEnabled: true,
+                voiceTypingShortcut: 'Alt+V',
+                voiceTypingMode: 'toggle',
+                streamingModelPath: 'path/to/model',
+                language: 'auto',
+                enableITN: true,
+            }
+        } as any);
+
+        mockStart.mockImplementation(async (segmentCallback) => {
+            onSegment = segmentCallback;
+        });
+
+        await (voiceTypingService as any).startListening();
+        vi.clearAllMocks();
+
+        await onSegment?.({ id: 'seg-1', text: '第一句', isFinal: true });
+
+        expect(invoke).toHaveBeenCalledWith('inject_text', { text: '第一句' });
+        expect(voiceTypingWindowService.close).not.toHaveBeenCalled();
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'segment',
+            text: '第一句',
+            segmentId: 'seg-1',
+            isFinal: true,
+        });
+
+        await vi.runAllTimersAsync();
+
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'listening',
+            text: '',
+        });
+    });
+
+    it('waits for flush final output before closing in hold mode', async () => {
+        let onSegment: ((segment: any) => Promise<void>) | undefined;
+        let resolveSoftStop: (() => void) | undefined;
+        vi.useFakeTimers();
+
+        mockStart.mockImplementation(async (segmentCallback) => {
+            onSegment = segmentCallback;
+        });
+        mockSoftStop.mockImplementation(() => new Promise<void>((resolve) => {
+            resolveSoftStop = resolve;
+        }));
+
+        await (voiceTypingService as any).startListening();
+        vi.clearAllMocks();
+
+        const stopPromise = (voiceTypingService as any).stopListening();
+        await Promise.resolve();
+
+        expect(voiceTypingWindowService.close).not.toHaveBeenCalled();
+        await onSegment?.({ id: 'seg-1', text: '短句结果', isFinal: true });
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'segment',
+            text: '短句结果',
+            segmentId: 'seg-1',
+            isFinal: true,
+        });
+        expect(invoke).toHaveBeenCalledWith('inject_text', { text: '短句结果' });
+
+        resolveSoftStop?.();
+        await vi.runAllTimersAsync();
+        await stopPromise;
+
+        expect(voiceTypingWindowService.close).toHaveBeenCalled();
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'listening',
+            text: '',
+        });
+    });
+
+    it('waits for a late final callback dispatched right after flush resolves', async () => {
+        let onSegment: ((segment: any) => Promise<void>) | undefined;
+        vi.useFakeTimers();
+
+        mockStart.mockImplementation(async (segmentCallback) => {
+            onSegment = segmentCallback;
+        });
+        mockSoftStop.mockResolvedValue(undefined);
+
+        await (voiceTypingService as any).startListening();
+        vi.clearAllMocks();
+
+        const stopPromise = (voiceTypingService as any).stopListening();
+        await Promise.resolve();
+
+        expect(voiceTypingWindowService.close).not.toHaveBeenCalled();
+
+        await onSegment?.({ id: 'seg-late', text: '迟到最终句', isFinal: true });
+
+        expect(voiceTypingWindowService.sendState).toHaveBeenCalledWith({
+            sessionId: 'voice-typing-1',
+            phase: 'segment',
+            text: '迟到最终句',
+            segmentId: 'seg-late',
+            isFinal: true,
+        });
+        expect(invoke).toHaveBeenCalledWith('inject_text', { text: '迟到最终句' });
+
+        await vi.runAllTimersAsync();
+        await stopPromise;
+
+        expect(voiceTypingWindowService.close).toHaveBeenCalled();
+    });
+
+    it('ignores stale segment updates after the session is closed', async () => {
+        let onSegment: ((segment: any) => Promise<void>) | undefined;
+
+        mockStart.mockImplementation(async (segmentCallback) => {
+            onSegment = segmentCallback;
+        });
+
+        await (voiceTypingService as any).startListening();
+        await (voiceTypingService as any).stopListening();
+        vi.clearAllMocks();
+
+        await onSegment?.({ id: 'seg-stale', text: '过期结果', isFinal: false });
+
+        expect(voiceTypingWindowService.sendState).not.toHaveBeenCalled();
+        expect(voiceTypingWindowService.open).not.toHaveBeenCalled();
     });
 
     it('flushes the recognizer before closing the voice typing session', async () => {

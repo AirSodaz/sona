@@ -2,20 +2,40 @@ import { register, unregister, isRegistered } from '@tauri-apps/plugin-global-sh
 import { invoke } from '@tauri-apps/api/core';
 import i18next from 'i18next';
 import { TranscriptionService } from './transcriptionService';
-import { voiceTypingWindowService } from './voiceTypingWindowService';
+import { TranscriptSegment } from '../types/transcript';
+import {
+    VoiceTypingOverlayPayload,
+    voiceTypingWindowService,
+} from './voiceTypingWindowService';
 import { useConfigStore } from '../stores/configStore';
 import { logger } from '../utils/logger';
 
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
+const LISTENING_RESET_VISIBILITY_MS = 350;
+const HOLD_FINAL_SEGMENT_VISIBILITY_MS = 700;
+const FLUSH_EVENT_SETTLE_MS = 80;
+
+function delay(ms: number) {
+    return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 class VoiceTypingService {
     private isListening = false;
+    private sessionState: 'idle' | 'starting' | 'listening' | 'stopping' = 'idle';
     private isShortcutRegistered = false;
     private transcriptionService: TranscriptionService;
     private currentShortcut: string | null = null;
     private captureStarted = false;
     private startRequestId = 0;
+    private activeSessionId: string | null = null;
+    private activeSegmentId: string | null = null;
+    private overlayVisible = false;
+    private lastOverlayPosition: [number, number] | null = null;
+    private lastOverlayPayload: VoiceTypingOverlayPayload | null = null;
+    private listeningResetTimer: ReturnType<typeof setTimeout> | null = null;
 
     private initialized = false;
     private lastEnabled = false;
@@ -94,6 +114,7 @@ class VoiceTypingService {
             this.transcriptionService.setLanguage(config.language);
             this.transcriptionService.setEnableITN(config.enableITN ?? true);
             await this.transcriptionService.prepare();
+            await voiceTypingWindowService.prepare(this.lastOverlayPosition ?? [0, 0]);
             
             // Warm up microphone
             await this.ensureMicrophoneStarted();
@@ -187,8 +208,14 @@ class VoiceTypingService {
 
     private async startListening() {
         if (this.isListening) return;
-        this.isListening = true;
+
         const requestId = ++this.startRequestId;
+        const sessionId = `voice-typing-${requestId}`;
+        this.clearListeningResetTimer();
+        this.isListening = true;
+        this.sessionState = 'starting';
+        this.activeSessionId = sessionId;
+        this.activeSegmentId = null;
         
         try {
             // 1. Prepare backend in parallel (non-blocking)
@@ -199,74 +226,63 @@ class VoiceTypingService {
 
             const startPromise = this.transcriptionService.start(
                 async (segment) => {
-                    const text = segment.text.trim();
-                    if (segment.isFinal) {
-                        if (text) {
-                            await voiceTypingWindowService.sendText(text);
-                            await invoke('inject_text', { text: text });
-                            // Reset to "Listening..." after a short delay for the next sentence
-                            setTimeout(() => {
-                                if (this.isListening && requestId === this.startRequestId) {
-                                    voiceTypingWindowService.sendText('');
-                                }
-                            }, 1000);
-                        }
-                    } else {
-                        // For partials, we send them to the overlay as a preview
-                        await voiceTypingWindowService.sendText(text);
-                    }
+                    await this.handleSegmentUpdate(sessionId, requestId, segment);
                 },
                 (error) => {
+                    if (!this.isCurrentSession(sessionId, requestId)) {
+                        return;
+                    }
+
                     logger.error('Voice typing transcription error:', error);
-                    voiceTypingWindowService.sendText(i18next.t('errors.common.operation_failed') + ': ' + error);
-                    this.stopListening();
+                    void this.handleSessionError(sessionId, requestId, error);
                 }
             );
 
             // 2. Detect position and open window in parallel
-            const positionPromise = this.getOverlayPosition().then(async ([x, y]) => {
-                await voiceTypingWindowService.open(x, y);
-                await voiceTypingWindowService.sendText(i18next.t('common.preparing'));
-            });
+            const positionPromise = this.sendOverlayState(
+                { sessionId, phase: 'preparing', text: '' },
+                { revealIfHidden: true, reposition: true }
+            );
 
             // 3. Wait for basic readiness
             await Promise.all([startPromise, positionPromise]);
 
-            if (!this.isListening || requestId !== this.startRequestId) {
-                await this.transcriptionService.softStop();
-                await voiceTypingWindowService.close();
+            if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
                 return;
             }
 
             // Ensure mic is started (should already be warmed up)
             await this.ensureMicrophoneStarted();
 
-            // Successfully started recognition
-            await voiceTypingWindowService.sendText(''); // Reset to "Listening..."
-
-            if (!this.isListening || requestId !== this.startRequestId) {
-                await this.stopListening();
+            if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
+                return;
             }
+
+            // Successfully started recognition
+            this.sessionState = 'listening';
+            await this.sendOverlayState({ sessionId, phase: 'listening', text: '' });
 
         } catch (e) {
             logger.error('Failed to start voice typing:', e);
-            this.isListening = false;
             // Don't stop capture here as we want to keep it warmed up
             await this.transcriptionService.softStop().catch((stopError) => {
                 logger.error('Failed to roll back voice typing recognizer after start failure:', stopError);
             });
-            await voiceTypingWindowService.close();
+
+            if (this.activeSessionId === sessionId) {
+                await this.hideOverlay(sessionId);
+                this.finishSession(sessionId);
+            }
         }
     }
 
     private async stopListening() {
-        if (!this.isListening) return;
-        
-        this.startRequestId += 1;
-        this.isListening = false;
+        if (!this.isListening || !this.activeSessionId || this.sessionState === 'stopping') return;
 
-        // Immediately close the window as requested by the user
-        voiceTypingWindowService.close().catch(e => logger.error('[VoiceTypingService] Failed to close window:', e));
+        const sessionId = this.activeSessionId;
+        const mode = this.getVoiceTypingMode();
+        this.sessionState = 'stopping';
+        this.clearListeningResetTimer();
 
         // We still await softStop to ensure the flush_recognizer completes 
         // and the final segments are emitted and injected.
@@ -274,6 +290,186 @@ class VoiceTypingService {
         await this.transcriptionService.softStop().catch((stopError) => {
             logger.error('Failed to flush voice typing recognizer while stopping:', stopError);
         });
+
+        if (!this.isCurrentSession(sessionId)) {
+            return;
+        }
+
+        // `flush_recognizer` waits for backend inference, but the emitted Tauri event can still
+        // arrive a beat later on the frontend. Give the final sentence a tiny settle window
+        // before deciding whether we can close immediately.
+        if (!this.isFinalSegmentVisible(sessionId)) {
+            await delay(FLUSH_EVENT_SETTLE_MS);
+        }
+
+        if (!this.isCurrentSession(sessionId)) {
+            return;
+        }
+
+        if (this.isFinalSegmentVisible(sessionId)) {
+            await delay(mode === 'hold' ? HOLD_FINAL_SEGMENT_VISIBILITY_MS : LISTENING_RESET_VISIBILITY_MS);
+        }
+
+        await this.hideOverlay(sessionId).catch(e => logger.error('[VoiceTypingService] Failed to close window:', e));
+        this.finishSession(sessionId);
+    }
+
+    private async handleSegmentUpdate(sessionId: string, requestId: number, segment: TranscriptSegment) {
+        if (!this.isCurrentSession(sessionId, requestId)) {
+            return;
+        }
+
+        const text = segment.text.trim();
+        const isNewSegment = this.activeSegmentId !== segment.id;
+        this.clearListeningResetTimer();
+
+        if (!text) {
+            if (!segment.isFinal && this.overlayVisible && this.sessionState === 'listening') {
+                this.activeSegmentId = null;
+                await this.sendOverlayState({ sessionId, phase: 'listening', text: '' });
+            }
+            return;
+        }
+
+        this.activeSegmentId = segment.id;
+        await this.sendOverlayState(
+            {
+                sessionId,
+                phase: 'segment',
+                text,
+                segmentId: segment.id,
+                isFinal: segment.isFinal,
+            },
+            {
+                revealIfHidden: !this.overlayVisible,
+                reposition: this.overlayVisible && isNewSegment,
+            }
+        );
+
+        if (!this.isCurrentSession(sessionId, requestId)) {
+            return;
+        }
+
+        if (segment.isFinal) {
+            await invoke('inject_text', { text });
+
+            if (!this.isCurrentSession(sessionId, requestId)) {
+                return;
+            }
+
+            if (this.sessionState === 'listening') {
+                this.scheduleListeningReset(sessionId, segment.id);
+            }
+        }
+    }
+
+    private async handleSessionError(sessionId: string, requestId: number, error: string) {
+        this.clearListeningResetTimer();
+        this.sessionState = 'stopping';
+        await this.sendOverlayState({
+            sessionId,
+            phase: 'error',
+            text: i18next.t('errors.common.operation_failed') + ': ' + error,
+        }, { revealIfHidden: true });
+
+        await this.transcriptionService.softStop().catch((stopError) => {
+            logger.error('Failed to stop voice typing recognizer after error:', stopError);
+        });
+
+        if (!this.isCurrentSession(sessionId, requestId)) {
+            return;
+        }
+
+        await delay(HOLD_FINAL_SEGMENT_VISIBILITY_MS);
+        await this.hideOverlay(sessionId);
+        this.finishSession(sessionId);
+    }
+
+    private async sendOverlayState(
+        payload: VoiceTypingOverlayPayload,
+        options?: { revealIfHidden?: boolean; reposition?: boolean }
+    ) {
+        this.lastOverlayPayload = payload;
+        const shouldReveal = options?.revealIfHidden ?? false;
+        const shouldReposition = options?.reposition ?? false;
+        const wasOverlayVisible = this.overlayVisible;
+
+        if (shouldReveal || (shouldReposition && this.overlayVisible)) {
+            const [x, y] = await this.getOverlayPosition();
+            this.lastOverlayPosition = [x, y];
+            await voiceTypingWindowService.open(x, y);
+            this.overlayVisible = true;
+        }
+
+        logger.info('[VoiceTypingService] Dispatching overlay state', {
+            sessionId: payload.sessionId,
+            phase: payload.phase,
+            segmentId: payload.segmentId ?? null,
+            isFinal: payload.isFinal ?? null,
+            textLength: payload.text.length,
+            overlayVisible: this.overlayVisible,
+            wasOverlayVisible,
+            revealIfHidden: shouldReveal,
+            reposition: shouldReposition,
+        });
+        await voiceTypingWindowService.sendState(payload);
+    }
+
+    private async hideOverlay(sessionId: string) {
+        this.overlayVisible = false;
+        await voiceTypingWindowService.close();
+        await voiceTypingWindowService.sendState({ sessionId, phase: 'listening', text: '' });
+    }
+
+    private clearListeningResetTimer() {
+        if (this.listeningResetTimer) {
+            clearTimeout(this.listeningResetTimer);
+            this.listeningResetTimer = null;
+        }
+    }
+
+    private scheduleListeningReset(sessionId: string, segmentId: string) {
+        this.clearListeningResetTimer();
+        this.listeningResetTimer = setTimeout(() => {
+            if (!this.isCurrentSession(sessionId) || this.sessionState !== 'listening' || this.activeSegmentId !== segmentId) {
+                return;
+            }
+
+            this.activeSegmentId = null;
+            void this.sendOverlayState({ sessionId, phase: 'listening', text: '' });
+        }, LISTENING_RESET_VISIBILITY_MS);
+    }
+
+    private isCurrentSession(sessionId: string, requestId?: number) {
+        return this.activeSessionId === sessionId &&
+            (requestId === undefined || requestId === this.startRequestId);
+    }
+
+    private finishSession(sessionId: string) {
+        if (this.activeSessionId !== sessionId) {
+            return;
+        }
+
+        this.clearListeningResetTimer();
+        this.activeSessionId = null;
+        this.activeSegmentId = null;
+        this.lastOverlayPayload = null;
+        this.sessionState = 'idle';
+        this.isListening = false;
+    }
+
+    private isSessionStopping() {
+        return this.sessionState === 'stopping';
+    }
+
+    private getVoiceTypingMode() {
+        return useConfigStore.getState().config.voiceTypingMode || 'hold';
+    }
+
+    private isFinalSegmentVisible(sessionId: string) {
+        return this.lastOverlayPayload?.sessionId === sessionId &&
+            this.lastOverlayPayload.phase === 'segment' &&
+            this.lastOverlayPayload.isFinal === true;
     }
 
     private async getOverlayPosition(): Promise<[number, number]> {
@@ -285,6 +481,10 @@ class VoiceTypingService {
             }
         } catch (error) {
             logger.debug('[VoiceTypingService] Failed to get text cursor position, falling back to mouse.', error);
+        }
+
+        if (this.lastOverlayPosition) {
+            return this.lastOverlayPosition;
         }
 
         const [x, y] = await invoke<[number, number]>('get_mouse_position');

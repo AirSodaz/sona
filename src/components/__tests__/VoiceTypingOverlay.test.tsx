@@ -7,7 +7,11 @@ vi.mock('react-i18next', async (importOriginal) => {
     return {
         ...actual,
         useTranslation: () => ({
-            t: (key: string) => key === 'common.listening' ? '正在聆听...' : key,
+            t: (key: string) => {
+                if (key === 'common.listening') return '正在聆听...';
+                if (key === 'common.preparing') return '正在准备...';
+                return key;
+            },
         }),
     };
 });
@@ -30,6 +34,15 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@tauri-apps/api/event', () => ({
     listen: mocks.listen,
+}));
+
+vi.mock('../../utils/logger', () => ({
+    logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+    },
 }));
 
 describe('VoiceTypingOverlay', () => {
@@ -58,9 +71,23 @@ describe('VoiceTypingOverlay', () => {
         expect(screen.getByText('正在聆听...')).toBeTruthy();
 
         await act(async () => {
-            mocks.listenCallbacks['voice-typing:text']?.({ payload: { text: '测试转录结果' } });
+            mocks.listenCallbacks['voice-typing:text']?.({
+                payload: { sessionId: 'voice-typing-1', text: '测试转录结果', phase: 'segment', segmentId: 'seg-1', isFinal: false }
+            });
         });
 
         expect(screen.getByText('测试转录结果')).toBeTruthy();
+    });
+
+    it('renders error text from Tauri events', async () => {
+        render(<VoiceTypingOverlay />);
+
+        await act(async () => {
+            mocks.listenCallbacks['voice-typing:text']?.({
+                payload: { sessionId: 'voice-typing-1', text: '识别失败', phase: 'error' }
+            });
+        });
+
+        expect(screen.getByText('识别失败')).toBeTruthy();
     });
 });

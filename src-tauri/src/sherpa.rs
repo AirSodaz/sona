@@ -621,6 +621,14 @@ fn is_record_instance(instance_id: &str) -> bool {
     instance_id == "record"
 }
 
+fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
+    match instance_id {
+        "record" => Some("record"),
+        "voice-typing" => Some("voice-typing"),
+        _ => None,
+    }
+}
+
 fn buffered_sample_count(chunks: &[Vec<f32>]) -> usize {
     chunks.iter().map(|chunk| chunk.len()).sum()
 }
@@ -645,15 +653,15 @@ fn stop_instance_runtime(instance: &mut SherpaInstance) {
     instance.is_running = false;
 }
 
-fn log_record_segment_emit(
+fn log_segment_emit_diagnostics(
     instance_id: &str,
     first_segment_emitted: Option<&Arc<AtomicBool>>,
     segment: &TranscriptSegment,
     stage: &str,
 ) {
-    if !is_record_instance(instance_id) {
+    let Some(label) = diagnostics_instance_label(instance_id) else {
         return;
-    }
+    };
 
     let text_len = segment.text.chars().count();
     if let Some(first_segment_emitted) = first_segment_emitted {
@@ -662,14 +670,14 @@ fn log_record_segment_emit(
             .is_ok()
         {
             println!(
-                "[Sherpa] record first segment emitted. stage={} segment_id={} final={} text_len={}",
+                "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
                 stage, segment.id, segment.is_final, text_len
             );
         }
     }
 
     println!(
-        "[Sherpa] record emit. stage={} segment_id={} final={} text_len={}",
+        "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
         stage, segment.id, segment.is_final, text_len
     );
 }
@@ -787,10 +795,9 @@ fn run_offline_inference<R: tauri::Runtime>(
     first_segment_emitted: Option<Arc<AtomicBool>>,
 ) {
     if speech_buffer.is_empty() {
-        if is_record_instance(instance_id) {
+        if let Some(label) = diagnostics_instance_label(instance_id) {
             println!(
-                "[Sherpa] record offline inference skipped because the speech buffer is empty. stage={}",
-                stage
+                "[Sherpa] {label} offline inference skipped because the speech buffer is empty. stage={stage}"
             );
         }
         return;
@@ -810,14 +817,10 @@ fn run_offline_inference<R: tauri::Runtime>(
     r.decode(&stream);
     debug!("[Offline] FFI: Decode finished");
 
-    if is_record_instance(instance_id) {
+    if let Some(label) = diagnostics_instance_label(instance_id) {
         println!(
-            "[Sherpa] record offline inference finished. stage={} segment_id={} final={} buffered_chunks={} buffered_samples={}",
-            stage,
-            segment_id,
-            is_final,
-            speech_buffer.len(),
-            full_audio.len()
+            "[Sherpa] {label} offline inference finished. stage={} segment_id={} final={} buffered_chunks={} buffered_samples={}",
+            stage, segment_id, is_final, speech_buffer.len(), full_audio.len()
         );
     }
 
@@ -837,6 +840,12 @@ fn run_offline_inference<R: tauri::Runtime>(
             }
 
             if text.is_empty() && !is_final {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    println!(
+                        "[Sherpa] {label} offline inference produced empty preview text after stripping tags. stage={} segment_id={}",
+                        stage, segment_id
+                    );
+                }
                 return;
             }
 
@@ -860,22 +869,22 @@ fn run_offline_inference<R: tauri::Runtime>(
                 durations,
             };
             let event_name = format!("recognizer-output-{}", instance_id);
-            log_record_segment_emit(
+            log_segment_emit_diagnostics(
                 instance_id,
                 first_segment_emitted.as_ref(),
                 &segment,
                 stage,
             );
             let _ = app.emit(&event_name, &segment);
-        } else if is_record_instance(instance_id) {
+        } else if let Some(label) = diagnostics_instance_label(instance_id) {
             println!(
-                "[Sherpa] record offline inference produced empty text after formatting. stage={} segment_id={} final={}",
+                "[Sherpa] {label} offline inference produced empty text after formatting. stage={} segment_id={} final={}",
                 stage, segment_id, is_final
             );
         }
-    } else if is_record_instance(instance_id) {
+    } else if let Some(label) = diagnostics_instance_label(instance_id) {
         println!(
-            "[Sherpa] record offline inference produced no recognizer result. stage={} segment_id={} final={}",
+            "[Sherpa] {label} offline inference produced no recognizer result. stage={} segment_id={} final={}",
             stage, segment_id, is_final
         );
     }
@@ -1030,9 +1039,9 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
         .get_mut(&instance_id)
         .ok_or("Instance not found")?;
 
-    if is_record_instance(&instance_id) {
+    if let Some(label) = diagnostics_instance_label(&instance_id) {
         println!(
-            "[Sherpa] flush_recognizer(record): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
+            "[Sherpa] flush_recognizer({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
             instance.is_running,
             instance.total_samples,
             instance.offline_state.speech_buffer.len(),
@@ -1058,15 +1067,14 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                 let punct_copy = instance.punctuation.clone();
                 let seg_id_copy = seg_id.clone();
                 let instance_id_copy = instance_id.clone();
-                let first_segment_emitted =
-                    is_record_instance(&instance_id).then(|| instance.record_diagnostics.first_segment_emitted.clone());
+                let first_segment_emitted = diagnostics_instance_label(&instance_id)
+                    .is_some()
+                    .then(|| instance.record_diagnostics.first_segment_emitted.clone());
 
-                if is_record_instance(&instance_id) {
+                if let Some(label) = diagnostics_instance_label(&instance_id) {
                     println!(
-                        "[Sherpa] record flush triggering offline inference. segment_id={} buffered_chunks={} buffered_samples={}",
-                        seg_id,
-                        offline_copy.len(),
-                        buffered_sample_count(&offline_copy)
+                        "[Sherpa] {label} flush triggering offline inference. segment_id={} buffered_chunks={} buffered_samples={}",
+                        seg_id, offline_copy.len(), buffered_sample_count(&offline_copy)
                     );
                 }
 
@@ -1091,13 +1099,13 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
 
                 instance.offline_state.speech_buffer.clear();
                 instance.offline_state.is_speaking = false;
-            } else if is_record_instance(&instance_id) {
-                println!("[Sherpa] record flush found no pending offline speech buffer.");
+            } else if let Some(label) = diagnostics_instance_label(&instance_id) {
+                println!("[Sherpa] {label} flush found no pending offline speech buffer.");
             }
             instance.current_segment_id = None;
             instance.offline_state = OfflineState::default();
-            if is_record_instance(&instance_id) {
-                println!("[Sherpa] flush_recognizer(record) complete. mode=offline");
+            if let Some(label) = diagnostics_instance_label(&instance_id) {
+                println!("[Sherpa] flush_recognizer({label}) complete. mode=offline");
             }
             return Ok(());
         }
@@ -1140,7 +1148,7 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                         durations,
                     };
                     let event_name = format!("recognizer-output-{}", instance_id);
-                    log_record_segment_emit(
+                    log_segment_emit_diagnostics(
                         &instance_id,
                         Some(&instance.record_diagnostics.first_segment_emitted),
                         &segment,
@@ -1153,8 +1161,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
             instance.current_segment_id = None;
             r.0.reset(&st.0);
             instance.segment_start_time = current_time;
-            if is_record_instance(&instance_id) {
-                println!("[Sherpa] flush_recognizer(record) complete. mode=online");
+            if let Some(label) = diagnostics_instance_label(&instance_id) {
+                println!("[Sherpa] flush_recognizer({label}) complete. mode=online");
             }
         }
     }
@@ -1172,25 +1180,29 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
 
     if !instance.is_running {
-        if is_record_instance(instance_id) && !instance.record_diagnostics.skipped_while_stopped_logged {
-            println!(
-                "[Sherpa] record audio chunk skipped because recognizer is not running. samples={} total_samples={}",
-                samples.len(),
-                instance.total_samples
-            );
-            instance.record_diagnostics.skipped_while_stopped_logged = true;
+        if let Some(label) = diagnostics_instance_label(instance_id) {
+            if !instance.record_diagnostics.skipped_while_stopped_logged {
+                println!(
+                    "[Sherpa] {label} audio chunk skipped because recognizer is not running. samples={} total_samples={}",
+                    samples.len(),
+                    instance.total_samples
+                );
+                instance.record_diagnostics.skipped_while_stopped_logged = true;
+            }
         }
         return Ok(());
     }
 
-    if is_record_instance(instance_id) && !instance.record_diagnostics.first_sample_logged {
-        println!(
-            "[Sherpa] record first sample received. samples={} total_samples_before={} current_segment={}",
-            samples.len(),
-            instance.total_samples,
-            instance.current_segment_id.as_deref().unwrap_or("none")
-        );
-        instance.record_diagnostics.first_sample_logged = true;
+    if let Some(label) = diagnostics_instance_label(instance_id) {
+        if !instance.record_diagnostics.first_sample_logged {
+            println!(
+                "[Sherpa] {label} first sample received. samples={} total_samples_before={} current_segment={}",
+                samples.len(),
+                instance.total_samples,
+                instance.current_segment_id.as_deref().unwrap_or("none")
+            );
+            instance.record_diagnostics.first_sample_logged = true;
+        }
     }
 
     let recognizer = instance
@@ -1211,17 +1223,19 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             vad.accept_waveform(samples);
             let currently_speaking = vad.detected();
 
-            if is_record_instance(instance_id) && instance.total_samples % 160000 < 2000 {
-                // Print once every ~10 seconds
-                println!(
-                    "[Sherpa] instance 'record' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
-                    instance.total_samples,
-                    currently_speaking,
-                    instance
-                        .record_diagnostics
-                        .first_segment_emitted
-                        .load(Ordering::SeqCst)
-                );
+            if let Some(label) = diagnostics_instance_label(instance_id) {
+                if instance.total_samples % 160000 < 2000 {
+                    // Print once every ~10 seconds
+                    println!(
+                        "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
+                        instance.total_samples,
+                        currently_speaking,
+                        instance
+                            .record_diagnostics
+                            .first_segment_emitted
+                            .load(Ordering::SeqCst)
+                    );
+                }
             }
 
             if instance.current_segment_id.is_none() {
@@ -1230,7 +1244,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
             if currently_speaking && !instance.offline_state.is_speaking {
-                if is_record_instance(instance_id) {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
                     let ring_buffer_samples: usize = instance
                         .offline_state
                         .ring_buffer
@@ -1238,10 +1252,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         .map(|chunk| chunk.len())
                         .sum();
                     println!(
-                        "[Sherpa] record detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
-                        seg_id,
-                        instance.total_samples,
-                        ring_buffer_samples
+                        "[Sherpa] {label} detected speech start. segment_id={} total_samples={} ring_buffer_samples={}",
+                        seg_id, instance.total_samples, ring_buffer_samples
                     );
                 } else {
                     println!("[Sherpa] Instance {} detected speech start.", instance_id);
@@ -1290,12 +1302,13 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     let seg_id_copy = seg_id.clone();
                     let instance_id_copy = instance_id.to_string();
                     let recognizer_copy = recognizer.clone();
-                    let first_segment_emitted = is_record_instance(instance_id)
+                    let first_segment_emitted = diagnostics_instance_label(instance_id)
+                        .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
 
-                    if is_record_instance(instance_id) {
+                    if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
-                            "[Sherpa] record triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                            "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
                             seg_id,
                             offline_copy.len(),
                             buffered_sample_count(&offline_copy),
@@ -1325,9 +1338,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 
             if !currently_speaking {
                 if instance.offline_state.is_speaking {
-                    if is_record_instance(instance_id) {
+                    if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
-                            "[Sherpa] record detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
+                            "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
                             seg_id,
                             instance.total_samples,
                             instance.offline_state.speech_buffer.len() + 1,
@@ -1349,12 +1362,13 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     let seg_id_copy = seg_id.clone();
                     let instance_id_copy = instance_id.to_string();
                     let recognizer_copy = recognizer.clone();
-                    let first_segment_emitted = is_record_instance(instance_id)
+                    let first_segment_emitted = diagnostics_instance_label(instance_id)
+                        .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
 
-                    if is_record_instance(instance_id) {
+                    if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
-                            "[Sherpa] record triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                            "[Sherpa] {label} triggering offline inference. stage=final segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
                             seg_id,
                             offline_copy.len(),
                             buffered_sample_count(&offline_copy),
@@ -1447,7 +1461,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         durations: None,
                     };
                     let event_name = format!("recognizer-output-{}", instance_id);
-                    log_record_segment_emit(
+                    log_segment_emit_diagnostics(
                         instance_id,
                         Some(&instance.record_diagnostics.first_segment_emitted),
                         &segment,
@@ -1491,7 +1505,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             durations,
                         };
                         let event_name = format!("recognizer-output-{}", instance_id);
-                        log_record_segment_emit(
+                        log_segment_emit_diagnostics(
                             instance_id,
                             Some(&instance.record_diagnostics.first_segment_emitted),
                             &segment,
