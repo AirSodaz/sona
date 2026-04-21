@@ -8,6 +8,7 @@ import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachi
 
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
+const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 
 class VoiceTypingService {
     private initialized = false;
@@ -27,11 +28,11 @@ class VoiceTypingService {
         transcriptionService: this.transcriptionService,
         overlayPresenter: this.overlayPresenter,
         resolveOverlayPosition: () => this.getOverlayPosition(),
+        resolveOverlayPositionAfterCommit: () => this.getOverlayPositionAfterCommit(),
         ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
         injectText: async (text) => {
             await invoke('inject_text', { text });
         },
-        getVoiceTypingMode: () => this.getVoiceTypingMode(),
     });
 
     public init() {
@@ -201,7 +202,7 @@ class VoiceTypingService {
                     return;
                 }
 
-                if (event.state === 'Released') {
+                if (event.state === 'Pressed') {
                     if (this.sessionMachine.isActive()) {
                         void this.stopListening();
                     } else {
@@ -233,24 +234,43 @@ class VoiceTypingService {
         return useConfigStore.getState().config.voiceTypingMode || 'hold';
     }
 
-    private async getOverlayPosition(): Promise<[number, number]> {
+    private normalizeOverlayPosition(cursorPosition: [number, number]): [number, number] {
         const marginCompensation = 4;
+        return [
+            cursorPosition[0] - marginCompensation,
+            cursorPosition[1] + CURSOR_POSITION_OFFSET - marginCompensation,
+        ];
+    }
 
+    private async delay(ms: number) {
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, ms);
+        });
+    }
+
+    private async tryGetTextCursorOverlayPosition() {
         try {
             const cursorPosition = await invoke<[number, number] | null>(
                 'get_text_cursor_position'
             );
-            if (cursorPosition) {
-                return [
-                    cursorPosition[0] - marginCompensation,
-                    cursorPosition[1] + CURSOR_POSITION_OFFSET - marginCompensation,
-                ];
+            if (!cursorPosition) {
+                return null;
             }
+
+            return this.normalizeOverlayPosition(cursorPosition);
         } catch (error) {
             logger.debug(
                 '[VoiceTypingService] Failed to get text cursor position, falling back to mouse.',
                 error
             );
+            return null;
+        }
+    }
+
+    private async getOverlayPosition(): Promise<[number, number]> {
+        const cursorPosition = await this.tryGetTextCursorOverlayPosition();
+        if (cursorPosition) {
+            return cursorPosition;
         }
 
         const lastPosition = this.sessionMachine.getLastPosition();
@@ -259,7 +279,60 @@ class VoiceTypingService {
         }
 
         const [x, y] = await invoke<[number, number]>('get_mouse_position');
-        return [x - marginCompensation, y + MOUSE_POSITION_OFFSET - marginCompensation];
+        return [x - 4, y + MOUSE_POSITION_OFFSET - 4];
+    }
+
+    private async getOverlayPositionAfterCommit(): Promise<[number, number]> {
+        const previousPosition = this.sessionMachine.getLastPosition();
+        let latestCursorPosition: [number, number] | null = null;
+
+        for (let attempt = 0; attempt < POST_COMMIT_CARET_RETRY_DELAYS_MS.length; attempt += 1) {
+            const retryDelay = POST_COMMIT_CARET_RETRY_DELAYS_MS[attempt];
+            if (retryDelay > 0) {
+                await this.delay(retryDelay);
+            }
+
+            const cursorPosition = await this.tryGetTextCursorOverlayPosition();
+            const moved =
+                !!cursorPosition &&
+                (!previousPosition ||
+                    cursorPosition[0] !== previousPosition[0] ||
+                    cursorPosition[1] !== previousPosition[1]);
+
+            logger.info('[VoiceTypingService] Post-commit caret probe', {
+                attempt: attempt + 1,
+                retryDelay,
+                previousPosition,
+                nextPosition: cursorPosition,
+                repositionAttempt: true,
+                repositionMoved: moved,
+            });
+
+            if (!cursorPosition) {
+                continue;
+            }
+
+            latestCursorPosition = cursorPosition;
+            if (moved) {
+                return cursorPosition;
+            }
+        }
+
+        if (previousPosition) {
+            logger.info('[VoiceTypingService] Falling back to last overlay position after commit', {
+                previousPosition,
+                latestCursorPosition,
+                repositionAttempt: true,
+                repositionMoved: false,
+            });
+            return previousPosition;
+        }
+
+        if (latestCursorPosition) {
+            return latestCursorPosition;
+        }
+
+        return await this.getOverlayPosition();
     }
 
     resetForTest() {

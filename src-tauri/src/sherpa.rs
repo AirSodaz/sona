@@ -762,6 +762,168 @@ fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
     result
 }
 
+fn normalize_recognizer_text(text: &str) -> String {
+    let mut result = text.trim();
+
+    while result.starts_with("<|") && result.contains("|>") {
+        let Some(tag_end) = result.find("|>") else {
+            break;
+        };
+        result = result[tag_end + 2..].trim();
+    }
+
+    result.trim().to_string()
+}
+
+fn is_meaningful_text_char(ch: char) -> bool {
+    ch.is_alphanumeric()
+}
+
+fn extract_meaningful_text(text: &str) -> String {
+    text.chars()
+        .filter(|ch| is_meaningful_text_char(*ch))
+        .collect()
+}
+
+fn extract_ascii_digits(text: &str) -> String {
+    text.chars().filter(|ch| ch.is_ascii_digit()).collect()
+}
+
+fn is_preservable_trailing_punctuation(ch: char) -> bool {
+    matches!(
+        ch,
+        '。'
+            | '，'
+            | '！'
+            | '？'
+            | '：'
+            | '；'
+            | '、'
+            | '.'
+            | ','
+            | '!'
+            | '?'
+            | ':'
+            | ';'
+            | ')'
+            | '）'
+            | ']'
+            | '】'
+            | '}'
+            | '」'
+            | '』'
+            | '》'
+            | '〉'
+            | '"'
+            | '\''
+            | '”'
+            | '’'
+    )
+}
+
+fn extract_trailing_punctuation(text: &str) -> String {
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut start = trimmed.len();
+    for (idx, ch) in trimmed.char_indices().rev() {
+        if is_preservable_trailing_punctuation(ch) {
+            start = idx;
+        } else {
+            break;
+        }
+    }
+
+    if start < trimmed.len() {
+        trimmed[start..].to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn merge_cleaned_text_with_trailing_punctuation(cleaned_text: &str, formatted_text: &str) -> String {
+    let mut result = cleaned_text.trim().to_string();
+    let trailing_punctuation = extract_trailing_punctuation(formatted_text);
+
+    if !trailing_punctuation.is_empty() && !result.ends_with(&trailing_punctuation) {
+        result.push_str(&trailing_punctuation);
+    }
+
+    result
+}
+
+fn should_fallback_to_cleaned_text(cleaned_text: &str, formatted_text: &str) -> bool {
+    let cleaned_meaningful = extract_meaningful_text(cleaned_text);
+    if cleaned_meaningful.is_empty() {
+        return false;
+    }
+
+    let formatted_meaningful = extract_meaningful_text(formatted_text);
+    if formatted_meaningful.is_empty() {
+        return true;
+    }
+
+    let cleaned_digits = extract_ascii_digits(cleaned_text);
+    if !cleaned_digits.is_empty() && extract_ascii_digits(formatted_text) != cleaned_digits {
+        return true;
+    }
+
+    false
+}
+
+fn select_final_transcript_text(cleaned_text: &str, formatted_text: &str) -> String {
+    let normalized_formatted = normalize_recognizer_text(formatted_text);
+    if should_fallback_to_cleaned_text(cleaned_text, &normalized_formatted) {
+        return merge_cleaned_text_with_trailing_punctuation(cleaned_text, &normalized_formatted);
+    }
+
+    normalized_formatted
+}
+
+fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation>) -> String {
+    let formatted_text = format_transcript(cleaned_text, punctuation);
+    select_final_transcript_text(cleaned_text, &formatted_text)
+}
+
+fn preview_text_for_log(text: &str) -> String {
+    const MAX_PREVIEW_CHARS: usize = 24;
+    let flattened = text.replace('\r', " ").replace('\n', " ");
+    let mut preview = flattened.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+    if flattened.chars().count() > MAX_PREVIEW_CHARS {
+        preview.push('…');
+    }
+    preview
+}
+
+fn log_text_transform_diagnostics(
+    instance_id: &str,
+    stage: &str,
+    segment_id: &str,
+    is_final: bool,
+    raw_text: &str,
+    cleaned_text: &str,
+    final_text: &str,
+) {
+    let Some(label) = diagnostics_instance_label(instance_id) else {
+        return;
+    };
+
+    info!(
+        "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={} raw_preview={:?} cleaned_preview={:?} final_preview={:?}",
+        stage,
+        segment_id,
+        is_final,
+        raw_text.chars().count(),
+        cleaned_text.chars().count(),
+        final_text.chars().count(),
+        preview_text_for_log(raw_text),
+        preview_text_for_log(cleaned_text),
+        preview_text_for_log(final_text)
+    );
+}
+
 fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
     if timestamps.is_empty() {
         return None;
@@ -824,27 +986,49 @@ fn run_offline_inference<R: tauri::Runtime>(
     if let Some(result) = stream.get_result() {
         let raw_text = result.text.trim();
         if !raw_text.is_empty() {
-            let mut text = if is_final {
-                format_transcript(&result.text, punctuation)
-            } else {
-                result.text.clone()
-            };
-
-            if !is_final && text.starts_with("<|") && text.contains("|>") {
-                if let Some(pos) = text.find("|>") {
-                    text = text[pos + 2..].trim().to_string();
-                }
-            }
-
-            if text.is_empty() && !is_final {
+            let cleaned_text = normalize_recognizer_text(&result.text);
+            if cleaned_text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     info!(
-                        "[Sherpa] {label} offline inference produced empty preview text after stripping tags. stage={} segment_id={}",
-                        stage, segment_id
+                        "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
+                        stage,
+                        segment_id,
+                        is_final,
+                        preview_text_for_log(raw_text)
                     );
                 }
                 return;
             }
+
+            let text = if is_final {
+                finalize_transcript_text(&cleaned_text, punctuation)
+            } else {
+                cleaned_text.clone()
+            };
+
+            if text.is_empty() {
+                if let Some(label) = diagnostics_instance_label(instance_id) {
+                    info!(
+                        "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
+                        stage,
+                        segment_id,
+                        is_final,
+                        preview_text_for_log(raw_text),
+                        preview_text_for_log(&cleaned_text)
+                    );
+                }
+                return;
+            }
+
+            log_text_transform_diagnostics(
+                instance_id,
+                stage,
+                segment_id,
+                is_final,
+                raw_text,
+                &cleaned_text,
+                &text,
+            );
 
             let global_end = global_start + (full_audio.len() as f64 / 16000.0);
             let timestamps_abs: Option<Vec<f32>> = result
@@ -1806,6 +1990,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_recognizer_text_strips_multiple_leading_tags() {
+        assert_eq!(
+            normalize_recognizer_text("  <|zh|><|withitn|><|noise|> 123。 "),
+            "123。"
+        );
+    }
+
+    #[test]
+    fn select_final_transcript_text_falls_back_to_cleaned_digits_when_formatting_drops_them() {
+        assert_eq!(select_final_transcript_text("123", "。"), "123。");
+    }
 
     #[test]
     fn build_model_config_supports_qwen3_asr_without_tokens() {
