@@ -389,6 +389,60 @@ describe('LiveRecord', () => {
         expect(useTranscriptStore.getState().isPaused).toBe(false);
     });
 
+    it('keeps transcript segment timestamps monotonic across pause and resume', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        mockPauseStream.mockImplementationOnce(async () => {
+            capturedOnSegment?.({
+                id: 'pause-final',
+                text: 'Pause final segment',
+                start: 0,
+                end: 2,
+                isFinal: true,
+                timestamps: [0, 1]
+            });
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(2000);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.pause/i }));
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            capturedOnSegment?.({
+                id: 'resume-seg',
+                text: 'After resume',
+                start: 0,
+                end: 0.5,
+                isFinal: true,
+                timestamps: [0, 0.25]
+            });
+            await Promise.resolve();
+        });
+
+        const resumedSegment = useTranscriptStore.getState().segments.find(segment => segment.id === 'resume-seg');
+        expect(resumedSegment).toBeTruthy();
+        expect(resumedSegment?.start).toBeGreaterThanOrEqual(2);
+        expect(resumedSegment?.start).toBeLessThan(2.2);
+        expect(resumedSegment?.end).toBeGreaterThanOrEqual(2.5);
+        expect(resumedSegment?.end).toBeLessThan(2.7);
+        expect(resumedSegment?.timestamps?.[0]).toBeGreaterThanOrEqual(2);
+        expect(resumedSegment?.timestamps?.[0]).toBeLessThan(2.2);
+        expect(resumedSegment?.timestamps?.[1]).toBeGreaterThanOrEqual(2.25);
+        expect(resumedSegment?.timestamps?.[1]).toBeLessThan(2.45);
+    });
+
     it('excludes paused time from the saved native recording duration', async () => {
         mockPauseStream.mockImplementationOnce(async () => {
             capturedOnSegment?.({
