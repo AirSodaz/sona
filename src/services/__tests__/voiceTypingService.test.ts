@@ -432,7 +432,10 @@ describe('voiceTypingService', () => {
                 revision: 5,
             })
         );
-        expect(getInvokeCalls('inject_text')).toEqual([[ 'inject_text', { text: '你好世界' } ]]);
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '你好世界', shortcutModifiers: ['alt'] },
+        ]]);
         expect(mocks.windowOpen).toHaveBeenCalledWith(156, 348);
     });
 
@@ -476,8 +479,57 @@ describe('voiceTypingService', () => {
         await vi.advanceTimersByTimeAsync(40);
         await flushMicrotasks(8);
 
-        expect(getInvokeCalls('inject_text')).toEqual([[ 'inject_text', { text: '第一句' } ]]);
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '第一句', shortcutModifiers: ['alt'] },
+        ]]);
         expect(mocks.windowOpen).toHaveBeenCalledWith(176, 368);
+    });
+
+    it('passes control modifiers to inject_text when the voice typing shortcut uses Ctrl + Space', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingShortcut: 'Ctrl + Space',
+        };
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+
+        const service = await loadService();
+        await service.startListening();
+        vi.clearAllMocks();
+
+        onSegment?.({ id: 'seg-ctrl', text: '123。', isFinal: true });
+        await flushMicrotasks(12);
+
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '123。', shortcutModifiers: ['control'] },
+        ]]);
+    });
+
+    it('omits shortcut modifiers when the voice typing shortcut has no modifier keys', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingShortcut: 'Space',
+        };
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+
+        const service = await loadService();
+        await service.startListening();
+        vi.clearAllMocks();
+
+        onSegment?.({ id: 'seg-space', text: '纯文本', isFinal: true });
+        await flushMicrotasks(12);
+
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '纯文本' },
+        ]]);
     });
 
     it('keeps the session alive across VAD sentence boundaries in hold mode', async () => {
@@ -498,7 +550,10 @@ describe('voiceTypingService', () => {
         onSegment?.({ id: 'seg-2', text: '第二句草稿', isFinal: false });
         await flushMicrotasks(8);
 
-        expect(getInvokeCalls('inject_text')).toEqual([[ 'inject_text', { text: '第一句' } ]]);
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '第一句', shortcutModifiers: ['alt'] },
+        ]]);
         expect(mocks.windowClose).not.toHaveBeenCalled();
         expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual([
             'segment',
@@ -616,7 +671,10 @@ describe('voiceTypingService', () => {
         onSegment?.({ id: 'seg-1', text: '短句结果', isFinal: true });
         await flushMicrotasks(8);
 
-        expect(getInvokeCalls('inject_text')).toEqual([[ 'inject_text', { text: '短句结果' } ]]);
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '短句结果', shortcutModifiers: ['alt'] },
+        ]]);
         expect(mocks.windowSendState).toHaveBeenCalledTimes(1);
         expect(mocks.windowSendState).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -658,7 +716,10 @@ describe('voiceTypingService', () => {
         onSegment?.({ id: 'seg-1', text: '重复句子', isFinal: true });
         await flushMicrotasks(8);
 
-        expect(getInvokeCalls('inject_text')).toEqual([[ 'inject_text', { text: '重复句子' } ]]);
+        expect(getInvokeCalls('inject_text')).toEqual([[
+            'inject_text',
+            { text: '重复句子', shortcutModifiers: ['alt'] },
+        ]]);
         expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual([
             'segment',
             'listening',

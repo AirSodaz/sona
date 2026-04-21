@@ -9,6 +9,7 @@ import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachi
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
+type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
 
 class VoiceTypingService {
     private initialized = false;
@@ -31,7 +32,13 @@ class VoiceTypingService {
         resolveOverlayPositionAfterCommit: () => this.getOverlayPositionAfterCommit(),
         ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
         injectText: async (text) => {
-            await invoke('inject_text', { text });
+            const shortcutModifiers = this.getCurrentShortcutModifiers();
+            await invoke('inject_text', shortcutModifiers.length > 0 ? {
+                text,
+                shortcutModifiers,
+            } : {
+                text,
+            });
         },
     });
 
@@ -232,6 +239,44 @@ class VoiceTypingService {
 
     private getVoiceTypingMode() {
         return useConfigStore.getState().config.voiceTypingMode || 'hold';
+    }
+
+    private getCurrentShortcutModifiers(): VoiceTypingShortcutModifier[] {
+        const shortcut = useConfigStore.getState().config.voiceTypingShortcut || 'Alt+V';
+        const normalizedParts = shortcut
+            .split('+')
+            .map((part) => part.trim().toLowerCase())
+            .filter(Boolean);
+        const modifiers = new Set<VoiceTypingShortcutModifier>();
+
+        for (const part of normalizedParts) {
+            if (part === 'ctrl' || part === 'control' || part === 'cmdorctrl') {
+                modifiers.add('control');
+                continue;
+            }
+
+            if (part === 'alt' || part === 'option') {
+                modifiers.add('alt');
+                continue;
+            }
+
+            if (part === 'shift') {
+                modifiers.add('shift');
+                continue;
+            }
+
+            if (
+                part === 'meta' ||
+                part === 'cmd' ||
+                part === 'command' ||
+                part === 'super' ||
+                part === 'win'
+            ) {
+                modifiers.add('meta');
+            }
+        }
+
+        return Array.from(modifiers);
     }
 
     private normalizeOverlayPosition(cursorPosition: [number, number]): [number, number] {
