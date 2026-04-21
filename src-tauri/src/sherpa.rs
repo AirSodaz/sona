@@ -480,8 +480,18 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
         return None;
     }
 
+    let model_file_path = if Path::new(&v_path).is_file() {
+        v_path
+    } else {
+        let entries = std::fs::read_dir(&v_path).ok()?;
+        let onnx_file = entries
+            .flatten()
+            .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
+        onnx_file.path().to_string_lossy().into_owned()
+    };
+
     let silero_vad = SileroVadModelConfig {
-        model: Some(v_path),
+        model: Some(model_file_path),
         threshold: 0.30,
         min_silence_duration: 0.5,
         min_speech_duration: 0.25,
