@@ -3,7 +3,12 @@ import { AuxWindowController } from './auxWindowController';
 
 export const VOICE_TYPING_WINDOW_LABEL = 'voice-typing';
 export const VOICE_TYPING_EVENT_TEXT = 'voice-typing:text';
-const VOICE_TYPING_WINDOW_SIZE = { width: 400, height: 60 };
+export const VOICE_TYPING_WINDOW_WIDTH = 400;
+export const VOICE_TYPING_WINDOW_INITIAL_HEIGHT = 80;
+const VOICE_TYPING_WINDOW_SIZE = {
+    width: VOICE_TYPING_WINDOW_WIDTH,
+    height: VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
+};
 
 export type VoiceTypingOverlayPhase = 'preparing' | 'listening' | 'segment' | 'error';
 

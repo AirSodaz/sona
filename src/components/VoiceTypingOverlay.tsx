@@ -1,31 +1,74 @@
-import { type CSSProperties, useEffect } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mic } from 'lucide-react';
 import '../styles/index.css';
 import { logger } from '../utils/logger';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
+import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
 import {
     DEFAULT_VOICE_TYPING_OVERLAY_STATE,
     VOICE_TYPING_EVENT_TEXT,
     VOICE_TYPING_WINDOW_LABEL,
+    VOICE_TYPING_WINDOW_WIDTH,
 } from '../services/voiceTypingWindowService';
+
+const OVERLAY_ROOT_PADDING = {
+    top: 4,
+    right: 4,
+    bottom: 20,
+    left: 4,
+};
 
 const baseContainerStyle = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    margin: '4px',
     borderRadius: '16px',
     fontSize: '14px',
-    boxShadow: '0 10px 30px rgba(15, 23, 42, 0.22)',
-    maxWidth: '90vw',
+    maxWidth: `${VOICE_TYPING_WINDOW_WIDTH - OVERLAY_ROOT_PADDING.left - OVERLAY_ROOT_PADDING.right}px`,
     transition:
         'background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease',
 } satisfies CSSProperties;
 
+async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
+    if (!rootElement) {
+        return;
+    }
+
+    const totalHeight = Math.ceil(rootElement.getBoundingClientRect().height);
+    if (totalHeight <= 0) {
+        return;
+    }
+
+    try {
+        const currentWindow = getCurrentWindow();
+        const factor = await currentWindow.scaleFactor();
+        const size = await currentWindow.innerSize();
+        const targetPhysicalHeight = Math.ceil(totalHeight * factor);
+        const targetPhysicalWidth = Math.ceil(VOICE_TYPING_WINDOW_WIDTH * factor);
+
+        if (
+            Math.abs(size.height - targetPhysicalHeight) <= 1 &&
+            Math.abs(size.width - targetPhysicalWidth) <= 1
+        ) {
+            return;
+        }
+
+        const { PhysicalSize } = await import('@tauri-apps/api/dpi');
+        await currentWindow.setSize(
+            new PhysicalSize(targetPhysicalWidth, targetPhysicalHeight)
+        );
+    } catch (error) {
+        logger.error('[VoiceTypingOverlay] Failed to resize window:', error);
+    }
+}
+
 export function VoiceTypingOverlay() {
     const { t } = useTranslation();
+    const rootRef = useRef<HTMLDivElement>(null);
+    const resolvedTheme = useAuxWindowTheme();
     const overlayState = useAuxWindowState({
         label: VOICE_TYPING_WINDOW_LABEL,
         eventName: VOICE_TYPING_EVENT_TEXT,
@@ -56,6 +99,23 @@ export function VoiceTypingOverlay() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!rootRef.current) {
+            return;
+        }
+
+        const observer = new ResizeObserver(() => {
+            void resizeVoiceTypingWindow(rootRef.current);
+        });
+
+        observer.observe(rootRef.current);
+        void resizeVoiceTypingWindow(rootRef.current);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
     const { phase, text } = overlayState;
     const isSegment = phase === 'segment' && text.trim().length > 0;
     const isError = phase === 'error';
@@ -79,13 +139,20 @@ export function VoiceTypingOverlay() {
         });
     }, [isSegment, overlayState.revision, overlayState.sessionId, phase, text]);
 
+    useEffect(() => {
+        void resizeVoiceTypingWindow(rootRef.current);
+    }, [displayText, phase, resolvedTheme]);
+
     const containerStyle: CSSProperties = isSegment
         ? {
             ...baseContainerStyle,
-            background: 'rgba(255, 255, 255, 0.94)',
-            color: '#111827',
-            border: '1px solid rgba(15, 23, 42, 0.12)',
-            boxShadow: '0 12px 30px rgba(15, 23, 42, 0.18)',
+            background: 'var(--color-bg-elevated)',
+            color: 'var(--color-text-primary)',
+            border: '1px solid var(--color-border-hover)',
+            boxShadow:
+                resolvedTheme === 'dark'
+                    ? '0 16px 32px rgba(0, 0, 0, 0.36)'
+                    : 'var(--shadow-xl)',
         }
         : isError
             ? {
@@ -96,11 +163,13 @@ export function VoiceTypingOverlay() {
             }
             : {
                 ...baseContainerStyle,
-                background: 'rgba(15, 23, 42, 0.78)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'var(--color-bg-elevated)',
+                color: 'var(--color-text-primary)',
+                border: '1px solid var(--color-border-hover)',
+                boxShadow:
+                    resolvedTheme === 'dark'
+                        ? '0 16px 32px rgba(0, 0, 0, 0.36)'
+                        : 'var(--shadow-xl)',
             };
 
     const indicatorStyle: CSSProperties = isSegment
@@ -123,17 +192,20 @@ export function VoiceTypingOverlay() {
 
     return (
         <div
+            data-testid="voice-typing-overlay-root"
+            ref={rootRef}
             style={{
-                width: '100vw',
-                height: '100vh',
                 display: 'flex',
                 alignItems: 'flex-start',
                 justifyContent: 'flex-start',
                 background: 'transparent',
-                overflow: 'hidden',
+                overflow: 'visible',
+                width: 'fit-content',
+                height: 'fit-content',
+                padding: `${OVERLAY_ROOT_PADDING.top}px ${OVERLAY_ROOT_PADDING.right}px ${OVERLAY_ROOT_PADDING.bottom}px ${OVERLAY_ROOT_PADDING.left}px`,
             }}
         >
-            <div style={containerStyle}>
+            <div data-testid="voice-typing-bubble" style={containerStyle}>
                 {isSegment ? (
                     <div style={indicatorStyle} />
                 ) : (

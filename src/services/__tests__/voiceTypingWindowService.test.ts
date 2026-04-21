@@ -96,7 +96,11 @@ describe('voiceTypingWindowService', () => {
     });
 
     it('prepares a hidden overlay window ahead of time with the standard size', async () => {
-        const { voiceTypingWindowService } = await import('../voiceTypingWindowService');
+        const {
+            voiceTypingWindowService,
+            VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
+            VOICE_TYPING_WINDOW_WIDTH,
+        } = await import('../voiceTypingWindowService');
 
         await voiceTypingWindowService.prepare([120, 220]);
 
@@ -105,8 +109,8 @@ describe('voiceTypingWindowService', () => {
             expect.objectContaining({
                 url: '/index.html?window=voice-typing',
                 visible: false,
-                width: 400,
-                height: 60,
+                width: VOICE_TYPING_WINDOW_WIDTH,
+                height: VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
                 x: 120,
                 y: 220,
             })
@@ -169,7 +173,11 @@ describe('voiceTypingWindowService', () => {
     });
 
     it('reuses the prepared window when opening the overlay', async () => {
-        const { voiceTypingWindowService } = await import('../voiceTypingWindowService');
+        const {
+            voiceTypingWindowService,
+            VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
+            VOICE_TYPING_WINDOW_WIDTH,
+        } = await import('../voiceTypingWindowService');
 
         await voiceTypingWindowService.prepare([10, 20]);
         const preparedWindow = mocks.createdWindows[0];
@@ -181,7 +189,10 @@ describe('voiceTypingWindowService', () => {
             expect.objectContaining({ x: 80, y: 160 })
         );
         expect(preparedWindow.setSize).toHaveBeenLastCalledWith(
-            expect.objectContaining({ width: 400, height: 60 })
+            expect.objectContaining({
+                width: VOICE_TYPING_WINDOW_WIDTH,
+                height: VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
+            })
         );
         expect(preparedWindow.show).toHaveBeenCalled();
     });

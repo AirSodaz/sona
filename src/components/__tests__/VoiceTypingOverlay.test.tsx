@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VoiceTypingOverlay } from '../VoiceTypingOverlay';
 
@@ -18,6 +18,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 
 const mocks = vi.hoisted(() => {
     const listenCallbacks: Record<string, (event: any) => void> = {};
+    let storeKeyChangeCallback: ((value: any) => void) | null = null;
     const unlisten = vi.fn();
     const listen = vi.fn((event: string, callback: (event: any) => void) => {
         listenCallbacks[event] = callback;
@@ -32,8 +33,23 @@ const mocks = vi.hoisted(() => {
         }
         return undefined;
     });
+    const settingsGet = vi.fn().mockResolvedValue(null);
+    const settingsOnKeyChange = vi.fn((_key: string, callback: (value: any) => void) => {
+        storeKeyChangeCallback = callback;
+        return Promise.resolve(() => {
+            if (storeKeyChangeCallback === callback) {
+                storeKeyChangeCallback = null;
+            }
+        });
+    });
+    const currentWindowScaleFactor = vi.fn().mockResolvedValue(1);
+    const currentWindowInnerSize = vi.fn().mockResolvedValue({ width: 400, height: 80 });
+    const currentWindowSetSize = vi.fn().mockResolvedValue(undefined);
 
     return {
+        currentWindowInnerSize,
+        currentWindowScaleFactor,
+        currentWindowSetSize,
         invoke,
         listen,
         listenCallbacks,
@@ -49,6 +65,11 @@ const mocks = vi.hoisted(() => {
         loggerWarn: vi.fn(),
         loggerError: vi.fn(),
         loggerDebug: vi.fn(),
+        settingsGet,
+        settingsOnKeyChange,
+        triggerStoredConfigChange: (value: any) => {
+            storeKeyChangeCallback?.(value);
+        },
     };
 });
 
@@ -66,6 +87,31 @@ vi.mock('@tauri-apps/api/webviewWindow', () => ({
     }),
 }));
 
+vi.mock('@tauri-apps/api/window', () => ({
+    getCurrentWindow: () => ({
+        scaleFactor: mocks.currentWindowScaleFactor,
+        innerSize: mocks.currentWindowInnerSize,
+        setSize: mocks.currentWindowSetSize,
+    }),
+}));
+
+vi.mock('@tauri-apps/api/dpi', () => ({
+    PhysicalSize: class MockPhysicalSize {
+        constructor(
+            public width: number,
+            public height: number
+        ) { }
+    },
+}));
+
+vi.mock('../../services/storageService', () => ({
+    STORE_KEY_CONFIG: 'sona-config',
+    settingsStore: {
+        get: mocks.settingsGet,
+        onKeyChange: mocks.settingsOnKeyChange,
+    },
+}));
+
 vi.mock('../../utils/logger', () => ({
     logger: {
         info: mocks.loggerInfo,
@@ -76,6 +122,10 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 describe('VoiceTypingOverlay', () => {
+    let mediaQueryMatches = false;
+    let mediaQueryListeners: Array<(event: MediaQueryListEvent) => void> = [];
+    let resizeObserverCallback: ResizeObserverCallback | null = null;
+
     beforeEach(() => {
         vi.useRealTimers();
         for (const key of Object.keys(mocks.listenCallbacks)) {
@@ -87,8 +137,46 @@ describe('VoiceTypingOverlay', () => {
             }
             return undefined;
         });
+        mocks.settingsGet.mockResolvedValue(null);
+        mocks.settingsOnKeyChange.mockClear();
+        mocks.currentWindowScaleFactor.mockResolvedValue(1);
+        mocks.currentWindowInnerSize.mockResolvedValue({ width: 400, height: 80 });
+        mocks.currentWindowSetSize.mockResolvedValue(undefined);
         document.documentElement.style.background = '';
         document.body.style.background = '';
+        document.documentElement.removeAttribute('data-theme');
+
+        mediaQueryMatches = false;
+        mediaQueryListeners = [];
+        resizeObserverCallback = null;
+
+        Object.defineProperty(window, 'matchMedia', {
+            writable: true,
+            value: vi.fn().mockImplementation(() => ({
+                matches: mediaQueryMatches,
+                media: '(prefers-color-scheme: dark)',
+                addEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+                    mediaQueryListeners.push(listener);
+                },
+                removeEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+                    mediaQueryListeners = mediaQueryListeners.filter(
+                        (currentListener) => currentListener !== listener
+                    );
+                },
+            })),
+        });
+
+        global.ResizeObserver = class {
+            constructor(callback: ResizeObserverCallback) {
+                resizeObserverCallback = callback;
+            }
+
+            observe() { }
+
+            disconnect() { }
+
+            unobserve() { }
+        } as typeof ResizeObserver;
     });
 
     afterEach(() => {
@@ -101,6 +189,61 @@ describe('VoiceTypingOverlay', () => {
         expect(screen.getByText('正在聆听...')).toBeTruthy();
         expect(document.documentElement.style.background).toBe('transparent');
         expect(document.body.style.background).toBe('transparent');
+    });
+
+    it('applies the stored dark theme to the auxiliary window root', async () => {
+        mocks.settingsGet.mockResolvedValue({
+            theme: 'dark',
+        });
+
+        render(<VoiceTypingOverlay />);
+
+        await waitFor(() => {
+            expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        });
+    });
+
+    it('resolves auto theme and reacts to system color-scheme changes', async () => {
+        mocks.settingsGet.mockResolvedValue({
+            theme: 'auto',
+        });
+
+        render(<VoiceTypingOverlay />);
+
+        await waitFor(() => {
+            expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        });
+
+        await act(async () => {
+            mediaQueryMatches = true;
+            for (const listener of mediaQueryListeners) {
+                listener({ matches: true } as MediaQueryListEvent);
+            }
+        });
+
+        await waitFor(() => {
+            expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        });
+    });
+
+    it('updates the resolved theme when the stored config changes', async () => {
+        mocks.settingsGet.mockResolvedValue({
+            theme: 'light',
+        });
+
+        render(<VoiceTypingOverlay />);
+
+        await waitFor(() => {
+            expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        });
+
+        await act(async () => {
+            mocks.triggerStoredConfigChange({ theme: 'dark' });
+        });
+
+        await waitFor(() => {
+            expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        });
     });
 
     it('renders the latest preview text from overlay events', async () => {
@@ -120,6 +263,9 @@ describe('VoiceTypingOverlay', () => {
         });
 
         expect(screen.getByText('测试转录结果')).toBeTruthy();
+        expect(screen.getByTestId('voice-typing-bubble').style.background).toBe(
+            'var(--color-bg-elevated)'
+        );
     });
 
     it('renders punctuation-only segment text and records the rendered phase', async () => {
@@ -272,5 +418,37 @@ describe('VoiceTypingOverlay', () => {
                 label: 'voice-typing',
             })
         );
+    });
+
+    it('resizes the auxiliary window to match measured content height', async () => {
+        render(<VoiceTypingOverlay />);
+
+        const root = screen.getByTestId('voice-typing-overlay-root');
+        Object.defineProperty(root, 'getBoundingClientRect', {
+            value: vi.fn(() => ({
+                width: 240,
+                height: 68,
+                top: 0,
+                left: 0,
+                right: 240,
+                bottom: 68,
+                x: 0,
+                y: 0,
+                toJSON: () => undefined,
+            })),
+        });
+
+        await act(async () => {
+            resizeObserverCallback?.([], {} as ResizeObserver);
+        });
+
+        await waitFor(() => {
+            expect(mocks.currentWindowSetSize).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    width: 400,
+                    height: 68,
+                })
+            );
+        });
     });
 });
