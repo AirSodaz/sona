@@ -12,9 +12,10 @@ import { Switch } from './Switch';
 import { captionWindowService } from '../services/captionWindowService';
 import { useCaptionSession } from '../hooks/useCaptionSession';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { useAudioRecorder, type RecordSegmentDeliveryMeta } from '../hooks/useAudioRecorder';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { logger } from '../utils/logger';
+import { TranscriptSegment } from '../types/transcript';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -47,7 +48,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // State from store
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
-    const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
     const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
@@ -92,43 +92,48 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [lockWindow, alwaysOnTop]);
 
     // Segment Handler
-    const onSegment = useCallback((segment: any) => {
+    const onSegment = useCallback((segment: TranscriptSegment, meta: RecordSegmentDeliveryMeta) => {
         const storeState = useTranscriptStore.getState();
+        logger.info(
+            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. segment=${segment.id} final=${segment.isFinal} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${storeState.isRecording}`
+        );
 
-        if (storeState.isRecording) {
-            if (enableTimeline && segment.isFinal) {
-                const parts = splitByPunctuation([segment]);
-                if (parts.length > 0) {
-                    storeState.deleteSegment(segment.id);
-                    parts.forEach(part => storeState.upsertSegment(part));
-                    storeState.setActiveSegmentId(parts[parts.length - 1].id);
-                } else {
-                    upsertSegmentAndSetActive(segment);
-                }
+        if (!meta.accepted) {
+            return;
+        }
+
+        if (enableTimeline && segment.isFinal) {
+            const parts = splitByPunctuation([segment]);
+            if (parts.length > 0) {
+                storeState.deleteSegment(segment.id);
+                parts.forEach(part => storeState.upsertSegment(part));
+                storeState.setActiveSegmentId(parts[parts.length - 1].id);
             } else {
                 upsertSegmentAndSetActive(segment);
             }
+        } else {
+            upsertSegmentAndSetActive(segment);
+        }
 
-            // Auto-Polish Logic
-            const config = useConfigStore.getState().config;
-            const autoPolish = config.autoPolish ?? false;
-            const frequency = config.autoPolishFrequency ?? 5;
+        // Auto-Polish Logic
+        const config = useConfigStore.getState().config;
+        const autoPolish = config.autoPolish ?? false;
+        const frequency = config.autoPolishFrequency ?? 5;
 
-            if (autoPolish && frequency > 0) {
-                const allSegments = storeState.segments;
-                const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
+        if (autoPolish && frequency > 0) {
+            const allSegments = storeState.segments;
+            const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
 
-                if (unpolished.length >= frequency) {
-                    const toPolish = unpolished.slice(0, frequency);
-                    toPolish.forEach(s => polishedIdsRef.current.add(s.id));
+            if (unpolished.length >= frequency) {
+                const toPolish = unpolished.slice(0, frequency);
+                toPolish.forEach(s => polishedIdsRef.current.add(s.id));
 
-                    polishService.polishSegments(toPolish, (chunk) => {
-                        const store = useTranscriptStore.getState();
-                        chunk.forEach(p => store.updateSegment(p.id, { text: p.text }));
-                    }).catch(err => {
-                        logger.error('[LiveRecord] Auto-polish failed:', err);
-                    });
-                }
+                polishService.polishSegments(toPolish, (chunk) => {
+                    const store = useTranscriptStore.getState();
+                    chunk.forEach(p => store.updateSegment(p.id, { text: p.text }));
+                }).catch(err => {
+                    logger.error('[LiveRecord] Auto-polish failed:', err);
+                });
             }
         }
     }, [upsertSegmentAndSetActive, enableTimeline]);
@@ -157,18 +162,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (isRecording) {
             await stopRecording();
             stopVisualizer();
-            // Reset state
-            setIsRecording(false);
             setIsPaused(false);
         } else {
             polishedIdsRef.current.clear();
             const success = await startRecording();
             if (success) {
-                setIsRecording(true);
                 startVisualizer();
             }
         }
-    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer, setIsRecording, setIsPaused]);
+    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer, setIsPaused]);
 
     const handleTogglePause = useCallback(() => {
         if (isPaused) {
@@ -196,18 +198,18 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         const handleKeyDown = (e: KeyboardEvent) => {
             const shortcutStr = config.liveRecordShortcut || 'Ctrl + Space';
             const parts = shortcutStr.split(' + ').map(p => p.trim());
-            
+
             const needsCtrl = parts.includes('Ctrl');
             const needsAlt = parts.includes('Alt');
             const needsShift = parts.includes('Shift');
             const needsMeta = parts.includes('Meta');
             const mainKeyPart = parts[parts.length - 1];
-            
+
             let eventKey = e.key;
             if (eventKey === ' ') eventKey = 'Space';
             else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
 
-            const isStartStopMatch = 
+            const isStartStopMatch =
                 e.ctrlKey === needsCtrl &&
                 e.altKey === needsAlt &&
                 e.shiftKey === needsShift &&
@@ -218,9 +220,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 e.preventDefault();
                 handleToggleRecording();
             } else if (e.code === 'Space' && !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space') {
-                // If the user mapped start/stop to just "Space", we don't handle pause with "Space" 
+                // If the user mapped start/stop to just "Space", we don't handle pause with "Space"
                 // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
-                // Wait, if it didn't match start/stop, we can check for pause.
                 if (isRecordingRef.current) {
                     e.preventDefault();
                     handleTogglePause();

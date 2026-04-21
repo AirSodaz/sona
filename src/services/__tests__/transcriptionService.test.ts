@@ -22,6 +22,7 @@ describe('TranscriptionService', () => {
         // Reset static global listeners to ensure listen is called in each test
         (transcriptionService.constructor as any).globalListeners.clear();
         (transcriptionService.constructor as any).instanceCallbacks.clear();
+        (transcriptionService.constructor as any).callbackRegistrationCounter = 0;
     });
 
     afterEach(async () => {
@@ -110,6 +111,52 @@ describe('TranscriptionService', () => {
             text: 'Hello world',
             start: 0,
             end: 1.5
+        }));
+    });
+
+    it('only dispatches recognizer events to the latest record callback registration', async () => {
+        const firstOnSegment = vi.fn();
+        const secondOnSegment = vi.fn();
+        const onError = vi.fn();
+
+        await transcriptionService.start(firstOnSegment, onError, {
+            callbackOwner: 'live-record',
+            callbackSessionId: 'session-1'
+        });
+        await transcriptionService.start(secondOnSegment, onError, {
+            callbackOwner: 'live-record',
+            callbackSessionId: 'session-2'
+        });
+
+        const currentRegistration = (transcriptionService.constructor as any).instanceCallbacks.get('record');
+        expect(currentRegistration).toMatchObject({
+            owner: 'live-record',
+            sessionId: 'session-2',
+            registrationId: 2
+        });
+
+        const listenCalls = vi.mocked(listen).mock.calls;
+        const listenCall = listenCalls.find(call => call[0] === 'recognizer-output-record');
+
+        if (!listenCall) {
+            throw new Error('listen was not called with recognizer-output-record');
+        }
+
+        const listenCallback = listenCall[1] as Function;
+        listenCallback({
+            payload: {
+                id: 'seg-latest',
+                text: 'latest callback only',
+                start: 0,
+                end: 1,
+                isFinal: true
+            }
+        });
+
+        expect(firstOnSegment).not.toHaveBeenCalled();
+        expect(secondOnSegment).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'seg-latest',
+            text: 'latest callback only'
         }));
     });
 

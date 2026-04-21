@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
+import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
@@ -15,16 +16,18 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 // Mock Tauri listen
-const mockListen = vi.fn().mockResolvedValue(() => { });
+const mockUnlisten = vi.fn();
+const mockEventListen = vi.fn((event: string, callback: (event: any) => void) => {
+    if (event === 'system-audio') {
+        systemAudioCallback = callback;
+    }
+    return Promise.resolve(mockUnlisten);
+});
 let systemAudioCallback: ((event: any) => void) | null = null;
+let recordSegmentCallback: ((segment: any) => void) | null = null;
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn((event, callback) => {
-        if (event === 'system-audio') {
-            systemAudioCallback = callback;
-        }
-        return Promise.resolve(mockListen); // Return unlisten function
-    }),
+    listen: (event: string, callback: (event: any) => void) => mockEventListen(event, callback),
 }));
 
 // Mock historyService
@@ -163,6 +166,12 @@ vi.mock('lucide-react', () => ({
 describe('LiveRecord Native Capture', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
 
         const raf = vi.fn((cb) => setTimeout(cb, 16));
         const caf = vi.fn((id) => clearTimeout(id));
@@ -287,6 +296,7 @@ describe('LiveRecord Native Capture', () => {
 
         // Setup store config
         const { useConfigStore } = await import('../../stores/configStore');
+        const { useDialogStore } = await import('../../stores/dialogStore');
         act(() => {
             useConfigStore.setState({
                 config: {
@@ -294,6 +304,9 @@ describe('LiveRecord Native Capture', () => {
                     offlineModelPath: '/path/to/model'
                 }
             });
+            useDialogStore.setState({
+                showError: vi.fn().mockResolvedValue(undefined)
+            } as any);
         });
 
         // Reset mocks
@@ -301,9 +314,22 @@ describe('LiveRecord Native Capture', () => {
         mockStop.mockClear();
         mockSoftStop.mockClear();
         mockPrepare.mockClear();
+        mockEventListen.mockClear();
+        mockEventListen.mockImplementation((event: string, callback: (event: any) => void) => {
+            if (event === 'system-audio') {
+                systemAudioCallback = callback;
+            }
+            return Promise.resolve(mockUnlisten);
+        });
+        mockUnlisten.mockClear();
         mockInvoke.mockClear();
         mockSaveRecording.mockClear();
+        mockSaveNativeRecording.mockClear();
         systemAudioCallback = null;
+        recordSegmentCallback = null;
+        mockStart.mockImplementation(async (onSegment?: (segment: any) => void) => {
+            recordSegmentCallback = typeof onSegment === 'function' ? onSegment : null;
+        });
     });
 
     afterEach(async () => {
@@ -394,6 +420,38 @@ describe('LiveRecord Native Capture', () => {
         // We can simulate time passing > 1.0s.
     });
 
+    it('accepts record segments that arrive while the session is still starting', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        mockStart.mockImplementationOnce(async (onSegment?: (segment: any) => void) => {
+            recordSegmentCallback = typeof onSegment === 'function' ? onSegment : null;
+            onSegment?.({
+                id: 'startup-seg',
+                text: 'Hello during startup',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+        expect(useTranscriptStore.getState().segments).toEqual([
+            expect.objectContaining({
+                id: 'startup-seg',
+                text: 'Hello during startup',
+                isFinal: true
+            })
+        ]);
+    });
+
     it('should save recording if segments exist', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
 
@@ -448,6 +506,179 @@ describe('LiveRecord Native Capture', () => {
         expect(typeof callArgs[0]).toBe('string');
         // 2nd arg: segments
         expect(callArgs[1]).toHaveLength(1);
+    });
+
+    it('keeps accepting native microphone segments after capture attaches', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(recordSegmentCallback).toBeTypeOf('function');
+
+        await act(async () => {
+            recordSegmentCallback?.({
+                id: 'attached-seg',
+                text: 'Shared mic is feeding record',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+
+        expect(useTranscriptStore.getState().segments).toEqual([
+            expect.objectContaining({
+                id: 'attached-seg',
+                text: 'Shared mic is feeding record'
+            })
+        ]);
+    });
+
+    it('keeps the native microphone session alive when the peak listener cannot attach', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        mockEventListen.mockImplementation((event: string, callback: (event: any) => void) => {
+            if (event === 'microphone-audio') {
+                return Promise.reject(new Error('listener attach failed'));
+            }
+            if (event === 'system-audio') {
+                systemAudioCallback = callback;
+            }
+            return Promise.resolve(mockUnlisten);
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).not.toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
+        expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+
+        await act(async () => {
+            recordSegmentCallback?.({
+                id: 'listener-failure-seg',
+                text: 'Listener failure should not tear down record',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+
+        expect(useTranscriptStore.getState().segments).toEqual([
+            expect.objectContaining({
+                id: 'listener-failure-seg',
+                text: 'Listener failure should not tear down record'
+            })
+        ]);
+    });
+
+    it('rolls back the record session state when microphone startup ultimately fails', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        mockStart.mockImplementationOnce(async (onSegment?: (segment: any) => void) => {
+            recordSegmentCallback = typeof onSegment === 'function' ? onSegment : null;
+            onSegment?.({
+                id: 'rollback-seg',
+                text: 'Should be cleared after failure',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+        navigator.mediaDevices.getUserMedia = vi.fn().mockRejectedValue(new Error('web fallback failed'));
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'start_microphone_capture') {
+                throw new Error('mic attach failed');
+            }
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
+        expect(useTranscriptStore.getState().segments).toEqual([]);
+        expect(mockSoftStop).toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: /live.stop/i })).toBeNull();
+        expect(screen.getByRole('button', { name: /live.start_recording/i })).not.toBeNull();
+    });
+
+    it('does not let a stale microphone startup rollback stop a newer record session', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+
+        let rejectFirstAttach: ((reason?: unknown) => void) | null = null;
+        let microphoneAttachAttempts = 0;
+
+        mockInvoke.mockImplementation((cmd: string) => {
+            if (cmd === 'set_microphone_boost') {
+                return Promise.resolve(undefined);
+            }
+
+            if (cmd === 'start_microphone_capture') {
+                microphoneAttachAttempts += 1;
+                if (microphoneAttachAttempts === 1) {
+                    return new Promise((_, reject) => {
+                        rejectFirstAttach = reject;
+                    });
+                }
+                return Promise.resolve(undefined);
+            }
+
+            if (cmd === 'stop_microphone_capture' || cmd === 'stop_system_audio_capture') {
+                return Promise.resolve('/mock/path/to/audio.wav');
+            }
+
+            return Promise.resolve(undefined);
+        });
+
+        const { result } = renderHook(() => useAudioRecorder({
+            inputSource: 'microphone',
+            onSegment: vi.fn()
+        }));
+
+        let firstStartPromise: Promise<boolean>;
+        await act(async () => {
+            firstStartPromise = result.current.startRecording();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(microphoneAttachAttempts).toBe(1);
+
+        let secondStartResult = false;
+        await act(async () => {
+            secondStartResult = await result.current.startRecording();
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(secondStartResult).toBe(true);
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+
+        await act(async () => {
+            rejectFirstAttach?.(new Error('first attach failed'));
+            await expect(firstStartPromise!).resolves.toBe(false);
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+        expect(mockSoftStop).not.toHaveBeenCalled();
+        expect(mockInvoke).not.toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
     });
 
     it('should stop the correct native capture after switching desktop back to microphone', async () => {

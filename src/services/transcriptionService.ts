@@ -11,6 +11,11 @@ export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
 
+interface StartOptions {
+    callbackOwner?: string;
+    callbackSessionId?: string | null;
+}
+
 interface ServiceConfig {
     modelPath: string;
     punctuationModelPath: string;
@@ -29,7 +34,22 @@ interface ServiceConfig {
  */
 export class TranscriptionService {
     private static globalListeners: Map<string, UnlistenFn> = new Map();
-    private static instanceCallbacks: Map<string, { onSegment: TranscriptionCallback, onError: ErrorCallback }> = new Map();
+    private static callbackRegistrationCounter = 0;
+    private static instanceCallbacks: Map<string, {
+        onSegment: TranscriptionCallback,
+        onError: ErrorCallback,
+        owner: string,
+        sessionId: string | null,
+        registrationId: number,
+    }> = new Map();
+
+    private static isRecordInstance(instanceId: string): boolean {
+        return instanceId === 'record';
+    }
+
+    private static formatSession(sessionId: string | null | undefined): string {
+        return sessionId ?? 'none';
+    }
 
     /** Ensures the global listener is active for a specific instance. */
     private static async ensureGlobalBusFor(instanceId: string) {
@@ -39,24 +59,35 @@ export class TranscriptionService {
         const unlisten = await listen<TranscriptSegment>(eventName, (event) => {
             const segment = event.payload;
             const instance = this.instanceCallbacks.get(instanceId);
-            if (instance) {
-                try {
-                    // Apply text replacements from global config
-                    const appConfig = useConfigStore.getState().config;
-                    const originalText = segment.text;
-                    const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);     
-
-                    if (originalText !== processedText) {
-                        logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
-                    }                    
-                    const processedSegment = {
-                        ...segment,
-                        text: processedText
-                    };
-                    instance.onSegment(processedSegment);
-                } catch (e) {
-                    logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
+            if (!instance) {
+                if (this.isRecordInstance(instanceId)) {
+                    logger.info(`[TranscriptionService:record] Received recognizer event without an active callback. segment=${segment.id}`);
                 }
+                return;
+            }
+
+            if (this.isRecordInstance(instanceId)) {
+                logger.info(
+                    `[TranscriptionService:record] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} segment=${segment.id} final=${segment.isFinal}`
+                );
+            }
+
+            try {
+                // Apply text replacements from global config
+                const appConfig = useConfigStore.getState().config;
+                const originalText = segment.text;
+                const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
+
+                if (originalText !== processedText) {
+                    logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
+                }
+                const processedSegment = {
+                    ...segment,
+                    text: processedText
+                };
+                instance.onSegment(processedSegment);
+            } catch (e) {
+                logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
             }
         });
 
@@ -94,13 +125,49 @@ export class TranscriptionService {
         return this._initBackend();
     }
 
-    async start(onSegment: TranscriptionCallback, onError: ErrorCallback): Promise<void> {
+    async start(onSegment: TranscriptionCallback, onError: ErrorCallback, options?: StartOptions): Promise<void> {
         this.onError = onError;
-        TranscriptionService.instanceCallbacks.set(this.instanceId, { onSegment, onError });
 
         if (!this.modelPath) {
             onError('Model path not configured');
             return;
+        }
+
+        const existingRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
+        if (TranscriptionService.isRecordInstance(this.instanceId) && existingRegistration) {
+            logger.info(
+                `[TranscriptionService:record] Replacing callback registration. previous_registration=${existingRegistration.registrationId} previous_owner=${existingRegistration.owner} previous_session=${TranscriptionService.formatSession(existingRegistration.sessionId)}`
+            );
+        }
+
+        const owner = options?.callbackOwner ?? this.instanceId;
+        const sessionId = options?.callbackSessionId ?? null;
+        const registrationId = ++TranscriptionService.callbackRegistrationCounter;
+        const wrappedOnSegment: TranscriptionCallback = (segment) => {
+            const currentRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
+            if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
+                if (TranscriptionService.isRecordInstance(this.instanceId)) {
+                    logger.info(
+                        `[TranscriptionService:record] Ignored stale callback invocation. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)} current_registration=${currentRegistration?.registrationId ?? 'none'}`
+                    );
+                }
+                return;
+            }
+            onSegment(segment);
+        };
+
+        TranscriptionService.instanceCallbacks.set(this.instanceId, {
+            onSegment: wrappedOnSegment,
+            onError,
+            owner,
+            sessionId,
+            registrationId
+        });
+
+        if (TranscriptionService.isRecordInstance(this.instanceId)) {
+            logger.info(
+                `[TranscriptionService:record] Registered callback. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)}`
+            );
         }
 
         await TranscriptionService.ensureGlobalBusFor(this.instanceId);

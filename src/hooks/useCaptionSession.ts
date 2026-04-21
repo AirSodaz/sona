@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { transcriptionService, captionTranscriptionService, TranscriptionService } from '../services/transcriptionService';
+import { captionTranscriptionService, TranscriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
 import { AppConfig } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
-    const isRecording = useTranscriptStore((state) => state.isRecording);
 
     // Refs to hold instances across renders
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<AudioWorkletNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const activeServiceRef = useRef<TranscriptionService>(transcriptionService);
+    const activeServiceRef = useRef<TranscriptionService>(captionTranscriptionService);
 
     // Native capture refs
     const usingNativeCaptureRef = useRef(false);
@@ -32,10 +30,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
     // Configuration is now updated globally via useTranscriptionServiceSync,
     // so we don't need updateServiceConfig here anymore.
-
-    const getCaptionService = useCallback((): TranscriptionService => {
-        return isRecording ? captionTranscriptionService : transcriptionService;
-    }, [isRecording]);
 
     const stopCaptionSession = useCallback(async () => {
         logger.info('[CaptionSession] Stopping session...');
@@ -82,7 +76,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
         // Stop Service
         await activeServiceRef.current.stop();
-        activeServiceRef.current = transcriptionService;
+        activeServiceRef.current = captionTranscriptionService;
 
         processorRef.current = null;
         sourceRef.current = null;
@@ -109,7 +103,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
             if (!activeRef.current) return;
 
-            const captionService = getCaptionService();
+            const captionService = captionTranscriptionService;
             activeServiceRef.current = captionService;
 
             // 1. Get Audio Source (Try Native -> Fallback to Web API)
@@ -255,7 +249,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         } finally {
             setIsInitializing(false);
         }
-    }, [config, getCaptionService, stopCaptionSession]);
+    }, [config, stopCaptionSession]);
 
 
     // Effect: Manage Session based on Mode
@@ -277,7 +271,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             // When config changes, it updates the global transcriptionService.
             // We just need to restart the stream if we are in caption mode.
             if (isCaptionMode && !isInitializing) {
-                const captionService = getCaptionService();
+                const captionService = captionTranscriptionService;
                 activeServiceRef.current = captionService;
                 await captionService.start(
                     (segment: any) => captionWindowService.sendSegments([segment]).catch(logger.error),
@@ -296,7 +290,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         config.vadBufferSize,
         isCaptionMode,
         isInitializing,
-        getCaptionService
     ]);
 
     // Effect: Handle Style Changes (No Restart)
