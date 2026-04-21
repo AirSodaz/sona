@@ -120,4 +120,27 @@ describe('AuxWindowController', () => {
         );
         expect(mocks.createdWindows[0].show).not.toHaveBeenCalled();
     });
+
+    it('emits to the concrete webview window target when one already exists', async () => {
+        const existingWindow = new mocks.MockWebviewWindow('caption', {});
+        mocks.getByLabel.mockResolvedValue(existingWindow);
+
+        const controller = new AuxWindowController<{ revision: number }>({
+            label: 'caption',
+            eventName: 'caption:state',
+            createWindow: () => new mocks.MockWebviewWindow('caption', {}) as any,
+        });
+
+        await controller.commitState({ revision: 2 });
+
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: { revision: 2 },
+        });
+        expect(mocks.emitTo).toHaveBeenCalledWith(
+            { kind: 'WebviewWindow', label: 'caption' },
+            'caption:state',
+            { revision: 2 }
+        );
+    });
 });

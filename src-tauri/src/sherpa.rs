@@ -792,8 +792,7 @@ fn extract_ascii_digits(text: &str) -> String {
 fn is_preservable_trailing_punctuation(ch: char) -> bool {
     matches!(
         ch,
-        '。'
-            | '，'
+        '。' | '，'
             | '！'
             | '？'
             | '：'
@@ -843,7 +842,10 @@ fn extract_trailing_punctuation(text: &str) -> String {
     }
 }
 
-fn merge_cleaned_text_with_trailing_punctuation(cleaned_text: &str, formatted_text: &str) -> String {
+fn merge_cleaned_text_with_trailing_punctuation(
+    cleaned_text: &str,
+    formatted_text: &str,
+) -> String {
     let mut result = cleaned_text.trim().to_string();
     let trailing_punctuation = extract_trailing_punctuation(formatted_text);
 
@@ -890,7 +892,10 @@ fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation
 fn preview_text_for_log(text: &str) -> String {
     const MAX_PREVIEW_CHARS: usize = 24;
     let flattened = text.replace('\r', " ").replace('\n', " ");
-    let mut preview = flattened.chars().take(MAX_PREVIEW_CHARS).collect::<String>();
+    let mut preview = flattened
+        .chars()
+        .take(MAX_PREVIEW_CHARS)
+        .collect::<String>();
     if flattened.chars().count() > MAX_PREVIEW_CHARS {
         preview.push('…');
     }
@@ -2081,7 +2086,10 @@ mod tests {
         instance.total_samples = 42;
         instance.segment_start_time = 3.5;
         instance.current_segment_id = Some("segment-1".to_string());
-        instance.offline_state.speech_buffer.push(vec![0.1, 0.2, 0.3]);
+        instance
+            .offline_state
+            .speech_buffer
+            .push(vec![0.1, 0.2, 0.3]);
         instance.offline_state.is_speaking = true;
         instance.record_diagnostics.first_sample_logged = true;
         instance.record_diagnostics.skipped_while_stopped_logged = true;
@@ -2101,12 +2109,10 @@ mod tests {
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
         assert!(!instance.record_diagnostics.skipped_while_stopped_logged);
-        assert!(
-            !instance
-                .record_diagnostics
-                .first_segment_emitted
-                .load(Ordering::SeqCst)
-        );
+        assert!(!instance
+            .record_diagnostics
+            .first_segment_emitted
+            .load(Ordering::SeqCst));
     }
 
     #[test]
@@ -2134,11 +2140,9 @@ mod tests {
         assert!(instance.offline_state.speech_buffer.is_empty());
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
-        assert!(
-            !instance
-                .record_diagnostics
-                .first_segment_emitted
-                .load(Ordering::SeqCst)
-        );
+        assert!(!instance
+            .record_diagnostics
+            .first_segment_emitted
+            .load(Ordering::SeqCst));
     }
 }

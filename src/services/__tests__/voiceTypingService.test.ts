@@ -36,6 +36,10 @@ const mocks = vi.hoisted(() => {
         setModelPath: vi.fn(),
         setLanguage: vi.fn(),
         setEnableITN: vi.fn(),
+        loggerInfo: vi.fn(),
+        loggerWarn: vi.fn(),
+        loggerError: vi.fn(),
+        loggerDebug: vi.fn(),
         windowPrepare: vi.fn(),
         windowOpen: vi.fn(),
         windowClose: vi.fn(),
@@ -91,10 +95,10 @@ vi.mock('../../stores/configStore', () => ({
 
 vi.mock('../../utils/logger', () => ({
     logger: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
+        info: mocks.loggerInfo,
+        warn: mocks.loggerWarn,
+        error: mocks.loggerError,
+        debug: mocks.loggerDebug,
     },
 }));
 
@@ -233,7 +237,7 @@ describe('voiceTypingService', () => {
         ]);
     });
 
-    it('ignores invalid partial updates after a visible candidate is already shown', async () => {
+    it('keeps an existing candidate visible when later partials collapse to tags or empty text', async () => {
         let onSegment: ((segment: any) => void) | undefined;
         mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
             onSegment = segmentCallback;
@@ -245,9 +249,9 @@ describe('voiceTypingService', () => {
 
         onSegment?.({ id: 'seg-1', text: '测试123', isFinal: false });
         await flushMicrotasks(8);
-        onSegment?.({ id: 'seg-1', text: '。', isFinal: false });
-        await flushMicrotasks(8);
         onSegment?.({ id: 'seg-1', text: '<|zh|><|withitn|>', isFinal: false });
+        await flushMicrotasks(8);
+        onSegment?.({ id: 'seg-1', text: '   ', isFinal: false });
         await flushMicrotasks(8);
 
         expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual([
@@ -256,6 +260,113 @@ describe('voiceTypingService', () => {
         expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual([
             '测试123',
         ]);
+        expect(mocks.loggerInfo).toHaveBeenCalledWith(
+            '[VoiceTypingSessionMachine] Dropped segment update',
+            expect.objectContaining({
+                dropReason: 'tag_only',
+            })
+        );
+        expect(mocks.loggerInfo).toHaveBeenCalledWith(
+            '[VoiceTypingSessionMachine] Dropped segment update',
+            expect.objectContaining({
+                dropReason: 'empty_after_normalize',
+            })
+        );
+    });
+
+    it('allows punctuation-only partial updates to appear as candidate text', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+
+        const service = await loadService();
+        await service.startListening();
+        vi.clearAllMocks();
+
+        onSegment?.({ id: 'seg-1', text: '。', isFinal: false });
+        await flushMicrotasks(8);
+
+        expect(mocks.windowSendState).toHaveBeenCalledWith(
+            expect.objectContaining({
+                phase: 'segment',
+                text: '。',
+                segmentId: 'seg-1',
+                isFinal: false,
+            })
+        );
+    });
+
+    it('keeps publishing later partial updates for the same sentence instead of only the first draft', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+
+        const service = await loadService();
+        await service.startListening();
+        vi.clearAllMocks();
+
+        onSegment?.({ id: 'seg-1', text: '喂。', isFinal: false });
+        await flushMicrotasks(8);
+        onSegment?.({ id: 'seg-1', text: '喂，123。', isFinal: false });
+        await flushMicrotasks(8);
+        onSegment?.({ id: 'seg-1', text: '喂，123，继续。', isFinal: false });
+        await flushMicrotasks(8);
+
+        expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual([
+            'segment',
+            'segment',
+            'segment',
+        ]);
+        expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual([
+            '喂。',
+            '喂，123。',
+            '喂，123，继续。',
+        ]);
+        expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.revision)).toEqual([
+            3,
+            4,
+            5,
+        ]);
+    });
+
+    it('drops non-final partial updates after manual stop is requested', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        let resolveSoftStop: (() => void) | undefined;
+        vi.useFakeTimers();
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+        mocks.mockSoftStop.mockImplementation(
+            () =>
+                new Promise<void>((resolve) => {
+                    resolveSoftStop = resolve;
+                })
+        );
+
+        const service = await loadService();
+        await service.startListening();
+        vi.clearAllMocks();
+
+        const stopPromise = service.stopListening();
+        await flushMicrotasks(2);
+
+        onSegment?.({ id: 'seg-1', text: '停止后的草稿', isFinal: false });
+        await flushMicrotasks(8);
+
+        expect(mocks.windowSendState).not.toHaveBeenCalled();
+        expect(mocks.loggerInfo).toHaveBeenCalledWith(
+            '[VoiceTypingSessionMachine] Dropped segment update',
+            expect.objectContaining({
+                dropReason: 'manual_stop_pending',
+                segmentId: 'seg-1',
+            })
+        );
+
+        resolveSoftStop?.();
+        await vi.runAllTimersAsync();
+        await stopPromise;
     });
 
     it('commits a finalized sentence and repositions the candidate bar from the updated caret', async () => {
@@ -397,6 +508,55 @@ describe('voiceTypingService', () => {
         expect(
             mocks.windowSendState.mock.calls.map(([payload]) => payload.text)
         ).toEqual(['第一句', '', '第二句草稿']);
+    });
+
+    it('keeps overlay revisions monotonic after a session is stopped and restarted', async () => {
+        let onSegment: ((segment: any) => void) | undefined;
+        vi.useFakeTimers();
+        mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+            onSegment = segmentCallback;
+        });
+
+        const service = await loadService();
+        await service.startListening();
+        onSegment?.({ id: 'seg-1', text: '第一轮候选', isFinal: false });
+        await flushMicrotasks(8);
+
+        const firstStopPromise = service.stopListening();
+        await vi.runAllTimersAsync();
+        await firstStopPromise;
+
+        vi.clearAllMocks();
+
+        await service.startListening();
+        onSegment?.({ id: 'seg-2', text: '第二轮候选', isFinal: false });
+        await flushMicrotasks(8);
+
+        expect(mocks.windowSendState).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                sessionId: 'voice-typing-2',
+                phase: 'preparing',
+                revision: 4,
+            })
+        );
+        expect(mocks.windowSendState).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                sessionId: 'voice-typing-2',
+                phase: 'listening',
+                revision: 5,
+            })
+        );
+        expect(mocks.windowSendState).toHaveBeenNthCalledWith(
+            3,
+            expect.objectContaining({
+                sessionId: 'voice-typing-2',
+                phase: 'segment',
+                text: '第二轮候选',
+                revision: 6,
+            })
+        );
     });
 
     it('uses pressed events to toggle start and stop in toggle mode', async () => {

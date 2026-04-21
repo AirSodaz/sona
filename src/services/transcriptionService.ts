@@ -6,6 +6,18 @@ import { useConfigStore } from '../stores/configStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
 
+const LOG_PREVIEW_MAX_CHARS = 24;
+
+function previewTextForLog(text: string) {
+    const flattened = text.replace(/\r?\n/g, ' ');
+    const preview = flattened.slice(0, LOG_PREVIEW_MAX_CHARS);
+    return flattened.length > LOG_PREVIEW_MAX_CHARS ? `${preview}...` : preview;
+}
+
+function shouldLogVoiceTypingDiagnostics(instanceId: string) {
+    return instanceId === 'voice-typing';
+}
+
 /** Callback for receiving a new transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
@@ -83,8 +95,28 @@ export class TranscriptionService {
                 const appConfig = useConfigStore.getState().config;
                 const originalText = segment.text;
                 const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
+                const replacementChanged = originalText !== processedText;
+                const replacedToEmpty = originalText.trim().length > 0 && processedText.trim().length === 0;
 
-                if (originalText !== processedText) {
+                if (shouldLogVoiceTypingDiagnostics(instanceId)) {
+                    logger.info(
+                        '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
+                        {
+                            instanceId,
+                            registrationId: instance.registrationId,
+                            segmentId: segment.id,
+                            isFinal: segment.isFinal,
+                            rawTextLength: originalText.length,
+                            processedTextLength: processedText.length,
+                            preview: previewTextForLog(processedText || originalText),
+                            replacementChanged,
+                            replacedToEmpty,
+                            callbackInvoked: false,
+                        }
+                    );
+                }
+
+                if (replacementChanged) {
                     logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
                 }
                 const processedSegment = {
@@ -155,12 +187,45 @@ export class TranscriptionService {
         const wrappedOnSegment: TranscriptionCallback = (segment) => {
             const currentRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
             if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
+                if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
+                    logger.info(
+                        '[TranscriptionService:voice-typing] Skipped callback invocation',
+                        {
+                            instanceId: this.instanceId,
+                            registrationId,
+                            currentRegistrationId: currentRegistration?.registrationId ?? null,
+                            segmentId: segment.id,
+                            isFinal: segment.isFinal,
+                            rawTextLength: null,
+                            processedTextLength: segment.text.length,
+                            preview: previewTextForLog(segment.text),
+                            callbackInvoked: false,
+                            dropReason: 'stale_registration',
+                        }
+                    );
+                }
                 if (TranscriptionService.isDiagnosticsInstance(this.instanceId)) {
                     logger.info(
                         `[TranscriptionService:${this.instanceId}] Ignored stale callback invocation. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)} current_registration=${currentRegistration?.registrationId ?? 'none'}`
                     );
                 }
                 return;
+            }
+
+            if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
+                logger.info(
+                    '[TranscriptionService:voice-typing] Invoking callback',
+                    {
+                        instanceId: this.instanceId,
+                        registrationId,
+                        segmentId: segment.id,
+                        isFinal: segment.isFinal,
+                        rawTextLength: null,
+                        processedTextLength: segment.text.length,
+                        preview: previewTextForLog(segment.text),
+                        callbackInvoked: true,
+                    }
+                );
             }
             onSegment(segment);
         };

@@ -400,11 +400,11 @@ pub fn start_system_audio_capture<R: Runtime>(
 
             if !recorder_paused {
                 if let Some(w) = writer.as_mut() {
-                                    let amplitude = i16::MAX as f32;
-                                    for &sample in chunk {
-                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
-                                    }
-                                }
+                    let amplitude = i16::MAX as f32;
+                    for &sample in chunk {
+                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                    }
+                }
             }
 
             feed_system_audio_to_instances(&app_clone, chunk).await;
@@ -783,11 +783,11 @@ pub fn start_microphone_capture<R: Runtime>(
 
             if !recorder_paused {
                 if let Some(w) = writer.as_mut() {
-                                    let amplitude = i16::MAX as f32;
-                                    for &sample in chunk {
-                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
-                                    }
-                                }
+                    let amplitude = i16::MAX as f32;
+                    for &sample in chunk {
+                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                    }
+                }
             }
 
             feed_mic_audio_to_instances(&app_clone, chunk).await;

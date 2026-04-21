@@ -136,7 +136,36 @@ describe('voiceTypingWindowService', () => {
             label: 'voice-typing',
             payload,
         });
-        expect(mocks.emitTo).toHaveBeenCalledWith('voice-typing', VOICE_TYPING_EVENT_TEXT, payload);
+        expect(mocks.emitTo).toHaveBeenCalledWith(
+            { kind: 'AnyLabel', label: 'voice-typing' },
+            VOICE_TYPING_EVENT_TEXT,
+            payload
+        );
+    });
+
+    it('targets the existing webview window directly when emitting overlay updates', async () => {
+        const existingWindow = new mocks.MockWebviewWindow('voice-typing', {});
+        mocks.getByLabel.mockResolvedValue(existingWindow);
+        const { voiceTypingWindowService, VOICE_TYPING_EVENT_TEXT } = await import(
+            '../voiceTypingWindowService'
+        );
+
+        const payload = {
+            sessionId: 'voice-typing-2',
+            phase: 'segment' as const,
+            text: '123。',
+            segmentId: 'seg-2',
+            isFinal: false,
+            revision: 4,
+        };
+
+        await voiceTypingWindowService.sendState(payload);
+
+        expect(mocks.emitTo).toHaveBeenCalledWith(
+            { kind: 'WebviewWindow', label: 'voice-typing' },
+            VOICE_TYPING_EVENT_TEXT,
+            payload
+        );
     });
 
     it('reuses the prepared window when opening the overlay', async () => {

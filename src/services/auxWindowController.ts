@@ -1,5 +1,5 @@
 import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi';
-import { emitTo } from '@tauri-apps/api/event';
+import { emitTo, type EventTarget } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { auxWindowStateService } from './auxWindowStateService';
 import { logger } from '../utils/logger';
@@ -206,7 +206,12 @@ export class AuxWindowController<T extends object> {
         await auxWindowStateService.set(this.options.label, payload);
 
         try {
-            await emitTo(this.options.label, this.options.eventName, payload);
+            const targetWindow = await this.resolveExistingWindow();
+            const target: EventTarget = targetWindow
+                ? { kind: 'WebviewWindow', label: targetWindow.label }
+                : { kind: 'AnyLabel', label: this.options.label };
+
+            await emitTo(target, this.options.eventName, payload);
         } catch (error) {
             logger.debug('[AuxWindowController] State emit skipped or failed', {
                 label: this.options.label,

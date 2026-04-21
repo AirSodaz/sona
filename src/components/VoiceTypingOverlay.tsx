@@ -66,6 +66,19 @@ export function VoiceTypingOverlay() {
                 ? t('common.preparing')
                 : t('common.listening');
 
+    useEffect(() => {
+        if (phase !== 'segment') {
+            return;
+        }
+
+        void logger.info('[VoiceTypingOverlay] Rendered segment state', {
+            sessionId: overlayState.sessionId,
+            revision: overlayState.revision,
+            textLength: text.length,
+            renderedPhase: isSegment ? 'segment' : 'listening',
+        });
+    }, [isSegment, overlayState.revision, overlayState.sessionId, phase, text]);
+
     const containerStyle: CSSProperties = isSegment
         ? {
             ...baseContainerStyle,

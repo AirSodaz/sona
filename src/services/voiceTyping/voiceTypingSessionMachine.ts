@@ -12,6 +12,11 @@ const ERROR_VISIBILITY_MS = 700;
 const FLUSH_EVENT_SETTLE_MS = 80;
 
 type SessionState = 'idle' | 'preparing' | 'listening' | 'composing' | 'stopping' | 'error';
+type SegmentDropReason =
+    | 'stale_session'
+    | 'manual_stop_pending'
+    | 'empty_after_normalize'
+    | 'tag_only';
 
 interface VoiceTypingSessionMachineOptions {
     transcriptionService: TranscriptionService;
@@ -39,8 +44,39 @@ function normalizeCandidateText(text: string) {
     return result;
 }
 
+function isControlTagOnlyText(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || !trimmed.includes('<|')) {
+        return false;
+    }
+
+    return trimmed.replace(/(?:<\|[^|]+?\|>\s*)+/g, '').trim().length === 0;
+}
+
+function analyzeCandidateText(text: string) {
+    const normalizedText = normalizeCandidateText(text);
+
+    if (normalizedText.length > 0) {
+        return {
+            normalizedText,
+            hasVisibleText: true,
+            dropReason: null,
+        };
+    }
+
+    return {
+        normalizedText,
+        hasVisibleText: false,
+        dropReason: isControlTagOnlyText(text) ? 'tag_only' : 'empty_after_normalize',
+    } satisfies {
+        normalizedText: string;
+        hasVisibleText: boolean;
+        dropReason: SegmentDropReason | null;
+    };
+}
+
 function hasVisibleCandidateText(text: string) {
-    return /[\p{L}\p{N}]/u.test(normalizeCandidateText(text));
+    return normalizeCandidateText(text).length > 0;
 }
 
 export class VoiceTypingSessionMachine {
@@ -50,6 +86,8 @@ export class VoiceTypingSessionMachine {
     private currentSegmentId: string | null = null;
     private currentText = '';
     private manualStopPending = false;
+    // Keep overlay revisions monotonic across the service lifetime so
+    // long-lived aux windows never treat a new session as stale state.
     private revision = 0;
     private readonly committedSegmentIds = new Set<string>();
     private segmentProcessingChain: Promise<void> = Promise.resolve();
@@ -63,7 +101,6 @@ export class VoiceTypingSessionMachine {
 
         const requestId = ++this.startRequestId;
         const sessionId = `voice-typing-${requestId}`;
-        this.revision = 0;
         this.sessionState = 'preparing';
         this.activeSessionId = sessionId;
         this.currentSegmentId = null;
@@ -227,15 +264,41 @@ export class VoiceTypingSessionMachine {
         requestId: number,
         segment: TranscriptSegment
     ) {
-        if (!this.isCurrentSession(sessionId, requestId) || this.sessionState === 'error') {
+        if (!this.isCurrentSession(sessionId, requestId)) {
+            this.logSegmentDrop('stale_session', {
+                sessionId,
+                requestId,
+                segmentId: segment.id,
+                final: segment.isFinal,
+                rawTextLength: segment.text.length,
+                revision: this.revision,
+            });
             return;
         }
 
-        const text = normalizeCandidateText(segment.text);
+        if (this.sessionState === 'error') {
+            return;
+        }
+
+        if (this.manualStopPending && !segment.isFinal) {
+            this.logSegmentDrop('manual_stop_pending', {
+                sessionId,
+                requestId,
+                segmentId: segment.id,
+                final: segment.isFinal,
+                rawTextLength: segment.text.length,
+                currentSegmentId: this.currentSegmentId,
+                revision: this.revision,
+            });
+            return;
+        }
+
+        const { normalizedText: text, hasVisibleText, dropReason } = analyzeCandidateText(
+            segment.text
+        );
         const isCurrentSentence =
             this.currentSegmentId === null || this.currentSegmentId === segment.id;
         const hadVisibleCandidate = hasVisibleCandidateText(this.currentText);
-        const hasVisibleText = hasVisibleCandidateText(text);
 
         if (this.committedSegmentIds.has(segment.id)) {
             logger.info('[VoiceTypingSessionMachine] Ignored stale segment for committed sentence', {
@@ -265,21 +328,21 @@ export class VoiceTypingSessionMachine {
         });
 
         if (!text || !hasVisibleText) {
+            this.logSegmentDrop(dropReason ?? 'empty_after_normalize', {
+                sessionId,
+                requestId,
+                segmentId: segment.id,
+                final: segment.isFinal,
+                rawTextLength: segment.text.length,
+                textLength: text.length,
+                hadVisibleCandidate,
+                keptVisibleCandidate: hadVisibleCandidate && !segment.isFinal && isCurrentSentence,
+                currentSegmentId: this.currentSegmentId,
+                revision: this.revision,
+            });
+
             if (!segment.isFinal && isCurrentSentence && !this.manualStopPending) {
                 if (hadVisibleCandidate) {
-                    logger.info(
-                        '[VoiceTypingSessionMachine] Ignored invalid partial because a visible candidate is already shown',
-                        {
-                            sessionId,
-                            requestId,
-                            segmentId: segment.id,
-                            rawTextLength: segment.text.length,
-                            textLength: text.length,
-                            hadVisibleCandidate,
-                            phase: this.sessionState,
-                            revision: this.revision,
-                        }
-                    );
                     return;
                 }
 
@@ -462,6 +525,15 @@ export class VoiceTypingSessionMachine {
         this.finishSession(sessionId);
     }
 
+    private logSegmentDrop(reason: SegmentDropReason, details: Record<string, unknown>) {
+        logger.info('[VoiceTypingSessionMachine] Dropped segment update', {
+            dropReason: reason,
+            phase: this.sessionState,
+            manualStopPending: this.manualStopPending,
+            ...details,
+        });
+    }
+
     private isCurrentSession(sessionId: string, requestId?: number) {
         return (
             this.activeSessionId === sessionId &&
@@ -478,7 +550,6 @@ export class VoiceTypingSessionMachine {
         this.currentSegmentId = null;
         this.currentText = '';
         this.manualStopPending = false;
-        this.revision = 0;
         this.committedSegmentIds.clear();
         this.segmentProcessingChain = Promise.resolve();
         this.sessionState = 'idle';
