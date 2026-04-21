@@ -1,59 +1,51 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { emit } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
+import { AuxWindowController } from './auxWindowController';
 import { logger } from '../utils/logger';
 
-const CAPTION_WINDOW_LABEL = 'caption';
-const CAPTION_EVENT_SEGMENTS = 'caption:segments';
-const CAPTION_EVENT_CLOSE = 'caption:close';
-const CAPTION_EVENT_STYLE = 'caption:style';
+export const CAPTION_WINDOW_LABEL = 'caption';
+export const CAPTION_EVENT_STATE = 'caption:state';
+const CAPTION_INITIAL_HEIGHT = 120;
+
+export interface CaptionWindowStyle {
+    width: number;
+    fontSize: number;
+    color: string;
+    backgroundOpacity: number;
+}
+
+export interface CaptionWindowState {
+    revision: number;
+    segments: TranscriptSegment[];
+    style: CaptionWindowStyle;
+}
+
+const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
+    width: 800,
+    fontSize: 24,
+    color: '#ffffff',
+    backgroundOpacity: 0.6,
+};
+
+export const DEFAULT_CAPTION_WINDOW_STATE: CaptionWindowState = {
+    revision: 0,
+    segments: [],
+    style: DEFAULT_CAPTION_STYLE,
+};
 
 class CaptionWindowService {
-    private windowInstance: WebviewWindow | null = null;
-
-    /**
-     * Opens the always-on-top caption window.
-     * If it already exists, it focuses it.
-     */
-    async open(options?: { alwaysOnTop?: boolean, lockWindow?: boolean, width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }) {
-        // Check if window already exists
-        const existingWindow = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-        if (existingWindow) {
-            await existingWindow.setFocus();
-            this.windowInstance = existingWindow;
-            // Apply settings if provided
-            if (options?.alwaysOnTop !== undefined) {
-                await this.setAlwaysOnTop(options.alwaysOnTop);
-            }
-            if (options?.lockWindow !== undefined) {
-                await this.setClickThrough(options.lockWindow);
-            }
-            if (options?.width || options?.fontSize || options?.color || options?.backgroundOpacity !== undefined) {
-                await this.updateStyle({
-                    width: options.width,
-                    fontSize: options.fontSize,
-                    color: options.color,
-                    backgroundOpacity: options.backgroundOpacity
-                });
-            }
-            return;
-        }
-
-        const width = options?.width || 800;
-        const fontSize = options?.fontSize || 24;
-        const color = options?.color ? encodeURIComponent(options.color) : 'white';
-        const backgroundOpacity = options?.backgroundOpacity ?? 0.6;
-
-        // specific creation options for caption window
-        this.windowInstance = new WebviewWindow(CAPTION_WINDOW_LABEL, {
-            url: `/index.html?window=caption&width=${width}&fontSize=${fontSize}&color=${color}&opacity=${backgroundOpacity}`,
+    private controller = new AuxWindowController<CaptionWindowState>({
+        label: CAPTION_WINDOW_LABEL,
+        eventName: CAPTION_EVENT_STATE,
+        createWindow: (displayState) => new WebviewWindow(CAPTION_WINDOW_LABEL, {
+            url: '/index.html?window=caption',
             title: 'Sona Live Caption',
-            alwaysOnTop: options?.alwaysOnTop ?? true,
+            alwaysOnTop: true,
             decorations: false,
             transparent: true,
             skipTaskbar: true,
-            width: width,
-            height: 120,
+            width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
+            height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
             minWidth: 200,
             minHeight: 32,
             center: false,
@@ -62,140 +54,137 @@ class CaptionWindowService {
             maximizable: false,
             minimizable: false,
             shadow: false,
-        });
+            visible: false,
+        }),
+    });
 
-        // Wait for window to be created
-        this.windowInstance.once('tauri://created', async () => {
-            logger.info('Caption window created successfully');
-            // Position at bottom center (manual calculation or let OS handle initial place)
-            // For now we let it float, user can drag it.
+    private state: CaptionWindowState = DEFAULT_CAPTION_WINDOW_STATE;
 
-            // Apply click-through if requested (cannot be set in constructor)
-            if (options?.lockWindow) {
-                await this.setClickThrough(true);
-            }
-        });
+    private buildState(partial: Partial<Omit<CaptionWindowState, 'revision'>>) {
+        this.state = {
+            revision: this.state.revision + 1,
+            segments: partial.segments ?? this.state.segments,
+            style: partial.style ?? this.state.style,
+        };
 
-        this.windowInstance.once('tauri://error', (e) => {
-            logger.error('Error creating caption window:', e);
-            this.windowInstance = null;
-        });
+        return this.state;
     }
 
-    /**
-     * Closes the caption window if it exists.
-     */
+    private async commitState(partial: Partial<Omit<CaptionWindowState, 'revision'>>) {
+        const nextState = this.buildState(partial);
+        await this.controller.commitState(nextState);
+        return nextState;
+    }
+
+    async open(options?: {
+        alwaysOnTop?: boolean;
+        lockWindow?: boolean;
+        width?: number;
+        fontSize?: number;
+        color?: string;
+        backgroundOpacity?: number;
+    }) {
+        const nextStyle: CaptionWindowStyle = {
+            width: options?.width ?? this.state.style.width,
+            fontSize: options?.fontSize ?? this.state.style.fontSize,
+            color: options?.color ?? this.state.style.color,
+            backgroundOpacity:
+                options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
+        };
+
+        await this.commitState({ style: nextStyle });
+
+        const windowInstance = await this.controller.open({
+            size: { width: nextStyle.width, height: CAPTION_INITIAL_HEIGHT },
+            focus: true,
+        });
+
+        if (!windowInstance) {
+            return;
+        }
+
+        if (options?.alwaysOnTop !== undefined) {
+            await windowInstance.setAlwaysOnTop(options.alwaysOnTop);
+        }
+
+        if (options?.lockWindow !== undefined) {
+            await windowInstance.setIgnoreCursorEvents(options.lockWindow);
+        }
+    }
+
     async close() {
         logger.info('[CaptionWindowService] Requested to close caption window');
-
-        // Robust close: Emit event first to ensure internal listener triggers close
-        try {
-            logger.info('[CaptionWindowService] Emitting close event to window');
-            await emit(CAPTION_EVENT_CLOSE);
-        } catch (e) {
-            logger.error('[CaptionWindowService] Error emitting close event:', e);
-        }
-
-        // Ensure instance is closed if we have it
-        if (this.windowInstance) {
-            try {
-                logger.info('[CaptionWindowService] Closing cached window instance');
-                await this.windowInstance.close();
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                if (!msg.includes('window not found')) {
-                    logger.error('[CaptionWindowService] Error closing cached window instance:', e);
-                }
-            }
-            this.windowInstance = null;
-        }
-
-        // Always try to find by label and close, just in case our instance reference was stale or lost
-        try {
-            const w = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-            if (w) {
-                logger.info('[CaptionWindowService] Found window by label, closing it');
-                await w.close();
-            } else {
-                logger.info('[CaptionWindowService] No window found by label to close');
-            }
-        } catch (e) {
-            // Ignore error if window not found or already closed (common in Tauri)
-            // But log if it's something else
-            const msg = e instanceof Error ? e.message : String(e);
-            if (!msg.includes('window not found')) {
-                logger.error('[CaptionWindowService] Error finding/closing caption window by label:', e);
-            }
-        }
+        this.state = {
+            ...this.state,
+            revision: this.state.revision + 1,
+            segments: [],
+        };
+        await this.controller.clearState();
+        await this.controller.close();
     }
 
-    /**
-     * Checks if the caption window is currently open.
-     */
     async isOpen(): Promise<boolean> {
-        const w = await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-        return !!w;
+        const windowInstance = await this.controller.getWindow();
+        return !!windowInstance;
     }
 
-    /**
-     * Sends the latest segments to the caption window.
-     * @param segments The list of segments to display (usually the last N)
-     */
     async sendSegments(segments: TranscriptSegment[]) {
-        // We broadcast the event to all windows, the caption window listens for it.
-        // This is more reliable than targeting a specific window instance that might be stale.
-        await emit(CAPTION_EVENT_SEGMENTS, segments);
+        const latestSegments = segments.length > 0 ? [segments[segments.length - 1]] : [];
+        await this.commitState({ segments: latestSegments });
     }
 
-    /**
-     * Sets whether the caption window should be always on top.
-     * @param enabled True to enable always on top.
-     */
     async setAlwaysOnTop(enabled: boolean) {
-        const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-        if (win) {
-            await win.setAlwaysOnTop(enabled);
+        const windowInstance = await this.controller.getWindow();
+        if (windowInstance) {
+            await windowInstance.setAlwaysOnTop(enabled);
         }
     }
 
-    /**
-     * Sets whether the caption window should be click-through (ignore mouse events).
-     * @param enabled True to enable click-through (lock window).
-     */
     async setClickThrough(enabled: boolean) {
-        const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-        if (win) {
-            await win.setIgnoreCursorEvents(enabled);
+        const windowInstance = await this.controller.getWindow();
+        if (windowInstance) {
+            await windowInstance.setIgnoreCursorEvents(enabled);
         }
     }
 
-    /**
-     * Updates the caption window style (width and font size).
-     * @param style Style object containing width and fontSize.
-     */
-    async updateStyle(style: { width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }) {
-        await emit(CAPTION_EVENT_STYLE, style);
+    async updateStyle(style: {
+        width?: number;
+        fontSize?: number;
+        color?: string;
+        backgroundOpacity?: number;
+    }) {
+        const nextStyle: CaptionWindowStyle = {
+            width: style.width ?? this.state.style.width,
+            fontSize: style.fontSize ?? this.state.style.fontSize,
+            color: style.color ?? this.state.style.color,
+            backgroundOpacity:
+                style.backgroundOpacity ?? this.state.style.backgroundOpacity,
+        };
 
-        // Also update window size if width is provided
-        if (style.width) {
-            const win = this.windowInstance || await WebviewWindow.getByLabel(CAPTION_WINDOW_LABEL);
-            if (win) {
-                try {
-                    const { PhysicalSize } = await import('@tauri-apps/api/dpi');
-                    const factor = await win.scaleFactor();
-                    const size = await win.innerSize();
+        await this.commitState({ style: nextStyle });
 
-                    // We only change width, keeping current height (or letting React handle it)
-                    // But resizing window width is important for the text wrapping
-                    const targetWidth = Math.ceil(style.width * factor);
-                    const newSize = new PhysicalSize(targetWidth, size.height);
-
-                    await win.setSize(newSize);
-                } catch (e) {
-                    logger.error('[CaptionWindowService] Failed to resize window:', e);
-                }
-            }
+        if (!style.width) {
+            return;
         }
+
+        const windowInstance = await this.controller.getWindow();
+        if (!windowInstance) {
+            return;
+        }
+
+        try {
+            const { PhysicalSize } = await import('@tauri-apps/api/dpi');
+            const factor = await windowInstance.scaleFactor();
+            const size = await windowInstance.innerSize();
+            const targetWidth = Math.ceil(style.width * factor);
+            await windowInstance.setSize(new PhysicalSize(targetWidth, size.height));
+        } catch (error) {
+            logger.error('[CaptionWindowService] Failed to resize window:', error);
+        }
+    }
+
+    async getSnapshot() {
+        return await this.controller.getState();
     }
 }
 

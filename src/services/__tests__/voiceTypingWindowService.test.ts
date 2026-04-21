@@ -1,17 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-    const emit = vi.fn().mockResolvedValue(undefined);
+    const emitTo = vi.fn().mockResolvedValue(undefined);
+    const invoke = vi.fn().mockResolvedValue(undefined);
     const getByLabel = vi.fn().mockResolvedValue(null);
     const createdWindows: any[] = [];
+
+    class MockPhysicalPosition {
+        constructor(
+            public x: number,
+            public y: number
+        ) { }
+    }
+
+    class MockPhysicalSize {
+        constructor(
+            public width: number,
+            public height: number
+        ) { }
+    }
 
     class MockWebviewWindow {
         label: string;
         options: Record<string, unknown>;
         onceHandlers: Record<string, (payload?: unknown) => void> = {};
+        setSize = vi.fn().mockResolvedValue(undefined);
         setPosition = vi.fn().mockResolvedValue(undefined);
         show = vi.fn().mockResolvedValue(undefined);
         hide = vi.fn().mockResolvedValue(undefined);
+        close = vi.fn().mockResolvedValue(undefined);
 
         constructor(label: string, options: Record<string, unknown>) {
             this.label = label;
@@ -32,15 +49,22 @@ const mocks = vi.hoisted(() => {
     }
 
     return {
+        MockPhysicalPosition,
+        MockPhysicalSize,
         MockWebviewWindow,
         createdWindows,
-        emit,
+        emitTo,
         getByLabel,
+        invoke,
     };
 });
 
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: mocks.invoke,
+}));
+
 vi.mock('@tauri-apps/api/event', () => ({
-    emit: mocks.emit,
+    emitTo: mocks.emitTo,
 }));
 
 vi.mock('@tauri-apps/api/webviewWindow', () => ({
@@ -48,9 +72,8 @@ vi.mock('@tauri-apps/api/webviewWindow', () => ({
 }));
 
 vi.mock('@tauri-apps/api/dpi', () => ({
-    PhysicalPosition: class PhysicalPosition {
-        constructor(public x: number, public y: number) { }
-    },
+    PhysicalPosition: mocks.MockPhysicalPosition,
+    PhysicalSize: mocks.MockPhysicalSize,
 }));
 
 vi.mock('../../utils/logger', () => ({
@@ -68,50 +91,71 @@ describe('voiceTypingWindowService', () => {
         vi.resetModules();
         mocks.createdWindows.length = 0;
         mocks.getByLabel.mockResolvedValue(null);
+        mocks.invoke.mockResolvedValue(undefined);
+        mocks.emitTo.mockResolvedValue(undefined);
     });
 
-    it('prepares a hidden overlay window ahead of time', async () => {
-        const serviceModule = await import('../voiceTypingWindowService');
-        const { voiceTypingWindowService } = serviceModule;
+    it('prepares a hidden overlay window ahead of time with the standard size', async () => {
+        const { voiceTypingWindowService } = await import('../voiceTypingWindowService');
 
         await voiceTypingWindowService.prepare([120, 220]);
 
         expect(mocks.createdWindows).toHaveLength(1);
-        expect(mocks.createdWindows[0].options.visible).toBe(false);
+        expect(mocks.createdWindows[0].options).toEqual(
+            expect.objectContaining({
+                url: '/index.html?window=voice-typing',
+                visible: false,
+                width: 400,
+                height: 60,
+            })
+        );
+        expect(mocks.createdWindows[0].setSize).toHaveBeenCalledWith(
+            expect.objectContaining({ width: 400, height: 60 })
+        );
+        expect(mocks.createdWindows[0].setPosition).toHaveBeenCalledWith(
+            expect.objectContaining({ x: 120, y: 220 })
+        );
+        expect(mocks.createdWindows[0].hide).toHaveBeenCalled();
     });
 
-    it('broadcasts overlay updates without waiting for a ready handshake', async () => {
-        const serviceModule = await import('../voiceTypingWindowService');
-        const { voiceTypingWindowService, VOICE_TYPING_EVENT_TEXT } = serviceModule;
+    it('commits the latest overlay payload to the shared state store and emits it to the overlay window', async () => {
+        const { voiceTypingWindowService, VOICE_TYPING_EVENT_TEXT } = await import(
+            '../voiceTypingWindowService'
+        );
 
-        await voiceTypingWindowService.sendState({
+        const payload = {
             sessionId: 'voice-typing-1',
-            phase: 'segment',
+            phase: 'segment' as const,
             text: '整句草稿',
             segmentId: 'seg-1',
             isFinal: false,
-        });
+            revision: 3,
+        };
 
-        expect(mocks.emit).toHaveBeenCalledWith(VOICE_TYPING_EVENT_TEXT, {
-            sessionId: 'voice-typing-1',
-            phase: 'segment',
-            text: '整句草稿',
-            segmentId: 'seg-1',
-            isFinal: false,
+        await voiceTypingWindowService.sendState(payload);
+
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'voice-typing',
+            payload,
         });
+        expect(mocks.emitTo).toHaveBeenCalledWith('voice-typing', VOICE_TYPING_EVENT_TEXT, payload);
     });
 
     it('reuses the prepared window when opening the overlay', async () => {
-        const serviceModule = await import('../voiceTypingWindowService');
-        const { voiceTypingWindowService } = serviceModule;
+        const { voiceTypingWindowService } = await import('../voiceTypingWindowService');
 
         await voiceTypingWindowService.prepare([10, 20]);
         const preparedWindow = mocks.createdWindows[0];
 
         await voiceTypingWindowService.open(80, 160);
 
-        expect(preparedWindow.setPosition).toHaveBeenCalled();
-        expect(preparedWindow.show).toHaveBeenCalled();
         expect(mocks.createdWindows).toHaveLength(1);
+        expect(preparedWindow.setPosition).toHaveBeenLastCalledWith(
+            expect.objectContaining({ x: 80, y: 160 })
+        );
+        expect(preparedWindow.setSize).toHaveBeenLastCalledWith(
+            expect.objectContaining({ width: 400, height: 60 })
+        );
+        expect(preparedWindow.show).toHaveBeenCalled();
     });
 });

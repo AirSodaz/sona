@@ -1,89 +1,226 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { emit } from '@tauri-apps/api/event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock emit
-vi.mock('@tauri-apps/api/event', () => ({
-    emit: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+    const emitTo = vi.fn().mockResolvedValue(undefined);
+    const invoke = vi.fn().mockResolvedValue(undefined);
+    const getByLabel = vi.fn().mockResolvedValue(null);
+    const createdWindows: any[] = [];
 
-// Mock DPI
-vi.mock('@tauri-apps/api/dpi', () => ({
-    PhysicalSize: vi.fn(),
-}));
+    class MockPhysicalSize {
+        constructor(
+            public width: number,
+            public height: number
+        ) { }
+    }
 
-// Mock WebviewWindow
-vi.mock('@tauri-apps/api/webviewWindow', () => {
-    const MockWebviewWindow = vi.fn();
-    (MockWebviewWindow as any).getByLabel = vi.fn();
-    return { WebviewWindow: MockWebviewWindow };
+    const buildWindow = () => ({
+        once: vi.fn((event: string, callback: (payload?: unknown) => void) => {
+            if (event === 'tauri://created') {
+                callback();
+            }
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
+        hide: vi.fn().mockResolvedValue(undefined),
+        show: vi.fn().mockResolvedValue(undefined),
+        setFocus: vi.fn().mockResolvedValue(undefined),
+        setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
+        setIgnoreCursorEvents: vi.fn().mockResolvedValue(undefined),
+        scaleFactor: vi.fn().mockResolvedValue(1),
+        innerSize: vi.fn().mockResolvedValue({ width: 800, height: 120 }),
+        setSize: vi.fn().mockResolvedValue(undefined),
+    });
+
+    class MockWebviewWindow {
+        label: string;
+        options: Record<string, unknown>;
+        windowInstance: ReturnType<typeof buildWindow>;
+
+        constructor(label: string, options: Record<string, unknown>) {
+            this.label = label;
+            this.options = options;
+            this.windowInstance = buildWindow();
+            createdWindows.push(this);
+            return this.windowInstance as any;
+        }
+
+        static getByLabel(label: string) {
+            return getByLabel(label);
+        }
+    }
+
+    return {
+        MockPhysicalSize,
+        MockWebviewWindow,
+        buildWindow,
+        createdWindows,
+        emitTo,
+        getByLabel,
+        invoke,
+    };
 });
 
-import { captionWindowService } from '../captionWindowService';
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: mocks.invoke,
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+    emitTo: mocks.emitTo,
+}));
+
+vi.mock('@tauri-apps/api/dpi', () => ({
+    PhysicalSize: mocks.MockPhysicalSize,
+}));
+
+vi.mock('@tauri-apps/api/webviewWindow', () => ({
+    WebviewWindow: mocks.MockWebviewWindow,
+}));
+
+vi.mock('../../utils/logger', () => ({
+    logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+    },
+}));
 
 describe('CaptionWindowService', () => {
-    let mockWindowInstance: any;
-
     beforeEach(() => {
         vi.clearAllMocks();
-
-        mockWindowInstance = {
-            once: vi.fn(),
-            close: vi.fn(),
-            setFocus: vi.fn(),
-            setAlwaysOnTop: vi.fn(),
-            setIgnoreCursorEvents: vi.fn(),
-            scaleFactor: vi.fn().mockResolvedValue(1),
-            innerSize: vi.fn().mockResolvedValue({ width: 800, height: 120 }),
-            setSize: vi.fn(),
-        };
-
-        // When constructor is called, return mock instance
-        (WebviewWindow as unknown as Mock).mockImplementation(function() { return mockWindowInstance; });
-
-        // Default behavior: window does not exist
-        (WebviewWindow.getByLabel as any).mockResolvedValue(null);
+        vi.resetModules();
+        mocks.createdWindows.length = 0;
+        mocks.getByLabel.mockResolvedValue(null);
+        mocks.invoke.mockResolvedValue(undefined);
+        mocks.emitTo.mockResolvedValue(undefined);
     });
 
-    it('opens the window with correct default properties', async () => {
+    it('opens the window with the default caption state and shared transport payload', async () => {
+        const { captionWindowService } = await import('../captionWindowService');
+
         await captionWindowService.open();
 
-        expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
-            url: '/index.html?window=caption&width=800&fontSize=24&color=white&opacity=0.6',
-            resizable: true,
-            maximizable: false,
-            minimizable: false,
-            transparent: true,
-            decorations: false,
-            alwaysOnTop: true
-        }));
+        expect(mocks.createdWindows).toHaveLength(1);
+        expect(mocks.createdWindows[0].options).toEqual(
+            expect.objectContaining({
+                url: '/index.html?window=caption',
+                width: 800,
+                height: 120,
+                resizable: true,
+                maximizable: false,
+                minimizable: false,
+                transparent: true,
+                decorations: false,
+                alwaysOnTop: true,
+                visible: false,
+            })
+        );
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: {
+                revision: 1,
+                segments: [],
+                style: {
+                    width: 800,
+                    fontSize: 24,
+                    color: '#ffffff',
+                    backgroundOpacity: 0.6,
+                },
+            },
+        });
+        expect(mocks.emitTo).toHaveBeenCalledWith('caption', 'caption:state', {
+            revision: 1,
+            segments: [],
+            style: {
+                width: 800,
+                fontSize: 24,
+                color: '#ffffff',
+                backgroundOpacity: 0.6,
+            },
+        });
     });
 
-    it('opens the window with custom style properties', async () => {
-        await captionWindowService.open({ width: 1000, fontSize: 32, color: '#ff0000' });
+    it('opens the window with custom style properties and applies window flags', async () => {
+        const { captionWindowService } = await import('../captionWindowService');
 
-        const encodedColor = encodeURIComponent('#ff0000');
-        expect(WebviewWindow).toHaveBeenCalledWith('caption', expect.objectContaining({
-            url: `/index.html?window=caption&width=1000&fontSize=32&color=${encodedColor}&opacity=0.6`,
+        await captionWindowService.open({
             width: 1000,
-        }));
+            fontSize: 32,
+            color: '#ff0000',
+            backgroundOpacity: 0.75,
+            alwaysOnTop: false,
+            lockWindow: true,
+        });
+
+        const createdWindow = mocks.createdWindows[0].windowInstance;
+
+        expect(mocks.createdWindows[0].options).toEqual(
+            expect.objectContaining({
+                url: '/index.html?window=caption',
+                width: 1000,
+            })
+        );
+        expect(createdWindow.setAlwaysOnTop).toHaveBeenCalledWith(false);
+        expect(createdWindow.setIgnoreCursorEvents).toHaveBeenCalledWith(true);
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: {
+                revision: 1,
+                segments: [],
+                style: {
+                    width: 1000,
+                    fontSize: 32,
+                    color: '#ff0000',
+                    backgroundOpacity: 0.75,
+                },
+            },
+        });
     });
 
-    it('reuses existing window and updates style', async () => {
-        (WebviewWindow.getByLabel as any).mockResolvedValue(mockWindowInstance);
+    it('reuses an existing window and keeps style updates flowing through shared state', async () => {
+        const existingWindow = mocks.buildWindow();
+        mocks.getByLabel.mockResolvedValue(existingWindow);
+
+        const { captionWindowService } = await import('../captionWindowService');
 
         await captionWindowService.open({ width: 1200, fontSize: 40 });
 
-        // Constructor not called
-        expect(WebviewWindow).toHaveBeenCalledTimes(0);
+        expect(mocks.createdWindows).toHaveLength(0);
+        expect(existingWindow.show).toHaveBeenCalled();
+        expect(existingWindow.setFocus).toHaveBeenCalled();
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: {
+                revision: 1,
+                segments: [],
+                style: {
+                    width: 1200,
+                    fontSize: 40,
+                    color: '#ffffff',
+                    backgroundOpacity: 0.6,
+                },
+            },
+        });
 
-        // Focus called
-        expect(mockWindowInstance.setFocus).toHaveBeenCalled();
+        vi.clearAllMocks();
+        mocks.getByLabel.mockResolvedValue(existingWindow);
 
-        // Should update style
-        expect(emit).toHaveBeenCalledWith('caption:style', { width: 1200, fontSize: 40 });
+        await captionWindowService.updateStyle({ width: 1400, fontSize: 42 });
 
-        // Should resize window
-        expect(mockWindowInstance.setSize).toHaveBeenCalled();
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: {
+                revision: 2,
+                segments: [],
+                style: {
+                    width: 1400,
+                    fontSize: 42,
+                    color: '#ffffff',
+                    backgroundOpacity: 0.6,
+                },
+            },
+        });
+        expect(existingWindow.setSize).toHaveBeenCalledWith(
+            expect.objectContaining({ width: 1400, height: 120 })
+        );
     });
 });

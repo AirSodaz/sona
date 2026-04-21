@@ -1,85 +1,44 @@
-import { useEffect, useState, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { useEffect, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
 import { TranscriptSegment } from '../types/transcript';
-import '../styles/index.css'; // Import styles to ensure variables are available
+import '../styles/index.css';
 import { logger } from '../utils/logger';
-
-const CAPTION_EVENT_SEGMENTS = 'caption:segments';
-const CAPTION_EVENT_CLOSE = 'caption:close';
-const CAPTION_EVENT_STYLE = 'caption:style';
+import {
+    CAPTION_EVENT_STATE,
+    CAPTION_WINDOW_LABEL,
+    DEFAULT_CAPTION_WINDOW_STATE,
+} from '../services/captionWindowService';
+import { useAuxWindowState } from '../hooks/useAuxWindowState';
 
 /**
  * Root component for the always-on-top caption window.
  * Manages its own state by listening to Tauri events from the main window.
  */
 export function CaptionWindow() {
-    const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-    const [fontSize, setFontSize] = useState(24);
-    const [fontColor, setFontColor] = useState('#ffffff');
-    const [backgroundOpacity, setBackgroundOpacity] = useState(0.6);
-    // Track target width to enforce it during height resizing
-    const [targetWidth, setTargetWidth] = useState(800);
+    const captionState = useAuxWindowState({
+        label: CAPTION_WINDOW_LABEL,
+        eventName: CAPTION_EVENT_STATE,
+        defaultState: DEFAULT_CAPTION_WINDOW_STATE,
+        onStateApplied: (state, source) => {
+            void logger.info('[CaptionWindow] Applied caption state', {
+                source,
+                revision: state.revision,
+                segmentCount: state.segments.length,
+                width: state.style.width,
+                fontSize: state.style.fontSize,
+            });
+        },
+    });
 
+    const [displaySegments, setDisplaySegments] = useState<TranscriptSegment[]>([]);
+
+    // Track target width to enforce it during height resizing
     const containerRef = useRef<HTMLDivElement>(null);
     const rootRef = useRef<HTMLDivElement>(null);
 
-    // Initialize style from URL params
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const w = params.get('width');
-        const fs = params.get('fontSize');
-        const c = params.get('color');
-        const op = params.get('opacity');
-        if (w) setTargetWidth(parseInt(w, 10));
-        if (fs) setFontSize(parseInt(fs, 10));
-        if (c) setFontColor(c);
-        if (op) setBackgroundOpacity(parseFloat(op));
-
-        // Listen for style updates
-        const unlistenPromise = listen<{ width?: number, fontSize?: number, color?: string, backgroundOpacity?: number }>(CAPTION_EVENT_STYLE, (event) => {
-            if (event.payload.width) setTargetWidth(event.payload.width);
-            if (event.payload.fontSize) setFontSize(event.payload.fontSize);
-            if (event.payload.color) setFontColor(event.payload.color);
-            if (event.payload.backgroundOpacity !== undefined) setBackgroundOpacity(event.payload.backgroundOpacity);
-        });
-
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten());
-        };
-    }, []);
-
-    useEffect(() => {
-        // Listen for segment updates from the main window
-        const unlistenPromise = listen<TranscriptSegment[]>(CAPTION_EVENT_SEGMENTS, (event) => {
-            // Only show the newest segment. New text must replace old text.
-            const payload = event.payload;
-            if (payload && payload.length > 0) {
-                // Take the last segment from the list
-                const lastSegment = payload[payload.length - 1];
-                setSegments([lastSegment]);
-            } else {
-                setSegments([]);
-            }
-        });
-
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten());
-        };
-    }, []);
-
-    // Listen for close command
-    useEffect(() => {
-        const unlistenPromise = listen(CAPTION_EVENT_CLOSE, () => {
-            logger.info('[CaptionWindow] Received close command, closing window');
-            getCurrentWindow().close();
-        });
-
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten());
-        };
-    }, []);
+        setDisplaySegments(captionState.segments);
+    }, [captionState.revision, captionState.segments]);
 
     // Set transparent background for the window
     useEffect(() => {
@@ -94,13 +53,13 @@ export function CaptionWindow() {
 
     // Clear text: Clear the window if no new text appears for 3 seconds.
     useEffect(() => {
-        if (segments.length > 0) {
+        if (displaySegments.length > 0) {
             const timer = setTimeout(() => {
-                setSegments([]);
+                setDisplaySegments([]);
             }, 3000);
             return () => clearTimeout(timer);
         }
-    }, [segments]);
+    }, [displaySegments]);
 
     // Dynamic height: Use ResizeObserver to ensure window always matches content height accurately
     useEffect(() => {
@@ -123,12 +82,13 @@ export function CaptionWindow() {
                     const size = await currentWindow.innerSize();
 
                     const targetPhysicalHeight = Math.ceil(totalHeight * factor);
-
-                    // We enforce the configured width if available, otherwise use current
-                    const widthToUse = targetWidth ? Math.ceil(targetWidth * factor) : size.width;
+                    const widthToUse = Math.ceil(captionState.style.width * factor);
 
                     // Avoid unnecessary resize calls if the physical height/width matches
-                    if (Math.abs(size.height - targetPhysicalHeight) > 1 || Math.abs(size.width - widthToUse) > 1) {
+                    if (
+                        Math.abs(size.height - targetPhysicalHeight) > 1 ||
+                        Math.abs(size.width - widthToUse) > 1
+                    ) {
                         const { PhysicalSize } = await import('@tauri-apps/api/dpi');
                         const targetSize = new PhysicalSize(widthToUse, targetPhysicalHeight);
 
@@ -137,8 +97,8 @@ export function CaptionWindow() {
                         await currentWindow.setMaxSize(targetSize);
                         await currentWindow.setSize(targetSize);
                     }
-                } catch (e) {
-                    logger.error("[CaptionWindow] Failed to resize window:", e);
+                } catch (error) {
+                    logger.error('[CaptionWindow] Failed to resize window:', error);
                 }
             }, 50);
         });
@@ -149,7 +109,7 @@ export function CaptionWindow() {
             observer.disconnect();
             clearTimeout(resizeTimeout);
         };
-    }, [targetWidth]);
+    }, [captionState.style.width]);
 
     const startDragging = () => {
         getCurrentWindow().startDragging();
@@ -164,7 +124,7 @@ export function CaptionWindow() {
                 minHeight: 'auto',
                 userSelect: 'none',
                 cursor: 'default',
-                background: `rgba(0, 0, 0, ${backgroundOpacity})`
+                background: `rgba(0, 0, 0, ${captionState.style.backgroundOpacity})`,
             }}
         >
             {/* Drag region for moving the window */}
@@ -173,7 +133,7 @@ export function CaptionWindow() {
                 data-tauri-drag-region
                 onMouseDown={startDragging}
             >
-                <div className="drag-indicator"></div>
+                <div className="drag-indicator" />
             </div>
 
             <div
@@ -182,19 +142,19 @@ export function CaptionWindow() {
                 style={{
                     maxHeight: 'none',
                     height: 'auto',
-                    fontSize: `${fontSize}px`,
+                    fontSize: `${captionState.style.fontSize}px`,
                     lineHeight: 1.5,
-                    color: fontColor
+                    color: captionState.style.color,
                 }}
             >
-                {segments.length === 0 ? null : (
-                    segments.map((seg) => (
+                {displaySegments.length === 0 ? null : (
+                    displaySegments.map((segment) => (
                         <p
-                            key={seg.id}
-                            className={`live-caption-line ${seg.isFinal ? '' : 'partial'}`}
-                            style={{ color: fontColor }}
+                            key={segment.id}
+                            className={`live-caption-line ${segment.isFinal ? '' : 'partial'}`}
+                            style={{ color: captionState.style.color }}
                         >
-                            {typeof seg.text === 'string' ? seg.text : ''}
+                            {typeof segment.text === 'string' ? segment.text : ''}
                         </p>
                     ))
                 )}

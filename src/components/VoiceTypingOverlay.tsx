@@ -1,13 +1,14 @@
-import { type CSSProperties, useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { type CSSProperties, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-    VOICE_TYPING_EVENT_TEXT,
-    VoiceTypingOverlayPayload,
-} from '../services/voiceTypingWindowService';
 import { Mic } from 'lucide-react';
 import '../styles/index.css';
 import { logger } from '../utils/logger';
+import { useAuxWindowState } from '../hooks/useAuxWindowState';
+import {
+    DEFAULT_VOICE_TYPING_OVERLAY_STATE,
+    VOICE_TYPING_EVENT_TEXT,
+    VOICE_TYPING_WINDOW_LABEL,
+} from '../services/voiceTypingWindowService';
 
 const baseContainerStyle = {
     display: 'flex',
@@ -19,34 +20,28 @@ const baseContainerStyle = {
     fontSize: '14px',
     boxShadow: '0 10px 30px rgba(15, 23, 42, 0.22)',
     maxWidth: '90vw',
-    transition: 'background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease',
+    transition:
+        'background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease',
 } satisfies CSSProperties;
 
 export function VoiceTypingOverlay() {
     const { t } = useTranslation();
-    const [overlayState, setOverlayState] = useState<VoiceTypingOverlayPayload>({
-        sessionId: 'bootstrap',
-        phase: 'listening',
-        text: '',
-    });
-
-    useEffect(() => {
-        const unlistenPromise = listen<VoiceTypingOverlayPayload>(VOICE_TYPING_EVENT_TEXT, (event) => {
-            const payload = event.payload;
-            void logger.info('[VoiceTypingOverlay] Received overlay state', {
+    const overlayState = useAuxWindowState({
+        label: VOICE_TYPING_WINDOW_LABEL,
+        eventName: VOICE_TYPING_EVENT_TEXT,
+        defaultState: DEFAULT_VOICE_TYPING_OVERLAY_STATE,
+        onStateApplied: (payload, source) => {
+            void logger.info('[VoiceTypingOverlay] Applied overlay state', {
+                source,
                 sessionId: payload.sessionId,
+                revision: payload.revision,
                 phase: payload.phase,
                 segmentId: payload.segmentId ?? null,
                 isFinal: payload.isFinal ?? null,
                 textLength: payload.text.length,
             });
-            setOverlayState(payload);
-        });
-
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten());
-        };
-    }, []);
+        },
+    });
 
     useEffect(() => {
         const previousDocumentBackground = document.documentElement.style.background;
@@ -64,11 +59,12 @@ export function VoiceTypingOverlay() {
     const { phase, text } = overlayState;
     const isSegment = phase === 'segment' && text.trim().length > 0;
     const isError = phase === 'error';
-    const displayText = isSegment || isError
-        ? text
-        : phase === 'preparing'
-            ? t('common.preparing')
-            : t('common.listening');
+    const displayText =
+        isSegment || isError
+            ? text
+            : phase === 'preparing'
+                ? t('common.preparing')
+                : t('common.listening');
 
     const containerStyle: CSSProperties = isSegment
         ? {
@@ -106,20 +102,24 @@ export function VoiceTypingOverlay() {
             height: '8px',
             borderRadius: '999px',
             background: isError ? '#fca5a5' : '#4ade80',
-            boxShadow: isError ? '0 0 0 4px rgba(248, 113, 113, 0.16)' : '0 0 0 4px rgba(74, 222, 128, 0.16)',
+            boxShadow: isError
+                ? '0 0 0 4px rgba(248, 113, 113, 0.16)'
+                : '0 0 0 4px rgba(74, 222, 128, 0.16)',
             flexShrink: 0,
         };
 
     return (
-        <div style={{
-            width: '100vw',
-            height: '100vh',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'flex-start',
-            background: 'transparent',
-            overflow: 'hidden',
-        }}>
+        <div
+            style={{
+                width: '100vw',
+                height: '100vh',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-start',
+                background: 'transparent',
+                overflow: 'hidden',
+            }}
+        >
             <div style={containerStyle}>
                 {isSegment ? (
                     <div style={indicatorStyle} />
@@ -128,18 +128,23 @@ export function VoiceTypingOverlay() {
                         <Mic
                             size={16}
                             className={isError ? undefined : 'animate-pulse'}
-                            style={{ color: isError ? '#fecaca' : '#4ade80', flexShrink: 0 }}
+                            style={{
+                                color: isError ? '#fecaca' : '#4ade80',
+                                flexShrink: 0,
+                            }}
                         />
                         <div style={indicatorStyle} />
                     </>
                 )}
-                <span style={{
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    fontWeight: isSegment ? 600 : 500,
-                    letterSpacing: isSegment ? '0.01em' : 'normal',
-                }}>
+                <span
+                    style={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontWeight: isSegment ? 600 : 500,
+                        letterSpacing: isSegment ? '0.01em' : 'normal',
+                    }}
+                >
                     {displayText}
                 </span>
             </div>

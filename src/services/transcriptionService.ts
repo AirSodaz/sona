@@ -43,8 +43,8 @@ export class TranscriptionService {
         registrationId: number,
     }> = new Map();
 
-    private static isRecordInstance(instanceId: string): boolean {
-        return instanceId === 'record';
+    private static isDiagnosticsInstance(instanceId: string): boolean {
+        return instanceId === 'record' || instanceId === 'voice-typing';
     }
 
     private static formatSession(sessionId: string | null | undefined): string {
@@ -60,15 +60,17 @@ export class TranscriptionService {
             const segment = event.payload;
             const instance = this.instanceCallbacks.get(instanceId);
             if (!instance) {
-                if (this.isRecordInstance(instanceId)) {
-                    logger.info(`[TranscriptionService:record] Received recognizer event without an active callback. segment=${segment.id}`);
+                if (this.isDiagnosticsInstance(instanceId)) {
+                    logger.info(
+                        `[TranscriptionService:${instanceId}] Received recognizer event without an active callback. segment=${segment.id} final=${segment.isFinal}`
+                    );
                 }
                 return;
             }
 
-            if (this.isRecordInstance(instanceId)) {
+            if (this.isDiagnosticsInstance(instanceId)) {
                 logger.info(
-                    `[TranscriptionService:record] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} segment=${segment.id} final=${segment.isFinal}`
+                    `[TranscriptionService:${instanceId}] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} segment=${segment.id} final=${segment.isFinal} textLength=${segment.text.length}`
                 );
             }
 
@@ -134,9 +136,12 @@ export class TranscriptionService {
         }
 
         const existingRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
-        if (TranscriptionService.isRecordInstance(this.instanceId) && existingRegistration) {
+        if (
+            TranscriptionService.isDiagnosticsInstance(this.instanceId) &&
+            existingRegistration
+        ) {
             logger.info(
-                `[TranscriptionService:record] Replacing callback registration. previous_registration=${existingRegistration.registrationId} previous_owner=${existingRegistration.owner} previous_session=${TranscriptionService.formatSession(existingRegistration.sessionId)}`
+                `[TranscriptionService:${this.instanceId}] Replacing callback registration. previous_registration=${existingRegistration.registrationId} previous_owner=${existingRegistration.owner} previous_session=${TranscriptionService.formatSession(existingRegistration.sessionId)}`
             );
         }
 
@@ -146,9 +151,9 @@ export class TranscriptionService {
         const wrappedOnSegment: TranscriptionCallback = (segment) => {
             const currentRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
             if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
-                if (TranscriptionService.isRecordInstance(this.instanceId)) {
+                if (TranscriptionService.isDiagnosticsInstance(this.instanceId)) {
                     logger.info(
-                        `[TranscriptionService:record] Ignored stale callback invocation. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)} current_registration=${currentRegistration?.registrationId ?? 'none'}`
+                        `[TranscriptionService:${this.instanceId}] Ignored stale callback invocation. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)} current_registration=${currentRegistration?.registrationId ?? 'none'}`
                     );
                 }
                 return;
@@ -164,9 +169,9 @@ export class TranscriptionService {
             registrationId
         });
 
-        if (TranscriptionService.isRecordInstance(this.instanceId)) {
+        if (TranscriptionService.isDiagnosticsInstance(this.instanceId)) {
             logger.info(
-                `[TranscriptionService:record] Registered callback. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)}`
+                `[TranscriptionService:${this.instanceId}] Registered callback. registration=${registrationId} owner=${owner} session=${TranscriptionService.formatSession(sessionId)}`
             );
         }
 

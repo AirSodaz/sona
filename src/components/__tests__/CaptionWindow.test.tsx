@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { CaptionWindow } from '../CaptionWindow';
 
+const defaultStyle = {
+    width: 800,
+    fontSize: 24,
+    color: '#ffffff',
+    backgroundOpacity: 0.6,
+};
+
 // Hoist mocks
 const mocks = vi.hoisted(() => {
     const listenCallbacks: Record<string, (event: any) => void> = {};
@@ -20,6 +27,12 @@ const mocks = vi.hoisted(() => {
         mockStartDragging: vi.fn(),
         mockSetMinSize: vi.fn(),
         mockSetMaxSize: vi.fn(),
+        mockInvoke: vi.fn(async (command: string): Promise<any> => {
+            if (command === 'get_aux_window_state') {
+                return null;
+            }
+            return undefined;
+        }),
         resizeObserverInstance: null as any,
     };
 });
@@ -56,6 +69,10 @@ vi.mock('@tauri-apps/api/dpi', () => ({
     }
 }));
 
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: mocks.mockInvoke,
+}));
+
 vi.mock('@tauri-apps/api/event', () => ({
     listen: mocks.mockListen
 }));
@@ -89,6 +106,12 @@ describe('CaptionWindow', () => {
 
         vi.useFakeTimers();
         mocks.mockSetSize.mockClear();
+        mocks.mockInvoke.mockImplementation(async (command: string): Promise<any> => {
+            if (command === 'get_aux_window_state') {
+                return null;
+            }
+            return undefined;
+        });
 
         // Mock offsetHeight and getBoundingClientRect
         Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 50 });
@@ -112,12 +135,24 @@ describe('CaptionWindow', () => {
 
         // Simulate event
         await act(async () => {
-            if (mocks.listenCallbacks['caption:segments']) {
-                mocks.listenCallbacks['caption:segments']({
-                    payload: [
-                        { id: '1', text: 'Old', start: 0, end: 1, isFinal: true, tokens: [], timestamps: [], durations: [] },
-                        { id: '2', text: 'New', start: 1, end: 2, isFinal: false, tokens: [], timestamps: [], durations: [] }
-                    ]
+            if (mocks.listenCallbacks['caption:state']) {
+                mocks.listenCallbacks['caption:state']({
+                    payload: {
+                        revision: 1,
+                        segments: [
+                            {
+                                id: '2',
+                                text: 'New',
+                                start: 1,
+                                end: 2,
+                                isFinal: false,
+                                tokens: [],
+                                timestamps: [],
+                                durations: [],
+                            },
+                        ],
+                        style: defaultStyle,
+                    }
                 });
             }
         });
@@ -132,9 +167,24 @@ describe('CaptionWindow', () => {
 
         // Add text
         await act(async () => {
-            if (mocks.listenCallbacks['caption:segments']) {
-                mocks.listenCallbacks['caption:segments']({
-                    payload: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: false, tokens: [], timestamps: [], durations: [] }]
+            if (mocks.listenCallbacks['caption:state']) {
+                mocks.listenCallbacks['caption:state']({
+                    payload: {
+                        revision: 1,
+                        segments: [
+                            {
+                                id: '1',
+                                text: 'Hello',
+                                start: 0,
+                                end: 1,
+                                isFinal: false,
+                                tokens: [],
+                                timestamps: [],
+                                durations: [],
+                            },
+                        ],
+                        style: defaultStyle,
+                    }
                 });
             }
         });
@@ -168,8 +218,23 @@ describe('CaptionWindow', () => {
         });
 
         await act(async () => {
-            mocks.listenCallbacks['caption:segments']?.({
-                payload: [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: false, tokens: [], timestamps: [], durations: [] }]
+            mocks.listenCallbacks['caption:state']?.({
+                payload: {
+                    revision: 1,
+                    segments: [
+                        {
+                            id: '1',
+                            text: 'Hello',
+                            start: 0,
+                            end: 1,
+                            isFinal: false,
+                            tokens: [],
+                            timestamps: [],
+                            durations: [],
+                        },
+                    ],
+                    style: defaultStyle,
+                }
             });
             mocks.resizeObserverInstance.triggerResize();
             await vi.advanceTimersByTimeAsync(100);

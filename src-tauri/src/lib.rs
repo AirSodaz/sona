@@ -24,11 +24,53 @@ struct AppSettings {
     minimize_to_tray: std::sync::Mutex<bool>,
 }
 
+struct AuxWindowStateStore {
+    states: std::sync::Mutex<HashMap<String, serde_json::Value>>,
+}
+
+impl Default for AuxWindowStateStore {
+    fn default() -> Self {
+        Self {
+            states: std::sync::Mutex::new(HashMap::new()),
+        }
+    }
+}
+
 #[tauri::command]
 fn set_minimize_to_tray(state: tauri::State<'_, AppSettings>, enabled: bool) {
     if let Ok(mut minimize) = state.minimize_to_tray.lock() {
         *minimize = enabled;
     }
+}
+
+#[tauri::command]
+fn set_aux_window_state(
+    state: tauri::State<'_, AuxWindowStateStore>,
+    label: String,
+    payload: serde_json::Value,
+) -> Result<(), String> {
+    let mut states = state.states.lock().map_err(|e| e.to_string())?;
+    states.insert(label, payload);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_aux_window_state(
+    state: tauri::State<'_, AuxWindowStateStore>,
+    label: String,
+) -> Result<Option<serde_json::Value>, String> {
+    let states = state.states.lock().map_err(|e| e.to_string())?;
+    Ok(states.get(&label).cloned())
+}
+
+#[tauri::command]
+fn clear_aux_window_state(
+    state: tauri::State<'_, AuxWindowStateStore>,
+    label: String,
+) -> Result<(), String> {
+    let mut states = state.states.lock().map_err(|e| e.to_string())?;
+    states.remove(&label);
+    Ok(())
 }
 
 /// Cancels an active download by its ID.
@@ -618,6 +660,7 @@ pub fn run() {
         .manage(AppSettings {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
+        .manage(AuxWindowStateStore::default())
         .manage(audio::AudioState::new())
         .manage(sherpa::SherpaState::new())
         .plugin(tauri_plugin_opener::init())
@@ -638,6 +681,9 @@ pub fn run() {
             has_active_downloads,
             update_tray_menu,
             set_minimize_to_tray,
+            set_aux_window_state,
+            get_aux_window_state,
+            clear_aux_window_state,
             set_system_audio_mute,
             open_log_folder,
             system::inject_text,
