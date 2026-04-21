@@ -44,7 +44,11 @@ export class TranscriptionService {
     }> = new Map();
 
     private static isDiagnosticsInstance(instanceId: string): boolean {
-        return instanceId === 'record' || instanceId === 'voice-typing';
+        return (
+            instanceId === 'record' ||
+            instanceId === 'voice-typing' ||
+            instanceId === 'caption'
+        );
     }
 
     private static formatSession(sessionId: string | null | undefined): string {

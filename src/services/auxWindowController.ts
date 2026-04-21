@@ -10,10 +10,22 @@ export interface AuxWindowDisplayState {
     focus?: boolean;
 }
 
+interface AuxWindowCreationState {
+    visible: boolean;
+}
+
 interface AuxWindowControllerOptions {
     label: string;
     eventName: string;
-    createWindow: (displayState: AuxWindowDisplayState) => WebviewWindow;
+    createWindow: (
+        displayState: AuxWindowDisplayState,
+        creationState: AuxWindowCreationState
+    ) => WebviewWindow;
+}
+
+interface ResolvedAuxWindow {
+    isNew: boolean;
+    windowInstance: WebviewWindow;
 }
 
 export class AuxWindowController<T extends object> {
@@ -51,13 +63,14 @@ export class AuxWindowController<T extends object> {
         return this.trackWindow(existingWindow);
     }
 
-    private async createWindow(displayState: AuxWindowDisplayState) {
+    private async createWindow(
+        displayState: AuxWindowDisplayState,
+        visible: boolean
+    ) {
         return await new Promise<WebviewWindow | null>((resolve) => {
-            const windowInstance = this.trackWindow(this.options.createWindow(displayState));
-
+            const windowInstance = this.trackWindow(this.options.createWindow(displayState, { visible }));
             windowInstance.once('tauri://created', () => {
                 logger.info('[AuxWindowController] Window created', { label: this.options.label });
-                resolve(windowInstance);
             });
 
             windowInstance.once('tauri://error', (error) => {
@@ -70,22 +83,41 @@ export class AuxWindowController<T extends object> {
                 }
                 resolve(null);
             });
+
+            logger.debug('[AuxWindowController] Created window handle', {
+                label: this.options.label,
+                visible,
+            });
+            resolve(windowInstance);
         });
     }
 
-    private async ensureWindow(displayState: AuxWindowDisplayState = {}) {
+    private async ensureWindow(
+        displayState: AuxWindowDisplayState = {},
+        visible = false
+    ): Promise<ResolvedAuxWindow | null> {
         const existingWindow = await this.resolveExistingWindow();
         if (existingWindow) {
-            return existingWindow;
+            return {
+                isNew: false,
+                windowInstance: existingWindow,
+            };
         }
 
         if (!this.windowCreationPromise) {
-            this.windowCreationPromise = this.createWindow(displayState);
+            this.windowCreationPromise = this.createWindow(displayState, visible);
         }
 
         const createdWindow = await this.windowCreationPromise;
         this.windowCreationPromise = null;
-        return createdWindow;
+        if (!createdWindow) {
+            return null;
+        }
+
+        return {
+            isNew: true,
+            windowInstance: createdWindow,
+        };
     }
 
     private async applyDisplayState(
@@ -117,23 +149,31 @@ export class AuxWindowController<T extends object> {
     }
 
     async prepare(displayState: AuxWindowDisplayState = {}) {
-        const windowInstance = await this.ensureWindow(displayState);
-        if (!windowInstance) {
+        const resolvedWindow = await this.ensureWindow(displayState, false);
+        if (!resolvedWindow) {
             return null;
         }
 
-        await this.applyDisplayState(windowInstance, displayState, false);
-        return windowInstance;
+        if (resolvedWindow.isNew) {
+            return resolvedWindow.windowInstance;
+        }
+
+        await this.applyDisplayState(resolvedWindow.windowInstance, displayState, false);
+        return resolvedWindow.windowInstance;
     }
 
     async open(displayState: AuxWindowDisplayState = {}) {
-        const windowInstance = await this.ensureWindow(displayState);
-        if (!windowInstance) {
+        const resolvedWindow = await this.ensureWindow(displayState, true);
+        if (!resolvedWindow) {
             return null;
         }
 
-        await this.applyDisplayState(windowInstance, displayState, true);
-        return windowInstance;
+        if (resolvedWindow.isNew) {
+            return resolvedWindow.windowInstance;
+        }
+
+        await this.applyDisplayState(resolvedWindow.windowInstance, displayState, true);
+        return resolvedWindow.windowInstance;
     }
 
     async hide() {

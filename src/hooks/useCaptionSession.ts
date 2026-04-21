@@ -200,7 +200,22 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 }
             }
 
-            // 3. Start Service (Configuration is already handled globally)
+            // 3. Open Window early so the floating subtitle surface is visible
+            // even if recognizer startup or the first VAD result is delayed.
+            logger.info('[CaptionSession] Opening caption window...');
+            await captionWindowService.open({
+                alwaysOnTop: config.alwaysOnTop ?? true,
+                lockWindow: config.lockWindow ?? false,
+                width: config.captionWindowWidth,
+                fontSize: config.captionFontSize,
+                color: config.captionFontColor,
+                backgroundOpacity: config.captionBackgroundOpacity
+            });
+
+            if (!activeRef.current) return;
+
+            // 4. Start Service (Configuration is already handled globally)
+            logger.info('[CaptionSession] Starting caption recognizer...');
             await captionService.start(
                 (segment: any) => {
                     captionWindowService.sendSegments([segment]).catch(logger.error);
@@ -209,13 +224,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                     logger.error('[CaptionSession] Service error:', error);
                 }
             );
+            logger.info('[CaptionSession] Caption recognizer started.');
 
             if (!activeRef.current) {
                 await captionService.stop();
                 return;
             }
 
-            // 4. Connect Audio Pipeline (ONLY for Web API fallback)
+            // 5. Connect Audio Pipeline (ONLY for Web API fallback)
             if (!usingNativeCaptureRef.current && !processorRef.current && audioContextRef.current && streamRef.current) {
                 const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
                 sourceRef.current = source;
@@ -232,16 +248,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             }
 
             if (!activeRef.current) return;
-
-            // 5. Open Window
-            await captionWindowService.open({
-                alwaysOnTop: config.alwaysOnTop ?? true,
-                lockWindow: config.lockWindow ?? false,
-                width: config.captionWindowWidth,
-                fontSize: config.captionFontSize,
-                color: config.captionFontColor,
-                backgroundOpacity: config.captionBackgroundOpacity
-            });
 
         } catch (error) {
             logger.error('[CaptionSession] Error starting session:', error);

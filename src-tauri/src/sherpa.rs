@@ -617,13 +617,10 @@ impl Default for SherpaInstance {
     }
 }
 
-fn is_record_instance(instance_id: &str) -> bool {
-    instance_id == "record"
-}
-
 fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
     match instance_id {
         "record" => Some("record"),
+        "caption" => Some("caption"),
         "voice-typing" => Some("voice-typing"),
         _ => None,
     }
@@ -989,9 +986,9 @@ pub async fn start_recognizer(
         instance.vad = load_vad(instance.vad_model.clone());
     }
 
-    if is_record_instance(&instance_id) {
-        println!(
-            "[Sherpa] start_recognizer(record): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
+    if let Some(label) = diagnostics_instance_label(&instance_id) {
+        info!(
+            "[Sherpa] start_recognizer({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
             recognizer_kind,
             instance.vad_model.is_some(),
             instance.punctuation.is_some()
@@ -1008,9 +1005,9 @@ pub async fn stop_recognizer(
 ) -> Result<(), String> {
     let mut instances = state.instances.lock().await;
     if let Some(instance) = instances.get_mut(&instance_id) {
-        if is_record_instance(&instance_id) {
-            println!(
-                "[Sherpa] stop_recognizer(record): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
+        if let Some(label) = diagnostics_instance_label(&instance_id) {
+            info!(
+                "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
                 instance.is_running,
                 instance.total_samples,
                 instance.offline_state.speech_buffer.len(),

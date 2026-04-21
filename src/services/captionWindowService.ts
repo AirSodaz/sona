@@ -37,25 +37,26 @@ class CaptionWindowService {
     private controller = new AuxWindowController<CaptionWindowState>({
         label: CAPTION_WINDOW_LABEL,
         eventName: CAPTION_EVENT_STATE,
-        createWindow: (displayState) => new WebviewWindow(CAPTION_WINDOW_LABEL, {
-            url: '/index.html?window=caption',
-            title: 'Sona Live Caption',
-            alwaysOnTop: true,
-            decorations: false,
-            transparent: true,
-            skipTaskbar: true,
-            width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
-            height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
-            minWidth: 200,
-            minHeight: 32,
-            center: false,
-            focus: false,
-            resizable: true,
-            maximizable: false,
-            minimizable: false,
-            shadow: false,
-            visible: false,
-        }),
+        createWindow: (displayState, creationState) =>
+            new WebviewWindow(CAPTION_WINDOW_LABEL, {
+                url: '/index.html?window=caption',
+                title: 'Sona Live Caption',
+                alwaysOnTop: true,
+                decorations: false,
+                transparent: true,
+                skipTaskbar: true,
+                width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
+                height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
+                minWidth: 200,
+                minHeight: 32,
+                center: false,
+                focus: false,
+                resizable: true,
+                maximizable: false,
+                minimizable: false,
+                shadow: false,
+                visible: creationState.visible,
+            }),
     });
 
     private state: CaptionWindowState = DEFAULT_CAPTION_WINDOW_STATE;
@@ -84,6 +85,16 @@ class CaptionWindowService {
         color?: string;
         backgroundOpacity?: number;
     }) {
+        logger.info('[CaptionWindowService] Opening caption window', {
+            width: options?.width ?? this.state.style.width,
+            fontSize: options?.fontSize ?? this.state.style.fontSize,
+            color: options?.color ?? this.state.style.color,
+            backgroundOpacity:
+                options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
+            alwaysOnTop: options?.alwaysOnTop ?? true,
+            lockWindow: options?.lockWindow ?? false,
+        });
+
         const nextStyle: CaptionWindowStyle = {
             width: options?.width ?? this.state.style.width,
             fontSize: options?.fontSize ?? this.state.style.fontSize,
@@ -100,6 +111,7 @@ class CaptionWindowService {
         });
 
         if (!windowInstance) {
+            logger.error('[CaptionWindowService] Failed to obtain caption window handle');
             return;
         }
 
@@ -110,6 +122,8 @@ class CaptionWindowService {
         if (options?.lockWindow !== undefined) {
             await windowInstance.setIgnoreCursorEvents(options.lockWindow);
         }
+
+        logger.info('[CaptionWindowService] Caption window open request completed');
     }
 
     async close() {
@@ -130,6 +144,12 @@ class CaptionWindowService {
 
     async sendSegments(segments: TranscriptSegment[]) {
         const latestSegments = segments.length > 0 ? [segments[segments.length - 1]] : [];
+        logger.info('[CaptionWindowService] Sending caption segments', {
+            segmentCount: latestSegments.length,
+            latestSegmentId: latestSegments[0]?.id ?? null,
+            latestSegmentFinal: latestSegments[0]?.isFinal ?? null,
+            textLength: latestSegments[0]?.text.length ?? 0,
+        });
         await this.commitState({ segments: latestSegments });
     }
 

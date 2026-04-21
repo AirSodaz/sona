@@ -111,7 +111,7 @@ describe('CaptionWindowService', () => {
                 transparent: true,
                 decorations: false,
                 alwaysOnTop: true,
-                visible: false,
+                visible: true,
             })
         );
         expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
