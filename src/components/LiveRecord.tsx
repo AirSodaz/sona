@@ -145,6 +145,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         resumeRecording,
         isInitializing,
         isTransitioning,
+        recordingElapsedMs,
         peakLevelRef
     } = useAudioRecorder({
         inputSource,
@@ -247,7 +248,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                     />
                 </div>
 
-                <RecordingTimer isRecording={isRecording} isPaused={isPaused} />
+                <RecordingTimer elapsedMs={recordingElapsedMs} isRecording={isRecording} />
 
                 <div className="record-controls">
                     {!isRecording ? (

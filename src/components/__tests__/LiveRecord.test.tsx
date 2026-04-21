@@ -167,6 +167,12 @@ describe('LiveRecord', () => {
         vi.useFakeTimers();
         capturedOnSegment = null;
         localStorage.clear();
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
 
         mockStart.mockImplementation((onSeg: any, _onError: any) => {
             capturedOnSegment = onSeg;
@@ -433,6 +439,49 @@ describe('LiveRecord', () => {
         const duration = lastCall?.[2];
         expect(duration).toBeGreaterThanOrEqual(2.9);
         expect(duration).toBeLessThan(3.2);
+    });
+
+    it('keeps the displayed timer accumulated across pause and resume when using web audio fallback', async () => {
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'start_microphone_capture') {
+                throw new Error('native unavailable');
+            }
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        const timer = screen.getByRole('timer');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.pause/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        expect(timer.textContent).toBe('00:03');
     });
 
     it('should start caption mode independently without recording', async () => {

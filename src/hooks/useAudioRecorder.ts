@@ -105,6 +105,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // State
     const [isInitializing, setIsInitializing] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
+    const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
 
     // Sync refs for callbacks
     const isRecordingRef = useRef(isRecording);
@@ -149,20 +150,39 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
     }, []);
 
-    const getRecordedDurationSeconds = useCallback((): number => {
+    const getRecordedDurationMs = useCallback((): number => {
         let durationMs = recordedDurationMsRef.current;
         if (activeDurationStartedAtRef.current !== null) {
             durationMs += Date.now() - activeDurationStartedAtRef.current;
         }
-        return durationMs / 1000;
+        return durationMs;
     }, []);
+
+    const syncRecordingElapsedMs = useCallback(() => {
+        setRecordingElapsedMs(getRecordedDurationMs());
+    }, [getRecordedDurationMs]);
+
+    const getRecordedDurationSeconds = useCallback((): number => {
+        return getRecordedDurationMs() / 1000;
+    }, [getRecordedDurationMs]);
 
     const finalizeRecordedDurationSeconds = useCallback((): number => {
         pauseRecordedDurationWindow();
+        syncRecordingElapsedMs();
         const durationSeconds = getRecordedDurationSeconds();
         finalizedDurationSecondsRef.current = durationSeconds;
         return durationSeconds;
-    }, [getRecordedDurationSeconds, pauseRecordedDurationWindow]);
+    }, [getRecordedDurationSeconds, pauseRecordedDurationWindow, syncRecordingElapsedMs]);
+
+    useEffect(() => {
+        if (!isRecording || isPaused) {
+            return;
+        }
+
+        syncRecordingElapsedMs();
+        const interval = window.setInterval(syncRecordingElapsedMs, 250);
+        return () => window.clearInterval(interval);
+    }, [isPaused, isRecording, syncRecordingElapsedMs]);
 
     const getRecordSegmentDeliveryMeta = useCallback((segment: TranscriptSegment): RecordSegmentDeliveryMeta => {
         const phase = recordSessionPhaseRef.current;
@@ -181,6 +201,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         peakLevelRef.current = 0;
         finalizedDurationSecondsRef.current = null;
         resetRecordedDuration();
+        setRecordingElapsedMs(0);
         setIsRecording(false);
         setIsPaused(false);
         clearSegments();
@@ -200,9 +221,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setIsRecording(true);
         setIsPaused(false);
         beginRecordedDurationWindow();
+        syncRecordingElapsedMs();
         logger.info(`[useAudioRecorder] Record session UI ready. session=${sessionId} native=${usingNativeCaptureRef.current}`);
         return true;
-    }, [beginRecordedDurationWindow, setIsPaused, setIsRecording]);
+    }, [beginRecordedDurationWindow, setIsPaused, setIsRecording, syncRecordingElapsedMs]);
 
     const canMutateActiveRecordResources = useCallback((sessionId: string): boolean => {
         return recordSessionIdRef.current === sessionId || recordSessionIdRef.current === null;
@@ -225,6 +247,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         recordSessionPhaseRef.current = 'idle';
         peakLevelRef.current = 0;
         resetRecordedDuration();
+        setRecordingElapsedMs(0);
         setIsRecording(false);
         setIsPaused(false);
         setIsTransitioning(false);
@@ -762,6 +785,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setIsTransitioning(true);
         peakLevelRef.current = 0;
         pauseRecordedDurationWindow();
+        syncRecordingElapsedMs();
 
         try {
             if (usingNativeCaptureRef.current) {
@@ -823,6 +847,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             }
 
             beginRecordedDurationWindow();
+            syncRecordingElapsedMs();
             setIsPaused(false);
             recordSessionPhaseRef.current = 'recording';
         } finally {
@@ -831,7 +856,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 setIsTransitioning(false);
             }
         }
-    }, [beginRecordedDurationWindow, config.muteDuringRecording, pauseRecordedDurationWindow, setNativeCapturePaused]);
+    }, [beginRecordedDurationWindow, config.muteDuringRecording, pauseRecordedDurationWindow, setNativeCapturePaused, syncRecordingElapsedMs]);
 
     const resumeRecording = useCallback(async () => {
         const sessionId = recordSessionIdRef.current;
@@ -867,6 +892,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             }
 
             beginRecordedDurationWindow();
+            syncRecordingElapsedMs();
             setIsPaused(false);
             recordSessionPhaseRef.current = 'recording';
             logger.info(`[useAudioRecorder] Recording session resumed. session=${sessionId}`);
@@ -882,7 +908,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 setIsTransitioning(false);
             }
         }
-    }, [beginRecordedDurationWindow, config.muteDuringRecording, setNativeCapturePaused]);
+    }, [beginRecordedDurationWindow, config.muteDuringRecording, setNativeCapturePaused, syncRecordingElapsedMs]);
 
     // Cleanup
     useEffect(() => {
@@ -903,6 +929,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         isPaused,
         isInitializing,
         isTransitioning,
+        recordingElapsedMs,
         peakLevelRef
     };
 }

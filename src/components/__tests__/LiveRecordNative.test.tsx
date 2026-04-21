@@ -732,4 +732,37 @@ describe('LiveRecord Native Capture', () => {
         expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
         expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
     });
+
+    it('keeps the displayed timer accumulated across pause and resume when using native capture', async () => {
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        const timer = screen.getByRole('timer');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.pause/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(timer.textContent).toBe('00:02');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        expect(timer.textContent).toBe('00:03');
+    });
 });
