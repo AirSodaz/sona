@@ -50,7 +50,10 @@ fn short_version_is_printed_to_stdout() {
 
 #[test]
 fn transcribe_help_mentions_key_examples() {
-    let output = cli_command().args(["transcribe", "--help"]).output().unwrap();
+    let output = cli_command()
+        .args(["transcribe", "--help"])
+        .output()
+        .unwrap();
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -72,7 +75,10 @@ fn models_help_mentions_list_and_download() {
 
 #[test]
 fn models_list_help_mentions_new_filters() {
-    let output = cli_command().args(["models", "list", "--help"]).output().unwrap();
+    let output = cli_command()
+        .args(["models", "list", "--help"])
+        .output()
+        .unwrap();
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -84,7 +90,10 @@ fn models_list_help_mentions_new_filters() {
 
 #[test]
 fn models_download_help_mentions_companions() {
-    let output = cli_command().args(["models", "download", "--help"]).output().unwrap();
+    let output = cli_command()
+        .args(["models", "download", "--help"])
+        .output()
+        .unwrap();
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);

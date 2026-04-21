@@ -533,12 +533,8 @@ async fn generate_with_azure_openai(
         "temperature": temperature.unwrap_or(0.7),
     });
 
-    let response = post_json_request(
-        &endpoint,
-        vec![("api-key", api_key.to_string())],
-        payload,
-    )
-    .await?;
+    let response =
+        post_json_request(&endpoint, vec![("api-key", api_key.to_string())], payload).await?;
 
     extract_text_from_json_response(&response)
 }
@@ -897,8 +893,13 @@ fn parse_json_array<T: DeserializeOwned>(
 ) -> Result<Vec<T>, String> {
     let cleaned = clean_json_response(response_text);
 
-    serde_json::from_str::<Vec<T>>(&cleaned)
-        .map_err(|error| chunk_error(task_type, chunk_number, format!("invalid JSON response: {error}")))
+    serde_json::from_str::<Vec<T>>(&cleaned).map_err(|error| {
+        chunk_error(
+            task_type,
+            chunk_number,
+            format!("invalid JSON response: {error}"),
+        )
+    })
 }
 
 fn validate_segment_ids<T, GetId>(
@@ -947,8 +948,15 @@ fn parse_polish_chunk(
     expected: &[LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<PolishedSegment>, String> {
-    let parsed = parse_json_array::<PolishedSegment>(response_text, LlmTaskType::Polish, chunk_number)?;
-    validate_segment_ids(&parsed, expected, LlmTaskType::Polish, chunk_number, |item| &item.id)?;
+    let parsed =
+        parse_json_array::<PolishedSegment>(response_text, LlmTaskType::Polish, chunk_number)?;
+    validate_segment_ids(
+        &parsed,
+        expected,
+        LlmTaskType::Polish,
+        chunk_number,
+        |item| &item.id,
+    )?;
     Ok(parsed)
 }
 
@@ -959,7 +967,13 @@ fn parse_translate_chunk(
 ) -> Result<Vec<TranslatedSegment>, String> {
     let parsed =
         parse_json_array::<TranslatedSegment>(response_text, LlmTaskType::Translate, chunk_number)?;
-    validate_segment_ids(&parsed, expected, LlmTaskType::Translate, chunk_number, |item| &item.id)?;
+    validate_segment_ids(
+        &parsed,
+        expected,
+        LlmTaskType::Translate,
+        chunk_number,
+        |item| &item.id,
+    )?;
     Ok(parsed)
 }
 
@@ -1047,7 +1061,14 @@ Input:\n\
     )
 }
 
-async fn run_segment_task<Output, BuildPrompt, ParseChunk, GenerateFn, EmitChunkFn, EmitProgressFn>(
+async fn run_segment_task<
+    Output,
+    BuildPrompt,
+    ParseChunk,
+    GenerateFn,
+    EmitChunkFn,
+    EmitProgressFn,
+>(
     task_id: &str,
     task_type: LlmTaskType,
     segments: &[LlmSegmentInput],
@@ -1183,7 +1204,9 @@ pub async fn translate_transcript_segments(
     let target_language = request.target_language.clone();
     let chunk_app = app.clone();
 
-    if config.provider == LlmProvider::GoogleTranslate || config.provider == LlmProvider::GoogleTranslateFree {
+    if config.provider == LlmProvider::GoogleTranslate
+        || config.provider == LlmProvider::GoogleTranslateFree
+    {
         let client = Client::new();
         return run_segment_task(
             &request.task_id,
@@ -1196,15 +1219,14 @@ pub async fn translate_transcript_segments(
             },
             move |response_text, chunk, chunk_number| {
                 if config.provider == LlmProvider::GoogleTranslate {
-                    let parsed: GoogleTranslateResponse = serde_json::from_str(response_text).map_err(
-                        |error| {
+                    let parsed: GoogleTranslateResponse = serde_json::from_str(response_text)
+                        .map_err(|error| {
                             chunk_error(
                                 LlmTaskType::Translate,
                                 chunk_number,
                                 format!("invalid JSON response: {error}"),
                             )
-                        },
-                    )?;
+                        })?;
 
                     if parsed.data.translations.len() != chunk.len() {
                         return Err(chunk_error(
@@ -1229,26 +1251,35 @@ pub async fn translate_transcript_segments(
                     Ok(translated_segments)
                 } else {
                     // GoogleTranslateFree returns raw JSON array of translations
-                    let translations: Vec<String> = serde_json::from_str(response_text).map_err(|e| {
-                        chunk_error(
-                            LlmTaskType::Translate,
-                            chunk_number,
-                            format!("invalid free translation JSON: {e}"),
-                        )
-                    })?;
-                    
+                    let translations: Vec<String> =
+                        serde_json::from_str(response_text).map_err(|e| {
+                            chunk_error(
+                                LlmTaskType::Translate,
+                                chunk_number,
+                                format!("invalid free translation JSON: {e}"),
+                            )
+                        })?;
+
                     if translations.len() != chunk.len() {
                         return Err(chunk_error(
                             LlmTaskType::Translate,
                             chunk_number,
-                            format!("expected {} translations but received {}", chunk.len(), translations.len()),
+                            format!(
+                                "expected {} translations but received {}",
+                                chunk.len(),
+                                translations.len()
+                            ),
                         ));
                     }
 
-                    Ok(chunk.iter().zip(translations).map(|(s, t)| TranslatedSegment {
-                        id: s.id.clone(),
-                        translation: t,
-                    }).collect())
+                    Ok(chunk
+                        .iter()
+                        .zip(translations)
+                        .map(|(s, t)| TranslatedSegment {
+                            id: s.id.clone(),
+                            translation: t,
+                        })
+                        .collect())
                 }
             },
             move |prompt| {
@@ -1257,7 +1288,7 @@ pub async fn translate_transcript_segments(
                 let client = client.clone();
                 Box::pin(async move {
                     let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
-                    
+
                     if config.provider == LlmProvider::GoogleTranslate {
                         let payload = GoogleTranslateRequest {
                             q: texts,
@@ -1298,14 +1329,18 @@ pub async fn translate_transcript_segments(
                                     target,
                                     urlencoding::encode(&text)
                                 );
-                                let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+                                let response =
+                                    client.get(&url).send().await.map_err(|e| e.to_string())?;
                                 if !response.status().is_success() {
                                     return Err(format!("Free API Error: {}", response.status()));
                                 }
-                                let body: Value = response.json().await.map_err(|e| e.to_string())?;
+                                let body: Value =
+                                    response.json().await.map_err(|e| e.to_string())?;
                                 let mut translated = String::new();
                                 if let Some(outer_arr) = body.as_array() {
-                                    if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
+                                    if let Some(inner_arr) =
+                                        outer_arr.get(0).and_then(|v| v.as_array())
+                                    {
                                         for part in inner_arr {
                                             if let Some(t) = part.get(0).and_then(|v| v.as_str()) {
                                                 translated.push_str(t);
@@ -1319,7 +1354,7 @@ pub async fn translate_transcript_segments(
                                 Ok(translated)
                             }
                         });
-                        
+
                         let results = futures_util::future::join_all(futures).await;
                         let mut translations = Vec::new();
                         for r in results {
@@ -1493,7 +1528,10 @@ mod tests {
             "https://api.openai.com/v1/responses"
         );
         assert_eq!(
-            join_url("https://ark.cn-beijing.volces.com", "api/v3/chat/completions"),
+            join_url(
+                "https://ark.cn-beijing.volces.com",
+                "api/v3/chat/completions"
+            ),
             "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
         );
     }
@@ -1547,12 +1585,8 @@ mod tests {
 
     #[test]
     fn parse_polish_chunk_rejects_length_mismatch() {
-        let err = parse_polish_chunk(
-            r#"[{"id":"1","text":"Hello"}]"#,
-            &sample_segments()[..2],
-            1,
-        )
-        .expect_err("length mismatch should fail");
+        let err = parse_polish_chunk(r#"[{"id":"1","text":"Hello"}]"#, &sample_segments()[..2], 1)
+            .expect_err("length mismatch should fail");
 
         assert!(err.contains("polish chunk 1 failed"));
         assert!(err.contains("expected 2 objects but received 1"));
@@ -1728,32 +1762,33 @@ mod tests {
     async fn run_segment_task_reports_second_chunk_failure() {
         let segments = sample_segments();
 
-        let err = run_segment_task(
-            "task-2",
-            LlmTaskType::Translate,
-            &segments,
-            Some(2),
-            |chunk| serde_json::to_string(chunk).unwrap(),
-            parse_translate_chunk,
-            {
-                let mut call_count = 0usize;
-                move |_prompt| {
-                    call_count += 1;
-                    Box::pin(async move {
-                        match call_count {
+        let err =
+            run_segment_task(
+                "task-2",
+                LlmTaskType::Translate,
+                &segments,
+                Some(2),
+                |chunk| serde_json::to_string(chunk).unwrap(),
+                parse_translate_chunk,
+                {
+                    let mut call_count = 0usize;
+                    move |_prompt| {
+                        call_count += 1;
+                        Box::pin(async move {
+                            match call_count {
                             1 => Ok(r#"[{"id":"1","translation":"A"},{"id":"2","translation":"B"}]"#
                                 .to_string()),
                             2 => Err("boom".to_string()),
                             _ => unreachable!(),
                         }
-                    })
-                }
-            },
-            |_payload| Ok(()),
-            |_payload| Ok(()),
-        )
-        .await
-        .expect_err("second chunk should fail");
+                        })
+                    }
+                },
+                |_payload| Ok(()),
+                |_payload| Ok(()),
+            )
+            .await
+            .expect_err("second chunk should fail");
 
         assert_eq!(err, "translate chunk 2 failed: boom");
     }

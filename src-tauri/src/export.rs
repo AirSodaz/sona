@@ -26,7 +26,12 @@ impl ExportFormat {
         let extension = path
             .extension()
             .and_then(|value| value.to_str())
-            .ok_or_else(|| format!("Unable to infer export format from path: {}", path.display()))?;
+            .ok_or_else(|| {
+                format!(
+                    "Unable to infer export format from path: {}",
+                    path.display()
+                )
+            })?;
         Self::parse(extension)
     }
 }
@@ -128,9 +133,7 @@ fn format_timestamp(seconds: f64, separator: &str) -> String {
     let whole_seconds = (seconds % 60.0).floor() as u64;
     let millis = ((seconds.fract()) * 1000.0).floor() as u64;
 
-    format!(
-        "{hours:02}:{minutes:02}:{whole_seconds:02}{separator}{millis:03}"
-    )
+    format!("{hours:02}:{minutes:02}:{whole_seconds:02}{separator}{millis:03}")
 }
 
 #[cfg(test)]

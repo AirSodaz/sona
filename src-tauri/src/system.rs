@@ -17,7 +17,7 @@ pub fn get_mouse_position() -> Result<(i32, i32), String> {
 #[tauri::command]
 pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     use std::mem::size_of;
-    use windows::Win32::Foundation::{POINT};
+    use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::ClientToScreen;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
@@ -133,7 +133,9 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
 }
 
 #[cfg(target_os = "windows")]
-unsafe fn safearray_to_f64_vec(psa: *mut windows::Win32::System::Com::SAFEARRAY) -> windows::core::Result<Vec<f64>> {
+unsafe fn safearray_to_f64_vec(
+    psa: *mut windows::Win32::System::Com::SAFEARRAY,
+) -> windows::core::Result<Vec<f64>> {
     use windows::Win32::System::Ole::*;
     if psa.is_null() {
         return Ok(Vec::new());
@@ -148,8 +150,8 @@ unsafe fn safearray_to_f64_vec(psa: *mut windows::Win32::System::Com::SAFEARRAY)
     let slice = std::slice::from_raw_parts(data_ptr as *const f64, len);
     let vec = slice.to_vec();
     SafeArrayUnaccessData(psa)?;
-    
-    // We should ideally free the SAFEARRAY if we're the owner. 
+
+    // We should ideally free the SAFEARRAY if we're the owner.
     // In UIA, GetBoundingRectangles returns a new SAFEARRAY that the caller must free.
     SafeArrayDestroy(psa)?;
 

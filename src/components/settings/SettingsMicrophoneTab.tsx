@@ -218,7 +218,7 @@ export function SettingsMicrophoneTab({
             nativeUnlistenRef.current = null;
         }
         if (usingNativeMicRef.current && startedMicCaptureRef.current) {
-            invoke<string>('stop_microphone_capture')
+            invoke<string>('stop_microphone_capture', { instanceId: 'test_mic' })
                 .then((path) => {
                     if (path) {
                         remove(path).catch(logger.error);

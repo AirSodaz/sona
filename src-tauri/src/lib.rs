@@ -1,8 +1,8 @@
-mod llm;
 mod audio;
 pub mod cli;
 pub mod export;
 mod hardware;
+mod llm;
 pub mod pipeline;
 pub mod preset_models;
 pub mod sherpa;
@@ -128,10 +128,20 @@ fn set_mute_linux(mute: bool) -> Result<(), String> {
     }
 
     let amixer_state = if mute { "mute" } else { "unmute" };
-    if Command::new("amixer").args(["-D", "pulse", "set", "Master", amixer_state]).output().map(|out| out.status.success()).unwrap_or(false) {
+    if Command::new("amixer")
+        .args(["-D", "pulse", "set", "Master", amixer_state])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+    {
         return Ok(());
     }
-    if Command::new("amixer").args(["set", "Master", amixer_state]).output().map(|out| out.status.success()).unwrap_or(false) {
+    if Command::new("amixer")
+        .args(["set", "Master", amixer_state])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+    {
         return Ok(());
     }
 
@@ -409,13 +419,15 @@ async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<
         .path()
         .app_log_dir()
         .map_err(|e: tauri::Error| e.to_string())?;
-    
+
     // Ensure directory exists
     if !log_dir.exists() {
         std::fs::create_dir_all(&log_dir).map_err(|e: std::io::Error| e.to_string())?;
     }
 
-    app.opener().open_path(log_dir.to_string_lossy(), None::<&str>).map_err(|e: tauri_plugin_opener::Error| e.to_string())?;
+    app.opener()
+        .open_path(log_dir.to_string_lossy(), None::<&str>)
+        .map_err(|e: tauri_plugin_opener::Error| e.to_string())?;
     Ok(())
 }
 

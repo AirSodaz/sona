@@ -1,4 +1,5 @@
 use log::{debug, info, trace};
+use serde::Deserialize;
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
@@ -6,7 +7,6 @@ use sherpa_onnx::{
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
-use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,7 +88,9 @@ pub fn build_model_config(
         .ok_or("File configuration is missing for this model.")?;
 
     let get_path = |filename: &Option<String>| -> Result<PathBuf, String> {
-        let name = filename.as_ref().ok_or("Required file name not specified in config")?;
+        let name = filename
+            .as_ref()
+            .ok_or("Required file name not specified in config")?;
         Ok(model_path.join(name))
     };
 
@@ -148,7 +150,12 @@ pub fn build_model_config(
                 .as_ref()
                 .map(|_| get_path(&fc.tokens))
                 .transpose()?;
-            let language = if language == "multilingual" { "" } else { language }.to_string();
+            let language = if language == "multilingual" {
+                ""
+            } else {
+                language
+            }
+            .to_string();
             Ok(ModelType::OfflineFunASRNano {
                 encoder_adaptor,
                 llm,
@@ -171,10 +178,7 @@ pub fn build_model_config(
         "dolphin" => {
             let model = get_path(&fc.model)?;
             let tokens = get_path(&fc.tokens)?;
-            Ok(ModelType::OfflineDolphin {
-                model,
-                tokens,
-            })
+            Ok(ModelType::OfflineDolphin { model, tokens })
         }
         "qwen3-asr" => {
             let conv_frontend = get_path(&fc.conv_frontend)?;
@@ -210,10 +214,7 @@ pub struct Recognizer {
     pub inner: RecognizerInner,
 }
 
-fn get_base_online_config(
-    num_threads: i32,
-    tokens: &Path,
-) -> OnlineRecognizerConfig {
+fn get_base_online_config(num_threads: i32, tokens: &Path) -> OnlineRecognizerConfig {
     let mut config = OnlineRecognizerConfig {
         rule1_min_trailing_silence: 1.2,
         rule2_min_trailing_silence: 1.2,
@@ -230,10 +231,7 @@ fn get_base_online_config(
     config
 }
 
-fn get_base_offline_config(
-    num_threads: i32,
-    tokens: Option<&Path>,
-) -> OfflineRecognizerConfig {
+fn get_base_offline_config(num_threads: i32, tokens: Option<&Path>) -> OfflineRecognizerConfig {
     let mut config = OfflineRecognizerConfig::default();
     config.model_config.tokens = tokens.map(|path| path.to_string_lossy().to_string());
     config.model_config.num_threads = num_threads;
@@ -244,11 +242,11 @@ fn get_base_offline_config(
 }
 
 impl Recognizer {
-    pub fn new(
-        model_type: ModelType,
-        num_threads: i32,
-    ) -> Result<Self, String> {
-        info!("[Recognizer::new] start model_type={:?} num_threads={num_threads}", model_type);
+    pub fn new(model_type: ModelType, num_threads: i32) -> Result<Self, String> {
+        info!(
+            "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
+            model_type
+        );
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -340,10 +338,13 @@ impl Recognizer {
             } => {
                 info!("[Recognizer::new] branch=OfflineFunASRNano");
                 let mut config = get_base_offline_config(num_threads, tokens.as_deref());
-                config.model_config.funasr_nano.encoder_adaptor = Some(encoder_adaptor.to_string_lossy().to_string());
+                config.model_config.funasr_nano.encoder_adaptor =
+                    Some(encoder_adaptor.to_string_lossy().to_string());
                 config.model_config.funasr_nano.llm = Some(llm.to_string_lossy().to_string());
-                config.model_config.funasr_nano.embedding = Some(embedding.to_string_lossy().to_string());
-                config.model_config.funasr_nano.tokenizer = Some(tokenizer.to_string_lossy().to_string());
+                config.model_config.funasr_nano.embedding =
+                    Some(embedding.to_string_lossy().to_string());
+                config.model_config.funasr_nano.tokenizer =
+                    Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
@@ -359,8 +360,10 @@ impl Recognizer {
             } => {
                 info!("[Recognizer::new] branch=OfflineFireRedAsr");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens));
-                config.model_config.fire_red_asr.encoder = Some(encoder.to_string_lossy().to_string());
-                config.model_config.fire_red_asr.decoder = Some(decoder.to_string_lossy().to_string());
+                config.model_config.fire_red_asr.encoder =
+                    Some(encoder.to_string_lossy().to_string());
+                config.model_config.fire_red_asr.decoder =
+                    Some(decoder.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFireRedAsr)");
                 let recognizer = OfflineRecognizer::create(&config)
@@ -368,10 +371,7 @@ impl Recognizer {
                 debug!("Successfully created OfflineRecognizer (OfflineFireRedAsr)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
-            ModelType::OfflineDolphin {
-                model,
-                tokens,
-            } => {
+            ModelType::OfflineDolphin { model, tokens } => {
                 info!("[Recognizer::new] branch=OfflineDolphin");
                 let mut config = get_base_offline_config(num_threads, Some(&tokens));
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
@@ -393,13 +393,11 @@ impl Recognizer {
                 let mut config = get_base_offline_config(num_threads, None);
                 config.model_config.qwen3_asr.conv_frontend =
                     Some(conv_frontend.to_string_lossy().to_string());
-                config.model_config.qwen3_asr.encoder =
-                    Some(encoder.to_string_lossy().to_string());
-                config.model_config.qwen3_asr.decoder =
-                    Some(decoder.to_string_lossy().to_string());
+                config.model_config.qwen3_asr.encoder = Some(encoder.to_string_lossy().to_string());
+                config.model_config.qwen3_asr.decoder = Some(decoder.to_string_lossy().to_string());
                 config.model_config.qwen3_asr.tokenizer =
                     Some(tokenizer.to_string_lossy().to_string());
-                
+
                 if let Some(hw) = hotwords {
                     config.model_config.qwen3_asr.hotwords = Some(hw);
                 }
@@ -451,7 +449,9 @@ impl Punctuation {
     }
 
     pub fn add_punct(&self, text: &str) -> String {
-        self.inner.add_punctuation(text).unwrap_or_else(|| text.to_string())
+        self.inner
+            .add_punctuation(text)
+            .unwrap_or_else(|| text.to_string())
     }
 }
 
@@ -477,18 +477,44 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
     let v_path = vad_model?;
 
     if v_path.is_empty() || !Path::new(&v_path).exists() {
+        println!(
+            "[Sherpa] load_vad: Path is empty or does not exist: {}",
+            v_path
+        );
         return None;
     }
 
     let model_file_path = if Path::new(&v_path).is_file() {
         v_path
     } else {
-        let entries = std::fs::read_dir(&v_path).ok()?;
+        let entries = match std::fs::read_dir(&v_path) {
+            Ok(e) => e,
+            Err(err) => {
+                println!("[Sherpa] load_vad: Failed to read dir {}: {}", v_path, err);
+                return None;
+            }
+        };
+
         let onnx_file = entries
             .flatten()
-            .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"))?;
-        onnx_file.path().to_string_lossy().into_owned()
+            .find(|e: &std::fs::DirEntry| e.path().extension().is_some_and(|ext| ext == "onnx"));
+
+        match onnx_file {
+            Some(file) => file.path().to_string_lossy().into_owned(),
+            None => {
+                println!(
+                    "[Sherpa] load_vad: No .onnx file found in directory {}",
+                    v_path
+                );
+                return None;
+            }
+        }
     };
+
+    println!(
+        "[Sherpa] load_vad: Found VAD model file: {}",
+        model_file_path
+    );
 
     let silero_vad = SileroVadModelConfig {
         model: Some(model_file_path),
@@ -506,7 +532,13 @@ pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
         ..Default::default()
     };
 
-    VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad)
+    let result = VoiceActivityDetector::create(&vad_config, 60.0).map(SafeVad);
+    if result.is_none() {
+        println!("[Sherpa] load_vad: VoiceActivityDetector::create FAILED!");
+    } else {
+        println!("[Sherpa] load_vad: VAD successfully created!");
+    }
+    result
 }
 
 pub struct OfflineState {
@@ -683,9 +715,12 @@ fn run_offline_inference<R: tauri::Runtime>(
         full_audio.extend_from_slice(chunk);
     }
     let stream = r.create_stream();
-    debug!("[Offline] FFI: Calling accept_waveform (Offline) with {} samples", full_audio.len());
+    debug!(
+        "[Offline] FFI: Calling accept_waveform (Offline) with {} samples",
+        full_audio.len()
+    );
     stream.accept_waveform(16000, &full_audio);
-    
+
     debug!("[Offline] FFI: Calling decode");
     r.decode(&stream);
     debug!("[Offline] FFI: Decode finished");
@@ -706,7 +741,7 @@ fn run_offline_inference<R: tauri::Runtime>(
             }
 
             if text.is_empty() && !is_final {
-                 return;
+                return;
             }
 
             let global_end = global_start + (full_audio.len() as f64 / 16000.0);
@@ -969,6 +1004,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     let instance = instances.get_mut(instance_id).ok_or("Instance not found")?;
 
     if !instance.is_running {
+        // Do not print anything here to avoid spamming the console during pre-warming
         return Ok(());
     }
 
@@ -980,11 +1016,23 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
     match &recognizer.inner {
         RecognizerInner::Offline(_) => {
             let Some(SafeVad(vad)) = instance.vad.as_ref() else {
+                println!(
+                    "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
+                    instance_id
+                );
                 return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
             };
 
             vad.accept_waveform(samples);
             let currently_speaking = vad.detected();
+
+            if instance_id == "record" && instance.total_samples % 160000 < 2000 {
+                // Print once every ~10 seconds
+                println!(
+                    "[Sherpa] instance 'record' running, total_samples: {}, currently_speaking: {}",
+                    instance.total_samples, currently_speaking
+                );
+            }
 
             if instance.current_segment_id.is_none() {
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
@@ -992,9 +1040,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
             if currently_speaking && !instance.offline_state.is_speaking {
+                println!("[Sherpa] Instance {} detected speech start.", instance_id);
                 instance.offline_state.is_speaking = true;
 
-                let samples_to_keep = (16000.0 * 0.3) as usize; 
+                let samples_to_keep = (16000.0 * 0.3) as usize;
                 let mut context_len = 0;
 
                 if !instance.offline_state.ring_buffer.is_empty() {
@@ -1057,6 +1106,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
 
             if !currently_speaking {
                 if instance.offline_state.is_speaking {
+                    println!("[Sherpa] Instance {} detected speech end.", instance_id);
                     instance.offline_state.is_speaking = false;
                     instance.offline_state.speech_buffer.push(samples.to_vec());
 
@@ -1137,7 +1187,10 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             if let Some(result) = r.0.get_result(&st.0) {
                 let has_text = !result.text.trim().is_empty();
                 if has_text || instance.current_segment_id.is_some() {
-                    let id = instance.current_segment_id.get_or_insert_with(|| uuid::Uuid::new_v4().to_string()).clone();
+                    let id = instance
+                        .current_segment_id
+                        .get_or_insert_with(|| uuid::Uuid::new_v4().to_string())
+                        .clone();
 
                     let segment = TranscriptSegment {
                         id,
@@ -1285,7 +1338,6 @@ where
     let recognizer = Recognizer::new(config_type, request.num_threads)?;
     let punctuation = load_punctuation(request.punctuation_model.clone());
 
-
     match &recognizer.inner {
         RecognizerInner::Offline(r) => {
             process_batch_offline(
@@ -1421,9 +1473,13 @@ where
                 if !result.text.trim().is_empty() {
                     let text = format_transcript(&result.text, punctuation);
                     let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                        ts.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>()
+                        ts.iter()
+                            .map(|t| *t + segment_start as f32)
+                            .collect::<Vec<_>>()
                     });
-                    let durations = timestamps_abs.as_ref().and_then(|ts| synthesize_durations(ts, current_time as f32));
+                    let durations = timestamps_abs
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
                     segments.push(TranscriptSegment {
                         id: uuid::Uuid::new_v4().to_string(),
@@ -1456,9 +1512,13 @@ where
             let text = format_transcript(&result.text, punctuation);
             let current_time = samples.len() as f64 / 16000.0;
             let timestamps_abs = result.timestamps.as_ref().map(|ts| {
-                ts.iter().map(|t| *t + segment_start as f32).collect::<Vec<_>>()
+                ts.iter()
+                    .map(|t| *t + segment_start as f32)
+                    .collect::<Vec<_>>()
             });
-            let durations = timestamps_abs.as_ref().and_then(|ts| synthesize_durations(ts, current_time as f32));
+            let durations = timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, current_time as f32));
 
             segments.push(TranscriptSegment {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -1491,15 +1551,8 @@ mod tests {
             ..Default::default()
         });
 
-        let model = build_model_config(
-            model_path,
-            "qwen3-asr",
-            &file_config,
-            false,
-            "auto",
-            None,
-        )
-        .expect("qwen3-asr model should build");
+        let model = build_model_config(model_path, "qwen3-asr", &file_config, false, "auto", None)
+            .expect("qwen3-asr model should build");
 
         match model {
             ModelType::OfflineQwen3Asr {
@@ -1526,15 +1579,8 @@ mod tests {
             ..Default::default()
         });
 
-        let error = build_model_config(
-            model_path,
-            "sensevoice",
-            &file_config,
-            true,
-            "auto",
-            None,
-        )
-        .expect_err("sensevoice should still require tokens.txt");
+        let error = build_model_config(model_path, "sensevoice", &file_config, true, "auto", None)
+            .expect_err("sensevoice should still require tokens.txt");
 
         assert!(
             error.contains("Required file name not specified in config"),
@@ -1553,15 +1599,9 @@ mod tests {
             ..Default::default()
         });
 
-        let model = build_model_config(
-            model_path,
-            "funasr-nano",
-            &file_config,
-            false,
-            "auto",
-            None,
-        )
-        .expect("funasr-nano should build without tokens");
+        let model =
+            build_model_config(model_path, "funasr-nano", &file_config, false, "auto", None)
+                .expect("funasr-nano should build without tokens");
 
         match model {
             ModelType::OfflineFunASRNano { tokens, .. } => {

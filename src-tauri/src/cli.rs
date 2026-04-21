@@ -52,10 +52,14 @@ struct ModelsArgs {
 #[derive(Debug, Subcommand)]
 enum ModelCommands {
     /// Lists preset models known to the CLI.
-    #[command(after_help = "Examples:\n  sona models list\n  sona models list --mode offline --type whisper\n  sona models list --language zh --installed")]
+    #[command(
+        after_help = "Examples:\n  sona models list\n  sona models list --mode offline --type whisper\n  sona models list --language zh --installed"
+    )]
     List(ModelListArgs),
     /// Downloads a preset model into the models directory.
-    #[command(after_help = "Examples:\n  sona models download sherpa-onnx-whisper-turbo\n  sona models download silero-vad --models-dir ./models")]
+    #[command(
+        after_help = "Examples:\n  sona models download sherpa-onnx-whisper-turbo\n  sona models download silero-vad --models-dir ./models"
+    )]
     Download(ModelDownloadArgs),
 }
 
@@ -63,19 +67,37 @@ enum ModelCommands {
 #[command(about = "List preset models with optional filters")]
 struct ModelListArgs {
     /// Models directory containing installed presets.
-    #[arg(long, help = "Override the models directory used to detect installed models")]
+    #[arg(
+        long,
+        help = "Override the models directory used to detect installed models"
+    )]
     models_dir: Option<PathBuf>,
     /// Filter by supported mode.
-    #[arg(long, value_name = "MODE", help = "Filter by mode: streaming or offline")]
+    #[arg(
+        long,
+        value_name = "MODE",
+        help = "Filter by mode: streaming or offline"
+    )]
     mode: Option<String>,
     /// Filter by model type.
-    #[arg(long = "type", value_name = "TYPE", help = "Filter by type, for example whisper, vad, punctuation")]
+    #[arg(
+        long = "type",
+        value_name = "TYPE",
+        help = "Filter by type, for example whisper, vad, punctuation"
+    )]
     model_type: Option<String>,
     /// Filter by language token.
-    #[arg(long, value_name = "LANG", help = "Filter by language token, for example zh, en, ja, yue")]
+    #[arg(
+        long,
+        value_name = "LANG",
+        help = "Filter by language token, for example zh, en, ja, yue"
+    )]
     language: Option<String>,
     /// Show only installed models.
-    #[arg(long, help = "Only include models already present in the models directory")]
+    #[arg(
+        long,
+        help = "Only include models already present in the models directory"
+    )]
     installed: bool,
 }
 
@@ -125,37 +147,72 @@ struct TranscribeArgs {
     #[arg(long, help = "Write output to a file instead of stdout")]
     output: Option<PathBuf>,
     /// Explicit export format.
-    #[arg(long, value_name = "FORMAT", help = "Override export format, for example json, srt, txt, vtt")]
+    #[arg(
+        long,
+        value_name = "FORMAT",
+        help = "Override export format, for example json, srt, txt, vtt"
+    )]
     format: Option<String>,
     /// Override the transcription language.
-    #[arg(long, value_name = "LANG", help = "Override language detection, for example auto, zh, en, ja")]
+    #[arg(
+        long,
+        value_name = "LANG",
+        help = "Override language detection, for example auto, zh, en, ja"
+    )]
     language: Option<String>,
     /// Offline preset model id.
-    #[arg(long, value_name = "MODEL_ID", help = "Offline preset model id to use for transcription")]
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "Offline preset model id to use for transcription"
+    )]
     model_id: Option<String>,
     /// Models directory containing installed presets.
-    #[arg(long, help = "Override the models directory used to resolve installed models")]
+    #[arg(
+        long,
+        help = "Override the models directory used to resolve installed models"
+    )]
     models_dir: Option<PathBuf>,
     /// VAD preset model id.
-    #[arg(long, value_name = "MODEL_ID", help = "VAD companion model id, usually silero-vad")]
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "VAD companion model id, usually silero-vad"
+    )]
     vad_model_id: Option<String>,
     /// Punctuation preset model id.
-    #[arg(long, value_name = "MODEL_ID", help = "Punctuation companion model id when required by the main model")]
+    #[arg(
+        long,
+        value_name = "MODEL_ID",
+        help = "Punctuation companion model id when required by the main model"
+    )]
     punctuation_model_id: Option<String>,
     /// Number of recognizer threads.
     #[arg(long, value_name = "N", help = "Recognizer thread count")]
     threads: Option<i32>,
     /// Enables ITN.
-    #[arg(long, conflicts_with = "disable_itn", help = "Enable inverse text normalization")]
+    #[arg(
+        long,
+        conflicts_with = "disable_itn",
+        help = "Enable inverse text normalization"
+    )]
     enable_itn: bool,
     /// Custom hotwords for ASR (currently supported by Transducer and Qwen3 models).
     #[arg(long, help = "Custom hotwords, comma separated")]
     hotwords: Option<String>,
     /// Disables ITN.
-    #[arg(long, conflicts_with = "enable_itn", help = "Disable inverse text normalization")]
+    #[arg(
+        long,
+        conflicts_with = "enable_itn",
+        help = "Disable inverse text normalization"
+    )]
     disable_itn: bool,
     /// VAD buffer size in seconds.
-    #[arg(long = "vad-buffer", value_name = "SECONDS", help = "Voice activity buffer size in seconds")]
+    #[arg(
+        long = "vad-buffer",
+        value_name = "SECONDS",
+        help = "Voice activity buffer size in seconds"
+    )]
     vad_buffer: Option<f32>,
     /// Optional path to save the resampled WAV file.
     #[arg(long, help = "Save the intermediate resampled WAV file to this path")]
@@ -217,7 +274,6 @@ pub struct TranscribeCliOptions {
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
 }
-
 
 /// Output target resolved from CLI arguments and config.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -288,10 +344,9 @@ pub fn resolve_transcribe_options(
     )?;
 
     let models_dir = resolve_models_dir(cli.models_dir.or(config.models_dir))?;
-    let model_id = cli
-        .model_id
-        .or(config.model_id)
-        .ok_or_else(|| "Missing required offline model. Pass --model-id or set model_id in --config.".to_string())?;
+    let model_id = cli.model_id.or(config.model_id).ok_or_else(|| {
+        "Missing required offline model. Pass --model-id or set model_id in --config.".to_string()
+    })?;
     let model = resolve_offline_model(&model_id)?;
     let rules = model.resolved_rules();
 
@@ -344,9 +399,7 @@ pub fn resolve_transcribe_options(
         quiet: cli.quiet,
         request: BatchTranscriptionRequest {
             file_path: cli.input.to_string_lossy().to_string(),
-            save_to_path: cli
-                .save_wav
-                .map(|path| path.to_string_lossy().to_string()),
+            save_to_path: cli.save_wav.map(|path| path.to_string_lossy().to_string()),
             model_path,
             num_threads: threads,
             enable_itn,
@@ -451,7 +504,11 @@ async fn download_one_model(
     })
     .await?;
 
-    eprintln!("Installed {} at {}", resolved.model.id, install_path.display());
+    eprintln!(
+        "Installed {} at {}",
+        resolved.model.id,
+        install_path.display()
+    );
     Ok(())
 }
 
@@ -599,7 +656,10 @@ where
         .map_err(|error| format!("Failed to download model: {error}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -645,13 +705,16 @@ pub fn required_companion_models(model: &PresetModel) -> RequiredCompanionModels
     let rules = model.resolved_rules();
     RequiredCompanionModels {
         vad_model_id: rules.requires_vad.then(|| "silero-vad".to_string()),
-        punctuation_model_id: rules
-            .requires_punctuation
-            .then(|| "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8".to_string()),
+        punctuation_model_id: rules.requires_punctuation.then(|| {
+            "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8".to_string()
+        }),
     }
 }
 
-fn resolve_export_format(format: Option<&str>, output: Option<&Path>) -> Result<ExportFormat, String> {
+fn resolve_export_format(
+    format: Option<&str>,
+    output: Option<&Path>,
+) -> Result<ExportFormat, String> {
     if let Some(value) = format {
         return ExportFormat::parse(value);
     }
@@ -698,14 +761,18 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Resu
     let target_dir = target_dir.to_path_buf();
 
     tokio::task::spawn_blocking(move || {
-        let file = std::fs::File::open(&archive_path)
-            .map_err(|error| format!("Failed to open archive {}: {error}", archive_path.display()))?;
+        let file = std::fs::File::open(&archive_path).map_err(|error| {
+            format!("Failed to open archive {}: {error}", archive_path.display())
+        })?;
         let buffered = std::io::BufReader::new(file);
         let tar = bzip2::read::BzDecoder::new(buffered);
         let mut archive = tar::Archive::new(tar);
-        archive
-            .unpack(&target_dir)
-            .map_err(|error| format!("Failed to extract archive into {}: {error}", target_dir.display()))
+        archive.unpack(&target_dir).map_err(|error| {
+            format!(
+                "Failed to extract archive into {}: {error}",
+                target_dir.display()
+            )
+        })
     })
     .await
     .map_err(|error| format!("Failed to join extraction task: {error}"))?
@@ -729,8 +796,8 @@ fn resolve_models_dir(configured: Option<PathBuf>) -> Result<PathBuf, String> {
 }
 
 fn resolve_offline_model(model_id: &str) -> Result<&'static PresetModel, String> {
-    let model = find_preset_model(model_id)
-        .ok_or_else(|| format!("Unknown model id: {model_id}"))?;
+    let model =
+        find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
     if !model.supports_mode("offline") {
         return Err(format!(
             "Model '{model_id}' does not support offline transcription."
@@ -778,7 +845,12 @@ fn default_models_dir() -> Option<PathBuf> {
         .into_iter()
         .map(|path| path.join("models"))
         .find(|path| path.exists())
-        .or_else(|| default_models_dir_candidates().into_iter().next().map(|path| path.join("models")))
+        .or_else(|| {
+            default_models_dir_candidates()
+                .into_iter()
+                .next()
+                .map(|path| path.join("models"))
+        })
 }
 
 fn default_models_dir_candidates() -> Vec<PathBuf> {
@@ -955,6 +1027,9 @@ mod tests {
     fn defaults_to_stdout_json_output() {
         let target = resolve_output_target(None);
         assert_eq!(target, OutputTarget::Stdout);
-        assert_eq!(resolve_export_format(None, None).unwrap(), ExportFormat::Json);
+        assert_eq!(
+            resolve_export_format(None, None).unwrap(),
+            ExportFormat::Json
+        );
     }
 }
