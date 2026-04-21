@@ -266,6 +266,9 @@ export class TranscriptionService {
     }
 
     private async _startStream(): Promise<void> {
+        if (this.isRunning) {
+            return;
+        }
         try {
             await invoke('start_recognizer', { instanceId: this.instanceId });
             this.isRunning = true;
@@ -338,6 +341,35 @@ export class TranscriptionService {
             }
         }
         await this.stop();
+    }
+
+    async pauseStream(): Promise<void> {
+        await this.softStop();
+    }
+
+    async resumeStream(): Promise<void> {
+        if (this.isRunning) {
+            return;
+        }
+
+        if (!this.modelPath) {
+            const errorMessage = 'Model path not configured';
+            if (this.onError) this.onError(errorMessage);
+            throw new Error(errorMessage);
+        }
+
+        const registration = TranscriptionService.instanceCallbacks.get(this.instanceId);
+        if (!registration) {
+            throw new Error(`No active callback registration for ${this.instanceId}`);
+        }
+
+        await TranscriptionService.ensureGlobalBusFor(this.instanceId);
+
+        if (!this._isConfigMatch()) {
+            await this._initBackend();
+        }
+
+        await this._startStream();
     }
 
     async terminate(): Promise<void> {

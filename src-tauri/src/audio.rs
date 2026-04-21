@@ -12,12 +12,14 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 pub enum RecorderCommand {
     Start(String), // filepath
     Stop(tokio::sync::oneshot::Sender<String>),
+    SetPaused(bool),
 }
 
 #[derive(Default)]
 struct SharedCaptureState {
     stop_signal: Option<Sender<()>>,
     instance_ids: HashSet<String>,
+    paused_instances: HashSet<String>,
     recorder_tx: Option<tokio::sync::mpsc::Sender<RecorderCommand>>,
     active_device_name: Option<String>,
 }
@@ -41,7 +43,19 @@ impl SharedCaptureState {
         owners
     }
 
+    fn active_instances(&self) -> Vec<String> {
+        let mut active_instances = self
+            .instance_ids
+            .iter()
+            .filter(|instance_id| !self.paused_instances.contains(*instance_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        active_instances.sort();
+        active_instances
+    }
+
     fn attach_instance(&mut self, instance_id: String) -> Vec<String> {
+        self.paused_instances.remove(&instance_id);
         self.instance_ids.insert(instance_id);
         self.owners()
     }
@@ -54,6 +68,7 @@ impl SharedCaptureState {
         recorder_tx: tokio::sync::mpsc::Sender<RecorderCommand>,
     ) -> Vec<String> {
         self.instance_ids.clear();
+        self.paused_instances.clear();
         self.instance_ids.insert(instance_id);
         self.active_device_name = Some(active_device_name);
         self.stop_signal = Some(stop_signal);
@@ -61,8 +76,30 @@ impl SharedCaptureState {
         self.owners()
     }
 
+    fn set_instance_paused(
+        &mut self,
+        instance_id: &str,
+        paused: bool,
+    ) -> Result<Vec<String>, String> {
+        if !self.instance_ids.contains(instance_id) {
+            return Err(format!(
+                "Capture instance '{}' is not attached to the active session",
+                instance_id
+            ));
+        }
+
+        if paused {
+            self.paused_instances.insert(instance_id.to_string());
+        } else {
+            self.paused_instances.remove(instance_id);
+        }
+
+        Ok(self.active_instances())
+    }
+
     fn detach_instance(&mut self, instance_id: &str) -> SharedCaptureDetachResult {
         self.instance_ids.remove(instance_id);
+        self.paused_instances.remove(instance_id);
         let remaining_instances = self.owners();
         let should_stop_hardware = remaining_instances.is_empty();
         let recorder_tx = if should_stop_hardware {
@@ -193,6 +230,48 @@ fn queue_recording_start<R: Runtime>(
     Ok(())
 }
 
+fn update_capture_pause_state(
+    capture: &mut SharedCaptureState,
+    instance_id: &str,
+    paused: bool,
+    capture_label: &str,
+    should_record: bool,
+) -> Result<(), String> {
+    if !capture.is_running() {
+        return Err(format!("{} capture is not running", capture_label));
+    }
+
+    let active_instances = capture.set_instance_paused(instance_id, paused)?;
+
+    if should_record {
+        let recorder_tx = capture
+            .recorder_tx
+            .as_ref()
+            .ok_or_else(|| format!("{} recorder task is not available", capture_label))?;
+
+        recorder_tx
+            .try_send(RecorderCommand::SetPaused(paused))
+            .map_err(|err| {
+                format!(
+                    "Failed to {} {} recorder: {}",
+                    if paused { "pause" } else { "resume" },
+                    capture_label.to_lowercase(),
+                    err
+                )
+            })?;
+    }
+
+    println!(
+        "[Audio] {} capture {} instance {}. active_instances={:?}",
+        capture_label,
+        if paused { "paused" } else { "resumed" },
+        instance_id,
+        active_instances
+    );
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn start_system_audio_capture<R: Runtime>(
     app: AppHandle<R>,
@@ -245,9 +324,11 @@ pub fn start_system_audio_capture<R: Runtime>(
         let mut writer: Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>> = None;
         let mut current_filepath = String::new();
         let mut pull_buffer = vec![0.0; 16000];
+        let mut recorder_paused = false;
 
         loop {
             tokio::select! {
+                biased;
                 cmd = recorder_rx.recv() => {
                     match cmd {
                         Some(RecorderCommand::Start(path)) => {
@@ -264,6 +345,7 @@ pub fn start_system_audio_capture<R: Runtime>(
                                 Ok(w) => {
                                     writer = Some(w);
                                     current_filepath = path;
+                                    recorder_paused = false;
                                 }
                                 Err(e) => {
                                     eprintln!("[Audio] Failed to create system WAV writer: {}", e)
@@ -271,11 +353,15 @@ pub fn start_system_audio_capture<R: Runtime>(
                             }
                         }
                         Some(RecorderCommand::Stop(tx)) => {
+                            recorder_paused = false;
                             if let Some(w) = writer.take() {
                                 let _ = w.finalize();
                             }
                             let _ = tx.send(current_filepath.clone());
                             current_filepath.clear();
+                        }
+                        Some(RecorderCommand::SetPaused(paused)) => {
+                            recorder_paused = paused;
                         }
                         None => break,
                     }
@@ -287,10 +373,12 @@ pub fn start_system_audio_capture<R: Runtime>(
                             if len > 0 {
                                 let chunk = &pull_buffer[..len];
 
-                                if let Some(w) = writer.as_mut() {
-                                    let amplitude = i16::MAX as f32;
-                                    for &sample in chunk {
-                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                if !recorder_paused {
+                                    if let Some(w) = writer.as_mut() {
+                                        let amplitude = i16::MAX as f32;
+                                        for &sample in chunk {
+                                            let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                        }
                                     }
                                 }
 
@@ -310,11 +398,13 @@ pub fn start_system_audio_capture<R: Runtime>(
             }
             let chunk = &pull_buffer[..len];
 
-            if let Some(w) = writer.as_mut() {
-                let amplitude = i16::MAX as f32;
-                for &sample in chunk {
-                    let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
-                }
+            if !recorder_paused {
+                if let Some(w) = writer.as_mut() {
+                                    let amplitude = i16::MAX as f32;
+                                    for &sample in chunk {
+                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                    }
+                                }
             }
 
             feed_system_audio_to_instances(&app_clone, chunk).await;
@@ -531,7 +621,7 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
             Ok(g) => g,
             Err(_) => return,
         };
-        guard.owners()
+        guard.active_instances()
     };
 
     if instance_ids.is_empty() {
@@ -619,9 +709,11 @@ pub fn start_microphone_capture<R: Runtime>(
         let mut writer: Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>> = None;
         let mut current_filepath = String::new();
         let mut pull_buffer = vec![0.0; 16000];
+        let mut recorder_paused = false;
 
         loop {
             tokio::select! {
+                biased;
                 cmd = recorder_rx.recv() => {
                     match cmd {
                         Some(RecorderCommand::Start(path)) => {
@@ -638,16 +730,21 @@ pub fn start_microphone_capture<R: Runtime>(
                                 Ok(w) => {
                                     writer = Some(w);
                                     current_filepath = path;
+                                    recorder_paused = false;
                                 }
                                 Err(e) => eprintln!("[Audio] Failed to create mic WAV writer: {}", e),
                             }
                         }
                         Some(RecorderCommand::Stop(tx)) => {
+                            recorder_paused = false;
                             if let Some(w) = writer.take() {
                                 let _ = w.finalize();
                             }
                             let _ = tx.send(current_filepath.clone());
                             current_filepath.clear();
+                        }
+                        Some(RecorderCommand::SetPaused(paused)) => {
+                            recorder_paused = paused;
                         }
                         None => break,
                     }
@@ -659,10 +756,12 @@ pub fn start_microphone_capture<R: Runtime>(
                             if len > 0 {
                                 let chunk = &pull_buffer[..len];
 
-                                if let Some(w) = writer.as_mut() {
-                                    let amplitude = i16::MAX as f32;
-                                    for &sample in chunk {
-                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                if !recorder_paused {
+                                    if let Some(w) = writer.as_mut() {
+                                        let amplitude = i16::MAX as f32;
+                                        for &sample in chunk {
+                                            let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                        }
                                     }
                                 }
 
@@ -682,11 +781,13 @@ pub fn start_microphone_capture<R: Runtime>(
             }
             let chunk = &pull_buffer[..len];
 
-            if let Some(w) = writer.as_mut() {
-                let amplitude = i16::MAX as f32;
-                for &sample in chunk {
-                    let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
-                }
+            if !recorder_paused {
+                if let Some(w) = writer.as_mut() {
+                                    let amplitude = i16::MAX as f32;
+                                    for &sample in chunk {
+                                        let _ = w.write_sample((sample.clamp(-1.0, 1.0) * amplitude) as i16);
+                                    }
+                                }
             }
 
             feed_mic_audio_to_instances(&app_clone, chunk).await;
@@ -932,7 +1033,7 @@ async fn feed_mic_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &[f3
             Ok(g) => g,
             Err(_) => return,
         };
-        guard.owners()
+        guard.active_instances()
     };
 
     if instance_ids.is_empty() {
@@ -1200,6 +1301,38 @@ pub async fn stop_system_audio_capture(
 }
 
 #[tauri::command]
+pub fn set_system_audio_capture_paused(
+    state: tauri::State<'_, AudioState>,
+    instance_id: String,
+    paused: bool,
+) -> Result<(), String> {
+    let mut capture = state.system_capture.lock().map_err(|e| e.to_string())?;
+    update_capture_pause_state(
+        &mut capture,
+        &instance_id,
+        paused,
+        "System",
+        should_record_system(&instance_id),
+    )
+}
+
+#[tauri::command]
+pub fn set_microphone_capture_paused(
+    state: tauri::State<'_, AudioState>,
+    instance_id: String,
+    paused: bool,
+) -> Result<(), String> {
+    let mut capture = state.mic_capture.lock().map_err(|e| e.to_string())?;
+    update_capture_pause_state(
+        &mut capture,
+        &instance_id,
+        paused,
+        "Microphone",
+        should_record_microphone(&instance_id),
+    )
+}
+
+#[tauri::command]
 pub fn set_microphone_boost(state: tauri::State<'_, AudioState>, boost: f32) -> Result<(), String> {
     let mut mic_boost = state.mic_boost.lock().map_err(|e| e.to_string())?;
     *mic_boost = boost;
@@ -1216,6 +1349,7 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         assert!(!capture.is_running());
         assert!(capture.owners().is_empty());
+        assert!(capture.active_instances().is_empty());
         assert!(capture.recorder_tx.is_none());
 
         let (stop_tx, _stop_rx) = channel::<()>();
@@ -1229,6 +1363,7 @@ mod tests {
 
         assert!(capture.is_running());
         assert_eq!(owners, vec!["record".to_string()]);
+        assert_eq!(capture.active_instances(), vec!["record".to_string()]);
         assert_eq!(capture.active_device_name.as_deref(), Some("default mic"));
         assert!(capture.recorder_tx.is_some());
     }
@@ -1239,6 +1374,7 @@ mod tests {
 
         assert!(!capture.is_running());
         assert!(capture.owners().is_empty());
+        assert!(capture.active_instances().is_empty());
         assert!(capture.recorder_tx.is_none());
         assert!(capture.active_device_name.is_none());
     }
@@ -1259,6 +1395,10 @@ mod tests {
 
         assert_eq!(
             owners,
+            vec!["record".to_string(), "voice-typing".to_string()]
+        );
+        assert_eq!(
+            capture.active_instances(),
             vec!["record".to_string(), "voice-typing".to_string()]
         );
         assert!(capture.is_running());
@@ -1288,7 +1428,51 @@ mod tests {
         );
         assert!(!capture.is_running());
         assert!(capture.owners().is_empty());
+        assert!(capture.active_instances().is_empty());
         assert!(capture.recorder_tx.is_none());
         assert!(capture.active_device_name.is_none());
+    }
+
+    #[test]
+    fn shared_capture_state_pause_filters_active_instances_without_detaching_owner() {
+        let mut capture = SharedCaptureState::default();
+        let (stop_tx, _stop_rx) = channel::<()>();
+        let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
+        capture.commit_start(
+            "voice-typing".to_string(),
+            "default mic".to_string(),
+            stop_tx,
+            recorder_tx,
+        );
+        capture.attach_instance("record".to_string());
+
+        let active_instances = capture.set_instance_paused("record", true).unwrap();
+
+        assert_eq!(
+            capture.owners(),
+            vec!["record".to_string(), "voice-typing".to_string()]
+        );
+        assert_eq!(active_instances, vec!["voice-typing".to_string()]);
+        assert_eq!(capture.active_instances(), vec!["voice-typing".to_string()]);
+    }
+
+    #[test]
+    fn shared_capture_state_detach_clears_paused_instance_state() {
+        let mut capture = SharedCaptureState::default();
+        let (stop_tx, _stop_rx) = channel::<()>();
+        let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
+        capture.commit_start(
+            "record".to_string(),
+            "default mic".to_string(),
+            stop_tx,
+            recorder_tx,
+        );
+        capture.set_instance_paused("record", true).unwrap();
+
+        let detach_result = capture.detach_instance("record");
+
+        assert!(detach_result.should_stop_hardware);
+        assert!(capture.paused_instances.is_empty());
+        assert!(capture.active_instances().is_empty());
     }
 }

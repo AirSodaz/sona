@@ -13,7 +13,14 @@ import { getResumeOnboardingStep } from '../utils/onboarding';
 import { logger } from '../utils/logger';
 import { TranscriptSegment } from '../types/transcript';
 
-export type RecordSessionPhase = 'idle' | 'starting' | 'recording' | 'stopping';
+export type RecordSessionPhase =
+    | 'idle'
+    | 'starting'
+    | 'recording'
+    | 'pausing'
+    | 'paused'
+    | 'resuming'
+    | 'stopping';
 
 export interface RecordSegmentDeliveryMeta {
     sessionId: string | null;
@@ -29,6 +36,22 @@ interface UseAudioRecorderProps {
 
 function createRecordSessionId(): string {
     return `record-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function shouldAcceptRecordSegment(phase: RecordSessionPhase, segment: TranscriptSegment): boolean {
+    if (phase === 'starting' || phase === 'recording' || phase === 'resuming') {
+        return true;
+    }
+
+    if ((phase === 'pausing' || phase === 'stopping') && segment.isFinal) {
+        return true;
+    }
+
+    return false;
+}
+
+function shouldFeedWebAudioForPhase(phase: RecordSessionPhase): boolean {
+    return phase === 'starting' || phase === 'recording' || phase === 'resuming';
 }
 
 /**
@@ -69,16 +92,19 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const activeStreamRef = useRef<MediaStream | null>(null);
     const nativeAudioUnlistenRef = useRef<UnlistenFn | null>(null);
     const usingNativeCaptureRef = useRef(false);
-    const startTimeRef = useRef<number>(0);
     const mimeTypeRef = useRef<string>('');
     const peakLevelRef = useRef<number>(0);
     const activeInputSourceRef = useRef<'microphone' | 'desktop'>(inputSource);
     const onSegmentRef = useRef(onSegment);
     const recordSessionIdRef = useRef<string | null>(null);
     const recordSessionPhaseRef = useRef<RecordSessionPhase>('idle');
+    const recordedDurationMsRef = useRef(0);
+    const activeDurationStartedAtRef = useRef<number | null>(null);
+    const finalizedDurationSecondsRef = useRef<number | null>(null);
 
     // State
     const [isInitializing, setIsInitializing] = useState(false);
+    const [isTransitioning, setIsTransitioning] = useState(false);
 
     // Sync refs for callbacks
     const isRecordingRef = useRef(isRecording);
@@ -107,13 +133,44 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         peakLevelRef.current = Math.min(1, maxAbs / 32767);
     }, []);
 
-    const getRecordSegmentDeliveryMeta = useCallback((): RecordSegmentDeliveryMeta => {
+    const resetRecordedDuration = useCallback(() => {
+        recordedDurationMsRef.current = 0;
+        activeDurationStartedAtRef.current = null;
+    }, []);
+
+    const beginRecordedDurationWindow = useCallback(() => {
+        activeDurationStartedAtRef.current = Date.now();
+    }, []);
+
+    const pauseRecordedDurationWindow = useCallback(() => {
+        if (activeDurationStartedAtRef.current !== null) {
+            recordedDurationMsRef.current += Date.now() - activeDurationStartedAtRef.current;
+            activeDurationStartedAtRef.current = null;
+        }
+    }, []);
+
+    const getRecordedDurationSeconds = useCallback((): number => {
+        let durationMs = recordedDurationMsRef.current;
+        if (activeDurationStartedAtRef.current !== null) {
+            durationMs += Date.now() - activeDurationStartedAtRef.current;
+        }
+        return durationMs / 1000;
+    }, []);
+
+    const finalizeRecordedDurationSeconds = useCallback((): number => {
+        pauseRecordedDurationWindow();
+        const durationSeconds = getRecordedDurationSeconds();
+        finalizedDurationSecondsRef.current = durationSeconds;
+        return durationSeconds;
+    }, [getRecordedDurationSeconds, pauseRecordedDurationWindow]);
+
+    const getRecordSegmentDeliveryMeta = useCallback((segment: TranscriptSegment): RecordSegmentDeliveryMeta => {
         const phase = recordSessionPhaseRef.current;
         return {
             sessionId: recordSessionIdRef.current,
             phase,
             isRecording: isRecordingRef.current,
-            accepted: recordSessionIdRef.current !== null && (phase === 'starting' || phase === 'recording')
+            accepted: recordSessionIdRef.current !== null && shouldAcceptRecordSegment(phase, segment)
         };
     }, []);
 
@@ -122,12 +179,14 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         recordSessionIdRef.current = sessionId;
         recordSessionPhaseRef.current = 'starting';
         peakLevelRef.current = 0;
+        finalizedDurationSecondsRef.current = null;
+        resetRecordedDuration();
         setIsRecording(false);
         setIsPaused(false);
         clearSegments();
         logger.info(`[useAudioRecorder] Record session opened. session=${sessionId} input=${inputSource}`);
         return sessionId;
-    }, [clearSegments, inputSource, setIsPaused, setIsRecording]);
+    }, [clearSegments, inputSource, resetRecordedDuration, setIsPaused, setIsRecording]);
 
     const activateRecordSession = useCallback((sessionId: string): boolean => {
         if (recordSessionIdRef.current !== sessionId) {
@@ -140,10 +199,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         recordSessionPhaseRef.current = 'recording';
         setIsRecording(true);
         setIsPaused(false);
-        startTimeRef.current = Date.now();
+        beginRecordedDurationWindow();
         logger.info(`[useAudioRecorder] Record session UI ready. session=${sessionId} native=${usingNativeCaptureRef.current}`);
         return true;
-    }, [setIsPaused, setIsRecording]);
+    }, [beginRecordedDurationWindow, setIsPaused, setIsRecording]);
 
     const canMutateActiveRecordResources = useCallback((sessionId: string): boolean => {
         return recordSessionIdRef.current === sessionId || recordSessionIdRef.current === null;
@@ -165,12 +224,14 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         recordSessionIdRef.current = null;
         recordSessionPhaseRef.current = 'idle';
         peakLevelRef.current = 0;
+        resetRecordedDuration();
         setIsRecording(false);
         setIsPaused(false);
+        setIsTransitioning(false);
         logger.info(
             `[useAudioRecorder] Record session reset. session=${activeSessionId ?? 'none'} previous_phase=${previousPhase} reason=${reason} cleared=${clearTranscript}`
         );
-    }, [clearSegments, setIsPaused, setIsRecording]);
+    }, [clearSegments, resetRecordedDuration, setIsPaused, setIsRecording]);
 
     const cleanupPartialStart = useCallback(async (sessionId: string) => {
         if (!canMutateActiveRecordResources(sessionId)) {
@@ -265,7 +326,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, []);
 
     const forwardRecordSegment = useCallback((segment: TranscriptSegment) => {
-        const meta = getRecordSegmentDeliveryMeta();
+        const meta = getRecordSegmentDeliveryMeta(segment);
         logger.info(
             `[useAudioRecorder] Record segment received. session=${meta.sessionId ?? 'none'} phase=${meta.phase} accepted=${meta.accepted} final=${segment?.isFinal === true}`
         );
@@ -335,7 +396,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
         processor.port.onmessage = (e) => {
             const samples = e.data as Int16Array;
-            transcriptionService.sendAudioInt16(samples);
+            if (shouldFeedWebAudioForPhase(recordSessionPhaseRef.current)) {
+                transcriptionService.sendAudioInt16(samples);
+            }
             if (!isPausedRef.current) {
                 setPeakFromInt16(samples);
             }
@@ -375,7 +438,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             useTranscriptStore.getState().setAudioUrl(url);
 
             const segments = useTranscriptStore.getState().segments;
-            const duration = (Date.now() - startTimeRef.current) / 1000;
+            const duration = finalizedDurationSecondsRef.current ?? getRecordedDurationSeconds();
 
             if (segments.length > 0) {
                 const newItem = await historyService.saveRecording(blob, segments, duration);
@@ -384,11 +447,13 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     useTranscriptStore.getState().setSourceHistoryId(newItem.id);
                 }
             }
+
+            finalizedDurationSecondsRef.current = null;
         };
 
         mediaRecorderRef.current.start();
         return activateRecordSession(sessionId);
-    }, [activateRecordSession]);
+    }, [activateRecordSession, getRecordedDurationSeconds]);
 
     const stopFileRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -397,6 +462,21 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setIsRecording(false);
         setIsPaused(false);
     }, [setIsRecording, setIsPaused]);
+
+    const setNativeCapturePaused = useCallback(async (sessionId: string, paused: boolean) => {
+        if (!usingNativeCaptureRef.current) {
+            return;
+        }
+
+        const command = activeInputSourceRef.current === 'desktop'
+            ? 'set_system_audio_capture_paused'
+            : 'set_microphone_capture_paused';
+
+        await invoke(command, { instanceId: 'record', paused });
+        logger.info(
+            `[useAudioRecorder] ${paused ? 'Paused' : 'Resumed'} native capture instance. session=${sessionId} command=${command}`
+        );
+    }, []);
 
 
     // Start Recording (Main Entry)
@@ -413,6 +493,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
 
         const sessionId = openRecordSession();
         setIsInitializing(true);
+        setIsTransitioning(true);
 
         try {
             let stream: MediaStream | undefined;
@@ -564,6 +645,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             }
             return false;
         } finally {
+            if (recordSessionIdRef.current === sessionId && recordSessionPhaseRef.current === 'recording') {
+                setIsTransitioning(false);
+            }
             if (shouldFinalizeRecordStartAttempt(sessionId)) {
                 setIsInitializing(false);
             } else {
@@ -578,7 +662,15 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // Stop Recording
     const stopRecording = useCallback(async () => {
         const sessionId = recordSessionIdRef.current;
+        if (!sessionId) {
+            return;
+        }
+
+        setIsTransitioning(true);
+        const previousPhase = recordSessionPhaseRef.current;
+        recordSessionPhaseRef.current = 'stopping';
         logger.info(`[useAudioRecorder] Stopping recording session. session=${sessionId ?? 'none'} input=${activeInputSourceRef.current}`);
+        const duration = finalizeRecordedDurationSeconds();
 
         // Stop Native Capture
         let savedWavPath: string | null = null;
@@ -618,7 +710,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     const url = convertFileSrc(savedWavPath);
                     useTranscriptStore.getState().setAudioUrl(url);
 
-                    const duration = (Date.now() - startTimeRef.current) / 1000;
                     const newItem = await historyService.saveNativeRecording(savedWavPath, segments, duration);
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
@@ -654,34 +745,144 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             invoke('set_system_audio_mute', { mute: false })
                 .catch(err => logger.error('Failed to unmute system audio:', err));
         }
+        logger.info(
+            `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
+        );
         resetRecordSession(sessionId, 'stop_completed');
-    }, [config.muteDuringRecording, stopFileRecording, resetRecordSession, finalizeLastSegment]);
+    }, [config.muteDuringRecording, finalizeLastSegment, finalizeRecordedDurationSeconds, resetRecordSession, stopFileRecording]);
 
-    const pauseRecording = useCallback(() => {
-        setIsPaused(true);
+    const pauseRecording = useCallback(async () => {
+        const sessionId = recordSessionIdRef.current;
+        if (!sessionId || recordSessionPhaseRef.current !== 'recording') {
+            return;
+        }
+
+        logger.info(`[useAudioRecorder] Pausing recording session. session=${sessionId}`);
+        recordSessionPhaseRef.current = 'pausing';
+        setIsTransitioning(true);
         peakLevelRef.current = 0;
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.pause();
-        }
-        if (config.muteDuringRecording) {
-            invoke('set_system_audio_mute', { mute: false })
-                .catch(err => logger.error('Failed to unmute system audio on pause:', err));
-        }
-    }, [setIsPaused, config.muteDuringRecording]);
+        pauseRecordedDurationWindow();
 
-    const resumeRecording = useCallback(() => {
-        setIsPaused(false);
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-            mediaRecorderRef.current.resume();
+        try {
+            if (usingNativeCaptureRef.current) {
+                await setNativeCapturePaused(sessionId, true);
+            } else {
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                    mediaRecorderRef.current.pause();
+                }
+                if (audioContextRef.current && audioContextRef.current.state === 'running') {
+                    await audioContextRef.current.suspend();
+                }
+            }
+
+            await transcriptionService.pauseStream();
+
+            if (config.muteDuringRecording) {
+                invoke('set_system_audio_mute', { mute: false })
+                    .catch(err => logger.error('Failed to unmute system audio on pause:', err));
+            }
+
+            if (recordSessionIdRef.current !== sessionId) {
+                return;
+            }
+
+            setIsPaused(true);
+            recordSessionPhaseRef.current = 'paused';
+            logger.info(`[useAudioRecorder] Recording session paused. session=${sessionId}`);
+        } catch (error) {
+            logger.error(`[useAudioRecorder] Failed to pause recording session. session=${sessionId}:`, error);
+
+            if (recordSessionIdRef.current !== sessionId) {
+                return;
+            }
+
+            try {
+                await transcriptionService.resumeStream();
+            } catch (resumeError) {
+                logger.warn(`[useAudioRecorder] Failed to restore recognizer after pause error. session=${sessionId}:`, resumeError);
+            }
+
+            try {
+                if (usingNativeCaptureRef.current) {
+                    await setNativeCapturePaused(sessionId, false);
+                } else {
+                    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                        await audioContextRef.current.resume();
+                    }
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+                        mediaRecorderRef.current.resume();
+                    }
+                }
+            } catch (restoreError) {
+                logger.warn(`[useAudioRecorder] Failed to restore capture after pause error. session=${sessionId}:`, restoreError);
+            }
+
+            if (config.muteDuringRecording && activeInputSourceRef.current === 'microphone') {
+                invoke('set_system_audio_mute', { mute: true })
+                    .catch(err => logger.error('Failed to remute system audio after pause rollback:', err));
+            }
+
+            beginRecordedDurationWindow();
+            setIsPaused(false);
+            recordSessionPhaseRef.current = 'recording';
+        } finally {
+            const currentPhase = recordSessionPhaseRef.current as RecordSessionPhase;
+            if (recordSessionIdRef.current === sessionId && currentPhase !== 'stopping') {
+                setIsTransitioning(false);
+            }
         }
-        if (config.muteDuringRecording && inputSource === 'microphone') {
-            invoke('set_system_audio_mute', { mute: true })
-                .catch(err => logger.error('Failed to mute system audio on resume:', err));
+    }, [beginRecordedDurationWindow, config.muteDuringRecording, pauseRecordedDurationWindow, setNativeCapturePaused]);
+
+    const resumeRecording = useCallback(async () => {
+        const sessionId = recordSessionIdRef.current;
+        if (!sessionId || recordSessionPhaseRef.current !== 'paused') {
+            return;
         }
-        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume();
+
+        logger.info(`[useAudioRecorder] Resuming recording session. session=${sessionId}`);
+        recordSessionPhaseRef.current = 'resuming';
+        setIsTransitioning(true);
+
+        try {
+            await transcriptionService.resumeStream();
+
+            if (usingNativeCaptureRef.current) {
+                await setNativeCapturePaused(sessionId, false);
+            } else {
+                if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                    await audioContextRef.current.resume();
+                }
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+                    mediaRecorderRef.current.resume();
+                }
+            }
+
+            if (config.muteDuringRecording && activeInputSourceRef.current === 'microphone') {
+                invoke('set_system_audio_mute', { mute: true })
+                    .catch(err => logger.error('Failed to mute system audio on resume:', err));
+            }
+
+            if (recordSessionIdRef.current !== sessionId) {
+                return;
+            }
+
+            beginRecordedDurationWindow();
+            setIsPaused(false);
+            recordSessionPhaseRef.current = 'recording';
+            logger.info(`[useAudioRecorder] Recording session resumed. session=${sessionId}`);
+        } catch (error) {
+            logger.error(`[useAudioRecorder] Failed to resume recording session. session=${sessionId}:`, error);
+            if (recordSessionIdRef.current === sessionId) {
+                setIsPaused(true);
+                recordSessionPhaseRef.current = 'paused';
+            }
+        } finally {
+            const currentPhase = recordSessionPhaseRef.current as RecordSessionPhase;
+            if (recordSessionIdRef.current === sessionId && currentPhase !== 'stopping') {
+                setIsTransitioning(false);
+            }
         }
-    }, [setIsPaused, config.muteDuringRecording, inputSource]);
+    }, [beginRecordedDurationWindow, config.muteDuringRecording, setNativeCapturePaused]);
 
     // Cleanup
     useEffect(() => {
@@ -701,6 +902,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         isRecording,
         isPaused,
         isInitializing,
+        isTransitioning,
         peakLevelRef
     };
 }

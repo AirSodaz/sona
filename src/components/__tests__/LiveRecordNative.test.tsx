@@ -48,6 +48,8 @@ const {
     mockStart,
     mockStop,
     mockSoftStop,
+    mockPauseStream,
+    mockResumeStream,
     mockPrepare,
     mockSendAudioInt16,
     mockSetModelPath,
@@ -59,6 +61,8 @@ const {
     mockStart: vi.fn().mockResolvedValue(undefined),
     mockStop: vi.fn().mockResolvedValue(undefined),
     mockSoftStop: vi.fn().mockResolvedValue(undefined),
+    mockPauseStream: vi.fn().mockResolvedValue(undefined),
+    mockResumeStream: vi.fn().mockResolvedValue(undefined),
     mockPrepare: vi.fn().mockResolvedValue(undefined),
     mockSendAudioInt16: vi.fn(),
     mockSetModelPath: vi.fn(),
@@ -75,6 +79,8 @@ vi.mock('../../services/transcriptionService', () => {
             start: mockStart,
             stop: mockStop,
             softStop: mockSoftStop,
+            pauseStream: mockPauseStream,
+            resumeStream: mockResumeStream,
             sendAudioInt16: mockSendAudioInt16,
             setModelPath: mockSetModelPath,
             setLanguage: mockSetLanguage,
@@ -87,6 +93,8 @@ vi.mock('../../services/transcriptionService', () => {
             start: mockStart,
             stop: mockStop,
             softStop: mockSoftStop,
+            pauseStream: mockPauseStream,
+            resumeStream: mockResumeStream,
             sendAudioInt16: mockSendAudioInt16,
             setModelPath: mockSetModelPath,
             setLanguage: mockSetLanguage,
@@ -99,6 +107,8 @@ vi.mock('../../services/transcriptionService', () => {
             start = mockStart;
             stop = mockStop;
             softStop = mockSoftStop;
+            pauseStream = mockPauseStream;
+            resumeStream = mockResumeStream;
             sendAudioInt16 = mockSendAudioInt16;
             setModelPath = mockSetModelPath;
             setLanguage = mockSetLanguage;
@@ -313,6 +323,8 @@ describe('LiveRecord Native Capture', () => {
         mockStart.mockClear();
         mockStop.mockClear();
         mockSoftStop.mockClear();
+        mockPauseStream.mockClear();
+        mockResumeStream.mockClear();
         mockPrepare.mockClear();
         mockEventListen.mockClear();
         mockEventListen.mockImplementation((event: string, callback: (event: any) => void) => {

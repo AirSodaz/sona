@@ -48,7 +48,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // State from store
     const isRecording = useTranscriptStore((state) => state.isRecording);
     const isPaused = useTranscriptStore((state) => state.isPaused);
-    const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
     const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
     // Local State
@@ -145,6 +144,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         pauseRecording,
         resumeRecording,
         isInitializing,
+        isTransitioning,
         peakLevelRef
     } = useAudioRecorder({
         inputSource,
@@ -162,7 +162,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         if (isRecording) {
             await stopRecording();
             stopVisualizer();
-            setIsPaused(false);
         } else {
             polishedIdsRef.current.clear();
             const success = await startRecording();
@@ -170,17 +169,15 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 startVisualizer();
             }
         }
-    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer, setIsPaused]);
+    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer]);
 
-    const handleTogglePause = useCallback(() => {
+    const handleTogglePause = useCallback(async () => {
         if (isPaused) {
-            resumeRecording();
-            setIsPaused(false);
+            await resumeRecording();
         } else {
-            pauseRecording();
-            setIsPaused(true);
+            await pauseRecording();
         }
-    }, [isPaused, pauseRecording, resumeRecording, setIsPaused]);
+    }, [isPaused, pauseRecording, resumeRecording]);
 
     const handleCaptionToggle = useCallback((checked: boolean) => {
         setIsCaptionMode(checked);
@@ -218,17 +215,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
             if (isStartStopMatch) {
                 e.preventDefault();
-                handleToggleRecording();
+                void handleToggleRecording();
             } else if (e.code === 'Space' && !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space') {
                 // If the user mapped start/stop to just "Space", we don't handle pause with "Space"
                 // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
                 if (isRecordingRef.current) {
                     e.preventDefault();
-                    handleTogglePause();
+                    void handleTogglePause();
                 }
             } else if (e.code === 'Space' && isRecordingRef.current) {
                 e.preventDefault();
-                handleTogglePause();
+                void handleTogglePause();
             }
         };
 
@@ -258,11 +255,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             ref={startButtonRef}
                             className="control-button start"
                             onClick={handleToggleRecording}
-                            disabled={isInitializing}
+                            disabled={isInitializing || isTransitioning}
                             aria-label={t('live.start_recording')}
                             data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
                             data-tooltip-pos="bottom"
-                            style={isInitializing ? { opacity: 0.7, cursor: 'wait' } : {}}
+                            style={isInitializing || isTransitioning ? { opacity: 0.7, cursor: 'wait' } : {}}
                         >
                             <div className="control-button-inner" />
                         </button>
@@ -271,7 +268,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             <button
                                 className="control-button pause"
                                 onClick={handleTogglePause}
-                                disabled={isInitializing}
+                                disabled={isInitializing || isTransitioning}
                                 aria-label={isPaused ? t('live.resume') : t('live.pause')}
                                 data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
                                 data-tooltip-pos="bottom"
@@ -282,7 +279,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                             <button
                                 className="control-button stop"
                                 onClick={handleToggleRecording}
-                                disabled={isInitializing}
+                                disabled={isInitializing || isTransitioning}
                                 aria-label={t('live.stop')}
                                 data-tooltip={t('live.stop')}
                                 data-tooltip-pos="bottom"

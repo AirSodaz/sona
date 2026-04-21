@@ -171,6 +171,40 @@ describe('TranscriptionService', () => {
         expect(invoke).toHaveBeenCalledWith('stop_recognizer', { instanceId: 'record' });
     });
 
+    it('pauses the active stream by flushing and stopping the recognizer', async () => {
+        const onSegment = vi.fn();
+        const onError = vi.fn();
+        await transcriptionService.start(onSegment, onError);
+        vi.mocked(invoke).mockClear();
+
+        await transcriptionService.pauseStream();
+
+        expect(invoke).toHaveBeenCalledWith('flush_recognizer', { instanceId: 'record' });
+        expect(invoke).toHaveBeenCalledWith('stop_recognizer', { instanceId: 'record' });
+    });
+
+    it('resumes the active stream without replacing the callback registration', async () => {
+        const onSegment = vi.fn();
+        const onError = vi.fn();
+        await transcriptionService.start(onSegment, onError, {
+            callbackOwner: 'live-record',
+            callbackSessionId: 'resume-session'
+        });
+        await transcriptionService.pauseStream();
+        vi.mocked(invoke).mockClear();
+
+        await transcriptionService.resumeStream();
+
+        const registration = (transcriptionService.constructor as any).instanceCallbacks.get('record');
+        expect(registration).toMatchObject({
+            owner: 'live-record',
+            sessionId: 'resume-session',
+            registrationId: 1
+        });
+        expect(invoke).toHaveBeenCalledTimes(1);
+        expect(invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
+    });
+
     describe('Batch Transcription', () => {
         it('executes batch transcription with correct args', async () => {
             vi.mocked(invoke).mockImplementation((cmd) => {

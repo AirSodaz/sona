@@ -4,9 +4,15 @@ import { LiveRecord } from '../LiveRecord';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 
 // Mock Tauri invoke
-const mockInvoke = vi.fn().mockResolvedValue(undefined);
+const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
+    if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+        return '/mock/path/to/audio.wav';
+    }
+    return undefined;
+});
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
+    convertFileSrc: vi.fn((path: string) => `asset://${path}`),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -18,6 +24,8 @@ const {
     mockStart,
     mockStop,
     mockSoftStop,
+    mockPauseStream,
+    mockResumeStream,
     mockPrepare,
     mockSendAudioInt16,
     mockSetModelPath,
@@ -29,6 +37,8 @@ const {
     mockStart: vi.fn().mockResolvedValue(undefined),
     mockStop: vi.fn().mockResolvedValue(undefined),
     mockSoftStop: vi.fn().mockResolvedValue(undefined),
+    mockPauseStream: vi.fn().mockResolvedValue(undefined),
+    mockResumeStream: vi.fn().mockResolvedValue(undefined),
     mockPrepare: vi.fn().mockResolvedValue(undefined),
     mockSendAudioInt16: vi.fn(),
     mockSetModelPath: vi.fn(),
@@ -45,6 +55,8 @@ vi.mock('../../services/transcriptionService', () => {
             start: mockStart,
             stop: mockStop,
             softStop: mockSoftStop,
+            pauseStream: mockPauseStream,
+            resumeStream: mockResumeStream,
             sendAudioInt16: mockSendAudioInt16,
             setModelPath: mockSetModelPath,
             setLanguage: mockSetLanguage,
@@ -57,6 +69,8 @@ vi.mock('../../services/transcriptionService', () => {
             start: mockStart,
             stop: mockStop,
             softStop: mockSoftStop,
+            pauseStream: mockPauseStream,
+            resumeStream: mockResumeStream,
             sendAudioInt16: mockSendAudioInt16,
             setModelPath: mockSetModelPath,
             setLanguage: mockSetLanguage,
@@ -69,6 +83,8 @@ vi.mock('../../services/transcriptionService', () => {
             start = mockStart;
             stop = mockStop;
             softStop = mockSoftStop;
+            pauseStream = mockPauseStream;
+            resumeStream = mockResumeStream;
             sendAudioInt16 = mockSendAudioInt16;
             setModelPath = mockSetModelPath;
             setLanguage = mockSetLanguage;
@@ -90,9 +106,12 @@ vi.mock('../../services/modelService', () => ({
 }));
 
 // Mock history service
+const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'test-id' });
+const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'test-id' });
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveRecording: vi.fn().mockResolvedValue({ id: 'test-id' }),
+        saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
+        saveNativeRecording: (path: string, segments: any, duration: number) => mockSaveNativeRecording(path, segments, duration),
         saveImportedFile: vi.fn().mockResolvedValue({ id: 'test-id' }),
     }
 }));
@@ -263,6 +282,8 @@ describe('LiveRecord', () => {
         mockStart.mockClear();
         mockStop.mockClear();
         mockSoftStop.mockClear();
+        mockPauseStream.mockClear();
+        mockResumeStream.mockClear();
         mockPrepare.mockClear();
     });
 
@@ -302,6 +323,116 @@ describe('LiveRecord', () => {
         expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
         expect(useTranscriptStore.getState().isRecording).toBe(true);
+    });
+
+    it('pauses native recording by flushing the current final segment and blocks later partials until resume', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        mockPauseStream.mockImplementationOnce(async () => {
+            capturedOnSegment?.({
+                id: 'pause-final',
+                text: 'Paused final segment',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.pause/i }));
+            await Promise.resolve();
+        });
+
+        expect(mockInvoke).toHaveBeenCalledWith('set_microphone_capture_paused', { instanceId: 'record', paused: true });
+        expect(mockPauseStream).toHaveBeenCalled();
+        expect(useTranscriptStore.getState().isPaused).toBe(true);
+        expect(useTranscriptStore.getState().segments).toEqual([
+            expect.objectContaining({
+                id: 'pause-final',
+                text: 'Paused final segment',
+                isFinal: true
+            })
+        ]);
+
+        await act(async () => {
+            capturedOnSegment?.({
+                id: 'should-drop',
+                text: 'Should not be accepted while paused',
+                start: 1,
+                end: 2,
+                isFinal: false
+            });
+            await Promise.resolve();
+        });
+
+        expect(useTranscriptStore.getState().segments).toHaveLength(1);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+            await Promise.resolve();
+        });
+
+        expect(mockResumeStream).toHaveBeenCalled();
+        expect(mockInvoke).toHaveBeenCalledWith('set_microphone_capture_paused', { instanceId: 'record', paused: false });
+        expect(useTranscriptStore.getState().isPaused).toBe(false);
+    });
+
+    it('excludes paused time from the saved native recording duration', async () => {
+        mockPauseStream.mockImplementationOnce(async () => {
+            capturedOnSegment?.({
+                id: 'duration-final',
+                text: 'Duration anchor',
+                start: 0,
+                end: 1,
+                isFinal: true
+            });
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.pause/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(5000);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.resume/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(1);
+        });
+
+        expect(mockSaveNativeRecording).toHaveBeenCalled();
+        const lastCall = mockSaveNativeRecording.mock.calls[mockSaveNativeRecording.mock.calls.length - 1];
+        const duration = lastCall?.[2];
+        expect(duration).toBeGreaterThanOrEqual(2.9);
+        expect(duration).toBeLessThan(3.2);
     });
 
     it('should start caption mode independently without recording', async () => {
