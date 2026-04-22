@@ -13,11 +13,13 @@ import { EditorToolbar } from './EditorToolbar';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
+import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
-    const segmentsCount = useTranscriptStore((state) => state.segments.length);
-    const summaryEnabled = useTranscriptStore((state) => state.config.summaryEnabled ?? true);
-    const showSummary = summaryEnabled && segmentsCount > 0;
+    const showSummary = useTranscriptStore((state) => {
+        const summaryEnabled = state.config.summaryEnabled ?? true;
+        return summaryEnabled && state.segments.length > 0 && isSummaryLlmConfigComplete(state.config);
+    });
 
     return (
         <div className="transcript-list-header">

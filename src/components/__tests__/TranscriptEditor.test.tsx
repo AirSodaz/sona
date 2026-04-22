@@ -5,6 +5,7 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 import { SegmentItem } from '../transcript/SegmentItem';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 import { computeSummarySourceFingerprint } from '../../utils/segmentUtils';
+import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llmConfig';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -74,6 +75,21 @@ vi.mock('../transcript/SegmentItem', async () => {
 });
 
 describe('TranscriptEditor', () => {
+    const createSummaryReadyConfig = () => {
+        let llmSettings = createLlmSettings('open_ai');
+        llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
+            apiHost: 'https://api.openai.com',
+            apiKey: 'test-key',
+        });
+        llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+        llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
+
+        return {
+            ...DEFAULT_CONFIG,
+            llmSettings,
+        };
+    };
+
     beforeEach(() => {
         vi.clearAllMocks();
         act(() => {
@@ -192,10 +208,7 @@ describe('TranscriptEditor', () => {
         act(() => {
             useTranscriptStore.setState({
                 segments,
-                config: {
-                    ...DEFAULT_CONFIG,
-                    summaryEnabled: true,
-                },
+                config: createSummaryReadyConfig(),
                 summaryStates: {
                     current: {
                         activeTemplate: 'general',
@@ -231,5 +244,28 @@ describe('TranscriptEditor', () => {
 
         expect(screen.getByText('Inline summary')).toBeDefined();
         expect(screen.getByRole('button', { name: 'summary.collapse' }).getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('does not render the summary header or gap when summary config is incomplete', () => {
+        const segments = [
+            { id: '1', start: 0, end: 1, text: 'One', isFinal: true, tokens: [], timestamps: [] },
+        ];
+        const readyConfig = createSummaryReadyConfig();
+
+        act(() => {
+            useTranscriptStore.setState({
+                segments,
+                config: {
+                    ...readyConfig,
+                    llmSettings: setFeatureModelSelection(readyConfig.llmSettings, 'summary', undefined),
+                },
+            });
+        });
+
+        render(<TranscriptEditor />);
+
+        const header = screen.getByTestId('virtuoso-header');
+        expect(header.querySelector('.transcript-summary-panel')).toBeNull();
+        expect(header.querySelector('.transcript-list-summary-gap')).toBeNull();
     });
 });

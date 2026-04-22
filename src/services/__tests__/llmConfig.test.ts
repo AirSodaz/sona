@@ -4,6 +4,7 @@ import {
   DEFAULT_LLM_TEMPERATURE,
   ensureLlmState,
   getFeatureLlmConfig,
+  isSummaryLlmConfigComplete,
   createLlmSettings,
   updateProviderSetting,
   buildLlmConfigPatch,
@@ -243,5 +244,20 @@ describe('llmConfig', () => {
     } as any);
 
     expect(llmSettings.selections.summaryModelId).toBeUndefined();
+  });
+
+  it('reports summary config completeness using the summary-specific helper', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
+      apiHost: 'https://api.openai.com',
+      apiKey: 'openai-key',
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
+
+    expect(isSummaryLlmConfigComplete({ llmSettings })).toBe(true);
+
+    const missingSummarySelection = setFeatureModelSelection(llmSettings, 'summary', undefined);
+    expect(isSummaryLlmConfigComplete({ llmSettings: missingSummarySelection })).toBe(false);
   });
 });

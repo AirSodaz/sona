@@ -836,6 +836,12 @@ export function isFeatureLlmConfigComplete(
   return isLlmConfigComplete(getFeatureLlmConfig(config, feature));
 }
 
+export function isSummaryLlmConfigComplete(
+  config: Pick<AppConfig, 'llmSettings'>,
+): boolean {
+  return isFeatureLlmConfigComplete(config, 'summary');
+}
+
 export function buildLlmConfigPatch(
   nextLlmSettings: LlmSettings,
 ): Pick<AppConfig, 'llmSettings'> {

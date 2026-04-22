@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import { DEFAULT_SUMMARY_TEMPLATE, SummaryTemplate } from '../types/transcript';
 import { ChevronDownIcon, ProcessingIcon } from './Icons';
@@ -21,7 +21,8 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const copyResetTimerRef = useRef<number | null>(null);
   const summaryEnabled = config.summaryEnabled ?? true;
-  const isSummaryVisible = summaryEnabled && segments.length > 0;
+  const summaryConfigComplete = isSummaryLlmConfigComplete(config);
+  const isSummaryVisible = summaryEnabled && summaryConfigComplete && segments.length > 0;
 
   const activeTemplate = summaryState?.activeTemplate || DEFAULT_SUMMARY_TEMPLATE;
   const record = summaryState?.records?.[activeTemplate];
@@ -56,8 +57,7 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   };
 
   const handleGenerate = async () => {
-    const llm = getFeatureLlmConfig(config, 'summary');
-    if (!isLlmConfigComplete(llm)) {
+    if (!summaryConfigComplete) {
       await showError({
         code: 'config.summary_model_missing',
         messageKey: 'errors.config.summary_model_missing',

@@ -185,4 +185,24 @@ describe('summaryService', () => {
     await expect(summaryService.generateSummary('general')).rejects.toThrow('AI Summary is disabled.');
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it('rejects new summary generation when the summary config is incomplete', async () => {
+    const readyConfig = createSummaryReadyConfig();
+
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true },
+      ],
+      config: {
+        ...readyConfig,
+        llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
+          apiHost: 'https://api.openai.com',
+          apiKey: '',
+        }),
+      },
+    });
+
+    await expect(summaryService.generateSummary('general')).rejects.toThrow('LLM Service not fully configured.');
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });

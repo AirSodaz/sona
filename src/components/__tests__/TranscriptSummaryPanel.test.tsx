@@ -57,6 +57,27 @@ function createSummaryReadyConfig() {
   };
 }
 
+function createSummaryConfigWithoutModel() {
+  const readyConfig = createSummaryReadyConfig();
+
+  return {
+    ...readyConfig,
+    llmSettings: setFeatureModelSelection(readyConfig.llmSettings, 'summary', undefined),
+  };
+}
+
+function createSummaryConfigWithoutApiKey() {
+  const readyConfig = createSummaryReadyConfig();
+
+  return {
+    ...readyConfig,
+    llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
+      apiHost: 'https://api.openai.com',
+      apiKey: '',
+    }),
+  };
+}
+
 describe('TranscriptSummaryPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,6 +241,34 @@ describe('TranscriptSummaryPanel', () => {
         ...createSummaryReadyConfig(),
         summaryEnabled: false,
       },
+    });
+
+    render(<TranscriptSummaryPanel />);
+
+    expect(screen.queryByText('summary.title')).toBeNull();
+    expect(mockLoadSummary).not.toHaveBeenCalled();
+  });
+
+  it('does not render when the summary model is not assigned', () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
+      ],
+      config: createSummaryConfigWithoutModel(),
+    });
+
+    render(<TranscriptSummaryPanel />);
+
+    expect(screen.queryByText('summary.title')).toBeNull();
+    expect(mockLoadSummary).not.toHaveBeenCalled();
+  });
+
+  it('does not render when the assigned summary model is missing required credentials', () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
+      ],
+      config: createSummaryConfigWithoutApiKey(),
     });
 
     render(<TranscriptSummaryPanel />);

@@ -10,7 +10,7 @@ import {
 } from '../types/transcript';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
 import { historyService } from './historyService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llmConfig';
 import { normalizeError } from '../utils/errorUtils';
 import {
   createLlmTaskId,
@@ -116,9 +116,7 @@ class SummaryService {
       throw new Error('AI Summary is disabled.');
     }
 
-    const llm = getFeatureLlmConfig(store.config, 'summary');
-
-    if (!isLlmConfigComplete(llm)) {
+    if (!isSummaryLlmConfigComplete(store.config)) {
       throw new Error('LLM Service not fully configured.');
     }
 
