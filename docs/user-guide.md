@@ -17,6 +17,8 @@ Sona is a good fit if you want to:
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want `Voice Typing`, jump to `History And Settings`, especially the `Settings > Shortcuts` section.
+
 ## 2. Install And Launch
 
 For most users, the simplest path is the latest release build:
@@ -86,6 +88,12 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 6. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language`.
 7. Turn on `Live Caption` if you want the floating caption window during live use.
 8. Open `Settings > Subtitle Settings` if you want to change caption behavior such as always-on-top, click-through, size, width, color, or startup behavior.
+
+### What `Live Caption` is for
+
+- `Live Caption` is the `System Audio Captions` toggle on the `Live Record` page, and it is useful when you mainly want a floating subtitle window for system audio.
+- You can turn it on without starting a recording first. If you later start `Live Record`, both can run in parallel.
+- `Settings > Subtitle Settings` controls caption startup behavior, always-on-top, click-through, font size, width, color, and background transparency.
 
 ### Result
 
@@ -268,9 +276,15 @@ Use `History` to reopen earlier work, and use `Settings` to manage default behav
 - `Settings > About`
   source code, logs, and update-related actions
 
+### `Voice Typing`
+
+- `Voice Typing` is useful when you want to dictate directly into chat apps, documents, forms, or other applications.
+- Open `Settings > Shortcuts`, turn on `Voice Typing`, choose a global shortcut, and pick either `Push to Talk (Hold)` or `Toggle (Press once)`.
+- `Push to Talk (Hold)` is better for short bursts. `Toggle (Press once)` is better for longer dictation sessions.
+- `Voice Typing` depends on the same offline live transcription setup, so you also need a working `Live Record Model`.
+
 ### Notes
 
-- In `Settings > Shortcuts`, `Voice Typing` can insert text into other applications. You can enable it, choose a shortcut, and pick `Push to Talk (Hold)` or `Toggle (Press once)`.
 - In `Settings > Vocabulary`, `Hotwords` are entered one per line. Weighted entries such as `Term :2.0` are supported, and hotwords are currently most relevant for Transducer and Qwen3 ASR models.
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
 
@@ -308,6 +322,12 @@ Use `History` to reopen earlier work, and use `Settings` to manage default behav
 ### Export only shows `Original`
 
 - `Translation` and `Bilingual` only appear when the transcript already contains translation text.
+
+### `Live Caption` does not appear
+
+- Go back to the `Live Record` page and make sure `Live Caption` is turned on there. `Settings > Subtitle Settings` only controls the window behavior and appearance.
+- If you only want floating system-audio subtitles, you do not need to start recording first. Turning on `Live Caption` is enough.
+- `Live Caption` depends on the same offline live transcription setup, so make sure a `Live Record Model` is configured.
 
 ### Voice Typing does not work
 
