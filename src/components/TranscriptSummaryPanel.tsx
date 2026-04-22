@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import { DEFAULT_SUMMARY_TEMPLATE, SummaryTemplate } from '../types/transcript';
-import { ChevronDownIcon, ProcessingIcon, SparklesIcon } from './Icons';
+import { ChevronDownIcon, ProcessingIcon } from './Icons';
 
 const SUMMARY_TEMPLATES: SummaryTemplate[] = ['general', 'meeting', 'lecture'];
 
 export function TranscriptSummaryPanel(): React.JSX.Element | null {
   const { t } = useTranslation();
+  const bodyId = useId();
   const segments = useTranscriptStore((state) => state.segments);
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const config = useTranscriptStore((state) => state.config);
@@ -95,6 +96,20 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   };
 
   const toggleLabel = t(isCollapsed ? 'summary.expand' : 'summary.collapse');
+  const collapsedStatusLabel = isGenerating
+    ? generationProgress > 0
+      ? t('summary.generating_short_progress', { progress: generationProgress })
+      : t('summary.generating_short')
+    : record && isStale
+      ? t('summary.stale_short')
+      : null;
+  const expandedStatusLabel = isGenerating
+    ? generationProgress > 0
+      ? t('summary.generating_progress', { progress: generationProgress })
+      : t('summary.generating_short')
+    : record && isStale
+      ? t('summary.stale')
+      : null;
 
   return (
     <section
@@ -107,52 +122,62 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
         onClick={() => setIsCollapsed((value) => !value)}
         aria-expanded={!isCollapsed}
         aria-label={toggleLabel}
+        aria-controls={bodyId}
       >
-        <div className="transcript-summary-panel-title-group">
-          <span className="transcript-summary-panel-icon">
-            <SparklesIcon />
-          </span>
-          <div className="transcript-summary-panel-heading">
-            <div className="transcript-summary-panel-title">{t('summary.title')}</div>
-            {!isCollapsed && (
-              <div className="transcript-summary-panel-subtitle">{t('summary.subtitle')}</div>
+        <span className="transcript-summary-panel-gutter-label" aria-hidden="true">
+          AI
+        </span>
+
+        <div className="transcript-summary-panel-heading">
+          <div className="transcript-summary-panel-title-line">
+            <span className="transcript-summary-panel-title">{t('summary.title')}</span>
+            {isCollapsed && collapsedStatusLabel && (
+              <span className={`transcript-summary-panel-inline-status ${isGenerating ? 'is-generating' : 'is-stale'}`}>
+                {collapsedStatusLabel}
+              </span>
             )}
           </div>
+          {!isCollapsed && expandedStatusLabel && (
+            <div className={`transcript-summary-panel-meta ${isGenerating ? 'is-generating' : 'is-stale'}`}>
+              {expandedStatusLabel}
+            </div>
+          )}
         </div>
 
-        <div className="transcript-summary-panel-toggle-meta">
-          {isGenerating && (
-            <span className="transcript-summary-panel-badge is-generating">
-              {generationProgress > 0
-                ? t('summary.generating_short_progress', { progress: generationProgress })
-                : t('summary.generating_short')}
-            </span>
-          )}
-          {!isGenerating && record && isStale && (
-            <span className="transcript-summary-panel-badge is-stale">
-              {t('summary.stale_short')}
-            </span>
-          )}
-          <span className={`transcript-summary-panel-chevron ${isCollapsed ? '' : 'open'}`} aria-hidden="true">
-            <ChevronDownIcon />
-          </span>
-        </div>
+        <span className={`transcript-summary-panel-chevron ${isCollapsed ? '' : 'open'}`} aria-hidden="true">
+          <ChevronDownIcon />
+        </span>
       </button>
 
       {!isCollapsed && (
         <>
+        <div className="transcript-summary-panel-controls">
+          <div className="transcript-summary-template-row" role="tablist" aria-label={t('summary.templates_label')}>
+            {SUMMARY_TEMPLATES.map((template, index) => (
+              <React.Fragment key={template}>
+                {index > 0 && (
+                  <span className="transcript-summary-template-divider" aria-hidden="true">
+                    /
+                  </span>
+                )}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTemplate === template}
+                  className={`transcript-summary-template-tab ${activeTemplate === template ? 'active' : ''}`}
+                  onClick={() => void handleTemplateChange(template)}
+                  disabled={isGenerating}
+                >
+                  {t(`summary.templates.${template}`)}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+
           <div className="transcript-summary-panel-actions">
             <button
               type="button"
-              className="btn btn-secondary transcript-summary-action-button"
-              onClick={handleCopy}
-              disabled={!record?.content}
-            >
-              {copied ? t('summary.copied') : t('summary.copy')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary transcript-summary-action-button"
+              className="btn transcript-summary-action-button transcript-summary-generate-button"
               onClick={handleGenerate}
               disabled={isGenerating}
             >
@@ -165,39 +190,31 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
                 <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
               )}
             </button>
-          </div>
 
-          <div className="transcript-summary-template-row" role="tablist" aria-label={t('summary.templates_label')}>
-            {SUMMARY_TEMPLATES.map((template) => (
-              <button
-                key={template}
-                type="button"
-                role="tab"
-                aria-selected={activeTemplate === template}
-                className={`transcript-summary-template-tab ${activeTemplate === template ? 'active' : ''}`}
-                onClick={() => void handleTemplateChange(template)}
-                disabled={isGenerating}
-              >
-                {t(`summary.templates.${template}`)}
-              </button>
-            ))}
+            <button
+              type="button"
+              className="btn transcript-summary-copy-button"
+              onClick={handleCopy}
+              disabled={!record?.content}
+            >
+              {copied ? t('summary.copied') : t('summary.copy')}
+            </button>
           </div>
+        </div>
 
-          {record && isStale && (
-            <div className="transcript-summary-stale-banner">
-              {t('summary.stale')}
+        <div
+          id={bodyId}
+          className="transcript-summary-panel-body"
+          data-summary-template={activeTemplate}
+        >
+          {record?.content ? (
+            <pre className="transcript-summary-content-text">{record.content}</pre>
+          ) : (
+            <div className="transcript-summary-empty-state">
+              {t('summary.empty_state', { template: t(`summary.templates.${activeTemplate}`) })}
             </div>
           )}
-
-          <div className="transcript-summary-content" data-summary-template={activeTemplate}>
-            {record?.content ? (
-              <pre className="transcript-summary-content-text">{record.content}</pre>
-            ) : (
-              <div className="transcript-summary-empty-state">
-                {t('summary.empty_state', { template: t(`summary.templates.${activeTemplate}`) })}
-              </div>
-            )}
-          </div>
+        </div>
         </>
       )}
     </section>

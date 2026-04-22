@@ -1,8 +1,10 @@
-import { render, act } from '@testing-library/react';
+import { render, act, fireEvent, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { SegmentItem } from '../transcript/SegmentItem';
+import { DEFAULT_CONFIG } from '../../stores/configStore';
+import { computeSummarySourceFingerprint } from '../../utils/segmentUtils';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -19,10 +21,22 @@ vi.mock('react-virtuoso', async () => {
             React.useImperativeHandle(ref, () => ({
                 scrollToIndex: mockScrollToIndex,
             }));
+            const Header = props.components?.Header;
+            const Footer = props.components?.Footer;
             return (
                 <div data-testid="virtuoso-list">
+                    {Header && (
+                        <div data-testid="virtuoso-header">
+                            <Header />
+                        </div>
+                    )}
                     {props.data?.map((item: any, index: number) =>
                         props.itemContent(index, item, props.context)
+                    )}
+                    {Footer && (
+                        <div data-testid="virtuoso-footer">
+                            <Footer />
+                        </div>
                     )}
                 </div>
             );
@@ -68,7 +82,10 @@ describe('TranscriptEditor', () => {
                 activeSegmentId: null,
                 activeSegmentIndex: -1,
                 isPlaying: false,
-                editingSegmentId: null
+                editingSegmentId: null,
+                config: DEFAULT_CONFIG,
+                summaryStates: {},
+                sourceHistoryId: null,
             });
         });
     });
@@ -164,5 +181,55 @@ describe('TranscriptEditor', () => {
         // Segment 3: props stable.
         // Expectation: 1
         expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders AI Summary in the scrollable header and keeps it expanded across segment updates', async () => {
+        const segments = [
+            { id: '1', start: 0, end: 1, text: 'One', isFinal: true, tokens: [], timestamps: [] },
+            { id: '2', start: 1, end: 2, text: 'Two', isFinal: true, tokens: [], timestamps: [] },
+        ];
+
+        act(() => {
+            useTranscriptStore.setState({
+                segments,
+                config: {
+                    ...DEFAULT_CONFIG,
+                    summaryEnabled: true,
+                },
+                summaryStates: {
+                    current: {
+                        activeTemplate: 'general',
+                        records: {
+                            general: {
+                                template: 'general',
+                                content: 'Inline summary',
+                                generatedAt: '2026-04-23T00:00:00.000Z',
+                                sourceFingerprint: computeSummarySourceFingerprint(segments),
+                            },
+                        },
+                        isGenerating: false,
+                        generationProgress: 0,
+                    },
+                },
+            });
+        });
+
+        render(<TranscriptEditor />);
+
+        const header = screen.getByTestId('virtuoso-header');
+        expect(header.querySelector('.transcript-summary-panel')).not.toBeNull();
+        expect(document.querySelector('.transcript-editor > .transcript-summary-panel')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'summary.expand' }));
+
+        expect(screen.getByText('Inline summary')).toBeDefined();
+        expect(screen.getByRole('button', { name: 'summary.collapse' }).getAttribute('aria-expanded')).toBe('true');
+
+        act(() => {
+            useTranscriptStore.getState().updateSegment('1', { text: 'One Updated' });
+        });
+
+        expect(screen.getByText('Inline summary')).toBeDefined();
+        expect(screen.getByRole('button', { name: 'summary.collapse' }).getAttribute('aria-expanded')).toBe('true');
     });
 });

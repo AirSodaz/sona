@@ -14,6 +14,24 @@ import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
 
+const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
+    const segmentsCount = useTranscriptStore((state) => state.segments.length);
+    const summaryEnabled = useTranscriptStore((state) => state.config.summaryEnabled ?? true);
+    const showSummary = summaryEnabled && segmentsCount > 0;
+
+    return (
+        <div className="transcript-list-header">
+            <div className="transcript-list-opening-spacer" aria-hidden="true" />
+            {showSummary && <TranscriptSummaryPanel />}
+            {showSummary && <div className="transcript-list-summary-gap" aria-hidden="true" />}
+        </div>
+    );
+});
+
+const TranscriptListFooter = React.memo(function TranscriptListFooter(): React.JSX.Element {
+    return <div className="transcript-list-footer-spacer" aria-hidden="true" />;
+});
+
 /** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {
     onSeek: (time: number) => void;
@@ -166,6 +184,11 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         return count;
     }, [segments]);
 
+    const virtuosoComponents = useMemo(() => ({
+        Header: TranscriptListHeader,
+        Footer: TranscriptListFooter,
+    }), []);
+
     // Scroll to active match
     useEffect(() => {
         if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
@@ -194,7 +217,6 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     return (
         <div className="transcript-editor">
             <EditorToolbar />
-            <TranscriptSummaryPanel />
             {wordCount > 0 && (
                 <div className="word-count-badge">
                     {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}
@@ -207,10 +229,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
                     data={segments}
                     context={contextValue}
                     itemContent={itemContent}
-                    components={{
-                        Header: () => <div style={{ height: '60px' }} />,
-                        Footer: () => <div style={{ height: '50vh' }} />
-                    }}
+                    components={virtuosoComponents}
                 />
             </TranscriptUIContext.Provider>
             <SearchUI />
