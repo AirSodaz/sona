@@ -124,8 +124,11 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
         aria-label={toggleLabel}
         aria-controls={bodyId}
       >
-        <span className="transcript-summary-panel-gutter-label" aria-hidden="true">
-          AI
+        <span
+          className={`transcript-summary-panel-chevron ${isCollapsed ? '' : 'open'}`}
+          aria-hidden="true"
+        >
+          <ChevronDownIcon />
         </span>
 
         <div className="transcript-summary-panel-heading">
@@ -144,9 +147,6 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
           )}
         </div>
 
-        <span className={`transcript-summary-panel-chevron ${isCollapsed ? '' : 'open'}`} aria-hidden="true">
-          <ChevronDownIcon />
-        </span>
       </button>
 
       {!isCollapsed && (

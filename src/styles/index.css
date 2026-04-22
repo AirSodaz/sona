@@ -692,11 +692,10 @@ input[type="radio"]:focus {
 
 .transcript-summary-panel {
   --summary-gutter: 60px;
-  --summary-action-col: 28px;
   width: min(900px, 100%);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: var(--summary-gutter) minmax(0, 1fr) var(--summary-action-col);
+  grid-template-columns: var(--summary-gutter) minmax(0, 1fr);
   column-gap: var(--spacing-md);
   row-gap: 6px;
 }
@@ -704,7 +703,7 @@ input[type="radio"]:focus {
 .transcript-summary-panel-toggle {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: var(--summary-gutter) minmax(0, 1fr) var(--summary-action-col);
+  grid-template-columns: var(--summary-gutter) minmax(0, 1fr);
   align-items: start;
   column-gap: var(--spacing-md);
   width: 100%;
@@ -721,26 +720,10 @@ input[type="radio"]:focus {
   color: color-mix(in srgb, var(--color-text-secondary) 88%, var(--color-primary));
 }
 
-.transcript-summary-panel-toggle:hover .transcript-summary-panel-gutter-label {
-  color: var(--color-text-secondary);
-}
-
 .transcript-summary-panel-toggle:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-primary) 36%, transparent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
-}
-
-.transcript-summary-panel-gutter-label {
-  justify-self: end;
-  padding-top: 3px;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  opacity: 0.62;
 }
 
 .transcript-summary-panel-title {
@@ -797,29 +780,42 @@ input[type="radio"]:focus {
   align-items: center;
   justify-content: center;
   justify-self: end;
-  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
   color: var(--color-text-muted);
   transition: transform var(--transition-fast), color var(--transition-fast);
+  opacity: 0.76;
 }
 
 .transcript-summary-panel-chevron.open {
   transform: rotate(180deg);
   color: var(--color-text-secondary);
+  opacity: 0.88;
+}
+
+.transcript-summary-panel-toggle:hover .transcript-summary-panel-chevron {
+  color: var(--color-text-secondary);
+  opacity: 0.88;
 }
 
 .transcript-summary-panel-controls {
   grid-column: 2 / 3;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 6px 16px;
+  width: 100%;
+  min-width: 0;
+  padding-inline-end: var(--spacing-md);
+  box-sizing: border-box;
 }
 
 .transcript-summary-template-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  flex: 1 1 auto;
   gap: 4px 8px;
   min-width: 0;
 }
@@ -859,11 +855,14 @@ input[type="radio"]:focus {
 }
 
 .transcript-summary-panel-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 6px 12px;
+  min-width: 0;
+  justify-self: end;
+  padding-inline-end: 8px;
 }
 
 .transcript-summary-generate-button {
@@ -935,8 +934,8 @@ input[type="radio"]:focus {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-serif);
-  font-size: 1rem;
-  line-height: 1.74;
+  font-size: 0.95rem;
+  line-height: 1.72;
   color: color-mix(in srgb, var(--color-text-primary) 86%, var(--color-text-secondary));
 }
 
@@ -958,7 +957,6 @@ input[type="radio"]:focus {
 
   .transcript-summary-panel {
     --summary-gutter: 40px;
-    --summary-action-col: 24px;
     column-gap: var(--spacing-sm);
     row-gap: 6px;
   }
@@ -968,17 +966,22 @@ input[type="radio"]:focus {
     column-gap: var(--spacing-sm);
   }
 
-  .transcript-summary-panel-gutter-label {
-    padding-top: 5px;
+  .transcript-summary-panel-chevron {
+    width: 16px;
+    height: 16px;
+    margin-top: 4px;
   }
 
   .transcript-summary-panel-controls {
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px 12px;
     align-items: flex-start;
+    padding-inline-end: var(--spacing-sm);
   }
 
   .transcript-summary-panel-actions {
-    justify-content: flex-start;
+    justify-self: start;
+    padding-inline-end: 0;
   }
 
   .transcript-summary-panel-body {

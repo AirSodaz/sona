@@ -101,6 +101,8 @@ describe('TranscriptSummaryPanel', () => {
 
     expect(screen.getByText('summary.title')).toBeDefined();
     expect(screen.getByRole('button', { name: 'summary.expand' }).getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.transcript-summary-panel-gutter-label')).toBeNull();
+    expect(document.querySelector('.transcript-summary-panel-toggle > .transcript-summary-panel-chevron')).not.toBeNull();
     expect(screen.getByText('summary.stale_short')).toBeDefined();
     expect(document.querySelector('.transcript-summary-panel-body')).toBeNull();
     expect(screen.queryByText('summary.templates.general')).toBeNull();
