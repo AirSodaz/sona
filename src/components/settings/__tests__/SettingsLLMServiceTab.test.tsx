@@ -68,11 +68,12 @@ describe('SettingsLLMServiceTab', () => {
     });
   });
 
-  it('renders feature cards and credentials section', async () => {
+  it('renders feature cards in polish-translation-summary order and keeps the credentials section', async () => {
+    let container!: HTMLElement;
     await act(async () => {
-      render(
+      ({ container } = render(
         <SettingsLLMServiceTab />,
-      );
+      ));
     });
 
     expect(screen.getByText('settings.llm.title')).toBeDefined();
@@ -82,6 +83,10 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getByText('settings.llm.translation_model')).toBeDefined();
     expect(screen.getByText('settings.llm.summary_model')).toBeDefined();
     expect(screen.getByText('settings.llm.credentials_section')).toBeDefined();
+
+    expect(
+      Array.from(container.querySelectorAll('[data-feature-id]')).map((node) => node.getAttribute('data-feature-id')),
+    ).toEqual(['polish', 'translation', 'summary']);
   });
 
   it('renders active provider fields from llmSettings in accordion', async () => {

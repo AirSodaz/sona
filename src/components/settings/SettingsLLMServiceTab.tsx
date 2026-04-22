@@ -24,7 +24,7 @@ import {
   buildLlmConfig,
   createProviderSetting,
 } from '../../services/llmConfig';
-import { SettingsItem, SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
+import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
 
 function getModelPlaceholder(provider: LlmProvider): string {
@@ -71,6 +71,7 @@ const FEATURE_TEMPERATURE_LABELS: Record<LlmFeature, string> = {
 
 // ------ FEATURE CARD COMPONENT ------
 interface FeatureCardProps {
+  stepNumber: number;
   featureId: LlmFeature;
   title: string;
   icon: React.ReactNode;
@@ -78,9 +79,20 @@ interface FeatureCardProps {
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string) => string;
   featureEnabled?: boolean;
+  headerAction?: React.ReactNode;
 }
 
-function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t, featureEnabled = true }: FeatureCardProps) {
+function FeatureCard({
+  stepNumber,
+  featureId,
+  title,
+  icon,
+  config,
+  applyLlmSettings,
+  t,
+  featureEnabled = true,
+  headerAction,
+}: FeatureCardProps) {
   const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
@@ -250,97 +262,110 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t, feat
   );
 
   return (
-    <div className={`feature-card ${featureEnabled ? '' : 'feature-card-off'}`.trim()}>
+    <div
+      className={`feature-card ${featureEnabled ? '' : 'feature-card-off'}`.trim()}
+      data-feature-id={featureId}
+    >
       <div className="feature-card-header">
         <div className="feature-card-title-group">
+          <span className="feature-card-step">{String(stepNumber).padStart(2, '0')}</span>
           <span className="feature-card-icon">{icon}</span>
-          <span>{title}</span>
+          <span className="feature-card-title-text">{title}</span>
         </div>
-        <div className="feature-card-status">{statusBadge}</div>
+        <div className="feature-card-header-meta">
+          <div className="feature-card-status">{statusBadge}</div>
+          {headerAction ? (
+            <div className="feature-card-header-action">{headerAction}</div>
+          ) : null}
+        </div>
       </div>
       
       <div className="feature-card-content">
-        <div className="feature-field">
-          <label className="settings-label">{t('settings.llm.credential_provider')}</label>
-          <Dropdown
-            id={`provider-${featureId}`}
-            value={localProvider}
-            onChange={handleProviderChange}
-            options={providerOptions}
-            style={{ width: '100%' }}
-          />
+        <div className="feature-card-row feature-card-row-primary">
+          <div className="feature-field">
+            <label className="settings-label">{t('settings.llm.credential_provider')}</label>
+            <Dropdown
+              id={`provider-${featureId}`}
+              value={localProvider}
+              onChange={handleProviderChange}
+              options={providerOptions}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          {localProvider !== 'google_translate' && (
+            <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
+              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
+              <div className="dropdown-container" style={{ margin: 0 }}>
+                <input
+                  id={`feature-model-${featureId}`}
+                  type="text"
+                  className="settings-input"
+                  value={localModelName}
+                  onChange={(e) => setLocalModelName(e.target.value)}
+                  onFocus={() => setIsCandidateMenuOpen(true)}
+                  onBlur={handleInputBlur}
+                  onKeyDown={handleKeyDown}
+                  placeholder={getModelPlaceholder(localProvider)}
+                />
+                {isLoadingCandidates && (
+                  <div className="settings-hint feature-card-loading-indicator">
+                    <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                )}
+                {isCandidateMenuOpen && filteredCandidates.length > 0 && (
+                  <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
+                    {filteredCandidates.slice(0, 8).map((candidate, index) => (
+                      <button
+                        key={candidate}
+                        type="button"
+                        className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setHighlightedCandidateIndex(index)}
+                        onClick={() => handleModelSelect(candidate)}
+                      >
+                        {candidate}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {localProvider !== 'google_translate' && (
-        <>
-        <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
-          <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
-          <div className="dropdown-container" style={{ margin: 0 }}>
-            <input
-              id={`feature-model-${featureId}`}
-              type="text"
-              className="settings-input"
-              value={localModelName}
-              onChange={(e) => setLocalModelName(e.target.value)}
-              onFocus={() => setIsCandidateMenuOpen(true)}
-              onBlur={handleInputBlur}
-              onKeyDown={handleKeyDown}
-              placeholder={getModelPlaceholder(localProvider)}
-            />
-            {isLoadingCandidates && (
-              <div className="settings-hint" style={{ position: 'absolute', right: 12, top: 10 }}>
-                <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+          <div className="feature-card-row feature-card-row-secondary">
+            <div className="feature-field">
+              <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(FEATURE_TEMPERATURE_LABELS[featureId])}</label>
+              <div className="feature-temperature-container">
+                <input
+                  type="range"
+                  className="feature-temperature-slider"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={temperature}
+                  onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+                  aria-label={t(FEATURE_TEMPERATURE_LABELS[featureId])}
+                />
+                <input
+                  id={`feature-temp-${featureId}`}
+                  type="number"
+                  className="settings-input"
+                  style={{ padding: '4px 6px', textAlign: 'center', width: '60px' }}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={temperature}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
+                  }}
+                />
               </div>
-            )}
-            {isCandidateMenuOpen && filteredCandidates.length > 0 && (
-              <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
-                {filteredCandidates.slice(0, 8).map((candidate, index) => (
-                  <button
-                    key={candidate}
-                    type="button"
-                    className={`dropdown-item ${index === highlightedCandidateIndex ? 'selected' : ''}`}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setHighlightedCandidateIndex(index)}
-                    onClick={() => handleModelSelect(candidate)}
-                  >
-                    {candidate}
-                  </button>
-                ))}
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-
-        <div className="feature-field">
-           <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(FEATURE_TEMPERATURE_LABELS[featureId])}</label>
-           <div className="feature-temperature-container">
-             <input
-               type="range"
-               className="feature-temperature-slider"
-               min={0}
-               max={2}
-               step={0.05}
-               value={temperature}
-               onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-               aria-label={t(FEATURE_TEMPERATURE_LABELS[featureId])}
-             />
-             <input
-               id={`feature-temp-${featureId}`}
-               type="number"
-               className="settings-input"
-               style={{ padding: '4px 6px', textAlign: 'center', width: '60px' }}
-               min={0}
-               max={2}
-               step={0.05}
-               value={temperature}
-               onChange={(e) => {
-                 const val = parseFloat(e.target.value);
-                 if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
-               }}
-             />
-           </div>
-        </div>
-        </>
         )}
       </div>
     </div>
@@ -593,43 +618,44 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
       >
-        <SettingsItem
-          title={t('settings.llm.enable_summary')}
-          hint={t('settings.llm.enable_summary_hint')}
-        >
-          <Switch
-            checked={summaryEnabled}
-            onChange={(enabled) => updateConfig({ summaryEnabled: enabled })}
-            aria-label={t('settings.llm.enable_summary')}
-          />
-        </SettingsItem>
-        <div className="feature-cards-grid">
-           <FeatureCard
-             featureId="polish"
-             title={t('settings.llm.polish_model')}
-             icon={<Sparkles size={20} />}
-             config={config}
-             applyLlmSettings={applyLlmSettings}
-             t={t}
-           />
-           <FeatureCard
-             featureId="translation"
-             title={t('settings.llm.translation_model')}
-             icon={<Globe size={20} />}
-             config={config}
-             applyLlmSettings={applyLlmSettings}
-             t={t}
-           />
-           <FeatureCard
-             featureId="summary"
-             title={t('settings.llm.summary_model')}
-             icon={<FileText size={20} />}
-             config={config}
-             applyLlmSettings={applyLlmSettings}
-             t={t}
-             featureEnabled={summaryEnabled}
-           />
-        </div>
+        <FeatureCard
+          stepNumber={1}
+          featureId="polish"
+          title={t('settings.llm.polish_model')}
+          icon={<Sparkles size={20} />}
+          config={config}
+          applyLlmSettings={applyLlmSettings}
+          t={t}
+        />
+        <FeatureCard
+          stepNumber={2}
+          featureId="translation"
+          title={t('settings.llm.translation_model')}
+          icon={<Globe size={20} />}
+          config={config}
+          applyLlmSettings={applyLlmSettings}
+          t={t}
+        />
+        <FeatureCard
+          stepNumber={3}
+          featureId="summary"
+          title={t('settings.llm.summary_model')}
+          icon={<FileText size={20} />}
+          config={config}
+          applyLlmSettings={applyLlmSettings}
+          t={t}
+          featureEnabled={summaryEnabled}
+          headerAction={(
+            <div className="feature-card-toggle">
+              <span className="feature-card-toggle-label">{t('settings.llm.enable_summary')}</span>
+              <Switch
+                checked={summaryEnabled}
+                onChange={(enabled) => updateConfig({ summaryEnabled: enabled })}
+                aria-label={t('settings.llm.enable_summary')}
+              />
+            </div>
+          )}
+        />
       </SettingsSection>
 
       {/* 2. Provider Credentials Section */}
