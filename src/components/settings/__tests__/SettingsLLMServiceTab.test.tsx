@@ -181,7 +181,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalled();
   });
 
-  it('renders only feature-specific temperature controls', async () => {
+  it('renders unified temperature controls for all three features', async () => {
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
@@ -189,9 +189,8 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
-    expect(screen.getByText('settings.llm.polish_temperature')).toBeDefined();
-    expect(screen.getByText('settings.llm.translation_temperature')).toBeDefined();
-    expect(screen.getByText('settings.llm.summary_temperature')).toBeDefined();
+    expect(screen.getAllByText('settings.llm.temperature')).toHaveLength(3);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
   });
 
   it('updates polish temperature independently', async () => {

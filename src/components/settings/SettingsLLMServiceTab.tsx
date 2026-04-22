@@ -63,12 +63,6 @@ function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting
   return true;
 }
 
-const FEATURE_TEMPERATURE_LABELS: Record<LlmFeature, string> = {
-  polish: 'settings.llm.polish_temperature',
-  translation: 'settings.llm.translation_temperature',
-  summary: 'settings.llm.summary_temperature',
-};
-
 // ------ FEATURE CARD COMPONENT ------
 interface FeatureCardProps {
   stepNumber: number;
@@ -251,6 +245,8 @@ function FeatureCard({
   };
   
   const isComplete = isFeatureLlmConfigComplete(config, featureId);
+  const featureTitleId = `feature-title-${featureId}`;
+  const temperatureLabelId = `feature-temperature-label-${featureId}`;
   const statusBadge = !featureEnabled ? (
     <span className="status-badge off"><X size={12}/> {t('settings.llm.status_off')}</span>
   ) : isComplete ? (
@@ -270,7 +266,7 @@ function FeatureCard({
         <div className="feature-card-title-group">
           <span className="feature-card-step">{String(stepNumber).padStart(2, '0')}</span>
           <span className="feature-card-icon">{icon}</span>
-          <span className="feature-card-title-text">{title}</span>
+          <span className="feature-card-title-text" id={featureTitleId}>{title}</span>
         </div>
         <div className="feature-card-header-meta">
           <div className="feature-card-status">{statusBadge}</div>
@@ -337,32 +333,38 @@ function FeatureCard({
         {localProvider !== 'google_translate' && (
           <div className="feature-card-row feature-card-row-secondary">
             <div className="feature-field">
-              <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(FEATURE_TEMPERATURE_LABELS[featureId])}</label>
-              <div className="feature-temperature-container">
-                <input
-                  type="range"
-                  className="feature-temperature-slider"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={temperature}
-                  onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-                  aria-label={t(FEATURE_TEMPERATURE_LABELS[featureId])}
-                />
-                <input
-                  id={`feature-temp-${featureId}`}
-                  type="number"
-                  className="settings-input"
-                  style={{ padding: '4px 6px', textAlign: 'center', width: '60px' }}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={temperature}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
-                  }}
-                />
+              <div className="feature-temperature-row">
+                <span className="feature-temperature-label" id={temperatureLabelId}>
+                  {t('settings.llm.temperature')}
+                </span>
+                <div className="feature-temperature-controls">
+                  <input
+                    id={`feature-temp-slider-${featureId}`}
+                    type="range"
+                    className="feature-temperature-slider"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={temperature}
+                    onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+                    aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
+                    style={{ '--temperature-progress': `${(temperature / 2) * 100}%` } as React.CSSProperties}
+                  />
+                  <input
+                    id={`feature-temp-${featureId}`}
+                    type="number"
+                    className="settings-input feature-temperature-number"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={temperature}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
+                    }}
+                    aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
+                  />
+                </div>
               </div>
             </div>
           </div>
