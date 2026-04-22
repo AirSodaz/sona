@@ -168,9 +168,9 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 - The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and line breaks.
 - Search can jump between matching segments without leaving the editor.
 
-## 7. LLM Polish And Translation
+## 7. LLM Polish, Translation, And Summary
 
-Sona's LLM features are optional. Local transcription works without them, but `LLM Polish` and `Translate` require setup in `Settings > LLM Service`.
+Sona's LLM features are optional. Local transcription works without them, but `LLM Polish`, `Translate`, and `AI Summary` require setup in `Settings > LLM Service`.
 
 ### Preconditions
 
@@ -180,7 +180,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 ### LLM Service Setup
 
 1. Open `Settings > LLM Service`.
-2. In `Feature Models`, choose the model for `Polish Model` and the model for `Translation Model`.
+2. In `Feature Models`, choose the model for `Polish Model`, `Translation Model`, and `Summary Model`.
 3. In `Provider Credentials`, open the provider you want to use and fill in its connection details such as `Base URL`, `API Key`, `Endpoint`, `Deployment Name`, or provider-specific fields.
 4. Click `Test Connection` after entering credentials.
 5. Return to the main workspace after the required feature model is assigned.
@@ -201,17 +201,29 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 4. Click `Start Translation` or `Retranslate`.
 5. Use `Show Translations` or `Hide Translations` to control bilingual display in the editor.
 
+### Steps For `AI Summary`
+
+1. Make sure `Summary Model` is assigned in `Settings > LLM Service`.
+2. Open any transcript that already has segments.
+3. Use the summary panel at the top of the editor and switch between `General`, `Meeting`, or `Lecture`.
+4. Click `Generate` to create a summary for the current template, or `Regenerate` to refresh that template later.
+5. Click `Copy` when you want to reuse the summary elsewhere.
+6. If the transcript is edited, polished, or re-transcribed later, the old summary stays visible but shows an outdated warning until you regenerate it manually.
+
 ### Result
 
 - `LLM Polish` updates transcript text in place.
 - `Translate` stores translation text per segment and can display it under the original text.
+- `AI Summary` stores a read-only summary beside the transcript without changing the original text.
 
 ### Notes
 
-- `Polish Model` and `Translation Model` are configured separately. One provider can serve both, or you can split them.
+- `Polish Model`, `Translation Model`, and `Summary Model` are configured separately. One provider can serve all three, or you can split them.
 - Translation can use dedicated translation providers such as `Google Translate (Free)` or `Google Translate (API)`, but `LLM Polish` needs an LLM-capable provider and model.
+- `AI Summary` also needs an LLM-capable provider and model; the Google Translate providers are not supported for summaries.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
 - `Re-transcribe` is only available when the current transcript came from a saved history item.
+- Summary output stays read-only in the editor for now. If you want to reuse it, copy it from the panel.
 
 ## 8. Export Transcript
 

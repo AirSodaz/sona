@@ -6,6 +6,7 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
+import { summaryService } from '../services/summaryService';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
@@ -500,11 +501,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             const duration = finalizedDurationSecondsRef.current ?? getRecordedDurationSeconds();
 
             if (segments.length > 0) {
-                const newItem = await historyService.saveRecording(blob, segments, duration);
-                if (newItem) {
-                    useHistoryStore.getState().addItem(newItem);
-                    useTranscriptStore.getState().setSourceHistoryId(newItem.id);
-                }
+                    const newItem = await historyService.saveRecording(blob, segments, duration);
+                    if (newItem) {
+                        useHistoryStore.getState().addItem(newItem);
+                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                        await summaryService.persistSummary(newItem.id);
+                    }
             }
 
             finalizedDurationSecondsRef.current = null;
@@ -773,6 +775,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
                         useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                        await summaryService.persistSummary(newItem.id);
                     }
                 } else {
                     logger.info('[useAudioRecorder] Empty transcript, deleting unsaved WAV file:', savedWavPath);

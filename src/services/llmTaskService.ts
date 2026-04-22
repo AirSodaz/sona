@@ -1,11 +1,11 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { v4 as uuidv4 } from 'uuid';
-import { LlmConfig } from '../types/transcript';
+import { LlmConfig, SummaryTemplate } from '../types/transcript';
 
 export const LLM_TASK_PROGRESS_EVENT = 'llm-task-progress';
 export const LLM_TASK_CHUNK_EVENT = 'llm-task-chunk';
 
-export type LlmTaskType = 'polish' | 'translate';
+export type LlmTaskType = 'polish' | 'translate' | 'summary';
 
 export interface LlmSegmentInput {
   id: string;
@@ -38,6 +38,25 @@ export interface TranslateSegmentsRequest {
   segments: LlmSegmentInput[];
   chunkSize?: number;
   targetLanguage: string;
+}
+
+export interface SummarySegmentInput extends LlmSegmentInput {
+  start: number;
+  end: number;
+  isFinal: boolean;
+}
+
+export interface SummarizeTranscriptRequest {
+  taskId: string;
+  config: LlmConfig;
+  template: SummaryTemplate;
+  segments: SummarySegmentInput[];
+  chunkCharBudget?: number;
+}
+
+export interface TranscriptSummaryResult {
+  template: SummaryTemplate;
+  content: string;
 }
 
 export interface LlmTaskProgressPayload {

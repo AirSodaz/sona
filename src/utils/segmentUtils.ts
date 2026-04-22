@@ -462,6 +462,12 @@ export function computeSegmentsFingerprint(segments: TranscriptSegment[]): strin
     ).join('|');
 }
 
+export function computeSummarySourceFingerprint(segments: TranscriptSegment[]): string {
+    return segments.map(s =>
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}`
+    ).join('|');
+}
+
 export function alignTokensToText(
     text: string,
     rawTokens: string[],

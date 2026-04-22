@@ -57,8 +57,10 @@ describe('historyService.deleteRecordings', () => {
         // Check file deletions
         expect(remove).toHaveBeenCalledWith('history/audio1.wav', expect.anything());
         expect(remove).toHaveBeenCalledWith('history/transcript1.json', expect.anything());
+        expect(remove).toHaveBeenCalledWith('history/1.summary.json', expect.anything());
         expect(remove).toHaveBeenCalledWith('history/audio3.wav', expect.anything());
         expect(remove).toHaveBeenCalledWith('history/transcript3.json', expect.anything());
+        expect(remove).toHaveBeenCalledWith('history/3.summary.json', expect.anything());
         expect(remove).not.toHaveBeenCalledWith('history/audio2.wav', expect.anything());
 
         // Check index update

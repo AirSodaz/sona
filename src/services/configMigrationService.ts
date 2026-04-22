@@ -40,8 +40,28 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
   const needsUpgrade = isConfigMigrated || !configToLoad.configVersion || configToLoad.configVersion < 1;
 
   if (!needsUpgrade) {
-    // If it's fully up to date and not from localStorage, just return it
-    return { config: configToLoad as AppConfig, migrated: false };
+    const normalizedLlmSettings = ensureLlmState(configToLoad).llmSettings;
+    const normalizedConfig: AppConfig = {
+      ...(configToLoad as AppConfig),
+      llmSettings: normalizedLlmSettings,
+    };
+
+    const llmChanged =
+      JSON.stringify((configToLoad as AppConfig).llmSettings ?? null) !==
+      JSON.stringify(normalizedLlmSettings);
+
+    if (!llmChanged) {
+      return { config: normalizedConfig, migrated: false };
+    }
+
+    try {
+      await settingsStore.set(STORE_KEY_CONFIG, normalizedConfig);
+      await settingsStore.save();
+    } catch (e) {
+      logger.error('Failed to save normalized config to Tauri store:', e);
+    }
+
+    return { config: normalizedConfig, migrated: true };
   }
 
   // 4. Perform Data Normalization & Structural Upgrades

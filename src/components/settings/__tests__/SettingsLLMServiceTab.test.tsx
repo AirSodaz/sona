@@ -39,6 +39,7 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
   });
   llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
   llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+  llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
 
   return {
     ...baseConfig,
@@ -77,6 +78,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getByText('settings.llm.feature_models')).toBeDefined();
     expect(screen.getByText('settings.llm.polish_model')).toBeDefined();
     expect(screen.getByText('settings.llm.translation_model')).toBeDefined();
+    expect(screen.getByText('settings.llm.summary_model')).toBeDefined();
     expect(screen.getByText('settings.llm.credentials_section')).toBeDefined();
   });
 
@@ -182,6 +184,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
     expect(screen.getByText('settings.llm.polish_temperature')).toBeDefined();
     expect(screen.getByText('settings.llm.translation_temperature')).toBeDefined();
+    expect(screen.getByText('settings.llm.summary_temperature')).toBeDefined();
   });
 
   it('updates polish temperature independently', async () => {
@@ -221,6 +224,27 @@ describe('SettingsLLMServiceTab', () => {
       llmSettings: expect.objectContaining({
         selections: expect.objectContaining({
           translationTemperature: 1.1,
+        }),
+      }),
+    }));
+  });
+
+  it('updates summary temperature independently', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    const sliders = screen.getAllByRole('spinbutton');
+    await act(async () => {
+      fireEvent.change(sliders[2], { target: { value: '0.6' } });
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        selections: expect.objectContaining({
+          summaryTemperature: 0.6,
         }),
       }),
     }));

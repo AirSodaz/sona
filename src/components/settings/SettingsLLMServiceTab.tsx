@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe } from 'lucide-react';
+import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, FileText } from 'lucide-react';
 import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
-import { LlmProvider, LlmProviderSetting } from '../../types/transcript';
+import { LlmFeature, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { LlmAssistantConfig } from '../../types/config';
 import { normalizeError } from '../../utils/errorUtils';
@@ -62,9 +62,15 @@ function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting
   return true;
 }
 
+const FEATURE_TEMPERATURE_LABELS: Record<LlmFeature, string> = {
+  polish: 'settings.llm.polish_temperature',
+  translation: 'settings.llm.translation_temperature',
+  summary: 'settings.llm.summary_temperature',
+};
+
 // ------ FEATURE CARD COMPONENT ------
 interface FeatureCardProps {
-  featureId: 'polish' | 'translation';
+  featureId: LlmFeature;
   title: string;
   icon: React.ReactNode;
   config: LlmAssistantConfig;
@@ -77,9 +83,11 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
-  const temperature = featureId === 'polish' 
+  const temperature = featureId === 'polish'
     ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
-    : (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE);
+    : featureId === 'translation'
+      ? (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE)
+      : (currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE);
 
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
@@ -103,7 +111,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
       if (p.id === selectedProvider) return true;
       
       // Feature-specific exclusions
-      if (featureId === 'polish' && (p.id === 'google_translate' || p.id === 'google_translate_free')) {
+      if (featureId !== 'translation' && (p.id === 'google_translate' || p.id === 'google_translate_free')) {
         return false;
       }
 
@@ -173,7 +181,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
     setLocalProvider(p);
-    if (p === 'google_translate' || p === 'google_translate_free') {
+    if (featureId === 'translation' && (p === 'google_translate' || p === 'google_translate_free')) {
       setLocalModelName('default');
       commitModelChange(p, 'default');
     } else {
@@ -301,7 +309,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
         </div>
 
         <div className="feature-field">
-           <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}</label>
+           <label className="settings-label" htmlFor={`feature-temp-${featureId}`}>{t(FEATURE_TEMPERATURE_LABELS[featureId])}</label>
            <div className="feature-temperature-container">
              <input
                type="range"
@@ -311,7 +319,7 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
                step={0.05}
                value={temperature}
                onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-               aria-label={t(featureId === 'polish' ? 'settings.llm.polish_temperature' : 'settings.llm.translation_temperature')}
+               aria-label={t(FEATURE_TEMPERATURE_LABELS[featureId])}
              />
              <input
                id={`feature-temp-${featureId}`}
@@ -546,6 +554,9 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
     const translationModel = getFeatureModelEntry(config, 'translation');
     if (translationModel) active.add(translationModel.provider);
 
+    const summaryModel = getFeatureModelEntry(config, 'summary');
+    if (summaryModel) active.add(summaryModel.provider);
+
     LLM_PROVIDER_DEFINITIONS.forEach(def => {
        const key = currentLlmState.providers[def.id]?.apiKey;
        if (key && key.trim()) {
@@ -569,7 +580,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
       <SettingsPageHeader 
           icon={<RobotIcon width={28} height={28} />}
           title={t('settings.llm.title')} 
-          description={t('settings.llm.description', { defaultValue: 'Configure LLM providers and models used for polishing and translating transcripts.' })} 
+          description={t('settings.llm.description', { defaultValue: 'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.' })} 
       />
       
       {/* 1. Feature Cards Section */}
@@ -591,6 +602,14 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
              featureId="translation"
              title={t('settings.llm.translation_model')}
              icon={<Globe size={20} />}
+             config={config}
+             applyLlmSettings={applyLlmSettings}
+             t={t}
+           />
+           <FeatureCard
+             featureId="summary"
+             title={t('settings.llm.summary_model')}
+             icon={<FileText size={20} />}
              config={config}
              applyLlmSettings={applyLlmSettings}
              t={t}

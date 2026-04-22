@@ -36,6 +36,7 @@ describe('llmConfig', () => {
     }));
     expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
+    expect(llmSettings.selections.summaryModelId).toBe(llmSettings.modelOrder[0]);
     expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
       provider: 'open_ai',
       baseUrl: 'https://api.openai.com',
@@ -76,6 +77,7 @@ describe('llmConfig', () => {
     llmSettings = addLlmModel(llmSettings, { provider: 'anthropic', model: 'claude-sonnet-4-20250514' });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[1]);
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
 
     const config = buildLlmConfigPatch(llmSettings);
 
@@ -89,6 +91,11 @@ describe('llmConfig', () => {
       apiKey: 'anthropic-key',
       model: 'claude-sonnet-4-20250514',
     }));
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(expect.objectContaining({
+      provider: 'open_ai',
+      apiKey: 'openai-key',
+      model: 'gpt-4o-mini',
+    }));
   });
 
   it('resolves feature-specific temperatures independently', () => {
@@ -100,8 +107,10 @@ describe('llmConfig', () => {
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
     llmSettings = setFeatureTemperature(llmSettings, 'polish', 0.2);
     llmSettings = setFeatureTemperature(llmSettings, 'translation', 1.1);
+    llmSettings = setFeatureTemperature(llmSettings, 'summary', 0.4);
 
     const config = buildLlmConfigPatch(llmSettings);
 
@@ -110,6 +119,9 @@ describe('llmConfig', () => {
     }));
     expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
       temperature: 1.1,
+    }));
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(expect.objectContaining({
+      temperature: 0.4,
     }));
   });
 
@@ -196,11 +208,40 @@ describe('llmConfig', () => {
     const modelId = llmSettings.modelOrder[0];
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', modelId);
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', modelId);
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', modelId);
 
     const nextSettings = removeLlmModel(llmSettings, modelId);
 
     expect(nextSettings.modelOrder).toEqual([]);
     expect(nextSettings.selections.polishModelId).toBeUndefined();
     expect(nextSettings.selections.translationModelId).toBeUndefined();
+    expect(nextSettings.selections.summaryModelId).toBeUndefined();
+  });
+
+  it('does not default summary to a translation-only google provider', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'google_translate_free',
+        providers: {
+          google_translate_free: {
+            apiHost: 'https://translate.googleapis.com/translate_a/single',
+            apiKey: '',
+          },
+        },
+        models: {
+          'google-default': {
+            id: 'google-default',
+            provider: 'google_translate_free',
+            model: 'default',
+          },
+        },
+        modelOrder: ['google-default'],
+        selections: {
+          translationModelId: 'google-default',
+        },
+      },
+    } as any);
+
+    expect(llmSettings.selections.summaryModelId).toBeUndefined();
   });
 });

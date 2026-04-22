@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSegmentsFingerprint } from '../segmentUtils';
+import { computeSegmentsFingerprint, computeSummarySourceFingerprint } from '../segmentUtils';
 import { TranscriptSegment } from '../../types/transcript';
 
 describe('computeSegmentsFingerprint', () => {
@@ -50,5 +50,29 @@ describe('computeSegmentsFingerprint', () => {
         const fingerprint2 = computeSegmentsFingerprint(segments2);
 
         expect(fingerprint1).not.toBe(fingerprint2);
+    });
+});
+
+describe('computeSummarySourceFingerprint', () => {
+    it('ignores translation changes when building the summary fingerprint', () => {
+        const segments1: TranscriptSegment[] = [
+            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
+        ];
+        const segments2: TranscriptSegment[] = [
+            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: 'Bonjour' }
+        ];
+
+        expect(computeSummarySourceFingerprint(segments1)).toBe(computeSummarySourceFingerprint(segments2));
+    });
+
+    it('changes when transcript source text changes', () => {
+        const segments1: TranscriptSegment[] = [
+            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
+        ];
+        const segments2: TranscriptSegment[] = [
+            { id: '1', text: 'Hello there', start: 0, end: 1, isFinal: true }
+        ];
+
+        expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
     });
 });

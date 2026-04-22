@@ -234,6 +234,18 @@ export const LLM_PROVIDER_MAP: Record<LlmProvider, LlmProviderDefinition> =
     return acc;
   }, {} as Record<LlmProvider, LlmProviderDefinition>);
 
+const FEATURE_MODEL_SELECTION_KEYS = {
+  polish: 'polishModelId',
+  translation: 'translationModelId',
+  summary: 'summaryModelId',
+} as const;
+
+const FEATURE_TEMPERATURE_SELECTION_KEYS = {
+  polish: 'polishTemperature',
+  translation: 'translationTemperature',
+  summary: 'summaryTemperature',
+} as const;
+
 const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
   anthropic: 'anthropic',
   azure_open_ai: 'azure_openai',
@@ -395,8 +407,13 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
       typeof selections.translationModelId === 'string' && models[selections.translationModelId]
         ? selections.translationModelId
         : undefined,
+    summaryModelId:
+      typeof selections.summaryModelId === 'string' && models[selections.summaryModelId]
+        ? selections.summaryModelId
+        : undefined,
     polishTemperature: normalizeTemperature(selections.polishTemperature),
     translationTemperature: normalizeTemperature(selections.translationTemperature),
+    summaryTemperature: normalizeTemperature(selections.summaryTemperature),
   };
 }
 
@@ -417,6 +434,14 @@ function applyLegacyTemperature(
       translationTemperature: llmSettings.selections.translationTemperature ?? normalizedTemperature,
     },
   };
+}
+
+function supportsSummaryModel(modelEntry: LlmModelEntry | undefined): boolean {
+  if (!modelEntry) {
+    return false;
+  }
+
+  return modelEntry.provider !== 'google_translate' && modelEntry.provider !== 'google_translate_free';
 }
 
 export function createLlmSettings(activeProvider: LlmProvider = DEFAULT_LLM_PROVIDER): LlmSettings {
@@ -523,8 +548,10 @@ export function removeLlmModel(
       polishModelId: current.selections.polishModelId === modelId ? undefined : current.selections.polishModelId,
       translationModelId:
         current.selections.translationModelId === modelId ? undefined : current.selections.translationModelId,
+      summaryModelId: current.selections.summaryModelId === modelId ? undefined : current.selections.summaryModelId,
       polishTemperature: current.selections.polishTemperature,
       translationTemperature: current.selections.translationTemperature,
+      summaryTemperature: current.selections.summaryTemperature,
     },
   };
 }
@@ -535,7 +562,7 @@ export function setFeatureModelSelection(
   modelId: string | undefined,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
-  const key = feature === 'polish' ? 'polishModelId' : 'translationModelId';
+  const key = FEATURE_MODEL_SELECTION_KEYS[feature];
   return {
     ...current,
     selections: {
@@ -551,7 +578,7 @@ export function setFeatureTemperature(
   temperature: number | undefined,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
-  const key = feature === 'polish' ? 'polishTemperature' : 'translationTemperature';
+  const key = FEATURE_TEMPERATURE_SELECTION_KEYS[feature];
   return {
     ...current,
     selections: {
@@ -576,9 +603,7 @@ export function getFeatureModelId(
     return undefined;
   }
 
-  return feature === 'polish'
-    ? config.llmSettings.selections.polishModelId
-    : config.llmSettings.selections.translationModelId;
+  return config.llmSettings.selections[FEATURE_MODEL_SELECTION_KEYS[feature]];
 }
 
 export function getFeatureModelEntry(
@@ -737,6 +762,15 @@ export function ensureLlmState(
 
   llmSettings = applyLegacyTemperature(llmSettings, candidate.llm?.temperature);
 
+  const summaryModelId = llmSettings.selections.summaryModelId;
+  if (!summaryModelId) {
+    const polishModelId = llmSettings.selections.polishModelId;
+    const polishModelEntry = polishModelId ? llmSettings.models[polishModelId] : undefined;
+    if (polishModelId && supportsSummaryModel(polishModelEntry)) {
+      llmSettings = setFeatureModelSelection(llmSettings, 'summary', polishModelId);
+    }
+  }
+
   return {
     llmSettings,
   };
@@ -760,9 +794,7 @@ function getFeatureTemperature(
   config: Pick<AppConfig, 'llmSettings'>,
   feature: LlmFeature,
 ): number | undefined {
-  const selectionTemperature = feature === 'polish'
-    ? config.llmSettings?.selections.polishTemperature
-    : config.llmSettings?.selections.translationTemperature;
+  const selectionTemperature = config.llmSettings?.selections[FEATURE_TEMPERATURE_SELECTION_KEYS[feature]];
 
   return selectionTemperature ?? DEFAULT_LLM_TEMPERATURE;
 }

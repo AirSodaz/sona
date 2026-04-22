@@ -66,6 +66,6 @@ describe('historyService Performance', () => {
 
         console.log(`deleteRecordings for ${itemCount} items took: ${(endTime - startTime).toFixed(2)}ms`);
 
-        expect(remove).toHaveBeenCalledTimes(itemCount * 2);
+        expect(remove).toHaveBeenCalledTimes(itemCount * 3);
     });
 });

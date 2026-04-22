@@ -42,6 +42,7 @@
             "llm_missing": "Please configure the LLM service in Settings first.",
             "polish_model_missing": "Please assign a model for polishing in Settings > LLM Service first.",
             "translation_model_missing": "Please assign a model for translation in Settings > LLM Service first.",
+            "summary_model_missing": "Please assign a model for summaries in Settings > LLM Service first.",
             "offline_model_missing": "Please configure an offline model in Settings first."
         },
         "batch": {
@@ -66,6 +67,9 @@
         "polish": {
             "failed": "Polishing failed.",
             "retranscribe_failed": "Retranscription failed."
+        },
+        "summary": {
+            "failed": "Summary generation failed."
         },
         "update": {
             "failed": "Update failed."
@@ -388,7 +392,7 @@
         },
         "llm": {
             "title": "LLM Service",
-            "description": "Configure LLM providers and models used for polishing and translating transcripts.",
+            "description": "Configure LLM providers and models used for polishing, translating, and summarizing transcripts.",
             "service_type": "LLM Service Type",
             "credential_provider": "Credential Provider",
             "credentials_section": "Provider Credentials",
@@ -411,10 +415,11 @@
             "add_model": "Add Model",
             "no_models_added": "No models added yet.",
             "feature_models": "Feature Models",
-            "feature_models_hint": "Assign models for polish and translation before using those features.",
-            "feature_models_runtime_hint": "Polish and translation run with the model and temperature configured here.",
+            "feature_models_hint": "Assign models for polish, translation, and summary before using those features.",
+            "feature_models_runtime_hint": "Polish, translation, and summary run with the model and temperature configured here.",
             "polish_model": "Polish Model",
             "translation_model": "Translation Model",
+            "summary_model": "Summary Model",
             "used_for_polish": "Used for polish",
             "used_for_translation": "Used for translation",
             "assign_to_polish": "Assign to Polish",
@@ -432,6 +437,7 @@
             "temperature": "Temperature",
             "polish_temperature": "Polish Temperature",
             "translation_temperature": "Translation Temperature",
+            "summary_temperature": "Summary Temperature",
             "status_ready": "Ready",
             "status_missing_api_key": "Missing API Key",
             "status_missing_model": "Missing model"
@@ -560,6 +566,23 @@
             "fr": "French",
             "de": "German",
             "es": "Spanish"
+        }
+    },
+    "summary": {
+        "title": "AI Summary",
+        "subtitle": "Keep a read-only summary beside the transcript without rewriting the original text.",
+        "templates_label": "Summary templates",
+        "copy": "Copy",
+        "copied": "Copied",
+        "generate": "Generate",
+        "regenerate": "Regenerate",
+        "generating_progress": "Generating... {{progress}}%",
+        "stale": "This summary is outdated because the transcript changed. Regenerate it when you are ready.",
+        "empty_state": "No {{template}} summary yet. Generate one when you need it.",
+        "templates": {
+            "general": "General",
+            "meeting": "Meeting",
+            "lecture": "Lecture"
         }
     },
     "polish": {

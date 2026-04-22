@@ -701,6 +701,7 @@ pub fn run() {
             llm::generate_llm_text,
             llm::list_llm_models,
             llm::polish_transcript_segments,
+            llm::summarize_transcript,
             llm::translate_transcript_segments,
             sherpa::init_recognizer,
             sherpa::start_recognizer,

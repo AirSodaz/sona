@@ -7,6 +7,7 @@ import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { polishService } from '../services/polishService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { summaryService } from '../services/summaryService';
 import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
@@ -279,6 +280,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         // If this is the active item, propagate sourceHistoryId
                         if (get().activeItemId === itemId) {
                             useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                            await summaryService.persistSummary(historyItem.id);
                         }
                     }
                 }

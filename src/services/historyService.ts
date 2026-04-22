@@ -3,12 +3,24 @@ import { BaseDirectory, readTextFile, writeTextFile, writeFile, remove, exists, 
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { TranscriptSegment } from '../types/transcript';
+import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { HistoryItem } from '../types/history';
 import { v4 as uuidv4 } from 'uuid';
 
 const HISTORY_DIR = 'history';
 const INDEX_FILE = 'index.json';
+
+async function safeRemoveHistoryPath(path: string): Promise<void> {
+    try {
+        await remove(path, { baseDir: BaseDirectory.AppLocalData });
+    } catch (e: any) {
+        const errMsg = String(e);
+        if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
+            logger.error(`[History] Failed to remove file at ${path}:`, e);
+            throw e;
+        }
+    }
+}
 
 export const historyService = {
 
@@ -251,23 +263,12 @@ export const historyService = {
                 // Delete files
                 const audioPath = `${HISTORY_DIR}/${itemToDelete.audioPath}`;
                 const transcriptPath = `${HISTORY_DIR}/${itemToDelete.transcriptPath}`;
-
-                const safeRemove = async (path: string) => {
-                    try {
-                        await remove(path, { baseDir: BaseDirectory.AppLocalData });
-                    } catch (e: any) {
-                        // Ignore file not found errors, but log others
-                        const errMsg = String(e);
-                        if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
-                            logger.error(`[History] Failed to remove file at ${path}:`, e);
-                            throw e;
-                        }
-                    }
-                };
+                const summaryPath = `${HISTORY_DIR}/${id}.summary.json`;
 
                 await Promise.all([
-                    safeRemove(audioPath),
-                    safeRemove(transcriptPath)
+                    safeRemoveHistoryPath(audioPath),
+                    safeRemoveHistoryPath(transcriptPath),
+                    safeRemoveHistoryPath(summaryPath)
                 ]);
             }
 
@@ -297,23 +298,12 @@ export const historyService = {
                 await Promise.allSettled(batch.map(async (item) => {
                     const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
                     const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
-
-                    const safeRemove = async (path: string) => {
-                        try {
-                            await remove(path, { baseDir: BaseDirectory.AppLocalData });
-                        } catch (e: any) {
-                            // Ignore file not found errors, but log others
-                            const errMsg = String(e);
-                            if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
-                                logger.error(`[History] Failed to remove file at ${path}:`, e);
-                                throw e; // Rethrow so Promise.allSettled can catch it
-                            }
-                        }
-                    };
+                    const summaryPath = `${HISTORY_DIR}/${item.id}.summary.json`;
 
                     await Promise.all([
-                        safeRemove(audioPath),
-                        safeRemove(transcriptPath)
+                        safeRemoveHistoryPath(audioPath),
+                        safeRemoveHistoryPath(transcriptPath),
+                        safeRemoveHistoryPath(summaryPath)
                     ]);
                 }));
             }
@@ -378,6 +368,43 @@ export const historyService = {
             );
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
+        }
+    },
+
+    async loadSummary(historyId: string): Promise<HistorySummaryPayload | null> {
+        try {
+            const content = await readTextFile(`${HISTORY_DIR}/${historyId}.summary.json`, {
+                baseDir: BaseDirectory.AppLocalData,
+            });
+            return JSON.parse(content);
+        } catch (error: any) {
+            const errMsg = String(error);
+            if (!errMsg.includes('No such file or directory') && error?.code !== 'ENOENT') {
+                logger.error('[History] Failed to load summary sidecar:', error);
+            }
+            return null;
+        }
+    },
+
+    async saveSummary(historyId: string, summaryPayload: HistorySummaryPayload): Promise<void> {
+        try {
+            await this.init();
+            await writeTextFile(
+                `${HISTORY_DIR}/${historyId}.summary.json`,
+                JSON.stringify(summaryPayload, null, 2),
+                { baseDir: BaseDirectory.AppLocalData }
+            );
+        } catch (error) {
+            logger.error('[History] Failed to save summary sidecar:', error);
+            throw error;
+        }
+    },
+
+    async deleteSummary(historyId: string): Promise<void> {
+        try {
+            await safeRemoveHistoryPath(`${HISTORY_DIR}/${historyId}.summary.json`);
+        } catch (error) {
+            logger.error('[History] Failed to delete summary sidecar:', error);
         }
     },
 

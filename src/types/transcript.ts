@@ -71,7 +71,40 @@ export type LlmProviderStrategy =
   | 'google_translate_free'
   | 'perplexity';
 
-export type LlmFeature = 'polish' | 'translation';
+export type SummaryTemplate = 'general' | 'meeting' | 'lecture';
+
+export const DEFAULT_SUMMARY_TEMPLATE: SummaryTemplate = 'general';
+
+export interface TranscriptSummaryRecord {
+  /** Template used to generate the summary. */
+  template: SummaryTemplate;
+  /** Read-only summary content. */
+  content: string;
+  /** ISO timestamp when the summary was generated. */
+  generatedAt: string;
+  /** Fingerprint of the transcript source used to create the summary. */
+  sourceFingerprint: string;
+}
+
+export interface TranscriptSummaryState {
+  /** Currently selected template in the summary panel. */
+  activeTemplate: SummaryTemplate;
+  /** Saved summary records keyed by template. */
+  records: Partial<Record<SummaryTemplate, TranscriptSummaryRecord>>;
+  /** Whether a summary is currently being generated. */
+  isGenerating: boolean;
+  /** Progress percentage for summary generation. */
+  generationProgress: number;
+}
+
+export interface HistorySummaryPayload {
+  /** Currently selected template for the history item. */
+  activeTemplate: SummaryTemplate;
+  /** Persisted summary records keyed by template. */
+  records: Partial<Record<SummaryTemplate, TranscriptSummaryRecord>>;
+}
+
+export type LlmFeature = 'polish' | 'translation' | 'summary';
 
 export interface LlmProviderSetting {
   /** Provider API host or endpoint. */
@@ -98,10 +131,14 @@ export interface LlmFeatureSelections {
   polishModelId?: string;
   /** Selected model entry for translation. */
   translationModelId?: string;
+  /** Selected model entry for summary. */
+  summaryModelId?: string;
   /** Temperature override for polish. */
   polishTemperature?: number;
   /** Temperature override for translation. */
   translationTemperature?: number;
+  /** Temperature override for summary. */
+  summaryTemperature?: number;
 }
 
 export interface LlmSettings {

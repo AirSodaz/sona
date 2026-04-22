@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { TranscriptSegment, AppMode, ProcessingStatus, AppConfig } from '../types/transcript';
+import {
+    TranscriptSegment,
+    AppMode,
+    ProcessingStatus,
+    AppConfig,
+    DEFAULT_SUMMARY_TEMPLATE,
+    HistorySummaryPayload,
+    SummaryTemplate,
+    TranscriptSummaryState
+} from '../types/transcript';
 import { useConfigStore, DEFAULT_CONFIG } from './configStore';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 // createLlmSettings is now used in configStore
@@ -57,6 +66,12 @@ interface TranscriptState {
      * Use 'current' for the active unsaved recording.
      */
     llmStates: Record<string, LlmState>;
+
+    /**
+     * Record of transcript summary states mapped by sourceHistoryId.
+     * Use 'current' for the active unsaved recording.
+     */
+    summaryStates: Record<string, TranscriptSummaryState>;
 
     // Config
     /** Application configuration. */
@@ -179,6 +194,39 @@ interface TranscriptState {
      */
     updateLlmState: (updates: Partial<LlmState>, historyId?: string) => void;
 
+    /**
+     * Gets the summary state for a specific history ID.
+     * If no ID is provided, uses the current sourceHistoryId or 'current'.
+     */
+    getSummaryState: (historyId?: string) => TranscriptSummaryState;
+
+    /**
+     * Replaces the summary state for a specific history ID.
+     * If no ID is provided, updates the current sourceHistoryId or 'current'.
+     */
+    setSummaryState: (summaryState: Partial<TranscriptSummaryState>, historyId?: string) => void;
+
+    /**
+     * Updates the summary state for a specific history ID.
+     * If no ID is provided, updates the current sourceHistoryId or 'current'.
+     */
+    updateSummaryState: (updates: Partial<TranscriptSummaryState>, historyId?: string) => void;
+
+    /**
+     * Updates the active summary template for the current transcript or a specific history item.
+     */
+    setActiveSummaryTemplate: (template: SummaryTemplate, historyId?: string) => void;
+
+    /**
+     * Hydrates persisted summary payload into store state for a specific history ID.
+     */
+    hydrateSummaryState: (payload: HistorySummaryPayload, historyId?: string) => void;
+
+    /**
+     * Clears a summary state entry.
+     */
+    clearSummaryState: (historyId?: string) => void;
+
     // Legacy actions for backward compatibility (updates current active state)
     setIsTranslationVisible: (visible: boolean) => void;
     setIsTranslating: (translating: boolean) => void;
@@ -251,6 +299,20 @@ const DEFAULT_LLM_STATE: LlmState = {
     retranscribeProgress: 0,
 };
 
+const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
+    activeTemplate: DEFAULT_SUMMARY_TEMPLATE,
+    records: {},
+    isGenerating: false,
+    generationProgress: 0,
+};
+
+function createDefaultSummaryState(): TranscriptSummaryState {
+    return {
+        ...DEFAULT_SUMMARY_STATE,
+        records: {},
+    };
+}
+
 
 /**
  * Zustand store for managing transcript data, audio state, and application configuration.
@@ -276,10 +338,37 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     seekRequest: null,
     sourceHistoryId: null,
     llmStates: {},
+    summaryStates: {},
     config: DEFAULT_CONFIG,
 
     // History tracking
-    setSourceHistoryId: (id) => set({ sourceHistoryId: id }),
+    setSourceHistoryId: (id) => set((state) => {
+        if (!id || !state.summaryStates.current) {
+            return { sourceHistoryId: id };
+        }
+
+        const currentSummaryState = state.summaryStates.current;
+        const existingTargetState = state.summaryStates[id];
+        const summaryStates = { ...state.summaryStates };
+
+        summaryStates[id] = existingTargetState
+            ? {
+                ...existingTargetState,
+                ...currentSummaryState,
+                records: {
+                    ...existingTargetState.records,
+                    ...currentSummaryState.records,
+                },
+            }
+            : currentSummaryState;
+
+        delete summaryStates.current;
+
+        return {
+            sourceHistoryId: id,
+            summaryStates,
+        };
+    }),
 
     // Segment CRUD
     addSegment: (segment) => {
@@ -388,12 +477,18 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     clearSegments: () => {
-        set({
+        set((state) => {
+            const summaryStates = { ...state.summaryStates };
+            delete summaryStates.current;
+
+            return {
             segments: [],
             activeSegmentId: null,
             activeSegmentIndex: -1,
             editingSegmentId: null,
-            sourceHistoryId: null
+            sourceHistoryId: null,
+            summaryStates,
+            };
         });
     },
 
@@ -434,6 +529,76 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
                     [id]: { ...currentState, ...updates }
                 }
             };
+        });
+    },
+
+    getSummaryState: (historyId) => {
+        const state = get();
+        const id = historyId || state.sourceHistoryId || 'current';
+        return state.summaryStates[id] || createDefaultSummaryState();
+    },
+
+    setSummaryState: (summaryState, historyId) => {
+        set((state) => {
+            const id = historyId || state.sourceHistoryId || 'current';
+            return {
+                summaryStates: {
+                    ...state.summaryStates,
+                    [id]: {
+                        ...createDefaultSummaryState(),
+                        ...summaryState,
+                        records: { ...(summaryState.records || {}) },
+                    },
+                },
+            };
+        });
+    },
+
+    updateSummaryState: (updates, historyId) => {
+        set((state) => {
+            const id = historyId || state.sourceHistoryId || 'current';
+            const currentState = state.summaryStates[id] || createDefaultSummaryState();
+            return {
+                summaryStates: {
+                    ...state.summaryStates,
+                    [id]: {
+                        ...currentState,
+                        ...updates,
+                        records: updates.records
+                            ? {
+                                ...currentState.records,
+                                ...updates.records,
+                            }
+                            : currentState.records,
+                    },
+                },
+            };
+        });
+    },
+
+    setActiveSummaryTemplate: (template, historyId) => {
+        get().updateSummaryState({ activeTemplate: template }, historyId);
+    },
+
+    hydrateSummaryState: (payload, historyId) => {
+        get().setSummaryState({
+            activeTemplate: payload.activeTemplate,
+            records: payload.records,
+            isGenerating: false,
+            generationProgress: 0,
+        }, historyId);
+    },
+
+    clearSummaryState: (historyId) => {
+        set((state) => {
+            const id = historyId || state.sourceHistoryId || 'current';
+            if (!state.summaryStates[id]) {
+                return state;
+            }
+
+            const summaryStates = { ...state.summaryStates };
+            delete summaryStates[id];
+            return { summaryStates };
         });
     },
 

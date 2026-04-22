@@ -57,6 +57,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecording(id);
+            useTranscriptStore.getState().clearSummaryState(id);
             
             // Clear current transcript if it matches the deleted item
             const transcriptStore = useTranscriptStore.getState();
@@ -81,6 +82,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecordings(ids);
+            ids.forEach((id) => useTranscriptStore.getState().clearSummaryState(id));
             
             // Clear current transcript if it matches any of the deleted items
             const transcriptStore = useTranscriptStore.getState();

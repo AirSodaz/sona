@@ -10,6 +10,7 @@ import { SegmentItem } from './transcript/SegmentItem';
 import { TranscriptUIContext } from './transcript/TranscriptUIContext';
 import { SearchUI } from './SearchUI';
 import { EditorToolbar } from './EditorToolbar';
+import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
 
@@ -193,6 +194,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     return (
         <div className="transcript-editor">
             <EditorToolbar />
+            <TranscriptSummaryPanel />
             {wordCount > 0 && (
                 <div className="word-count-badge">
                     {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}

@@ -9,6 +9,8 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
 const DEFAULT_SEGMENT_CHUNK_SIZE: usize = 30;
+const DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET: usize = 6000;
+const MIN_SUMMARY_CHUNK_CHAR_BUDGET: usize = 1200;
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
 const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 
@@ -72,6 +74,15 @@ struct GoogleTranslateResponse {
 pub enum LlmTaskType {
     Polish,
     Translate,
+    Summary,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SummaryTemplate {
+    General,
+    Meeting,
+    Lecture,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -130,6 +141,26 @@ pub struct TranslateSegmentsRequest {
     pub target_language: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SummarySegmentInput {
+    pub id: String,
+    pub text: String,
+    pub start: f32,
+    pub end: f32,
+    pub is_final: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SummarizeTranscriptRequest {
+    pub task_id: String,
+    pub config: LlmConfig,
+    pub template: SummaryTemplate,
+    pub segments: Vec<SummarySegmentInput>,
+    pub chunk_char_budget: Option<usize>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PolishedSegment {
@@ -142,6 +173,13 @@ pub struct PolishedSegment {
 pub struct TranslatedSegment {
     pub id: String,
     pub translation: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSummaryResult {
+    pub template: SummaryTemplate,
+    pub content: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -874,6 +912,7 @@ fn task_label(task_type: LlmTaskType) -> &'static str {
     match task_type {
         LlmTaskType::Polish => "polish",
         LlmTaskType::Translate => "translate",
+        LlmTaskType::Summary => "summary",
     }
 }
 
@@ -1059,6 +1098,214 @@ Input:\n\
         segments.len(),
         json_str
     )
+}
+
+fn summary_template_name(template: SummaryTemplate) -> &'static str {
+    match template {
+        SummaryTemplate::General => "general",
+        SummaryTemplate::Meeting => "meeting",
+        SummaryTemplate::Lecture => "lecture",
+    }
+}
+
+fn summary_template_structure(template: SummaryTemplate) -> &'static str {
+    match template {
+        SummaryTemplate::General => {
+            "1. A short overview paragraph.\n2. A concise list of key points.\n3. Follow-up items or next steps only if they are supported by the transcript."
+        }
+        SummaryTemplate::Meeting => {
+            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.\n4. Open questions, blockers, or risks."
+        }
+        SummaryTemplate::Lecture => {
+            "1. Lecture overview.\n2. Core concepts or arguments.\n3. Important examples, evidence, or explanations.\n4. Review points or next steps for study."
+        }
+    }
+}
+
+fn format_summary_timestamp(seconds: f32) -> String {
+    let total_seconds = seconds.max(0.0).floor() as u64;
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let secs = total_seconds % 60;
+    format!("{hours:02}:{minutes:02}:{secs:02}")
+}
+
+fn format_summary_segments_for_prompt(segments: &[SummarySegmentInput]) -> String {
+    segments
+        .iter()
+        .filter_map(|segment| {
+            let text = segment.text.trim();
+            if text.is_empty() {
+                return None;
+            }
+
+            Some(format!(
+                "[{} - {}] {}",
+                format_summary_timestamp(segment.start),
+                format_summary_timestamp(segment.end),
+                text
+            ))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn build_summary_chunk_prompt(
+    template: SummaryTemplate,
+    segments: &[SummarySegmentInput],
+    chunk_number: usize,
+    total_chunks: usize,
+) -> String {
+    format!(
+        "You are preparing an intermediate {template_name} summary for a transcript.\n\
+Use the same language as the transcript. Do not translate or switch languages.\n\
+Follow this structure:\n\
+{structure}\n\n\
+This is chunk {chunk_number} of {total_chunks}. Capture only information supported by this chunk.\n\
+Keep it concise, factual, and easy to merge later.\n\
+Do not use markdown code fences.\n\n\
+Transcript chunk:\n\
+{chunk_text}",
+        template_name = summary_template_name(template),
+        structure = summary_template_structure(template),
+        chunk_number = chunk_number,
+        total_chunks = total_chunks,
+        chunk_text = format_summary_segments_for_prompt(segments),
+    )
+}
+
+fn build_summary_finalize_prompt(
+    template: SummaryTemplate,
+    partial_summaries: &[String],
+) -> String {
+    format!(
+        "You are combining intermediate transcript summaries into one final {template_name} summary.\n\
+Use the same language as the transcript. Do not translate or switch languages.\n\
+Follow this structure:\n\
+{structure}\n\n\
+Merge overlapping points, keep the wording concise, and preserve only information supported by the intermediate summaries.\n\
+Do not use markdown code fences.\n\n\
+Intermediate summaries:\n\
+{partials}",
+        template_name = summary_template_name(template),
+        structure = summary_template_structure(template),
+        partials = partial_summaries
+            .iter()
+            .enumerate()
+            .map(|(index, item)| format!("[Chunk {}]\n{}", index + 1, item.trim()))
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+    )
+}
+
+fn normalize_summary_chunk_char_budget(chunk_char_budget: Option<usize>) -> usize {
+    chunk_char_budget
+        .unwrap_or(DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET)
+        .max(MIN_SUMMARY_CHUNK_CHAR_BUDGET)
+}
+
+fn estimate_summary_segment_chars(segment: &SummarySegmentInput) -> usize {
+    segment.text.chars().count() + 24
+}
+
+fn split_summary_segments(
+    segments: &[SummarySegmentInput],
+    chunk_char_budget: usize,
+) -> Vec<Vec<SummarySegmentInput>> {
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut current_chunk = Vec::new();
+    let mut current_chars = 0usize;
+
+    for segment in segments {
+        let segment_chars = estimate_summary_segment_chars(segment);
+
+        if !current_chunk.is_empty() && current_chars + segment_chars > chunk_char_budget {
+            chunks.push(current_chunk);
+            current_chunk = Vec::new();
+            current_chars = 0;
+        }
+
+        current_chars += segment_chars;
+        current_chunk.push(segment.clone());
+    }
+
+    if !current_chunk.is_empty() {
+        chunks.push(current_chunk);
+    }
+
+    chunks
+}
+
+fn validate_summary_provider(provider: LlmProvider) -> Result<(), String> {
+    if provider == LlmProvider::GoogleTranslate || provider == LlmProvider::GoogleTranslateFree {
+        return Err("Google Translate does not support transcript summaries".to_string());
+    }
+
+    Ok(())
+}
+
+fn summary_task_error(stage: impl AsRef<str>, error: impl Into<String>) -> String {
+    format!("summary {} failed: {}", stage.as_ref(), error.into())
+}
+
+async fn run_summary_task<GenerateFn, EmitProgressFn>(
+    task_id: &str,
+    template: SummaryTemplate,
+    segments: &[SummarySegmentInput],
+    chunk_char_budget: Option<usize>,
+    mut generate_text: GenerateFn,
+    mut emit_progress: EmitProgressFn,
+) -> Result<TranscriptSummaryResult, String>
+where
+    GenerateFn: FnMut(String) -> BoxFuture<'static, Result<String, String>>,
+    EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String>,
+{
+    if segments.is_empty() {
+        return Err("Transcript cannot be empty".to_string());
+    }
+
+    let normalized_budget = normalize_summary_chunk_char_budget(chunk_char_budget);
+    let chunks = split_summary_segments(segments, normalized_budget);
+    let total_chunks = chunks.len() + 1;
+    let mut partial_summaries = Vec::with_capacity(chunks.len());
+
+    for (chunk_index, chunk) in chunks.iter().enumerate() {
+        let chunk_number = chunk_index + 1;
+        let prompt = build_summary_chunk_prompt(template, chunk, chunk_number, chunks.len());
+        let intermediate_summary = generate_text(prompt)
+            .await
+            .map_err(|error| summary_task_error(format!("chunk {}", chunk_number), error))?;
+
+        partial_summaries.push(intermediate_summary.trim().to_string());
+
+        emit_progress(LlmTaskProgressPayload {
+            task_id: task_id.to_string(),
+            task_type: LlmTaskType::Summary,
+            completed_chunks: chunk_number,
+            total_chunks,
+        })?;
+    }
+
+    let final_prompt = build_summary_finalize_prompt(template, &partial_summaries);
+    let final_summary = generate_text(final_prompt)
+        .await
+        .map_err(|error| summary_task_error("final synthesis", error))?;
+
+    emit_progress(LlmTaskProgressPayload {
+        task_id: task_id.to_string(),
+        task_type: LlmTaskType::Summary,
+        completed_chunks: total_chunks,
+        total_chunks,
+    })?;
+
+    Ok(TranscriptSummaryResult {
+        template,
+        content: final_summary.trim().to_string(),
+    })
 }
 
 async fn run_segment_task<
@@ -1408,6 +1655,40 @@ pub async fn translate_transcript_segments(
 }
 
 #[tauri::command]
+pub async fn summarize_transcript(
+    app: AppHandle,
+    request: SummarizeTranscriptRequest,
+) -> Result<TranscriptSummaryResult, String> {
+    validate_task_request(&request.task_id, &request.config)?;
+    validate_summary_provider(request.config.provider)?;
+
+    let config = request.config.clone();
+    let template = request.template;
+
+    run_summary_task(
+        &request.task_id,
+        template,
+        &request.segments,
+        request.chunk_char_budget,
+        move |prompt| {
+            let config = config.clone();
+            Box::pin(async move {
+                generate_with_rig(LlmGenerateRequest {
+                    config,
+                    input: prompt,
+                })
+                .await
+            })
+        },
+        move |payload| {
+            app.emit(LLM_TASK_PROGRESS_EVENT, payload)
+                .map_err(|error| error.to_string())
+        },
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<String>, String> {
     if !provider_supports_model_listing(&request.provider) {
         return Ok(vec![]);
@@ -1443,6 +1724,32 @@ mod tests {
             LlmSegmentInput {
                 id: "3".to_string(),
                 text: "again".to_string(),
+            },
+        ]
+    }
+
+    fn sample_summary_segments() -> Vec<SummarySegmentInput> {
+        vec![
+            SummarySegmentInput {
+                id: "1".to_string(),
+                text: "Opening discussion about the roadmap.".to_string(),
+                start: 0.0,
+                end: 12.0,
+                is_final: true,
+            },
+            SummarySegmentInput {
+                id: "2".to_string(),
+                text: "The team agreed to ship the beta next month.".to_string(),
+                start: 12.0,
+                end: 26.0,
+                is_final: true,
+            },
+            SummarySegmentInput {
+                id: "3".to_string(),
+                text: "Alice will prepare the onboarding checklist.".to_string(),
+                start: 26.0,
+                end: 39.0,
+                is_final: true,
             },
         ]
     }
@@ -1630,6 +1937,50 @@ mod tests {
     }
 
     #[test]
+    fn build_summary_chunk_prompt_requires_same_language_and_structure() {
+        let prompt = build_summary_chunk_prompt(
+            SummaryTemplate::Meeting,
+            &sample_summary_segments()[..2],
+            1,
+            2,
+        );
+
+        assert!(prompt.contains("Use the same language as the transcript."));
+        assert!(prompt.contains("Meeting overview."));
+        assert!(prompt.contains("Action items with owners"));
+    }
+
+    #[test]
+    fn build_summary_finalize_prompt_requires_same_language_and_structure() {
+        let prompt = build_summary_finalize_prompt(
+            SummaryTemplate::Lecture,
+            &["Chunk 1 summary".to_string(), "Chunk 2 summary".to_string()],
+        );
+
+        assert!(prompt.contains("Use the same language as the transcript."));
+        assert!(prompt.contains("Core concepts or arguments."));
+        assert!(prompt.contains("[Chunk 1]"));
+    }
+
+    #[test]
+    fn split_summary_segments_uses_char_budget() {
+        let chunks = split_summary_segments(&sample_summary_segments(), 70);
+
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0][0].id, "1");
+        assert_eq!(chunks[1][0].id, "2");
+        assert_eq!(chunks[2][0].id, "3");
+    }
+
+    #[test]
+    fn summary_provider_rejects_google_translate() {
+        let err = validate_summary_provider(LlmProvider::GoogleTranslate)
+            .expect_err("google translate should be rejected");
+
+        assert!(err.contains("does not support transcript summaries"));
+    }
+
+    #[test]
     fn chunk_payload_serializes_with_camel_case() {
         let payload = LlmTaskChunkPayload {
             task_id: "task-1".to_string(),
@@ -1791,5 +2142,98 @@ mod tests {
             .expect_err("second chunk should fail");
 
         assert_eq!(err, "translate chunk 2 failed: boom");
+    }
+
+    #[tokio::test]
+    async fn run_summary_task_emits_chunk_and_final_progress() {
+        let segments = vec![
+            SummarySegmentInput {
+                id: "1".to_string(),
+                text: "A".repeat(700),
+                start: 0.0,
+                end: 12.0,
+                is_final: true,
+            },
+            SummarySegmentInput {
+                id: "2".to_string(),
+                text: "B".repeat(700),
+                start: 12.0,
+                end: 24.0,
+                is_final: true,
+            },
+            SummarySegmentInput {
+                id: "3".to_string(),
+                text: "C".repeat(700),
+                start: 24.0,
+                end: 36.0,
+                is_final: true,
+            },
+        ];
+        let mut progress_events = Vec::new();
+
+        let result = run_summary_task(
+            "summary-task-1",
+            SummaryTemplate::Meeting,
+            &segments,
+            Some(1200),
+            {
+                let mut call_count = 0usize;
+                move |_prompt| {
+                    call_count += 1;
+                    let response = match call_count {
+                        1 => "Intermediate summary A".to_string(),
+                        2 => "Intermediate summary B".to_string(),
+                        3 => "Intermediate summary C".to_string(),
+                        4 => "Final meeting summary".to_string(),
+                        _ => unreachable!(),
+                    };
+
+                    Box::pin(async move { Ok(response) })
+                }
+            },
+            |payload| {
+                progress_events.push(payload);
+                Ok(())
+            },
+        )
+        .await
+        .expect("summary task should succeed");
+
+        assert_eq!(
+            result,
+            TranscriptSummaryResult {
+                template: SummaryTemplate::Meeting,
+                content: "Final meeting summary".to_string(),
+            }
+        );
+        assert_eq!(
+            progress_events,
+            vec![
+                LlmTaskProgressPayload {
+                    task_id: "summary-task-1".to_string(),
+                    task_type: LlmTaskType::Summary,
+                    completed_chunks: 1,
+                    total_chunks: 4,
+                },
+                LlmTaskProgressPayload {
+                    task_id: "summary-task-1".to_string(),
+                    task_type: LlmTaskType::Summary,
+                    completed_chunks: 2,
+                    total_chunks: 4,
+                },
+                LlmTaskProgressPayload {
+                    task_id: "summary-task-1".to_string(),
+                    task_type: LlmTaskType::Summary,
+                    completed_chunks: 3,
+                    total_chunks: 4,
+                },
+                LlmTaskProgressPayload {
+                    task_id: "summary-task-1".to_string(),
+                    task_type: LlmTaskType::Summary,
+                    completed_chunks: 4,
+                    total_chunks: 4,
+                },
+            ]
+        );
     }
 }

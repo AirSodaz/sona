@@ -42,6 +42,7 @@
             "llm_missing": "请先在设置中配置 LLM 服务。",
             "polish_model_missing": "请先在 设置 > LLM 服务 中为润色指定模型。",
             "translation_model_missing": "请先在 设置 > LLM 服务 中为翻译指定模型。",
+            "summary_model_missing": "请先在 设置 > LLM 服务 中为摘要指定模型。",
             "offline_model_missing": "请先在设置中配置离线模型。"
         },
         "batch": {
@@ -66,6 +67,9 @@
         "polish": {
             "failed": "润色失败。",
             "retranscribe_failed": "重新转录失败。"
+        },
+        "summary": {
+            "failed": "摘要生成失败。"
         },
         "update": {
             "failed": "更新失败。"
@@ -388,7 +392,7 @@
         },
         "llm": {
             "title": "LLM 服务",
-            "description": "配置用于润色和翻译的 LLM 服务商与模型库。",
+            "description": "配置用于润色、翻译和摘要的 LLM 服务商与模型库。",
             "service_type": "LLM 服务类型",
             "credential_provider": "凭据提供商",
             "credentials_section": "Provider 凭据",
@@ -411,10 +415,11 @@
             "add_model": "添加模型",
             "no_models_added": "尚未添加模型。",
             "feature_models": "功能模型绑定",
-            "feature_models_hint": "使用润色和翻译前，请先分别指定对应模型。",
-            "feature_models_runtime_hint": "润色和翻译会直接使用这里配置的模型与 Temperature。",
+            "feature_models_hint": "使用润色、翻译和摘要前，请先分别指定对应模型。",
+            "feature_models_runtime_hint": "润色、翻译和摘要会直接使用这里配置的模型与 Temperature。",
             "polish_model": "润色模型",
             "translation_model": "翻译模型",
+            "summary_model": "摘要模型",
             "used_for_polish": "用于润色",
             "used_for_translation": "用于翻译",
             "assign_to_polish": "指定给润色",
@@ -432,6 +437,7 @@
             "temperature": "Temperature",
             "polish_temperature": "润色 Temperature",
             "translation_temperature": "翻译 Temperature",
+            "summary_temperature": "摘要 Temperature",
             "status_ready": "可用",
             "status_missing_api_key": "缺 API Key",
             "status_missing_model": "缺模型"
@@ -560,6 +566,23 @@
             "fr": "法语",
             "de": "德语",
             "es": "西班牙语"
+        }
+    },
+    "summary": {
+        "title": "AI 摘要",
+        "subtitle": "把摘要作为只读附属结果保留在转录旁边，不改写原文。",
+        "templates_label": "摘要模板",
+        "copy": "复制",
+        "copied": "已复制",
+        "generate": "生成",
+        "regenerate": "重新生成",
+        "generating_progress": "生成中... {{progress}}%",
+        "stale": "转录内容已发生变化，当前摘要已过期。需要时请手动重新生成。",
+        "empty_state": "当前还没有{{template}}摘要，需要时可立即生成。",
+        "templates": {
+            "general": "通用",
+            "meeting": "会议",
+            "lecture": "课堂"
         }
     },
     "polish": {
