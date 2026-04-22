@@ -44,13 +44,15 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     const normalizedConfig: AppConfig = {
       ...(configToLoad as AppConfig),
       llmSettings: normalizedLlmSettings,
+      summaryEnabled: (configToLoad as AppConfig).summaryEnabled ?? true,
     };
 
     const llmChanged =
       JSON.stringify((configToLoad as AppConfig).llmSettings ?? null) !==
       JSON.stringify(normalizedLlmSettings);
+    const summaryEnabledChanged = (configToLoad as AppConfig).summaryEnabled !== normalizedConfig.summaryEnabled;
 
-    if (!llmChanged) {
+    if (!llmChanged && !summaryEnabledChanged) {
       return { config: normalizedConfig, migrated: false };
     }
 
@@ -95,6 +97,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     captionFontColor: parsed.captionFontColor || '#ffffff',
     captionBackgroundOpacity: parsed.captionBackgroundOpacity ?? 0.6,
     llmSettings,
+    summaryEnabled: parsed.summaryEnabled ?? true,
     translationLanguage: parsed.translationLanguage || 'zh',
     polishKeywords: parsed.polishKeywords || '',
     polishContext: parsed.polishContext || '',

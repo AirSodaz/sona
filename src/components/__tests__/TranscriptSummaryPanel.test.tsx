@@ -18,6 +18,9 @@ vi.mock('react-i18next', () => ({
       if (key === 'summary.generating_progress' && options?.progress !== undefined) {
         return `summary.generating_progress:${options.progress}`;
       }
+      if (key === 'summary.generating_short_progress' && options?.progress !== undefined) {
+        return `summary.generating_short_progress:${options.progress}`;
+      }
       return key;
     },
   }),
@@ -72,7 +75,7 @@ describe('TranscriptSummaryPanel', () => {
     });
   });
 
-  it('renders the current summary and shows the stale warning when transcript changed', () => {
+  it('starts collapsed and shows lightweight stale status without rendering content', () => {
     useTranscriptStore.setState({
       segments: [
         { id: '1', text: 'Updated transcript text', start: 0, end: 1, isFinal: true },
@@ -97,11 +100,13 @@ describe('TranscriptSummaryPanel', () => {
     render(<TranscriptSummaryPanel />);
 
     expect(screen.getByText('summary.title')).toBeDefined();
-    expect(screen.getByText('Saved summary content')).toBeDefined();
-    expect(screen.getByText('summary.stale')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'summary.expand' }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByText('summary.stale_short')).toBeDefined();
+    expect(screen.queryByText('Saved summary content')).toBeNull();
+    expect(screen.queryByText('summary.stale')).toBeNull();
   });
 
-  it('loads history-backed summaries and supports template switching, generating, and copying', async () => {
+  it('expands on demand and supports template switching, generating, copying, and collapsing again', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'history-1',
       segments: [
@@ -131,6 +136,13 @@ describe('TranscriptSummaryPanel', () => {
     });
 
     await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'summary.expand' }));
+    });
+
+    expect(screen.getByRole('button', { name: 'summary.collapse' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('History summary')).toBeDefined();
+
+    await act(async () => {
       fireEvent.click(screen.getByText('summary.templates.meeting'));
     });
     expect(mockSetActiveTemplate).toHaveBeenCalledWith('meeting');
@@ -148,5 +160,29 @@ describe('TranscriptSummaryPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('summary.copied')).toBeDefined();
     });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'summary.collapse' }));
+    });
+
+    expect(screen.getByRole('button', { name: 'summary.expand' }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('History summary')).toBeNull();
+  });
+
+  it('does not render when AI Summary is disabled in config', () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
+      ],
+      config: {
+        ...createSummaryReadyConfig(),
+        summaryEnabled: false,
+      },
+    });
+
+    render(<TranscriptSummaryPanel />);
+
+    expect(screen.queryByText('summary.title')).toBeNull();
+    expect(mockLoadSummary).not.toHaveBeenCalled();
   });
 });

@@ -417,6 +417,8 @@
             "feature_models": "功能模型绑定",
             "feature_models_hint": "使用润色、翻译和摘要前，请先分别指定对应模型。",
             "feature_models_runtime_hint": "润色、翻译和摘要会直接使用这里配置的模型与 Temperature。",
+            "enable_summary": "启用 AI 摘要",
+            "enable_summary_hint": "在转录编辑区显示摘要面板，并允许生成新的摘要结果。",
             "polish_model": "润色模型",
             "translation_model": "翻译模型",
             "summary_model": "摘要模型",
@@ -440,7 +442,8 @@
             "summary_temperature": "摘要 Temperature",
             "status_ready": "可用",
             "status_missing_api_key": "缺 API Key",
-            "status_missing_model": "缺模型"
+            "status_missing_model": "缺模型",
+            "status_off": "已关闭"
         }
     },
     "shortcuts": {
@@ -571,13 +574,18 @@
     "summary": {
         "title": "AI 摘要",
         "subtitle": "把摘要作为只读附属结果保留在转录旁边，不改写原文。",
+        "expand": "展开 AI 摘要",
+        "collapse": "收起 AI 摘要",
         "templates_label": "摘要模板",
         "copy": "复制",
         "copied": "已复制",
         "generate": "生成",
         "regenerate": "重新生成",
         "generating_progress": "生成中... {{progress}}%",
+        "generating_short": "生成中",
+        "generating_short_progress": "生成中 {{progress}}%",
         "stale": "转录内容已发生变化，当前摘要已过期。需要时请手动重新生成。",
+        "stale_short": "已过期",
         "empty_state": "当前还没有{{template}}摘要，需要时可立即生成。",
         "templates": {
             "general": "通用",

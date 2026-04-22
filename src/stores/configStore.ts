@@ -62,6 +62,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 
   // LLM Assistant
   llmSettings: createLlmSettings(),
+  summaryEnabled: true,
   translationLanguage: 'zh',
   polishKeywords: undefined,
   polishContext: undefined,
@@ -131,7 +132,7 @@ const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
 ];
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
-  'llmSettings', 'translationLanguage',
+  'llmSettings', 'summaryEnabled', 'translationLanguage',
   'polishKeywords', 'polishContext', 'polishScenario',
   'autoPolish', 'autoPolishFrequency',
 ];

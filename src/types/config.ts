@@ -116,6 +116,8 @@ export interface TranscriptionConfig {
 export interface LlmAssistantConfig {
   /** LLM provider settings keyed by provider. */
   llmSettings?: LlmSettings;
+  /** Whether AI Summary is available in the transcript editor. Default: true. */
+  summaryEnabled?: boolean;
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */

@@ -170,4 +170,19 @@ describe('summaryService', () => {
       }),
     }));
   });
+
+  it('rejects new summary generation when AI Summary is disabled', async () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true },
+      ],
+      config: {
+        ...createSummaryReadyConfig(),
+        summaryEnabled: false,
+      },
+    });
+
+    await expect(summaryService.generateSummary('general')).rejects.toThrow('AI Summary is disabled.');
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });

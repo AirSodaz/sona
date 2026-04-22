@@ -53,6 +53,10 @@
   box-shadow: var(--shadow-md);
 }
 
+.feature-card-off {
+  border-color: color-mix(in srgb, var(--color-border) 90%, transparent);
+}
+
 .feature-card-header {
   display: flex;
   align-items: center;
@@ -180,6 +184,11 @@
 .status-badge.missing {
   background: rgba(239, 68, 68, 0.15);
   color: #dc2626;
+}
+
+.status-badge.off {
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  color: var(--color-text-muted);
 }
 
 @media (prefers-color-scheme: dark) {

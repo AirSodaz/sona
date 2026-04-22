@@ -203,10 +203,10 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 
 ### Steps For `AI Summary`
 
-1. Make sure `Summary Model` is assigned in `Settings > LLM Service`.
+1. Make sure `AI Summary` is enabled and `Summary Model` is assigned in `Settings > LLM Service`.
 2. Open any transcript that already has segments.
-3. Use the summary panel at the top of the editor and switch between `General`, `Meeting`, or `Lecture`.
-4. Click `Generate` to create a summary for the current template, or `Regenerate` to refresh that template later.
+3. Expand the summary panel at the top of the editor. It starts collapsed by default so it stays out of the way.
+4. Switch between `General`, `Meeting`, or `Lecture`, then click `Generate` to create a summary for the current template, or `Regenerate` to refresh that template later.
 5. Click `Copy` when you want to reuse the summary elsewhere.
 6. If the transcript is edited, polished, or re-transcribed later, the old summary stays visible but shows an outdated warning until you regenerate it manually.
 
@@ -221,6 +221,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - `Polish Model`, `Translation Model`, and `Summary Model` are configured separately. One provider can serve all three, or you can split them.
 - Translation can use dedicated translation providers such as `Google Translate (Free)` or `Google Translate (API)`, but `LLM Polish` needs an LLM-capable provider and model.
 - `AI Summary` also needs an LLM-capable provider and model; the Google Translate providers are not supported for summaries.
+- You can turn `AI Summary` off in `Settings > LLM Service`. This hides the panel and prevents new summaries from being generated, but existing summary sidecar data is kept.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
 - `Re-transcribe` is only available when the current transcript came from a saved history item.
 - Summary output stays read-only in the editor for now. If you want to reuse it, copy it from the panel.

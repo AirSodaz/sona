@@ -27,6 +27,7 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
     offlineModelPath: '',
     language: 'auto',
     appLanguage: 'auto',
+    summaryEnabled: true,
     llmSettings: createLlmSettings(provider),
   } as AppConfig;
 
@@ -76,6 +77,7 @@ describe('SettingsLLMServiceTab', () => {
 
     expect(screen.getByText('settings.llm.title')).toBeDefined();
     expect(screen.getByText('settings.llm.feature_models')).toBeDefined();
+    expect(screen.getByText('settings.llm.enable_summary')).toBeDefined();
     expect(screen.getByText('settings.llm.polish_model')).toBeDefined();
     expect(screen.getByText('settings.llm.translation_model')).toBeDefined();
     expect(screen.getByText('settings.llm.summary_model')).toBeDefined();
@@ -247,6 +249,31 @@ describe('SettingsLLMServiceTab', () => {
           summaryTemperature: 0.6,
         }),
       }),
+    }));
+  });
+
+  it('shows the summary toggle and marks the summary card as off when disabled', async () => {
+    currentConfig = {
+      ...buildConfig(),
+      summaryEnabled: false,
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    const summarySwitch = screen.getByRole('switch', { name: 'settings.llm.enable_summary' });
+    expect(summarySwitch.getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByText('settings.llm.status_off')).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(summarySwitch);
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      summaryEnabled: true,
     }));
   });
 

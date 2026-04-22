@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, FileText } from 'lucide-react';
 import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
+import { Switch } from '../Switch';
 import { LlmFeature, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { LlmAssistantConfig } from '../../types/config';
@@ -23,7 +24,7 @@ import {
   buildLlmConfig,
   createProviderSetting,
 } from '../../services/llmConfig';
-import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
+import { SettingsItem, SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
 
 function getModelPlaceholder(provider: LlmProvider): string {
@@ -76,9 +77,10 @@ interface FeatureCardProps {
   config: LlmAssistantConfig;
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string) => string;
+  featureEnabled?: boolean;
 }
 
-function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: FeatureCardProps) {
+function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t, featureEnabled = true }: FeatureCardProps) {
   const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
@@ -237,23 +239,24 @@ function FeatureCard({ featureId, title, icon, config, applyLlmSettings, t }: Fe
   };
   
   const isComplete = isFeatureLlmConfigComplete(config, featureId);
+  const statusBadge = !featureEnabled ? (
+    <span className="status-badge off"><X size={12}/> {t('settings.llm.status_off')}</span>
+  ) : isComplete ? (
+    <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
+  ) : (
+    <span className="status-badge missing">
+      <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
+    </span>
+  );
 
   return (
-    <div className="feature-card">
+    <div className={`feature-card ${featureEnabled ? '' : 'feature-card-off'}`.trim()}>
       <div className="feature-card-header">
         <div className="feature-card-title-group">
           <span className="feature-card-icon">{icon}</span>
           <span>{title}</span>
         </div>
-        <div className="feature-card-status">
-          {isComplete ? (
-            <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
-          ) : (
-             <span className="status-badge missing">
-               <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
-             </span>
-          )}
-        </div>
+        <div className="feature-card-status">{statusBadge}</div>
       </div>
       
       <div className="feature-card-content">
@@ -532,6 +535,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
   const [expandedProvider, setExpandedProvider] = useState<LlmProvider | null>(null);
+  const summaryEnabled = config.summaryEnabled ?? true;
 
   const applyLlmSettings = useCallback((nextLlmSettings: LlmAssistantConfig['llmSettings']) => {
     if (!nextLlmSettings) return;
@@ -589,6 +593,16 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
       >
+        <SettingsItem
+          title={t('settings.llm.enable_summary')}
+          hint={t('settings.llm.enable_summary_hint')}
+        >
+          <Switch
+            checked={summaryEnabled}
+            onChange={(enabled) => updateConfig({ summaryEnabled: enabled })}
+            aria-label={t('settings.llm.enable_summary')}
+          />
+        </SettingsItem>
         <div className="feature-cards-grid">
            <FeatureCard
              featureId="polish"
@@ -613,6 +627,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
              config={config}
              applyLlmSettings={applyLlmSettings}
              t={t}
+             featureEnabled={summaryEnabled}
            />
         </div>
       </SettingsSection>

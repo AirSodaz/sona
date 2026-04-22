@@ -111,6 +111,11 @@ class SummaryService {
 
   async generateSummary(template?: SummaryTemplate): Promise<void> {
     const store = useTranscriptStore.getState();
+
+    if (store.config.summaryEnabled === false) {
+      throw new Error('AI Summary is disabled.');
+    }
+
     const llm = getFeatureLlmConfig(store.config, 'summary');
 
     if (!isLlmConfigComplete(llm)) {

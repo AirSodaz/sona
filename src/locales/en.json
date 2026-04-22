@@ -417,6 +417,8 @@
             "feature_models": "Feature Models",
             "feature_models_hint": "Assign models for polish, translation, and summary before using those features.",
             "feature_models_runtime_hint": "Polish, translation, and summary run with the model and temperature configured here.",
+            "enable_summary": "Enable AI Summary",
+            "enable_summary_hint": "Show the summary panel in the transcript editor and allow new summaries to be generated.",
             "polish_model": "Polish Model",
             "translation_model": "Translation Model",
             "summary_model": "Summary Model",
@@ -440,7 +442,8 @@
             "summary_temperature": "Summary Temperature",
             "status_ready": "Ready",
             "status_missing_api_key": "Missing API Key",
-            "status_missing_model": "Missing model"
+            "status_missing_model": "Missing model",
+            "status_off": "Off"
         }
     },
     "shortcuts": {
@@ -571,13 +574,18 @@
     "summary": {
         "title": "AI Summary",
         "subtitle": "Keep a read-only summary beside the transcript without rewriting the original text.",
+        "expand": "Expand AI Summary",
+        "collapse": "Collapse AI Summary",
         "templates_label": "Summary templates",
         "copy": "Copy",
         "copied": "Copied",
         "generate": "Generate",
         "regenerate": "Regenerate",
         "generating_progress": "Generating... {{progress}}%",
+        "generating_short": "Generating",
+        "generating_short_progress": "Generating {{progress}}%",
         "stale": "This summary is outdated because the transcript changed. Regenerate it when you are ready.",
+        "stale_short": "Outdated",
         "empty_state": "No {{template}} summary yet. Generate one when you need it.",
         "templates": {
             "general": "General",
