@@ -860,14 +860,6 @@ export function ProjectsView(): React.JSX.Element {
 
   const activeFilterCount = activeFilterLabels.length;
   const hasActiveFilters = activeFilterCount > 0;
-  const filterSummary = hasActiveFilters
-    ? activeFilterCount === 1
-      ? activeFilterLabels[0]
-      : t('projects.filter_active_count', {
-        count: activeFilterCount,
-        defaultValue: `${activeFilterCount} active`,
-      })
-    : t('projects.filter_all_state', { defaultValue: 'All items' });
   const filterPopoverHint = hasActiveFilters
     ? activeFilterLabels.join(' · ')
     : t('projects.filter_menu_hint', {
