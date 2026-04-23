@@ -2,7 +2,7 @@ import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
-import { useConfigStore } from '../stores/configStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
 
@@ -92,7 +92,7 @@ export class TranscriptionService {
 
             try {
                 // Apply text replacements from global config
-                const appConfig = useConfigStore.getState().config;
+                const appConfig = useTranscriptStore.getState().config;
                 const originalText = segment.text;
                 const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
                 const replacementChanged = originalText !== processedText;
@@ -258,7 +258,7 @@ export class TranscriptionService {
 
         this.startingPromise = (async () => {
             try {
-                const appConfig = useConfigStore.getState().config;
+                const appConfig = useTranscriptStore.getState().config;
                 let punctuationPathToUse = '';
                 let vadPathToUse = '';
                 let vadBufferToUse = 5.0;
@@ -348,7 +348,7 @@ export class TranscriptionService {
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
 
-        const appConfig = useConfigStore.getState().config;
+        const appConfig = useTranscriptStore.getState().config;
         let vadPathToUse = '';
         let punctuationPathToUse = '';
         const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
@@ -465,7 +465,7 @@ export class TranscriptionService {
     private async _transcribeFileInternal(filePath: string, _provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, _saveToPath?: string): Promise<TranscriptSegment[]> {
         if (!this.modelPath) throw new Error('Model path not configured');
 
-        const appConfig = useConfigStore.getState().config;
+        const appConfig = useTranscriptStore.getState().config;
         let punctuationPathToUse = '';
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;

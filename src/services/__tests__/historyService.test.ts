@@ -41,9 +41,9 @@ describe('historyService.deleteRecordings', () => {
 
     it('should delete specified recordings and update index', async () => {
         const mockItems = [
-            { id: '1', audioPath: 'audio1.wav', transcriptPath: 'transcript1.json' },
-            { id: '2', audioPath: 'audio2.wav', transcriptPath: 'transcript2.json' },
-            { id: '3', audioPath: 'audio3.wav', transcriptPath: 'transcript3.json' },
+            { id: '1', audioPath: 'audio1.wav', transcriptPath: 'transcript1.json', projectId: null },
+            { id: '2', audioPath: 'audio2.wav', transcriptPath: 'transcript2.json', projectId: null },
+            { id: '3', audioPath: 'audio3.wav', transcriptPath: 'transcript3.json', projectId: null },
         ];
 
         // Mock getAll indirectly via readTextFile
@@ -72,7 +72,7 @@ describe('historyService.deleteRecordings', () => {
     });
 
     it('should handle empty ids array', async () => {
-        const mockItems = [{ id: '1', audioPath: 'audio1.wav', transcriptPath: 'transcript1.json' }];
+        const mockItems = [{ id: '1', audioPath: 'audio1.wav', transcriptPath: 'transcript1.json', projectId: null }];
         (readTextFile as any).mockResolvedValue(JSON.stringify(mockItems));
         (exists as any).mockResolvedValue(true);
 

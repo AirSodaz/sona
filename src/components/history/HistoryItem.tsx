@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Clock } from 'lucide-react';
 import { HistoryItem as HistoryItemType } from '../../types/history';
+import { useProjectStore } from '../../stores/projectStore';
 import { TrashIcon, MicIcon, FileTextIcon } from '../Icons';
 
 import { Checkbox } from '../Checkbox';
@@ -57,6 +58,12 @@ function HistoryItemComponent({
     onToggleSelection
 }: HistoryItemProps): React.JSX.Element {
     const { t } = useTranslation();
+    const projectName = useProjectStore((state) => {
+        if (!item.projectId) {
+            return t('projects.inbox', { defaultValue: 'Inbox' });
+        }
+        return state.projects.find((project) => project.id === item.projectId)?.name || t('projects.unknown_project', { defaultValue: 'Unknown Project' });
+    });
 
     const handleClick = (e: React.MouseEvent) => {
         if (isSelectionMode && onToggleSelection) {
@@ -128,6 +135,17 @@ function HistoryItemComponent({
                         display: 'block',
                         minWidth: 0
                     }}>{highlightText(item.title, searchQuery)}</span>
+                    <span style={{
+                        fontSize: '0.7rem',
+                        color: 'var(--color-text-secondary)',
+                        background: 'var(--color-bg-secondary)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '999px',
+                        padding: '2px 8px',
+                        flexShrink: 0,
+                    }}>
+                        {projectName}
+                    </span>
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>

@@ -10,6 +10,7 @@ import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig'
 import { summaryService } from '../services/summaryService';
 import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
+import { useProjectStore } from './projectStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { tempDir, join } from '@tauri-apps/api/path';
 import { remove } from '@tauri-apps/plugin-fs';
@@ -90,6 +91,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     isQueueProcessing: false,
 
     addFiles: (filePaths) => {
+        const activeProjectId = useProjectStore.getState().activeProjectId;
         const newItems: BatchQueueItem[] = filePaths.map((filePath) => {
             const filename = filePath.split(/[/\\]/).pop() || filePath;
             return {
@@ -100,6 +102,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 progress: 0,
                 segments: [],
                 audioUrl: convertFileSrc(filePath),
+                projectId: activeProjectId,
             };
         });
 
@@ -270,16 +273,23 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             // Save to History
             try {
                 if (postPolishSegments.length > 0) {
-                    const historyItem = await historyService.saveImportedFile(item.filePath, postPolishSegments, duration, tempWavPath);
+                    const historyItem = await historyService.saveImportedFile(
+                        item.filePath,
+                        postPolishSegments,
+                        duration,
+                        tempWavPath,
+                        item.projectId,
+                    );
                     if (historyItem) {
                         set((state) => ({
                             queueItems: state.queueItems.map((i) =>
-                                i.id === itemId ? { ...i, historyId: historyItem.id } : i
+                                i.id === itemId ? { ...i, historyId: historyItem.id, projectId: historyItem.projectId } : i
                             )
                         }));
                         // If this is the active item, propagate sourceHistoryId
                         if (get().activeItemId === itemId) {
                             useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                            void useProjectStore.getState().setActiveProjectId(historyItem.projectId);
                             await summaryService.persistSummary(historyItem.id);
                         }
                     }
@@ -319,6 +329,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             // Use atomic load to prevent auto-save from overwriting previous item
             useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null);
             useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
+            void useProjectStore.getState().setActiveProjectId(item.projectId);
             // Set source file path for CTC alignment
 
         } else if (id === null) {

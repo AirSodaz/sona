@@ -11,6 +11,8 @@ import {
     TranscriptSummaryState
 } from '../types/transcript';
 import { useConfigStore, DEFAULT_CONFIG } from './configStore';
+import { useProjectStore } from './projectStore';
+import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 // createLlmSettings is now used in configStore
 
@@ -662,16 +664,43 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Config actions (delegated to configStore, synced back for reactivity)
     setConfig: (patch) => {
         useConfigStore.getState().setConfig(patch);
-        // Sync: update local copy so useTranscriptStore(s => s.config) re-renders
-        set((state) => ({ config: { ...state.config, ...patch } }));
+        const effectiveConfig = resolveEffectiveConfig(
+            useConfigStore.getState().config,
+            useProjectStore.getState().getActiveProject(),
+        );
+        set({ config: effectiveConfig });
     },
 }));
 
-// Keep transcriptStore.config in sync with configStore (for backward compatibility).
-// New code should use useConfigStore / domain hooks directly.
+function syncEffectiveConfigToTranscriptStore() {
+    const projectState = useProjectStore.getState();
+    const activeProject = typeof projectState.getActiveProject === 'function'
+        ? projectState.getActiveProject()
+        : null;
+    const effectiveConfig = resolveEffectiveConfig(
+        useConfigStore.getState().config,
+        activeProject,
+    );
+    useTranscriptStore.setState({ config: effectiveConfig });
+}
+
+// Keep transcriptStore.config in sync with the active project-aware config.
+// New code should prefer transcriptStore.config for runtime workflow behavior.
 useConfigStore.subscribe((state) => {
-    useTranscriptStore.setState({ config: state.config });
+    const projectState = useProjectStore.getState();
+    const activeProject = typeof projectState.getActiveProject === 'function'
+        ? projectState.getActiveProject()
+        : null;
+    useTranscriptStore.setState({
+        config: resolveEffectiveConfig(state.config, activeProject),
+    });
 });
+
+if (typeof useProjectStore.subscribe === 'function') {
+    useProjectStore.subscribe(() => {
+        syncEffectiveConfigToTranscriptStore();
+    });
+}
 
 /**
  * Calculates the new segments array and the index of the updated/inserted segment.

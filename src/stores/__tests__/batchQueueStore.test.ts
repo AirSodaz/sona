@@ -42,6 +42,15 @@ vi.mock('../services/modelService', () => ({
     }
 }));
 
+vi.mock('../projectStore', () => ({
+    useProjectStore: {
+        getState: () => ({
+            activeProjectId: null,
+            setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+        }),
+    },
+}));
+
 describe('batchQueueStore', () => {
     beforeEach(() => {
         useBatchQueueStore.getState().clearQueue();
@@ -70,8 +79,8 @@ describe('batchQueueStore', () => {
         // Setup
         useBatchQueueStore.setState({
             queueItems: [
-                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav' },
-                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///2.wav' }
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav', projectId: null },
+                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///2.wav', projectId: null }
             ],
             activeItemId: '1'
         });
@@ -95,8 +104,8 @@ describe('batchQueueStore', () => {
         // Setup
         useBatchQueueStore.setState({
             queueItems: [
-                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav' },
-                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///2.wav' }
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav', projectId: null },
+                { id: '2', filename: '2.wav', filePath: '/2.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///2.wav', projectId: null }
             ],
             activeItemId: '1'
         });
@@ -122,7 +131,7 @@ describe('batchQueueStore', () => {
         // Setup
         useBatchQueueStore.setState({
             queueItems: [
-                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav' }
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav', projectId: null }
             ],
             activeItemId: '1'
         });

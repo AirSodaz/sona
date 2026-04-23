@@ -11,6 +11,8 @@ import { PolishButton } from './components/PolishButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { HistoryView } from './components/HistoryView';
+import { ProjectsView } from './components/ProjectsView';
+import { ProjectContextBar } from './components/ProjectContextBar';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -35,6 +37,8 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
       return t('panel.live_record');
     case 'history':
       return t('history.title');
+    case 'projects':
+      return t('panel.projects');
     case 'batch':
     default:
       return t('panel.batch_import');
@@ -107,11 +111,13 @@ function App(): React.JSX.Element {
               <h2>{panelTitle}</h2>
             </div>
             <div className="panel-content">
+              {mode !== 'projects' && <ProjectContextBar />}
               <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
                 <LiveRecord />
               </div>
               {mode === 'history' && <HistoryView />}
               {mode === 'batch' && <BatchImport />}
+              {mode === 'projects' && <ProjectsView />}
             </div>
           </div>
 
@@ -119,6 +125,7 @@ function App(): React.JSX.Element {
           <div className="panel panel-right">
 
             <div className="panel-content">
+              <ProjectContextBar />
               <ErrorBoundary>
                 <TranscriptEditor />
               </ErrorBoundary>

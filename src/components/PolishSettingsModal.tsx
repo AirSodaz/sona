@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useProjectStore } from '../stores/projectStore';
 import { XIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
@@ -17,11 +18,14 @@ interface PolishSettingsModalProps {
  */
 export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
-    const config = useConfigStore((state) => state.config);
+    const globalConfig = useConfigStore((state) => state.config);
+    const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const activeProjectId = useProjectStore((state) => state.activeProjectId);
+    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
 
-    const autoPolish = config.autoPolish ?? false;
-    const autoPolishFrequency = config.autoPolishFrequency ?? 5;
+    const autoPolish = globalConfig.autoPolish ?? false;
+    const autoPolishFrequency = globalConfig.autoPolishFrequency ?? 5;
     const isLlmConfigured = isFeatureLlmConfigComplete(config, 'polish');
 
     // Keyboard support (Escape to close)
@@ -167,7 +171,13 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                         </label>
                         <Dropdown
                             value={config.polishScenario || 'custom'}
-                            onChange={(val) => setConfig({ polishScenario: val })}
+                            onChange={(val) => {
+                                if (activeProjectId) {
+                                    void updateProjectDefaults(activeProjectId, { polishScenario: val });
+                                    return;
+                                }
+                                setConfig({ polishScenario: val });
+                            }}
                             options={scenarioOptions}
                             style={{ width: '100%' }}
                         />
@@ -182,7 +192,13 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                             <textarea
                                 id="polish-custom-context"
                                 value={config.polishContext || ''}
-                                onChange={(e) => setConfig({ polishContext: e.target.value })}
+                                onChange={(e) => {
+                                    if (activeProjectId) {
+                                        void updateProjectDefaults(activeProjectId, { polishContext: e.target.value });
+                                        return;
+                                    }
+                                    setConfig({ polishContext: e.target.value });
+                                }}
                                 style={{
                                     padding: '8px 12px',
                                     borderRadius: '4px',

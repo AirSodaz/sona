@@ -48,8 +48,17 @@ vi.mock('../../services/modelService', () => ({
 
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1' })
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1', projectId: null })
     }
+}));
+
+vi.mock('../projectStore', () => ({
+    useProjectStore: {
+        getState: () => ({
+            activeProjectId: null,
+            setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+        }),
+    },
 }));
 
 describe('batchQueueStore History Integration', () => {
@@ -108,7 +117,8 @@ describe('batchQueueStore History Integration', () => {
             file,
             mockSegments,
             2, // Duration from last segment
-            '/tmp/test-uuid-123.wav'
+            '/tmp/test-uuid-123.wav',
+            null,
         );
 
         // Assert Item Status

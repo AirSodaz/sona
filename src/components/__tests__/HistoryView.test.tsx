@@ -4,6 +4,8 @@ import { HistoryView } from '../HistoryView';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useDialogStore } from '../../stores/dialogStore';
 
+const mockSetActiveProjectId = vi.fn().mockResolvedValue(undefined);
+
 // Mock dependencies
 vi.mock('react-virtuoso', () => ({
     Virtuoso: ({ data, itemContent }: any) => {
@@ -78,6 +80,14 @@ vi.mock('../../services/historyService', () => ({
     }
 }));
 
+vi.mock('../../stores/projectStore', () => ({
+    useProjectStore: (selector: any) => selector({
+        activeProjectId: null,
+        projects: [],
+        setActiveProjectId: mockSetActiveProjectId,
+    }),
+}));
+
 
 describe('HistoryView', () => {
     beforeEach(() => {
@@ -95,7 +105,8 @@ describe('HistoryView', () => {
                     duration: 60,
                     audioPath: '/path/to/audio1.wav',
                     transcriptPath: '/path/to/transcript1.json',
-                    previewText: 'This is a preview of the transcript...'
+                    previewText: 'This is a preview of the transcript...',
+                    projectId: null,
                 }
             ],
             isLoading: false

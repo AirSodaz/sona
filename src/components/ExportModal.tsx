@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { join } from '@tauri-apps/api/path';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { exportSegments, getFileExtension, ExportFormat, ExportMode } from '../utils/exportFormats';
 import { exportToPath } from '../utils/fileExport';
@@ -27,6 +28,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
     const segments = useTranscriptStore((state) => state.segments);
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
     const historyItems = useHistoryStore((state) => state.items);
+    const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
     
     const [fileName, setFileName] = useState('');
     const [directory, setDirectory] = useState(localStorage.getItem('sona_last_export_dir') || '');
@@ -40,10 +42,14 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
     useEffect(() => {
         if (isOpen) {
             const historyItem = historyItems.find(item => item.id === sourceHistoryId);
+            const prefix = (activeProject?.defaults.exportFileNamePrefix || '').trim();
+            const sanitizedPrefix = prefix.replace(/[\\/:*?"<>|]/g, '_').trim();
             if (historyItem) {
                 // Sanitize filename: remove characters that are usually illegal in filenames
                 const sanitized = historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
-                setFileName(sanitized);
+                setFileName(sanitizedPrefix ? `${sanitizedPrefix} ${sanitized}`.trim() : sanitized);
+            } else if (sanitizedPrefix) {
+                setFileName(sanitizedPrefix);
             }
             
             // Reset export mode if no translations
@@ -51,7 +57,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                 setExportMode('original');
             }
         }
-    }, [isOpen, sourceHistoryId, historyItems, hasTranslation, exportMode]);
+    }, [isOpen, sourceHistoryId, historyItems, hasTranslation, exportMode, activeProject]);
 
     // Keyboard support (Escape to close)
     useEffect(() => {

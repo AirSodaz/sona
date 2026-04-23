@@ -5,7 +5,7 @@ import { AppMode } from '../types/transcript';
 import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 
-import { MicIcon, FolderIcon, HistoryIcon } from './Icons';
+import { MicIcon, FolderIcon, HistoryIcon, BookIcon } from './Icons';
 
 
 /** Props for TabNavigation. */
@@ -40,7 +40,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
                 if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) return;
 
                 e.preventDefault();
-                const modes: AppMode[] = ['live', 'batch', 'history'];
+                const modes: AppMode[] = ['live', 'batch', 'history', 'projects'];
                 const currentIndex = modes.indexOf(mode);
                 const nextIndex = e.shiftKey
                     ? (currentIndex - 1 + modes.length) % modes.length
@@ -86,6 +86,15 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
             >
                 <HistoryIcon />
                 <span>{t('history.title')}</span>
+            </button>
+            <button
+                className={`tab-button ${mode === 'projects' ? 'active' : ''}`}
+                onClick={() => handleTabChange('projects')}
+                aria-selected={mode === 'projects'}
+                role="tab"
+            >
+                <BookIcon />
+                <span>{t('panel.projects')}</span>
             </button>
         </div>
     );

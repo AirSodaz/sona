@@ -14,6 +14,8 @@ vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishBu
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/HistoryView', () => ({ HistoryView: () => <div>HistoryView</div> }));
+vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/ProjectContextBar', () => ({ ProjectContextBar: () => <div>ProjectContextBar</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
@@ -73,5 +75,11 @@ describe('App Title Logic', () => {
     setupStore({ mode: 'batch' });
     render(<App />);
     expect(screen.getByText('panel.batch_import')).not.toBeNull();
+  });
+
+  it('displays "Projects" title in projects mode', () => {
+    setupStore({ mode: 'projects' });
+    render(<App />);
+    expect(screen.getByText('panel.projects')).not.toBeNull();
   });
 });

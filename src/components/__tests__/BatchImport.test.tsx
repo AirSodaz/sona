@@ -63,8 +63,17 @@ vi.mock('../../services/modelService', () => ({
 
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id' }),
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id', projectId: null }),
     }
+}));
+
+vi.mock('../../stores/projectStore', () => ({
+    useProjectStore: {
+        getState: () => ({
+            activeProjectId: null,
+            setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+        }),
+    },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -244,7 +253,8 @@ describe('BatchImport Integration', () => {
                 status: 'processing',
                 progress: 50,
                 segments: [],
-                audioUrl: 'asset:///path/to/processing.wav'
+                audioUrl: 'asset:///path/to/processing.wav',
+                projectId: null,
             }],
             activeItemId: '1',
             isQueueProcessing: true

@@ -10,6 +10,29 @@ import { v4 as uuidv4 } from 'uuid';
 const HISTORY_DIR = 'history';
 const INDEX_FILE = 'index.json';
 
+function normalizeHistoryItem(item: Partial<HistoryItem>): HistoryItem {
+    return {
+        id: item.id || '',
+        timestamp: item.timestamp || 0,
+        duration: item.duration || 0,
+        audioPath: item.audioPath || '',
+        transcriptPath: item.transcriptPath || '',
+        title: item.title || '',
+        previewText: item.previewText || '',
+        type: item.type || 'recording',
+        searchContent: item.searchContent || '',
+        projectId: typeof item.projectId === 'string' ? item.projectId : null,
+    };
+}
+
+async function writeHistoryIndex(items: HistoryItem[]): Promise<void> {
+    await writeTextFile(
+        `${HISTORY_DIR}/${INDEX_FILE}`,
+        JSON.stringify(items, null, 2),
+        { baseDir: BaseDirectory.AppLocalData }
+    );
+}
+
 async function safeRemoveHistoryPath(path: string): Promise<void> {
     try {
         await remove(path, { baseDir: BaseDirectory.AppLocalData });
@@ -48,7 +71,7 @@ export const historyService = {
             await this.init();
             const content = await readTextFile(`${HISTORY_DIR}/${INDEX_FILE}`, { baseDir: BaseDirectory.AppLocalData });
             logger.info('[History] Loaded index:', content?.substring(0, 50));
-            return JSON.parse(content);
+            return (JSON.parse(content) as Partial<HistoryItem>[]).map((item) => normalizeHistoryItem(item));
         } catch (error) {
             logger.error('[History] Failed to load history:', error);
             return [];
@@ -73,7 +96,7 @@ export const historyService = {
         return { transcriptFileName, previewText, searchContent };
     },
 
-    async saveNativeRecording(absoluteWavPath: string, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
+    async saveNativeRecording(absoluteWavPath: string, segments: TranscriptSegment[], duration: number, projectId: string | null = null): Promise<HistoryItem | null> {
         logger.info('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
 
         if (!segments || segments.length === 0) {
@@ -104,18 +127,15 @@ export const historyService = {
                 title,
                 previewText,
                 type: 'recording',
-                searchContent
+                searchContent,
+                projectId,
             };
 
             // Add to Index
             logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
+            await writeHistoryIndex(items);
 
             logger.info('[History] Native save complete:', newItem);
             return newItem;
@@ -125,7 +145,7 @@ export const historyService = {
         }
     },
 
-    async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number): Promise<HistoryItem | null> {
+    async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number, projectId: string | null = null): Promise<HistoryItem | null> {
         logger.info('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
 
         if (!segments || segments.length === 0) {
@@ -166,18 +186,15 @@ export const historyService = {
                 title,
                 previewText,
                 type: 'recording',
-                searchContent
+                searchContent,
+                projectId,
             };
 
             // Add to Index
             logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
+            await writeHistoryIndex(items);
 
             logger.info('[History] Save complete:', newItem);
             return newItem;
@@ -187,7 +204,7 @@ export const historyService = {
         }
     },
 
-    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string): Promise<HistoryItem | null> {
+    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string, projectId: string | null = null): Promise<HistoryItem | null> {
         logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
 
         if (!segments || segments.length === 0) {
@@ -232,18 +249,15 @@ export const historyService = {
                 title,
                 previewText,
                 type: 'batch',
-                searchContent
+                searchContent,
+                projectId,
             };
 
             // Add to Index
             logger.info('[History] Updating index');
             const items = await this.getAll();
             items.unshift(newItem); // Add to beginning
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
+            await writeHistoryIndex(items);
 
             logger.info('[History] Import save complete:', newItem);
             return newItem;
@@ -273,11 +287,7 @@ export const historyService = {
             }
 
             const newItems = items.filter(item => item.id !== id);
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(newItems, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
+            await writeHistoryIndex(newItems);
         } catch (error) {
             logger.error('Failed to delete recording:', error);
         }
@@ -285,7 +295,6 @@ export const historyService = {
 
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
-            // console.time('deleteRecordings');
             const items = await this.getAll();
             const idSet = new Set(ids);
             const itemsToDelete = items.filter(item => idSet.has(item.id));
@@ -309,12 +318,7 @@ export const historyService = {
             }
 
             const newItems = items.filter(item => !idSet.has(item.id));
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(newItems, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
-            console.timeEnd('deleteRecordings');
+            await writeHistoryIndex(newItems);
         } catch (error) {
             logger.error('Failed to delete recordings:', error);
             throw error;
@@ -361,14 +365,31 @@ export const historyService = {
             // Update item in index
             item.previewText = previewText;
             item.searchContent = searchContent;
-            await writeTextFile(
-                `${HISTORY_DIR}/${INDEX_FILE}`,
-                JSON.stringify(items, null, 2),
-                { baseDir: BaseDirectory.AppLocalData }
-            );
+            await writeHistoryIndex(items);
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
         }
+    },
+
+    async updateProjectAssignments(ids: string[], projectId: string | null): Promise<void> {
+        if (ids.length === 0) {
+            return;
+        }
+
+        const targetIds = new Set(ids);
+        const items = await this.getAll();
+        const nextItems = items.map((item) => (
+            targetIds.has(item.id) ? { ...item, projectId } : item
+        ));
+        await writeHistoryIndex(nextItems);
+    },
+
+    async updateProjectAssignmentsByCurrentProject(currentProjectId: string, nextProjectId: string | null): Promise<void> {
+        const items = await this.getAll();
+        const nextItems = items.map((item) => (
+            item.projectId === currentProjectId ? { ...item, projectId: nextProjectId } : item
+        ));
+        await writeHistoryIndex(nextItems);
     },
 
     async loadSummary(historyId: string): Promise<HistorySummaryPayload | null> {

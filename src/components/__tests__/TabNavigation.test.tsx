@@ -33,7 +33,7 @@ describe('TabNavigation', () => {
 
         // Check for tabs
         const tabs = screen.getAllByRole('tab');
-        expect(tabs).toHaveLength(3);
+        expect(tabs).toHaveLength(4);
 
         // Check live tab
         expect(tabs[0].getAttribute('aria-selected')).toBe('true');
@@ -46,5 +46,9 @@ describe('TabNavigation', () => {
         // Check history tab
         expect(tabs[2].getAttribute('aria-selected')).toBe('false');
         expect(tabs[2].textContent).toContain('history.title');
+
+        // Check projects tab
+        expect(tabs[3].getAttribute('aria-selected')).toBe('false');
+        expect(tabs[3].textContent).toContain('panel.projects');
     });
 });

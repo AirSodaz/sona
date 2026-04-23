@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { useConfigStore } from '../stores/configStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
@@ -38,8 +38,10 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
     const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
 
-    const config = useConfigStore((state) => state.config);
+    const config = useTranscriptStore((state) => state.config);
     const setConfig = useTranscriptStore((state) => state.setConfig);
+    const activeProjectId = useProjectStore((state) => state.activeProjectId);
+    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
     const segments = useTranscriptStore((state) => state.segments);
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
@@ -154,8 +156,12 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
         triggerRef.current?.focus();
     };
 
-    const handleLanguageSelect = (langCode: string) => {
-        setConfig({ translationLanguage: langCode });
+    const handleLanguageSelect = async (langCode: string) => {
+        if (activeProjectId) {
+            await updateProjectDefaults(activeProjectId, { translationLanguage: langCode });
+        } else {
+            setConfig({ translationLanguage: langCode });
+        }
         // Don't close menu to allow quick translation start after selection?
         // Or close it to indicate selection made. Let's close it.
         setIsOpen(false);
@@ -249,7 +255,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
                             key={lang}
                             type="button"
                             className="export-dropdown-item"
-                            onClick={() => handleLanguageSelect(lang)}
+                            onClick={() => void handleLanguageSelect(lang)}
                             role="menuitem"
                             tabIndex={-1}
                         >

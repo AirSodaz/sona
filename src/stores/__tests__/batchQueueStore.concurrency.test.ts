@@ -36,8 +36,17 @@ vi.mock('../../services/transcriptionService', () => ({
 
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id' }),
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id', projectId: null }),
     }
+}));
+
+vi.mock('../projectStore', () => ({
+    useProjectStore: {
+        getState: () => ({
+            activeProjectId: null,
+            setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+        }),
+    },
 }));
 
 vi.mock('../../services/modelService', () => ({

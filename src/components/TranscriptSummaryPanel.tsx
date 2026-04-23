@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
@@ -16,6 +17,9 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const config = useTranscriptStore((state) => state.config);
   const summaryState = useTranscriptStore((state) => state.summaryStates[state.sourceHistoryId || 'current']);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
+  const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
   const showError = useDialogStore((state) => state.showError);
   const [copied, setCopied] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -24,7 +28,7 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
   const isSummaryVisible = summaryEnabled && summaryConfigComplete && segments.length > 0;
 
-  const activeTemplate = summaryState?.activeTemplate || DEFAULT_SUMMARY_TEMPLATE;
+  const activeTemplate = summaryState?.activeTemplate || activeProject?.defaults.summaryTemplate || DEFAULT_SUMMARY_TEMPLATE;
   const record = summaryState?.records?.[activeTemplate];
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
@@ -54,6 +58,9 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
 
   const handleTemplateChange = async (template: SummaryTemplate) => {
     await summaryService.setActiveTemplate(template);
+    if (activeProjectId) {
+      await updateProjectDefaults(activeProjectId, { summaryTemplate: template });
+    }
   };
 
   const handleGenerate = async () => {

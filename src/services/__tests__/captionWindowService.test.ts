@@ -127,7 +127,10 @@ describe('CaptionWindowService', () => {
                 },
             },
         });
-        expect(mocks.emitTo).toHaveBeenCalledWith('caption', 'caption:state', {
+        expect(mocks.emitTo).toHaveBeenCalledWith({
+            kind: 'AnyLabel',
+            label: 'caption',
+        }, 'caption:state', {
             revision: 1,
             segments: [],
             style: {

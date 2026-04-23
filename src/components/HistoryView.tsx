@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { historyService } from '../services/historyService';
 import { Search } from 'lucide-react';
@@ -25,6 +26,7 @@ export function HistoryView() {
 
     // Actions
     const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
+    const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
     const confirm = useDialogStore((state) => state.confirm);
     const showError = useDialogStore((state) => state.showError);
 
@@ -117,6 +119,7 @@ export function HistoryView() {
             // Use atomic load to prevent auto-save from seeing mixed state (new segments + old ID)
             useTranscriptStore.getState().loadTranscript(segments, item.id);
             setAudioUrl(url);
+            await setActiveProjectId(item.projectId);
 
         } catch (error) {
             await showError({

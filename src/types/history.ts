@@ -8,4 +8,5 @@ export interface HistoryItem {
     previewText: string;
     type?: 'recording' | 'batch';
     searchContent?: string;
+    projectId: string | null;
 }

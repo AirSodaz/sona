@@ -44,7 +44,8 @@ describe('historyService Performance', () => {
         const mockItems = Array.from({ length: itemCount }).map((_, i) => ({
             id: String(i),
             audioPath: `audio${i}.wav`,
-            transcriptPath: `transcript${i}.json`
+            transcriptPath: `transcript${i}.json`,
+            projectId: null,
         }));
         const idsToDelete = mockItems.map(item => item.id);
 

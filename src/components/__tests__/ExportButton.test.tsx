@@ -4,6 +4,13 @@ import { ExportButton } from '../ExportButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useHistoryStore } from '../../stores/historyStore';
 
+vi.mock('../../stores/projectStore', () => ({
+    useProjectStore: (selector: any) => selector({
+        activeProjectId: null,
+        projects: [],
+    }),
+}));
+
 // Mock dependencies
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -44,7 +51,7 @@ describe('ExportButton', () => {
 
         useHistoryStore.setState({
             items: [
-                { id: 'hist-1', title: 'Test Recording', timestamp: Date.now(), duration: 10, audioPath: '', transcriptPath: '', previewText: '' }
+                { id: 'hist-1', title: 'Test Recording', timestamp: Date.now(), duration: 10, audioPath: '', transcriptPath: '', previewText: '', projectId: null }
             ]
         });
     });

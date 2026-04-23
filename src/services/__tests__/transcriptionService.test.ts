@@ -39,10 +39,18 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('../../stores/configStore', () => ({
+    DEFAULT_CONFIG: {
+        textReplacementSets: [],
+        hotwordSets: [],
+        punctuationModelPath: '',
+        vadModelPath: '',
+        vadBufferSize: 5.0,
+    },
     useConfigStore: {
         getState: vi.fn(() => ({
             config: mocks.config,
         })),
+        subscribe: vi.fn(() => () => undefined),
     },
 }));
 
@@ -67,6 +75,16 @@ async function loadTranscriptionService() {
     return module.TranscriptionService;
 }
 
+async function syncTranscriptConfig() {
+    const { useTranscriptStore } = await import('../../stores/transcriptStore');
+    useTranscriptStore.setState((state: any) => ({
+        config: {
+            ...state.config,
+            ...mocks.config,
+        },
+    }));
+}
+
 describe('TranscriptionService voice typing diagnostics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -88,6 +106,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
 
     it('logs raw and processed voice-typing text before invoking the callback', async () => {
         const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
         const service = new TranscriptionService('voice-typing');
         const onSegment = vi.fn();
         const onError = vi.fn();
@@ -154,6 +173,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         };
 
         const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
         const service = new TranscriptionService('voice-typing');
         const onSegment = vi.fn();
         const onError = vi.fn();

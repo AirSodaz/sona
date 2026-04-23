@@ -27,4 +27,6 @@ export interface BatchQueueItem {
     audioUrl?: string;
     /** ID of the saved history item for this queue item. */
     historyId?: string;
+    /** Project context captured when this queue item was created. */
+    projectId: string | null;
 }
