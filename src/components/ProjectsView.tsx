@@ -1142,13 +1142,6 @@ export function ProjectsView(): React.JSX.Element {
     : t('projects.inbox_description', {
       defaultValue: 'Inbox collects unassigned recordings and imports.',
     });
-  const headerDetailHint = selectedItem
-    ? t('projects.detail_hint', {
-      defaultValue: 'Editing stays inside Projects until you close this detail pane.',
-    })
-    : t('projects.select_item_hint', {
-      defaultValue: 'Select an item to open it in the built-in editor pane.',
-    });
   const showWorkflowActions = !isAllItemsScope;
   const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
   const summaryChips = [
@@ -1367,7 +1360,6 @@ export function ProjectsView(): React.JSX.Element {
                 total: scopedItems.length,
                 defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
               })}</strong>
-              <span>{headerDetailHint}</span>
             </div>
           </div>
 
