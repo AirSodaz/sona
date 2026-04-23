@@ -1607,20 +1607,24 @@ export function ProjectsView(): React.JSX.Element {
             <div className={`projects-list projects-layout-${viewMode}`}>
               {viewMode === 'table' && (
                 <div className="projects-table-header" role="row">
-                  {isSelectionMode && <div className="projects-table-header-cell" role="columnheader" style={{ width: '40px' }} />}
-                  <div className="projects-table-header-cell projects-table-header-title" role="columnheader">
-                    {t('projects.table_header_name', { defaultValue: 'Name' })}
+                  {isSelectionMode && <div role="columnheader" style={{ width: '40px' }} />}
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                    <div className="projects-table-header-cell projects-table-header-title" role="columnheader">
+                      {t('projects.table_header_name', { defaultValue: 'Name' })}
+                    </div>
+                    <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
+                      {t('projects.table_header_project', { defaultValue: 'Project' })}
+                    </div>
+                    <div style={{ flex: 2, display: 'flex', alignItems: 'center' }}>
+                      <div className="projects-table-header-cell projects-table-header-date" role="columnheader">
+                        {t('projects.table_header_date', { defaultValue: 'Date' })}
+                      </div>
+                      <div className="projects-table-header-cell projects-table-header-duration" role="columnheader">
+                        {t('projects.table_header_duration', { defaultValue: 'Duration' })}
+                      </div>
+                    </div>
                   </div>
-                  <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
-                    {t('projects.table_header_project', { defaultValue: 'Project' })}
-                  </div>
-                  <div className="projects-table-header-cell projects-table-header-date" role="columnheader">
-                    {t('projects.table_header_date', { defaultValue: 'Date' })}
-                  </div>
-                  <div className="projects-table-header-cell projects-table-header-duration" role="columnheader">
-                    {t('projects.table_header_duration', { defaultValue: 'Duration' })}
-                  </div>
-                  {!isSelectionMode && <div className="projects-table-header-cell projects-table-header-actions" role="columnheader" style={{ width: '48px' }} />}
+                  {!isSelectionMode && <div role="columnheader" style={{ width: '48px' }} />}
                 </div>
               )}
               {filteredAndSortedItems.map((item) => (

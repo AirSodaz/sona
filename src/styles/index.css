@@ -3691,6 +3691,7 @@ input[type="radio"]:focus {
   flex: 2;
   display: flex;
   align-items: center;
+  gap: 0;
 }
 
 .history-item--table .history-item-meta-chip {
