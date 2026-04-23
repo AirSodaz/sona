@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList, CheckSquare } from 'lucide-react';
+import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList, CheckSquare, ArrowRight, Trash2, X, ListChecks } from 'lucide-react';
 import { AudioPlayer } from './AudioPlayer';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
@@ -1079,6 +1079,14 @@ export function ProjectsView(): React.JSX.Element {
     setSelectedIds([]);
   };
 
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredAndSortedItems.map((item) => item.id));
+    }
+  };
+
   const handleMoveSelected = async () => {
     if (selectedIds.length === 0) {
       return;
@@ -1511,35 +1519,55 @@ export function ProjectsView(): React.JSX.Element {
                   })}
                 </div>
                 <div className="projects-fab-actions">
+                  <button
+                    type="button"
+                    className={`btn btn-icon projects-toolbar-icon ${selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0 ? 'active' : ''}`}
+                    onClick={handleToggleSelectAll}
+                    aria-label={t('common.select_all', { defaultValue: 'Select All' })}
+                    data-tooltip={t('common.select_all', { defaultValue: 'Select All' })}
+                    data-tooltip-pos="top"
+                  >
+                    <ListChecks size={16} />
+                  </button>
+                  <div className="projects-toolbar-separator" />
                   <Dropdown
                     value={moveTarget}
                     onChange={setMoveTarget}
                     options={moveOptions}
-                    style={{ width: '220px' }}
+                    style={{ width: '200px' }}
                     aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
                   />
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-icon projects-toolbar-icon"
                     onClick={() => void handleMoveSelected()}
                     disabled={selectedIds.length === 0 || (currentScopeMoveTarget !== null && moveTarget === currentScopeMoveTarget)}
+                    aria-label={t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                    data-tooltip={t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                    data-tooltip-pos="top"
                   >
-                    {t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                    <ArrowRight size={16} />
                   </button>
                   <button
                     type="button"
-                    className="btn btn-danger"
+                    className="btn btn-icon projects-toolbar-icon btn-danger"
                     onClick={() => void handleDeleteSelected()}
                     disabled={selectedIds.length === 0}
+                    aria-label={t('common.delete', { defaultValue: 'Delete' })}
+                    data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                    data-tooltip-pos="top"
                   >
-                    {t('common.delete', { defaultValue: 'Delete' })}
+                    <Trash2 size={16} />
                   </button>
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-icon projects-toolbar-icon"
                     onClick={toggleSelectionMode}
+                    aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+                    data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
+                    data-tooltip-pos="top"
                   >
-                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                    <X size={16} />
                   </button>
                 </div>
               </div>
