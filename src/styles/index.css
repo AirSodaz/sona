@@ -3593,24 +3593,67 @@ input[type="radio"]:focus {
   flex-direction: column;
   height: 220px;
   position: relative;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.history-item--grid.is-selection-mode {
+  padding-left: 16px; /* Reset the base list mode padding override */
+}
+
+.history-item--grid .history-item-checkbox {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding-top: 0;
+  z-index: 2;
 }
 
 .history-item--grid .history-item-content {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.history-item--grid .history-item-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-right: 24px; /* Avoid delete button overlap */
+}
+
+.history-item--grid.is-selection-mode .history-item-header {
+  padding-right: 0; /* Actions are hidden in selection mode */
+}
+
+.history-item--grid.is-selection-mode .history-item-title-row {
+  padding-left: 28px;
+}
+
+.history-item--grid .history-item-title {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
 }
 
 .history-item--grid .history-item-meta {
   margin-top: auto;
+  gap: 8px 12px;
 }
 
 .history-item--grid .history-item-actions {
   position: absolute;
   top: 12px;
   right: 12px;
+  margin-top: 0;
+  z-index: 2;
 }
 
 .history-item--grid .history-item-preview {
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
 }
 
 /* Table Layout */
