@@ -52,11 +52,14 @@ export function EditorToolbar(): React.JSX.Element | null {
         return () => window.clearTimeout(timeout);
     }, [autoSaveState?.status, autoSaveState?.updatedAt, sourceHistoryId]);
 
-    const saveStatus = sourceHistoryId
-        ? (autoSaveState?.status === 'saved'
-            ? (isSavedVisible ? 'saved' : null)
-            : autoSaveState?.status || null)
-        : null;
+    let saveStatus = null;
+    if (sourceHistoryId && autoSaveState?.status) {
+        if (autoSaveState.status === 'saved') {
+            saveStatus = isSavedVisible ? 'saved' : null;
+        } else {
+            saveStatus = autoSaveState.status;
+        }
+    }
 
     if (!isEditing && !saveStatus) return null;
 
