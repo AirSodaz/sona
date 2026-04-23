@@ -1360,19 +1360,6 @@ export function ProjectsView(): React.JSX.Element {
           <div className="projects-toolbar-controls">
               <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
                 <div className="projects-toolbar-primary">
-                  <div className="projects-toolbar-sort">
-                    <span className="projects-toolbar-field-label">
-                      {t('projects.sort_label', { defaultValue: 'Sort items' })}
-                    </span>
-                    <Dropdown
-                      value={sortOrder}
-                      onChange={(value) => setSortOrder(value as ProjectSortOrder)}
-                      options={sortOptions}
-                      style={{ width: '200px' }}
-                      aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
-                    />
-                  </div>
-
                   <div className="projects-filter-menu" ref={filterMenuRef}>
                     <button
                       type="button"
@@ -1382,7 +1369,7 @@ export function ProjectsView(): React.JSX.Element {
                       aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
                       aria-expanded={isFilterMenuOpen}
                       aria-controls="projects-filter-panel"
-                      data-tooltip={t('projects.filter_button', { defaultValue: 'Filter' })}
+                      data-tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
                       data-tooltip-pos="bottom"
                     >
                       <SlidersHorizontal size={16} />
@@ -1402,7 +1389,7 @@ export function ProjectsView(): React.JSX.Element {
                       >
                         <div className="projects-filter-popover-header">
                           <div className="projects-filter-popover-copy">
-                            <strong>{t('projects.filter_button', { defaultValue: 'Filter' })}</strong>
+                            <strong>{t('projects.filter_button', { defaultValue: 'Filter & Sort' })}</strong>
                             <span>{filterPopoverHint}</span>
                           </div>
                           <button
@@ -1416,6 +1403,18 @@ export function ProjectsView(): React.JSX.Element {
                         </div>
 
                         <div className="projects-filter-popover-body">
+                          <div className="projects-filter-field">
+                            <span className="projects-toolbar-field-label">
+                              {t('projects.sort_label', { defaultValue: 'Sort items' })}
+                            </span>
+                            <Dropdown
+                              value={sortOrder}
+                              onChange={(value) => setSortOrder(value as ProjectSortOrder)}
+                              options={sortOptions}
+                              style={{ width: '100%' }}
+                              aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
+                            />
+                          </div>
                           <div className="projects-filter-field">
                             <span className="projects-toolbar-field-label">
                               {t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
