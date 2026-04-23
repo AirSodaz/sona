@@ -1461,7 +1461,8 @@ export function ProjectsView(): React.JSX.Element {
                       onClick={() => setConfig({ projectsViewMode: 'list' })}
                       aria-pressed={viewMode === 'list'}
                       aria-label={t('projects.view_list', { defaultValue: 'List View' })}
-                      title={t('projects.view_list', { defaultValue: 'List View' })}
+                      data-tooltip={t('projects.view_list', { defaultValue: 'List View' })}
+                      data-tooltip-pos="bottom"
                     >
                       <List size={16} />
                     </button>
@@ -1471,7 +1472,8 @@ export function ProjectsView(): React.JSX.Element {
                       onClick={() => setConfig({ projectsViewMode: 'grid' })}
                       aria-pressed={viewMode === 'grid'}
                       aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
-                      title={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                      data-tooltip={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                      data-tooltip-pos="bottom"
                     >
                       <LayoutGrid size={16} />
                     </button>
@@ -1481,7 +1483,8 @@ export function ProjectsView(): React.JSX.Element {
                       onClick={() => setConfig({ projectsViewMode: 'table' })}
                       aria-pressed={viewMode === 'table'}
                       aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
-                      title={t('projects.view_table', { defaultValue: 'Table View' })}
+                      data-tooltip={t('projects.view_table', { defaultValue: 'Table View' })}
+                      data-tooltip-pos="bottom"
                     >
                       <LayoutList size={16} />
                     </button>
