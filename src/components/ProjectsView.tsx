@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList } from 'lucide-react';
+import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList, CheckSquare } from 'lucide-react';
 import { AudioPlayer } from './AudioPlayer';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
@@ -1181,23 +1181,20 @@ export function ProjectsView(): React.JSX.Element {
     <div className={`projects-workbench ${selectedItem ? 'with-detail' : ''}`}>
       <aside className="projects-rail">
         <div className="projects-rail-header">
-          <div className="projects-rail-copy">
+          <div className="projects-rail-title-row">
             <div className="projects-rail-eyebrow">
               {t('panel.projects', { defaultValue: 'Workspace' })}
             </div>
-            <div className="projects-rail-title-row">
-              <h2>{t('projects.workspace_label', { defaultValue: 'Workspace' })}</h2>
-              <button
-                type="button"
-                className="btn btn-icon projects-rail-create"
-                onClick={() => setIsCreateModalOpen(true)}
-                aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
-                data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
-                data-tooltip-pos="bottom"
-              >
-                <PlusCircleIcon width={18} height={18} />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn btn-icon projects-rail-create"
+              onClick={() => setIsCreateModalOpen(true)}
+              aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+              data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
+              data-tooltip-pos="bottom"
+            >
+              <PlusCircleIcon width={18} height={18} />
+            </button>
           </div>
         </div>
 
@@ -1266,9 +1263,6 @@ export function ProjectsView(): React.JSX.Element {
         <div className="projects-main-header">
           <div className="projects-main-header-top">
             <div className="projects-main-heading">
-              <div className="projects-main-eyebrow">
-                {t('projects.workspace_label', { defaultValue: 'Workspace' })}
-              </div>
               <div className="projects-main-title-row">
                 <h3>{headerTitle}</h3>
               </div>
@@ -1382,18 +1376,16 @@ export function ProjectsView(): React.JSX.Element {
                   <div className="projects-filter-menu" ref={filterMenuRef}>
                     <button
                       type="button"
-                      className={`btn btn-secondary projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
+                      className={`btn btn-icon projects-toolbar-icon projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
                       onClick={() => setIsFilterMenuOpen((value) => !value)}
                       aria-haspopup="dialog"
                       aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
                       aria-expanded={isFilterMenuOpen}
                       aria-controls="projects-filter-panel"
+                      data-tooltip={t('projects.filter_button', { defaultValue: 'Filter' })}
+                      data-tooltip-pos="bottom"
                     >
                       <SlidersHorizontal size={16} />
-                      <span className="projects-filter-trigger-label">
-                        {t('projects.filter_button', { defaultValue: 'Filter' })}
-                      </span>
-                      <span className="projects-filter-trigger-summary">{filterSummary}</span>
                       {hasActiveFilters && (
                         <span className="projects-filter-trigger-count" aria-hidden="true">
                           {activeFilterCount}
@@ -1500,10 +1492,13 @@ export function ProjectsView(): React.JSX.Element {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className={`btn btn-icon projects-toolbar-icon ${isSelectionMode ? 'active' : ''}`}
                     onClick={toggleSelectionMode}
+                    aria-label={t('common.select', { defaultValue: 'Select' })}
+                    data-tooltip={t('common.select', { defaultValue: 'Select' })}
+                    data-tooltip-pos="bottom"
                   >
-                    {t('common.select', { defaultValue: 'Select' })}
+                    <CheckSquare size={16} />
                   </button>
                 </div>
               </div>
