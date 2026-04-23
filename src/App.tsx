@@ -10,7 +10,6 @@ import { TranslateButton } from './components/TranslateButton';
 import { PolishButton } from './components/PolishButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
-import { HistoryView } from './components/HistoryView';
 import { ProjectsView } from './components/ProjectsView';
 import { ProjectContextBar } from './components/ProjectContextBar';
 import { Settings } from './components/Settings';
@@ -36,8 +35,6 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
   switch (mode) {
     case 'live':
       return t('panel.live_record');
-    case 'history':
-      return t('history.title');
     case 'projects':
       return t('panel.projects');
     case 'batch':
@@ -114,31 +111,31 @@ function App(): React.JSX.Element {
             <ProjectsView />
           </div>
         ) : (
-          <div className="panel-container">
-            {/* Left Panel - Input */}
-            <div className="panel panel-left">
-              <div className="panel-header">
-                <h2>{panelTitle}</h2>
-              </div>
-              <div className="panel-content">
-                <ProjectContextBar />
-                <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
-                  <LiveRecord />
+          <div className="workspace-mode-shell">
+            <ProjectContextBar />
+            <div className="panel-container">
+              {/* Left Panel - Input */}
+              <div className="panel panel-left">
+                <div className="panel-header">
+                  <h2>{panelTitle}</h2>
                 </div>
-                {mode === 'history' && <HistoryView />}
-                {mode === 'batch' && <BatchImport />}
+                <div className="panel-content">
+                  <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
+                    <LiveRecord />
+                  </div>
+                  {mode === 'batch' && <BatchImport />}
+                </div>
               </div>
-            </div>
 
-            {/* Right Panel - Editor */}
-            <div className="panel panel-right">
-              <div className="panel-content">
-                <ProjectContextBar />
-                <ErrorBoundary>
-                  <TranscriptEditor />
-                </ErrorBoundary>
+              {/* Right Panel - Editor */}
+              <div className="panel panel-right">
+                <div className="panel-content">
+                  <ErrorBoundary>
+                    <TranscriptEditor />
+                  </ErrorBoundary>
+                </div>
+                {audioUrl && <AudioPlayer />}
               </div>
-              {audioUrl && <AudioPlayer />}
             </div>
           </div>
         )}

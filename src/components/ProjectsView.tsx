@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Search } from 'lucide-react';
 import { AudioPlayer } from './AudioPlayer';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
@@ -8,7 +9,6 @@ import { TranscriptEditor } from './TranscriptEditor';
 import { HistoryItem } from './history/HistoryItem';
 import {
   CloseIcon,
-  FolderIcon,
   PlusCircleIcon,
   SettingsIcon,
   XIcon,
@@ -24,6 +24,11 @@ import type { ProjectDefaults, ProjectRecord } from '../types/project';
 
 const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 const SUMMARY_TEMPLATE_OPTIONS = ['general', 'meeting', 'lecture'] as const;
+const DEFAULT_FILTER_TYPE = 'all';
+const DEFAULT_DATE_FILTER = 'all';
+const DEFAULT_SORT_ORDER = 'newest';
+const ALL_ITEMS_SCOPE = 'all';
+const INBOX_SCOPE = 'inbox';
 const POLISH_SCENARIO_OPTIONS = [
   'customer_service',
   'meeting',
@@ -32,9 +37,80 @@ const POLISH_SCENARIO_OPTIONS = [
   'podcast',
   'custom',
 ] as const;
+type ProjectFilterType = 'all' | 'recording' | 'batch';
+type ProjectDateFilter = 'all' | 'today' | 'week' | 'month';
+type ProjectSortOrder = 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
+type ProjectBrowseScope = typeof ALL_ITEMS_SCOPE | typeof INBOX_SCOPE | string;
 
 function sortRuleSetIds(ids: string[]): string[] {
   return [...ids].sort();
+}
+
+function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+}
+
+function formatSummaryDuration(
+  durationInSeconds: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const totalMinutes = Math.max(0, Math.round(durationInSeconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return t('projects.summary_duration_hours', {
+      hours,
+      minutes,
+      defaultValue: `${hours}h ${minutes}m`,
+    });
+  }
+
+  return t('projects.summary_duration_minutes', {
+    minutes: totalMinutes,
+    defaultValue: `${totalMinutes}m`,
+  });
+}
+
+function matchesDateFilter(item: HistoryItemType, dateFilter: ProjectDateFilter): boolean {
+  if (dateFilter === 'all') {
+    return true;
+  }
+
+  const itemDate = new Date(item.timestamp);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (dateFilter === 'today') {
+    return itemDate >= today;
+  }
+
+  if (dateFilter === 'week') {
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return itemDate >= weekAgo;
+  }
+
+  const monthAgo = new Date(today);
+  monthAgo.setMonth(monthAgo.getMonth() - 1);
+  return itemDate >= monthAgo;
+}
+
+function compareProjectItems(a: HistoryItemType, b: HistoryItemType, sortOrder: ProjectSortOrder): number {
+  switch (sortOrder) {
+    case 'oldest':
+      return a.timestamp - b.timestamp;
+    case 'duration_desc':
+      return b.duration - a.duration || b.timestamp - a.timestamp;
+    case 'duration_asc':
+      return a.duration - b.duration || b.timestamp - a.timestamp;
+    case 'title_asc':
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) || b.timestamp - a.timestamp;
+    case 'newest':
+    default:
+      return b.timestamp - a.timestamp;
+  }
 }
 
 function buildComparableProjectSettings(
@@ -461,9 +537,6 @@ export function ProjectsView(): React.JSX.Element {
   const { t } = useTranslation();
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const activeProject = useProjectStore((state) => (
-    state.projects.find((item) => item.id === state.activeProjectId) || null
-  ));
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
   const deleteProject = useProjectStore((state) => state.deleteProject);
@@ -475,6 +548,7 @@ export function ProjectsView(): React.JSX.Element {
   const loadHistoryItems = useHistoryStore((state) => state.loadItems);
   const refreshHistory = useHistoryStore((state) => state.refresh);
   const deleteHistoryItem = useHistoryStore((state) => state.deleteItem);
+  const deleteHistoryItems = useHistoryStore((state) => state.deleteItems);
 
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
@@ -495,10 +569,23 @@ export function ProjectsView(): React.JSX.Element {
   const [draftDefaults, setDraftDefaults] = useState<ProjectDefaults | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [moveTarget, setMoveTarget] = useState('inbox');
+  const [moveTarget, setMoveTarget] = useState(INBOX_SCOPE);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
+  const [browseScope, setBrowseScope] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
+  const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
+  const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
 
-  const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = activeProject) => {
+  const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
+  const isInboxScope = browseScope === INBOX_SCOPE;
+  const browseProjectId = !isAllItemsScope && !isInboxScope ? browseScope : null;
+  const browseProject = useMemo(
+    () => projects.find((item) => item.id === browseProjectId) || null,
+    [browseProjectId, projects],
+  );
+
+  const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
     if (!project) {
       setDraftName('');
       setDraftDescription('');
@@ -509,30 +596,48 @@ export function ProjectsView(): React.JSX.Element {
     setDraftName(project.name);
     setDraftDescription(project.description);
     setDraftDefaults(project.defaults);
-  }, [activeProject]);
+  }, [browseProject]);
 
   useEffect(() => {
     void loadHistoryItems();
   }, [loadHistoryItems]);
 
   useEffect(() => {
-    if (!activeProject) {
+    if (!browseProject) {
       resetProjectSettingsDraft(null);
       setIsSettingsOpen(false);
       return;
     }
 
-    resetProjectSettingsDraft(activeProject);
-  }, [activeProject, resetProjectSettingsDraft]);
+    resetProjectSettingsDraft(browseProject);
+  }, [browseProject, resetProjectSettingsDraft]);
 
   useEffect(() => {
-    if (activeProjectId) {
-      setMoveTarget('inbox');
+    if (browseProjectId) {
+      setMoveTarget(INBOX_SCOPE);
       return;
     }
 
-    setMoveTarget(projects[0]?.id || 'inbox');
-  }, [activeProjectId, projects]);
+    setMoveTarget(projects[0]?.id || INBOX_SCOPE);
+  }, [browseProjectId, projects]);
+
+  useEffect(() => {
+    setSearchQuery('');
+    setFilterType(DEFAULT_FILTER_TYPE);
+    setDateFilter(DEFAULT_DATE_FILTER);
+  }, [browseScope]);
+
+  useEffect(() => {
+    if (browseScope === ALL_ITEMS_SCOPE || browseScope === INBOX_SCOPE) {
+      return;
+    }
+
+    if (projects.some((item) => item.id === browseScope)) {
+      return;
+    }
+
+    setBrowseScope(activeProjectId || INBOX_SCOPE);
+  }, [activeProjectId, browseScope, projects]);
 
   const clearOpenedItem = useCallback(() => {
     setSelectedHistoryId(null);
@@ -541,14 +646,78 @@ export function ProjectsView(): React.JSX.Element {
   }, [clearSegments, setAudioUrl]);
 
   const scopedItems = useMemo(
-    () => historyItems.filter((item) => (activeProjectId ? item.projectId === activeProjectId : item.projectId === null)),
-    [historyItems, activeProjectId],
+    () => historyItems.filter((item) => {
+      if (isAllItemsScope) {
+        return true;
+      }
+
+      if (isInboxScope) {
+        return item.projectId === null;
+      }
+
+      return item.projectId === browseProjectId;
+    }),
+    [browseProjectId, historyItems, isAllItemsScope, isInboxScope],
   );
 
   const selectedItem = useMemo(
     () => scopedItems.find((item) => item.id === selectedHistoryId) || null,
     [scopedItems, selectedHistoryId],
   );
+
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return scopedItems.filter((item) => {
+      if (normalizedQuery) {
+        const haystack = [item.title, item.searchContent || item.previewText || '']
+          .join(' ')
+          .toLowerCase();
+
+        if (!haystack.includes(normalizedQuery)) {
+          return false;
+        }
+      }
+
+      if (filterType !== 'all' && (item.type || 'recording') !== filterType) {
+        return false;
+      }
+
+      return matchesDateFilter(item, dateFilter);
+    });
+  }, [dateFilter, filterType, scopedItems, searchQuery]);
+
+  const filteredAndSortedItems = useMemo(
+    () => [...filteredItems].sort((a, b) => compareProjectItems(a, b, sortOrder)),
+    [filteredItems, sortOrder],
+  );
+
+  const projectSummary = useMemo(() => {
+    let totalDuration = 0;
+    let recordingCount = 0;
+    let batchCount = 0;
+    let latestTimestamp: number | null = null;
+
+    scopedItems.forEach((item) => {
+      totalDuration += item.duration || 0;
+      latestTimestamp = latestTimestamp === null ? item.timestamp : Math.max(latestTimestamp, item.timestamp);
+
+      if ((item.type || 'recording') === 'batch') {
+        batchCount += 1;
+        return;
+      }
+
+      recordingCount += 1;
+    });
+
+    return {
+      totalItems: scopedItems.length,
+      totalDuration,
+      latestTimestamp,
+      recordingCount,
+      batchCount,
+    };
+  }, [scopedItems]);
 
   const itemCounts = useMemo(() => {
     const counts = new Map<string | null, number>();
@@ -579,29 +748,67 @@ export function ProjectsView(): React.JSX.Element {
     }
   }, [clearOpenedItem, scopedItems, selectedHistoryId, selectedItem, sourceHistoryId]);
 
+  useEffect(() => {
+    const visibleIds = new Set(filteredAndSortedItems.map((item) => item.id));
+    setSelectedIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [filteredAndSortedItems]);
+
   const moveOptions = useMemo(
     () => [
-      { value: 'inbox', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
+      { value: INBOX_SCOPE, label: t('projects.inbox', { defaultValue: 'Inbox' }) },
       ...projects.map((project) => ({ value: project.id, label: project.name })),
     ],
     [projects, t],
   );
 
+  const filterTypeOptions = useMemo(
+    () => [
+      { value: 'all', label: t('projects.filter_all_types', { defaultValue: 'All types' }) },
+      { value: 'recording', label: t('projects.filter_recordings', { defaultValue: 'Recordings' }) },
+      { value: 'batch', label: t('projects.filter_batch', { defaultValue: 'Batch imports' }) },
+    ],
+    [t],
+  );
+
+  const dateFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: t('projects.date_all', { defaultValue: 'Any time' }) },
+      { value: 'today', label: t('projects.date_today', { defaultValue: 'Today' }) },
+      { value: 'week', label: t('projects.date_week', { defaultValue: 'Last 7 days' }) },
+      { value: 'month', label: t('projects.date_month', { defaultValue: 'Last 30 days' }) },
+    ],
+    [t],
+  );
+
+  const sortOptions = useMemo(
+    () => [
+      { value: 'newest', label: t('projects.sort_newest', { defaultValue: 'Newest first' }) },
+      { value: 'oldest', label: t('projects.sort_oldest', { defaultValue: 'Oldest first' }) },
+      { value: 'duration_desc', label: t('projects.sort_duration_desc', { defaultValue: 'Longest first' }) },
+      { value: 'duration_asc', label: t('projects.sort_duration_asc', { defaultValue: 'Shortest first' }) },
+      { value: 'title_asc', label: t('projects.sort_title_asc', { defaultValue: 'Title A-Z' }) },
+    ],
+    [t],
+  );
+
   const isProjectSettingsDirty = useMemo(() => {
-    if (!activeProject || !draftDefaults) {
+    if (!browseProject || !draftDefaults) {
       return false;
     }
 
     const currentDraft = buildComparableProjectSettings(
-      activeProject,
+      browseProject,
       draftName,
       draftDescription,
       draftDefaults,
     );
-    const savedProject = buildSavedProjectSettings(activeProject);
+    const savedProject = buildSavedProjectSettings(browseProject);
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
-  }, [activeProject, draftDefaults, draftDescription, draftName]);
+  }, [browseProject, draftDefaults, draftDescription, draftName]);
 
   const confirmDiscardProjectSettingsChanges = useCallback(async () => {
     if (!isSettingsOpen || !isProjectSettingsDirty) {
@@ -627,10 +834,10 @@ export function ProjectsView(): React.JSX.Element {
     );
   }, [confirm, isProjectSettingsDirty, isSettingsOpen, t]);
 
-  const discardProjectSettingsDraft = useCallback((project: ProjectRecord | null = activeProject) => {
+  const discardProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
     resetProjectSettingsDraft(project);
     setIsSettingsOpen(false);
-  }, [activeProject, resetProjectSettingsDraft]);
+  }, [browseProject, resetProjectSettingsDraft]);
 
   const handleRequestCloseProjectSettings = useCallback(async () => {
     const shouldDiscard = await confirmDiscardProjectSettingsChanges();
@@ -641,7 +848,7 @@ export function ProjectsView(): React.JSX.Element {
     discardProjectSettingsDraft();
   }, [confirmDiscardProjectSettingsChanges, discardProjectSettingsDraft]);
 
-  const handleSwitchProject = async (projectId: string | null) => {
+  const handleSwitchBrowseScope = async (nextScope: ProjectBrowseScope) => {
     const shouldDiscard = await confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
       return;
@@ -653,7 +860,13 @@ export function ProjectsView(): React.JSX.Element {
 
     setIsSelectionMode(false);
     setSelectedIds([]);
-    await setActiveProjectId(projectId);
+    setBrowseScope(nextScope);
+
+    if (nextScope === ALL_ITEMS_SCOPE) {
+      return;
+    }
+
+    await setActiveProjectId(nextScope === INBOX_SCOPE ? null : nextScope);
   };
 
   const handleOpenItem = async (item: HistoryItemType) => {
@@ -726,16 +939,17 @@ export function ProjectsView(): React.JSX.Element {
     setNewProjectName('');
     setNewProjectDescription('');
     setIsCreateModalOpen(false);
+    setBrowseScope(project.id);
     await setActiveProjectId(project.id);
   };
 
   const handleSaveProject = async () => {
-    if (!activeProject || !draftDefaults) {
+    if (!browseProject || !draftDefaults) {
       return;
     }
 
-    await updateProject(activeProject.id, {
-      name: draftName.trim() || activeProject.name,
+    await updateProject(browseProject.id, {
+      name: draftName.trim() || browseProject.name,
       description: draftDescription,
       defaults: draftDefaults,
     });
@@ -743,7 +957,7 @@ export function ProjectsView(): React.JSX.Element {
   };
 
   const handleDeleteProject = async () => {
-    if (!activeProject) {
+    if (!browseProject) {
       return;
     }
 
@@ -753,12 +967,12 @@ export function ProjectsView(): React.JSX.Element {
     }
 
     if (isSettingsOpen) {
-      discardProjectSettingsDraft(activeProject);
+      discardProjectSettingsDraft(browseProject);
     }
 
     const confirmed = await confirm(
       t('projects.delete_confirm', {
-        defaultValue: `Delete ${activeProject.name} and move its items back to Inbox?`,
+        defaultValue: `Delete ${browseProject.name} and move its items back to Inbox?`,
       }),
       {
         title: t('projects.delete_title', { defaultValue: 'Delete Project' }),
@@ -772,7 +986,8 @@ export function ProjectsView(): React.JSX.Element {
     }
 
     clearOpenedItem();
-    await deleteProject(activeProject.id);
+    setBrowseScope(INBOX_SCOPE);
+    await deleteProject(browseProject.id);
     await refreshHistory();
   };
 
@@ -782,12 +997,17 @@ export function ProjectsView(): React.JSX.Element {
     ));
   };
 
+  const toggleSelectionMode = () => {
+    setIsSelectionMode((value) => !value);
+    setSelectedIds([]);
+  };
+
   const handleMoveSelected = async () => {
     if (selectedIds.length === 0) {
       return;
     }
 
-    const targetProjectId = moveTarget === 'inbox' ? null : moveTarget;
+    const targetProjectId = moveTarget === INBOX_SCOPE ? null : moveTarget;
     await assignHistoryItems(selectedIds, targetProjectId);
     await refreshHistory();
 
@@ -800,176 +1020,356 @@ export function ProjectsView(): React.JSX.Element {
     setIsSelectionMode(false);
   };
 
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    const confirmed = await confirm(
+      t('history.delete_bulk_confirm', {
+        count: selectedIds.length,
+        defaultValue: `Are you sure you want to delete ${selectedIds.length} items?`,
+      }),
+      {
+        title: t('history.delete_title', { defaultValue: 'Delete History' }),
+        confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
+        variant: 'error',
+      },
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await deleteHistoryItems(selectedIds);
+    await refreshHistory();
+    setSelectedIds([]);
+    setIsSelectionMode(false);
+  };
+
+  const resetBrowseState = useCallback(() => {
+    setSearchQuery('');
+    setFilterType(DEFAULT_FILTER_TYPE);
+    setDateFilter(DEFAULT_DATE_FILTER);
+  }, []);
+
+  const headerTitle = isAllItemsScope
+    ? t('projects.all_items', { defaultValue: 'All Items' })
+    : browseProject?.name || t('projects.inbox', { defaultValue: 'Inbox' });
+  const headerDescription = isAllItemsScope
+    ? t('projects.all_items_description', {
+      defaultValue: 'Browse everything across Inbox and your projects.',
+    })
+    : browseProject?.description || t('projects.inbox_description', {
+      defaultValue: 'Inbox collects unassigned recordings and imports.',
+    });
+  const headerDetailHint = selectedItem
+    ? t('projects.detail_hint', {
+      defaultValue: 'Editing stays inside Projects until you close this detail pane.',
+    })
+    : t('projects.select_item_hint', {
+      defaultValue: 'Select an item to open it in the built-in editor pane.',
+    });
+  const showWorkflowActions = !isAllItemsScope;
+  const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
+  const summaryChips = [
+    {
+      key: 'items',
+      label: t('projects.summary_items', { defaultValue: 'Items' }),
+      value: String(projectSummary.totalItems),
+      testId: 'projects-summary-total-items',
+    },
+    {
+      key: 'duration',
+      label: t('projects.summary_duration', { defaultValue: 'Total duration' }),
+      value: formatSummaryDuration(projectSummary.totalDuration, t),
+      testId: 'projects-summary-total-duration',
+    },
+    {
+      key: 'latest',
+      label: t('projects.summary_latest_activity', { defaultValue: 'Latest activity' }),
+      value: projectSummary.latestTimestamp
+        ? formatTimestamp(projectSummary.latestTimestamp)
+        : t('projects.summary_no_activity', { defaultValue: 'No activity yet' }),
+      testId: 'projects-summary-latest-activity',
+    },
+    {
+      key: 'type-split',
+      label: t('projects.summary_type_split', { defaultValue: 'Type split' }),
+      value: t('projects.summary_type_split_value', {
+        recordings: projectSummary.recordingCount,
+        imports: projectSummary.batchCount,
+        defaultValue: `${projectSummary.recordingCount} recordings / ${projectSummary.batchCount} imports`,
+      }),
+      testId: 'projects-summary-type-split',
+    },
+  ];
+
   return (
     <div className={`projects-workbench ${selectedItem ? 'with-detail' : ''}`}>
       <aside className="projects-rail">
         <div className="projects-rail-header">
-          <div>
+          <div className="projects-rail-copy">
             <div className="projects-rail-eyebrow">
-              {t('panel.projects', { defaultValue: 'Projects' })}
+              {t('panel.projects', { defaultValue: 'Workspace' })}
             </div>
-            <h2>{t('projects.workspace_label', { defaultValue: 'Workspace' })}</h2>
+            <div className="projects-rail-title-row">
+              <h2>{t('projects.workspace_label', { defaultValue: 'Workspace' })}</h2>
+              <button
+                type="button"
+                className="btn btn-secondary projects-rail-create"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <PlusCircleIcon width={18} height={18} />
+                <span>{t('projects.new_project_button', { defaultValue: 'New Project' })}</span>
+              </button>
+            </div>
           </div>
+        </div>
+
+        <div className="projects-rail-scopes">
+          <button
+            type="button"
+            className={`projects-rail-item ${isAllItemsScope ? 'active' : ''}`}
+            onClick={() => void handleSwitchBrowseScope(ALL_ITEMS_SCOPE)}
+            aria-pressed={isAllItemsScope}
+          >
+            <div className="projects-rail-item-copy">
+              <strong>{t('projects.all_items', { defaultValue: 'All Items' })}</strong>
+              <span>
+                {t('projects.all_items_description', {
+                  defaultValue: 'Browse everything across Inbox and your projects.',
+                })}
+              </span>
+            </div>
+            <span className="projects-rail-count">{historyItems.length}</span>
+          </button>
 
           <button
             type="button"
-            className="btn btn-icon"
-            onClick={() => setIsCreateModalOpen(true)}
-            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
+            onClick={() => void handleSwitchBrowseScope(INBOX_SCOPE)}
+            aria-pressed={isInboxScope}
           >
-            <PlusCircleIcon width={20} height={20} />
+            <div className="projects-rail-item-copy">
+              <strong>{t('projects.inbox', { defaultValue: 'Inbox' })}</strong>
+              <span>
+                {t('projects.inbox_description', {
+                  defaultValue: 'Inbox collects unassigned recordings and imports.',
+                })}
+              </span>
+            </div>
+            <span className="projects-rail-count">{itemCounts.get(null) || 0}</span>
           </button>
         </div>
 
-        <button
-          type="button"
-          className={`projects-rail-item ${activeProjectId === null ? 'active' : ''}`}
-          onClick={() => void handleSwitchProject(null)}
-        >
-          <div>
-            <strong>{t('projects.inbox', { defaultValue: 'Inbox' })}</strong>
-            <span>
-              {t('projects.inbox_description', {
-                defaultValue: 'Inbox collects unassigned recordings and imports.',
-              })}
-            </span>
-          </div>
-          <span className="projects-rail-count">{itemCounts.get(null) || 0}</span>
-        </button>
-
-        <div className="projects-rail-list">
-          {projects.length === 0 && (
-            <div className="projects-rail-empty">
-              {t('projects.no_projects', { defaultValue: 'No projects yet.' })}
-            </div>
-          )}
-
-          {projects.map((project) => (
-            <button
-              key={project.id}
-              type="button"
-              className={`projects-rail-item ${activeProjectId === project.id ? 'active' : ''}`}
-              onClick={() => void handleSwitchProject(project.id)}
-            >
-              <div>
-                <strong>{project.name}</strong>
-                <span>{project.description || t('projects.project_description', { defaultValue: 'Description' })}</span>
+        <div className="projects-rail-projects">
+          <div className="projects-rail-list">
+            {projects.length === 0 && (
+              <div className="projects-rail-empty">
+                {t('projects.no_projects', { defaultValue: 'No projects yet.' })}
               </div>
-              <span className="projects-rail-count">{itemCounts.get(project.id) || 0}</span>
-            </button>
-          ))}
-        </div>
+            )}
 
-        <button
-          type="button"
-          className="btn btn-secondary projects-rail-create"
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          <PlusCircleIcon width={18} height={18} />
-          <span>{t('projects.new_project_button', { defaultValue: 'New Project' })}</span>
-        </button>
+            {projects.map((project) => {
+              const projectCount = itemCounts.get(project.id) || 0;
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`projects-rail-item ${browseProjectId === project.id ? 'active' : ''}`}
+                  onClick={() => void handleSwitchBrowseScope(project.id)}
+                  aria-pressed={browseProjectId === project.id}
+                >
+                  <div className="projects-rail-item-copy">
+                    <strong>{project.name}</strong>
+                    <span>
+                      {project.description || t('projects.items_title', {
+                        count: projectCount,
+                        defaultValue: `${projectCount} items`,
+                      })}
+                    </span>
+                  </div>
+                  <span className="projects-rail-count">{projectCount}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </aside>
 
       <section className="projects-main">
         <div className="projects-main-header">
-          <div className="projects-main-heading">
-            <div className="projects-main-eyebrow">
-              {t('projects.workspace_label', { defaultValue: 'Workspace' })}
+          <div className="projects-main-header-top">
+            <div className="projects-main-heading">
+              <div className="projects-main-eyebrow">
+                {t('projects.workspace_label', { defaultValue: 'Workspace' })}
+              </div>
+              <div className="projects-main-title-row">
+                <h3>{headerTitle}</h3>
+                {browseProject && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary projects-inline-action"
+                    onClick={() => setIsSettingsOpen(true)}
+                  >
+                    <SettingsIcon width={16} height={16} />
+                    <span>{t('projects.project_settings', { defaultValue: 'Project Settings' })}</span>
+                  </button>
+                )}
+              </div>
+              <p>{headerDescription}</p>
             </div>
-            <div className="projects-main-title-row">
-              <h3>{activeProject?.name || t('projects.inbox', { defaultValue: 'Inbox' })}</h3>
-              <span className="projects-main-count">
-                {t('projects.items_title', {
-                  count: scopedItems.length,
-                  defaultValue: `${scopedItems.length} items`,
-                })}
-              </span>
-            </div>
-            <p>
-              {activeProject?.description || t('projects.inbox_description', {
-                defaultValue: 'Inbox collects unassigned recordings and imports.',
-              })}
-            </p>
+
+            {showWorkflowActions && (
+              <div className="projects-main-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setMode('live')}>
+                  {t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setMode('batch')}>
+                  {t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="projects-main-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setMode('live')}>
-              {t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setMode('batch')}>
-              {t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
-            </button>
-            {activeProject && (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setIsSettingsOpen(true)}
-                >
-                  <SettingsIcon width={16} height={16} />
-                  <span>{t('projects.project_settings', { defaultValue: 'Project Settings' })}</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => void handleSwitchProject(null)}
-                >
-                  {t('projects.exit_to_inbox', { defaultValue: 'Exit to Inbox' })}
-                </button>
-              </>
-            )}
+          <div className="projects-meta-chips" data-testid="projects-summary-chips">
+            {summaryChips.map((chip) => (
+              <div key={chip.key} className="projects-meta-chip">
+                <span className="projects-meta-chip-label">{chip.label}</span>
+                <strong className="projects-meta-chip-value" data-testid={chip.testId}>
+                  {chip.value}
+                </strong>
+              </div>
+            ))}
           </div>
         </div>
 
         <div className="projects-toolbar">
-          <div className="projects-toolbar-copy">
-            <strong>{t('projects.items_title', {
-              count: scopedItems.length,
-              defaultValue: `${scopedItems.length} items`,
-            })}</strong>
-            <span>
-              {selectedItem
-                ? t('projects.detail_hint', {
-                  defaultValue: 'Editing stays inside Projects until you close this detail pane.',
-                })
-                : t('projects.select_item_hint', {
-                  defaultValue: 'Select an item to open it in the built-in editor pane.',
-                })}
-            </span>
-          </div>
-
-          <div className="projects-toolbar-actions">
-            <button
-              type="button"
-              className={`btn ${isSelectionMode ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => {
-                setIsSelectionMode((value) => !value);
-                setSelectedIds([]);
-              }}
-            >
-              {isSelectionMode
-                ? t('common.cancel', { defaultValue: 'Cancel' })
-                : t('common.select', { defaultValue: 'Select' })}
-            </button>
-
-            {isSelectionMode && (
-              <>
-                <Dropdown
-                  value={moveTarget}
-                  onChange={setMoveTarget}
-                  options={moveOptions}
-                  style={{ width: '220px' }}
-                  aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
-                />
+          <div className="projects-toolbar-search-group">
+            <div className="projects-search">
+              <Search size={16} className="projects-search-icon" />
+              <input
+                type="text"
+                placeholder={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
+                aria-label={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchQuery('');
+                  }
+                }}
+              />
+              {searchQuery && (
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => void handleMoveSelected()}
-                  disabled={selectedIds.length === 0 || moveTarget === (activeProjectId || 'inbox')}
+                  className="btn btn-icon btn-text projects-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
                 >
-                  {t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                  <XIcon width={14} height={14} />
                 </button>
-              </>
+              )}
+            </div>
+
+            <div className="projects-toolbar-copy">
+              <strong data-testid="projects-results-count">{t('projects.results_count', {
+                visible: filteredAndSortedItems.length,
+                total: scopedItems.length,
+                defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
+              })}</strong>
+              <span>{headerDetailHint}</span>
+            </div>
+          </div>
+
+          <div className="projects-toolbar-controls">
+            {!isSelectionMode && (
+              <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
+                <div className="projects-toolbar-filters">
+                  <Dropdown
+                    value={filterType}
+                    onChange={(value) => setFilterType(value as ProjectFilterType)}
+                    options={filterTypeOptions}
+                    style={{ width: '180px' }}
+                    aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
+                  />
+                  <Dropdown
+                    value={dateFilter}
+                    onChange={(value) => setDateFilter(value as ProjectDateFilter)}
+                    options={dateFilterOptions}
+                    style={{ width: '180px' }}
+                    aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
+                  />
+                  <Dropdown
+                    value={sortOrder}
+                    onChange={(value) => setSortOrder(value as ProjectSortOrder)}
+                    options={sortOptions}
+                    style={{ width: '180px' }}
+                    aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
+                  />
+                </div>
+
+                <div className="projects-toolbar-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => historyService.openHistoryFolder()}
+                  >
+                    {t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={toggleSelectionMode}
+                  >
+                    {t('common.select', { defaultValue: 'Select' })}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isSelectionMode && (
+              <div className="projects-toolbar-contextual" data-testid="projects-toolbar-contextual">
+                <div className="projects-selection-copy">
+                  {t('projects.selected_count', {
+                    count: selectedIds.length,
+                    defaultValue: `${selectedIds.length} selected`,
+                  })}
+                </div>
+                <div className="projects-toolbar-contextual-actions">
+                  <Dropdown
+                    value={moveTarget}
+                    onChange={setMoveTarget}
+                    options={moveOptions}
+                    style={{ width: '220px' }}
+                    aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => void handleMoveSelected()}
+                    disabled={selectedIds.length === 0 || (currentScopeMoveTarget !== null && moveTarget === currentScopeMoveTarget)}
+                  >
+                    {t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => void handleDeleteSelected()}
+                    disabled={selectedIds.length === 0}
+                  >
+                    {t('common.delete', { defaultValue: 'Delete' })}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={toggleSelectionMode}
+                  >
+                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -980,7 +1380,11 @@ export function ProjectsView(): React.JSX.Element {
               <PlusCircleIcon />
               <h4>{t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}</h4>
               <p>
-                {activeProject
+                {isAllItemsScope
+                  ? t('projects.empty_all_items_hint', {
+                    defaultValue: 'Saved recordings and imports will appear here once you create some content.',
+                  })
+                  : browseProject
                   ? t('projects.empty_project_hint', {
                     defaultValue: 'Start a live recording or import files to begin building this project.',
                   })
@@ -991,17 +1395,18 @@ export function ProjectsView(): React.JSX.Element {
             </div>
           )}
 
-          {!selectedItem && scopedItems.length > 0 && (
-            <div className="projects-overview-card compact">
-              <FolderIcon width={32} height={32} />
-              <div>
-                <h4>{t('projects.select_item_title', { defaultValue: 'Pick an item to continue' })}</h4>
-                <p>
-                  {t('projects.select_item_hint', {
-                    defaultValue: 'Select an item to open it in the built-in editor pane.',
-                  })}
-                </p>
-              </div>
+          {!isHistoryLoading && scopedItems.length > 0 && filteredAndSortedItems.length === 0 && (
+            <div className="projects-overview-card">
+              <Search size={28} />
+              <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
+              <p>
+                {t('projects.no_results_hint', {
+                  defaultValue: 'Try a different search or clear the current filters.',
+                })}
+              </p>
+              <button type="button" className="btn btn-secondary" onClick={resetBrowseState}>
+                {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
+              </button>
             </div>
           )}
 
@@ -1011,14 +1416,15 @@ export function ProjectsView(): React.JSX.Element {
             </div>
           )}
 
-          {!isHistoryLoading && scopedItems.length > 0 && (
+          {!isHistoryLoading && filteredAndSortedItems.length > 0 && (
             <div className="projects-list">
-              {scopedItems.map((item) => (
+              {filteredAndSortedItems.map((item) => (
                 <HistoryItem
                   key={item.id}
                   item={item}
                   onLoad={handleOpenItem}
                   onDelete={handleDeleteHistoryItem}
+                  searchQuery={searchQuery}
                   isSelectionMode={isSelectionMode}
                   isSelected={isSelectionMode ? selectedIds.includes(item.id) : selectedHistoryId === item.id}
                   onToggleSelection={toggleSelection}
@@ -1080,7 +1486,7 @@ export function ProjectsView(): React.JSX.Element {
 
       <ProjectSettingsDrawer
         isOpen={isSettingsOpen}
-        project={activeProject}
+        project={browseProject}
         draftName={draftName}
         draftDescription={draftDescription}
         draftDefaults={draftDefaults}

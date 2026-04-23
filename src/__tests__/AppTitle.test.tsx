@@ -13,7 +13,6 @@ vi.mock('../components/TranslateButton', () => ({ TranslateButton: () => <div>Tr
 vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
-vi.mock('../components/HistoryView', () => ({ HistoryView: () => <div>HistoryView</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/ProjectContextBar', () => ({ ProjectContextBar: () => <div>ProjectContextBar</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
@@ -65,16 +64,16 @@ describe('App Title Logic', () => {
     expect(screen.getByText('panel.live_record')).not.toBeNull();
   });
 
-  it('displays "History" title in history mode', () => {
-    setupStore({ mode: 'history' });
-    render(<App />);
-    expect(screen.getByText('history.title')).not.toBeNull();
-  });
-
   it('displays "Batch Import" title in batch mode', () => {
     setupStore({ mode: 'batch' });
     render(<App />);
     expect(screen.getByText('panel.batch_import')).not.toBeNull();
+  });
+
+  it('renders a single shared project context bar outside projects mode', () => {
+    setupStore({ mode: 'live' });
+    render(<App />);
+    expect(screen.getAllByText('ProjectContextBar')).toHaveLength(1);
   });
 
   it('renders the projects workbench without the old editor shell in projects mode', () => {
@@ -82,5 +81,6 @@ describe('App Title Logic', () => {
     render(<App />);
     expect(screen.getByText('ProjectsView')).not.toBeNull();
     expect(screen.queryByText('TranscriptEditor')).toBeNull();
+    expect(screen.queryByText('ProjectContextBar')).toBeNull();
   });
 });

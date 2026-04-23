@@ -30,7 +30,7 @@ function highlightText(text: string, query: string): React.ReactNode {
     const parts = text.split(regex);
 
     return parts.map((part, index) =>
-        regex.test(part) ? (
+        index % 2 === 1 ? (
             <mark key={index} className="search-highlight">{part}</mark>
         ) : (
             part
@@ -64,10 +64,14 @@ function HistoryItemComponent({
         }
         return state.projects.find((project) => project.id === item.projectId)?.name || t('projects.unknown_project', { defaultValue: 'Unknown Project' });
     });
+    const itemTypeLabel = item.type === 'batch'
+        ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
+        : t('projects.filter_recordings', { defaultValue: 'Recordings' });
 
     const handleClick = (e: React.MouseEvent) => {
         if (isSelectionMode && onToggleSelection) {
             e.preventDefault();
+            e.stopPropagation();
             onToggleSelection(item.id);
         } else {
             onLoad(item);
@@ -76,18 +80,11 @@ function HistoryItemComponent({
 
     return (
         <div
-            className={`history-item ${isSelected ? 'selected' : ''}`}
-            style={{
-                position: 'relative',
-                display: 'flex',
-                gap: 'var(--spacing-md)',
-                alignItems: 'flex-start',
-                paddingLeft: isSelectionMode ? 'var(--spacing-sm)' : undefined
-            }}
-            onClick={isSelectionMode ? handleClick : undefined}
+            className={`history-item ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''}`}
+            onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
         >
             {isSelectionMode && (
-                <div style={{ paddingTop: 'var(--spacing-sm)' }}>
+                <div className="history-item-checkbox">
                     <Checkbox
                         checked={isSelected}
                         onChange={() => onToggleSelection?.(item.id)}
@@ -97,97 +94,48 @@ function HistoryItemComponent({
             )}
 
             <button
+                type="button"
                 className="history-item-content"
                 onClick={handleClick}
                 aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
-                style={{
-                    flex: 1,
-                    textAlign: 'left',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    margin: 0,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    fontFamily: 'inherit',
-                    color: 'inherit',
-                    minWidth: 0
-                }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)', paddingRight: isSelectionMode ? 0 : '40px', width: '100%' }}>
-                    {item.type === 'batch' ? (
-                        <span title="Batch Import" style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
-                            <FileTextIcon />
+                <div className="history-item-header">
+                    <div className="history-item-title-row">
+                        <span className="history-item-type-icon" title={itemTypeLabel}>
+                            {item.type === 'batch' ? <FileTextIcon /> : <MicIcon />}
                         </span>
-                    ) : (
-                        <span title="Recording" style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
-                            <MicIcon />
-                        </span>
-                    )}
-                    <span style={{
-                        fontWeight: 600,
-                        color: 'var(--color-text-primary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        flex: 1,
-                        display: 'block',
-                        minWidth: 0
-                    }}>{highlightText(item.title, searchQuery)}</span>
-                    <span style={{
-                        fontSize: '0.7rem',
-                        color: 'var(--color-text-secondary)',
-                        background: 'var(--color-bg-secondary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: '999px',
-                        padding: '2px 8px',
-                        flexShrink: 0,
-                    }}>
+                        <span className="history-item-title">{highlightText(item.title, searchQuery)}</span>
+                    </div>
+
+                    <span className="history-item-project-badge">
                         {projectName}
                     </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 'var(--spacing-md)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', marginBottom: 'var(--spacing-sm)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div className="history-item-meta">
+                    <span className="history-item-meta-chip">
                         <Calendar size={12} />
                         {formatDate(item.timestamp)}
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="history-item-meta-chip">
                         <Clock size={12} />
                         {formatDuration(item.duration)}
                     </span>
                 </div>
 
-                <p style={{
-                    fontSize: '0.875rem',
-                    color: 'var(--color-text-secondary)',
-                    lineHeight: 1.5,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    margin: 0,
-                    textAlign: 'left',
-                    width: '100%',
-                    wordBreak: 'break-all'
-                }}>
+                <p className="history-item-preview">
                     {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
                 </p>
             </button>
 
             {!isSelectionMode && (
                 <button
-                    className="btn btn-icon delete-btn"
+                    type="button"
+                    className="btn btn-icon delete-btn history-item-delete"
                     onClick={(e) => onDelete(e, item.id)}
                     aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
                     data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
                     data-tooltip-pos="left"
-                    style={{
-                        position: 'absolute',
-                        top: 'var(--spacing-md)',
-                        right: 'var(--spacing-md)'
-                    }}
                 >
                     <TrashIcon />
                 </button>
