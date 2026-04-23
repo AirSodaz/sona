@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal } from 'lucide-react';
 import { AudioPlayer } from './AudioPlayer';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
@@ -9,6 +9,7 @@ import { TranscriptEditor } from './TranscriptEditor';
 import { HistoryItem } from './history/HistoryItem';
 import {
   CloseIcon,
+  FolderIcon,
   PlusCircleIcon,
   SettingsIcon,
   XIcon,
@@ -572,10 +573,12 @@ export function ProjectsView(): React.JSX.Element {
   const [moveTarget, setMoveTarget] = useState(INBOX_SCOPE);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [browseScope, setBrowseScope] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
   const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
 
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const isInboxScope = browseScope === INBOX_SCOPE;
@@ -625,7 +628,38 @@ export function ProjectsView(): React.JSX.Element {
     setSearchQuery('');
     setFilterType(DEFAULT_FILTER_TYPE);
     setDateFilter(DEFAULT_DATE_FILTER);
+    setIsFilterMenuOpen(false);
   }, [browseScope]);
+
+  useEffect(() => {
+    if (!isFilterMenuOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (filterMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setIsFilterMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      setIsFilterMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFilterMenuOpen]);
 
   useEffect(() => {
     if (browseScope === ALL_ITEMS_SCOPE || browseScope === INBOX_SCOPE) {
@@ -794,6 +828,42 @@ export function ProjectsView(): React.JSX.Element {
     [t],
   );
 
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+
+    if (filterType !== DEFAULT_FILTER_TYPE) {
+      const typeLabel = filterTypeOptions.find((option) => option.value === filterType)?.label;
+      if (typeLabel) {
+        labels.push(typeLabel);
+      }
+    }
+
+    if (dateFilter !== DEFAULT_DATE_FILTER) {
+      const dateLabel = dateFilterOptions.find((option) => option.value === dateFilter)?.label;
+      if (dateLabel) {
+        labels.push(dateLabel);
+      }
+    }
+
+    return labels;
+  }, [dateFilter, dateFilterOptions, filterType, filterTypeOptions]);
+
+  const activeFilterCount = activeFilterLabels.length;
+  const hasActiveFilters = activeFilterCount > 0;
+  const filterSummary = hasActiveFilters
+    ? activeFilterCount === 1
+      ? activeFilterLabels[0]
+      : t('projects.filter_active_count', {
+        count: activeFilterCount,
+        defaultValue: `${activeFilterCount} active`,
+      })
+    : t('projects.filter_all_state', { defaultValue: 'All items' });
+  const filterPopoverHint = hasActiveFilters
+    ? activeFilterLabels.join(' · ')
+    : t('projects.filter_menu_hint', {
+      defaultValue: 'Refine the current workspace view by type or time.',
+    });
+
   const isProjectSettingsDirty = useMemo(() => {
     if (!browseProject || !draftDefaults) {
       return false;
@@ -860,6 +930,7 @@ export function ProjectsView(): React.JSX.Element {
 
     setIsSelectionMode(false);
     setSelectedIds([]);
+    setIsFilterMenuOpen(false);
     setBrowseScope(nextScope);
 
     if (nextScope === ALL_ITEMS_SCOPE) {
@@ -998,6 +1069,7 @@ export function ProjectsView(): React.JSX.Element {
   };
 
   const toggleSelectionMode = () => {
+    setIsFilterMenuOpen(false);
     setIsSelectionMode((value) => !value);
     setSelectedIds([]);
   };
@@ -1117,11 +1189,13 @@ export function ProjectsView(): React.JSX.Element {
               <h2>{t('projects.workspace_label', { defaultValue: 'Workspace' })}</h2>
               <button
                 type="button"
-                className="btn btn-secondary projects-rail-create"
+                className="btn btn-icon projects-rail-create"
                 onClick={() => setIsCreateModalOpen(true)}
+                aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+                data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
+                data-tooltip-pos="bottom"
               >
                 <PlusCircleIcon width={18} height={18} />
-                <span>{t('projects.new_project_button', { defaultValue: 'New Project' })}</span>
               </button>
             </div>
           </div>
@@ -1207,31 +1281,33 @@ export function ProjectsView(): React.JSX.Element {
               </div>
               <div className="projects-main-title-row">
                 <h3>{headerTitle}</h3>
-                {browseProject && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary projects-inline-action"
-                    onClick={() => setIsSettingsOpen(true)}
-                  >
-                    <SettingsIcon width={16} height={16} />
-                    <span>{t('projects.project_settings', { defaultValue: 'Project Settings' })}</span>
-                  </button>
-                )}
               </div>
               <p>{headerDescription}</p>
             </div>
-
-            {showWorkflowActions && (
-              <div className="projects-main-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setMode('live')}>
-                  {t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => setMode('batch')}>
-                  {t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
-                </button>
-              </div>
+            {browseProject && (
+              <button
+                type="button"
+                className="btn btn-icon projects-header-icon"
+                onClick={() => setIsSettingsOpen(true)}
+                aria-label={t('projects.project_settings', { defaultValue: 'Project Settings' })}
+                data-tooltip={t('projects.project_settings', { defaultValue: 'Project Settings' })}
+                data-tooltip-pos="bottom-left"
+              >
+                <SettingsIcon width={16} height={16} />
+              </button>
             )}
           </div>
+
+          {showWorkflowActions && (
+            <div className="projects-main-entry-actions" data-testid="projects-main-entry-actions">
+              <button type="button" className="btn btn-primary" onClick={() => setMode('live')}>
+                {t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setMode('batch')}>
+                {t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
+              </button>
+            </div>
+          )}
 
           <div className="projects-meta-chips" data-testid="projects-summary-chips">
             {summaryChips.map((chip) => (
@@ -1286,37 +1362,105 @@ export function ProjectsView(): React.JSX.Element {
           <div className="projects-toolbar-controls">
             {!isSelectionMode && (
               <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
-                <div className="projects-toolbar-filters">
-                  <Dropdown
-                    value={filterType}
-                    onChange={(value) => setFilterType(value as ProjectFilterType)}
-                    options={filterTypeOptions}
-                    style={{ width: '180px' }}
-                    aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
-                  />
-                  <Dropdown
-                    value={dateFilter}
-                    onChange={(value) => setDateFilter(value as ProjectDateFilter)}
-                    options={dateFilterOptions}
-                    style={{ width: '180px' }}
-                    aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
-                  />
-                  <Dropdown
-                    value={sortOrder}
-                    onChange={(value) => setSortOrder(value as ProjectSortOrder)}
-                    options={sortOptions}
-                    style={{ width: '180px' }}
-                    aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
-                  />
+                <div className="projects-toolbar-primary">
+                  <div className="projects-toolbar-sort">
+                    <span className="projects-toolbar-field-label">
+                      {t('projects.sort_label', { defaultValue: 'Sort items' })}
+                    </span>
+                    <Dropdown
+                      value={sortOrder}
+                      onChange={(value) => setSortOrder(value as ProjectSortOrder)}
+                      options={sortOptions}
+                      style={{ width: '200px' }}
+                      aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
+                    />
+                  </div>
+
+                  <div className="projects-filter-menu" ref={filterMenuRef}>
+                    <button
+                      type="button"
+                      className={`btn btn-secondary projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
+                      onClick={() => setIsFilterMenuOpen((value) => !value)}
+                      aria-haspopup="dialog"
+                      aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
+                      aria-expanded={isFilterMenuOpen}
+                      aria-controls="projects-filter-panel"
+                    >
+                      <SlidersHorizontal size={16} />
+                      <span className="projects-filter-trigger-label">
+                        {t('projects.filter_button', { defaultValue: 'Filter' })}
+                      </span>
+                      <span className="projects-filter-trigger-summary">{filterSummary}</span>
+                      {hasActiveFilters && (
+                        <span className="projects-filter-trigger-count" aria-hidden="true">
+                          {activeFilterCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {isFilterMenuOpen && (
+                      <div
+                        id="projects-filter-panel"
+                        className="projects-filter-popover"
+                        role="dialog"
+                        aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
+                      >
+                        <div className="projects-filter-popover-header">
+                          <div className="projects-filter-popover-copy">
+                            <strong>{t('projects.filter_button', { defaultValue: 'Filter' })}</strong>
+                            <span>{filterPopoverHint}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-text projects-filter-clear"
+                            onClick={resetBrowseState}
+                            disabled={!hasActiveFilters}
+                          >
+                            {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
+                          </button>
+                        </div>
+
+                        <div className="projects-filter-popover-body">
+                          <div className="projects-filter-field">
+                            <span className="projects-toolbar-field-label">
+                              {t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
+                            </span>
+                            <Dropdown
+                              value={filterType}
+                              onChange={(value) => setFilterType(value as ProjectFilterType)}
+                              options={filterTypeOptions}
+                              style={{ width: '100%' }}
+                              aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
+                            />
+                          </div>
+                          <div className="projects-filter-field">
+                            <span className="projects-toolbar-field-label">
+                              {t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
+                            </span>
+                            <Dropdown
+                              value={dateFilter}
+                              onChange={(value) => setDateFilter(value as ProjectDateFilter)}
+                              options={dateFilterOptions}
+                              style={{ width: '100%' }}
+                              aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="projects-toolbar-actions">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-icon projects-toolbar-icon"
                     onClick={() => historyService.openHistoryFolder()}
+                    aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                    data-tooltip={t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                    data-tooltip-pos="bottom"
                   >
-                    {t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                    <FolderIcon />
                   </button>
                   <button
                     type="button"

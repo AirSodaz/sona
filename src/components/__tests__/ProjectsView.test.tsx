@@ -99,6 +99,14 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('option', { name: optionLabel }));
   };
 
+  const openFilterMenu = () => {
+    if (screen.queryByRole('dialog', { name: 'Filter' })) {
+      return;
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
+  };
+
   const waitForInitialHistoryLoad = async () => {
     const { historyService } = await import('../../services/historyService');
 
@@ -200,6 +208,9 @@ describe('ProjectsView', () => {
     expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
     expect(screen.queryByTestId('projects-toolbar-contextual')).toBeNull();
     expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
+    expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
 
@@ -550,18 +561,71 @@ describe('ProjectsView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 
+    openFilterMenu();
     selectDropdownOption('Filter by type', 'Batch imports');
+    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('Batch imports');
     expect(screen.queryByText('Client Call')).toBeNull();
     expect(screen.getByText('Imported Deck')).toBeDefined();
     expect(screen.getByText('Workshop Import')).toBeDefined();
 
+    openFilterMenu();
     selectDropdownOption('Filter by date', 'Last 7 days');
+    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2 active');
     expect(screen.queryByText('Imported Deck')).toBeNull();
     expect(screen.getByText('Workshop Import')).toBeDefined();
 
     selectDropdownOption('Sort items', 'Title A-Z');
     const orderedItems = screen.getAllByTestId(/history-item-/).map((item) => item.textContent || '');
     expect(orderedItems[0]).toContain('Workshop Import');
+  });
+
+  it('opens the filter popover and clears active filters without affecting sort controls', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-recording',
+          title: 'Client Call',
+          timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000),
+          duration: 180,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-recording.json',
+          previewText: 'Quarterly planning',
+          searchContent: 'Quarterly roadmap follow up',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+        {
+          id: 'hist-batch',
+          title: 'Workshop Import',
+          timestamp: Date.now() - (24 * 60 * 60 * 1000),
+          duration: 240,
+          audioPath: 'audio-2.wav',
+          transcriptPath: 'hist-batch.json',
+          previewText: 'Workshop notes',
+          searchContent: 'Training import summary',
+          type: 'batch',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    openFilterMenu();
+    expect(screen.getByText('Refine the current workspace view by type or time.')).toBeDefined();
+
+    selectDropdownOption('Filter by type', 'Batch imports');
+    expect(screen.queryByText('Client Call')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('Batch imports');
+
+    openFilterMenu();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('All items');
+    expect(screen.getByText('Client Call')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
   });
 
   it('shows a no-results state and trims hidden selections without dropping the open detail pane', async () => {
