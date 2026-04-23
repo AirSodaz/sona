@@ -13,6 +13,8 @@ import {
   PlusCircleIcon,
   SettingsIcon,
   XIcon,
+  MicIcon,
+  FileTextIcon,
 } from './Icons';
 import { historyService } from '../services/historyService';
 import { useConfigStore } from '../stores/configStore';
@@ -1277,30 +1279,45 @@ export function ProjectsView(): React.JSX.Element {
               </div>
               <p>{headerDescription}</p>
             </div>
-            {browseProject && (
-              <button
-                type="button"
-                className="btn btn-icon projects-header-icon"
-                onClick={() => setIsSettingsOpen(true)}
-                aria-label={t('projects.project_settings', { defaultValue: 'Project Settings' })}
-                data-tooltip={t('projects.project_settings', { defaultValue: 'Project Settings' })}
-                data-tooltip-pos="bottom-left"
-              >
-                <SettingsIcon width={16} height={16} />
-              </button>
-            )}
-          </div>
-
-          {showWorkflowActions && (
             <div className="projects-main-entry-actions" data-testid="projects-main-entry-actions">
-              <button type="button" className="btn btn-primary" onClick={() => setMode('live')}>
-                {t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setMode('batch')}>
-                {t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
-              </button>
+              {showWorkflowActions && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-icon projects-header-icon"
+                    onClick={() => setMode('live')}
+                    aria-label={t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
+                    data-tooltip={t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
+                    data-tooltip-pos="bottom"
+                  >
+                    <MicIcon width={16} height={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-icon projects-header-icon"
+                    onClick={() => setMode('batch')}
+                    aria-label={t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
+                    data-tooltip={t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
+                    data-tooltip-pos="bottom"
+                  >
+                    <FileTextIcon width={16} height={16} />
+                  </button>
+                </>
+              )}
+              {browseProject && (
+                <button
+                  type="button"
+                  className="btn btn-icon projects-header-icon"
+                  onClick={() => setIsSettingsOpen(true)}
+                  aria-label={t('projects.project_settings', { defaultValue: 'Project Settings' })}
+                  data-tooltip={t('projects.project_settings', { defaultValue: 'Project Settings' })}
+                  data-tooltip-pos="bottom-left"
+                >
+                  <SettingsIcon width={16} height={16} />
+                </button>
+              )}
             </div>
-          )}
+          </div>
 
           <div className="projects-stats-row" data-testid="projects-summary-chips">
             {summaryChips.map((chip) => (
