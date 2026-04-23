@@ -181,7 +181,10 @@
         "alignment_failed": "Token alignment failed",
         "word_count_one": "{{count}} word",
         "word_count_other": "{{count}} words",
-        "char_count": "{{count}} characters"
+        "char_count": "{{count}} characters",
+        "autosave_saving": "Saving...",
+        "autosave_saved": "Saved",
+        "autosave_error": "Save failed"
     },
     "export": {
         "button": "Export",
@@ -264,7 +267,11 @@
         "detail_label": "Selected Item",
         "detail_hint": "Editing stays inside Projects until you close this detail pane.",
         "close_detail": "Close detail",
-        "no_projects": "No projects yet."
+        "no_projects": "No projects yet.",
+        "discard_changes_title": "Discard project changes?",
+        "discard_changes_confirm": "You have unsaved project settings changes. Discard them?",
+        "discard_changes_action": "Discard",
+        "keep_editing_action": "Keep editing"
     },
     "settings": {
         "title": "Settings",

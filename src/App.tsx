@@ -24,6 +24,7 @@ import { useTranscriptStore } from './stores/transcriptStore';
 import { SettingsIcon, WaveformIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
+import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { SettingsTab } from './hooks/useSettingsLogic';
@@ -59,6 +60,9 @@ function App(): React.JSX.Element {
 
   // Initialize auto-save hook
   useAutoSaveTranscript();
+
+  // Run shared updater auto-check once per session when enabled
+  useAutoUpdateCheck(isLoaded);
 
   // Keep TranscriptionService synced and preloaded in background
   useTranscriptionServiceSync();

@@ -1,66 +1,144 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EditorToolbar } from '../EditorToolbar';
 import { useTranscriptStore } from '../../stores/transcriptStore';
-import { vi, describe, beforeEach, it, expect } from 'vitest';
+import { vi, describe, beforeEach, afterEach, it, expect } from 'vitest';
 
-// Mock store
 vi.mock('../../stores/transcriptStore', () => ({
     useTranscriptStore: vi.fn(),
 }));
 
-// Mock translation
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (_key: string, def: string) => def }),
+    useTranslation: () => ({
+        t: (_key: string, fallbackOrOptions?: string | { defaultValue?: string }) => {
+            if (typeof fallbackOrOptions === 'string') {
+                return fallbackOrOptions;
+            }
+
+            return fallbackOrOptions?.defaultValue || _key;
+        },
+    }),
 }));
 
 describe('EditorToolbar', () => {
     let execCommandMock: any;
+    let mockState: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        // Mock document.execCommand
         execCommandMock = vi.fn();
         document.execCommand = execCommandMock;
+
+        mockState = {
+            editingSegmentId: null,
+            sourceHistoryId: null,
+            autoSaveStates: {},
+        };
+
+        (useTranscriptStore as any).mockImplementation((selector: any) => selector(mockState));
     });
 
-    it('should not render when not editing', () => {
-        (useTranscriptStore as any).mockImplementation((selector: any) => selector({ editingSegmentId: null }));
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('does not render when there is no saved item and no active edit session', () => {
         const { container } = render(<EditorToolbar />);
         expect(container.firstChild).toBeNull();
     });
 
-    it('should render when editing', () => {
-        (useTranscriptStore as any).mockImplementation((selector: any) => selector({ editingSegmentId: 'seg-1' }));
+    it('does not synthesize a saved status for an opened history item without an auto-save record', () => {
+        mockState.sourceHistoryId = 'hist-1';
+
+        const { container } = render(<EditorToolbar />);
+
+        expect(container.firstChild).toBeNull();
+        expect(screen.queryByRole('status')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    });
+
+    it('does not show a save pill for unsaved content while still exposing edit controls', () => {
+        mockState.editingSegmentId = 'seg-1';
+
         render(<EditorToolbar />);
 
-        // getByRole throws if not found
+        expect(screen.queryByRole('status')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    });
+
+    it('shows a lightweight saving status while auto-save is running', () => {
+        mockState.sourceHistoryId = 'hist-1';
+        mockState.autoSaveStates = {
+            'hist-1': {
+                status: 'saving',
+                updatedAt: Date.now(),
+            },
+        };
+
+        render(<EditorToolbar />);
+
+        expect(screen.getByRole('status').textContent).toContain('Saving...');
+        expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    });
+
+    it('hides the saved status after 1.5 seconds', () => {
+        vi.useFakeTimers();
+        mockState.sourceHistoryId = 'hist-1';
+        mockState.autoSaveStates = {
+            'hist-1': {
+                status: 'saved',
+                updatedAt: Date.now(),
+            },
+        };
+
+        render(<EditorToolbar />);
+
+        expect(screen.getByRole('status').textContent).toContain('Saved');
+
+        act(() => {
+            vi.advanceTimersByTime(1500);
+        });
+
+        expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('renders editor controls while editing and reflects auto-save errors', () => {
+        mockState.editingSegmentId = 'seg-1';
+        mockState.sourceHistoryId = 'hist-1';
+        mockState.autoSaveStates = {
+            'hist-1': {
+                status: 'error',
+                updatedAt: Date.now(),
+            },
+        };
+
+        render(<EditorToolbar />);
+
+        expect(screen.getByRole('status').textContent).toContain('Save failed');
         expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
     });
 
-    it('should call execCommand on button click', () => {
-        (useTranscriptStore as any).mockImplementation((selector: any) => selector({ editingSegmentId: 'seg-1' }));
+    it('calls execCommand on button click', () => {
+        mockState.editingSegmentId = 'seg-1';
+
         render(<EditorToolbar />);
 
-        const boldBtn = screen.getByRole('button', { name: 'Bold' });
-        fireEvent.click(boldBtn);
+        fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
         expect(execCommandMock).toHaveBeenCalledWith('bold', false, undefined);
 
-        const italicBtn = screen.getByRole('button', { name: 'Italic' });
-        fireEvent.click(italicBtn);
+        fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
         expect(execCommandMock).toHaveBeenCalledWith('italic', false, undefined);
 
-        const lineBreakBtn = screen.getByRole('button', { name: 'Line break' });
-        fireEvent.click(lineBreakBtn);
+        fireEvent.click(screen.getByRole('button', { name: 'Line break' }));
         expect(execCommandMock).toHaveBeenCalledWith('insertLineBreak', false, undefined);
     });
 
-    it('should prevent default on mouse down to preserve focus', () => {
-        (useTranscriptStore as any).mockImplementation((selector: any) => selector({ editingSegmentId: 'seg-1' }));
+    it('prevents default on mouse down to preserve focus', () => {
+        mockState.editingSegmentId = 'seg-1';
+
         render(<EditorToolbar />);
 
         const boldButton = screen.getByRole('button', { name: 'Bold' });
-
         const event = new MouseEvent('mousedown', {
             bubbles: true,
             cancelable: true,

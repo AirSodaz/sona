@@ -33,6 +33,43 @@ const POLISH_SCENARIO_OPTIONS = [
   'custom',
 ] as const;
 
+function sortRuleSetIds(ids: string[]): string[] {
+  return [...ids].sort();
+}
+
+function buildComparableProjectSettings(
+  project: ProjectRecord,
+  draftName: string,
+  draftDescription: string,
+  draftDefaults: ProjectDefaults,
+) {
+  return {
+    name: draftName.trim() || project.name,
+    description: draftDescription,
+    summaryTemplate: draftDefaults.summaryTemplate,
+    translationLanguage: draftDefaults.translationLanguage,
+    polishScenario: draftDefaults.polishScenario,
+    polishContext: draftDefaults.polishContext,
+    exportFileNamePrefix: draftDefaults.exportFileNamePrefix,
+    enabledTextReplacementSetIds: sortRuleSetIds(draftDefaults.enabledTextReplacementSetIds),
+    enabledHotwordSetIds: sortRuleSetIds(draftDefaults.enabledHotwordSetIds),
+  };
+}
+
+function buildSavedProjectSettings(project: ProjectRecord) {
+  return {
+    name: project.name,
+    description: project.description,
+    summaryTemplate: project.defaults.summaryTemplate,
+    translationLanguage: project.defaults.translationLanguage,
+    polishScenario: project.defaults.polishScenario,
+    polishContext: project.defaults.polishContext,
+    exportFileNamePrefix: project.defaults.exportFileNamePrefix,
+    enabledTextReplacementSetIds: sortRuleSetIds(project.defaults.enabledTextReplacementSetIds),
+    enabledHotwordSetIds: sortRuleSetIds(project.defaults.enabledHotwordSetIds),
+  };
+}
+
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
@@ -161,6 +198,24 @@ function ProjectSettingsDrawer({
   onDefaultsChange,
 }: ProjectSettingsDrawerProps): React.JSX.Element | null {
   const { t } = useTranslation();
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      void onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !project || !draftDefaults) {
     return null;
@@ -443,23 +498,32 @@ export function ProjectsView(): React.JSX.Element {
   const [moveTarget, setMoveTarget] = useState('inbox');
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
 
+  const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = activeProject) => {
+    if (!project) {
+      setDraftName('');
+      setDraftDescription('');
+      setDraftDefaults(null);
+      return;
+    }
+
+    setDraftName(project.name);
+    setDraftDescription(project.description);
+    setDraftDefaults(project.defaults);
+  }, [activeProject]);
+
   useEffect(() => {
     void loadHistoryItems();
   }, [loadHistoryItems]);
 
   useEffect(() => {
     if (!activeProject) {
-      setDraftName('');
-      setDraftDescription('');
-      setDraftDefaults(null);
+      resetProjectSettingsDraft(null);
       setIsSettingsOpen(false);
       return;
     }
 
-    setDraftName(activeProject.name);
-    setDraftDescription(activeProject.description);
-    setDraftDefaults(activeProject.defaults);
-  }, [activeProject]);
+    resetProjectSettingsDraft(activeProject);
+  }, [activeProject, resetProjectSettingsDraft]);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -523,7 +587,70 @@ export function ProjectsView(): React.JSX.Element {
     [projects, t],
   );
 
+  const isProjectSettingsDirty = useMemo(() => {
+    if (!activeProject || !draftDefaults) {
+      return false;
+    }
+
+    const currentDraft = buildComparableProjectSettings(
+      activeProject,
+      draftName,
+      draftDescription,
+      draftDefaults,
+    );
+    const savedProject = buildSavedProjectSettings(activeProject);
+
+    return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
+  }, [activeProject, draftDefaults, draftDescription, draftName]);
+
+  const confirmDiscardProjectSettingsChanges = useCallback(async () => {
+    if (!isSettingsOpen || !isProjectSettingsDirty) {
+      return true;
+    }
+
+    return confirm(
+      t('projects.discard_changes_confirm', {
+        defaultValue: 'You have unsaved project settings changes. Discard them?',
+      }),
+      {
+        title: t('projects.discard_changes_title', {
+          defaultValue: 'Discard project changes?',
+        }),
+        confirmLabel: t('projects.discard_changes_action', {
+          defaultValue: 'Discard',
+        }),
+        cancelLabel: t('projects.keep_editing_action', {
+          defaultValue: 'Keep editing',
+        }),
+        variant: 'warning',
+      },
+    );
+  }, [confirm, isProjectSettingsDirty, isSettingsOpen, t]);
+
+  const discardProjectSettingsDraft = useCallback((project: ProjectRecord | null = activeProject) => {
+    resetProjectSettingsDraft(project);
+    setIsSettingsOpen(false);
+  }, [activeProject, resetProjectSettingsDraft]);
+
+  const handleRequestCloseProjectSettings = useCallback(async () => {
+    const shouldDiscard = await confirmDiscardProjectSettingsChanges();
+    if (!shouldDiscard) {
+      return;
+    }
+
+    discardProjectSettingsDraft();
+  }, [confirmDiscardProjectSettingsChanges, discardProjectSettingsDraft]);
+
   const handleSwitchProject = async (projectId: string | null) => {
+    const shouldDiscard = await confirmDiscardProjectSettingsChanges();
+    if (!shouldDiscard) {
+      return;
+    }
+
+    if (isSettingsOpen) {
+      discardProjectSettingsDraft();
+    }
+
     setIsSelectionMode(false);
     setSelectedIds([]);
     await setActiveProjectId(projectId);
@@ -620,6 +747,15 @@ export function ProjectsView(): React.JSX.Element {
       return;
     }
 
+    const shouldDiscard = await confirmDiscardProjectSettingsChanges();
+    if (!shouldDiscard) {
+      return;
+    }
+
+    if (isSettingsOpen) {
+      discardProjectSettingsDraft(activeProject);
+    }
+
     const confirmed = await confirm(
       t('projects.delete_confirm', {
         defaultValue: `Delete ${activeProject.name} and move its items back to Inbox?`,
@@ -636,7 +772,6 @@ export function ProjectsView(): React.JSX.Element {
     }
 
     clearOpenedItem();
-    setIsSettingsOpen(false);
     await deleteProject(activeProject.id);
     await refreshHistory();
   };
@@ -950,7 +1085,7 @@ export function ProjectsView(): React.JSX.Element {
         draftDescription={draftDescription}
         draftDefaults={draftDefaults}
         globalConfig={globalConfig}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={handleRequestCloseProjectSettings}
         onSave={handleSaveProject}
         onDelete={handleDeleteProject}
         onNameChange={setDraftName}

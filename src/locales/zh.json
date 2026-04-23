@@ -181,7 +181,10 @@
         "alignment_failed": "对齐失败",
         "word_count_one": "{{count}} 字",
         "word_count_other": "{{count}} 字",
-        "char_count": "{{count}} 字"
+        "char_count": "{{count}} 字",
+        "autosave_saving": "正在保存...",
+        "autosave_saved": "已保存",
+        "autosave_error": "保存失败"
     },
     "export": {
         "button": "导出",
@@ -264,7 +267,11 @@
         "detail_label": "当前内容",
         "detail_hint": "当前内容会继续留在 Projects 内编辑，不会跳出工作台。",
         "close_detail": "关闭详情",
-        "no_projects": "还没有项目。"
+        "no_projects": "还没有项目。",
+        "discard_changes_title": "放弃项目设置修改？",
+        "discard_changes_confirm": "你有未保存的项目设置修改，确定要放弃吗？",
+        "discard_changes_action": "放弃修改",
+        "keep_editing_action": "继续编辑"
     },
     "settings": {
         "title": "设置",

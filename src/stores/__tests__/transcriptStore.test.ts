@@ -6,6 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 describe('TranscriptStore', () => {
     beforeEach(() => {
         useTranscriptStore.getState().clearSegments();
+        useTranscriptStore.setState({
+            autoSaveStates: {},
+            sourceHistoryId: null,
+        });
     });
 
     describe('setActiveSegmentId', () => {
@@ -75,6 +79,26 @@ describe('TranscriptStore', () => {
             expect(useTranscriptStore.getState().activeSegmentId).toBe(id2);
             // activeSegmentIndex should be set by findSegmentAndIndexForTime
             expect(useTranscriptStore.getState().activeSegmentIndex).toBe(1);
+        });
+    });
+
+    describe('autoSaveStates', () => {
+        it('stores save status per history item with timestamps', () => {
+            useTranscriptStore.getState().setAutoSaveState('hist-1', 'saving');
+
+            expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toEqual({
+                status: 'saving',
+                updatedAt: expect.any(Number),
+            });
+        });
+
+        it('clears the active history item auto-save state when requested', () => {
+            useTranscriptStore.setState({ sourceHistoryId: 'hist-1' });
+            useTranscriptStore.getState().setAutoSaveState('hist-1', 'saved');
+
+            useTranscriptStore.getState().clearAutoSaveState();
+
+            expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
         });
     });
 });

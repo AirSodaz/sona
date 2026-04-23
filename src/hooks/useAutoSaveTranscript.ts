@@ -37,6 +37,7 @@ export function useAutoSaveTranscript() {
 
                         // Flush save for PREVIOUS item using PREVIOUS segments
                         const prevSegments = prevState.segments;
+                        useTranscriptStore.getState().setAutoSaveState(prevId, 'saving');
                         logger.info('[AutoSave] Switching items, flushing save for:', prevId);
                         saveToHistory(prevId, prevSegments);
                     }
@@ -61,6 +62,7 @@ export function useAutoSaveTranscript() {
                                 clearTimeout(timeoutRef.current);
                             }
 
+                            useTranscriptStore.getState().setAutoSaveState(currentId, 'saving');
                             timeoutRef.current = setTimeout(() => {
                                 logger.info('[AutoSave] Debounce triggered for:', currentId);
                                 saveToHistory(currentId, state.segments);
@@ -106,9 +108,11 @@ export function useAutoSaveTranscript() {
                 previewText,
                 searchContent: fullText
             });
+            useTranscriptStore.getState().setAutoSaveState(historyId, 'saved');
 
         } catch (err) {
             logger.error('[AutoSave] Failed to save:', err);
+            useTranscriptStore.getState().setAutoSaveState(historyId, 'error');
         } finally {
             isSavingRef.current = false;
         }

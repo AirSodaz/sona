@@ -15,18 +15,16 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
 }));
 
 vi.mock('../../stores/errorDialogStore', () => ({
-  useErrorDialogStore: (selector: (state: { showError: typeof showErrorMock }) => unknown) => selector({
-    showError: showErrorMock,
-  }),
+  useErrorDialogStore: {
+    getState: () => ({
+      showError: showErrorMock,
+    }),
+  },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
+vi.mock('../../i18n', () => ({
+  default: {
     t: (key: string) => key,
-  }),
-  initReactI18next: {
-    type: '3rdParty',
-    init: () => undefined,
   },
 }));
 

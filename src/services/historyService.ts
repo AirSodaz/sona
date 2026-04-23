@@ -348,7 +348,7 @@ export const historyService = {
             const item = items.find(i => i.id === historyId);
             if (!item) {
                 logger.error('[History] updateTranscript: item not found:', historyId);
-                return;
+                throw new Error(`History item not found: ${historyId}`);
             }
 
             // Overwrite transcript file
@@ -368,6 +368,7 @@ export const historyService = {
             await writeHistoryIndex(items);
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
+            throw error;
         }
     },
 

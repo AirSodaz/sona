@@ -182,6 +182,11 @@ describe('ProjectsView', () => {
   it('keeps project settings in a drawer and saves edits', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     const updateProjectSpy = vi.spyOn(useProjectStore.getState(), 'updateProject');
+    const confirmSpy = vi.fn().mockResolvedValue(true);
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      confirm: confirmSpy,
+    });
 
     render(<ProjectsView />);
 
@@ -201,6 +206,77 @@ describe('ProjectsView', () => {
         expect.objectContaining({ name: 'Alpha Updated' }),
       );
     });
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText('projects.project_settings_title')).toBeNull();
+  });
+
+  it('prompts before discarding dirty settings on close, backdrop, and escape', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    const confirmSpy = vi.fn().mockResolvedValue(false);
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      confirm: confirmSpy,
+    });
+
+    render(<ProjectsView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.project_settings' }));
+    fireEvent.change(screen.getByDisplayValue('Alpha'), {
+      target: { value: 'Alpha Updated' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText('projects.project_settings_title')).toBeDefined();
+
+    const backdrop = document.querySelector('.projects-drawer-backdrop');
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop!);
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByText('projects.project_settings_title')).toBeDefined();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.getByText('projects.project_settings_title')).toBeDefined();
+  });
+
+  it('guards exit to inbox when project settings drafts are dirty', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    const confirmSpy = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      confirm: confirmSpy,
+    });
+
+    render(<ProjectsView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.project_settings' }));
+    fireEvent.change(screen.getByDisplayValue('Alpha'), {
+      target: { value: 'Alpha Updated' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.exit_to_inbox' }));
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
+    expect(screen.getByText('projects.project_settings_title')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.exit_to_inbox' }));
+    await waitFor(() => {
+      expect(useProjectStore.getState().activeProjectId).toBeNull();
+    });
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('projects.project_settings_title')).toBeNull();
   });
 
   it('opens a project item in the built-in detail pane and closes it when switching scope', async () => {

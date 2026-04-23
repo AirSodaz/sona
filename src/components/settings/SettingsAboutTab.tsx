@@ -13,7 +13,7 @@ import { logger } from '../../utils/logger';
  */
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const { status, updateInfo, checkUpdate, installUpdate, progress } = useAppUpdater();
+    const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate } = useAppUpdater();
 
     React.useEffect(() => {
         const handleTrigger = () => {
@@ -103,7 +103,7 @@ export function SettingsAboutTab(): React.JSX.Element {
                         <span>{t('settings.update_relaunch')}</span>
                         <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => window.location.reload()} // Fallback, usually app restarts itself
+                            onClick={relaunchToUpdate}
                         >
                             {t('settings.update_btn_relaunch')}
                         </button>

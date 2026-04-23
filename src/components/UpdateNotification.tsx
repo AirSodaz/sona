@@ -1,122 +1,102 @@
-import React, { useEffect, useState } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Download, X } from 'lucide-react';
-import { useConfigStore } from '../stores/configStore';
-import { useErrorDialogStore } from '../stores/errorDialogStore';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { buildErrorDialogViewModel } from '../utils/errorUtils';
-import { logger } from '../utils/logger';
+import { Check, Download, X } from 'lucide-react';
+import { useAppUpdater } from '../hooks/useAppUpdater';
 
 export function UpdateNotification(): React.JSX.Element | null {
-    const { t } = useTranslation();
-    const config = useConfigStore((state) => state.config);
-    const showError = useErrorDialogStore((state) => state.showError);
-    const [updateAvailable, setUpdateAvailable] = useState<any>(null);
-    const [isInstalling, setIsInstalling] = useState(false);
-    const [isVisible, setIsVisible] = useState(false);
+  const { t } = useTranslation();
+  const {
+    status,
+    updateInfo,
+    progress,
+    notificationVisible,
+    installUpdate,
+    dismissNotification,
+    relaunchToUpdate,
+  } = useAppUpdater();
 
-    useEffect(() => {
-        const checkForUpdates = async () => {
-            // Only check if auto-check is enabled
-            if (!config.autoCheckUpdates) return;
+  const isBusy = status === 'downloading' || status === 'installing';
 
-            try {
-                const update = await check();
-                if (update?.available) {
-                    setUpdateAvailable(update);
-                    setIsVisible(true);
-                }
-            } catch (err) {
-                logger.error('Failed to check for updates:', err);
-                // Do not show error to user on auto-check to avoid annoyance
-            }
-        };
+  if (!notificationVisible || !updateInfo) {
+    return null;
+  }
 
-        // Delay check slightly to not impact startup performance
-        const timer = setTimeout(() => {
-            checkForUpdates();
-        }, 5000); // 5 seconds delay
-
-        return () => clearTimeout(timer);
-    }, [config.autoCheckUpdates]);
-
-    const handleUpdate = async () => {
-        if (!updateAvailable) return;
-
-        try {
-            setIsInstalling(true);
-            await updateAvailable.downloadAndInstall();
-            await relaunch();
-        } catch (err: any) {
-            logger.error('Update failed:', err);
-            setIsInstalling(false);
-            const result = await showError(buildErrorDialogViewModel(t, {
-                code: 'update.failed',
-                messageKey: 'errors.update.failed',
-                cause: err,
-                primaryActionLabelKey: 'settings.update_download_manually',
-            }));
-
-            if (result === 'primary') {
-                try {
-                    await openUrl('https://github.com/AirSodaz/sona/releases/latest');
-                } catch (openErr) {
-                    logger.error('Failed to open URL:', openErr);
-                }
-            }
-        }
-    };
-
-    const handleDismiss = () => {
-        setIsVisible(false);
-    };
-
-    if (!isVisible || !updateAvailable) return null;
-
-    return (
-        <div className="update-notification" role="alert">
-            <div className="update-notification-header">
-                <div className="update-notification-title">
-                    <Download size={18} style={{ color: 'var(--color-info)' }} />
-                    <span>{t('settings.update_available', { version: updateAvailable.version })}</span>
-                </div>
-                <button
-                    className="update-notification-close"
-                    onClick={handleDismiss}
-                    aria-label={t('common.close')}
-                >
-                    <X size={16} />
-                </button>
-            </div>
-
-            <div className="update-notification-body">
-                {updateAvailable.body ? (
-                    <div style={{ maxHeight: '100px', overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
-                        {updateAvailable.body}
-                    </div>
-                ) : (
-                   <div>{t('settings.update_desc_default')}</div>
-                )}
-            </div>
-
-            <div className="update-notification-actions">
-                <button
-                    className="btn btn-secondary"
-                    onClick={handleDismiss}
-                    disabled={isInstalling}
-                >
-                    {t('common.cancel')}
-                </button>
-                <button
-                    className="btn btn-primary"
-                    onClick={handleUpdate}
-                    disabled={isInstalling}
-                >
-                    {isInstalling ? t('settings.update_installing') : t('settings.update_btn_install')}
-                </button>
-            </div>
+  const renderBody = () => {
+    if (status === 'downloading' || status === 'installing') {
+      return (
+        <div className="update-progress-container">
+          <div className="update-progress-header">
+            <span>{status === 'downloading' ? t('settings.update_downloading') : t('settings.update_installing')}</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+          </div>
         </div>
-    );
+      );
+    }
+
+    if (status === 'downloaded') {
+      return (
+        <div className="update-status success">
+          <Check size={18} />
+          <span>{t('settings.update_relaunch')}</span>
+        </div>
+      );
+    }
+
+    if (updateInfo.body) {
+      return (
+        <div style={{ maxHeight: '100px', overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+          {updateInfo.body}
+        </div>
+      );
+    }
+
+    return <div>{t('settings.update_desc_default')}</div>;
+  };
+
+  return (
+    <div className="update-notification" role="alert">
+      <div className="update-notification-header">
+        <div className="update-notification-title">
+          <Download size={18} style={{ color: 'var(--color-info)' }} />
+          <span>{t('settings.update_available', { version: updateInfo.version })}</span>
+        </div>
+        <button
+          className="update-notification-close"
+          onClick={dismissNotification}
+          aria-label={t('common.close')}
+          disabled={isBusy}
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="update-notification-body">
+        {renderBody()}
+      </div>
+
+      <div className="update-notification-actions">
+        <button
+          className="btn btn-secondary"
+          onClick={dismissNotification}
+          disabled={isBusy}
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={status === 'downloaded' ? relaunchToUpdate : installUpdate}
+          disabled={isBusy}
+        >
+          {status === 'downloaded'
+            ? t('settings.update_btn_relaunch')
+            : isBusy
+              ? (status === 'downloading' ? t('settings.update_downloading') : t('settings.update_installing'))
+              : t('settings.update_btn_install')}
+        </button>
+      </div>
+    </div>
+  );
 }

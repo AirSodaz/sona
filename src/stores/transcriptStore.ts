@@ -75,6 +75,11 @@ interface TranscriptState {
      */
     summaryStates: Record<string, TranscriptSummaryState>;
 
+    /**
+     * UI-only auto-save status mapped by historyId.
+     */
+    autoSaveStates: Record<string, AutoSaveState>;
+
     // Config
     /** Application configuration. */
     config: AppConfig;
@@ -229,6 +234,16 @@ interface TranscriptState {
      */
     clearSummaryState: (historyId?: string) => void;
 
+    /**
+     * Updates the auto-save status for a specific history item.
+     */
+    setAutoSaveState: (historyId: string, status: AutoSaveStatus) => void;
+
+    /**
+     * Clears a specific auto-save state entry.
+     */
+    clearAutoSaveState: (historyId?: string) => void;
+
     // Legacy actions for backward compatibility (updates current active state)
     setIsTranslationVisible: (visible: boolean) => void;
     setIsTranslating: (translating: boolean) => void;
@@ -291,6 +306,13 @@ export interface LlmState {
     retranscribeProgress: number;
 }
 
+export type AutoSaveStatus = 'saving' | 'saved' | 'error';
+
+export interface AutoSaveState {
+    status: AutoSaveStatus;
+    updatedAt: number;
+}
+
 const DEFAULT_LLM_STATE: LlmState = {
     isTranslating: false,
     translationProgress: 0,
@@ -341,6 +363,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     sourceHistoryId: null,
     llmStates: {},
     summaryStates: {},
+    autoSaveStates: {},
     config: DEFAULT_CONFIG,
 
     // History tracking
@@ -601,6 +624,35 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             const summaryStates = { ...state.summaryStates };
             delete summaryStates[id];
             return { summaryStates };
+        });
+    },
+
+    setAutoSaveState: (historyId, status) => {
+        if (!historyId || historyId === 'current') {
+            return;
+        }
+
+        set((state) => ({
+            autoSaveStates: {
+                ...state.autoSaveStates,
+                [historyId]: {
+                    status,
+                    updatedAt: Date.now(),
+                },
+            },
+        }));
+    },
+
+    clearAutoSaveState: (historyId) => {
+        set((state) => {
+            const id = historyId || state.sourceHistoryId || 'current';
+            if (!id || id === 'current' || !state.autoSaveStates[id]) {
+                return state;
+            }
+
+            const autoSaveStates = { ...state.autoSaveStates };
+            delete autoSaveStates[id];
+            return { autoSaveStates };
         });
     },
 
