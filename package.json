@@ -1,7 +1,7 @@
 {
   "name": "tauri-appsona",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -36,7 +36,7 @@
     "react-dom": "^19.1.0",
     "react-i18next": "^16.5.3",
     "react-virtuoso": "^4.18.1",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.0",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
