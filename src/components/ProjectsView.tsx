@@ -1213,11 +1213,6 @@ export function ProjectsView(): React.JSX.Element {
           >
             <div className="projects-rail-item-copy">
               <strong>{t('projects.all_items', { defaultValue: 'All Items' })}</strong>
-              <span>
-                {t('projects.all_items_description', {
-                  defaultValue: 'Browse everything across Inbox and your projects.',
-                })}
-              </span>
             </div>
             <span className="projects-rail-count">{historyItems.length}</span>
           </button>
@@ -1230,11 +1225,6 @@ export function ProjectsView(): React.JSX.Element {
           >
             <div className="projects-rail-item-copy">
               <strong>{t('projects.inbox', { defaultValue: 'Inbox' })}</strong>
-              <span>
-                {t('projects.inbox_description', {
-                  defaultValue: 'Inbox collects unassigned recordings and imports.',
-                })}
-              </span>
             </div>
             <span className="projects-rail-count">{itemCounts.get(null) || 0}</span>
           </button>
