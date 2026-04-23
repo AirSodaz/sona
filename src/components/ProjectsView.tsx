@@ -1137,7 +1137,9 @@ export function ProjectsView(): React.JSX.Element {
     ? t('projects.all_items_description', {
       defaultValue: 'Browse everything across Inbox and your projects.',
     })
-    : browseProject?.description || t('projects.inbox_description', {
+    : browseProject
+    ? browseProject.description
+    : t('projects.inbox_description', {
       defaultValue: 'Inbox collects unassigned recordings and imports.',
     });
   const headerDetailHint = selectedItem
