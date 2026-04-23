@@ -374,8 +374,10 @@ function ProjectSettingsDrawer({
             </label>
             <input
               id="project-settings-name"
+              type="text"
               value={draftName}
               onChange={(event) => onNameChange(event.target.value)}
+              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
             />
           </div>
 
@@ -437,15 +439,18 @@ function ProjectSettingsDrawer({
             </div>
 
             <div className="projects-field">
-              <label>
+              <label htmlFor="project-settings-export-prefix">
                 {t('projects.export_prefix', { defaultValue: 'Export Filename Prefix' })}
               </label>
               <input
+                id="project-settings-export-prefix"
+                type="text"
                 value={draftDefaults.exportFileNamePrefix}
                 onChange={(event) => onDefaultsChange({
                   ...draftDefaults,
                   exportFileNamePrefix: event.target.value,
                 })}
+                placeholder={t('projects.export_prefix_placeholder', { defaultValue: 'e.g. SONA_' })}
               />
             </div>
           </div>
