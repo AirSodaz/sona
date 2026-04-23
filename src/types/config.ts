@@ -24,6 +24,8 @@ export interface UIConfig {
   minimizeToTrayOnExit?: boolean;
   /** Whether to automatically check for updates on startup. */
   autoCheckUpdates?: boolean;
+  /** Workspace view mode. Default: 'list' */
+  projectsViewMode?: 'list' | 'grid' | 'table';
 }
 
 // ---------------------------------------------------------------------------

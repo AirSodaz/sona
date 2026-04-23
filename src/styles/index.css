@@ -599,34 +599,36 @@ body {
   white-space: nowrap;
 }
 
-.projects-meta-chips {
+.projects-stats-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-sm);
 }
 
-.projects-meta-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 12px;
+.projects-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  padding: 12px 16px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   background: var(--color-bg-secondary);
 }
 
-.projects-meta-chip-label {
-  font-size: 0.72rem;
+.projects-stat-label {
+  font-size: 0.75rem;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  font-weight: 600;
 }
 
-.projects-meta-chip-value {
+.projects-stat-value {
   min-width: 0;
   color: var(--color-text-primary);
-  font-size: 0.84rem;
+  font-size: 1.1rem;
   font-weight: 600;
 }
 
@@ -3572,6 +3574,180 @@ input[type="radio"]:focus {
 :root[data-theme="dark"] .search-highlight {
   background-color: rgba(223, 171, 1, 0.4);
   color: var(--color-text-primary);
+}
+
+/* ===========================
+   Grid and Table Layouts
+   =========================== */
+
+/* Grid Layout */
+.projects-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+.history-item--grid {
+  flex-direction: column;
+  height: 220px;
+  position: relative;
+}
+
+.history-item--grid .history-item-content {
+  height: 100%;
+}
+
+.history-item--grid .history-item-meta {
+  margin-top: auto;
+}
+
+.history-item--grid .history-item-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.history-item--grid .history-item-preview {
+  -webkit-line-clamp: 4;
+}
+
+/* Table Layout */
+.projects-layout-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+}
+
+.projects-table-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.projects-table-header-cell {
+  padding: 0 8px;
+}
+
+.projects-table-header-title {
+  flex: 2;
+  min-width: 200px;
+}
+
+.projects-table-header-project {
+  flex: 1;
+  min-width: 120px;
+}
+
+.projects-table-header-date,
+.projects-table-header-duration {
+  flex: 1;
+  min-width: 100px;
+}
+
+.history-item--table {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 10px 16px;
+  gap: 0;
+}
+
+.history-item--table:last-child {
+  border-bottom: none;
+}
+
+.history-item--table .history-item-content {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+.history-item--table .history-item-header {
+  flex: 2;
+  min-width: 200px;
+  padding: 0 8px;
+}
+
+.history-item--table .history-item-table-project {
+  flex: 1;
+  min-width: 120px;
+  padding: 0 8px;
+}
+
+.history-item--table .history-item-table-cells {
+  flex: 2;
+  display: flex;
+  align-items: center;
+}
+
+.history-item--table .history-item-meta-chip {
+  flex: 1;
+  min-width: 100px;
+  padding: 0 8px;
+}
+
+.history-item--table .history-item-actions {
+  width: 48px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.history-item--table.is-selection-mode {
+  padding-left: 16px;
+}
+
+.history-item--table .history-item-checkbox {
+  width: 40px;
+  padding-top: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Floating Action Bar */
+.projects-fab {
+  position: fixed;
+  bottom: var(--spacing-xl);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: 12px 20px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.projects-fab-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* ===========================

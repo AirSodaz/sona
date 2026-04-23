@@ -106,7 +106,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // equality so components re-render only when their domain changes.
 
 const UI_KEYS: (keyof UIConfig)[] = [
-  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates',
+  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'projectsViewMode'
 ];
 
 const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [

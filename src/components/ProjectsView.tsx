@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList } from 'lucide-react';
 import { AudioPlayer } from './AudioPlayer';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
@@ -558,8 +558,11 @@ export function ProjectsView(): React.JSX.Element {
   const setMode = useTranscriptStore((state) => state.setMode);
 
   const globalConfig = useConfigStore((state) => state.config);
+  const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
   const showError = useDialogStore((state) => state.showError);
+
+  const viewMode = globalConfig.projectsViewMode || 'list';
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1309,11 +1312,11 @@ export function ProjectsView(): React.JSX.Element {
             </div>
           )}
 
-          <div className="projects-meta-chips" data-testid="projects-summary-chips">
+          <div className="projects-stats-row" data-testid="projects-summary-chips">
             {summaryChips.map((chip) => (
-              <div key={chip.key} className="projects-meta-chip">
-                <span className="projects-meta-chip-label">{chip.label}</span>
-                <strong className="projects-meta-chip-value" data-testid={chip.testId}>
+              <div key={chip.key} className="projects-stat-card">
+                <span className="projects-stat-label">{chip.label}</span>
+                <strong className="projects-stat-value" data-testid={chip.testId}>
                   {chip.value}
                 </strong>
               </div>
@@ -1360,7 +1363,6 @@ export function ProjectsView(): React.JSX.Element {
           </div>
 
           <div className="projects-toolbar-controls">
-            {!isSelectionMode && (
               <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
                 <div className="projects-toolbar-primary">
                   <div className="projects-toolbar-sort">
@@ -1452,6 +1454,39 @@ export function ProjectsView(): React.JSX.Element {
                 </div>
 
                 <div className="projects-toolbar-actions">
+                  <div className="projects-view-toggles" role="group" aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}>
+                    <button
+                      type="button"
+                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'list' ? 'active' : ''}`}
+                      onClick={() => setConfig({ projectsViewMode: 'list' })}
+                      aria-pressed={viewMode === 'list'}
+                      aria-label={t('projects.view_list', { defaultValue: 'List View' })}
+                      title={t('projects.view_list', { defaultValue: 'List View' })}
+                    >
+                      <List size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'grid' ? 'active' : ''}`}
+                      onClick={() => setConfig({ projectsViewMode: 'grid' })}
+                      aria-pressed={viewMode === 'grid'}
+                      aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                      title={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'table' ? 'active' : ''}`}
+                      onClick={() => setConfig({ projectsViewMode: 'table' })}
+                      aria-pressed={viewMode === 'table'}
+                      aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
+                      title={t('projects.view_table', { defaultValue: 'Table View' })}
+                    >
+                      <LayoutList size={16} />
+                    </button>
+                  </div>
+                  <div className="projects-toolbar-separator" />
                   <button
                     type="button"
                     className="btn btn-icon projects-toolbar-icon"
@@ -1471,17 +1506,16 @@ export function ProjectsView(): React.JSX.Element {
                   </button>
                 </div>
               </div>
-            )}
 
             {isSelectionMode && (
-              <div className="projects-toolbar-contextual" data-testid="projects-toolbar-contextual">
+              <div className="projects-fab" data-testid="projects-fab">
                 <div className="projects-selection-copy">
                   {t('projects.selected_count', {
                     count: selectedIds.length,
                     defaultValue: `${selectedIds.length} selected`,
                   })}
                 </div>
-                <div className="projects-toolbar-contextual-actions">
+                <div className="projects-fab-actions">
                   <Dropdown
                     value={moveTarget}
                     onChange={setMoveTarget}
@@ -1561,7 +1595,25 @@ export function ProjectsView(): React.JSX.Element {
           )}
 
           {!isHistoryLoading && filteredAndSortedItems.length > 0 && (
-            <div className="projects-list">
+            <div className={`projects-list projects-layout-${viewMode}`}>
+              {viewMode === 'table' && (
+                <div className="projects-table-header" role="row">
+                  {isSelectionMode && <div className="projects-table-header-cell" role="columnheader" style={{ width: '40px' }} />}
+                  <div className="projects-table-header-cell projects-table-header-title" role="columnheader">
+                    {t('projects.table_header_name', { defaultValue: 'Name' })}
+                  </div>
+                  <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
+                    {t('projects.table_header_project', { defaultValue: 'Project' })}
+                  </div>
+                  <div className="projects-table-header-cell projects-table-header-date" role="columnheader">
+                    {t('projects.table_header_date', { defaultValue: 'Date' })}
+                  </div>
+                  <div className="projects-table-header-cell projects-table-header-duration" role="columnheader">
+                    {t('projects.table_header_duration', { defaultValue: 'Duration' })}
+                  </div>
+                  {!isSelectionMode && <div className="projects-table-header-cell projects-table-header-actions" role="columnheader" style={{ width: '48px' }} />}
+                </div>
+              )}
               {filteredAndSortedItems.map((item) => (
                 <HistoryItem
                   key={item.id}
@@ -1572,6 +1624,7 @@ export function ProjectsView(): React.JSX.Element {
                   isSelectionMode={isSelectionMode}
                   isSelected={isSelectionMode ? selectedIds.includes(item.id) : selectedHistoryId === item.id}
                   onToggleSelection={toggleSelection}
+                  layout={viewMode}
                 />
               ))}
             </div>

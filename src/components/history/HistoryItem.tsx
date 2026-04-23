@@ -4,7 +4,6 @@ import { Calendar, Clock } from 'lucide-react';
 import { HistoryItem as HistoryItemType } from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
 import { TrashIcon, MicIcon, FileTextIcon } from '../Icons';
-
 import { Checkbox } from '../Checkbox';
 
 interface HistoryItemProps {
@@ -15,6 +14,7 @@ interface HistoryItemProps {
     isSelectionMode?: boolean;
     isSelected?: boolean;
     onToggleSelection?: (id: string) => void;
+    layout?: 'list' | 'grid' | 'table';
 }
 
 /**
@@ -55,7 +55,8 @@ function HistoryItemComponent({
     searchQuery = '',
     isSelectionMode = false,
     isSelected = false,
-    onToggleSelection
+    onToggleSelection,
+    layout = 'list'
 }: HistoryItemProps): React.JSX.Element {
     const { t } = useTranslation();
     const projectName = useProjectStore((state) => {
@@ -80,11 +81,12 @@ function HistoryItemComponent({
 
     return (
         <div
-            className={`history-item ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''}`}
+            className={`history-item history-item--${layout} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''}`}
             onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
+            role={layout === 'table' ? 'row' : 'listitem'}
         >
             {isSelectionMode && (
-                <div className="history-item-checkbox">
+                <div className="history-item-checkbox" role={layout === 'table' ? 'cell' : undefined}>
                     <Checkbox
                         checked={isSelected}
                         onChange={() => onToggleSelection?.(item.id)}
@@ -98,6 +100,7 @@ function HistoryItemComponent({
                 className="history-item-content"
                 onClick={handleClick}
                 aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
+                role={layout === 'table' ? 'cell' : undefined}
             >
                 <div className="history-item-header">
                     <div className="history-item-title-row">
@@ -107,38 +110,50 @@ function HistoryItemComponent({
                         <span className="history-item-title">{highlightText(item.title, searchQuery)}</span>
                     </div>
 
-                    <span className="history-item-project-badge">
-                        {projectName}
-                    </span>
+                    {layout !== 'table' && (
+                        <span className="history-item-project-badge">
+                            {projectName}
+                        </span>
+                    )}
                 </div>
 
-                <div className="history-item-meta">
-                    <span className="history-item-meta-chip">
+                {layout === 'table' && (
+                    <div className="history-item-table-cell history-item-table-project" role="cell">
+                        <span className="history-item-project-badge">{projectName}</span>
+                    </div>
+                )}
+
+                {layout !== 'table' && (
+                    <p className="history-item-preview">
+                        {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
+                    </p>
+                )}
+
+                <div className={`history-item-meta ${layout === 'table' ? 'history-item-table-cells' : ''}`}>
+                    <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
                         <Calendar size={12} />
                         {formatDate(item.timestamp)}
                     </span>
-                    <span className="history-item-meta-chip">
+                    <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
                         <Clock size={12} />
                         {formatDuration(item.duration)}
                     </span>
                 </div>
-
-                <p className="history-item-preview">
-                    {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
-                </p>
             </button>
 
             {!isSelectionMode && (
-                <button
-                    type="button"
-                    className="btn btn-icon delete-btn history-item-delete"
-                    onClick={(e) => onDelete(e, item.id)}
-                    aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                    data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                    data-tooltip-pos="left"
-                >
-                    <TrashIcon />
-                </button>
+                <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
+                    <button
+                        type="button"
+                        className="btn btn-icon delete-btn history-item-delete"
+                        onClick={(e) => onDelete(e, item.id)}
+                        aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
+                        data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+                        data-tooltip-pos="left"
+                    >
+                        <TrashIcon />
+                    </button>
+                </div>
             )}
         </div>
     );
