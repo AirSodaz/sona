@@ -655,7 +655,8 @@ body {
   min-width: min(280px, 100%);
 }
 
-.projects-search input {
+.projects-search input[type="text"],
+.projects-search input[type="search"] {
   width: 100%;
   padding-left: 36px;
   padding-right: 36px;
