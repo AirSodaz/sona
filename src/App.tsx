@@ -71,6 +71,7 @@ function App(): React.JSX.Element {
   }
 
   const panelTitle = getPanelTitle(mode, t);
+  const isProjectsMode = mode === 'projects';
 
   return (
     <div className="app">
@@ -104,35 +105,39 @@ function App(): React.JSX.Element {
 
       {/* Main Content */}
       <main id="main-content" className="app-main">
-        <div className="panel-container">
-          {/* Left Panel - Input */}
-          <div className="panel panel-left">
-            <div className="panel-header">
-              <h2>{panelTitle}</h2>
-            </div>
-            <div className="panel-content">
-              {mode !== 'projects' && <ProjectContextBar />}
-              <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
-                <LiveRecord />
+        {isProjectsMode ? (
+          <div className="projects-mode-shell">
+            <ProjectsView />
+          </div>
+        ) : (
+          <div className="panel-container">
+            {/* Left Panel - Input */}
+            <div className="panel panel-left">
+              <div className="panel-header">
+                <h2>{panelTitle}</h2>
               </div>
-              {mode === 'history' && <HistoryView />}
-              {mode === 'batch' && <BatchImport />}
-              {mode === 'projects' && <ProjectsView />}
+              <div className="panel-content">
+                <ProjectContextBar />
+                <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
+                  <LiveRecord />
+                </div>
+                {mode === 'history' && <HistoryView />}
+                {mode === 'batch' && <BatchImport />}
+              </div>
+            </div>
+
+            {/* Right Panel - Editor */}
+            <div className="panel panel-right">
+              <div className="panel-content">
+                <ProjectContextBar />
+                <ErrorBoundary>
+                  <TranscriptEditor />
+                </ErrorBoundary>
+              </div>
+              {audioUrl && <AudioPlayer />}
             </div>
           </div>
-
-          {/* Right Panel - Editor */}
-          <div className="panel panel-right">
-
-            <div className="panel-content">
-              <ProjectContextBar />
-              <ErrorBoundary>
-                <TranscriptEditor />
-              </ErrorBoundary>
-            </div>
-            {audioUrl && <AudioPlayer />}
-          </div>
-        </div>
+        )}
       </main>
 
       {/* Live Caption Overlay - rendered at app level to survive tab switches */}

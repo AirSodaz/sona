@@ -77,9 +77,10 @@ describe('App Title Logic', () => {
     expect(screen.getByText('panel.batch_import')).not.toBeNull();
   });
 
-  it('displays "Projects" title in projects mode', () => {
+  it('renders the projects workbench without the old editor shell in projects mode', () => {
     setupStore({ mode: 'projects' });
     render(<App />);
-    expect(screen.getByText('panel.projects')).not.toBeNull();
+    expect(screen.getByText('ProjectsView')).not.toBeNull();
+    expect(screen.queryByText('TranscriptEditor')).toBeNull();
   });
 });

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProjectsView } from '../ProjectsView';
-import { useProjectStore } from '../../stores/projectStore';
-import { useHistoryStore } from '../../stores/historyStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useHistoryStore } from '../../stores/historyStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptStore } from '../../stores/transcriptStore';
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -32,6 +32,41 @@ vi.mock('../../services/projectService', () => ({
   },
 }));
 
+vi.mock('../../services/historyService', () => ({
+  historyService: {
+    getAll: vi.fn().mockResolvedValue([]),
+    loadTranscript: vi.fn().mockResolvedValue([]),
+    getAudioUrl: vi.fn().mockResolvedValue('asset:///audio.wav'),
+    updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('../TranscriptEditor', () => ({
+  TranscriptEditor: () => <div>TranscriptEditor</div>,
+}));
+
+vi.mock('../AudioPlayer', () => ({
+  AudioPlayer: () => <div>AudioPlayer</div>,
+}));
+
+vi.mock('../ErrorBoundary', () => ({
+  ErrorBoundary: ({ children }: any) => <div>{children}</div>,
+}));
+
+vi.mock('../history/HistoryItem', () => ({
+  HistoryItem: ({ item, onLoad, isSelectionMode, isSelected, onToggleSelection }: any) => (
+    <div data-testid={`history-item-${item.id}`}>
+      <button onClick={() => onLoad(item)}>{item.title}</button>
+      {isSelected && <span>{`Active ${item.id}`}</span>}
+      {isSelectionMode && (
+        <button onClick={() => onToggleSelection?.(item.id)}>
+          {isSelected ? `Selected ${item.id}` : `Select ${item.id}`}
+        </button>
+      )}
+    </div>
+  ),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: any) => {
@@ -47,29 +82,16 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
-vi.mock('../../services/historyService', () => ({
-  historyService: {
-    getAll: vi.fn().mockResolvedValue([]),
-    loadTranscript: vi.fn().mockResolvedValue([]),
-    getAudioUrl: vi.fn().mockResolvedValue('asset:///audio.wav'),
-    updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-vi.mock('../history/HistoryItem', () => ({
-  HistoryItem: ({ item, onLoad, isSelectionMode, isSelected, onToggleSelection }: any) => (
-    <div>
-      <button onClick={() => onLoad(item)}>{item.title}</button>
-      {isSelectionMode && (
-        <button onClick={() => onToggleSelection?.(item.id)}>
-          {isSelected ? `Selected ${item.id}` : `Select ${item.id}`}
-        </button>
-      )}
-    </div>
-  ),
-}));
-
 describe('ProjectsView', () => {
+  const waitForInitialHistoryLoad = async () => {
+    const { historyService } = await import('../../services/historyService');
+
+    await waitFor(() => {
+      expect(historyService.getAll).toHaveBeenCalled();
+      expect(useHistoryStore.getState().isLoading).toBe(false);
+    });
+  };
+
   beforeEach(async () => {
     vi.clearAllMocks();
 
@@ -100,12 +122,12 @@ describe('ProjectsView', () => {
     useHistoryStore.setState({
       items: [
         {
-          id: 'hist-1',
+          id: 'hist-inbox',
           title: 'Inbox Item',
           timestamp: Date.now(),
           duration: 12,
           audioPath: 'audio.wav',
-          transcriptPath: 'hist-1.json',
+          transcriptPath: 'hist-inbox.json',
           previewText: 'Preview',
           projectId: null,
         },
@@ -113,6 +135,7 @@ describe('ProjectsView', () => {
       isLoading: false,
       error: null,
     } as any);
+
     const { historyService } = await import('../../services/historyService');
     (historyService.getAll as any).mockImplementation(async () => useHistoryStore.getState().items);
 
@@ -139,15 +162,16 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('creates a project and makes it active', async () => {
+  it('creates a project from the create modal and makes it active', async () => {
     const { projectService } = await import('../../services/projectService');
 
     render(<ProjectsView />);
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'projects.new_project_button' })[0]);
     fireEvent.change(screen.getByPlaceholderText('projects.new_project_name'), {
       target: { value: 'New Workspace' },
     });
-    fireEvent.click(screen.getAllByRole('button', { name: 'projects.create_action' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'projects.create_action' }));
 
     await waitFor(() => {
       expect(projectService.create).toHaveBeenCalled();
@@ -155,11 +179,16 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('saves project edits and jumps into live mode from the workspace header', async () => {
+  it('keeps project settings in a drawer and saves edits', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     const updateProjectSpy = vi.spyOn(useProjectStore.getState(), 'updateProject');
 
     render(<ProjectsView />);
+
+    expect(screen.queryByText('projects.project_settings_title')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.project_settings' }));
+    expect(screen.getByText('projects.project_settings_title')).toBeDefined();
 
     fireEvent.change(screen.getByDisplayValue('Alpha'), {
       target: { value: 'Alpha Updated' },
@@ -172,9 +201,45 @@ describe('ProjectsView', () => {
         expect.objectContaining({ name: 'Alpha Updated' }),
       );
     });
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'projects.start_live_record' }));
-    expect(useTranscriptStore.getState().mode).toBe('live');
+  it('opens a project item in the built-in detail pane and closes it when switching scope', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Project Item',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Preview',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+
+    const projectItemButton = await screen.findByRole('button', { name: 'Project Item' });
+    fireEvent.click(projectItemButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-1');
+    });
+
+    const inboxButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('projects.inbox_description'));
+    expect(inboxButton).not.toBeNull();
+    fireEvent.click(inboxButton!);
+
+    await waitFor(() => {
+      expect(screen.queryByText('TranscriptEditor')).toBeNull();
+      expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
+    });
   });
 
   it('moves selected items from the active project back to Inbox', async () => {
@@ -200,14 +265,23 @@ describe('ProjectsView', () => {
 
     await screen.findByText('Project Item');
     fireEvent.click(screen.getByRole('button', { name: 'common.select' }));
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Select hist-1' })).toBeDefined();
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
     fireEvent.click(screen.getByRole('button', { name: 'projects.move_selected' }));
 
     await waitFor(() => {
       expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(['hist-1'], null);
     });
+  });
+
+  it('jumps into live mode while keeping the active project context', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.click(screen.getByRole('button', { name: 'projects.start_live_record' }));
+
+    expect(useTranscriptStore.getState().mode).toBe('live');
+    expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
 });
