@@ -56,6 +56,15 @@ export function UpdateNotification(): React.JSX.Element | null {
     return <div>{t('settings.update_desc_default')}</div>;
   };
 
+  let actionLabel;
+  if (status === 'downloaded') {
+    actionLabel = t('settings.update_btn_relaunch');
+  } else if (isBusy) {
+    actionLabel = status === 'downloading' ? t('settings.update_downloading') : t('settings.update_installing');
+  } else {
+    actionLabel = t('settings.update_btn_install');
+  }
+
   return (
     <div className="update-notification" role="alert">
       <div className="update-notification-header">
@@ -90,11 +99,7 @@ export function UpdateNotification(): React.JSX.Element | null {
           onClick={status === 'downloaded' ? relaunchToUpdate : installUpdate}
           disabled={isBusy}
         >
-          {status === 'downloaded'
-            ? t('settings.update_btn_relaunch')
-            : isBusy
-              ? (status === 'downloading' ? t('settings.update_downloading') : t('settings.update_installing'))
-              : t('settings.update_btn_install')}
+          {actionLabel}
         </button>
       </div>
     </div>

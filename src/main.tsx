@@ -26,8 +26,15 @@ if (import.meta.env.DEV) {
 const isCaptionWindow = window.location.search.includes('window=caption');
 const isVoiceTypingWindow = window.location.search.includes('window=voice-typing');
 
+let rootComponent = <App />;
+if (isVoiceTypingWindow) {
+  rootComponent = <VoiceTypingOverlay />;
+} else if (isCaptionWindow) {
+  rootComponent = <CaptionWindow />;
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isVoiceTypingWindow ? <VoiceTypingOverlay /> : (isCaptionWindow ? <CaptionWindow /> : <App />)}
+    {rootComponent}
   </React.StrictMode>,
 );
