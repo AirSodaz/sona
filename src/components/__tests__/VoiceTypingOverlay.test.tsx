@@ -166,7 +166,7 @@ describe('VoiceTypingOverlay', () => {
             })),
         });
 
-        global.ResizeObserver = class {
+        globalThis.ResizeObserver = class {
             constructor(callback: ResizeObserverCallback) {
                 resizeObserverCallback = callback;
             }

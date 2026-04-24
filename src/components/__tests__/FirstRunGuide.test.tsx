@@ -224,6 +224,10 @@ describe('FirstRunGuide', () => {
     expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'first_run.actions.finish' })).toBeDefined();
 
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.back' }));
 
     expect(screen.getByText('first_run.models.heading')).toBeDefined();

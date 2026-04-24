@@ -80,7 +80,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 describe('CaptionWindow', () => {
     beforeEach(() => {
         // Mock ResizeObserver
-        global.ResizeObserver = class {
+        globalThis.ResizeObserver = class {
             callback: any;
             target: any;
             constructor(callback: any) {

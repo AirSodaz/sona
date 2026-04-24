@@ -20,8 +20,8 @@ vi.mock('../../stores/dialogStore', () => ({
 describe('AudioPlayer', () => {
     beforeEach(() => {
         // Mock URL.createObjectURL/revokeObjectURL
-        global.URL.createObjectURL = vi.fn(() => 'blob:test');
-        global.URL.revokeObjectURL = vi.fn();
+        globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
+        globalThis.URL.revokeObjectURL = vi.fn();
 
         // Reset store state
         useTranscriptStore.setState({
