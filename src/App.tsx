@@ -11,7 +11,6 @@ import { PolishButton } from './components/PolishButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';
-import { ProjectContextBar } from './components/ProjectContextBar';
 import { Settings } from './components/Settings';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -20,6 +19,7 @@ import { OnboardingReminderBanner } from './components/OnboardingReminderBanner'
 import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
+import { useProjectStore } from './stores/projectStore';
 import { SettingsIcon, WaveformIcon, CloseIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -50,9 +50,14 @@ function App(): React.JSX.Element {
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const hasSegments = useTranscriptStore((state) => state.segments.length > 0);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
+  const setMode = useTranscriptStore((state) => state.setMode);
   const title = useTranscriptStore((state) => state.title);
-  // const isRecording = useTranscriptStore((state) => state.isRecording);
-  // const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const activeProject = useProjectStore((state) => 
+    state.projects.find((p) => p.id === activeProjectId) || null
+  );
+
   const { t } = useTranslation();
 
   // Run application initialization logic
@@ -83,8 +88,16 @@ function App(): React.JSX.Element {
       {/* Header */}
       <header className="app-header">
         <div className="app-logo">
-          <WaveformIcon />
           <h1>Sona</h1>
+          {activeProject && (
+            <span 
+              className="current-project-tag" 
+              onClick={() => setMode('projects')}
+              title={t('projects.open_projects', { defaultValue: 'Open Workspace' })}
+            >
+              {activeProject.name}
+            </span>
+          )}
         </div>
 
         <TabNavigation />
@@ -115,7 +128,6 @@ function App(): React.JSX.Element {
           </div>
         ) : (
           <div className="workspace-mode-shell">
-            <ProjectContextBar />
             <div className="panel-container">
               {/* Left Panel - Input */}
               <div className="panel panel-left">

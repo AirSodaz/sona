@@ -302,39 +302,31 @@ body {
   background: var(--color-bg-primary);
 }
 
-.project-context-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-  padding: 10px var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  flex-shrink: 0;
-}
-
-.project-context-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.project-context-label {
+.current-project-tag {
+  background: var(--color-bg-elevated);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
   font-size: 0.75rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
-}
-
-.project-context-name {
-  font-weight: 600;
-  color: var(--color-text-primary);
+  max-width: 240px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-left: 6px;
+  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
 }
 
-.project-context-action {
-  white-space: nowrap;
+.current-project-tag:hover {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
 }
 
 /* ===========================
