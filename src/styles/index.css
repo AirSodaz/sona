@@ -345,14 +345,14 @@ body {
   --projects-detail-width: clamp(380px, 34vw, 520px);
   position: relative;
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
+  grid-template-columns: 350px minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   background: var(--color-bg-primary);
 }
 
 .projects-workbench.with-detail {
-  grid-template-columns: 256px minmax(0, 1fr) var(--projects-detail-width);
+  grid-template-columns: 350px minmax(0, 1fr) var(--projects-detail-width);
 }
 
 .projects-rail {
@@ -361,14 +361,13 @@ body {
   min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--color-border);
-  background: linear-gradient(180deg,
-      var(--color-bg-secondary),
-      color-mix(in srgb, var(--color-bg-secondary) 90%, var(--color-bg-elevated)));
+  background: var(--color-bg-secondary);
 }
 
 .projects-rail-header {
-  padding: var(--spacing-md);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom: none;
+  min-height: 68px;
 }
 
 .projects-rail-copy {
@@ -395,7 +394,7 @@ body {
 .projects-modal-eyebrow {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -413,7 +412,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -422,7 +421,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
 }
 
 .projects-rail-list {
@@ -1080,7 +1079,7 @@ body {
 
 @media (max-width: 1280px) {
   .projects-workbench.with-detail {
-    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-columns: 350px minmax(0, 1fr);
   }
 
   .projects-detail-backdrop {
@@ -1184,16 +1183,18 @@ body {
   padding: var(--spacing-md) var(--spacing-xl);
   background: transparent;
   /* Seamless headers */
-  border-bottom: 1px solid transparent;
+  border-bottom: none;
+  min-height: 68px;
   flex-shrink: 0;
 }
 
 .panel-header h2 {
+  margin: 0;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .panel-content {
