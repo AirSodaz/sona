@@ -42,12 +42,31 @@ export const projectService = {
       });
       const parsed = JSON.parse(content) as Partial<ProjectRecord>[];
       return parsed
-        .map((item) => normalizeProjectRecord(item))
-        .sort((a, b) => b.updatedAt - a.updatedAt);
+        .map((item) => normalizeProjectRecord(item));
     } catch (error) {
       logger.error('[Projects] Failed to load projects:', error);
       return [];
     }
+  },
+
+  async reorder(projectIds: string[]): Promise<void> {
+    const projects = await this.getAll();
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+    const nextProjects = projectIds
+      .map((id) => projectMap.get(id))
+      .filter((p): p is ProjectRecord => !!p);
+    
+    // Add any projects that might have been missing from projectIds (safety check)
+    if (nextProjects.length < projects.length) {
+      const addedIds = new Set(projectIds);
+      projects.forEach((p) => {
+        if (!addedIds.has(p.id)) {
+          nextProjects.push(p);
+        }
+      });
+    }
+
+    await writeProjects(nextProjects);
   },
 
   async create(input: { name: string; description?: string; defaults: ProjectDefaults }): Promise<ProjectRecord> {

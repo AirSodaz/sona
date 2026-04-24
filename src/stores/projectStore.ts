@@ -24,6 +24,7 @@ interface ProjectState {
   deleteProject: (id: string) => Promise<void>;
   setActiveProjectId: (projectId: string | null) => Promise<void>;
   assignHistoryItems: (historyIds: string[], projectId: string | null) => Promise<void>;
+  reorderProjects: (projectIds: string[]) => Promise<void>;
   getActiveProject: () => ProjectRecord | null;
   getProjectById: (projectId: string | null | undefined) => ProjectRecord | null;
 }
@@ -88,7 +89,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateProjectDefaults: async (id, updates) => {
-    const project = get().projects.find((item) => item.id === id);
+    const project = get().projects.find((item) => id === item.id);
     if (!project) {
       return;
     }
@@ -135,6 +136,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     await historyService.updateProjectAssignments(historyIds, projectId);
+  },
+
+  reorderProjects: async (projectIds) => {
+    const { projects } = get();
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+    const nextProjects = projectIds
+      .map((id) => projectMap.get(id))
+      .filter((p): p is ProjectRecord => !!p);
+
+    if (nextProjects.length < projects.length) {
+      const addedIds = new Set(projectIds);
+      projects.forEach((p) => {
+        if (!addedIds.has(p.id)) {
+          nextProjects.push(p);
+        }
+      });
+    }
+
+    set({ projects: nextProjects });
+    await projectService.reorder(nextProjects.map((p) => p.id));
   },
 
   getActiveProject: () => {

@@ -468,6 +468,39 @@ body {
   color: var(--color-text-secondary);
 }
 
+.projects-rail-item-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: grab;
+}
+
+.projects-rail-item-container:active {
+  cursor: grabbing;
+}
+
+.projects-rail-item-container.is-dragging {
+  opacity: 0.15;
+  z-index: 1;
+}
+
+.projects-rail-item-container.is-dragging-overlay {
+  cursor: grabbing;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.projects-rail-item-container.is-dragging-overlay .projects-rail-item {
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-border-hover);
+  background: var(--color-bg-elevated);
+  transform: scale(1.02);
+  border-color: var(--color-text-secondary);
+}
+
+.projects-rail-item-container .projects-rail-item {
+  flex: 1;
+}
+
 .projects-rail-count {
   flex-shrink: 0;
   min-width: 28px;

@@ -1,6 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList, CheckSquare, ArrowRight, Trash2, X, ListChecks } from 'lucide-react';
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { HistoryItem } from './history/HistoryItem';
 import { TranscriptWorkbench } from './TranscriptWorkbench';
 import { Checkbox } from './Checkbox';
@@ -575,6 +596,65 @@ function ProjectSettingsModal({
   );
 }
 
+interface SortableProjectItemProps {
+  project: ProjectRecord;
+  projectCount: number;
+  isActive: boolean;
+  onSwitchScope: (id: string) => Promise<void>;
+  t: (key: string, options?: any) => string;
+}
+
+function SortableProjectItem({
+  project,
+  projectCount,
+  isActive,
+  onSwitchScope,
+  t,
+}: SortableProjectItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''}`}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className={`projects-rail-item ${isActive ? 'active' : ''}`}
+        onClick={() => void onSwitchScope(project.id)}
+        aria-pressed={isActive}
+      >
+        <div className="projects-rail-item-copy">
+          <strong>{project.name}</strong>
+          <span>
+            {project.description || t('projects.items_title', {
+              count: projectCount,
+              defaultValue: `${projectCount} items`,
+            })}
+          </span>
+        </div>
+        <span className="projects-rail-count">{projectCount}</span>
+      </button>
+    </div>
+  );
+}
+
 export function ProjectsView(): React.JSX.Element {
   const { t } = useTranslation();
   const projects = useProjectStore((state) => state.projects);
@@ -584,6 +664,7 @@ export function ProjectsView(): React.JSX.Element {
   const deleteProject = useProjectStore((state) => state.deleteProject);
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const assignHistoryItems = useProjectStore((state) => state.assignHistoryItems);
+  const reorderProjects = useProjectStore((state) => state.reorderProjects);
 
   const historyItems = useHistoryStore((state) => state.items);
   const isHistoryLoading = useHistoryStore((state) => state.isLoading);
@@ -614,6 +695,7 @@ export function ProjectsView(): React.JSX.Element {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moveTarget, setMoveTarget] = useState(INBOX_SCOPE);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [browseScope, setBrowseScope] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
@@ -1135,6 +1217,34 @@ export function ProjectsView(): React.JSX.Element {
     setIsSelectionMode(false);
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (over && active.id !== over.id) {
+      const oldIndex = projects.findIndex((p) => p.id === active.id);
+      const newIndex = projects.findIndex((p) => p.id === over.id);
+
+      const newOrder = arrayMove(projects, oldIndex, newIndex);
+      await reorderProjects(newOrder.map((p) => p.id));
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) {
       return;
@@ -1270,29 +1380,60 @@ export function ProjectsView(): React.JSX.Element {
               </div>
             )}
 
-            {projects.map((project) => {
-              const projectCount = itemCounts.get(project.id) || 0;
-              return (
-                <button
-                  key={project.id}
-                  type="button"
-                  className={`projects-rail-item ${browseProjectId === project.id ? 'active' : ''}`}
-                  onClick={() => void handleSwitchBrowseScope(project.id)}
-                  aria-pressed={browseProjectId === project.id}
-                >
-                  <div className="projects-rail-item-copy">
-                    <strong>{project.name}</strong>
-                    <span>
-                      {project.description || t('projects.items_title', {
-                        count: projectCount,
-                        defaultValue: `${projectCount} items`,
-                      })}
-                    </span>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
+            >
+              <SortableContext
+                items={projects.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {projects.map((project) => (
+                  <SortableProjectItem
+                    key={project.id}
+                    project={project}
+                    projectCount={itemCounts.get(project.id) || 0}
+                    isActive={browseProjectId === project.id}
+                    onSwitchScope={handleSwitchBrowseScope}
+                    t={t}
+                  />
+                ))}
+              </SortableContext>
+              <DragOverlay
+                dropAnimation={{
+                  sideEffects: defaultDropAnimationSideEffects({
+                    styles: {
+                      active: {
+                        opacity: '0.4',
+                      },
+                    },
+                  }),
+                }}
+              >
+                {activeId ? (
+                  <div className="projects-rail-item-container is-dragging-overlay">
+                    <button
+                      type="button"
+                      className={`projects-rail-item ${browseProjectId === activeId ? 'active' : ''}`}
+                    >
+                      <div className="projects-rail-item-copy">
+                        <strong>{projects.find((p) => p.id === activeId)?.name}</strong>
+                        <span>
+                          {projects.find((p) => p.id === activeId)?.description || t('projects.items_title', {
+                            count: itemCounts.get(activeId) || 0,
+                            defaultValue: `${itemCounts.get(activeId) || 0} items`,
+                          })}
+                        </span>
+                      </div>
+                      <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
+                    </button>
                   </div>
-                  <span className="projects-rail-count">{projectCount}</span>
-                </button>
-              );
-            })}
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </div>
       </aside>
