@@ -61,6 +61,8 @@ interface TranscriptState {
     // History tracking
     /** ID of the history item the current segments originate from. */
     sourceHistoryId: string | null;
+    /** Title of the current transcription. */
+    title: string | null;
 
     // LLM states mapped by historyId
     /**
@@ -152,7 +154,7 @@ interface TranscriptState {
      * Atomically loads segments and sets the source history ID.
      * Prevents auto-save race conditions when switching items.
      */
-    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null) => void;
+    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null) => void;
 
     /**
      * Mark the last segment as final if it isn't already.
@@ -361,6 +363,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     lastSeekTimestamp: 0,
     seekRequest: null,
     sourceHistoryId: null,
+    title: null,
     llmStates: {},
     summaryStates: {},
     autoSaveStates: {},
@@ -478,10 +481,11 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
-    loadTranscript: (segments, sourceHistoryId) => {
+    loadTranscript: (segments, sourceHistoryId, title) => {
         set({
             segments: segments.sort((a, b) => a.start - b.start),
             sourceHistoryId,
+            title: title || null,
             activeSegmentIndex: -1,
             activeSegmentId: null,
             editingSegmentId: null
@@ -512,6 +516,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             activeSegmentIndex: -1,
             editingSegmentId: null,
             sourceHistoryId: null,
+            title: null,
             summaryStates,
             };
         });

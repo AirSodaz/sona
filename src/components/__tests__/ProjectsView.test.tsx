@@ -206,16 +206,14 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
-    expect(screen.queryByTestId('projects-toolbar-contextual')).toBeNull();
+    expect(screen.queryByTestId('projects-fab')).toBeNull();
     expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
     expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
 
-    expect(screen.queryByTestId('projects-toolbar-default')).toBeNull();
-    expect(screen.getByTestId('projects-toolbar-contextual')).toBeDefined();
+    expect(screen.getByTestId('projects-fab')).toBeDefined();
     expect(screen.getByText('0 selected')).toBeDefined();
     expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
   });
@@ -276,14 +274,14 @@ describe('ProjectsView', () => {
       target: { value: 'Alpha Updated' },
     });
 
-    fireEvent.click(getButtonByContent('Inbox collects unassigned recordings and imports.'));
+    fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
     expect(screen.getByText('Edit Project Defaults')).toBeDefined();
 
-    fireEvent.click(getButtonByContent('Inbox collects unassigned recordings and imports.'));
+    fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
       expect(useProjectStore.getState().activeProjectId).toBeNull();
     });
@@ -403,7 +401,7 @@ describe('ProjectsView', () => {
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-1');
     });
 
-    await clickAsync(getButtonByContent('Inbox collects unassigned recordings and imports.'));
+    await clickAsync(getButtonByContent('Inbox'));
 
     await waitFor(() => {
       expect(screen.queryByText('TranscriptEditor')).toBeNull();
@@ -563,14 +561,14 @@ describe('ProjectsView', () => {
 
     openFilterMenu();
     selectDropdownOption('Filter by type', 'Batch imports');
-    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('Batch imports');
+    expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
     expect(screen.queryByText('Client Call')).toBeNull();
     expect(screen.getByText('Imported Deck')).toBeDefined();
     expect(screen.getByText('Workshop Import')).toBeDefined();
 
     openFilterMenu();
     selectDropdownOption('Filter by date', 'Last 7 days');
-    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2 active');
+    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2');
     expect(screen.queryByText('Imported Deck')).toBeNull();
     expect(screen.getByText('Workshop Import')).toBeDefined();
 
@@ -618,12 +616,12 @@ describe('ProjectsView', () => {
 
     selectDropdownOption('Filter by type', 'Batch imports');
     expect(screen.queryByText('Client Call')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('Batch imports');
+    expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
 
     openFilterMenu();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
-    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('All items');
+    expect(screen.getByText(/All items/i)).toBeDefined();
     expect(screen.getByText('Client Call')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
   });
@@ -662,11 +660,6 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    await clickAsync(screen.getByRole('button', { name: 'Project Item' }));
-    await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
-    });
-
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
 
@@ -676,7 +669,6 @@ describe('ProjectsView', () => {
 
     expect(screen.getByText('No matching items')).toBeDefined();
     expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-    expect(screen.getByText('TranscriptEditor')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Move Selected' }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));

@@ -50,7 +50,9 @@ describe('App Title Logic', () => {
   const defaultState = {
     mode: 'live',
     audioUrl: null,
-    config: { theme: 'light' }
+    config: { theme: 'light' },
+    segments: [],
+    clearSegments: vi.fn()
   };
 
   const setupStore = (overrides = {}) => {

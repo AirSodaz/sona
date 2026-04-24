@@ -20,7 +20,7 @@ import { OnboardingReminderBanner } from './components/OnboardingReminderBanner'
 import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
-import { SettingsIcon, WaveformIcon } from './components/Icons';
+import { SettingsIcon, WaveformIcon, CloseIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
@@ -48,6 +48,9 @@ function App(): React.JSX.Element {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
+  const hasSegments = useTranscriptStore((state) => state.segments.length > 0);
+  const clearSegments = useTranscriptStore((state) => state.clearSegments);
+  const title = useTranscriptStore((state) => state.title);
   // const isRecording = useTranscriptStore((state) => state.isRecording);
   // const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
   const { t } = useTranslation();
@@ -129,6 +132,21 @@ function App(): React.JSX.Element {
 
               {/* Right Panel - Editor */}
               <div className="panel panel-right">
+                {hasSegments && (
+                  <div className="projects-detail-header">
+                    <div>
+                      <h4>{title || panelTitle}</h4>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-icon"
+                      onClick={clearSegments}
+                      aria-label={t('common.close', { defaultValue: 'Close' })}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                )}
                 <div className="panel-content">
                   <ErrorBoundary>
                     <TranscriptEditor />

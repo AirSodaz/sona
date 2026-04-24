@@ -962,7 +962,7 @@ export function ProjectsView(): React.JSX.Element {
         segments = [];
       }
 
-      useTranscriptStore.getState().loadTranscript(segments, item.id);
+      useTranscriptStore.getState().loadTranscript(segments, item.id, item.title);
       setAudioUrl(url);
       setSelectedHistoryId(item.id);
       await setActiveProjectId(item.projectId);
@@ -1264,6 +1264,7 @@ export function ProjectsView(): React.JSX.Element {
         </div>
       </aside>
 
+      {!selectedItem && (
       <section className="projects-main">
         <div className="projects-main-header">
           <div className="projects-main-header-top">
@@ -1658,22 +1659,12 @@ export function ProjectsView(): React.JSX.Element {
           )}
         </div>
       </section>
+      )}
 
       {selectedItem && (
-        <>
-          <button
-            type="button"
-            className="projects-detail-backdrop"
-            onClick={clearOpenedItem}
-            aria-label={t('projects.close_detail', { defaultValue: 'Close detail' })}
-          />
-
           <aside className="projects-detail-pane">
             <div className="projects-detail-header">
               <div>
-                <div className="projects-main-eyebrow">
-                  {t('projects.detail_label', { defaultValue: 'Selected Item' })}
-                </div>
                 <h4>{selectedItem.title}</h4>
               </div>
 
@@ -1695,7 +1686,6 @@ export function ProjectsView(): React.JSX.Element {
 
             {audioUrl && <AudioPlayer />}
           </aside>
-        </>
       )}
 
       <ProjectCreateModal

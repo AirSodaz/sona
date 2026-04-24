@@ -327,7 +327,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const item = state.queueItems.find((i) => i.id === id);
         if (item) {
             // Use atomic load to prevent auto-save from overwriting previous item
-            useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null);
+            useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null, item.filename);
             useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
             void useProjectStore.getState().setActiveProjectId(item.projectId);
             // Set source file path for CTC alignment
