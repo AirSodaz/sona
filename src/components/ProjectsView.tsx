@@ -1355,17 +1355,17 @@ export function ProjectsView(): React.JSX.Element {
             </div>
 
             <div className="projects-toolbar-copy">
-              <strong data-testid="projects-results-count">{t('projects.results_count', {
-                visible: filteredAndSortedItems.length,
-                total: scopedItems.length,
-                defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
-              })}</strong>
             </div>
           </div>
 
           <div className="projects-toolbar-controls">
               <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
                 <div className="projects-toolbar-primary">
+                  <strong className="projects-results-count" data-testid="projects-results-count">{t('projects.results_count', {
+                    visible: filteredAndSortedItems.length,
+                    total: scopedItems.length,
+                    defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
+                  })}</strong>
                   <div className="projects-filter-menu" ref={filterMenuRef}>
                     <button
                       type="button"

@@ -710,6 +710,14 @@ body {
   min-width: 200px;
 }
 
+.projects-results-count {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-inline-end: 4px;
+  white-space: nowrap;
+}
+
 .projects-filter-menu {
   position: relative;
   flex: 0 0 auto;
@@ -718,10 +726,12 @@ body {
 .projects-filter-trigger {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   min-height: 38px;
-  min-width: 0;
-  padding-inline: 12px;
+  width: auto !important;
+  min-width: 38px;
+  padding-inline: 10px;
 }
 
 .projects-filter-trigger.active,
@@ -758,6 +768,7 @@ body {
   color: var(--color-text-primary);
   font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 .projects-filter-popover {
