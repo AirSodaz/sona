@@ -20,7 +20,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
-import { SettingsIcon, WaveformIcon, CloseIcon } from './components/Icons';
+import { SettingsIcon, CloseIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';

@@ -247,7 +247,7 @@ function ProjectCreateModal({
   );
 }
 
-interface ProjectSettingsDrawerProps {
+interface ProjectSettingsModalProps {
   isOpen: boolean;
   project: ProjectRecord | null;
   draftName: string;
@@ -262,7 +262,7 @@ interface ProjectSettingsDrawerProps {
   onDefaultsChange: (defaults: ProjectDefaults) => void;
 }
 
-function ProjectSettingsDrawer({
+function ProjectSettingsModal({
   isOpen,
   project,
   draftName,
@@ -275,7 +275,7 @@ function ProjectSettingsDrawer({
   onNameChange,
   onDescriptionChange,
   onDefaultsChange,
-}: ProjectSettingsDrawerProps): React.JSX.Element | null {
+}: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -333,24 +333,39 @@ function ProjectSettingsDrawer({
   };
 
   return (
-    <div className="projects-drawer-shell">
-      <div className="projects-drawer-backdrop" onClick={onClose} />
-
-      <aside
-        className="projects-settings-drawer"
+    <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
+      <div
+        className="dialog-modal"
+        onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="project-settings-title"
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-xl)',
+          width: '650px',
+          maxWidth: '95vw',
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          border: '1px solid var(--color-border)',
+          overflow: 'hidden'
+        }}
       >
-        <div className="projects-settings-header">
+        {/* Header - Fixed */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
+          borderBottom: '1px solid var(--color-border)'
+        }}>
           <div>
-            <div className="projects-modal-eyebrow">
-              {t('projects.project_settings', { defaultValue: 'Project Settings' })}
-            </div>
-            <h3 id="project-settings-title">
+            <h3 id="project-settings-title" style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
               {t('projects.project_settings_title', { defaultValue: 'Edit Project Defaults' })}
             </h3>
-            <p>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '4px 0 0 0' }}>
               {t('projects.project_settings_hint', {
                 defaultValue: 'These defaults apply whenever you work inside this project.',
               })}
@@ -367,7 +382,15 @@ function ProjectSettingsDrawer({
           </button>
         </div>
 
-        <div className="projects-settings-body">
+        {/* Content - Scrollable */}
+        <div className="settings-content-scroll" style={{ 
+          padding: 'var(--spacing-lg)',
+          flex: 1,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--spacing-lg)'
+        }}>
           <div className="projects-field">
             <label htmlFor="project-settings-name">
               {t('projects.project_name', { defaultValue: 'Project Name' })}
@@ -375,6 +398,7 @@ function ProjectSettingsDrawer({
             <input
               id="project-settings-name"
               type="text"
+              className="settings-input"
               value={draftName}
               onChange={(event) => onNameChange(event.target.value)}
               placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
@@ -387,8 +411,10 @@ function ProjectSettingsDrawer({
             </label>
             <textarea
               id="project-settings-description"
+              className="settings-input"
               value={draftDescription}
               onChange={(event) => onDescriptionChange(event.target.value)}
+              style={{ minHeight: '80px' }}
             />
           </div>
 
@@ -445,6 +471,7 @@ function ProjectSettingsDrawer({
               <input
                 id="project-settings-export-prefix"
                 type="text"
+                className="settings-input"
                 value={draftDefaults.exportFileNamePrefix}
                 onChange={(event) => onDefaultsChange({
                   ...draftDefaults,
@@ -462,11 +489,13 @@ function ProjectSettingsDrawer({
               </label>
               <textarea
                 id="project-settings-polish-context"
+                className="settings-input"
                 value={draftDefaults.polishContext}
                 onChange={(event) => onDefaultsChange({
                   ...draftDefaults,
                   polishContext: event.target.value,
                 })}
+                style={{ minHeight: '80px' }}
               />
             </div>
           )}
@@ -522,12 +551,20 @@ function ProjectSettingsDrawer({
           </div>
         </div>
 
-        <div className="projects-settings-footer">
+        {/* Footer - Fixed */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          padding: 'var(--spacing-md) var(--spacing-lg)', 
+          borderTop: '1px solid var(--color-border)',
+          background: 'var(--color-bg-elevated)'
+        }}>
           <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
             {t('projects.delete_project', { defaultValue: 'Delete Project' })}
           </button>
 
-          <div className="projects-settings-footer-actions">
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </button>
@@ -536,7 +573,7 @@ function ProjectSettingsDrawer({
             </button>
           </div>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
@@ -1698,7 +1735,7 @@ export function ProjectsView(): React.JSX.Element {
         onCreate={handleCreateProject}
       />
 
-      <ProjectSettingsDrawer
+      <ProjectSettingsModal
         isOpen={isSettingsOpen}
         project={browseProject}
         draftName={draftName}
