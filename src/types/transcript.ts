@@ -89,8 +89,8 @@ export interface TranscriptSummaryRecord {
 export interface TranscriptSummaryState {
   /** Currently selected template in the summary panel. */
   activeTemplate: SummaryTemplate;
-  /** Saved summary records keyed by template. */
-  records: Partial<Record<SummaryTemplate, TranscriptSummaryRecord>>;
+  /** Saved summary record. */
+  record?: TranscriptSummaryRecord;
   /** Whether a summary is currently being generated. */
   isGenerating: boolean;
   /** Progress percentage for summary generation. */
@@ -100,8 +100,8 @@ export interface TranscriptSummaryState {
 export interface HistorySummaryPayload {
   /** Currently selected template for the history item. */
   activeTemplate: SummaryTemplate;
-  /** Persisted summary records keyed by template. */
-  records: Partial<Record<SummaryTemplate, TranscriptSummaryRecord>>;
+  /** Persisted summary record. */
+  record?: TranscriptSummaryRecord;
 }
 
 export type LlmFeature = 'polish' | 'translation' | 'summary';

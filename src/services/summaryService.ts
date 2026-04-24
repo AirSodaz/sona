@@ -28,7 +28,7 @@ function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined)
   return (
     summaryState.isGenerating ||
     summaryState.generationProgress > 0 ||
-    Object.keys(summaryState.records).length > 0 ||
+    !!summaryState.record ||
     summaryState.activeTemplate !== DEFAULT_SUMMARY_TEMPLATE
   );
 }
@@ -36,13 +36,13 @@ function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined)
 function buildSummaryPayload(summaryState: TranscriptSummaryState): HistorySummaryPayload {
   return {
     activeTemplate: summaryState.activeTemplate,
-    records: summaryState.records,
+    record: summaryState.record,
   };
 }
 
 function hasPersistableSummaryData(summaryState: TranscriptSummaryState): boolean {
   return (
-    Object.keys(summaryState.records).length > 0 ||
+    !!summaryState.record ||
     summaryState.activeTemplate !== DEFAULT_SUMMARY_TEMPLATE
   );
 }
@@ -158,9 +158,7 @@ class SummaryService {
 
       useTranscriptStore.getState().updateSummaryState({
         activeTemplate: result.template,
-        records: {
-          [result.template]: record,
-        },
+        record,
       }, targetHistoryId);
 
       if (targetHistoryId !== 'current') {

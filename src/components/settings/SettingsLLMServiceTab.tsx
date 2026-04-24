@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, FileText } from 'lucide-react';
+import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, AlignLeft } from 'lucide-react';
 import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
@@ -642,7 +642,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           stepNumber={3}
           featureId="summary"
           title={t('settings.llm.summary_model')}
-          icon={<FileText size={20} />}
+          icon={<AlignLeft size={20} />}
           config={config}
           applyLlmSettings={applyLlmSettings}
           t={t}

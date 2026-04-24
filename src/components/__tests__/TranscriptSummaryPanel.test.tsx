@@ -87,13 +87,11 @@ describe('TranscriptSummaryPanel', () => {
       summaryStates: {
         'history-1': {
           activeTemplate: 'general',
-          records: {
-            general: {
-              template: 'general',
-              content: 'History summary',
-              generatedAt: '2026-04-22T10:00:00.000Z',
-              sourceFingerprint: '1:Transcript text:0:1:true',
-            },
+          record: {
+            template: 'general',
+            content: 'History summary',
+            generatedAt: '2026-04-22T10:00:00.000Z',
+            sourceFingerprint: '1:Transcript text:0:1:true',
           },
           isGenerating: false,
           generationProgress: 0,
@@ -143,7 +141,7 @@ describe('TranscriptSummaryPanel', () => {
       summaryStates: {
         current: {
           activeTemplate: 'general',
-          records: {},
+          record: undefined,
           isGenerating: true,
           generationProgress: 42,
         },

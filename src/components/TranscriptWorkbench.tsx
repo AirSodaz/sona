@@ -5,7 +5,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
-import { CloseIcon, SparklesIcon } from './Icons';
+import { CloseIcon, SummaryIcon } from './Icons';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 
 interface TranscriptWorkbenchProps {
@@ -63,7 +63,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
                 data-tooltip={t('summary.title')}
                 data-tooltip-pos="bottom"
               >
-                <SparklesIcon />
+                <SummaryIcon />
               </button>
             )}
           </div>

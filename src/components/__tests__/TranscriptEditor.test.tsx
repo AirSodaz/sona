@@ -1,11 +1,9 @@
-import { render, act, fireEvent, screen } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { SegmentItem } from '../transcript/SegmentItem';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
-import { computeSummarySourceFingerprint } from '../../utils/segmentUtils';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llmConfig';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -75,21 +73,6 @@ vi.mock('../transcript/SegmentItem', async () => {
 });
 
 describe('TranscriptEditor', () => {
-    const createSummaryReadyConfig = () => {
-        let llmSettings = createLlmSettings('open_ai');
-        llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
-            apiHost: 'https://api.openai.com',
-            apiKey: 'test-key',
-        });
-        llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
-        llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
-
-        return {
-            ...DEFAULT_CONFIG,
-            llmSettings,
-        };
-    };
-
     beforeEach(() => {
         vi.clearAllMocks();
         act(() => {

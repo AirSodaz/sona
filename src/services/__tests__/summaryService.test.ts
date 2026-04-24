@@ -100,14 +100,12 @@ describe('summaryService', () => {
       'history-a',
       expect.objectContaining({
         activeTemplate: 'meeting',
-        records: expect.objectContaining({
-          meeting: expect.objectContaining({
-            content: 'Meeting summary',
-          }),
+        record: expect.objectContaining({
+          content: 'Meeting summary',
         }),
       }),
     );
-    expect(useTranscriptStore.getState().getSummaryState('history-a').records.meeting?.content).toBe('Meeting summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Meeting summary');
     expect(useTranscriptStore.getState().getSummaryState('history-a').isGenerating).toBe(false);
   });
 
@@ -134,28 +132,24 @@ describe('summaryService', () => {
     expect(historyService.saveSummary).toHaveBeenCalledWith(
       'history-new',
       expect.objectContaining({
-        records: expect.objectContaining({
-          general: expect.objectContaining({
-            content: 'Current summary',
-          }),
+        record: expect.objectContaining({
+          content: 'Current summary',
         }),
       }),
     );
     expect(useTranscriptStore.getState().summaryStates.current).toBeUndefined();
-    expect(useTranscriptStore.getState().getSummaryState('history-new').records.general?.content).toBe('Current summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-new').record?.content).toBe('Current summary');
   });
 
   it('hydrates summary sidecars into the store', async () => {
     const { historyService } = await import('../historyService');
     vi.mocked(historyService.loadSummary).mockResolvedValue({
       activeTemplate: 'lecture',
-      records: {
-        lecture: {
-          template: 'lecture',
-          content: 'Lecture summary',
-          generatedAt: '2026-04-22T10:00:00.000Z',
-          sourceFingerprint: 'fingerprint-a',
-        },
+      record: {
+        template: 'lecture',
+        content: 'Lecture summary',
+        generatedAt: '2026-04-22T10:00:00.000Z',
+        sourceFingerprint: 'fingerprint-a',
       },
     });
 
@@ -163,10 +157,8 @@ describe('summaryService', () => {
 
     expect(useTranscriptStore.getState().getSummaryState('history-lecture')).toEqual(expect.objectContaining({
       activeTemplate: 'lecture',
-      records: expect.objectContaining({
-        lecture: expect.objectContaining({
-          content: 'Lecture summary',
-        }),
+      record: expect.objectContaining({
+        content: 'Lecture summary',
       }),
     }));
   });

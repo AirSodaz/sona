@@ -327,7 +327,7 @@ const DEFAULT_LLM_STATE: LlmState = {
 
 const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
     activeTemplate: DEFAULT_SUMMARY_TEMPLATE,
-    records: {},
+    record: undefined,
     isGenerating: false,
     generationProgress: 0,
 };
@@ -335,7 +335,6 @@ const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
 function createDefaultSummaryState(): TranscriptSummaryState {
     return {
         ...DEFAULT_SUMMARY_STATE,
-        records: {},
     };
 }
 
@@ -383,10 +382,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             ? {
                 ...existingTargetState,
                 ...currentSummaryState,
-                records: {
-                    ...existingTargetState.records,
-                    ...currentSummaryState.records,
-                },
+                record: currentSummaryState.record || existingTargetState.record,
             }
             : currentSummaryState;
 
@@ -577,7 +573,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
                     [id]: {
                         ...createDefaultSummaryState(),
                         ...summaryState,
-                        records: { ...(summaryState.records || {}) },
+                        record: summaryState.record,
                     },
                 },
             };
@@ -594,12 +590,6 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
                     [id]: {
                         ...currentState,
                         ...updates,
-                        records: updates.records
-                            ? {
-                                ...currentState.records,
-                                ...updates.records,
-                            }
-                            : currentState.records,
                     },
                 },
             };
@@ -611,9 +601,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     hydrateSummaryState: (payload, historyId) => {
+        // Migration logic for legacy records map
+        let record = payload.record;
+        if (!record && (payload as any).records) {
+            const records = (payload as any).records;
+            record = records[payload.activeTemplate] || Object.values(records)[0] as any;
+        }
+
         get().setSummaryState({
             activeTemplate: payload.activeTemplate,
-            records: payload.records,
+            record,
             isGenerating: false,
             generationProgress: 0,
         }, historyId);

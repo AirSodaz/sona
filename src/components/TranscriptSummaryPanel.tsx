@@ -6,7 +6,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import { SummaryTemplate } from '../types/transcript';
-import { ProcessingIcon, XIcon } from './Icons';
+import { ProcessingIcon, XIcon, SummaryIcon } from './Icons';
 
 const SUMMARY_TEMPLATES: SummaryTemplate[] = ['general', 'meeting', 'lecture'];
 
@@ -38,7 +38,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
 
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
   const activeTemplate = summaryState?.activeTemplate || activeProject?.defaults.summaryTemplate || 'general';
-  const record = summaryState?.records?.[activeTemplate];
+  const record = summaryState?.record;
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
@@ -245,7 +245,10 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
                   <span>{t('summary.generating_short')}</span>
                 </>
               ) : (
-                <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
+                <>
+                  <SummaryIcon />
+                  <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
+                </>
               )}
             </button>
 
