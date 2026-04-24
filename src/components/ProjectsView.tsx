@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, SlidersHorizontal, LayoutGrid, List, LayoutList, CheckSquare, ArrowRight, Trash2, X, ListChecks } from 'lucide-react';
-import { AudioPlayer } from './AudioPlayer';
+import { HistoryItem } from './history/HistoryItem';
+import { TranscriptWorkbench } from './TranscriptWorkbench';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
-import { ErrorBoundary } from './ErrorBoundary';
-import { TranscriptEditor } from './TranscriptEditor';
-import { HistoryItem } from './history/HistoryItem';
 import {
-  CloseIcon,
   FolderIcon,
   PlusCircleIcon,
   SettingsIcon,
@@ -425,7 +422,7 @@ function ProjectSettingsModal({
               </label>
               <Dropdown
                 value={draftDefaults.summaryTemplate}
-                onChange={(value) => onDefaultsChange({
+                onChange={(value: string) => onDefaultsChange({
                   ...draftDefaults,
                   summaryTemplate: value as ProjectDefaults['summaryTemplate'],
                 })}
@@ -440,7 +437,7 @@ function ProjectSettingsModal({
               </label>
               <Dropdown
                 value={draftDefaults.translationLanguage}
-                onChange={(value) => onDefaultsChange({
+                onChange={(value: string) => onDefaultsChange({
                   ...draftDefaults,
                   translationLanguage: value,
                 })}
@@ -455,7 +452,7 @@ function ProjectSettingsModal({
               </label>
               <Dropdown
                 value={draftDefaults.polishScenario}
-                onChange={(value) => onDefaultsChange({
+                onChange={(value: string) => onDefaultsChange({
                   ...draftDefaults,
                   polishScenario: value,
                 })}
@@ -596,7 +593,6 @@ export function ProjectsView(): React.JSX.Element {
   const deleteHistoryItems = useHistoryStore((state) => state.deleteItems);
 
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-  const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
   const setMode = useTranscriptStore((state) => state.setMode);
@@ -1452,7 +1448,8 @@ export function ProjectsView(): React.JSX.Element {
                             </span>
                             <Dropdown
                               value={sortOrder}
-                              onChange={(value) => setSortOrder(value as ProjectSortOrder)}
+                              onChange={(value: string) =>
+ setSortOrder(value as ProjectSortOrder)}
                               options={sortOptions}
                               style={{ width: '100%' }}
                               aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
@@ -1464,7 +1461,8 @@ export function ProjectsView(): React.JSX.Element {
                             </span>
                             <Dropdown
                               value={filterType}
-                              onChange={(value) => setFilterType(value as ProjectFilterType)}
+                              onChange={(value: string) =>
+ setFilterType(value as ProjectFilterType)}
                               options={filterTypeOptions}
                               style={{ width: '100%' }}
                               aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
@@ -1476,7 +1474,8 @@ export function ProjectsView(): React.JSX.Element {
                             </span>
                             <Dropdown
                               value={dateFilter}
-                              onChange={(value) => setDateFilter(value as ProjectDateFilter)}
+                              onChange={(value: string) =>
+ setDateFilter(value as ProjectDateFilter)}
                               options={dateFilterOptions}
                               style={{ width: '100%' }}
                               aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
@@ -1700,28 +1699,7 @@ export function ProjectsView(): React.JSX.Element {
 
       {selectedItem && (
           <aside className="projects-detail-pane">
-            <div className="projects-detail-header">
-              <div>
-                <h4>{selectedItem.title}</h4>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-icon"
-                onClick={clearOpenedItem}
-                aria-label={t('projects.close_detail', { defaultValue: 'Close detail' })}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-
-            <div className="projects-detail-body">
-              <ErrorBoundary>
-                <TranscriptEditor />
-              </ErrorBoundary>
-            </div>
-
-            {audioUrl && <AudioPlayer />}
+            <TranscriptWorkbench onClose={clearOpenedItem} title={selectedItem.title} />
           </aside>
       )}
 

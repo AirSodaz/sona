@@ -8,6 +8,7 @@ import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProvide
 const mockLoadSummary = vi.fn();
 const mockSetActiveTemplate = vi.fn();
 const mockGenerateSummary = vi.fn();
+const mockOnClose = vi.fn();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -17,9 +18,6 @@ vi.mock('react-i18next', () => ({
       }
       if (key === 'summary.generating_progress' && options?.progress !== undefined) {
         return `summary.generating_progress:${options.progress}`;
-      }
-      if (key === 'summary.generating_short_progress' && options?.progress !== undefined) {
-        return `summary.generating_short_progress:${options.progress}`;
       }
       return key;
     },
@@ -57,27 +55,6 @@ function createSummaryReadyConfig() {
   };
 }
 
-function createSummaryConfigWithoutModel() {
-  const readyConfig = createSummaryReadyConfig();
-
-  return {
-    ...readyConfig,
-    llmSettings: setFeatureModelSelection(readyConfig.llmSettings, 'summary', undefined),
-  };
-}
-
-function createSummaryConfigWithoutApiKey() {
-  const readyConfig = createSummaryReadyConfig();
-
-  return {
-    ...readyConfig,
-    llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
-      apiHost: 'https://api.openai.com',
-      apiKey: '',
-    }),
-  };
-}
-
 describe('TranscriptSummaryPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,42 +73,12 @@ describe('TranscriptSummaryPanel', () => {
     });
   });
 
-  it('starts collapsed and shows lightweight stale status without rendering content', () => {
-    useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Updated transcript text', start: 0, end: 1, isFinal: true },
-      ],
-      summaryStates: {
-        current: {
-          activeTemplate: 'general',
-          records: {
-            general: {
-              template: 'general',
-              content: 'Saved summary content',
-              generatedAt: '2026-04-22T10:00:00.000Z',
-              sourceFingerprint: 'older-fingerprint',
-            },
-          },
-          isGenerating: false,
-          generationProgress: 0,
-        },
-      },
-    });
-
-    render(<TranscriptSummaryPanel />);
-
-    expect(screen.getByText('summary.title')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'summary.expand' }).getAttribute('aria-expanded')).toBe('false');
-    expect(document.querySelector('.transcript-summary-panel-gutter-label')).toBeNull();
-    expect(document.querySelector('.transcript-summary-panel-toggle > .transcript-summary-panel-chevron')).not.toBeNull();
-    expect(screen.getByText('summary.stale_short')).toBeDefined();
-    expect(document.querySelector('.transcript-summary-panel-body')).toBeNull();
-    expect(screen.queryByText('summary.templates.general')).toBeNull();
-    expect(screen.queryByText('Saved summary content')).toBeNull();
-    expect(screen.queryByText('summary.stale')).toBeNull();
+  it('renders nothing when isOpen is false', () => {
+    render(<TranscriptSummaryPanel isOpen={false} onClose={mockOnClose} />);
+    expect(screen.queryByText('summary.title')).toBeNull();
   });
 
-  it('expands on demand and supports template switching, generating, copying, and collapsing again', async () => {
+  it('renders content when isOpen is true and supports template switching, generating, and copying', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'history-1',
       segments: [
@@ -154,20 +101,13 @@ describe('TranscriptSummaryPanel', () => {
       },
     });
 
-    render(<TranscriptSummaryPanel />);
+    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
 
     await waitFor(() => {
       expect(mockLoadSummary).toHaveBeenCalledWith('history-1');
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'summary.expand' }));
-    });
-
-    const panelBody = document.querySelector('.transcript-summary-panel-body') as HTMLDivElement;
-
-    expect(screen.getByRole('button', { name: 'summary.collapse' }).getAttribute('aria-expanded')).toBe('true');
-    expect(panelBody).toBeDefined();
+    expect(screen.getByText('summary.title')).toBeDefined();
     expect(screen.getByText('History summary')).toBeDefined();
 
     await act(async () => {
@@ -190,15 +130,12 @@ describe('TranscriptSummaryPanel', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'summary.collapse' }));
+      fireEvent.click(screen.getByLabelText('common.close'));
     });
-
-    expect(screen.getByRole('button', { name: 'summary.expand' }).getAttribute('aria-expanded')).toBe('false');
-    expect(document.querySelector('.transcript-summary-panel-body')).toBeNull();
-    expect(screen.queryByText('History summary')).toBeNull();
+    expect(mockOnClose).toHaveBeenCalled();
   });
 
-  it('shows generating status in both collapsed and expanded states while disabling actions', async () => {
+  it('shows generating status and progress', async () => {
     useTranscriptStore.setState({
       segments: [
         { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
@@ -213,67 +150,11 @@ describe('TranscriptSummaryPanel', () => {
       },
     });
 
-    render(<TranscriptSummaryPanel />);
+    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.getByText('summary.generating_short_progress:42')).toBeDefined();
-    expect(document.querySelector('.transcript-summary-panel-body')).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'summary.expand' }));
-    });
-
-    const panelBody = document.querySelector('.transcript-summary-panel-body') as HTMLDivElement;
-
-    expect(panelBody).toBeDefined();
-    expect(screen.queryByText('summary.generating_short_progress:42')).toBeNull();
-    expect(screen.getAllByText('summary.generating_progress:42').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole('button', { name: 'summary.generating_progress:42' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('summary.generating_progress:42')).toBeDefined();
+    expect(screen.getByText('summary.generating_short')).toBeDefined();
+    expect((screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByText('summary.templates.general') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'summary.copy' }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('does not render when AI Summary is disabled in config', () => {
-    useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
-      config: {
-        ...createSummaryReadyConfig(),
-        summaryEnabled: false,
-      },
-    });
-
-    render(<TranscriptSummaryPanel />);
-
-    expect(screen.queryByText('summary.title')).toBeNull();
-    expect(mockLoadSummary).not.toHaveBeenCalled();
-  });
-
-  it('does not render when the summary model is not assigned', () => {
-    useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
-      config: createSummaryConfigWithoutModel(),
-    });
-
-    render(<TranscriptSummaryPanel />);
-
-    expect(screen.queryByText('summary.title')).toBeNull();
-    expect(mockLoadSummary).not.toHaveBeenCalled();
-  });
-
-  it('does not render when the assigned summary model is missing required credentials', () => {
-    useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
-      config: createSummaryConfigWithoutApiKey(),
-    });
-
-    render(<TranscriptSummaryPanel />);
-
-    expect(screen.queryByText('summary.title')).toBeNull();
-    expect(mockLoadSummary).not.toHaveBeenCalled();
   });
 });

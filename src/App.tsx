@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
-import { ErrorBoundary } from './components/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
-import './styles/index.css';
 import { TabNavigation } from './components/TabNavigation';
-import { TranscriptEditor } from './components/TranscriptEditor';
-import { AudioPlayer } from './components/AudioPlayer';
+import { TranscriptWorkbench } from './components/TranscriptWorkbench';
 import { ExportButton } from './components/ExportButton';
 import { TranslateButton } from './components/TranslateButton';
 import { PolishButton } from './components/PolishButton';
@@ -20,7 +17,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
-import { SettingsIcon, CloseIcon } from './components/Icons';
+import { SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
@@ -47,11 +44,8 @@ function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptStore((state) => state.mode);
-  const audioUrl = useTranscriptStore((state) => state.audioUrl);
-  const hasSegments = useTranscriptStore((state) => state.segments.length > 0);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setMode = useTranscriptStore((state) => state.setMode);
-  const title = useTranscriptStore((state) => state.title);
 
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const activeProject = useProjectStore((state) => 
@@ -144,27 +138,7 @@ function App(): React.JSX.Element {
 
               {/* Right Panel - Editor */}
               <div className="panel panel-right">
-                {hasSegments && (
-                  <div className="projects-detail-header">
-                    <div>
-                      <h4>{title || panelTitle}</h4>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-icon"
-                      onClick={clearSegments}
-                      aria-label={t('common.close', { defaultValue: 'Close' })}
-                    >
-                      <CloseIcon />
-                    </button>
-                  </div>
-                )}
-                <div className="panel-content">
-                  <ErrorBoundary>
-                    <TranscriptEditor />
-                  </ErrorBoundary>
-                </div>
-                {audioUrl && <AudioPlayer />}
+                <TranscriptWorkbench onClose={clearSegments} />
               </div>
             </div>
           </div>

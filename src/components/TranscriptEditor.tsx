@@ -10,22 +10,13 @@ import { SegmentItem } from './transcript/SegmentItem';
 import { TranscriptUIContext } from './transcript/TranscriptUIContext';
 import { SearchUI } from './SearchUI';
 import { EditorToolbar } from './EditorToolbar';
-import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
-import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
-    const showSummary = useTranscriptStore((state) => {
-        const summaryEnabled = state.config.summaryEnabled ?? true;
-        return summaryEnabled && state.segments.length > 0 && isSummaryLlmConfigComplete(state.config);
-    });
-
     return (
         <div className="transcript-list-header">
             <div className="transcript-list-opening-spacer" aria-hidden="true" />
-            {showSummary && <TranscriptSummaryPanel />}
-            {showSummary && <div className="transcript-list-summary-gap" aria-hidden="true" />}
         </div>
     );
 });

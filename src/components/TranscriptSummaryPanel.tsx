@@ -5,14 +5,25 @@ import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
-import { DEFAULT_SUMMARY_TEMPLATE, SummaryTemplate } from '../types/transcript';
-import { ChevronDownIcon, ProcessingIcon } from './Icons';
+import { SummaryTemplate } from '../types/transcript';
+import { ProcessingIcon, XIcon } from './Icons';
 
 const SUMMARY_TEMPLATES: SummaryTemplate[] = ['general', 'meeting', 'lecture'];
 
-export function TranscriptSummaryPanel(): React.JSX.Element | null {
+interface TranscriptSummaryPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+/**
+ * Modal dialog for displaying and generating AI transcript summaries.
+ */
+export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const bodyId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
   const segments = useTranscriptStore((state) => state.segments);
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const config = useTranscriptStore((state) => state.config);
@@ -21,28 +32,45 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
   const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
   const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
   const showError = useDialogStore((state) => state.showError);
+  
   const [copied, setCopied] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(true);
   const copyResetTimerRef = useRef<number | null>(null);
-  const summaryEnabled = config.summaryEnabled ?? true;
-  const summaryConfigComplete = isSummaryLlmConfigComplete(config);
-  const isSummaryVisible = summaryEnabled && summaryConfigComplete && segments.length > 0;
 
-  const activeTemplate = summaryState?.activeTemplate || activeProject?.defaults.summaryTemplate || DEFAULT_SUMMARY_TEMPLATE;
+  const summaryConfigComplete = isSummaryLlmConfigComplete(config);
+  const activeTemplate = summaryState?.activeTemplate || activeProject?.defaults.summaryTemplate || 'general';
   const record = summaryState?.records?.[activeTemplate];
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
 
+  // Load summary on open
   useEffect(() => {
-    if (isSummaryVisible && sourceHistoryId) {
+    if (isOpen && sourceHistoryId) {
       void summaryService.loadSummary(sourceHistoryId);
     }
-  }, [isSummaryVisible, sourceHistoryId]);
+  }, [isOpen, sourceHistoryId]);
 
+  // Focus management
   useEffect(() => {
-    setIsCollapsed(true);
-  }, [sourceHistoryId]);
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        closeButtonRef.current?.focus();
+      });
+    }
+  }, [isOpen]);
+
+  // Keyboard support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     return () => {
@@ -52,7 +80,7 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
     };
   }, []);
 
-  if (!isSummaryVisible) {
+  if (!isOpen) {
     return null;
   }
 
@@ -102,15 +130,7 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
     }, 1600);
   };
 
-  const toggleLabel = t(isCollapsed ? 'summary.expand' : 'summary.collapse');
-  const collapsedStatusLabel = isGenerating
-    ? generationProgress > 0
-      ? t('summary.generating_short_progress', { progress: generationProgress })
-      : t('summary.generating_short')
-    : record && isStale
-      ? t('summary.stale_short')
-      : null;
-  const expandedStatusLabel = isGenerating
+  const statusLabel = isGenerating
     ? generationProgress > 0
       ? t('summary.generating_progress', { progress: generationProgress })
       : t('summary.generating_short')
@@ -119,51 +139,82 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
       : null;
 
   return (
-    <section
-      className={`transcript-summary-panel ${isCollapsed ? 'is-collapsed' : 'is-expanded'}`}
-      aria-label={t('summary.title')}
-    >
-      <button
-        type="button"
-        className="transcript-summary-panel-toggle"
-        onClick={() => setIsCollapsed((value) => !value)}
-        aria-expanded={!isCollapsed}
-        aria-label={toggleLabel}
-        aria-controls={bodyId}
+    <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
+      <div
+        ref={modalRef}
+        className="dialog-modal transcript-summary-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="summary-modal-title"
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-xl)',
+          width: '700px',
+          maxWidth: '92vw',
+          maxHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+          border: '1px solid var(--color-border)',
+          overflow: 'hidden'
+        }}
       >
-        <span
-          className={`transcript-summary-panel-chevron ${isCollapsed ? '' : 'open'}`}
-          aria-hidden="true"
-        >
-          <ChevronDownIcon />
-        </span>
-
-        <div className="transcript-summary-panel-heading">
-          <div className="transcript-summary-panel-title-line">
-            <span className="transcript-summary-panel-title">{t('summary.title')}</span>
-            {isCollapsed && collapsedStatusLabel && (
-              <span className={`transcript-summary-panel-inline-status ${isGenerating ? 'is-generating' : 'is-stale'}`}>
-                {collapsedStatusLabel}
+        {/* Header */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
+          borderBottom: '1px solid var(--color-border)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--spacing-md)' }}>
+            <h3
+              id="summary-modal-title"
+              style={{
+                fontSize: '1.125rem',
+                fontWeight: 600,
+                color: 'var(--color-text-primary)',
+                margin: 0
+              }}
+            >
+              {t('summary.title')}
+            </h3>
+            {statusLabel && (
+              <span style={{ 
+                fontSize: '0.75rem', 
+                color: isGenerating ? 'var(--color-primary)' : 'var(--color-warning)',
+                fontWeight: 500
+              }}>
+                {statusLabel}
               </span>
             )}
           </div>
-          {!isCollapsed && expandedStatusLabel && (
-            <div className={`transcript-summary-panel-meta ${isGenerating ? 'is-generating' : 'is-stale'}`}>
-              {expandedStatusLabel}
-            </div>
-          )}
+          <button
+            ref={closeButtonRef}
+            className="btn btn-icon"
+            onClick={onClose}
+            aria-label={t('common.close')}
+          >
+            <XIcon />
+          </button>
         </div>
 
-      </button>
-
-      {!isCollapsed && (
-        <>
-        <div className="transcript-summary-panel-controls">
-          <div className="transcript-summary-template-row" role="tablist" aria-label={t('summary.templates_label')}>
+        {/* Toolbar */}
+        <div className="transcript-summary-panel-controls" style={{
+          padding: 'var(--spacing-md) var(--spacing-lg)',
+          background: 'var(--color-bg-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--spacing-md)',
+          flexWrap: 'wrap'
+        }}>
+          <div className="transcript-summary-template-row" role="tablist" aria-label={t('summary.templates_label')} style={{ flex: 1 }}>
             {SUMMARY_TEMPLATES.map((template, index) => (
               <React.Fragment key={template}>
                 {index > 0 && (
-                  <span className="transcript-summary-template-divider" aria-hidden="true">
+                  <span className="transcript-summary-template-divider" aria-hidden="true" style={{ margin: '0 4px' }}>
                     /
                   </span>
                 )}
@@ -181,17 +232,17 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
             ))}
           </div>
 
-          <div className="transcript-summary-panel-actions">
+          <div className="transcript-summary-panel-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <button
               type="button"
-              className="btn transcript-summary-action-button transcript-summary-generate-button"
+              className="btn transcript-summary-generate-button"
               onClick={handleGenerate}
               disabled={isGenerating}
             >
               {isGenerating ? (
                 <>
                   <ProcessingIcon />
-                  <span>{t('summary.generating_progress', { progress: generationProgress })}</span>
+                  <span>{t('summary.generating_short')}</span>
                 </>
               ) : (
                 <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
@@ -200,31 +251,39 @@ export function TranscriptSummaryPanel(): React.JSX.Element | null {
 
             <button
               type="button"
-              className="btn transcript-summary-copy-button"
+              className="btn btn-secondary transcript-summary-copy-button"
               onClick={handleCopy}
               disabled={!record?.content}
+              style={{ padding: '5px 12px', fontSize: '0.78rem' }}
             >
               {copied ? t('summary.copied') : t('summary.copy')}
             </button>
           </div>
         </div>
 
+        {/* Content */}
         <div
           id={bodyId}
           className="transcript-summary-panel-body"
           data-summary-template={activeTemplate}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: 'var(--spacing-lg)',
+            border: 'none',
+            background: 'var(--color-bg-primary)'
+          }}
         >
           {record?.content ? (
-            <pre className="transcript-summary-content-text">{record.content}</pre>
+            <pre className="transcript-summary-content-text" style={{ margin: 0 }}>{record.content}</pre>
           ) : (
             <div className="transcript-summary-empty-state">
               {t('summary.empty_state', { template: t(`summary.templates.${activeTemplate}`) })}
             </div>
           )}
         </div>
-        </>
-      )}
-    </section>
+      </div>
+    </div>
   );
 }
 

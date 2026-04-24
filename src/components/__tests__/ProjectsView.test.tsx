@@ -44,6 +44,16 @@ vi.mock('../../services/historyService', () => ({
   },
 }));
 
+vi.mock('../TranscriptWorkbench', () => ({
+  TranscriptWorkbench: ({ title, onClose }: any) => (
+    <div>
+      <div>TranscriptEditor</div>
+      <button onClick={onClose}>Close</button>
+      {title && <div>{title}</div>}
+    </div>
+  ),
+}));
+
 vi.mock('../TranscriptEditor', () => ({
   TranscriptEditor: () => <div>TranscriptEditor</div>,
 }));
