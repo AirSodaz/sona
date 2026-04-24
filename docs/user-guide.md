@@ -214,7 +214,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 
 - `LLM Polish` updates transcript text in place.
 - `Translate` stores translation text per segment and can display it under the original text.
-- `AI Summary` stores a read-only summary beside the transcript without changing the original text.
+- `AI Summary` stores a summary beside the transcript without changing the original text.
 
 ### Notes
 
@@ -224,7 +224,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - You can turn `AI Summary` off in `Settings > LLM Service`. This hides the panel and prevents new summaries from being generated, but existing summary sidecar data is kept.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
 - `Re-transcribe` is only available when the current transcript came from a saved history item.
-- Summary output stays read-only in the editor for now. If you want to reuse it, copy it from the panel.
+- Summary output is editable in the editor. You can click on the text to modify it, and it will auto-save when you click away. You can also copy it using the panel's copy button.
 
 ## 8. Export Transcript
 

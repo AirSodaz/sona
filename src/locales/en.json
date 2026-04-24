@@ -669,7 +669,7 @@
     },
     "summary": {
         "title": "AI Summary",
-        "subtitle": "Keep a read-only summary beside the transcript without rewriting the original text.",
+        "subtitle": "Keep a summary beside the transcript without rewriting the original text.",
         "expand": "Expand AI Summary",
         "collapse": "Collapse AI Summary",
         "templates_label": "Summary templates",
@@ -677,6 +677,9 @@
         "copied": "Copied",
         "generate": "Generate",
         "regenerate": "Regenerate",
+        "saving": "Saving...",
+        "saved": "Saved",
+        "placeholder": "Write your summary here...",
         "generating_progress": "Generating... {{progress}}%",
         "generating_short": "Generating",
         "generating_short_progress": "Generating {{progress}}%",

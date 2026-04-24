@@ -78,7 +78,7 @@ export const DEFAULT_SUMMARY_TEMPLATE: SummaryTemplate = 'general';
 export interface TranscriptSummaryRecord {
   /** Template used to generate the summary. */
   template: SummaryTemplate;
-  /** Read-only summary content. */
+  /** Summary content. */
   content: string;
   /** ISO timestamp when the summary was generated. */
   generatedAt: string;

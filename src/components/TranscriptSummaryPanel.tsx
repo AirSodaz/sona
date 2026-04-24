@@ -1,5 +1,8 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -23,6 +26,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const bodyId = useId();
   const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const segments = useTranscriptStore((state) => state.segments);
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
@@ -34,6 +38,9 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const showError = useDialogStore((state) => state.showError);
   
   const [copied, setCopied] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isEditingMode, setIsEditingMode] = useState(false);
   const copyResetTimerRef = useRef<number | null>(null);
 
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
@@ -42,6 +49,18 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
+
+  // Sync editContent with record.content
+  useEffect(() => {
+    setEditContent(record?.content || '');
+  }, [record?.content]);
+
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (isEditingMode) {
+      textareaRef.current?.focus();
+    }
+  }, [isEditingMode]);
 
   // Load summary on open
   useEffect(() => {
@@ -113,11 +132,11 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   };
 
   const handleCopy = async () => {
-    if (!record?.content || !navigator.clipboard?.writeText) {
+    if (!editContent || !navigator.clipboard?.writeText) {
       return;
     }
 
-    await navigator.clipboard.writeText(record.content);
+    await navigator.clipboard.writeText(editContent);
     setCopied(true);
 
     if (copyResetTimerRef.current !== null) {
@@ -130,13 +149,37 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }, 1600);
   };
 
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditContent(e.target.value);
+  };
+
+  const handleBlur = async () => {
+    setIsEditingMode(false);
+    if (record && editContent !== record.content) {
+      setIsSaving(true);
+      try {
+        await summaryService.updateSummaryRecord(editContent);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const handleEditClick = () => {
+    if (!isGenerating) {
+      setIsEditingMode(true);
+    }
+  };
+
   const statusLabel = isGenerating
     ? generationProgress > 0
       ? t('summary.generating_progress', { progress: generationProgress })
       : t('summary.generating_short')
-    : record && isStale
-      ? t('summary.stale')
-      : null;
+    : isSaving
+      ? t('summary.saving')
+      : record && isStale
+        ? t('summary.stale')
+        : null;
 
   return (
     <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
@@ -274,11 +317,55 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             overflowY: 'auto',
             padding: 'var(--spacing-lg)',
             border: 'none',
-            background: 'var(--color-bg-primary)'
+            background: 'var(--color-bg-primary)',
+            display: 'flex',
+            flexDirection: 'column'
           }}
         >
-          {record?.content ? (
-            <pre className="transcript-summary-content-text" style={{ margin: 0 }}>{record.content}</pre>
+          {record ? (
+            isEditingMode ? (
+              <textarea
+                ref={textareaRef}
+                className="transcript-summary-content-text"
+                value={editContent}
+                onChange={handleContentChange}
+                onBlur={handleBlur}
+                placeholder={t('summary.placeholder')}
+                style={{
+                  flex: 1,
+                  width: '100%',
+                  border: 'none',
+                  outline: 'none',
+                  resize: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  margin: 0,
+                  display: 'block',
+                  minHeight: '400px'
+                }}
+              />
+            ) : (
+              <div
+                className="transcript-summary-content-text markdown-content"
+                onClick={handleEditClick}
+                title={t('common.edit_manually', { defaultValue: 'Click to edit' })}
+                style={{
+                  flex: 1,
+                  cursor: isGenerating ? 'default' : 'text',
+                  minHeight: '400px'
+                }}
+              >
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkBreaks]}
+                  components={{
+                    p: ({ node, ...props }) => <p className="md-p" {...props} />,
+                    li: ({ node, ...props }) => <li className="md-li" {...props} />
+                  }}
+                >
+                  {editContent}
+                </ReactMarkdown>
+              </div>
+            )
           ) : (
             <div className="transcript-summary-empty-state">
               {t('summary.empty_state', { template: t(`summary.templates.${activeTemplate}`) })}

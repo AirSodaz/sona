@@ -109,6 +109,27 @@ class SummaryService {
     }
   }
 
+  async updateSummaryRecord(content: string, historyId?: string): Promise<void> {
+    const store = useTranscriptStore.getState();
+    const targetHistoryId = historyId || store.sourceHistoryId || 'current';
+    const summaryState = store.getSummaryState(targetHistoryId);
+
+    if (!summaryState.record) {
+      return;
+    }
+
+    store.updateSummaryState({
+      record: {
+        ...summaryState.record,
+        content,
+      },
+    }, targetHistoryId);
+
+    if (targetHistoryId !== 'current') {
+      await this.persistSummary(targetHistoryId);
+    }
+  }
+
   async generateSummary(template?: SummaryTemplate): Promise<void> {
     const store = useTranscriptStore.getState();
 

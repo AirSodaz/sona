@@ -669,7 +669,7 @@
     },
     "summary": {
         "title": "AI 摘要",
-        "subtitle": "把摘要作为只读附属结果保留在转录旁边，不改写原文。",
+        "subtitle": "把摘要作为附属结果保留在转录旁边，不改写原文。",
         "expand": "展开 AI 摘要",
         "collapse": "收起 AI 摘要",
         "templates_label": "摘要模板",
@@ -677,6 +677,9 @@
         "copied": "已复制",
         "generate": "生成",
         "regenerate": "重新生成",
+        "saving": "正在保存...",
+        "saved": "已保存",
+        "placeholder": "在此输入摘要内容...",
         "generating_progress": "生成中... {{progress}}%",
         "generating_short": "生成中",
         "generating_short_progress": "生成中 {{progress}}%",
