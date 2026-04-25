@@ -19,6 +19,7 @@ function normalizeHistoryItem(item: Partial<HistoryItem>): HistoryItem {
         transcriptPath: item.transcriptPath || '',
         title: item.title || '',
         previewText: item.previewText || '',
+        icon: item.icon,
         type: item.type || 'recording',
         searchContent: item.searchContent || '',
         projectId: typeof item.projectId === 'string' ? item.projectId : null,

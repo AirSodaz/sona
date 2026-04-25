@@ -7,7 +7,8 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
-import { CloseIcon, SummaryIcon, EditIcon } from './Icons';
+import { RenameModal } from './RenameModal';
+import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { generateAiTitle } from '../services/aiRenameService';
 
@@ -19,23 +20,47 @@ interface TranscriptWorkbenchProps {
 }
 
 /**
+ * Renders an icon based on the icon string or fallback to mode default
+ */
+function renderHeaderIcon(icon: string | null, mode: string): React.ReactNode {
+  if (icon) {
+    if (icon.startsWith('system:')) {
+      const iconName = icon.replace('system:', '');
+      switch (iconName) {
+        case 'mic': return <MicIcon />;
+        case 'file': return <FileTextIcon />;
+        case 'folder': return <FolderIcon />;
+        case 'code': return <CodeIcon />;
+        default: break;
+      }
+    } else {
+      return <span style={{ fontSize: '1.125rem', lineHeight: 1 }}>{icon}</span>;
+    }
+  }
+
+  return mode === 'batch' ? <FileTextIcon /> : <MicIcon />;
+}
+
+/**
  * A unified workbench for transcript editing.
  * Combines the editor, audio player, AI summary access, and standard header.
  */
 export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
   // Store state
   const segments = useTranscriptStore((state) => state.segments);
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const config = useTranscriptStore((state) => state.config);
   const storeTitle = useTranscriptStore((state) => state.title);
+  const storeIcon = useTranscriptStore((state) => state.icon);
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const setTitle = useTranscriptStore((state) => state.setTitle);
+  const setIcon = useTranscriptStore((state) => state.setIcon);
   const mode = useTranscriptStore((state) => state.mode);
   
-  const prompt = useDialogStore((state) => state.prompt);
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const hasSegments = segments.length > 0;
@@ -48,21 +73,13 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
 
-  const handleRename = async () => {
-    const newTitle = await prompt(t('common.rename_prompt', { defaultValue: 'Enter new title' }), {
-      title: t('common.rename', { defaultValue: 'Rename' }),
-      defaultValue: displayTitle,
-      onAiAction: async () => {
-        return await generateAiTitle(segments);
-      }
-    });
-
-    if (newTitle !== null && newTitle.trim() !== '') {
-      setTitle(newTitle.trim());
-      if (sourceHistoryId) {
-        await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim() });
-      }
+  const handlePerformRename = async (newTitle: string, newIcon?: string) => {
+    setTitle(newTitle.trim());
+    setIcon(newIcon || null);
+    if (sourceHistoryId) {
+      await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim(), icon: newIcon });
     }
+    setIsRenameModalOpen(false);
   };
 
   return (
@@ -70,6 +87,9 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
       {hasSegments && (
         <div className="projects-detail-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)' }}>
+              {renderHeaderIcon(storeIcon, mode)}
+            </div>
             <h4 
               style={{ 
                 margin: 0, 
@@ -83,7 +103,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
             </h4>
             <button
               className="btn btn-icon btn-sm"
-              onClick={handleRename}
+              onClick={() => setIsRenameModalOpen(true)}
               data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
               data-tooltip-pos="bottom"
             >
@@ -122,6 +142,18 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
       <TranscriptSummaryPanel 
         isOpen={isSummaryOpen} 
         onClose={() => setIsSummaryOpen(false)} 
+      />
+
+      <RenameModal
+        isOpen={isRenameModalOpen}
+        onClose={() => setIsRenameModalOpen(false)}
+        initialTitle={displayTitle}
+        initialIcon={storeIcon || undefined}
+        defaultType={mode === 'batch' ? 'batch' : 'recording'}
+        onRename={handlePerformRename}
+        onAiAction={async () => {
+          return await generateAiTitle(segments);
+        }}
       />
     </>
   );

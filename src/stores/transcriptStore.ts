@@ -63,6 +63,8 @@ interface TranscriptState {
     sourceHistoryId: string | null;
     /** Title of the current transcription. */
     title: string | null;
+    /** Icon of the current transcription (emoji or system:icon). */
+    icon: string | null;
 
     // LLM states mapped by historyId
     /**
@@ -100,6 +102,13 @@ interface TranscriptState {
      * @param title The new title.
      */
     setTitle: (title: string | null) => void;
+
+    /**
+     * Sets the icon for the current transcription.
+     *
+     * @param icon The new icon.
+     */
+    setIcon: (icon: string | null) => void;
 
     // Segment CRUD operations
     /**
@@ -370,6 +379,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     seekRequest: null,
     sourceHistoryId: null,
     title: null,
+    icon: null,
     llmStates: {},
     summaryStates: {},
     autoSaveStates: {},
@@ -402,6 +412,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     }),
 
     setTitle: (title) => set({ title }),
+
+    setIcon: (icon) => set({ icon }),
 
     // Segment CRUD
     addSegment: (segment) => {
@@ -486,11 +498,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
-    loadTranscript: (segments, sourceHistoryId, title) => {
+    loadTranscript: (segments, sourceHistoryId, title, icon) => {
         set({
             segments: segments.sort((a, b) => a.start - b.start),
             sourceHistoryId,
             title: title || null,
+            icon: icon || null,
             activeSegmentIndex: -1,
             activeSegmentId: null,
             editingSegmentId: null
@@ -522,6 +535,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             editingSegmentId: null,
             sourceHistoryId: null,
             title: null,
+            icon: null,
             summaryStates,
             };
         });

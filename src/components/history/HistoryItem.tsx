@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Calendar, Clock } from 'lucide-react';
 import { HistoryItem as HistoryItemType } from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
-import { TrashIcon, MicIcon, FileTextIcon, EditIcon } from '../Icons';
+import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon } from '../Icons';
 import { Checkbox } from '../Checkbox';
 
 interface HistoryItemProps {
@@ -16,6 +16,30 @@ interface HistoryItemProps {
     isSelected?: boolean;
     onToggleSelection?: (id: string) => void;
     layout?: 'list' | 'grid' | 'table';
+}
+
+/**
+ * Renders an icon based on the icon string or fallback to type default
+ */
+function renderIcon(icon: string | undefined, type: string | undefined): React.ReactNode {
+    if (icon) {
+        if (icon.startsWith('system:')) {
+            const iconName = icon.replace('system:', '');
+            switch (iconName) {
+                case 'mic': return <MicIcon />;
+                case 'file': return <FileTextIcon />;
+                case 'folder': return <FolderIcon />;
+                case 'code': return <CodeIcon />;
+                default: break;
+            }
+        } else {
+            // Assume it's an emoji
+            return <span className="emoji-icon">{icon}</span>;
+        }
+    }
+
+    // Fallback
+    return type === 'batch' ? <FileTextIcon /> : <MicIcon />;
 }
 
 /**
@@ -127,7 +151,7 @@ function HistoryItemComponent({
                 <div className="history-item-header">
                     <div className="history-item-title-row">
                         <span className="history-item-type-icon" title={itemTypeLabel}>
-                            {item.type === 'batch' ? <FileTextIcon /> : <MicIcon />}
+                            {renderIcon(item.icon, item.type)}
                         </span>
                         <span className="history-item-title">{highlightText(item.title, searchQuery)}</span>
                     </div>

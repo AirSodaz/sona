@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { HistoryItem } from './history/HistoryItem';
 import { TranscriptWorkbench } from './TranscriptWorkbench';
+import { RenameModal } from './RenameModal';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
 import {
@@ -761,6 +762,7 @@ export function ProjectsView(): React.JSX.Element {
   const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string; icon?: string; type?: 'recording' | 'batch' } | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -1149,7 +1151,7 @@ export function ProjectsView(): React.JSX.Element {
         segments = [];
       }
 
-      useTranscriptStore.getState().loadTranscript(segments, item.id, item.title);
+      useTranscriptStore.getState().loadTranscript(segments, item.id, item.title, item.icon);
       setAudioUrl(url);
       setSelectedHistoryId(item.id);
       await setActiveProjectId(item.projectId);
@@ -1186,22 +1188,21 @@ export function ProjectsView(): React.JSX.Element {
       return;
     }
 
-    const newTitle = await prompt(t('common.rename_prompt', { defaultValue: 'Enter new title' }), {
-      title: t('common.rename', { defaultValue: 'Rename' }),
-      defaultValue: item.title,
-      onAiAction: async () => {
-        return await generateAiTitleForHistoryItem(item.transcriptPath);
-      }
-    });
+    setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
+  };
 
-    if (newTitle !== null && newTitle.trim() !== '') {
-      await updateHistoryItemMeta(id, { title: newTitle.trim() });
-      await refreshHistory();
+  const handlePerformRename = async (newTitle: string, newIcon?: string) => {
+    if (!renameTarget) return;
+    const { id } = renameTarget;
 
-      if (sourceHistoryId === id) {
-        setTitle(newTitle.trim());
-      }
+    await updateHistoryItemMeta(id, { title: newTitle.trim(), icon: newIcon });
+    await refreshHistory();
+
+    if (sourceHistoryId === id) {
+      setTitle(newTitle.trim());
+      useTranscriptStore.getState().setIcon(newIcon || null);
     }
+    setRenameTarget(null);
   };
 
   const handleCreateProject = async () => {
@@ -1597,14 +1598,21 @@ export function ProjectsView(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="projects-toolbar">
+        <div className="projects-toolbar" data-testid="projects-toolbar-default">
           <div className="projects-toolbar-left">
+            <span className="projects-results-count" data-testid="projects-results-count" style={{ display: 'none' }}>
+              {t('projects.results_count', {
+                visible: filteredAndSortedItems.length,
+                total: scopedItems.length,
+                defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
+              })}
+            </span>
             <div className="projects-search">
               <Search size={16} className="projects-search-icon" />
               <input
                 type="text"
-                placeholder={t('projects.search_placeholder', { defaultValue: 'Search...' })}
-                aria-label={t('projects.search_placeholder', { defaultValue: 'Search...' })}
+                placeholder={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
+                aria-label={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -1964,6 +1972,21 @@ export function ProjectsView(): React.JSX.Element {
         onNameChange={setDraftName}
         onDescriptionChange={setDraftDescription}
         onDefaultsChange={setDraftDefaults}
+      />
+
+      <RenameModal
+        isOpen={!!renameTarget}
+        onClose={() => setRenameTarget(null)}
+        initialTitle={renameTarget?.title || ''}
+        initialIcon={renameTarget?.icon}
+        defaultType={renameTarget?.type}
+        onRename={handlePerformRename}
+        onAiAction={async () => {
+          if (!renameTarget) return '';
+          const item = historyItems.find((i) => i.id === renameTarget.id);
+          if (!item) return '';
+          return await generateAiTitleForHistoryItem(item.transcriptPath);
+        }}
       />
     </div>
   );
