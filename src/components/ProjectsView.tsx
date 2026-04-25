@@ -188,25 +188,61 @@ function ProjectCreateModal({
 }: ProjectCreateModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      } else if (event.key === 'Enter' && name.trim()) {
+        event.preventDefault();
+        void onCreate();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, onCreate, name]);
+
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div className="projects-overlay" onClick={onClose}>
+    <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
       <div
-        className="projects-modal"
+        className="dialog-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="project-create-title"
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-xl)',
+          width: '520px',
+          maxWidth: '95vw',
+          display: 'flex',
+          flexDirection: 'column',
+          border: '1px solid var(--color-border)',
+          overflow: 'hidden'
+        }}
       >
-        <div className="projects-modal-header">
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'flex-start', 
+          justifyContent: 'space-between', 
+          padding: 'var(--spacing-lg)',
+          borderBottom: '1px solid var(--color-border)'
+        }}>
           <div>
             <div className="projects-modal-eyebrow">
               {t('projects.create_project', { defaultValue: 'Create Project' })}
             </div>
-            <h3 id="project-create-title">
+            <h3 id="project-create-title" style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
               {t('projects.new_project_title', { defaultValue: 'New Project' })}
             </h3>
           </div>
@@ -220,7 +256,12 @@ function ProjectCreateModal({
           </button>
         </div>
 
-        <div className="projects-modal-body">
+        <div style={{ 
+          padding: 'var(--spacing-lg)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--spacing-lg)'
+        }}>
           <div className="projects-field">
             <label htmlFor="project-create-name">
               {t('projects.project_name', { defaultValue: 'Project Name' })}
@@ -228,9 +269,11 @@ function ProjectCreateModal({
             <input
               id="project-create-name"
               type="text"
+              className="settings-input"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
               placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+              autoFocus
             />
           </div>
 
@@ -240,14 +283,24 @@ function ProjectCreateModal({
             </label>
             <textarea
               id="project-create-description"
+              className="settings-input"
               value={description}
               onChange={(event) => onDescriptionChange(event.target.value)}
               placeholder={t('projects.new_project_description', { defaultValue: 'Short description' })}
+              style={{ minHeight: '100px' }}
             />
           </div>
         </div>
 
-        <div className="projects-modal-footer">
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'flex-end', 
+          gap: 'var(--spacing-sm)',
+          padding: 'var(--spacing-md) var(--spacing-lg)', 
+          borderTop: '1px solid var(--color-border)',
+          background: 'var(--color-bg-elevated)'
+        }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>

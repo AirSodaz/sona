@@ -538,6 +538,7 @@ body {
 }
 
 .projects-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--color-bg-primary);
@@ -992,6 +993,8 @@ body {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
   font-weight: 600;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .projects-main-scroll {
@@ -3771,43 +3774,8 @@ input[type="radio"]:focus {
   align-self: center;
 }
 
-/* Floating Action Bar */
-.projects-fab {
-  position: fixed;
-  bottom: var(--spacing-xl);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
-  padding: 12px 20px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-xl), var(--shadow-glow);
-  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.projects-fab-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-@keyframes slideUpFade {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 20px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
 /* ===========================
-   Token Highlighting
+   Update UI
    =========================== */
 
 .active-token {
@@ -4765,3 +4733,52 @@ input[type="radio"]:focus {
     margin-inline-end: 0;
   }
 }
+
+/* ===========================
+   Floating Action Bar (FAB)
+   =========================== */
+.projects-fab {
+  position: absolute !important;
+  bottom: var(--spacing-xl) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: var(--spacing-lg) !important;
+  padding: 12px 24px !important;
+  background: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-full) !important;
+  box-shadow: var(--shadow-xl), var(--shadow-glow) !important;
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  width: max-content !important;
+  max-width: 90% !important;
+  white-space: nowrap !important;
+}
+
+.projects-fab-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: var(--spacing-sm) !important;
+  flex-shrink: 0 !important;
+}
+
+.projects-fab-actions .btn {
+  width: auto !important;
+}
+
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
