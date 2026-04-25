@@ -703,7 +703,22 @@ export function ProjectsView(): React.JSX.Element {
   const [filterType, setFilterType] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
   const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
+  const [isScrolled, setIsScrolled] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollableHeight = target.scrollHeight - target.clientHeight;
+    
+    // Only collapse if there is enough scrollable content to absorb the header's height (approx 250px).
+    // This prevents an infinite loop of collapsing and expanding when the list is short.
+    if (scrollTop > 10 && scrollableHeight > 250) {
+      setIsScrolled(true);
+    } else if (scrollTop <= 10) {
+      setIsScrolled(false);
+    }
+  }, []);
 
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const isInboxScope = browseScope === INBOX_SCOPE;
@@ -1440,7 +1455,7 @@ export function ProjectsView(): React.JSX.Element {
 
       {!selectedItem && (
       <section className="projects-main">
-        <div className="projects-main-header">
+        <div className={`projects-main-header ${isScrolled ? 'is-scrolled' : ''}`}>
           <div className="projects-main-header-top">
             <div className="projects-main-heading">
               <div className="projects-main-title-row">
@@ -1501,13 +1516,13 @@ export function ProjectsView(): React.JSX.Element {
         </div>
 
         <div className="projects-toolbar">
-          <div className="projects-toolbar-search-group">
+          <div className="projects-toolbar-left">
             <div className="projects-search">
               <Search size={16} className="projects-search-icon" />
               <input
                 type="text"
-                placeholder={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
-                aria-label={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
+                placeholder={t('projects.search_placeholder', { defaultValue: 'Search...' })}
+                aria-label={t('projects.search_placeholder', { defaultValue: 'Search...' })}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -1528,232 +1543,231 @@ export function ProjectsView(): React.JSX.Element {
               )}
             </div>
 
-            <div className="projects-toolbar-copy">
+            <div className="projects-filter-menu" ref={filterMenuRef}>
+              <button
+                type="button"
+                className={`btn btn-icon projects-toolbar-icon projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
+                onClick={() => setIsFilterMenuOpen((value) => !value)}
+                aria-haspopup="dialog"
+                aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
+                aria-expanded={isFilterMenuOpen}
+                aria-controls="projects-filter-panel"
+                data-tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
+                data-tooltip-pos="bottom"
+              >
+                <SlidersHorizontal size={16} />
+                {hasActiveFilters && (
+                  <span className="projects-filter-trigger-count" aria-hidden="true">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+                {isFilterMenuOpen && (
+                  <div
+                    id="projects-filter-panel"
+                    className="projects-filter-popover"
+                    role="dialog"
+                    aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
+                  >
+                    <div className="projects-filter-popover-header">
+                      <div className="projects-filter-popover-copy">
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                          <strong>{t('projects.filter_button', { defaultValue: 'Filter & Sort' })}</strong>
+                          <span className="projects-results-count" data-testid="projects-results-count">
+                            {t('projects.results_count', {
+                              visible: filteredAndSortedItems.length,
+                              total: scopedItems.length,
+                              defaultValue: `${filteredAndSortedItems.length} / ${scopedItems.length}`,
+                            })}
+                          </span>
+                        </div>
+                        <span>{filterPopoverHint}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-text projects-filter-clear"
+                        onClick={resetBrowseState}
+                        disabled={!hasActiveFilters}
+                      >
+                        {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
+                      </button>
+                    </div>
+
+                    <div className="projects-filter-popover-body">
+                      <div className="projects-filter-field">
+                        <span className="projects-toolbar-field-label">
+                          {t('projects.sort_label', { defaultValue: 'Sort items' })}
+                        </span>
+                        <Dropdown
+                          value={sortOrder}
+                          onChange={(value: string) =>
+                            setSortOrder(value as ProjectSortOrder)}
+                          options={sortOptions}
+                          style={{ width: '100%' }}
+                          aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
+                        />
+                      </div>
+                      <div className="projects-filter-field">
+                        <span className="projects-toolbar-field-label">
+                          {t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
+                        </span>
+                        <Dropdown
+                          value={filterType}
+                          onChange={(value: string) =>
+                            setFilterType(value as ProjectFilterType)}
+                          options={filterTypeOptions}
+                          style={{ width: '100%' }}
+                          aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
+                        />
+                      </div>
+                      <div className="projects-filter-field">
+                        <span className="projects-toolbar-field-label">
+                          {t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
+                        </span>
+                        <Dropdown
+                          value={dateFilter}
+                          onChange={(value: string) =>
+                            setDateFilter(value as ProjectDateFilter)}
+                          options={dateFilterOptions}
+                          style={{ width: '100%' }}
+                          aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
+                        />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="projects-toolbar-controls">
-              <div className="projects-toolbar-default" data-testid="projects-toolbar-default">
-                <div className="projects-toolbar-primary">
-                  <strong className="projects-results-count" data-testid="projects-results-count">{t('projects.results_count', {
-                    visible: filteredAndSortedItems.length,
-                    total: scopedItems.length,
-                    defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
-                  })}</strong>
-                  <div className="projects-filter-menu" ref={filterMenuRef}>
-                    <button
-                      type="button"
-                      className={`btn btn-icon projects-toolbar-icon projects-filter-trigger ${isFilterMenuOpen ? 'active' : ''} ${hasActiveFilters ? 'has-active' : ''}`}
-                      onClick={() => setIsFilterMenuOpen((value) => !value)}
-                      aria-haspopup="dialog"
-                      aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
-                      aria-expanded={isFilterMenuOpen}
-                      aria-controls="projects-filter-panel"
-                      data-tooltip={t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
-                      data-tooltip-pos="bottom"
-                    >
-                      <SlidersHorizontal size={16} />
-                      {hasActiveFilters && (
-                        <span className="projects-filter-trigger-count" aria-hidden="true">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </button>
-
-                    {isFilterMenuOpen && (
-                      <div
-                        id="projects-filter-panel"
-                        className="projects-filter-popover"
-                        role="dialog"
-                        aria-label={t('projects.filter_button', { defaultValue: 'Filter' })}
-                      >
-                        <div className="projects-filter-popover-header">
-                          <div className="projects-filter-popover-copy">
-                            <strong>{t('projects.filter_button', { defaultValue: 'Filter & Sort' })}</strong>
-                            <span>{filterPopoverHint}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-text projects-filter-clear"
-                            onClick={resetBrowseState}
-                            disabled={!hasActiveFilters}
-                          >
-                            {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
-                          </button>
-                        </div>
-
-                        <div className="projects-filter-popover-body">
-                          <div className="projects-filter-field">
-                            <span className="projects-toolbar-field-label">
-                              {t('projects.sort_label', { defaultValue: 'Sort items' })}
-                            </span>
-                            <Dropdown
-                              value={sortOrder}
-                              onChange={(value: string) =>
- setSortOrder(value as ProjectSortOrder)}
-                              options={sortOptions}
-                              style={{ width: '100%' }}
-                              aria-label={t('projects.sort_label', { defaultValue: 'Sort items' })}
-                            />
-                          </div>
-                          <div className="projects-filter-field">
-                            <span className="projects-toolbar-field-label">
-                              {t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
-                            </span>
-                            <Dropdown
-                              value={filterType}
-                              onChange={(value: string) =>
- setFilterType(value as ProjectFilterType)}
-                              options={filterTypeOptions}
-                              style={{ width: '100%' }}
-                              aria-label={t('projects.filter_type_label', { defaultValue: 'Filter by type' })}
-                            />
-                          </div>
-                          <div className="projects-filter-field">
-                            <span className="projects-toolbar-field-label">
-                              {t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
-                            </span>
-                            <Dropdown
-                              value={dateFilter}
-                              onChange={(value: string) =>
- setDateFilter(value as ProjectDateFilter)}
-                              options={dateFilterOptions}
-                              style={{ width: '100%' }}
-                              aria-label={t('projects.filter_date_label', { defaultValue: 'Filter by date' })}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="projects-toolbar-actions">
-                  <div className="projects-view-toggles" role="group" aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}>
-                    <button
-                      type="button"
-                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'list' ? 'active' : ''}`}
-                      onClick={() => setConfig({ projectsViewMode: 'list' })}
-                      aria-pressed={viewMode === 'list'}
-                      aria-label={t('projects.view_list', { defaultValue: 'List View' })}
-                      data-tooltip={t('projects.view_list', { defaultValue: 'List View' })}
-                      data-tooltip-pos="bottom"
-                    >
-                      <List size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'grid' ? 'active' : ''}`}
-                      onClick={() => setConfig({ projectsViewMode: 'grid' })}
-                      aria-pressed={viewMode === 'grid'}
-                      aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
-                      data-tooltip={t('projects.view_grid', { defaultValue: 'Grid View' })}
-                      data-tooltip-pos="bottom"
-                    >
-                      <LayoutGrid size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-icon projects-toolbar-icon ${viewMode === 'table' ? 'active' : ''}`}
-                      onClick={() => setConfig({ projectsViewMode: 'table' })}
-                      aria-pressed={viewMode === 'table'}
-                      aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
-                      data-tooltip={t('projects.view_table', { defaultValue: 'Table View' })}
-                      data-tooltip-pos="bottom"
-                    >
-                      <LayoutList size={16} />
-                    </button>
-                  </div>
-                  <div className="projects-toolbar-separator" />
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-toolbar-icon"
-                    onClick={() => historyService.openHistoryFolder()}
-                    aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-                    data-tooltip={t('history.open_folder', { defaultValue: 'Open File Directory' })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <FolderIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-icon projects-toolbar-icon ${isSelectionMode ? 'active' : ''}`}
-                    onClick={toggleSelectionMode}
-                    aria-label={t('common.select', { defaultValue: 'Select' })}
-                    data-tooltip={t('common.select', { defaultValue: 'Select' })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <CheckSquare size={16} />
-                  </button>
-                </div>
+          <div className="projects-toolbar-right">
+            <div className="projects-segmented-control">
+              <div className="projects-view-toggles" role="group" aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}>
+                <button
+                  type="button"
+                  className={`btn btn-icon projects-toolbar-icon ${viewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setConfig({ projectsViewMode: 'list' })}
+                  aria-pressed={viewMode === 'list'}
+                  aria-label={t('projects.view_list', { defaultValue: 'List View' })}
+                  data-tooltip={t('projects.view_list', { defaultValue: 'List View' })}
+                  data-tooltip-pos="bottom"
+                >
+                  <List size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-icon projects-toolbar-icon ${viewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setConfig({ projectsViewMode: 'grid' })}
+                  aria-pressed={viewMode === 'grid'}
+                  aria-label={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                  data-tooltip={t('projects.view_grid', { defaultValue: 'Grid View' })}
+                  data-tooltip-pos="bottom"
+                >
+                  <LayoutGrid size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-icon projects-toolbar-icon ${viewMode === 'table' ? 'active' : ''}`}
+                  onClick={() => setConfig({ projectsViewMode: 'table' })}
+                  aria-pressed={viewMode === 'table'}
+                  aria-label={t('projects.view_table', { defaultValue: 'Table View' })}
+                  data-tooltip={t('projects.view_table', { defaultValue: 'Table View' })}
+                  data-tooltip-pos="bottom"
+                >
+                  <LayoutList size={16} />
+                </button>
               </div>
 
-            {isSelectionMode && (
-              <div className="projects-fab" data-testid="projects-fab">
-                <div className="projects-selection-copy">
-                  {t('projects.selected_count', {
-                    count: selectedIds.length,
-                    defaultValue: `${selectedIds.length} selected`,
-                  })}
-                </div>
-                <div className="projects-fab-actions">
-                  <button
-                    type="button"
-                    className={`btn btn-icon projects-toolbar-icon ${selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0 ? 'active' : ''}`}
-                    onClick={handleToggleSelectAll}
-                    aria-label={t('common.select_all', { defaultValue: 'Select All' })}
-                    data-tooltip={t('common.select_all', { defaultValue: 'Select All' })}
-                    data-tooltip-pos="top"
-                  >
-                    <ListChecks size={16} />
-                  </button>
-                  <div className="projects-toolbar-separator" />
-                  <Dropdown
-                    value={moveTarget}
-                    onChange={setMoveTarget}
-                    options={moveOptions}
-                    style={{ width: '200px' }}
-                    aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-toolbar-icon"
-                    onClick={() => void handleMoveSelected()}
-                    disabled={selectedIds.length === 0 || (currentScopeMoveTarget !== null && moveTarget === currentScopeMoveTarget)}
-                    aria-label={t('projects.move_selected', { defaultValue: 'Move Selected' })}
-                    data-tooltip={t('projects.move_selected', { defaultValue: 'Move Selected' })}
-                    data-tooltip-pos="top"
-                  >
-                    <ArrowRight size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-toolbar-icon btn-danger"
-                    onClick={() => void handleDeleteSelected()}
-                    disabled={selectedIds.length === 0}
-                    aria-label={t('common.delete', { defaultValue: 'Delete' })}
-                    data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
-                    data-tooltip-pos="top"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-toolbar-icon"
-                    onClick={toggleSelectionMode}
-                    aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
-                    data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
-                    data-tooltip-pos="top"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
+              <div className="projects-toolbar-divider" />
+
+              <button
+                type="button"
+                className="btn btn-icon projects-toolbar-icon"
+                onClick={() => historyService.openHistoryFolder()}
+                aria-label={t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                data-tooltip={t('history.open_folder', { defaultValue: 'Open File Directory' })}
+                data-tooltip-pos="bottom"
+              >
+                <FolderIcon width={16} height={16} />
+              </button>
+              <button
+                type="button"
+                className={`btn btn-icon projects-toolbar-icon ${isSelectionMode ? 'active' : ''}`}
+                onClick={toggleSelectionMode}
+                aria-label={t('common.select', { defaultValue: 'Select' })}
+                data-tooltip={t('common.select', { defaultValue: 'Select' })}
+                data-tooltip-pos="bottom"
+              >
+                <CheckSquare size={16} />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="projects-main-scroll">
+        {isSelectionMode && (
+          <div className="projects-fab" data-testid="projects-fab">
+            <div className="projects-selection-copy">
+              {t('projects.selected_count', {
+                count: selectedIds.length,
+                defaultValue: `${selectedIds.length} selected`,
+              })}
+            </div>
+            <div className="projects-fab-actions">
+              <button
+                type="button"
+                className={`btn btn-icon projects-toolbar-icon ${selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0 ? 'active' : ''}`}
+                onClick={handleToggleSelectAll}
+                aria-label={t('common.select_all', { defaultValue: 'Select All' })}
+                data-tooltip={t('common.select_all', { defaultValue: 'Select All' })}
+                data-tooltip-pos="top"
+              >
+                <ListChecks size={16} />
+              </button>
+              <div className="projects-toolbar-divider" />
+              <Dropdown
+                value={moveTarget}
+                onChange={setMoveTarget}
+                options={moveOptions}
+                style={{ width: '200px' }}
+                aria-label={t('projects.move_target', { defaultValue: 'Move target' })}
+              />
+              <button
+                type="button"
+                className="btn btn-icon projects-toolbar-icon"
+                onClick={() => void handleMoveSelected()}
+                disabled={selectedIds.length === 0 || (currentScopeMoveTarget !== null && moveTarget === currentScopeMoveTarget)}
+                aria-label={t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                data-tooltip={t('projects.move_selected', { defaultValue: 'Move Selected' })}
+                data-tooltip-pos="top"
+              >
+                <ArrowRight size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon projects-toolbar-icon btn-danger"
+                onClick={() => void handleDeleteSelected()}
+                disabled={selectedIds.length === 0}
+                aria-label={t('common.delete', { defaultValue: 'Delete' })}
+                data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                data-tooltip-pos="top"
+              >
+                <Trash2 size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon projects-toolbar-icon"
+                onClick={toggleSelectionMode}
+                aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+                data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
+                data-tooltip-pos="top"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="projects-main-scroll" onScroll={handleScroll}>
           {!selectedItem && scopedItems.length === 0 && !isHistoryLoading && (
             <div className="projects-overview-card">
               <PlusCircleIcon />
