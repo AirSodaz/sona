@@ -44,8 +44,28 @@ function formatDuration(seconds: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString() + ' ' + new Date(timestamp).toLocaleTimeString();
+function formatRelativeDate(timestamp: number, locale: string): string {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    const now = Date.now();
+    const diffInSeconds = Math.round((timestamp - now) / 1000);
+    const absDiff = Math.abs(diffInSeconds);
+
+    if (absDiff < 60) {
+        return rtf.format(diffInSeconds, 'second');
+    } else if (absDiff < 3600) {
+        return rtf.format(Math.round(diffInSeconds / 60), 'minute');
+    } else if (absDiff < 86400) {
+        return rtf.format(Math.round(diffInSeconds / 3600), 'hour');
+    } else if (absDiff < 604800) {
+        return rtf.format(Math.round(diffInSeconds / 86400), 'day');
+    } else {
+        const date = new Date(timestamp);
+        return new Intl.DateTimeFormat(locale, {
+            month: 'short',
+            day: 'numeric',
+            year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+        }).format(date);
+    }
 }
 
 function HistoryItemComponent({
@@ -58,7 +78,7 @@ function HistoryItemComponent({
     onToggleSelection,
     layout = 'list'
 }: HistoryItemProps): React.JSX.Element {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const projectName = useProjectStore((state) => {
         if (!item.projectId) {
             return t('projects.inbox', { defaultValue: 'Inbox' });
@@ -132,7 +152,7 @@ function HistoryItemComponent({
                 <div className={`history-item-meta ${layout === 'table' ? 'history-item-table-cells' : ''}`}>
                     <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
                         <Calendar size={12} />
-                        {formatDate(item.timestamp)}
+                        {formatRelativeDate(item.timestamp, i18n.language)}
                     </span>
                     <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
                         <Clock size={12} />
