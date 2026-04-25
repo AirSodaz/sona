@@ -186,11 +186,17 @@ function SegmentItemComponent({
             e.preventDefault();
             // Save current HTML converted to text
             onSave(segment.id, htmlToText(e.currentTarget.innerHTML));
-        } else if (e.key === 'Escape') {
+            return;
+        }
+
+        if (e.key === 'Escape') {
             setEditText(textToHtml(segment.text));
             // Save original (cancel)
             onSave(segment.id, segment.text);
-        } else if ((e.ctrlKey || e.metaKey)) {
+            return;
+        }
+
+        if (e.ctrlKey || e.metaKey) {
              const key = e.key.toLowerCase();
              let command = '';
              switch (key) {

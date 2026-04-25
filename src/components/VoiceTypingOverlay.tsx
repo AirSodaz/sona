@@ -143,52 +143,69 @@ export function VoiceTypingOverlay() {
         void resizeVoiceTypingWindow(rootRef.current);
     }, [displayText, phase, resolvedTheme]);
 
-    const containerStyle: CSSProperties = isSegment
-        ? {
+    let containerStyle: CSSProperties;
+    let indicatorStyle: CSSProperties;
+
+    if (isSegment) {
+        containerStyle = {
             ...baseContainerStyle,
             background: 'var(--color-bg-elevated)',
             color: 'var(--color-text-primary)',
             border: '1px solid var(--color-border-hover)',
-            boxShadow:
-                resolvedTheme === 'dark'
-                    ? '0 16px 32px rgba(0, 0, 0, 0.36)'
-                    : 'var(--shadow-xl)',
-        }
-        : isError
-            ? {
-                ...baseContainerStyle,
-                background: 'rgba(127, 29, 29, 0.92)',
-                color: '#ffffff',
-                border: '1px solid rgba(248, 113, 113, 0.35)',
-            }
-            : {
-                ...baseContainerStyle,
-                background: 'var(--color-bg-elevated)',
-                color: 'var(--color-text-primary)',
-                border: '1px solid var(--color-border-hover)',
-                boxShadow:
-                    resolvedTheme === 'dark'
-                        ? '0 16px 32px rgba(0, 0, 0, 0.36)'
-                        : 'var(--shadow-xl)',
-            };
+            boxShadow: resolvedTheme === 'dark'
+                ? '0 16px 32px rgba(0, 0, 0, 0.36)'
+                : 'var(--shadow-xl)',
+        };
 
-    const indicatorStyle: CSSProperties = isSegment
-        ? {
+        indicatorStyle = {
             width: '4px',
             alignSelf: 'stretch',
             borderRadius: '999px',
             background: 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)',
-        }
-        : {
+        };
+    } else if (isError) {
+        containerStyle = {
+            ...baseContainerStyle,
+            background: 'rgba(127, 29, 29, 0.92)',
+            color: '#ffffff',
+            border: '1px solid rgba(248, 113, 113, 0.35)',
+        };
+
+        indicatorStyle = {
             width: '8px',
             height: '8px',
             borderRadius: '999px',
-            background: isError ? '#fca5a5' : '#4ade80',
-            boxShadow: isError
-                ? '0 0 0 4px rgba(248, 113, 113, 0.16)'
-                : '0 0 0 4px rgba(74, 222, 128, 0.16)',
+            background: '#fca5a5',
+            boxShadow: '0 0 0 4px rgba(248, 113, 113, 0.16)',
             flexShrink: 0,
         };
+    } else {
+        containerStyle = {
+            ...baseContainerStyle,
+            background: 'var(--color-bg-elevated)',
+            color: 'var(--color-text-primary)',
+            border: '1px solid var(--color-border-hover)',
+            boxShadow: resolvedTheme === 'dark'
+                ? '0 16px 32px rgba(0, 0, 0, 0.36)'
+                : 'var(--shadow-xl)',
+        };
+
+        indicatorStyle = {
+            width: '8px',
+            height: '8px',
+            borderRadius: '999px',
+            background: '#4ade80',
+            boxShadow: '0 0 0 4px rgba(74, 222, 128, 0.16)',
+            flexShrink: 0,
+        };
+    }
+
+    let micColor = '#4ade80';
+    let micClass: string | undefined = 'animate-pulse';
+    if (isError) {
+        micColor = '#fecaca';
+        micClass = undefined;
+    }
 
     return (
         <div
@@ -212,9 +229,9 @@ export function VoiceTypingOverlay() {
                     <>
                         <Mic
                             size={16}
-                            className={isError ? undefined : 'animate-pulse'}
+                            className={micClass}
                             style={{
-                                color: isError ? '#fecaca' : '#4ade80',
+                                color: micColor,
                                 flexShrink: 0,
                             }}
                         />

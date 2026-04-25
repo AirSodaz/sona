@@ -272,10 +272,13 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const isMicrophoneReady = permissionState === 'granted' && deviceOptions.length > 0;
 
   let areSecondaryActionsDisabled = false;
-  if (currentStep === 'models') {
-    areSecondaryActionsDisabled = modelStepStatus === 'downloading';
-  } else if (currentStep === 'microphone') {
-    areSecondaryActionsDisabled = isLoadingDevices;
+  switch (currentStep) {
+    case 'models':
+      areSecondaryActionsDisabled = modelStepStatus === 'downloading';
+      break;
+    case 'microphone':
+      areSecondaryActionsDisabled = isLoadingDevices;
+      break;
   }
 
   return (
@@ -426,27 +429,41 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
               )}
 
-              <OnboardingActions
-                backLabel={t('first_run.actions.back')}
-                laterLabel={t('first_run.actions.later')}
-                onBack={handleBack}
-                onLater={defer}
-                primaryAction={{
-                  disabled: modelStepStatus === 'downloading',
-                  label: hasModelsConfigured
-                    ? t('first_run.actions.continue')
-                    : (
-                      <>
-                        <DownloadIcon />
-                        {modelStepStatus === 'error'
-                          ? t('first_run.actions.retry')
-                          : t('first_run.actions.download_recommended')}
-                      </>
-                    ),
-                  onClick: hasModelsConfigured ? () => setStep('microphone') : handleModelDownload,
-                }}
-                secondaryActionsDisabled={areSecondaryActionsDisabled}
-              />
+              {(() => {
+                let primaryActionLabel;
+                if (hasModelsConfigured) {
+                  primaryActionLabel = t('first_run.actions.continue');
+                } else {
+                  let buttonText;
+                  if (modelStepStatus === 'error') {
+                    buttonText = t('first_run.actions.retry');
+                  } else {
+                    buttonText = t('first_run.actions.download_recommended');
+                  }
+
+                  primaryActionLabel = (
+                    <>
+                      <DownloadIcon />
+                      {buttonText}
+                    </>
+                  );
+                }
+
+                return (
+                  <OnboardingActions
+                    backLabel={t('first_run.actions.back')}
+                    laterLabel={t('first_run.actions.later')}
+                    onBack={handleBack}
+                    onLater={defer}
+                    primaryAction={{
+                      disabled: modelStepStatus === 'downloading',
+                      label: primaryActionLabel,
+                      onClick: hasModelsConfigured ? () => setStep('microphone') : handleModelDownload,
+                    }}
+                    secondaryActionsDisabled={areSecondaryActionsDisabled}
+                  />
+                );
+              })()}
             </section>
           )}
 

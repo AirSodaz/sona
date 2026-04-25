@@ -96,12 +96,15 @@ function ShortcutInput({ value, onChange }: ShortcutInputProps) {
                         setIsEditing(false);
                     }}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            onChange(tempValue);
-                            setIsEditing(false);
-                        } else if (e.key === 'Escape') {
-                            setTempValue(value);
-                            setIsEditing(false);
+                        switch (e.key) {
+                            case 'Enter':
+                                onChange(tempValue);
+                                setIsEditing(false);
+                                break;
+                            case 'Escape':
+                                setTempValue(value);
+                                setIsEditing(false);
+                                break;
                         }
                     }}
                     autoFocus
