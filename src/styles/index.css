@@ -3428,7 +3428,10 @@ input[type="radio"]:focus {
 }
 
 .history-item-checkbox {
-  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-top: 0;
   flex-shrink: 0;
 }
 
@@ -3689,10 +3692,14 @@ input[type="radio"]:focus {
   min-width: 120px;
 }
 
-.projects-table-header-date,
+.projects-table-header-date {
+  flex: 1.5;
+  min-width: 160px;
+}
+
 .projects-table-header-duration {
-  flex: 1;
-  min-width: 100px;
+  flex: 0.5;
+  min-width: 80px;
 }
 
 .history-item--table {
@@ -3733,9 +3740,20 @@ input[type="radio"]:focus {
 }
 
 .history-item--table .history-item-meta-chip {
-  flex: 1;
-  min-width: 100px;
   padding: 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item--table .history-item-meta-chip:first-child {
+  flex: 1.5;
+  min-width: 160px;
+}
+
+.history-item--table .history-item-meta-chip:nth-child(2) {
+  flex: 0.5;
+  min-width: 80px;
 }
 
 .history-item--table .history-item-actions {
@@ -3750,9 +3768,7 @@ input[type="radio"]:focus {
 
 .history-item--table .history-item-checkbox {
   width: 40px;
-  padding-top: 0;
-  display: flex;
-  align-items: center;
+  align-self: center;
 }
 
 /* Floating Action Bar */
