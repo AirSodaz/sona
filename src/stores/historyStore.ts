@@ -16,12 +16,13 @@ interface HistoryState {
     deleteItems: (ids: string[]) => Promise<void>;
     refresh: () => Promise<void>;
     /**
-     * Updates metadata fields for a specific history item in the in-memory list.
+     * Updates metadata fields for a specific history item in the in-memory list and on disk.
      *
      * @param id The history item ID.
      * @param updates Partial fields to merge into the item.
+     * @return A promise that resolves when the update is complete.
      */
-    updateItemMeta: (id: string, updates: Partial<HistoryItem>) => void;
+    updateItemMeta: (id: string, updates: Partial<HistoryItem>) => Promise<void>;
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -102,11 +103,23 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         await get().loadItems();
     },
 
-    updateItemMeta: (id, updates) => {
+    updateItemMeta: async (id, updates) => {
+        const originalItems = get().items;
+        
+        // Optimistic update
         set((state) => ({
             items: state.items.map((item) =>
                 item.id === id ? { ...item, ...updates } : item
             )
         }));
+
+        try {
+            await historyService.updateItemMeta(id, updates);
+        } catch (err: any) {
+            logger.error('Failed to update history item meta:', err);
+            // Revert
+            set({ items: originalItems, error: 'Failed to update item metadata' });
+            throw err;
+        }
     }
 }));

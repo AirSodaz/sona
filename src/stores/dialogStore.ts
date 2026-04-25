@@ -4,7 +4,7 @@ import { logger } from '../utils/logger';
 import { AppErrorInput, buildErrorDialogOptions, normalizeError } from '../utils/errorUtils';
 
 /** Supported dialog types. */
-export type DialogType = 'alert' | 'confirm';
+export type DialogType = 'alert' | 'confirm' | 'prompt';
 
 /** Visual variants for dialogs. */
 export type DialogVariant = 'info' | 'success' | 'warning' | 'error';
@@ -25,6 +25,12 @@ export interface DialogOptions {
     confirmLabel?: string;
     /** Label for the cancel button. */
     cancelLabel?: string;
+    /** Default value for prompt input. */
+    defaultValue?: string;
+    /** Placeholder for prompt input. */
+    inputPlaceholder?: string;
+    /** Optional callback for an AI action (e.g., auto-generating text). */
+    onAiAction?: () => Promise<string>;
 }
 
 /** State interface for the dialog store. */
@@ -34,7 +40,8 @@ interface DialogState {
     /** Current dialog options. */
     options: DialogOptions | null;
     /** Resolver function for the current dialog promise. */
-    resolveRef: ((value: boolean) => void) | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolveRef: ((value: any) => void) | null;
 
     // Actions
     /**
@@ -64,11 +71,20 @@ interface DialogState {
     confirm: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<boolean>;
 
     /**
+     * Shows a prompt dialog with a text input.
+     *
+     * @param message The message to display.
+     * @param options Additional options including defaultValue.
+     * @return A promise that resolves to the input string or null if cancelled.
+     */
+    prompt: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<string | null>;
+
+    /**
      * Closes the dialog with a result.
      *
-     * @param result The result value (true for confirm, false for cancel).
+     * @param result The result value.
      */
-    close: (result: boolean) => void;
+    close: (result: any) => void;
 }
 
 /**
@@ -125,7 +141,22 @@ export const useDialogStore = create<DialogState>((set, get) => ({
         });
     },
 
-    close: (result: boolean) => {
+    prompt: (message, options) => {
+        return new Promise<string | null>((resolve) => {
+            set({
+                isOpen: true,
+                options: {
+                    message,
+                    type: 'prompt',
+                    variant: 'info',
+                    ...options,
+                },
+                resolveRef: resolve,
+            });
+        });
+    },
+
+    close: (result: any) => {
         const { resolveRef } = get();
         if (resolveRef) {
             resolveRef(result);

@@ -17,6 +17,10 @@
         "close": "Close",
         "confirm": "Confirm",
         "ok": "OK",
+        "rename": "Rename",
+        "rename_item": "Rename {{item}}",
+        "rename_prompt": "Enter new title",
+        "ai_rename": "AI Auto-rename",
         "details": "Details",
         "skip_to_content": "Skip to Content",
         "select": "Select",
@@ -27,6 +31,9 @@
         "recommended": "Recommended"
     },
     "errors": {
+        "ai": {
+            "rename_failed": "AI renaming failed"
+        },
         "common": {
             "unknown": "An unknown error occurred.",
             "operation_failed": "The operation could not be completed."

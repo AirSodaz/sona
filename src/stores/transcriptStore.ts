@@ -94,6 +94,13 @@ interface TranscriptState {
      */
     setSourceHistoryId: (id: string | null) => void;
 
+    /**
+     * Sets the title for the current transcription.
+     *
+     * @param title The new title.
+     */
+    setTitle: (title: string | null) => void;
+
     // Segment CRUD operations
     /**
      * Adds a new segment.
@@ -393,6 +400,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             summaryStates,
         };
     }),
+
+    setTitle: (title) => set({ title }),
 
     // Segment CRUD
     addSegment: (segment) => {

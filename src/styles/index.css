@@ -3534,7 +3534,9 @@ input[type="radio"]:focus {
 }
 
 .history-item .delete-btn,
-.history-item-delete {
+.history-item-delete,
+.history-item-rename,
+.history-item-ai-rename {
   padding: 4px;
   height: auto;
   color: var(--color-text-muted);
@@ -3553,7 +3555,13 @@ input[type="radio"]:focus {
 
 .history-item:hover .history-item-delete,
 .history-item:focus-within .history-item-delete,
-.history-item.selected .history-item-delete {
+.history-item.selected .history-item-delete,
+.history-item:hover .history-item-rename,
+.history-item:focus-within .history-item-rename,
+.history-item.selected .history-item-rename,
+.history-item:hover .history-item-ai-rename,
+.history-item:focus-within .history-item-ai-rename,
+.history-item.selected .history-item-ai-rename {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -3562,6 +3570,11 @@ input[type="radio"]:focus {
 .history-item .delete-btn:hover,
 .history-item-delete:hover {
   color: var(--color-error);
+}
+
+.history-item-rename:hover,
+.history-item-ai-rename:hover {
+  color: var(--color-info);
 }
 
 /* Search Highlight */
@@ -3759,8 +3772,15 @@ input[type="radio"]:focus {
   min-width: 80px;
 }
 
+.history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
 .history-item--table .history-item-actions {
-  width: 48px;
+  width: 80px;
   display: flex;
   justify-content: flex-end;
 }

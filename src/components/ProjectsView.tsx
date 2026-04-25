@@ -35,6 +35,7 @@ import {
   FileTextIcon,
 } from './Icons';
 import { historyService } from '../services/historyService';
+import { generateAiTitleForHistoryItem } from '../services/aiRenameService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -725,16 +726,19 @@ export function ProjectsView(): React.JSX.Element {
   const refreshHistory = useHistoryStore((state) => state.refresh);
   const deleteHistoryItem = useHistoryStore((state) => state.deleteItem);
   const deleteHistoryItems = useHistoryStore((state) => state.deleteItems);
+  const updateHistoryItemMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
   const setMode = useTranscriptStore((state) => state.setMode);
+  const setTitle = useTranscriptStore((state) => state.setTitle);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
   const showError = useDialogStore((state) => state.showError);
+  const prompt = useDialogStore((state) => state.prompt);
 
   const viewMode = globalConfig.projectsViewMode || 'list';
 
@@ -1173,6 +1177,31 @@ export function ProjectsView(): React.JSX.Element {
 
     await deleteHistoryItem(id);
     await refreshHistory();
+  };
+
+  const handleRenameHistoryItem = async (event: React.MouseEvent, id: string) => {
+    event.stopPropagation();
+    const item = historyItems.find((i) => i.id === id);
+    if (!item) {
+      return;
+    }
+
+    const newTitle = await prompt(t('common.rename_prompt', { defaultValue: 'Enter new title' }), {
+      title: t('common.rename', { defaultValue: 'Rename' }),
+      defaultValue: item.title,
+      onAiAction: async () => {
+        return await generateAiTitleForHistoryItem(item.transcriptPath);
+      }
+    });
+
+    if (newTitle !== null && newTitle.trim() !== '') {
+      await updateHistoryItemMeta(id, { title: newTitle.trim() });
+      await refreshHistory();
+
+      if (sourceHistoryId === id) {
+        setTitle(newTitle.trim());
+      }
+    }
   };
 
   const handleCreateProject = async () => {
@@ -1892,6 +1921,7 @@ export function ProjectsView(): React.JSX.Element {
                   item={item}
                   onLoad={handleOpenItem}
                   onDelete={handleDeleteHistoryItem}
+                  onRename={handleRenameHistoryItem}
                   searchQuery={searchQuery}
                   isSelectionMode={isSelectionMode}
                   isSelected={isSelectionMode ? selectedIds.includes(item.id) : selectedHistoryId === item.id}

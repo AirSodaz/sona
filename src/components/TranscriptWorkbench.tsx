@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useDialogStore } from '../stores/dialogStore';
+import { useHistoryStore } from '../stores/historyStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
-import { CloseIcon, SummaryIcon } from './Icons';
+import { CloseIcon, SummaryIcon, EditIcon } from './Icons';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
+import { generateAiTitle } from '../services/aiRenameService';
 
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */
@@ -28,7 +31,12 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
   const audioUrl = useTranscriptStore((state) => state.audioUrl);
   const config = useTranscriptStore((state) => state.config);
   const storeTitle = useTranscriptStore((state) => state.title);
+  const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+  const setTitle = useTranscriptStore((state) => state.setTitle);
   const mode = useTranscriptStore((state) => state.mode);
+  
+  const prompt = useDialogStore((state) => state.prompt);
+  const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const hasSegments = segments.length > 0;
   
@@ -39,6 +47,23 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
 
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
+
+  const handleRename = async () => {
+    const newTitle = await prompt(t('common.rename_prompt', { defaultValue: 'Enter new title' }), {
+      title: t('common.rename', { defaultValue: 'Rename' }),
+      defaultValue: displayTitle,
+      onAiAction: async () => {
+        return await generateAiTitle(segments);
+      }
+    });
+
+    if (newTitle !== null && newTitle.trim() !== '') {
+      setTitle(newTitle.trim());
+      if (sourceHistoryId) {
+        await updateHistoryMeta(sourceHistoryId, { title: newTitle.trim() });
+      }
+    }
+  };
 
   return (
     <>
@@ -56,6 +81,14 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
             >
               {displayTitle}
             </h4>
+            <button
+              className="btn btn-icon btn-sm"
+              onClick={handleRename}
+              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
+              data-tooltip-pos="bottom"
+            >
+              <EditIcon />
+            </button>
             {showSummaryButton && (
               <button
                 className="btn btn-icon btn-sm"

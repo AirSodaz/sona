@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { Calendar, Clock } from 'lucide-react';
 import { HistoryItem as HistoryItemType } from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
-import { TrashIcon, MicIcon, FileTextIcon } from '../Icons';
+import { TrashIcon, MicIcon, FileTextIcon, EditIcon } from '../Icons';
 import { Checkbox } from '../Checkbox';
 
 interface HistoryItemProps {
     item: HistoryItemType;
     onLoad: (item: HistoryItemType) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
+    onRename?: (e: React.MouseEvent, id: string) => void;
     searchQuery?: string;
     isSelectionMode?: boolean;
     isSelected?: boolean;
@@ -72,11 +73,12 @@ function HistoryItemComponent({
     item,
     onLoad,
     onDelete,
+    onRename,
     searchQuery = '',
     isSelectionMode = false,
     isSelected = false,
     onToggleSelection,
-    layout = 'list'
+    layout = 'list',
 }: HistoryItemProps): React.JSX.Element {
     const { t, i18n } = useTranslation();
     const projectName = useProjectStore((state) => {
@@ -163,6 +165,18 @@ function HistoryItemComponent({
 
             {!isSelectionMode && (
                 <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
+                    {onRename && (
+                        <button
+                            type="button"
+                            className="btn btn-icon history-item-rename"
+                            onClick={(e) => onRename(e, item.id)}
+                            aria-label={t('common.rename_item', { item: item.title, defaultValue: `Rename ${item.title}` })}
+                            data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
+                            data-tooltip-pos="left"
+                        >
+                            <EditIcon />
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="btn btn-icon delete-btn history-item-delete"

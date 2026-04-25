@@ -372,6 +372,25 @@ export const historyService = {
         }
     },
 
+    async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {
+        const items = await this.getAll();
+        let updated = false;
+        
+        const nextItems = items.map((item) => {
+            if (item.id === id) {
+                updated = true;
+                return { ...item, ...updates };
+            }
+            return item;
+        });
+
+        if (updated) {
+            await writeHistoryIndex(nextItems);
+        } else {
+            logger.warn(`[History] updateItemMeta: item not found for ID ${id}`);
+        }
+    },
+
     async updateProjectAssignments(ids: string[], projectId: string | null): Promise<void> {
         if (ids.length === 0) {
             return;
