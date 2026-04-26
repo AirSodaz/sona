@@ -139,36 +139,23 @@ function compareProjectItems(a: HistoryItemType, b: HistoryItemType, sortOrder: 
   }
 }
 
-function buildComparableProjectSettings(
-  project: ProjectRecord,
-  draftName: string,
-  draftDescription: string,
-  draftDefaults: ProjectDefaults,
-) {
+function buildComparableProjectSettingsSnapshot(input: {
+  name: string;
+  description: string;
+  icon?: string;
+  defaults: ProjectDefaults;
+}) {
   return {
-    name: draftName.trim() || project.name,
-    description: draftDescription,
-    summaryTemplate: draftDefaults.summaryTemplate,
-    translationLanguage: draftDefaults.translationLanguage,
-    polishScenario: draftDefaults.polishScenario,
-    polishContext: draftDefaults.polishContext,
-    exportFileNamePrefix: draftDefaults.exportFileNamePrefix,
-    enabledTextReplacementSetIds: sortRuleSetIds(draftDefaults.enabledTextReplacementSetIds),
-    enabledHotwordSetIds: sortRuleSetIds(draftDefaults.enabledHotwordSetIds),
-  };
-}
-
-function buildSavedProjectSettings(project: ProjectRecord) {
-  return {
-    name: project.name,
-    description: project.description,
-    summaryTemplate: project.defaults.summaryTemplate,
-    translationLanguage: project.defaults.translationLanguage,
-    polishScenario: project.defaults.polishScenario,
-    polishContext: project.defaults.polishContext,
-    exportFileNamePrefix: project.defaults.exportFileNamePrefix,
-    enabledTextReplacementSetIds: sortRuleSetIds(project.defaults.enabledTextReplacementSetIds),
-    enabledHotwordSetIds: sortRuleSetIds(project.defaults.enabledHotwordSetIds),
+    name: input.name.trim(),
+    description: input.description,
+    icon: input.icon || '',
+    summaryTemplate: input.defaults.summaryTemplate,
+    translationLanguage: input.defaults.translationLanguage,
+    polishScenario: input.defaults.polishScenario,
+    polishContext: input.defaults.polishContext,
+    exportFileNamePrefix: input.defaults.exportFileNamePrefix,
+    enabledTextReplacementSetIds: sortRuleSetIds(input.defaults.enabledTextReplacementSetIds),
+    enabledHotwordSetIds: sortRuleSetIds(input.defaults.enabledHotwordSetIds),
   };
 }
 
@@ -830,12 +817,14 @@ export function ProjectsView(): React.JSX.Element {
     if (!project) {
       setDraftName('');
       setDraftDescription('');
+      setDraftIcon('');
       setDraftDefaults(null);
       return;
     }
 
     setDraftName(project.name);
     setDraftDescription(project.description);
+    setDraftIcon(project.icon || '');
     setDraftDefaults(project.defaults);
   }, [browseProject]);
 
@@ -1099,16 +1088,21 @@ export function ProjectsView(): React.JSX.Element {
       return false;
     }
 
-    const currentDraft = buildComparableProjectSettings(
-      browseProject,
-      draftName,
-      draftDescription,
-      draftDefaults,
-    );
-    const savedProject = buildSavedProjectSettings(browseProject);
+    const currentDraft = buildComparableProjectSettingsSnapshot({
+      name: draftName.trim() || browseProject.name,
+      description: draftDescription,
+      icon: draftIcon,
+      defaults: draftDefaults,
+    });
+    const savedProject = buildComparableProjectSettingsSnapshot({
+      name: browseProject.name,
+      description: browseProject.description,
+      icon: browseProject.icon || '',
+      defaults: browseProject.defaults,
+    });
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
-  }, [browseProject, draftDefaults, draftDescription, draftName]);
+  }, [browseProject, draftDefaults, draftDescription, draftIcon, draftName]);
 
   const confirmDiscardProjectSettingsChanges = useCallback(async () => {
     if (!isSettingsOpen || !isProjectSettingsDirty) {

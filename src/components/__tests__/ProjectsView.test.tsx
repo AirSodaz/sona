@@ -11,10 +11,11 @@ vi.mock('../../services/projectService', () => ({
   projectService: {
     getAll: vi.fn().mockResolvedValue([]),
     getActiveProjectId: vi.fn().mockResolvedValue(null),
-    create: vi.fn().mockImplementation(async ({ name, description, defaults }: any) => ({
+    create: vi.fn().mockImplementation(async ({ name, description, icon, defaults }: any) => ({
       id: 'project-new',
       name,
       description,
+      icon: icon ?? '',
       createdAt: 1,
       updatedAt: 1,
       defaults,
@@ -23,6 +24,7 @@ vi.mock('../../services/projectService', () => ({
       id,
       name: updates.name || 'Alpha',
       description: updates.description || '',
+      icon: updates.icon ?? '🧪',
       createdAt: 1,
       updatedAt: 2,
       defaults: updates.defaults,
@@ -300,7 +302,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(updateProjectSpy).toHaveBeenCalledWith(
         'project-1',
-        expect.objectContaining({ name: 'Alpha Updated' }),
+        expect.objectContaining({ name: 'Alpha Updated', icon: '🧪' }),
       );
     });
 
@@ -320,9 +322,8 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.change(screen.getByDisplayValue('Alpha'), {
-      target: { value: 'Alpha Updated' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
+    fireEvent.click(screen.getByRole('button', { name: '📄' }));
 
     fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
@@ -337,6 +338,92 @@ describe('ProjectsView', () => {
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Edit Project Defaults')).toBeNull();
+  });
+
+  it('guards closing project settings when icon-only edits are dirty', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    const confirmSpy = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      confirm: confirmSpy,
+    });
+
+    render(<ProjectsView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
+    fireEvent.click(screen.getByRole('button', { name: '📄' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText('Edit Project Defaults')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Edit Project Defaults')).toBeNull();
+    });
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('rehydrates the active project icon after discarding and switching projects', async () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Alpha',
+          description: 'Project alpha',
+          icon: '🧪',
+          createdAt: 1,
+          updatedAt: 1,
+          defaults: {
+            summaryTemplate: 'general',
+            translationLanguage: 'zh',
+            polishScenario: 'custom',
+            polishContext: '',
+            exportFileNamePrefix: '',
+            enabledTextReplacementSetIds: [],
+            enabledHotwordSetIds: [],
+          },
+        },
+        {
+          id: 'project-2',
+          name: 'Beta',
+          description: 'Project beta',
+          icon: '🎯',
+          createdAt: 2,
+          updatedAt: 2,
+          defaults: {
+            summaryTemplate: 'meeting',
+            translationLanguage: 'en',
+            polishScenario: 'lecture',
+            polishContext: 'Keep focus',
+            exportFileNamePrefix: '',
+            enabledTextReplacementSetIds: [],
+            enabledHotwordSetIds: [],
+          },
+        },
+      ],
+      activeProjectId: 'project-1',
+    });
+
+    render(<ProjectsView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
+    fireEvent.click(screen.getByRole('button', { name: '📄' }));
+
+    await clickAsync(getButtonByContent('Beta'));
+    await waitFor(() => {
+      expect(useProjectStore.getState().activeProjectId).toBe('project-2');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+    expect(screen.getByRole('button', { name: '🎯' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: '📄' })).toBeNull();
   });
 
   it('shows all history in All Items with global summary and project badges', async () => {

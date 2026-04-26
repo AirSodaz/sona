@@ -81,6 +81,7 @@ export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRe
     id: input.id || '',
     name: input.name?.trim() || 'Untitled Project',
     description: input.description || '',
+    icon: input.icon || '',
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || input.createdAt || now,
     defaults: {
