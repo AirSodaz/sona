@@ -439,117 +439,117 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
         </div>
       </div>
       {isOpen && (
-        <div className="accordion-content">
-           {def.id === 'google_translate_free' ? (
-             <div className="settings-hint" style={{ color: 'var(--color-success)', marginBottom: '12px', fontSize: '0.95rem' }}>
-               {t('settings.llm.free_service_hint')}
-             </div>
-           ) : (
-           <>
-           <div className="settings-item">
-             <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabel || t('settings.llm.base_url')}</label>
-             {def.editableApiHost === false ? (
-               <div className="settings-input" style={{ alignItems: 'center', display: 'flex', minHeight: 40, opacity: 0.75 }} id={`llm-${def.id}-host`}>
-                 {setting?.apiHost || def.defaultApiHost}
-               </div>
-             ) : (
-               <input
-                 id={`llm-${def.id}-host`}
-                 type="text"
-                 className="settings-input"
-                 value={setting?.apiHost || ''}
-                 onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
-                 placeholder={def.defaultApiHost}
-               />
-             )}
-           </div>
-
-           <div className="settings-item">
-             <label className="settings-label" htmlFor={`llm-${def.id}-key`}>{t('settings.llm.api_key')}</label>
-             <input
-               id={`llm-${def.id}-key`}
-               type="password"
-               className="settings-input"
-               value={setting?.apiKey || ''}
-               onChange={(e) => applyProviderUpdates({ apiKey: e.target.value })}
-               placeholder={def.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
-             />
-           </div>
-
-           {setting?.apiVersion !== undefined && (
-             <div className="settings-item">
-               <label className="settings-label" htmlFor={`llm-${def.id}-version`}>{t('settings.llm.api_version')}</label>
-               <input
-                 id={`llm-${def.id}-version`}
-                 type="text"
-                 className="settings-input"
-                 value={setting.apiVersion}
-                 onChange={(e) => applyProviderUpdates({ apiVersion: e.target.value })}
-                 placeholder={def.defaultApiVersion || ''}
-               />
-             </div>
-           )}
-
-           {setting?.apiPath !== undefined && (
-             <div className="settings-item">
-               <label className="settings-label" htmlFor={`llm-${def.id}-path`}>{t('settings.llm.api_path')}</label>
-               <input
-                 id={`llm-${def.id}-path`}
-                 type="text"
-                 className="settings-input"
-                 value={setting.apiPath}
-                 onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
-                 readOnly={provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
-               />
-             </div>
-           )}
-           </>
-           )}
-           
-           <div className="feature-field">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {(() => {
-                  let testBtnClass = 'btn-secondary';
-                  let icon = null;
-                  let label = t('settings.llm.test_connection');
-
-                  if (testStatus === 'loading') {
-                    icon = <Loader2 className="animate-spin" size={16} />;
-                    label = t('settings.llm.testing');
-                  } else if (testStatus === 'success') {
-                    testBtnClass = 'btn-success-flash';
-                    icon = <Check size={16} />;
-                    label = t('settings.llm.connection_success');
-                  } else if (testStatus === 'error') {
-                    testBtnClass = 'btn-error-flash';
-                    icon = <X size={16} />;
-                    label = t('settings.llm.connection_failed');
-                  }
-
-                  return (
-                    <button
-                      type="button"
-                      className={`btn ${testBtnClass} btn-loading-wrapper`}
-                      style={{ width: 'fit-content', minWidth: '120px' }}
-                      onClick={handleTestConnection}
-                      disabled={testStatus === 'loading'}
-                    >
-                      <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        {icon}
-                        <span>{label}</span>
-                      </div>
-                    </button>
-                  );
-                })()}
-                
-                {testStatus === 'error' && testMessage && (
-                  <div className="connection-error-detail">
-                    <X size={12} />
-                    <span>{testMessage}</span>
+        <div className="accordion-content" data-testid={`provider-accordion-content-${provider}`}>
+          {def.id === 'google_translate_free' ? (
+            <div className="settings-hint provider-free-hint">
+              {t('settings.llm.free_service_hint')}
+            </div>
+          ) : (
+            <>
+              <div className="settings-item">
+                <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabel || t('settings.llm.base_url')}</label>
+                {def.editableApiHost === false ? (
+                  <div className="settings-input provider-readonly-field" id={`llm-${def.id}-host`}>
+                    {setting?.apiHost || def.defaultApiHost}
                   </div>
+                ) : (
+                  <input
+                    id={`llm-${def.id}-host`}
+                    type="text"
+                    className="settings-input"
+                    value={setting?.apiHost || ''}
+                    onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
+                    placeholder={def.defaultApiHost}
+                  />
                 )}
               </div>
-           </div>
+
+              <div className="settings-item">
+                <label className="settings-label" htmlFor={`llm-${def.id}-key`}>{t('settings.llm.api_key')}</label>
+                <input
+                  id={`llm-${def.id}-key`}
+                  type="password"
+                  className="settings-input"
+                  value={setting?.apiKey || ''}
+                  onChange={(e) => applyProviderUpdates({ apiKey: e.target.value })}
+                  placeholder={def.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
+                />
+              </div>
+
+              {setting?.apiVersion !== undefined && (
+                <div className="settings-item">
+                  <label className="settings-label" htmlFor={`llm-${def.id}-version`}>{t('settings.llm.api_version')}</label>
+                  <input
+                    id={`llm-${def.id}-version`}
+                    type="text"
+                    className="settings-input"
+                    value={setting.apiVersion}
+                    onChange={(e) => applyProviderUpdates({ apiVersion: e.target.value })}
+                    placeholder={def.defaultApiVersion || ''}
+                  />
+                </div>
+              )}
+
+              {setting?.apiPath !== undefined && (
+                <div className="settings-item">
+                  <label className="settings-label" htmlFor={`llm-${def.id}-path`}>{t('settings.llm.api_path')}</label>
+                  <input
+                    id={`llm-${def.id}-path`}
+                    type="text"
+                    className="settings-input"
+                    value={setting.apiPath}
+                    onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
+                    readOnly={provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="feature-field provider-test-actions">
+            <div className="provider-test-stack">
+              {(() => {
+                let testBtnClass = 'btn-secondary';
+                let icon = null;
+                let label = t('settings.llm.test_connection');
+
+                if (testStatus === 'loading') {
+                  icon = <Loader2 className="animate-spin" size={16} />;
+                  label = t('settings.llm.testing');
+                } else if (testStatus === 'success') {
+                  testBtnClass = 'btn-success-flash';
+                  icon = <Check size={16} />;
+                  label = t('settings.llm.connection_success');
+                } else if (testStatus === 'error') {
+                  testBtnClass = 'btn-error-flash';
+                  icon = <X size={16} />;
+                  label = t('settings.llm.connection_failed');
+                }
+
+                return (
+                  <button
+                    type="button"
+                    className={`btn ${testBtnClass} btn-loading-wrapper`}
+                    style={{ width: 'fit-content', minWidth: '120px' }}
+                    onClick={handleTestConnection}
+                    disabled={testStatus === 'loading'}
+                  >
+                    <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      {icon}
+                      <span>{label}</span>
+                    </div>
+                  </button>
+                );
+              })()}
+
+              {testStatus === 'error' && testMessage && (
+                <div className="connection-error-detail">
+                  <X size={12} />
+                  <span>{testMessage}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

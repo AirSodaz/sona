@@ -105,6 +105,23 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getByDisplayValue('test-key')).toBeDefined();
   });
 
+  it('keeps expanded provider fields grouped inside the matching accordion content', async () => {
+    let conf = buildConfig();
+    conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
+    currentConfig = conf;
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    const content = screen.getByTestId('provider-accordion-content-open_ai');
+    expect(content.querySelector('#llm-open_ai-host')).not.toBeNull();
+    expect(content.querySelector('#llm-open_ai-key')).not.toBeNull();
+    expect(screen.queryByTestId('provider-accordion-content-gemini')).toBeNull();
+  });
+
   it('shows missing api key status', async () => {
     await act(async () => {
       render(
