@@ -18,7 +18,7 @@ Sona is a good fit if you want to:
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `History And Settings`, especially the `Settings > Shortcuts` section.
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Shortcuts` section.
 
 ## 2. Install And Launch
 
@@ -100,7 +100,8 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - Transcript segments appear in the editor on the right.
 - The active segment follows the live recording state.
-- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and history saving.
+- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and later reopening from `Workspace`.
+- If you were not already inside a project, the saved item usually lands in `Inbox`.
 
 ### Notes
 
@@ -144,7 +145,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 
 ### Preconditions
 
-- You already created transcript content with `Live Record`, `Batch Import`, or `History`.
+- You already created transcript content with `Live Record`, `Batch Import`, or `Workspace`.
 
 ### Steps
 
@@ -224,7 +225,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - `AI Summary` also needs an LLM-capable provider and model; the Google Translate providers are not supported for summaries.
 - You can turn `AI Summary` off in `Settings > LLM Service`. This hides the panel and prevents new summaries from being generated, but existing summary sidecar data is kept.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
-- `Re-transcribe` is only available when the current transcript came from a saved history item.
+- `Re-transcribe` is only available when the current transcript came from a saved workspace item.
 - Summary output is editable in the editor. You can click on the text to modify it, and it will auto-save when you click away. You can also copy it using the panel's copy button.
 
 ## 8. Export Transcript
@@ -302,18 +303,14 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 - Saved recordings and imports also support title and icon changes through their own rename flow, but that is separate from `Project Settings`.
 - If you switch away from a project while its settings drawer has unsaved changes, Sona asks whether to discard those edits first.
 
-## 10. History And Settings
+## 10. Export And Settings
 
-Use `History` when you mainly want to reopen earlier work without the workspace organization tools, and use `Settings` to manage app-wide defaults.
+Use `Export` when you are ready to write files out of Sona, and use `Settings` to manage app-wide defaults. If you want to reopen or organize saved work, return to `Workspace` instead of looking for a separate saved-items surface.
 
-### History Steps
+### Export Reminder
 
-1. Click the `History` tab.
-2. Search by title or transcript content.
-3. Filter by type with `All Types`, `Recordings`, or `Batch Imports`.
-4. Filter by time with `Any Time`, `Today`, `Last 7 Days`, or `Last 30 Days`.
-5. Click an item to load it.
-6. Use selection mode if you want to delete multiple items.
+- Use the `Export` button in the header when the transcript is ready.
+- Section `8. Export Transcript` above lists the formats and modes Sona currently supports.
 
 ### Settings Areas To Review
 
