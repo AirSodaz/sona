@@ -6,8 +6,10 @@ import { useProjectStore } from '../stores/projectStore';
 import i18n from '../i18n';
 import { migrateConfig } from '../services/configMigrationService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../services/storageService';
+import { projectService } from '../services/projectService';
 import { migrateOnboardingState, LEGACY_FIRST_RUN_KEY, ONBOARDING_STORAGE_KEY } from '../utils/onboarding';
 import { AppConfig } from '../types/config';
+import { migrateProjectPolishDefaults } from '../types/project';
 import { logger } from '../utils/logger';
 import { useThemeEffect } from './useThemeEffect';
 import { useFontEffect } from './useFontEffect';
@@ -39,11 +41,14 @@ export function useAppInitialization() {
     useEffect(() => {
         async function initialize() {
             try {
+                let hasPendingSettingsSave = false;
+
                 // 1. Load config
                 let savedConfig = await settingsStore.get<AppConfig>(STORE_KEY_CONFIG);
                 const { config: loadedConfig, migrated: isConfigMigrated } = await migrateConfig(savedConfig);
 
                 setConfig(loadedConfig);
+                hasPendingSettingsSave = isConfigMigrated;
 
                 if (loadedConfig.startOnLaunch) {
                     setIsCaptionMode(true);
@@ -84,11 +89,29 @@ export function useAppInitialization() {
                     setPersistedState({ version: 1, status: 'pending' }, false);
                 }
 
-                if (isConfigMigrated || isOnboardingMigrated) {
-                    await settingsStore.save();
-                }
+                hasPendingSettingsSave = hasPendingSettingsSave || isOnboardingMigrated;
 
                 await loadProjects();
+
+                const projectPresetMigration = migrateProjectPolishDefaults(
+                    useProjectStore.getState().projects,
+                    useConfigStore.getState().config.polishCustomPresets,
+                );
+
+                if (projectPresetMigration.migrated) {
+                    useProjectStore.setState({ projects: projectPresetMigration.projects });
+                    setConfig({ polishCustomPresets: projectPresetMigration.customPresets });
+                    await projectService.saveAll(projectPresetMigration.projects);
+                    await settingsStore.set(STORE_KEY_CONFIG, {
+                        ...useConfigStore.getState().config,
+                        polishCustomPresets: projectPresetMigration.customPresets,
+                    });
+                    hasPendingSettingsSave = true;
+                }
+
+                if (hasPendingSettingsSave) {
+                    await settingsStore.save();
+                }
 
                 // Initialize Voice Typing shortcut listeners (Main Window Only)
                 voiceTypingService.init();

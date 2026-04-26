@@ -114,6 +114,15 @@ export interface TranscriptionConfig {
 // LLM assistant
 // ---------------------------------------------------------------------------
 
+export interface PolishCustomPreset {
+  /** Stable preset id. */
+  id: string;
+  /** User-visible preset name. */
+  name: string;
+  /** Context text sent to the polish prompt. */
+  context: string;
+}
+
 /** LLM assistant and auto-polish settings. */
 export interface LlmAssistantConfig {
   /** LLM provider settings keyed by provider. */
@@ -124,9 +133,13 @@ export interface LlmAssistantConfig {
   translationLanguage?: string;
   /** Keywords for polishing. */
   polishKeywords?: string;
-  /** Context for polishing. */
+  /** Selected global polish preset id. */
+  polishPresetId?: string;
+  /** User-defined polish presets. */
+  polishCustomPresets?: PolishCustomPreset[];
+  /** Deprecated legacy context, retained only for migration. */
   polishContext?: string;
-  /** Scenario preset for polishing. */
+  /** Deprecated legacy scenario, retained only for migration. */
   polishScenario?: string;
   /** Whether to automatically polish the transcript. */
   autoPolish?: boolean;
@@ -174,12 +187,21 @@ export interface HotwordRuleSet {
   rules: HotwordRule[];
 }
 
+export interface PolishKeywordRuleSet {
+  id: string;
+  name: string;
+  enabled: boolean;
+  keywords: string;
+}
+
 /** Vocabulary and custom dictionary settings. */
 export interface VocabularyConfig {
   /** List of text replacement rule sets. */
   textReplacementSets?: TextReplacementRuleSet[];
   /** List of hotword rule sets. */
   hotwordSets?: HotwordRuleSet[];
+  /** List of polish keyword rule sets. */
+  polishKeywordSets?: PolishKeywordRuleSet[];
   /** Deprecated: Custom hotwords for ASR. Use hotwordSets instead. */
   hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */

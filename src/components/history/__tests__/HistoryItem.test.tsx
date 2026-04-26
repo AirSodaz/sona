@@ -45,8 +45,7 @@ describe('HistoryItem', () => {
           defaults: {
             summaryTemplate: 'general',
             translationLanguage: 'zh',
-            polishScenario: 'custom',
-            polishContext: '',
+            polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],

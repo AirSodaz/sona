@@ -44,6 +44,14 @@ describe('PolishButton', () => {
         useConfigStore.setState({
             config: {
                 ...useConfigStore.getState().config,
+                polishKeywordSets: [
+                    {
+                        id: 'kw-1',
+                        name: 'Brand Terms',
+                        enabled: true,
+                        keywords: 'Sona\nSherpa-onnx',
+                    },
+                ],
                 llmSettings: {
                     activeProvider: 'open_ai',
                     providers: {
@@ -171,6 +179,7 @@ describe('PolishButton', () => {
 
         // Check if modal elements appear (using localized keys from mock)
         expect(screen.getByText('polish.keywords')).toBeDefined();
-        expect(screen.getByText('polish.scenario_label')).toBeDefined();
+        expect(screen.getByText('Brand Terms')).toBeDefined();
+        expect(screen.getByText('polish.preset_label')).toBeDefined();
     });
 });

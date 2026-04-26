@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 
 export type SettingsTab = 'general' | 'microphone' | 'subtitle' | 'local' | 'models' | 'shortcuts' | 'about' | 'llm_service' | 'vocabulary';
+export type SettingsTabInput = SettingsTab | 'context';
 
 /**
  * Hook managing local UI state for the Settings dialog:
  * active tab and language synchronisation.
  */
-export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initialTab?: SettingsTab) {
+export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initialTab?: SettingsTabInput) {
     const config = useConfigStore((state) => state.config);
     const setConfig = useConfigStore((state) => state.setConfig);
     const { i18n } = useTranslation();
@@ -18,7 +19,7 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     useEffect(() => {
         if (_isOpen) {
             if (initialTab) {
-                setActiveTab(initialTab);
+                setActiveTab(initialTab === 'context' ? 'vocabulary' : initialTab);
             }
         } else {
             setActiveTab('general');

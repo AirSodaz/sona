@@ -73,4 +73,10 @@ describe('useSettingsLogic', () => {
 
         expect(result.current.activeTab).toBe('models');
     });
+
+    it('maps the legacy context tab to vocabulary when opened', () => {
+        const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'context'));
+
+        expect(result.current.activeTab).toBe('vocabulary');
+    });
 });

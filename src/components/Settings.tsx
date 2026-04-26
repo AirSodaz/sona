@@ -15,7 +15,7 @@ import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
-import { SettingsTab } from '../hooks/useSettingsLogic';
+import { SettingsTabInput } from '../hooks/useSettingsLogic';
 import './settings/Settings.css';
 import {
     GeneralIcon,
@@ -34,7 +34,7 @@ import {
 interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTab?: SettingsTab;
+    initialTab?: SettingsTabInput;
 }
 
 /**

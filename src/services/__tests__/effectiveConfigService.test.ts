@@ -6,7 +6,7 @@ import { createLlmSettings } from '../llmConfig';
 
 function createBaseConfig(): AppConfig {
   return {
-    configVersion: 1,
+    configVersion: 4,
     appLanguage: 'en',
     theme: 'light',
     font: 'system',
@@ -28,8 +28,13 @@ function createBaseConfig(): AppConfig {
     llmSettings: createLlmSettings(),
     summaryEnabled: true,
     translationLanguage: 'zh',
-    polishScenario: 'custom',
-    polishContext: '',
+    polishPresetId: 'general',
+    polishCustomPresets: [
+      { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
+    ],
+    polishKeywordSets: [
+      { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
+    ],
     autoPolish: false,
     autoPolishFrequency: 5,
     voiceTypingEnabled: false,
@@ -57,8 +62,7 @@ function createProject(): ProjectRecord {
     defaults: {
       summaryTemplate: 'meeting',
       translationLanguage: 'ja',
-      polishScenario: 'meeting',
-      polishContext: 'Team sync notes',
+      polishPresetId: 'meeting',
       exportFileNamePrefix: 'TEAM',
       enabledTextReplacementSetIds: ['set-b'],
       enabledHotwordSetIds: ['hot-a'],
@@ -76,8 +80,8 @@ describe('effectiveConfigService', () => {
     const effective = resolveEffectiveConfig(createBaseConfig(), createProject());
 
     expect(effective.translationLanguage).toBe('ja');
-    expect(effective.polishScenario).toBe('meeting');
-    expect(effective.polishContext).toBe('Team sync notes');
+    expect(effective.polishPresetId).toBe('meeting');
+    expect(effective.polishKeywordSets?.[0].name).toBe('Brand');
     expect(effective.textReplacementSets?.find((set) => set.id === 'set-a')?.enabled).toBe(false);
     expect(effective.textReplacementSets?.find((set) => set.id === 'set-b')?.enabled).toBe(true);
     expect(effective.hotwordSets?.find((set) => set.id === 'hot-a')?.enabled).toBe(true);

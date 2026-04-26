@@ -6,7 +6,10 @@ import { useProjectStore } from '../stores/projectStore';
 import { XIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
+import { Checkbox } from './Checkbox';
 import { isFeatureLlmConfigComplete } from '../services/llmConfig';
+import { getPolishPresetOptions } from '../utils/polishPresets';
+import { normalizePolishKeywordSets } from '../utils/polishKeywords';
 
 interface PolishSettingsModalProps {
     isOpen: boolean;
@@ -43,14 +46,18 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
 
     if (!isOpen) return null;
 
-    const scenarioOptions = [
-        { value: 'customer_service', label: t('polish.scenarios.customer_service') },
-        { value: 'meeting', label: t('polish.scenarios.meeting') },
-        { value: 'interview', label: t('polish.scenarios.interview') },
-        { value: 'lecture', label: t('polish.scenarios.lecture') },
-        { value: 'podcast', label: t('polish.scenarios.podcast') },
-        { value: 'custom', label: t('polish.scenarios.custom') },
-    ];
+    const presetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
+    const polishKeywordSets = normalizePolishKeywordSets(globalConfig.polishKeywordSets);
+
+    const handleToggleKeywordSet = (setId: string, enabled: boolean) => {
+        setConfig({
+            polishKeywordSets: polishKeywordSets.map((set) => (
+                set.id === setId
+                    ? { ...set, enabled }
+                    : set
+            )),
+        });
+    };
 
     return (
         <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
@@ -144,76 +151,63 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
 
                     {/* Keywords */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
-                        <label htmlFor="polish-keywords" style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+                        <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
                             {t('polish.keywords')}
                         </label>
-                        <input
-                            id="polish-keywords"
-                            type="text"
-                            value={config.polishKeywords || ''}
-                            onChange={(e) => setConfig({ polishKeywords: e.target.value })}
-                            style={{
-                                padding: '8px 12px',
+                        {polishKeywordSets.length === 0 ? (
+                            <div style={{
+                                padding: '12px 14px',
+                                borderRadius: '4px',
+                                border: '1px dashed var(--color-border)',
+                                background: 'var(--color-bg-secondary)',
+                                color: 'var(--color-text-secondary)',
+                                fontSize: '0.8125rem',
+                                lineHeight: 1.5,
+                            }}>
+                                {t('polish.no_keyword_sets', {
+                                    defaultValue: 'No keyword sets yet. Create them in Vocabulary to reuse polish keyword guidance.',
+                                })}
+                            </div>
+                        ) : (
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '10px',
+                                padding: '12px 14px',
                                 borderRadius: '4px',
                                 border: '1px solid var(--color-border)',
-                                background: 'var(--color-bg-input)',
-                                color: 'var(--color-text-primary)',
-                                outline: 'none'
-                            }}
-                            placeholder={t('polish.keywords_placeholder')}
-                        />
+                                background: 'var(--color-bg-secondary)',
+                            }}>
+                                {polishKeywordSets.map((set) => (
+                                    <Checkbox
+                                        key={set.id}
+                                        checked={set.enabled}
+                                        onChange={(checked) => handleToggleKeywordSet(set.id, checked)}
+                                        label={set.name}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Scenario */}
+                    {/* Preset */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
                         <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
-                            {t('polish.scenario_label')}
+                            {t('polish.preset_label', { defaultValue: 'Context Presets' })}
                         </label>
                         <Dropdown
-                            value={config.polishScenario || 'custom'}
+                            value={config.polishPresetId || 'general'}
                             onChange={(val) => {
                                 if (activeProjectId) {
-                                    void updateProjectDefaults(activeProjectId, { polishScenario: val });
+                                    void updateProjectDefaults(activeProjectId, { polishPresetId: val });
                                     return;
                                 }
-                                setConfig({ polishScenario: val });
+                                setConfig({ polishPresetId: val });
                             }}
-                            options={scenarioOptions}
+                            options={presetOptions}
                             style={{ width: '100%' }}
                         />
                     </div>
-
-                    {/* Custom Context */}
-                    {(config.polishScenario === 'custom' || !config.polishScenario) && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
-                            <label htmlFor="polish-custom-context" style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
-                                {t('polish.custom_context')}
-                            </label>
-                            <textarea
-                                id="polish-custom-context"
-                                value={config.polishContext || ''}
-                                onChange={(e) => {
-                                    if (activeProjectId) {
-                                        void updateProjectDefaults(activeProjectId, { polishContext: e.target.value });
-                                        return;
-                                    }
-                                    setConfig({ polishContext: e.target.value });
-                                }}
-                                style={{
-                                    padding: '8px 12px',
-                                    borderRadius: '4px',
-                                    border: '1px solid var(--color-border)',
-                                    background: 'var(--color-bg-input)',
-                                    color: 'var(--color-text-primary)',
-                                    outline: 'none',
-                                    minHeight: '80px',
-                                    resize: 'vertical',
-                                    fontFamily: 'inherit'
-                                }}
-                                placeholder={t('polish.context_placeholder')}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

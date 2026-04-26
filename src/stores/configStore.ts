@@ -20,7 +20,7 @@ import type {
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
-  configVersion: 1,
+  configVersion: 4,
 
   // UI
   appLanguage: 'auto',
@@ -64,9 +64,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   llmSettings: createLlmSettings(),
   summaryEnabled: true,
   translationLanguage: 'zh',
-  polishKeywords: undefined,
-  polishContext: undefined,
-  polishScenario: undefined,
+  polishKeywords: '',
+  polishPresetId: 'general',
+  polishCustomPresets: [],
   autoPolish: false,
   autoPolishFrequency: 5,
 
@@ -78,6 +78,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   // Vocabulary
   textReplacementSets: [],
   hotwordSets: [],
+  polishKeywordSets: [],
   hotwords: [],
 };
 
@@ -133,13 +134,14 @@ const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'llmSettings', 'summaryEnabled', 'translationLanguage',
-  'polishKeywords', 'polishContext', 'polishScenario',
+  'polishKeywords', 'polishPresetId', 'polishCustomPresets',
   'autoPolish', 'autoPolishFrequency',
 ];
 
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'textReplacementSets',
   'hotwordSets',
+  'polishKeywordSets',
   'hotwords',
 ];
 

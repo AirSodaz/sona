@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeProjectRecord } from './project';
+import { migrateProjectPolishDefaults, normalizeProjectRecord } from './project';
 
 describe('normalizeProjectRecord', () => {
   it('preserves an incoming icon value', () => {
@@ -12,8 +12,7 @@ describe('normalizeProjectRecord', () => {
       defaults: {
         summaryTemplate: 'general',
         translationLanguage: 'en',
-        polishScenario: 'custom',
-        polishContext: '',
+        polishPresetId: 'general',
         exportFileNamePrefix: '',
         enabledTextReplacementSetIds: ['set-1'],
         enabledHotwordSetIds: ['hot-1'],
@@ -21,5 +20,28 @@ describe('normalizeProjectRecord', () => {
     });
 
     expect(project.icon).toBe('🧪');
+  });
+
+  it('migrates legacy project polish context into a shared custom preset reference', () => {
+    const result = migrateProjectPolishDefaults([
+      normalizeProjectRecord({
+        id: 'project-1',
+        name: 'Alpha',
+        defaults: {
+          summaryTemplate: 'general',
+          translationLanguage: 'en',
+          polishPresetId: '',
+          polishScenario: 'custom',
+          polishContext: 'Use product terminology.',
+          exportFileNamePrefix: '',
+          enabledTextReplacementSetIds: [],
+          enabledHotwordSetIds: [],
+        },
+      }),
+    ], []);
+
+    expect(result.customPresets).toHaveLength(1);
+    expect(result.projects[0].defaults.polishPresetId).toBe(result.customPresets[0].id);
+    expect(result.migrated).toBe(true);
   });
 });

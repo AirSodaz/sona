@@ -49,6 +49,11 @@ export const projectService = {
     }
   },
 
+  async saveAll(projects: ProjectRecord[]): Promise<void> {
+    await ensureProjectsIndex();
+    await writeProjects(projects);
+  },
+
   async reorder(projectIds: string[]): Promise<void> {
     const projects = await this.getAll();
     const projectMap = new Map(projects.map((p) => [p.id, p]));

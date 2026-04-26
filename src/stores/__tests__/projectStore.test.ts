@@ -43,8 +43,7 @@ describe('projectStore', () => {
         defaults: {
           summaryTemplate: 'general',
           translationLanguage: 'zh',
-          polishScenario: 'custom',
-          polishContext: '',
+          polishPresetId: 'general',
           exportFileNamePrefix: '',
           enabledTextReplacementSetIds: [],
           enabledHotwordSetIds: [],
@@ -73,7 +72,7 @@ describe('projectStore', () => {
     const project = await useProjectStore.getState().createProject(
       { name: 'Alpha' },
       {
-        configVersion: 1,
+        configVersion: 3,
         appLanguage: 'en',
         theme: 'light',
         font: 'system',
@@ -95,8 +94,8 @@ describe('projectStore', () => {
         llmSettings: createLlmSettings(),
         summaryEnabled: true,
         translationLanguage: 'en',
-        polishScenario: 'lecture',
-        polishContext: 'Talk track',
+        polishPresetId: 'lecture',
+        polishCustomPresets: [],
         autoPolish: false,
         autoPolishFrequency: 5,
         voiceTypingEnabled: false,
@@ -109,7 +108,7 @@ describe('projectStore', () => {
     );
 
     expect(project?.defaults.translationLanguage).toBe('en');
-    expect(project?.defaults.polishScenario).toBe('lecture');
+    expect(project?.defaults.polishPresetId).toBe('lecture');
     expect(project?.defaults.enabledTextReplacementSetIds).toEqual(['set-1']);
     expect(project?.defaults.enabledHotwordSetIds).toEqual(['hot-1']);
     expect(useProjectStore.getState().projects).toHaveLength(1);
@@ -130,8 +129,7 @@ describe('projectStore', () => {
           defaults: {
             summaryTemplate: 'general',
             translationLanguage: 'zh',
-            polishScenario: 'custom',
-            polishContext: '',
+            polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],

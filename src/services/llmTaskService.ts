@@ -29,7 +29,6 @@ export interface PolishSegmentsRequest {
   chunkSize?: number;
   context?: string;
   keywords?: string;
-  scenarioPrompt?: string;
 }
 
 export interface TranslateSegmentsRequest {

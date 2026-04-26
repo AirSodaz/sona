@@ -1,11 +1,19 @@
-import type { AppConfig, HotwordRuleSet, TextReplacementRuleSet } from './config';
+import type { AppConfig, HotwordRuleSet, PolishCustomPreset, TextReplacementRuleSet } from './config';
 import type { SummaryTemplate } from './transcript';
+import {
+  DEFAULT_POLISH_PRESET_ID,
+  migrateLegacyPolishSelection,
+  normalizePolishCustomPresets,
+} from '../utils/polishPresets';
 
 export interface ProjectDefaults {
   summaryTemplate: SummaryTemplate;
   translationLanguage: string;
-  polishScenario: string;
-  polishContext: string;
+  polishPresetId: string;
+  /** Deprecated legacy scenario, retained only for migration. */
+  polishScenario?: string;
+  /** Deprecated legacy context, retained only for migration. */
+  polishContext?: string;
   exportFileNamePrefix: string;
   enabledTextReplacementSetIds: string[];
   enabledHotwordSetIds: string[];
@@ -25,8 +33,7 @@ export function buildProjectDefaultsFromConfig(config: AppConfig): ProjectDefaul
   return {
     summaryTemplate: 'general',
     translationLanguage: config.translationLanguage || 'zh',
-    polishScenario: config.polishScenario || 'custom',
-    polishContext: config.polishContext || '',
+    polishPresetId: config.polishPresetId || DEFAULT_POLISH_PRESET_ID,
     exportFileNamePrefix: '',
     enabledTextReplacementSetIds: (config.textReplacementSets || [])
       .filter((set) => set.enabled)
@@ -76,6 +83,10 @@ export function resolveProjectAwareHotwordSets(
 
 export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRecord {
   const now = Date.now();
+  const defaults = (input.defaults || {}) as Partial<ProjectDefaults> & {
+    polishScenario?: string;
+    polishContext?: string;
+  };
 
   return {
     id: input.id || '',
@@ -85,13 +96,77 @@ export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRe
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || input.createdAt || now,
     defaults: {
-      summaryTemplate: input.defaults?.summaryTemplate || 'general',
-      translationLanguage: input.defaults?.translationLanguage || 'zh',
-      polishScenario: input.defaults?.polishScenario || 'custom',
-      polishContext: input.defaults?.polishContext || '',
-      exportFileNamePrefix: input.defaults?.exportFileNamePrefix || '',
-      enabledTextReplacementSetIds: input.defaults?.enabledTextReplacementSetIds || [],
-      enabledHotwordSetIds: input.defaults?.enabledHotwordSetIds || [],
+      summaryTemplate: defaults.summaryTemplate || 'general',
+      translationLanguage: defaults.translationLanguage || 'zh',
+      polishPresetId: defaults.polishPresetId
+        || ((defaults.polishScenario || defaults.polishContext) ? '' : DEFAULT_POLISH_PRESET_ID),
+      polishScenario: defaults.polishScenario,
+      polishContext: defaults.polishContext,
+      exportFileNamePrefix: defaults.exportFileNamePrefix || '',
+      enabledTextReplacementSetIds: defaults.enabledTextReplacementSetIds || [],
+      enabledHotwordSetIds: defaults.enabledHotwordSetIds || [],
     },
+  };
+}
+
+export function migrateProjectPolishDefaults(
+  projects: ProjectRecord[],
+  initialCustomPresets: PolishCustomPreset[] | null | undefined,
+): {
+  projects: ProjectRecord[];
+  customPresets: PolishCustomPreset[];
+  migrated: boolean;
+} {
+  let customPresets = normalizePolishCustomPresets(initialCustomPresets);
+  let migrated = false;
+
+  const nextProjects = projects.map((project) => {
+    const selection = migrateLegacyPolishSelection(
+      {
+        presetId: project.defaults.polishPresetId,
+        scenario: project.defaults.polishScenario,
+        context: project.defaults.polishContext,
+      },
+      customPresets,
+      `${project.name} Context`,
+    );
+
+    const nextDefaults: ProjectDefaults = {
+      summaryTemplate: project.defaults.summaryTemplate,
+      translationLanguage: project.defaults.translationLanguage,
+      polishPresetId: selection.presetId,
+      exportFileNamePrefix: project.defaults.exportFileNamePrefix,
+      enabledTextReplacementSetIds: [...project.defaults.enabledTextReplacementSetIds],
+      enabledHotwordSetIds: [...project.defaults.enabledHotwordSetIds],
+    };
+
+    customPresets = selection.customPresets;
+
+    const projectMigrated =
+      project.defaults.polishPresetId !== nextDefaults.polishPresetId
+      || typeof project.defaults.polishScenario !== 'undefined'
+      || typeof project.defaults.polishContext !== 'undefined';
+
+    if (projectMigrated) {
+      migrated = true;
+      return {
+        ...project,
+        defaults: nextDefaults,
+      };
+    }
+
+    return project;
+  });
+
+  if (
+    JSON.stringify(normalizePolishCustomPresets(initialCustomPresets)) !== JSON.stringify(customPresets)
+  ) {
+    migrated = true;
+  }
+
+  return {
+    projects: nextProjects,
+    customPresets,
+    migrated,
   };
 }

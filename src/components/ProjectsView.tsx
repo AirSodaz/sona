@@ -47,6 +47,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import type { ProjectDefaults, ProjectRecord } from '../types/project';
+import { getPolishPresetOptions } from '../utils/polishPresets';
 
 const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 const SUMMARY_TEMPLATE_OPTIONS = ['general', 'meeting', 'lecture'] as const;
@@ -55,14 +56,6 @@ const DEFAULT_DATE_FILTER = 'all';
 const DEFAULT_SORT_ORDER = 'newest';
 const ALL_ITEMS_SCOPE = 'all';
 const INBOX_SCOPE = 'inbox';
-const POLISH_SCENARIO_OPTIONS = [
-  'customer_service',
-  'meeting',
-  'interview',
-  'lecture',
-  'podcast',
-  'custom',
-] as const;
 type ProjectFilterType = 'all' | 'recording' | 'batch';
 type ProjectDateFilter = 'all' | 'today' | 'week' | 'month';
 type ProjectSortOrder = 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
@@ -151,8 +144,7 @@ function buildComparableProjectSettingsSnapshot(input: {
     icon: input.icon || '',
     summaryTemplate: input.defaults.summaryTemplate,
     translationLanguage: input.defaults.translationLanguage,
-    polishScenario: input.defaults.polishScenario,
-    polishContext: input.defaults.polishContext,
+    polishPresetId: input.defaults.polishPresetId,
     exportFileNamePrefix: input.defaults.exportFileNamePrefix,
     enabledTextReplacementSetIds: sortRuleSetIds(input.defaults.enabledTextReplacementSetIds),
     enabledHotwordSetIds: sortRuleSetIds(input.defaults.enabledHotwordSetIds),
@@ -406,10 +398,7 @@ function ProjectSettingsModal({
     label: t(`translation.languages.${language}`),
   }));
 
-  const polishScenarioOptions = POLISH_SCENARIO_OPTIONS.map((scenario) => ({
-    value: scenario,
-    label: t(`polish.scenarios.${scenario}`),
-  }));
+  const polishPresetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
 
   const toggleRuleSetId = (
     key: 'enabledTextReplacementSetIds' | 'enabledHotwordSetIds',
@@ -551,15 +540,15 @@ function ProjectSettingsModal({
 
             <div className="projects-field">
               <label>
-                {t('projects.polish_scenario', { defaultValue: 'Default Polish Scenario' })}
+                {t('projects.polish_preset', { defaultValue: 'Default Polish Preset' })}
               </label>
               <Dropdown
-                value={draftDefaults.polishScenario}
+                value={draftDefaults.polishPresetId}
                 onChange={(value: string) => onDefaultsChange({
                   ...draftDefaults,
-                  polishScenario: value,
+                  polishPresetId: value,
                 })}
-                options={polishScenarioOptions}
+                options={polishPresetOptions}
                 style={{ width: '100%' }}
               />
             </div>
@@ -581,24 +570,6 @@ function ProjectSettingsModal({
               />
             </div>
           </div>
-
-          {(draftDefaults.polishScenario === 'custom' || !draftDefaults.polishScenario) && (
-            <div className="projects-field">
-              <label htmlFor="project-settings-polish-context">
-                {t('projects.polish_context', { defaultValue: 'Default Polish Context' })}
-              </label>
-              <textarea
-                id="project-settings-polish-context"
-                className="settings-input"
-                value={draftDefaults.polishContext}
-                onChange={(event) => onDefaultsChange({
-                  ...draftDefaults,
-                  polishContext: event.target.value,
-                })}
-                style={{ minHeight: '80px' }}
-              />
-            </div>
-          )}
 
           <div className="projects-settings-grid">
             <div className="projects-settings-card">

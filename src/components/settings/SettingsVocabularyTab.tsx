@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List } from 'lucide-react';
 import { BookIcon } from '../Icons';
-import { TextReplacementRuleSet, TextReplacementRule, HotwordRuleSet, HotwordRule } from '../../types/config';
+import { TextReplacementRuleSet, TextReplacementRule, HotwordRuleSet, HotwordRule, PolishKeywordRuleSet } from '../../types/config';
 import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { v4 as uuidv4 } from 'uuid';
+import { SettingsContextSection } from './SettingsContextSection';
+import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
 
 export function SettingsVocabularyTab(): React.JSX.Element {
     const { t } = useTranslation();
@@ -23,8 +25,13 @@ export function SettingsVocabularyTab(): React.JSX.Element {
     const [expandedHotwordSets, setExpandedHotwordSets] = useState<Set<string>>(new Set());
     const [batchEditingHotwordSets, setBatchEditingHotwordSets] = useState<Set<string>>(new Set());
 
+    // State for Polish Keyword Sets
+    const [newPolishKeywordSetName, setNewPolishKeywordSetName] = useState('');
+    const [expandedPolishKeywordSets, setExpandedPolishKeywordSets] = useState<Set<string>>(new Set());
+
     const sets = config.textReplacementSets || [];
     const hotwordSets = config.hotwordSets || [];
+    const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
 
     // --- Text Replacement Handlers ---
 
@@ -198,12 +205,44 @@ export function SettingsVocabularyTab(): React.JSX.Element {
             .map(line => ({ id: uuidv4(), text: line.trim() }));
     };
 
+    // --- Polish Keyword Set Handlers ---
+
+    const togglePolishKeywordSetExpanded = (id: string) => {
+        const nextExpanded = new Set(expandedPolishKeywordSets);
+        if (nextExpanded.has(id)) nextExpanded.delete(id);
+        else nextExpanded.add(id);
+        setExpandedPolishKeywordSets(nextExpanded);
+    };
+
+    const handleAddPolishKeywordSet = () => {
+        if (!newPolishKeywordSetName.trim()) return;
+        const newSet: PolishKeywordRuleSet = {
+            id: uuidv4(),
+            name: newPolishKeywordSetName.trim(),
+            enabled: true,
+            keywords: '',
+        };
+        updateConfig({ polishKeywordSets: [...polishKeywordSets, newSet] });
+        setNewPolishKeywordSetName('');
+        setExpandedPolishKeywordSets(prev => new Set(prev).add(newSet.id));
+    };
+
+    const handleUpdatePolishKeywordSet = (id: string, updates: Partial<PolishKeywordRuleSet>) => {
+        updateConfig({
+            polishKeywordSets: polishKeywordSets.map((set) => (set.id === id ? { ...set, ...updates } : set)),
+        });
+    };
+
+    const handleDeletePolishKeywordSet = (id: string) => {
+        updateConfig({ polishKeywordSets: polishKeywordSets.filter((set) => set.id !== id) });
+    };
+
     return (
         <SettingsTabContainer id="settings-panel-vocabulary" ariaLabelledby="settings-tab-vocabulary">
             <SettingsPageHeader 
                 icon={<BookIcon width={28} height={28} />}
                 title={t('settings.vocabulary')} 
-                description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary and text replacement rules.' })} 
+                description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary, hotwords, polish keyword sets, and text polish context presets.' })} 
             />
 
             <SettingsSection
@@ -618,6 +657,151 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                     )}
                 </div>
             </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.polish_keywords_title', { defaultValue: 'Polish Keywords' })}
+                icon={<BookIcon width={20} height={20} />}
+                description={t('settings.polish_keywords_description', {
+                    defaultValue: 'Group reusable keyword guidance into global sets. Enabled sets are combined when text polish runs.',
+                })}
+            >
+                <div style={{
+                    display: 'flex',
+                    gap: '12px',
+                    padding: '24px',
+                    background: 'var(--color-bg-primary)',
+                    alignItems: 'flex-end',
+                    borderBottom: '1px solid var(--color-border-subtle)'
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
+                            {t('settings.rule_set_name', { defaultValue: 'Rule Set Name' })}
+                        </label>
+                        <input
+                            type="text"
+                            className="settings-input"
+                            value={newPolishKeywordSetName}
+                            onChange={(e) => setNewPolishKeywordSetName(e.target.value)}
+                            placeholder={t('settings.polish_keyword_set_name_placeholder', { defaultValue: 'e.g. Brand Terms' })}
+                            style={{ width: '100%' }}
+                        />
+                    </div>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleAddPolishKeywordSet}
+                        disabled={!newPolishKeywordSetName.trim()}
+                        style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
+                    >
+                        <Plus size={18} />
+                        {t('settings.add_rule_set', { defaultValue: 'Add Set' })}
+                    </button>
+                </div>
+
+                <div className="settings-list" style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}>
+                    {polishKeywordSets.length === 0 ? (
+                        <div style={{
+                            padding: '48px 24px',
+                            textAlign: 'center',
+                            color: 'var(--color-text-muted)'
+                        }}>
+                            {t('settings.no_polish_keyword_sets', { defaultValue: 'No polish keyword sets yet.' })}
+                        </div>
+                    ) : (
+                        polishKeywordSets.map((set, index) => (
+                            <div key={set.id} style={{
+                                borderBottom: index === polishKeywordSets.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
+                                background: set.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    padding: '16px 24px',
+                                    cursor: 'pointer'
+                                }} onClick={() => togglePolishKeywordSetExpanded(set.id)}>
+                                    <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
+                                        {expandedPolishKeywordSets.has(set.id) ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                    </div>
+
+                                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <input
+                                            type="text"
+                                            className="settings-input-minimal"
+                                            value={set.name}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => handleUpdatePolishKeywordSet(set.id, { name: e.target.value })}
+                                            style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
+                                        />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                                            {set.keywords.trim()
+                                                ? t('settings.polish_keywords_ready', { defaultValue: 'Ready' })
+                                                : t('settings.polish_keywords_empty', { defaultValue: 'Empty' })}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }} onClick={(e) => e.stopPropagation()}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <Switch
+                                                checked={set.enabled}
+                                                onChange={(checked) => handleUpdatePolishKeywordSet(set.id, { enabled: checked })}
+                                            />
+                                        </div>
+
+                                        <button
+                                            className="btn btn-icon btn-danger-soft"
+                                            onClick={() => handleDeletePolishKeywordSet(set.id)}
+                                            title={t('common.delete')}
+                                            aria-label={t('common.delete')}
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {expandedPolishKeywordSets.has(set.id) && (
+                                    <div style={{
+                                        padding: '0 24px 24px 56px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '8px'
+                                    }}>
+                                        <textarea
+                                            className="settings-input"
+                                            value={set.keywords}
+                                            onChange={(e) => handleUpdatePolishKeywordSet(set.id, { keywords: e.target.value })}
+                                            placeholder={t('settings.polish_keywords_placeholder', {
+                                                defaultValue: 'e.g. Product names, terminology, preferred spellings',
+                                            })}
+                                            rows={5}
+                                            style={{
+                                                width: '100%',
+                                                minHeight: '120px',
+                                                fontFamily: 'var(--font-mono)',
+                                                fontSize: '0.85rem',
+                                                resize: 'vertical',
+                                                lineHeight: '1.4',
+                                                padding: '10px'
+                                            }}
+                                        />
+                                        <p style={{
+                                            fontSize: '0.75rem',
+                                            color: 'var(--color-text-muted)',
+                                            margin: 0,
+                                            marginTop: '4px'
+                                        }}>
+                                            {t('settings.polish_keywords_hint', {
+                                                defaultValue: 'Use this block for preferred terms or style guidance. Enabled sets are combined in order during polishing.',
+                                            })}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </SettingsSection>
+
+            <SettingsContextSection />
         </SettingsTabContainer>
     );
 }

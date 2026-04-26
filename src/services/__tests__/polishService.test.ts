@@ -64,9 +64,10 @@ describe('PolishService', () => {
             polishModelId: 'open-ai-test',
           },
         },
-        polishScenario: 'custom',
-        polishContext: '',
+        polishPresetId: 'general',
+        polishCustomPresets: [],
         polishKeywords: '',
+        polishKeywordSets: [],
       },
       segments: [],
       updateSegment: vi.fn(),
@@ -96,9 +97,10 @@ describe('PolishService', () => {
             polishModelId: 'open-ai-test',
           },
         },
-        polishScenario: 'custom',
-        polishContext: '',
+        polishPresetId: 'general',
+        polishCustomPresets: [],
         polishKeywords: '',
+        polishKeywordSets: [],
       },
     });
   });
@@ -141,7 +143,6 @@ describe('PolishService', () => {
         ],
         context: '',
         keywords: '',
-        scenarioPrompt: '',
       },
     });
     expect(onChunk).toHaveBeenCalledTimes(1);
@@ -162,6 +163,110 @@ describe('PolishService', () => {
     await polishService.polishSegments(segments, onChunk);
 
     expect(onChunk).toHaveBeenCalledWith([{ id: '1', text: 'Hello' }]);
+  });
+
+  it('polishSegments resolves custom preset context before invoking Rust', async () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
+    ];
+
+    (useTranscriptStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      config: {
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
+        },
+        polishPresetId: 'custom-team',
+        polishCustomPresets: [
+          { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
+        ],
+        polishKeywords: '',
+        polishKeywordSets: [],
+      },
+      segments: [],
+      updateSegment: vi.fn(),
+      updateLlmState: vi.fn(),
+      sourceHistoryId: null,
+    });
+
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
+
+    await polishService.polishSegments(segments);
+
+    expect(invoke).toHaveBeenCalledWith('polish_transcript_segments', {
+      request: expect.objectContaining({
+        context: 'Team sync notes',
+      }),
+    });
+  });
+
+  it('polishSegments resolves enabled keyword set blocks before invoking Rust', async () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
+    ];
+
+    (useTranscriptStore.getState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      config: {
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'test-url',
+              apiKey: 'test-key',
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            polishModelId: 'open-ai-test',
+          },
+        },
+        polishPresetId: 'general',
+        polishCustomPresets: [],
+        polishKeywords: '',
+        polishKeywordSets: [
+          { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
+          { id: 'kw-2', name: 'Disabled', enabled: false, keywords: 'Ignore me' },
+          { id: 'kw-3', name: 'Style', enabled: true, keywords: 'Preserve speaker names' },
+        ],
+      },
+      segments: [],
+      updateSegment: vi.fn(),
+      updateLlmState: vi.fn(),
+      sourceHistoryId: null,
+    });
+
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
+
+    await polishService.polishSegments(segments);
+
+    expect(invoke).toHaveBeenCalledWith('polish_transcript_segments', {
+      request: expect.objectContaining({
+        keywords: 'Sona\nSherpa-onnx\n\nPreserve speaker names',
+      }),
+    });
   });
 
   it('polishSegments surfaces normalized Rust command errors', async () => {
@@ -203,9 +308,10 @@ describe('PolishService', () => {
             polishModelId: 'open-ai-test',
           },
         },
-        polishScenario: 'custom',
-        polishContext: '',
+        polishPresetId: 'general',
+        polishCustomPresets: [],
         polishKeywords: '',
+        polishKeywordSets: [],
       },
       segments,
       updateSegment: vi.fn(),
@@ -235,9 +341,10 @@ describe('PolishService', () => {
             polishModelId: 'open-ai-test',
           },
         },
-        polishScenario: 'custom',
-        polishContext: '',
+        polishPresetId: 'general',
+        polishCustomPresets: [],
         polishKeywords: '',
+        polishKeywordSets: [],
       },
     };
 

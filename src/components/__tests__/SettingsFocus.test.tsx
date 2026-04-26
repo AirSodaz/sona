@@ -122,6 +122,9 @@ describe('Settings Focus Trap & Navigation', () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
 
+        expect(screen.getByText('settings.vocabulary')).toBeDefined();
+        expect(screen.queryByText('settings.context_title')).toBeNull();
+
         const tablist = screen.getByRole('tablist');
         const tabs = screen.getAllByRole('tab');
         const generalTab = tabs[0];

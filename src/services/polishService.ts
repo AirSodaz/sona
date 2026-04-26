@@ -2,11 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
-import { POLISH_SCENARIO_PROMPTS } from '../utils/polishPrompts';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { resolvePolishPreset } from '../utils/polishPresets';
+import { resolvePolishKeywords } from '../utils/polishKeywords';
 import {
   createLlmTaskId,
   listenToLlmTaskChunks,
@@ -111,15 +112,14 @@ class PolishService {
 
   private buildRequest(taskId: string, segments: TranscriptSegment[]): PolishSegmentsRequest {
     const config = useTranscriptStore.getState().config;
-    const scenario = config.polishScenario || 'custom';
+    const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
 
     return {
       taskId,
       config: getFeatureLlmConfig(config, 'polish')!,
       segments: segments.map(({ id, text }) => ({ id, text })),
-      context: scenario === 'custom' ? (config.polishContext || '') : '',
-      keywords: config.polishKeywords || '',
-      scenarioPrompt: scenario === 'custom' ? '' : (POLISH_SCENARIO_PROMPTS[scenario] || ''),
+      context: preset.context,
+      keywords: resolvePolishKeywords(config.polishKeywordSets),
     };
   }
 

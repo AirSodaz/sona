@@ -4,10 +4,50 @@ import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import i18n from '../i18n';
 import { DEFAULT_CONFIG } from '../stores/configStore';
 import { logger } from '../utils/logger';
+import {
+  coercePolishPresetId,
+  migrateLegacyPolishSelection,
+  normalizePolishCustomPresets,
+} from '../utils/polishPresets';
+import {
+  migrateLegacyPolishKeywords,
+  normalizePolishKeywordSets,
+} from '../utils/polishKeywords';
 
 export interface MigrationResult {
   config: AppConfig;
   migrated: boolean;
+}
+
+const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 4;
+
+function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
+  if (isConfigMigrated) {
+    return true;
+  }
+
+  const version = typeof config?.configVersion === 'number' ? config.configVersion : 0;
+  if (version < CURRENT_CONFIG_VERSION) {
+    return true;
+  }
+
+  if (config?.summaryEnabled === undefined) {
+    return true;
+  }
+
+  if (!Array.isArray(config?.polishCustomPresets)) {
+    return true;
+  }
+
+  if (!Array.isArray(config?.polishKeywordSets)) {
+    return true;
+  }
+
+  if (typeof config?.polishPresetId !== 'string' || !config.polishPresetId.trim()) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -37,22 +77,48 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
   }
 
   // 3. Determine if an upgrade is needed based on version or missing keys
-  const needsUpgrade = isConfigMigrated || !configToLoad.configVersion || configToLoad.configVersion < 1;
+  const needsUpgrade = shouldUpgradeConfig(configToLoad, isConfigMigrated);
 
   if (!needsUpgrade) {
     const normalizedLlmSettings = ensureLlmState(configToLoad).llmSettings;
+    const normalizedPolishCustomPresets = normalizePolishCustomPresets(
+      (configToLoad as AppConfig).polishCustomPresets,
+    );
+    const normalizedPolishPresetId = coercePolishPresetId(
+      (configToLoad as AppConfig).polishPresetId,
+      normalizedPolishCustomPresets,
+    );
+    const normalizedPolishKeywordSets = migrateLegacyPolishKeywords(
+      (configToLoad as AppConfig).polishKeywords,
+      (configToLoad as AppConfig).polishKeywordSets,
+    );
     const normalizedConfig: AppConfig = {
+      ...DEFAULT_CONFIG,
       ...(configToLoad as AppConfig),
+      configVersion: CURRENT_CONFIG_VERSION,
       llmSettings: normalizedLlmSettings,
       summaryEnabled: (configToLoad as AppConfig).summaryEnabled ?? true,
+      polishKeywords: '',
+      polishPresetId: normalizedPolishPresetId,
+      polishCustomPresets: normalizedPolishCustomPresets,
+      polishKeywordSets: normalizedPolishKeywordSets,
     };
 
     const llmChanged =
       JSON.stringify((configToLoad as AppConfig).llmSettings ?? null) !==
       JSON.stringify(normalizedLlmSettings);
     const summaryEnabledChanged = (configToLoad as AppConfig).summaryEnabled !== normalizedConfig.summaryEnabled;
+    const polishPresetsChanged =
+      JSON.stringify((configToLoad as AppConfig).polishCustomPresets ?? []) !==
+        JSON.stringify(normalizedPolishCustomPresets)
+      || (configToLoad as AppConfig).polishPresetId !== normalizedPolishPresetId
+      || (configToLoad as AppConfig).configVersion !== CURRENT_CONFIG_VERSION;
+    const polishKeywordSetsChanged =
+      JSON.stringify((configToLoad as AppConfig).polishKeywordSets ?? []) !==
+        JSON.stringify(normalizedPolishKeywordSets)
+      || ((configToLoad as AppConfig).polishKeywords || '') !== normalizedConfig.polishKeywords;
 
-    if (!llmChanged && !summaryEnabledChanged) {
+    if (!llmChanged && !summaryEnabledChanged && !polishPresetsChanged && !polishKeywordSetsChanged) {
       return { config: normalizedConfig, migrated: false };
     }
 
@@ -67,11 +133,24 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
   }
 
   // 4. Perform Data Normalization & Structural Upgrades
-  const parsed = configToLoad;
+  const parsed = configToLoad as any;
   const { llmSettings } = ensureLlmState(parsed);
+  const normalizedPolishCustomPresets = normalizePolishCustomPresets(parsed.polishCustomPresets);
+  const normalizedPolishKeywordSets = normalizePolishKeywordSets(parsed.polishKeywordSets);
+  const migratedPolishSelection = migrateLegacyPolishSelection(
+    {
+      presetId: parsed.polishPresetId,
+      scenario: parsed.polishScenario,
+      context: parsed.polishContext,
+    },
+    normalizedPolishCustomPresets,
+    'Imported Preset',
+  );
 
   const upgradedConfig: AppConfig = {
-    configVersion: 1, // Bump to latest version
+    ...DEFAULT_CONFIG,
+    ...(parsed as AppConfig),
+    configVersion: CURRENT_CONFIG_VERSION,
     streamingModelPath: parsed.streamingModelPath || parsed.recognitionModelPath || parsed.offlineModelPath || parsed.modelPath || '',
     offlineModelPath: parsed.offlineModelPath || parsed.recognitionModelPath || parsed.modelPath || '',
     punctuationModelPath: parsed.punctuationModelPath || '',
@@ -99,9 +178,10 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     llmSettings,
     summaryEnabled: parsed.summaryEnabled ?? true,
     translationLanguage: parsed.translationLanguage || 'zh',
-    polishKeywords: parsed.polishKeywords || '',
-    polishContext: parsed.polishContext || '',
-    polishScenario: parsed.polishScenario || '',
+    polishKeywords: '',
+    polishPresetId: migratedPolishSelection.presetId,
+    polishCustomPresets: migratedPolishSelection.customPresets,
+    polishKeywordSets: migrateLegacyPolishKeywords(parsed.polishKeywords, normalizedPolishKeywordSets),
     autoPolish: parsed.autoPolish ?? false,
     autoPolishFrequency: parsed.autoPolishFrequency || 5,
     autoCheckUpdates: parsed.autoCheckUpdates ?? true,
@@ -109,6 +189,9 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     hotwordSets: parsed.hotwordSets || [],
     hotwords: parsed.hotwords || [],
     liveRecordShortcut: parsed.liveRecordShortcut || 'Ctrl + Space',
+    voiceTypingEnabled: parsed.voiceTypingEnabled ?? false,
+    voiceTypingShortcut: parsed.voiceTypingShortcut || 'Alt+V',
+    voiceTypingMode: parsed.voiceTypingMode || 'hold',
   };
 
   // Migration: textReplacements -> textReplacementSets

@@ -128,7 +128,6 @@ pub struct PolishSegmentsRequest {
     pub chunk_size: Option<usize>,
     pub context: Option<String>,
     pub keywords: Option<String>,
-    pub scenario_prompt: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1020,18 +1019,9 @@ fn build_polish_prompt(
     segments: &[LlmSegmentInput],
     context: Option<&str>,
     keywords: Option<&str>,
-    scenario_prompt: Option<&str>,
 ) -> String {
     let json_str = serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string());
     let mut prompt = String::new();
-
-    if let Some(value) = scenario_prompt {
-        if !value.trim().is_empty() {
-            prompt.push_str("[User Context]\n");
-            prompt.push_str(value.trim());
-            prompt.push_str("\n\n");
-        }
-    }
 
     if let Some(value) = context {
         if !value.trim().is_empty() {
@@ -1396,7 +1386,6 @@ pub async fn polish_transcript_segments(
     let config = request.config.clone();
     let context = request.context.clone();
     let keywords = request.keywords.clone();
-    let scenario_prompt = request.scenario_prompt.clone();
     let chunk_app = app.clone();
 
     run_segment_task(
@@ -1409,7 +1398,6 @@ pub async fn polish_transcript_segments(
                 chunk,
                 context.as_deref(),
                 keywords.as_deref(),
-                scenario_prompt.as_deref(),
             )
         },
         parse_polish_chunk,
@@ -1916,14 +1904,12 @@ mod tests {
     fn build_polish_prompt_contains_context_and_keywords() {
         let prompt = build_polish_prompt(
             &sample_segments()[..2],
-            Some("custom context"),
+            Some("combined context"),
             Some("keyword-a, keyword-b"),
-            Some("preset context"),
         );
 
         assert!(prompt.contains("[User Context]"));
-        assert!(prompt.contains("preset context"));
-        assert!(prompt.contains("custom context"));
+        assert!(prompt.contains("combined context"));
         assert!(prompt.contains("[User Keywords]"));
         assert!(prompt.contains("keyword-a, keyword-b"));
     }

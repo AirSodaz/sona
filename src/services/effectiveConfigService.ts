@@ -16,8 +16,7 @@ export function resolveEffectiveConfig(
   return {
     ...globalConfig,
     translationLanguage: project.defaults.translationLanguage || globalConfig.translationLanguage,
-    polishScenario: project.defaults.polishScenario || globalConfig.polishScenario,
-    polishContext: project.defaults.polishContext ?? globalConfig.polishContext,
+    polishPresetId: project.defaults.polishPresetId || globalConfig.polishPresetId,
     textReplacementSets: resolveProjectAwareTextReplacementSets(globalConfig.textReplacementSets, project),
     hotwordSets: resolveProjectAwareHotwordSets(globalConfig.hotwordSets, project),
   };

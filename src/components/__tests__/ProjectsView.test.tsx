@@ -155,8 +155,7 @@ describe('ProjectsView', () => {
           defaults: {
             summaryTemplate: 'general',
             translationLanguage: 'zh',
-            polishScenario: 'custom',
-            polishContext: '',
+            polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
@@ -199,8 +198,8 @@ describe('ProjectsView', () => {
       config: {
         ...useConfigStore.getState().config,
         translationLanguage: 'en',
-        polishScenario: 'lecture',
-        polishContext: 'Context',
+        polishPresetId: 'lecture',
+        polishCustomPresets: [],
       },
     });
 
@@ -382,8 +381,7 @@ describe('ProjectsView', () => {
           defaults: {
             summaryTemplate: 'general',
             translationLanguage: 'zh',
-            polishScenario: 'custom',
-            polishContext: '',
+            polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
@@ -399,8 +397,7 @@ describe('ProjectsView', () => {
           defaults: {
             summaryTemplate: 'meeting',
             translationLanguage: 'en',
-            polishScenario: 'lecture',
-            polishContext: 'Keep focus',
+            polishPresetId: 'lecture',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
