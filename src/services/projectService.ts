@@ -3,7 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { settingsStore, STORE_KEY_ACTIVE_PROJECT } from './storageService';
 import { logger } from '../utils/logger';
 import type { ProjectDefaults, ProjectRecord } from '../types/project';
-import { normalizeProjectRecord } from '../types/project';
+import {
+  normalizeProjectRecord,
+  normalizeProjectRecordWithKeywordSetBackfill,
+} from '../types/project';
 
 const PROJECTS_DIR = 'projects';
 const INDEX_FILE = 'index.json';
@@ -34,15 +37,29 @@ export const projectService = {
     await ensureProjectsIndex();
   },
 
-  async getAll(): Promise<ProjectRecord[]> {
+  async getAll(options?: { fallbackEnabledPolishKeywordSetIds?: string[] }): Promise<ProjectRecord[]> {
     try {
       await ensureProjectsIndex();
       const content = await readTextFile(`${PROJECTS_DIR}/${INDEX_FILE}`, {
         baseDir: BaseDirectory.AppLocalData,
       });
       const parsed = JSON.parse(content) as Partial<ProjectRecord>[];
-      return parsed
-        .map((item) => normalizeProjectRecord(item));
+      const fallbackEnabledPolishKeywordSetIds = options?.fallbackEnabledPolishKeywordSetIds ?? [];
+      let migrated = false;
+      const projects = parsed.map((item) => {
+        const normalized = normalizeProjectRecordWithKeywordSetBackfill(
+          item,
+          fallbackEnabledPolishKeywordSetIds,
+        );
+        migrated = migrated || normalized.migrated;
+        return normalized.project;
+      });
+
+      if (migrated) {
+        await writeProjects(projects);
+      }
+
+      return projects;
     } catch (error) {
       logger.error('[Projects] Failed to load projects:', error);
       return [];

@@ -77,12 +77,12 @@ pub enum LlmTaskType {
     Summary,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SummaryTemplate {
-    General,
-    Meeting,
-    Lecture,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SummaryTemplateConfig {
+    pub id: String,
+    pub name: String,
+    pub instructions: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -155,7 +155,7 @@ pub struct SummarySegmentInput {
 pub struct SummarizeTranscriptRequest {
     pub task_id: String,
     pub config: LlmConfig,
-    pub template: SummaryTemplate,
+    pub template: SummaryTemplateConfig,
     pub segments: Vec<SummarySegmentInput>,
     pub chunk_char_budget: Option<usize>,
 }
@@ -177,7 +177,7 @@ pub struct TranslatedSegment {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSummaryResult {
-    pub template: SummaryTemplate,
+    pub template_id: String,
     pub content: String,
 }
 
@@ -1090,28 +1090,6 @@ Input:\n\
     )
 }
 
-fn summary_template_name(template: SummaryTemplate) -> &'static str {
-    match template {
-        SummaryTemplate::General => "general",
-        SummaryTemplate::Meeting => "meeting",
-        SummaryTemplate::Lecture => "lecture",
-    }
-}
-
-fn summary_template_structure(template: SummaryTemplate) -> &'static str {
-    match template {
-        SummaryTemplate::General => {
-            "1. A short overview paragraph.\n2. A concise list of key points.\n3. Follow-up items or next steps only if they are supported by the transcript."
-        }
-        SummaryTemplate::Meeting => {
-            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.\n4. Open questions, blockers, or risks."
-        }
-        SummaryTemplate::Lecture => {
-            "1. Lecture overview.\n2. Core concepts or arguments.\n3. Important examples, evidence, or explanations.\n4. Review points or next steps for study."
-        }
-    }
-}
-
 fn format_summary_timestamp(seconds: f32) -> String {
     let total_seconds = seconds.max(0.0).floor() as u64;
     let hours = total_seconds / 3600;
@@ -1141,13 +1119,13 @@ fn format_summary_segments_for_prompt(segments: &[SummarySegmentInput]) -> Strin
 }
 
 fn build_summary_chunk_prompt(
-    template: SummaryTemplate,
+    template: &SummaryTemplateConfig,
     segments: &[SummarySegmentInput],
     chunk_number: usize,
     total_chunks: usize,
 ) -> String {
     format!(
-        "You are preparing an intermediate {template_name} summary for a transcript.\n\
+        "You are preparing an intermediate transcript summary using the \"{template_name}\" template.\n\
 Use the same language as the transcript. Do not translate or switch languages.\n\
 Follow this structure:\n\
 {structure}\n\n\
@@ -1156,8 +1134,8 @@ Keep it concise, factual, and easy to merge later.\n\
 Do not use markdown code fences.\n\n\
 Transcript chunk:\n\
 {chunk_text}",
-        template_name = summary_template_name(template),
-        structure = summary_template_structure(template),
+        template_name = template.name.trim(),
+        structure = template.instructions.trim(),
         chunk_number = chunk_number,
         total_chunks = total_chunks,
         chunk_text = format_summary_segments_for_prompt(segments),
@@ -1165,11 +1143,11 @@ Transcript chunk:\n\
 }
 
 fn build_summary_finalize_prompt(
-    template: SummaryTemplate,
+    template: &SummaryTemplateConfig,
     partial_summaries: &[String],
 ) -> String {
     format!(
-        "You are combining intermediate transcript summaries into one final {template_name} summary.\n\
+        "You are combining intermediate transcript summaries into one final summary using the \"{template_name}\" template.\n\
 Use the same language as the transcript. Do not translate or switch languages.\n\
 Follow this structure:\n\
 {structure}\n\n\
@@ -1177,8 +1155,8 @@ Merge overlapping points, keep the wording concise, and preserve only informatio
 Do not use markdown code fences.\n\n\
 Intermediate summaries:\n\
 {partials}",
-        template_name = summary_template_name(template),
-        structure = summary_template_structure(template),
+        template_name = template.name.trim(),
+        structure = template.instructions.trim(),
         partials = partial_summaries
             .iter()
             .enumerate()
@@ -1244,7 +1222,7 @@ fn summary_task_error(stage: impl AsRef<str>, error: impl Into<String>) -> Strin
 
 async fn run_summary_task<GenerateFn, EmitProgressFn>(
     task_id: &str,
-    template: SummaryTemplate,
+    template: &SummaryTemplateConfig,
     segments: &[SummarySegmentInput],
     chunk_char_budget: Option<usize>,
     mut generate_text: GenerateFn,
@@ -1293,7 +1271,7 @@ where
     })?;
 
     Ok(TranscriptSummaryResult {
-        template,
+        template_id: template.id.clone(),
         content: final_summary.trim().to_string(),
     })
 }
@@ -1655,7 +1633,7 @@ pub async fn summarize_transcript(
 
     run_summary_task(
         &request.task_id,
-        template,
+        &template,
         &request.segments,
         request.chunk_char_budget,
         move |prompt| {
@@ -1740,6 +1718,18 @@ mod tests {
                 is_final: true,
             },
         ]
+    }
+
+    fn sample_summary_template(
+        id: &str,
+        name: &str,
+        instructions: &str,
+    ) -> SummaryTemplateConfig {
+        SummaryTemplateConfig {
+            id: id.to_string(),
+            name: name.to_string(),
+            instructions: instructions.to_string(),
+        }
     }
 
     #[test]
@@ -1924,8 +1914,13 @@ mod tests {
 
     #[test]
     fn build_summary_chunk_prompt_requires_same_language_and_structure() {
+        let template = sample_summary_template(
+            "meeting",
+            "Meeting",
+            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.",
+        );
         let prompt = build_summary_chunk_prompt(
-            SummaryTemplate::Meeting,
+            &template,
             &sample_summary_segments()[..2],
             1,
             2,
@@ -1938,8 +1933,13 @@ mod tests {
 
     #[test]
     fn build_summary_finalize_prompt_requires_same_language_and_structure() {
+        let template = sample_summary_template(
+            "lecture",
+            "Lecture",
+            "1. Lecture overview.\n2. Core concepts or arguments.\n3. Important examples, evidence, or explanations.",
+        );
         let prompt = build_summary_finalize_prompt(
-            SummaryTemplate::Lecture,
+            &template,
             &["Chunk 1 summary".to_string(), "Chunk 2 summary".to_string()],
         );
 
@@ -2156,10 +2156,15 @@ mod tests {
             },
         ];
         let mut progress_events = Vec::new();
+        let template = sample_summary_template(
+            "meeting",
+            "Meeting",
+            "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.\n4. Open questions, blockers, or risks.",
+        );
 
         let result = run_summary_task(
             "summary-task-1",
-            SummaryTemplate::Meeting,
+            &template,
             &segments,
             Some(1200),
             {
@@ -2188,7 +2193,7 @@ mod tests {
         assert_eq!(
             result,
             TranscriptSummaryResult {
-                template: SummaryTemplate::Meeting,
+                template_id: "meeting".to_string(),
                 content: "Final meeting summary".to_string(),
             }
         );

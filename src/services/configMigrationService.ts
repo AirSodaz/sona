@@ -13,13 +13,17 @@ import {
   migrateLegacyPolishKeywords,
   normalizePolishKeywordSets,
 } from '../utils/polishKeywords';
+import {
+  coerceSummaryTemplateId,
+  normalizeSummaryCustomTemplates,
+} from '../utils/summaryTemplates';
 
 export interface MigrationResult {
   config: AppConfig;
   migrated: boolean;
 }
 
-const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 4;
+const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 5;
 
 function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
   if (isConfigMigrated) {
@@ -43,7 +47,15 @@ function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
     return true;
   }
 
+  if (!Array.isArray(config?.summaryCustomTemplates)) {
+    return true;
+  }
+
   if (typeof config?.polishPresetId !== 'string' || !config.polishPresetId.trim()) {
+    return true;
+  }
+
+  if (typeof config?.summaryTemplateId !== 'string' || !config.summaryTemplateId.trim()) {
     return true;
   }
 
@@ -88,6 +100,13 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       (configToLoad as AppConfig).polishPresetId,
       normalizedPolishCustomPresets,
     );
+    const normalizedSummaryCustomTemplates = normalizeSummaryCustomTemplates(
+      (configToLoad as AppConfig).summaryCustomTemplates,
+    );
+    const normalizedSummaryTemplateId = coerceSummaryTemplateId(
+      (configToLoad as AppConfig).summaryTemplateId,
+      normalizedSummaryCustomTemplates,
+    );
     const normalizedPolishKeywordSets = migrateLegacyPolishKeywords(
       (configToLoad as AppConfig).polishKeywords,
       (configToLoad as AppConfig).polishKeywordSets,
@@ -98,6 +117,8 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       configVersion: CURRENT_CONFIG_VERSION,
       llmSettings: normalizedLlmSettings,
       summaryEnabled: (configToLoad as AppConfig).summaryEnabled ?? true,
+      summaryTemplateId: normalizedSummaryTemplateId,
+      summaryCustomTemplates: normalizedSummaryCustomTemplates,
       polishKeywords: '',
       polishPresetId: normalizedPolishPresetId,
       polishCustomPresets: normalizedPolishCustomPresets,
@@ -113,12 +134,22 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
         JSON.stringify(normalizedPolishCustomPresets)
       || (configToLoad as AppConfig).polishPresetId !== normalizedPolishPresetId
       || (configToLoad as AppConfig).configVersion !== CURRENT_CONFIG_VERSION;
+    const summaryTemplatesChanged =
+      JSON.stringify((configToLoad as AppConfig).summaryCustomTemplates ?? []) !==
+        JSON.stringify(normalizedSummaryCustomTemplates)
+      || (configToLoad as AppConfig).summaryTemplateId !== normalizedSummaryTemplateId;
     const polishKeywordSetsChanged =
       JSON.stringify((configToLoad as AppConfig).polishKeywordSets ?? []) !==
         JSON.stringify(normalizedPolishKeywordSets)
       || ((configToLoad as AppConfig).polishKeywords || '') !== normalizedConfig.polishKeywords;
 
-    if (!llmChanged && !summaryEnabledChanged && !polishPresetsChanged && !polishKeywordSetsChanged) {
+    if (
+      !llmChanged
+      && !summaryEnabledChanged
+      && !polishPresetsChanged
+      && !summaryTemplatesChanged
+      && !polishKeywordSetsChanged
+    ) {
       return { config: normalizedConfig, migrated: false };
     }
 
@@ -136,6 +167,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
   const parsed = configToLoad as any;
   const { llmSettings } = ensureLlmState(parsed);
   const normalizedPolishCustomPresets = normalizePolishCustomPresets(parsed.polishCustomPresets);
+  const normalizedSummaryCustomTemplates = normalizeSummaryCustomTemplates(parsed.summaryCustomTemplates);
   const normalizedPolishKeywordSets = normalizePolishKeywordSets(parsed.polishKeywordSets);
   const migratedPolishSelection = migrateLegacyPolishSelection(
     {
@@ -177,6 +209,11 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     captionBackgroundOpacity: parsed.captionBackgroundOpacity ?? 0.6,
     llmSettings,
     summaryEnabled: parsed.summaryEnabled ?? true,
+    summaryTemplateId: coerceSummaryTemplateId(
+      parsed.summaryTemplateId ?? parsed.summaryTemplate,
+      normalizedSummaryCustomTemplates,
+    ),
+    summaryCustomTemplates: normalizedSummaryCustomTemplates,
     translationLanguage: parsed.translationLanguage || 'zh',
     polishKeywords: '',
     polishPresetId: migratedPolishSelection.presetId,

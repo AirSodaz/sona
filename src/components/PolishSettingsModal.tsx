@@ -47,9 +47,19 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
     if (!isOpen) return null;
 
     const presetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
-    const polishKeywordSets = normalizePolishKeywordSets(globalConfig.polishKeywordSets);
+    const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
 
     const handleToggleKeywordSet = (setId: string, enabled: boolean) => {
+        if (activeProjectId) {
+            const nextEnabledIds = polishKeywordSets
+                .filter((set) => (set.id === setId ? enabled : set.enabled))
+                .map((set) => set.id);
+            void updateProjectDefaults(activeProjectId, {
+                enabledPolishKeywordSetIds: nextEnabledIds,
+            });
+            return;
+        }
+
         setConfig({
             polishKeywordSets: polishKeywordSets.map((set) => (
                 set.id === setId

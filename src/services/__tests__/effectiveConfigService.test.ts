@@ -6,7 +6,7 @@ import { createLlmSettings } from '../llmConfig';
 
 function createBaseConfig(): AppConfig {
   return {
-    configVersion: 4,
+    configVersion: 5,
     appLanguage: 'en',
     theme: 'light',
     font: 'system',
@@ -27,6 +27,8 @@ function createBaseConfig(): AppConfig {
     maxConcurrent: 2,
     llmSettings: createLlmSettings(),
     summaryEnabled: true,
+    summaryTemplateId: 'general',
+    summaryCustomTemplates: [],
     translationLanguage: 'zh',
     polishPresetId: 'general',
     polishCustomPresets: [
@@ -34,6 +36,7 @@ function createBaseConfig(): AppConfig {
     ],
     polishKeywordSets: [
       { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
+      { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Keep sentence case.' },
     ],
     autoPolish: false,
     autoPolishFrequency: 5,
@@ -60,12 +63,13 @@ function createProject(): ProjectRecord {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     defaults: {
-      summaryTemplate: 'meeting',
+      summaryTemplateId: 'meeting',
       translationLanguage: 'ja',
       polishPresetId: 'meeting',
       exportFileNamePrefix: 'TEAM',
       enabledTextReplacementSetIds: ['set-b'],
       enabledHotwordSetIds: ['hot-a'],
+      enabledPolishKeywordSetIds: ['kw-2'],
     },
   };
 }
@@ -79,9 +83,12 @@ describe('effectiveConfigService', () => {
   it('overrides workflow defaults and filters enabled rule sets for an active project', () => {
     const effective = resolveEffectiveConfig(createBaseConfig(), createProject());
 
+    expect(effective.summaryTemplateId).toBe('meeting');
     expect(effective.translationLanguage).toBe('ja');
     expect(effective.polishPresetId).toBe('meeting');
     expect(effective.polishKeywordSets?.[0].name).toBe('Brand');
+    expect(effective.polishKeywordSets?.find((set) => set.id === 'kw-1')?.enabled).toBe(false);
+    expect(effective.polishKeywordSets?.find((set) => set.id === 'kw-2')?.enabled).toBe(true);
     expect(effective.textReplacementSets?.find((set) => set.id === 'set-a')?.enabled).toBe(false);
     expect(effective.textReplacementSets?.find((set) => set.id === 'set-b')?.enabled).toBe(true);
     expect(effective.hotwordSets?.find((set) => set.id === 'hot-a')?.enabled).toBe(true);

@@ -6,7 +6,7 @@
  * unnecessary re-renders.
  */
 
-import type { LlmSettings } from './transcript';
+import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './transcript';
 
 // ---------------------------------------------------------------------------
 // UI preferences
@@ -127,8 +127,12 @@ export interface PolishCustomPreset {
 export interface LlmAssistantConfig {
   /** LLM provider settings keyed by provider. */
   llmSettings?: LlmSettings;
-  /** Whether AI Summary is available in the transcript editor. Default: true. */
+  /** Whether Summary is available in the transcript editor. Default: true. */
   summaryEnabled?: boolean;
+  /** Selected global summary template id. */
+  summaryTemplateId?: SummaryTemplateId;
+  /** User-defined summary templates. */
+  summaryCustomTemplates?: SummaryCustomTemplate[];
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
   /** Keywords for polishing. */

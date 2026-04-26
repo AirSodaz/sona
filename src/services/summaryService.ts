@@ -1,9 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import {
-  DEFAULT_SUMMARY_TEMPLATE,
+  DEFAULT_SUMMARY_TEMPLATE_ID,
   HistorySummaryPayload,
-  SummaryTemplate,
+  ResolvedSummaryTemplate,
+  SummaryTemplateId,
   TranscriptSegment,
   TranscriptSummaryRecord,
   TranscriptSummaryState,
@@ -19,6 +20,7 @@ import {
   SummarySegmentInput,
   TranscriptSummaryResult,
 } from './llmTaskService';
+import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
 
 function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined): boolean {
   if (!summaryState) {
@@ -29,13 +31,13 @@ function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined)
     summaryState.isGenerating ||
     summaryState.generationProgress > 0 ||
     !!summaryState.record ||
-    summaryState.activeTemplate !== DEFAULT_SUMMARY_TEMPLATE
+    summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
   );
 }
 
 function buildSummaryPayload(summaryState: TranscriptSummaryState): HistorySummaryPayload {
   return {
-    activeTemplate: summaryState.activeTemplate,
+    activeTemplateId: summaryState.activeTemplateId,
     record: summaryState.record,
   };
 }
@@ -43,7 +45,7 @@ function buildSummaryPayload(summaryState: TranscriptSummaryState): HistorySumma
 function hasPersistableSummaryData(summaryState: TranscriptSummaryState): boolean {
   return (
     !!summaryState.record ||
-    summaryState.activeTemplate !== DEFAULT_SUMMARY_TEMPLATE
+    summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
   );
 }
 
@@ -99,10 +101,11 @@ class SummaryService {
     await historyService.saveSummary(historyId, buildSummaryPayload(summaryState));
   }
 
-  async setActiveTemplate(template: SummaryTemplate, historyId?: string): Promise<void> {
+  async setActiveTemplate(templateId: SummaryTemplateId, historyId?: string): Promise<void> {
     const store = useTranscriptStore.getState();
     const targetHistoryId = historyId || store.sourceHistoryId || 'current';
-    store.setActiveSummaryTemplate(template, targetHistoryId);
+    const resolvedTemplateId = coerceSummaryTemplateId(templateId, store.config.summaryCustomTemplates);
+    store.setActiveSummaryTemplate(resolvedTemplateId, targetHistoryId);
 
     if (targetHistoryId !== 'current') {
       await this.persistSummary(targetHistoryId);
@@ -113,15 +116,24 @@ class SummaryService {
     const store = useTranscriptStore.getState();
     const targetHistoryId = historyId || store.sourceHistoryId || 'current';
     const summaryState = store.getSummaryState(targetHistoryId);
+    const activeTemplateId = coerceSummaryTemplateId(
+      summaryState.activeTemplateId || store.config.summaryTemplateId,
+      store.config.summaryCustomTemplates,
+    );
+    const hasMeaningfulContent = content.trim().length > 0;
 
-    if (!summaryState.record) {
+    if (!summaryState.record && !hasMeaningfulContent) {
       return;
     }
 
+    const sourceFingerprint = computeSummarySourceFingerprint(store.segments);
     store.updateSummaryState({
+      activeTemplateId,
       record: {
-        ...summaryState.record,
+        templateId: activeTemplateId,
         content,
+        generatedAt: new Date().toISOString(),
+        sourceFingerprint,
       },
     }, targetHistoryId);
 
@@ -130,11 +142,11 @@ class SummaryService {
     }
   }
 
-  async generateSummary(template?: SummaryTemplate): Promise<void> {
+  async generateSummary(templateId?: SummaryTemplateId): Promise<void> {
     const store = useTranscriptStore.getState();
 
     if (store.config.summaryEnabled === false) {
-      throw new Error('AI Summary is disabled.');
+      throw new Error('Summary is disabled.');
     }
 
     if (!isSummaryLlmConfigComplete(store.config)) {
@@ -146,13 +158,17 @@ class SummaryService {
       return;
     }
 
-    const activeTemplate = template ?? store.getSummaryState().activeTemplate;
+    const resolvedTemplate = resolveSummaryTemplate(
+      templateId ?? store.getSummaryState().activeTemplateId ?? store.config.summaryTemplateId,
+      store.config.summaryCustomTemplates,
+    );
+    const activeTemplateId = resolvedTemplate.id;
     const jobHistoryId = store.sourceHistoryId || 'current';
     const sourceFingerprint = computeSummarySourceFingerprint(segments);
     const taskId = createLlmTaskId('summary');
 
     store.updateSummaryState({
-      activeTemplate,
+      activeTemplateId,
       isGenerating: true,
       generationProgress: 0,
     }, jobHistoryId);
@@ -166,19 +182,23 @@ class SummaryService {
 
     try {
       const result = await invoke<TranscriptSummaryResult>('summarize_transcript', {
-        request: this.buildRequest(taskId, activeTemplate, segments),
+        request: this.buildRequest(taskId, resolvedTemplate, segments),
       });
 
       const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
+      const resultTemplateId = coerceSummaryTemplateId(
+        result.templateId,
+        store.config.summaryCustomTemplates,
+      );
       const record: TranscriptSummaryRecord = {
-        template: result.template,
+        templateId: resultTemplateId,
         content: result.content.trim(),
         generatedAt: new Date().toISOString(),
         sourceFingerprint,
       };
 
       useTranscriptStore.getState().updateSummaryState({
-        activeTemplate: result.template,
+        activeTemplateId: resultTemplateId,
         record,
       }, targetHistoryId);
 
@@ -204,7 +224,7 @@ class SummaryService {
 
   private buildRequest(
     taskId: string,
-    template: SummaryTemplate,
+    template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
   ): SummarizeTranscriptRequest {
     const config = useTranscriptStore.getState().config;

@@ -5,15 +5,16 @@ import {
     AppMode,
     ProcessingStatus,
     AppConfig,
-    DEFAULT_SUMMARY_TEMPLATE,
+    DEFAULT_SUMMARY_TEMPLATE_ID,
     HistorySummaryPayload,
-    SummaryTemplate,
+    SummaryTemplateId,
     TranscriptSummaryState
 } from '../types/transcript';
 import { useConfigStore, DEFAULT_CONFIG } from './configStore';
 import { useProjectStore } from './projectStore';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
+import { coerceSummaryTemplateId } from '../utils/summaryTemplates';
 // createLlmSettings is now used in configStore
 
 /** State interface for the transcript store. */
@@ -240,7 +241,7 @@ interface TranscriptState {
     /**
      * Updates the active summary template for the current transcript or a specific history item.
      */
-    setActiveSummaryTemplate: (template: SummaryTemplate, historyId?: string) => void;
+    setActiveSummaryTemplate: (templateId: SummaryTemplateId, historyId?: string) => void;
 
     /**
      * Hydrates persisted summary payload into store state for a specific history ID.
@@ -342,7 +343,7 @@ const DEFAULT_LLM_STATE: LlmState = {
 };
 
 const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
-    activeTemplate: DEFAULT_SUMMARY_TEMPLATE,
+    activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID,
     record: undefined,
     isGenerating: false,
     generationProgress: 0,
@@ -618,20 +619,43 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
-    setActiveSummaryTemplate: (template, historyId) => {
-        get().updateSummaryState({ activeTemplate: template }, historyId);
+    setActiveSummaryTemplate: (templateId, historyId) => {
+        get().updateSummaryState({ activeTemplateId: templateId }, historyId);
     },
 
     hydrateSummaryState: (payload, historyId) => {
-        // Migration logic for legacy records map
-        let record = payload.record;
-        if (!record && (payload as any).records) {
-            const records = (payload as any).records;
-            record = records[payload.activeTemplate] || Object.values(records)[0] as any;
+        const customTemplates = get().config.summaryCustomTemplates;
+        const payloadWithLegacyFields = payload as HistorySummaryPayload & {
+            activeTemplate?: string;
+            records?: Record<string, any>;
+        };
+        const activeTemplateId = coerceSummaryTemplateId(
+            payloadWithLegacyFields.activeTemplateId || payloadWithLegacyFields.activeTemplate,
+            customTemplates,
+        );
+
+        let record = payload.record as any;
+        if (!record && payloadWithLegacyFields.records) {
+            const records = payloadWithLegacyFields.records;
+            record = records[
+                payloadWithLegacyFields.activeTemplateId
+                || payloadWithLegacyFields.activeTemplate
+                || activeTemplateId
+            ] || Object.values(records)[0] as any;
+        }
+
+        if (record) {
+            record = {
+                ...record,
+                templateId: coerceSummaryTemplateId(
+                    record.templateId || record.template || activeTemplateId,
+                    customTemplates,
+                ),
+            };
         }
 
         get().setSummaryState({
-            activeTemplate: payload.activeTemplate,
+            activeTemplateId,
             record,
             isGenerating: false,
             generationProgress: 0,

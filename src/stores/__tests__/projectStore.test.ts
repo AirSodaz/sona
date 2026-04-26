@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useConfigStore } from '../configStore';
 import { useProjectStore } from '../projectStore';
 import { createLlmSettings } from '../../services/llmConfig';
 
@@ -28,6 +29,15 @@ describe('projectStore', () => {
       isLoading: false,
       error: null,
     });
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        polishKeywordSets: [
+          { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona' },
+          { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Sentence case' },
+        ],
+      },
+    });
     vi.clearAllMocks();
   });
 
@@ -41,12 +51,13 @@ describe('projectStore', () => {
         createdAt: 1,
         updatedAt: 1,
         defaults: {
-          summaryTemplate: 'general',
+          summaryTemplateId: 'general',
           translationLanguage: 'zh',
           polishPresetId: 'general',
           exportFileNamePrefix: '',
           enabledTextReplacementSetIds: [],
           enabledHotwordSetIds: [],
+          enabledPolishKeywordSetIds: ['kw-1'],
         },
       },
     ]);
@@ -54,6 +65,9 @@ describe('projectStore', () => {
 
     await useProjectStore.getState().loadProjects();
 
+    expect(projectService.getAll).toHaveBeenCalledWith({
+      fallbackEnabledPolishKeywordSetIds: ['kw-1'],
+    });
     expect(useProjectStore.getState().projects).toHaveLength(1);
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
@@ -96,6 +110,10 @@ describe('projectStore', () => {
         translationLanguage: 'en',
         polishPresetId: 'lecture',
         polishCustomPresets: [],
+        polishKeywordSets: [
+          { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona' },
+          { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Sentence case' },
+        ],
         autoPolish: false,
         autoPolishFrequency: 5,
         voiceTypingEnabled: false,
@@ -111,6 +129,7 @@ describe('projectStore', () => {
     expect(project?.defaults.polishPresetId).toBe('lecture');
     expect(project?.defaults.enabledTextReplacementSetIds).toEqual(['set-1']);
     expect(project?.defaults.enabledHotwordSetIds).toEqual(['hot-1']);
+    expect(project?.defaults.enabledPolishKeywordSetIds).toEqual(['kw-1']);
     expect(useProjectStore.getState().projects).toHaveLength(1);
   });
 
@@ -127,12 +146,13 @@ describe('projectStore', () => {
           createdAt: 1,
           updatedAt: 1,
           defaults: {
-            summaryTemplate: 'general',
+            summaryTemplateId: 'general',
             translationLanguage: 'zh',
             polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
+            enabledPolishKeywordSetIds: [],
           },
         },
       ],

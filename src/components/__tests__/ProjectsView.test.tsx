@@ -153,12 +153,13 @@ describe('ProjectsView', () => {
           createdAt: 1,
           updatedAt: 1,
           defaults: {
-            summaryTemplate: 'general',
+            summaryTemplateId: 'general',
             translationLanguage: 'zh',
             polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
+            enabledPolishKeywordSetIds: [],
           },
         },
       ],
@@ -200,6 +201,10 @@ describe('ProjectsView', () => {
         translationLanguage: 'en',
         polishPresetId: 'lecture',
         polishCustomPresets: [],
+        polishKeywordSets: [
+          { id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' },
+          { id: 'kw-2', name: 'Style Guide', enabled: false, keywords: 'Sentence case' },
+        ],
       },
     });
 
@@ -308,6 +313,28 @@ describe('ProjectsView', () => {
     expect(screen.queryByText('Edit Project Defaults')).toBeNull();
   });
 
+  it('lets project settings override enabled polish keyword sets', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    const updateProjectSpy = vi.spyOn(useProjectStore.getState(), 'updateProject');
+
+    render(<ProjectsView />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Brand Terms' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(updateProjectSpy).toHaveBeenCalledWith(
+        'project-1',
+        expect.objectContaining({
+          defaults: expect.objectContaining({
+            enabledPolishKeywordSetIds: ['kw-1'],
+          }),
+        }),
+      );
+    });
+  });
+
   it('guards switching to Inbox when project settings drafts are dirty', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     const confirmSpy = vi.fn()
@@ -379,12 +406,13 @@ describe('ProjectsView', () => {
           createdAt: 1,
           updatedAt: 1,
           defaults: {
-            summaryTemplate: 'general',
+            summaryTemplateId: 'general',
             translationLanguage: 'zh',
             polishPresetId: 'general',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
+            enabledPolishKeywordSetIds: [],
           },
         },
         {
@@ -395,12 +423,13 @@ describe('ProjectsView', () => {
           createdAt: 2,
           updatedAt: 2,
           defaults: {
-            summaryTemplate: 'meeting',
+            summaryTemplateId: 'meeting',
             translationLanguage: 'en',
             polishPresetId: 'lecture',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
+            enabledPolishKeywordSetIds: [],
           },
         },
       ],

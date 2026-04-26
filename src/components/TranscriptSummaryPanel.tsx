@@ -1,17 +1,16 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import { useTranscriptStore } from '../stores/transcriptStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
-import { SummaryTemplate } from '../types/transcript';
-import { ProcessingIcon, XIcon, SummaryIcon } from './Icons';
-
-const SUMMARY_TEMPLATES: SummaryTemplate[] = ['general', 'meeting', 'lecture'];
+import {
+  getSummaryTemplateOptions,
+  resolveSummaryTemplate,
+} from '../utils/summaryTemplates';
+import { Dropdown } from './Dropdown';
+import { ProcessingIcon, SummaryIcon, XIcon } from './Icons';
 
 interface TranscriptSummaryPanelProps {
   isOpen: boolean;
@@ -19,12 +18,11 @@ interface TranscriptSummaryPanelProps {
 }
 
 /**
- * Modal dialog for displaying and generating AI transcript summaries.
+ * Modal dialog for displaying and generating transcript summaries.
  */
 export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const bodyId = useId();
-  const modalRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -33,84 +31,125 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const config = useTranscriptStore((state) => state.config);
   const summaryState = useTranscriptStore((state) => state.summaryStates[state.sourceHistoryId || 'current']);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
   const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
   const showError = useDialogStore((state) => state.showError);
-  
+
   const [copied, setCopied] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isEditingMode, setIsEditingMode] = useState(false);
   const copyResetTimerRef = useRef<number | null>(null);
+  const editContentRef = useRef('');
+  const lastSavedContentRef = useRef('');
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
 
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
-  const activeTemplate = summaryState?.activeTemplate || activeProject?.defaults.summaryTemplate || 'general';
+  const activeTemplate = useMemo(
+    () => resolveSummaryTemplate(
+      summaryState?.activeTemplateId || config.summaryTemplateId,
+      config.summaryCustomTemplates,
+      t,
+    ),
+    [config.summaryCustomTemplates, config.summaryTemplateId, summaryState?.activeTemplateId, t],
+  );
+  const templateOptions = useMemo(
+    () => getSummaryTemplateOptions(config.summaryCustomTemplates, t),
+    [config.summaryCustomTemplates, t],
+  );
   const record = summaryState?.record;
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
 
-  // Sync editContent with record.content
+  const persistDraftIfNeeded = useCallback(async () => {
+    if (saveInFlightRef.current) {
+      return saveInFlightRef.current;
+    }
+
+    const nextContent = editContentRef.current;
+    const hasStoredRecord = !!useTranscriptStore.getState().getSummaryState(sourceHistoryId || 'current').record;
+    if (nextContent === lastSavedContentRef.current || (!hasStoredRecord && !nextContent.trim())) {
+      return;
+    }
+
+    setIsSaving(true);
+    const savePromise = summaryService.updateSummaryRecord(nextContent)
+      .then(() => {
+        lastSavedContentRef.current = nextContent;
+      })
+      .finally(() => {
+        setIsSaving(false);
+        saveInFlightRef.current = null;
+      });
+
+    saveInFlightRef.current = savePromise;
+    return savePromise;
+  }, [sourceHistoryId]);
+
+  const handleCloseRequest = useCallback(async () => {
+    await persistDraftIfNeeded();
+    onClose();
+  }, [onClose, persistDraftIfNeeded]);
+
   useEffect(() => {
     setEditContent(record?.content || '');
+    editContentRef.current = record?.content || '';
+    lastSavedContentRef.current = record?.content || '';
   }, [record?.content]);
 
-  // Focus textarea when entering edit mode
   useEffect(() => {
-    if (isEditingMode) {
-      textareaRef.current?.focus();
-    }
-  }, [isEditingMode]);
+    editContentRef.current = editContent;
+  }, [editContent]);
 
-  // Load summary on open
   useEffect(() => {
     if (isOpen && sourceHistoryId) {
       void summaryService.loadSummary(sourceHistoryId);
     }
   }, [isOpen, sourceHistoryId]);
 
-  // Focus management
   useEffect(() => {
     if (isOpen) {
       requestAnimationFrame(() => {
-        closeButtonRef.current?.focus();
+        textareaRef.current?.focus();
       });
     }
   }, [isOpen]);
 
-  // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+      if (!isOpen) {
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        void handleCloseRequest();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [handleCloseRequest, isOpen]);
 
-  useEffect(() => {
-    return () => {
+  useEffect(() => (
+    () => {
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current);
       }
-    };
-  }, []);
+    }
+  ), []);
 
   if (!isOpen) {
     return null;
   }
 
-  const handleTemplateChange = async (template: SummaryTemplate) => {
-    await summaryService.setActiveTemplate(template);
+  const handleTemplateChange = async (templateId: string) => {
+    await persistDraftIfNeeded();
+    await summaryService.setActiveTemplate(templateId);
     if (activeProjectId) {
-      await updateProjectDefaults(activeProjectId, { summaryTemplate: template });
+      await updateProjectDefaults(activeProjectId, { summaryTemplateId: templateId });
     }
   };
 
   const handleGenerate = async () => {
+    await persistDraftIfNeeded();
     if (!summaryConfigComplete) {
       await showError({
         code: 'config.summary_model_missing',
@@ -121,7 +160,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }
 
     try {
-      await summaryService.generateSummary(activeTemplate);
+      await summaryService.generateSummary(activeTemplate.id);
     } catch (error) {
       await showError({
         code: 'summary.failed',
@@ -132,7 +171,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   };
 
   const handleCopy = async () => {
-    if (!editContent || !navigator.clipboard?.writeText) {
+    if (!editContent.trim() || !navigator.clipboard?.writeText) {
       return;
     }
 
@@ -154,21 +193,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   };
 
   const handleBlur = async () => {
-    setIsEditingMode(false);
-    if (record && editContent !== record.content) {
-      setIsSaving(true);
-      try {
-        await summaryService.updateSummaryRecord(editContent);
-      } finally {
-        setIsSaving(false);
-      }
-    }
-  };
-
-  const handleEditClick = () => {
-    if (!isGenerating) {
-      setIsEditingMode(true);
-    }
+    await persistDraftIfNeeded();
   };
 
   const statusLabel = isGenerating
@@ -182,9 +207,8 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
         : null;
 
   return (
-    <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
+    <div className="settings-overlay" onClick={() => { void handleCloseRequest(); }} style={{ zIndex: 2000 }}>
       <div
-        ref={modalRef}
         className="dialog-modal transcript-summary-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -200,16 +224,15 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           display: 'flex',
           flexDirection: 'column',
           border: '1px solid var(--color-border)',
-          overflow: 'hidden'
+          overflow: 'hidden',
         }}
       >
-        {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
-          borderBottom: '1px solid var(--color-border)'
+          borderBottom: '1px solid var(--color-border)',
         }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--spacing-md)' }}>
             <h3
@@ -218,17 +241,19 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
                 fontSize: '1.125rem',
                 fontWeight: 600,
                 color: 'var(--color-text-primary)',
-                margin: 0
+                margin: 0,
               }}
             >
               {t('summary.title')}
             </h3>
             {statusLabel && (
-              <span style={{ 
-                fontSize: '0.75rem', 
-                color: isGenerating ? 'var(--color-primary)' : 'var(--color-warning)',
-                fontWeight: 500
-              }}>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  color: isGenerating ? 'var(--color-primary)' : 'var(--color-warning)',
+                  fontWeight: 500,
+                }}
+              >
                 {statusLabel}
               </span>
             )}
@@ -236,14 +261,13 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           <button
             ref={closeButtonRef}
             className="btn btn-icon"
-            onClick={onClose}
+            onClick={() => { void handleCloseRequest(); }}
             aria-label={t('common.close')}
           >
             <XIcon />
           </button>
         </div>
 
-        {/* Toolbar */}
         <div className="transcript-summary-panel-controls" style={{
           padding: 'var(--spacing-md) var(--spacing-lg)',
           background: 'var(--color-bg-secondary)',
@@ -251,28 +275,29 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 'var(--spacing-md)',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
         }}>
-          <div className="transcript-summary-template-row" role="tablist" aria-label={t('summary.templates_label')} style={{ flex: 1 }}>
-            {SUMMARY_TEMPLATES.map((template, index) => (
-              <React.Fragment key={template}>
-                {index > 0 && (
-                  <span className="transcript-summary-template-divider" aria-hidden="true" style={{ margin: '0 4px' }}>
-                    /
-                  </span>
-                )}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTemplate === template}
-                  className={`transcript-summary-template-tab ${activeTemplate === template ? 'active' : ''}`}
-                  onClick={() => void handleTemplateChange(template)}
-                  disabled={isGenerating}
-                >
-                  {t(`summary.templates.${template}`)}
-                </button>
-              </React.Fragment>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
+            <span
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('summary.templates_label')}
+            </span>
+            <div style={{ flex: 1, minWidth: '220px' }}>
+              <Dropdown
+                value={activeTemplate.id}
+                onChange={(value: string) => {
+                  void handleTemplateChange(value);
+                }}
+                options={templateOptions}
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
 
           <div className="transcript-summary-panel-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
@@ -280,7 +305,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
               type="button"
               className="btn transcript-summary-generate-button"
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !summaryConfigComplete}
             >
               {isGenerating ? (
                 <>
@@ -299,7 +324,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
               type="button"
               className="btn btn-secondary transcript-summary-copy-button"
               onClick={handleCopy}
-              disabled={!record?.content}
+              disabled={!editContent.trim()}
               style={{ padding: '5px 12px', fontSize: '0.78rem' }}
             >
               {copied ? t('summary.copied') : t('summary.copy')}
@@ -307,11 +332,30 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           </div>
         </div>
 
-        {/* Content */}
+        {!summaryConfigComplete && (
+          <div
+            style={{
+              margin: '0 var(--spacing-lg)',
+              marginTop: 'var(--spacing-md)',
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px dashed var(--color-border)',
+              background: 'var(--color-bg-secondary)',
+              color: 'var(--color-text-secondary)',
+              fontSize: '0.8125rem',
+              lineHeight: 1.5,
+            }}
+          >
+            {t('summary.manual_only_hint', {
+              defaultValue: 'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
+            })}
+          </div>
+        )}
+
         <div
           id={bodyId}
           className="transcript-summary-panel-body"
-          data-summary-template={activeTemplate}
+          data-summary-template={activeTemplate.id}
           style={{
             flex: 1,
             overflowY: 'auto',
@@ -319,58 +363,29 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             border: 'none',
             background: 'var(--color-bg-primary)',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
           }}
         >
-          {record ? (
-            isEditingMode ? (
-              <textarea
-                ref={textareaRef}
-                className="transcript-summary-content-text"
-                value={editContent}
-                onChange={handleContentChange}
-                onBlur={handleBlur}
-                placeholder={t('summary.placeholder')}
-                style={{
-                  flex: 1,
-                  width: '100%',
-                  border: 'none',
-                  outline: 'none',
-                  resize: 'none',
-                  background: 'transparent',
-                  padding: 0,
-                  margin: 0,
-                  display: 'block',
-                  minHeight: '400px'
-                }}
-              />
-            ) : (
-              <div
-                className="transcript-summary-content-text markdown-content"
-                onClick={handleEditClick}
-                title={t('common.edit_manually', { defaultValue: 'Click to edit' })}
-                style={{
-                  flex: 1,
-                  cursor: isGenerating ? 'default' : 'text',
-                  minHeight: '400px'
-                }}
-              >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkBreaks]}
-                  components={{
-                    p: ({ node, ...props }) => <p className="md-p" {...props} />,
-                    li: ({ node, ...props }) => <li className="md-li" {...props} />
-                  }}
-                >
-                  {editContent}
-                </ReactMarkdown>
-              </div>
-            )
-          ) : (
-            <div className="transcript-summary-empty-state">
-              {t('summary.empty_state', { template: t(`summary.templates.${activeTemplate}`) })}
-            </div>
-          )}
+          <textarea
+            ref={textareaRef}
+            className="transcript-summary-content-text"
+            value={editContent}
+            onChange={handleContentChange}
+            onBlur={() => { void handleBlur(); }}
+            placeholder={t('summary.placeholder')}
+            style={{
+              flex: 1,
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              resize: 'none',
+              background: 'transparent',
+              padding: 0,
+              margin: 0,
+              display: 'block',
+              minHeight: '400px',
+            }}
+          />
         </div>
       </div>
     </div>

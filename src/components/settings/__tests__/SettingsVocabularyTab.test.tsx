@@ -26,16 +26,17 @@ vi.mock('../../../services/projectService', () => ({
       description: updates.description || '',
       createdAt: 1,
       updatedAt: 2,
-      defaults: {
-        summaryTemplate: 'general',
-        translationLanguage: 'en',
-        polishPresetId: 'general',
-        exportFileNamePrefix: '',
-        enabledTextReplacementSetIds: [],
-        enabledHotwordSetIds: [],
-        ...(updates.defaults || {}),
-      },
-    })),
+        defaults: {
+          summaryTemplateId: 'general',
+          translationLanguage: 'en',
+          polishPresetId: 'general',
+          exportFileNamePrefix: '',
+          enabledTextReplacementSetIds: [],
+          enabledHotwordSetIds: [],
+          enabledPolishKeywordSetIds: [],
+          ...(updates.defaults || {}),
+        },
+      })),
     delete: vi.fn(),
     setActiveProjectId: vi.fn(),
     saveAll: vi.fn(),
@@ -56,6 +57,8 @@ describe('SettingsVocabularyTab', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
+        summaryTemplateId: 'general',
+        summaryCustomTemplates: [],
         polishPresetId: 'general',
         polishCustomPresets: [],
         polishKeywordSets: [],
@@ -72,12 +75,13 @@ describe('SettingsVocabularyTab', () => {
           createdAt: 1,
           updatedAt: 1,
           defaults: {
-            summaryTemplate: 'general',
+            summaryTemplateId: 'general',
             translationLanguage: 'en',
             polishPresetId: 'custom-team',
             exportFileNamePrefix: '',
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
+            enabledPolishKeywordSetIds: ['kw-1'],
           },
         },
       ],
@@ -85,13 +89,14 @@ describe('SettingsVocabularyTab', () => {
     });
   });
 
-  it('renders text replacement, hotwords, polish keywords, and context presets while letting users add a custom preset', () => {
+  it('renders text replacement, hotwords, polish keywords, context presets, and summary templates while letting users add a custom preset', () => {
     render(<SettingsVocabularyTab />);
 
     expect(screen.getByText('Text Replacement')).toBeDefined();
     expect(screen.getByText('Hotwords')).toBeDefined();
     expect(screen.getByText('Polish Keywords')).toBeDefined();
     expect(screen.getByText('Built-in Presets')).toBeDefined();
+    expect(screen.getByText('Built-in Summary Templates')).toBeDefined();
     expect(screen.getAllByText('General').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Meeting').length).toBeGreaterThan(0);
 
@@ -109,6 +114,55 @@ describe('SettingsVocabularyTab', () => {
         context: 'Focus on roadmap terms.',
       }),
     ]);
+  });
+
+  it('adds and deletes custom summary templates while resetting affected defaults', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        summaryTemplateId: 'summary-team',
+        summaryCustomTemplates: [
+          { id: 'summary-team', name: 'Team Summary', instructions: '1. Status\n2. Risks' },
+        ],
+      },
+    });
+    useProjectStore.setState({
+      ...useProjectStore.getState(),
+      projects: [
+        {
+          ...useProjectStore.getState().projects[0],
+          defaults: {
+            ...useProjectStore.getState().projects[0].defaults,
+            summaryTemplateId: 'summary-team',
+          },
+        },
+      ],
+    });
+
+    render(<SettingsVocabularyTab />);
+
+    fireEvent.change(screen.getByDisplayValue('Team Summary'), {
+      target: { value: 'Ops Summary' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ops Summary' }), {
+      target: { value: '1. Overview\n2. Follow-up' },
+    });
+
+    expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([
+      expect.objectContaining({
+        id: 'summary-team',
+        name: 'Ops Summary',
+        instructions: '1. Overview\n2. Follow-up',
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Ops Summary' }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([]);
+      expect(useConfigStore.getState().config.summaryTemplateId).toBe('general');
+      expect(useProjectStore.getState().projects[0].defaults.summaryTemplateId).toBe('general');
+    });
   });
 
   it('adds and updates polish keyword sets', () => {
@@ -137,6 +191,57 @@ describe('SettingsVocabularyTab', () => {
         keywords: 'Sona\nSherpa-onnx',
       }),
     ]);
+  });
+
+  it('deletes global rule sets and removes their project-level references', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        textReplacementSets: [
+          { id: 'text-1', name: 'Text Set', enabled: true, ignoreCase: false, rules: [] },
+        ],
+        hotwordSets: [
+          { id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] },
+        ],
+        polishKeywordSets: [
+          { id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' },
+        ],
+      },
+    });
+    useProjectStore.setState({
+      ...useProjectStore.getState(),
+      projects: [
+        {
+          ...useProjectStore.getState().projects[0],
+          defaults: {
+            ...useProjectStore.getState().projects[0].defaults,
+            enabledTextReplacementSetIds: ['text-1'],
+            enabledHotwordSetIds: ['hot-1'],
+            enabledPolishKeywordSetIds: ['kw-1'],
+          },
+        },
+      ],
+    });
+
+    render(<SettingsVocabularyTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Text Set' }));
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.textReplacementSets).toEqual([]);
+      expect(useProjectStore.getState().projects[0].defaults.enabledTextReplacementSetIds).toEqual([]);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Hot Set' }));
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.hotwordSets).toEqual([]);
+      expect(useProjectStore.getState().projects[0].defaults.enabledHotwordSetIds).toEqual([]);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Brand Terms' }));
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([]);
+      expect(useProjectStore.getState().projects[0].defaults.enabledPolishKeywordSetIds).toEqual([]);
+    });
   });
 
   it('updates and deletes custom presets while resetting affected project defaults', async () => {

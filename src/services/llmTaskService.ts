@@ -1,6 +1,6 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { v4 as uuidv4 } from 'uuid';
-import { LlmConfig, SummaryTemplate } from '../types/transcript';
+import { LlmConfig, ResolvedSummaryTemplate, SummaryTemplateId } from '../types/transcript';
 
 export const LLM_TASK_PROGRESS_EVENT = 'llm-task-progress';
 export const LLM_TASK_CHUNK_EVENT = 'llm-task-chunk';
@@ -48,13 +48,13 @@ export interface SummarySegmentInput extends LlmSegmentInput {
 export interface SummarizeTranscriptRequest {
   taskId: string;
   config: LlmConfig;
-  template: SummaryTemplate;
+  template: ResolvedSummaryTemplate;
   segments: SummarySegmentInput[];
   chunkCharBudget?: number;
 }
 
 export interface TranscriptSummaryResult {
-  template: SummaryTemplate;
+  templateId: SummaryTemplateId;
   content: string;
 }
 

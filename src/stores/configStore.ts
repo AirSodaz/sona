@@ -20,7 +20,7 @@ import type {
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
-  configVersion: 4,
+  configVersion: 5,
 
   // UI
   appLanguage: 'auto',
@@ -63,6 +63,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   // LLM Assistant
   llmSettings: createLlmSettings(),
   summaryEnabled: true,
+  summaryTemplateId: 'general',
+  summaryCustomTemplates: [],
   translationLanguage: 'zh',
   polishKeywords: '',
   polishPresetId: 'general',
@@ -134,6 +136,7 @@ const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'llmSettings', 'summaryEnabled', 'translationLanguage',
+  'summaryTemplateId', 'summaryCustomTemplates',
   'polishKeywords', 'polishPresetId', 'polishCustomPresets',
   'autoPolish', 'autoPolishFrequency',
 ];

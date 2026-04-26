@@ -1,13 +1,21 @@
-import type { AppConfig, HotwordRuleSet, PolishCustomPreset, TextReplacementRuleSet } from './config';
-import type { SummaryTemplate } from './transcript';
+import type {
+  AppConfig,
+  HotwordRuleSet,
+  PolishCustomPreset,
+  PolishKeywordRuleSet,
+  TextReplacementRuleSet,
+} from './config';
+import type { SummaryTemplateId } from './transcript';
 import {
   DEFAULT_POLISH_PRESET_ID,
   migrateLegacyPolishSelection,
   normalizePolishCustomPresets,
 } from '../utils/polishPresets';
+import { DEFAULT_SUMMARY_TEMPLATE_ID } from './transcript';
+import { coerceSummaryTemplateId } from '../utils/summaryTemplates';
 
 export interface ProjectDefaults {
-  summaryTemplate: SummaryTemplate;
+  summaryTemplateId: SummaryTemplateId;
   translationLanguage: string;
   polishPresetId: string;
   /** Deprecated legacy scenario, retained only for migration. */
@@ -17,6 +25,7 @@ export interface ProjectDefaults {
   exportFileNamePrefix: string;
   enabledTextReplacementSetIds: string[];
   enabledHotwordSetIds: string[];
+  enabledPolishKeywordSetIds: string[];
 }
 
 export interface ProjectRecord {
@@ -29,9 +38,22 @@ export interface ProjectRecord {
   defaults: ProjectDefaults;
 }
 
+type ProjectDefaultsInput = Partial<ProjectDefaults> & {
+  summaryTemplate?: string;
+  polishScenario?: string;
+  polishContext?: string;
+};
+
+type ProjectRecordInput = Partial<Omit<ProjectRecord, 'defaults'>> & {
+  defaults?: ProjectDefaultsInput;
+};
+
 export function buildProjectDefaultsFromConfig(config: AppConfig): ProjectDefaults {
   return {
-    summaryTemplate: 'general',
+    summaryTemplateId: coerceSummaryTemplateId(
+      config.summaryTemplateId,
+      config.summaryCustomTemplates,
+    ),
     translationLanguage: config.translationLanguage || 'zh',
     polishPresetId: config.polishPresetId || DEFAULT_POLISH_PRESET_ID,
     exportFileNamePrefix: '',
@@ -41,10 +63,13 @@ export function buildProjectDefaultsFromConfig(config: AppConfig): ProjectDefaul
     enabledHotwordSetIds: (config.hotwordSets || [])
       .filter((set) => set.enabled)
       .map((set) => set.id),
+    enabledPolishKeywordSetIds: (config.polishKeywordSets || [])
+      .filter((set) => set.enabled)
+      .map((set) => set.id),
   };
 }
 
-function resolveEnabledSetIds<T extends { id: string }>(
+function resolveEnabledSetIds<T extends { id: string; enabled: boolean }>(
   sets: T[] | undefined,
   enabledIds: string[],
 ): T[] {
@@ -81,12 +106,20 @@ export function resolveProjectAwareHotwordSets(
   return resolveEnabledSetIds(sets, project.defaults.enabledHotwordSetIds);
 }
 
-export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRecord {
+export function resolveProjectAwarePolishKeywordSets(
+  sets: PolishKeywordRuleSet[] | undefined,
+  project: ProjectRecord | null,
+): PolishKeywordRuleSet[] | undefined {
+  if (!project) {
+    return sets;
+  }
+
+  return resolveEnabledSetIds(sets, project.defaults.enabledPolishKeywordSetIds);
+}
+
+export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord {
   const now = Date.now();
-  const defaults = (input.defaults || {}) as Partial<ProjectDefaults> & {
-    polishScenario?: string;
-    polishContext?: string;
-  };
+  const defaults = input.defaults || {};
 
   return {
     id: input.id || '',
@@ -96,7 +129,7 @@ export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRe
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || input.createdAt || now,
     defaults: {
-      summaryTemplate: defaults.summaryTemplate || 'general',
+      summaryTemplateId: normalizeProjectSummaryTemplateId(defaults.summaryTemplateId, defaults.summaryTemplate),
       translationLanguage: defaults.translationLanguage || 'zh',
       polishPresetId: defaults.polishPresetId
         || ((defaults.polishScenario || defaults.polishContext) ? '' : DEFAULT_POLISH_PRESET_ID),
@@ -105,7 +138,39 @@ export function normalizeProjectRecord(input: Partial<ProjectRecord>): ProjectRe
       exportFileNamePrefix: defaults.exportFileNamePrefix || '',
       enabledTextReplacementSetIds: defaults.enabledTextReplacementSetIds || [],
       enabledHotwordSetIds: defaults.enabledHotwordSetIds || [],
+      enabledPolishKeywordSetIds: defaults.enabledPolishKeywordSetIds || [],
     },
+  };
+}
+
+export function normalizeProjectRecordWithKeywordSetBackfill(
+  input: ProjectRecordInput,
+  fallbackEnabledPolishKeywordSetIds: string[],
+): {
+  project: ProjectRecord;
+  migrated: boolean;
+} {
+  const defaults = input.defaults || {};
+  const migrated =
+    !Array.isArray(defaults.enabledPolishKeywordSetIds)
+    || !isNonEmptyString(defaults.summaryTemplateId);
+
+  if (!migrated) {
+    return {
+      project: normalizeProjectRecord(input),
+      migrated: false,
+    };
+  }
+
+  return {
+    project: normalizeProjectRecord({
+      ...input,
+      defaults: {
+        ...defaults,
+        enabledPolishKeywordSetIds: [...fallbackEnabledPolishKeywordSetIds],
+      },
+    }),
+    migrated: true,
   };
 }
 
@@ -132,12 +197,13 @@ export function migrateProjectPolishDefaults(
     );
 
     const nextDefaults: ProjectDefaults = {
-      summaryTemplate: project.defaults.summaryTemplate,
+      summaryTemplateId: project.defaults.summaryTemplateId,
       translationLanguage: project.defaults.translationLanguage,
       polishPresetId: selection.presetId,
       exportFileNamePrefix: project.defaults.exportFileNamePrefix,
       enabledTextReplacementSetIds: [...project.defaults.enabledTextReplacementSetIds],
       enabledHotwordSetIds: [...project.defaults.enabledHotwordSetIds],
+      enabledPolishKeywordSetIds: [...project.defaults.enabledPolishKeywordSetIds],
     };
 
     customPresets = selection.customPresets;
@@ -169,4 +235,23 @@ export function migrateProjectPolishDefaults(
     customPresets,
     migrated,
   };
+}
+
+function normalizeProjectSummaryTemplateId(
+  summaryTemplateId: string | null | undefined,
+  legacySummaryTemplate: string | null | undefined,
+): SummaryTemplateId {
+  if (isNonEmptyString(summaryTemplateId)) {
+    return summaryTemplateId.trim();
+  }
+
+  if (isNonEmptyString(legacySummaryTemplate)) {
+    return legacySummaryTemplate.trim();
+  }
+
+  return DEFAULT_SUMMARY_TEMPLATE_ID;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }

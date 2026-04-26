@@ -4,16 +4,21 @@ import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List } from 'lucide-
 import { BookIcon } from '../Icons';
 import { TextReplacementRuleSet, TextReplacementRule, HotwordRuleSet, HotwordRule, PolishKeywordRuleSet } from '../../types/config';
 import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
+import type { ProjectDefaults } from '../../types/project';
 import { SettingsTabContainer, SettingsSection, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsContextSection } from './SettingsContextSection';
+import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
 import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
 
 export function SettingsVocabularyTab(): React.JSX.Element {
     const { t } = useTranslation();
     const config = useVocabularyConfig();
     const updateConfig = useSetConfig();
+    const projects = useProjectStore((state) => state.projects);
+    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
     
     // State for Text Replacement Sets
     const [newSetName, setNewSetName] = useState('');
@@ -32,6 +37,22 @@ export function SettingsVocabularyTab(): React.JSX.Element {
     const sets = config.textReplacementSets || [];
     const hotwordSets = config.hotwordSets || [];
     const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
+
+    const removeRuleSetReferenceFromProjects = async (
+        key: 'enabledTextReplacementSetIds' | 'enabledHotwordSetIds' | 'enabledPolishKeywordSetIds',
+        setId: string,
+    ) => {
+        const affectedProjects = projects.filter((project) => project.defaults[key].includes(setId));
+        if (affectedProjects.length === 0) {
+            return;
+        }
+
+        await Promise.all(affectedProjects.map((project) => (
+            updateProjectDefaults(project.id, {
+                [key]: project.defaults[key].filter((id) => id !== setId),
+            } as Pick<ProjectDefaults, typeof key>)
+        )));
+    };
 
     // --- Text Replacement Handlers ---
 
@@ -76,8 +97,9 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         });
     };
 
-    const handleDeleteSet = (id: string) => {
+    const handleDeleteSet = async (id: string) => {
         updateConfig({ textReplacementSets: sets.filter(s => s.id !== id) });
+        await removeRuleSetReferenceFromProjects('enabledTextReplacementSetIds', id);
     };
 
     const handleAddRuleToSet = (setId: string) => {
@@ -164,8 +186,9 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         });
     };
 
-    const handleDeleteHotwordSet = (id: string) => {
+    const handleDeleteHotwordSet = async (id: string) => {
         updateConfig({ hotwordSets: hotwordSets.filter(s => s.id !== id) });
+        await removeRuleSetReferenceFromProjects('enabledHotwordSetIds', id);
     };
 
     const handleAddHotwordToSet = (setId: string) => {
@@ -233,8 +256,9 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         });
     };
 
-    const handleDeletePolishKeywordSet = (id: string) => {
+    const handleDeletePolishKeywordSet = async (id: string) => {
         updateConfig({ polishKeywordSets: polishKeywordSets.filter((set) => set.id !== id) });
+        await removeRuleSetReferenceFromProjects('enabledPolishKeywordSetIds', id);
     };
 
     return (
@@ -242,7 +266,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
             <SettingsPageHeader 
                 icon={<BookIcon width={28} height={28} />}
                 title={t('settings.vocabulary')} 
-                description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary, hotwords, polish keyword sets, and text polish context presets.' })} 
+                description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary, hotwords, polish keyword sets, text polish context presets, and summary templates.' })} 
             />
 
             <SettingsSection
@@ -356,8 +380,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                         <button 
                                             className="btn btn-icon btn-danger-soft"
                                             onClick={() => handleDeleteSet(set.id)}
-                                            title={t('common.delete')}
-                                            aria-label={t('common.delete')}
+                                            title={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
+                                            aria-label={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -557,8 +581,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                         <button 
                                             className="btn btn-icon btn-danger-soft"
                                             onClick={() => handleDeleteHotwordSet(set.id)}
-                                            title={t('common.delete')}
-                                            aria-label={t('common.delete')}
+                                            title={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
+                                            aria-label={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -750,8 +774,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                         <button
                                             className="btn btn-icon btn-danger-soft"
                                             onClick={() => handleDeletePolishKeywordSet(set.id)}
-                                            title={t('common.delete')}
-                                            aria-label={t('common.delete')}
+                                            title={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
+                                            aria-label={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -802,6 +826,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
             </SettingsSection>
 
             <SettingsContextSection />
+            <SettingsSummaryTemplateSection />
         </SettingsTabContainer>
     );
 }

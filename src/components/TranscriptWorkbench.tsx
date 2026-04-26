@@ -8,7 +8,6 @@ import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { RenameModal } from './RenameModal';
 import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
-import { isSummaryLlmConfigComplete } from '../services/llmConfig';
 import { generateAiTitle } from '../services/aiRenameService';
 
 interface TranscriptWorkbenchProps {
@@ -66,8 +65,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
   
   // Summary button logic
   const summaryEnabled = config.summaryEnabled ?? true;
-  const summaryConfigComplete = isSummaryLlmConfigComplete(config);
-  const showSummaryButton = summaryEnabled && summaryConfigComplete && hasSegments;
+  const showSummaryButton = summaryEnabled && hasSegments;
 
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));

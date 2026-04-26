@@ -46,6 +46,21 @@ describe('configMigrationService', () => {
     expect(result.config.summaryEnabled).toBe(false);
   });
 
+  it('fills missing summary template registry fields with defaults', async () => {
+    const savedConfig: any = {
+      ...DEFAULT_CONFIG,
+      configVersion: 4,
+      summaryTemplateId: undefined,
+      summaryCustomTemplates: undefined,
+    };
+
+    const result = await migrateConfig(savedConfig);
+
+    expect(result.config.summaryTemplateId).toBe('general');
+    expect(result.config.summaryCustomTemplates).toEqual([]);
+    expect(result.migrated).toBe(true);
+  });
+
   it('migrates a legacy built-in polish scenario to polishPresetId', async () => {
     const savedConfig: any = {
       ...DEFAULT_CONFIG,

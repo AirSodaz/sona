@@ -102,7 +102,7 @@ describe('App Title Logic', () => {
   it('displays active project name as a tag in header when active', () => {
     setupStore({ mode: 'live' }, { 
       activeProjectId: 'p1', 
-      projects: [{ id: 'p1', name: 'My Project', defaults: { summaryTemplate: 'general' } }] 
+      projects: [{ id: 'p1', name: 'My Project', defaults: { summaryTemplateId: 'general' } }] 
     });
     render(<App />);
     expect(screen.getByText('My Project')).not.toBeNull();

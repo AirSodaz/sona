@@ -48,9 +48,9 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import type { ProjectDefaults, ProjectRecord } from '../types/project';
 import { getPolishPresetOptions } from '../utils/polishPresets';
+import { getSummaryTemplateOptions } from '../utils/summaryTemplates';
 
 const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
-const SUMMARY_TEMPLATE_OPTIONS = ['general', 'meeting', 'lecture'] as const;
 const DEFAULT_FILTER_TYPE = 'all';
 const DEFAULT_DATE_FILTER = 'all';
 const DEFAULT_SORT_ORDER = 'newest';
@@ -142,12 +142,13 @@ function buildComparableProjectSettingsSnapshot(input: {
     name: input.name.trim(),
     description: input.description,
     icon: input.icon || '',
-    summaryTemplate: input.defaults.summaryTemplate,
+    summaryTemplateId: input.defaults.summaryTemplateId,
     translationLanguage: input.defaults.translationLanguage,
     polishPresetId: input.defaults.polishPresetId,
     exportFileNamePrefix: input.defaults.exportFileNamePrefix,
     enabledTextReplacementSetIds: sortRuleSetIds(input.defaults.enabledTextReplacementSetIds),
     enabledHotwordSetIds: sortRuleSetIds(input.defaults.enabledHotwordSetIds),
+    enabledPolishKeywordSetIds: sortRuleSetIds(input.defaults.enabledPolishKeywordSetIds),
   };
 }
 
@@ -388,10 +389,7 @@ function ProjectSettingsModal({
     return null;
   }
 
-  const summaryTemplateOptions = SUMMARY_TEMPLATE_OPTIONS.map((template) => ({
-    value: template,
-    label: t(`summary.templates.${template}`),
-  }));
+  const summaryTemplateOptions = getSummaryTemplateOptions(globalConfig.summaryCustomTemplates, t);
 
   const languageOptions = LANGUAGE_OPTIONS.map((language) => ({
     value: language,
@@ -401,7 +399,7 @@ function ProjectSettingsModal({
   const polishPresetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
 
   const toggleRuleSetId = (
-    key: 'enabledTextReplacementSetIds' | 'enabledHotwordSetIds',
+    key: 'enabledTextReplacementSetIds' | 'enabledHotwordSetIds' | 'enabledPolishKeywordSetIds',
     id: string,
   ) => {
     const current = new Set(draftDefaults[key]);
@@ -513,10 +511,10 @@ function ProjectSettingsModal({
                 {t('projects.summary_template', { defaultValue: 'Default Summary Template' })}
               </label>
               <Dropdown
-                value={draftDefaults.summaryTemplate}
+                value={draftDefaults.summaryTemplateId}
                 onChange={(value: string) => onDefaultsChange({
                   ...draftDefaults,
-                  summaryTemplate: value as ProjectDefaults['summaryTemplate'],
+                  summaryTemplateId: value as ProjectDefaults['summaryTemplateId'],
                 })}
                 options={summaryTemplateOptions}
                 style={{ width: '100%' }}
@@ -613,6 +611,30 @@ function ProjectSettingsModal({
                       key={set.id}
                       checked={draftDefaults.enabledHotwordSetIds.includes(set.id)}
                       onChange={() => toggleRuleSetId('enabledHotwordSetIds', set.id)}
+                      label={set.name}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="projects-settings-card">
+              <div className="projects-settings-card-title">
+                {t('projects.polish_keyword_sets', { defaultValue: 'Enabled Polish Keyword Sets' })}
+              </div>
+              <div className="projects-settings-card-list">
+                {(globalConfig.polishKeywordSets || []).length === 0 ? (
+                  <span className="projects-settings-empty-copy">
+                    {t('projects.no_polish_keyword_sets', {
+                      defaultValue: 'No global polish keyword sets yet.',
+                    })}
+                  </span>
+                ) : (
+                  (globalConfig.polishKeywordSets || []).map((set) => (
+                    <Checkbox
+                      key={set.id}
+                      checked={draftDefaults.enabledPolishKeywordSetIds.includes(set.id)}
+                      onChange={() => toggleRuleSetId('enabledPolishKeywordSetIds', set.id)}
                       label={set.name}
                     />
                   ))

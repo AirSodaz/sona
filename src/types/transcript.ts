@@ -71,13 +71,36 @@ export type LlmProviderStrategy =
   | 'google_translate_free'
   | 'perplexity';
 
-export type SummaryTemplate = 'general' | 'meeting' | 'lecture';
+export type SummaryTemplateId = string;
 
-export const DEFAULT_SUMMARY_TEMPLATE: SummaryTemplate = 'general';
+export interface SummaryCustomTemplate {
+  /** Stable template id. */
+  id: string;
+  /** User-visible template name. */
+  name: string;
+  /** Template instructions sent to the summary prompt. */
+  instructions: string;
+}
+
+export interface ResolvedSummaryTemplate {
+  /** Stable template id. */
+  id: SummaryTemplateId;
+  /** Resolved display name. */
+  name: string;
+  /** Instructions sent to the prompt builder. */
+  instructions: string;
+  /** Whether this template is built into the app. */
+  builtIn: boolean;
+}
+
+export type SummaryTemplate = SummaryTemplateId;
+
+export const DEFAULT_SUMMARY_TEMPLATE_ID: SummaryTemplateId = 'general';
+export const DEFAULT_SUMMARY_TEMPLATE: SummaryTemplate = DEFAULT_SUMMARY_TEMPLATE_ID;
 
 export interface TranscriptSummaryRecord {
-  /** Template used to generate the summary. */
-  template: SummaryTemplate;
+  /** Template used when the summary was last generated or saved. */
+  templateId: SummaryTemplateId;
   /** Summary content. */
   content: string;
   /** ISO timestamp when the summary was generated. */
@@ -88,7 +111,7 @@ export interface TranscriptSummaryRecord {
 
 export interface TranscriptSummaryState {
   /** Currently selected template in the summary panel. */
-  activeTemplate: SummaryTemplate;
+  activeTemplateId: SummaryTemplateId;
   /** Saved summary record. */
   record?: TranscriptSummaryRecord;
   /** Whether a summary is currently being generated. */
@@ -99,7 +122,7 @@ export interface TranscriptSummaryState {
 
 export interface HistorySummaryPayload {
   /** Currently selected template for the history item. */
-  activeTemplate: SummaryTemplate;
+  activeTemplateId: SummaryTemplateId;
   /** Persisted summary record. */
   record?: TranscriptSummaryRecord;
 }

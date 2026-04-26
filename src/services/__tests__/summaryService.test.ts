@@ -75,7 +75,7 @@ describe('summaryService', () => {
       return vi.fn();
     });
     vi.mocked(invoke).mockResolvedValue({
-      template: 'meeting',
+      templateId: 'meeting',
       content: 'Meeting summary',
     });
 
@@ -84,7 +84,12 @@ describe('summaryService', () => {
     expect(invoke).toHaveBeenCalledWith('summarize_transcript', {
       request: {
         taskId: 'summary-task-id',
-        template: 'meeting',
+        template: {
+          id: 'meeting',
+          name: 'Meeting',
+          instructions: expect.stringContaining('Meeting overview.'),
+          builtIn: true,
+        },
         config: expect.objectContaining({
           apiKey: 'test-key',
           model: 'gpt-4o-mini',
@@ -99,7 +104,7 @@ describe('summaryService', () => {
     expect(historyService.saveSummary).toHaveBeenCalledWith(
       'history-a',
       expect.objectContaining({
-        activeTemplate: 'meeting',
+        activeTemplateId: 'meeting',
         record: expect.objectContaining({
           content: 'Meeting summary',
         }),
@@ -122,7 +127,7 @@ describe('summaryService', () => {
     vi.mocked(invoke).mockImplementation(async () => {
       useTranscriptStore.getState().setSourceHistoryId('history-new');
       return {
-        template: 'general',
+        templateId: 'general',
         content: 'Current summary',
       };
     });
@@ -144,9 +149,9 @@ describe('summaryService', () => {
   it('hydrates summary sidecars into the store', async () => {
     const { historyService } = await import('../historyService');
     vi.mocked(historyService.loadSummary).mockResolvedValue({
-      activeTemplate: 'lecture',
+      activeTemplateId: 'lecture',
       record: {
-        template: 'lecture',
+        templateId: 'lecture',
         content: 'Lecture summary',
         generatedAt: '2026-04-22T10:00:00.000Z',
         sourceFingerprint: 'fingerprint-a',
@@ -156,14 +161,51 @@ describe('summaryService', () => {
     await summaryService.loadSummary('history-lecture');
 
     expect(useTranscriptStore.getState().getSummaryState('history-lecture')).toEqual(expect.objectContaining({
-      activeTemplate: 'lecture',
+      activeTemplateId: 'lecture',
       record: expect.objectContaining({
         content: 'Lecture summary',
       }),
     }));
   });
 
-  it('rejects new summary generation when AI Summary is disabled', async () => {
+  it('creates the first manual summary record when none exists yet', async () => {
+    const { historyService } = await import('../historyService');
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Manual transcript', start: 0, end: 2, isFinal: true },
+      ],
+      sourceHistoryId: 'history-manual',
+      summaryStates: {
+        'history-manual': {
+          activeTemplateId: 'meeting',
+          record: undefined,
+          isGenerating: false,
+          generationProgress: 0,
+        },
+      },
+    });
+
+    await summaryService.updateSummaryRecord('Manual summary', 'history-manual');
+
+    expect(useTranscriptStore.getState().getSummaryState('history-manual').record).toEqual(
+      expect.objectContaining({
+        templateId: 'meeting',
+        content: 'Manual summary',
+      }),
+    );
+    expect(historyService.saveSummary).toHaveBeenCalledWith(
+      'history-manual',
+      expect.objectContaining({
+        activeTemplateId: 'meeting',
+        record: expect.objectContaining({
+          templateId: 'meeting',
+          content: 'Manual summary',
+        }),
+      }),
+    );
+  });
+
+  it('rejects new summary generation when Summary is disabled', async () => {
     useTranscriptStore.setState({
       segments: [
         { id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true },
@@ -174,7 +216,7 @@ describe('summaryService', () => {
       },
     });
 
-    await expect(summaryService.generateSummary('general')).rejects.toThrow('AI Summary is disabled.');
+    await expect(summaryService.generateSummary('general')).rejects.toThrow('Summary is disabled.');
     expect(invoke).not.toHaveBeenCalled();
   });
 

@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import type { AppConfig } from '../types/config';
 import type { ProjectDefaults, ProjectRecord } from '../types/project';
 import { buildProjectDefaultsFromConfig } from '../types/project';
+import { useConfigStore } from './configStore';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import { logger } from '../utils/logger';
+import { normalizePolishKeywordSets } from '../utils/polishKeywords';
 
 interface CreateProjectInput {
   name: string;
@@ -39,8 +41,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadProjects: async () => {
     set({ isLoading: true, error: null });
     try {
+      const fallbackEnabledPolishKeywordSetIds = normalizePolishKeywordSets(
+        useConfigStore.getState().config.polishKeywordSets,
+      )
+        .filter((set) => set.enabled)
+        .map((set) => set.id);
       const [projects, activeProjectId] = await Promise.all([
-        projectService.getAll(),
+        projectService.getAll({ fallbackEnabledPolishKeywordSetIds }),
         projectService.getActiveProjectId(),
       ]);
 
