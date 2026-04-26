@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
@@ -55,6 +55,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
   const storeTitle = useTranscriptStore((state) => state.title);
   const storeIcon = useTranscriptStore((state) => state.icon);
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+  const isRecording = useTranscriptStore((state) => state.isRecording);
   const setTitle = useTranscriptStore((state) => state.setTitle);
   const setIcon = useTranscriptStore((state) => state.setIcon);
   const mode = useTranscriptStore((state) => state.mode);
@@ -69,6 +70,13 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
 
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
+  const isManualHeaderActionsDisabled = isRecording;
+
+  useEffect(() => {
+    if (isManualHeaderActionsDisabled) {
+      setIsRenameModalOpen(false);
+    }
+  }, [isManualHeaderActionsDisabled]);
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
     setTitle(newTitle.trim());
@@ -100,7 +108,15 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
             </h4>
             <button
               className="btn btn-icon btn-sm"
-              onClick={() => setIsRenameModalOpen(true)}
+              type="button"
+              onClick={() => {
+                if (isManualHeaderActionsDisabled) {
+                  return;
+                }
+                setIsRenameModalOpen(true);
+              }}
+              aria-label={t('common.rename', { defaultValue: 'Rename' })}
+              disabled={isManualHeaderActionsDisabled}
               data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
               data-tooltip-pos="bottom"
             >
@@ -120,8 +136,14 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
           <button
             type="button"
             className="btn btn-icon"
-            onClick={onClose}
+            onClick={() => {
+              if (isManualHeaderActionsDisabled) {
+                return;
+              }
+              onClose();
+            }}
             aria-label={t('common.close', { defaultValue: 'Close' })}
+            disabled={isManualHeaderActionsDisabled}
           >
             <CloseIcon />
           </button>

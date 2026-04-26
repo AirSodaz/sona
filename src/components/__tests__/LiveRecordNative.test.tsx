@@ -31,8 +31,8 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 // Mock historyService
-const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'mock-id' });
-const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'mock-id' });
+const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'mock-id', title: 'Recording test', projectId: null });
+const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'mock-id', title: 'Recording test', projectId: null });
 vi.mock('../../services/historyService', () => ({
     historyService: {
         saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
@@ -354,6 +354,9 @@ describe('LiveRecord Native Capture', () => {
                 isCaptionMode: false,
                 segments: [],
                 audioUrl: null,
+                sourceHistoryId: null,
+                title: null,
+                icon: null,
             });
         });
         vi.useRealTimers();
@@ -518,6 +521,40 @@ describe('LiveRecord Native Capture', () => {
         expect(typeof callArgs[0]).toBe('string');
         // 2nd arg: segments
         expect(callArgs[1]).toHaveLength(1);
+    });
+
+    it('syncs the saved history title into the editor after native recording is persisted', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        mockSaveNativeRecording.mockResolvedValueOnce({
+            id: 'native-history-id',
+            title: 'Recording 2026-04-27 09-30-00',
+            icon: 'system:mic',
+            projectId: null,
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        act(() => {
+            useTranscriptStore.setState({
+                segments: [{ id: 'native-seg', text: 'Hello native capture', start: 0, end: 1, isFinal: true }],
+            });
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(100);
+            await Promise.resolve();
+        });
+
+        expect(mockSaveNativeRecording).toHaveBeenCalled();
+        expect(useTranscriptStore.getState().sourceHistoryId).toBe('native-history-id');
+        expect(useTranscriptStore.getState().title).toBe('Recording 2026-04-27 09-30-00');
+        expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });
 
     it('keeps accepting native microphone segments after capture attaches', async () => {

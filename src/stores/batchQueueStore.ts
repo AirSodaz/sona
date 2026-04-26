@@ -301,6 +301,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         ? {
                             ...queueItem,
                             historyId: historyItem.id,
+                            historyTitle: historyItem.title,
                             projectId: historyItem.projectId ?? queueItem.projectId,
                         }
                         : queueItem
@@ -308,7 +309,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             }));
 
             if (get().activeItemId === itemId) {
-                useTranscriptStore.getState().setSourceHistoryId(historyItem.id);
+                const transcriptStore = useTranscriptStore.getState();
+                transcriptStore.setSourceHistoryId(historyItem.id);
+                transcriptStore.setTitle(historyItem.title);
+                transcriptStore.setIcon(historyItem.icon || null);
                 void useProjectStore.getState().setActiveProjectId(historyItem.projectId);
             }
         };
@@ -446,7 +450,11 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const item = state.queueItems.find((queueItem) => queueItem.id === id);
         if (item) {
-            useTranscriptStore.getState().loadTranscript(item.segments, item.historyId || null, item.filename);
+            useTranscriptStore.getState().loadTranscript(
+                item.segments,
+                item.historyId || null,
+                item.historyTitle || item.filename,
+            );
             useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
             void useProjectStore.getState().setActiveProjectId(item.projectId);
         } else if (id === null) {

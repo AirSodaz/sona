@@ -48,7 +48,7 @@ vi.mock('../../services/modelService', () => ({
 
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1', projectId: null })
+        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1', title: 'Batch test.wav', projectId: null })
     }
 }));
 
@@ -68,6 +68,11 @@ describe('batchQueueStore History Integration', () => {
         useBatchQueueStore.getState().clearQueue();
         useTranscriptStore.getState().setAudioUrl(null);
         useTranscriptStore.getState().clearSegments();
+        useTranscriptStore.setState({
+            sourceHistoryId: null,
+            title: null,
+            icon: null,
+        });
         useConfigStore.setState({
             config: {
                 ...useConfigStore.getState().config,
@@ -126,5 +131,43 @@ describe('batchQueueStore History Integration', () => {
         // Assert Item Status
         const queueState = useBatchQueueStore.getState();
         expect(queueState.queueItems[0].status).toBe('complete');
+    });
+
+    it('keeps the active editor title aligned with the saved history title for batch imports', async () => {
+        const file = '/path/to/meeting.wav';
+        const mockSegments = [
+            { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },
+        ];
+        let resolveSave!: (value: { id: string; title: string; projectId: null }) => void;
+
+        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        (historyService.saveImportedFile as any).mockImplementation(() => new Promise((resolve) => {
+            resolveSave = resolve;
+        }));
+
+        useBatchQueueStore.getState().addFiles([file]);
+
+        expect(useTranscriptStore.getState().title).toBe('meeting.wav');
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(useTranscriptStore.getState().title).toBe('meeting.wav');
+
+        resolveSave({
+            id: 'history-1',
+            title: 'Batch meeting.wav',
+            projectId: null,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(useTranscriptStore.getState().sourceHistoryId).toBe('history-1');
+        expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
+
+        const queueItemId = useBatchQueueStore.getState().queueItems[0].id;
+        useBatchQueueStore.getState().setActiveItem(null);
+        expect(useTranscriptStore.getState().title).toBe('');
+
+        useBatchQueueStore.getState().setActiveItem(queueItemId);
+        expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
     });
 });

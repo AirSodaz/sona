@@ -56,6 +56,13 @@ function shouldFeedWebAudioForPhase(phase: RecordSessionPhase): boolean {
     return phase === 'starting' || phase === 'recording' || phase === 'resuming';
 }
 
+function syncSavedRecordingMeta(title: string, historyId: string, icon: string | undefined | null): void {
+    const transcriptStore = useTranscriptStore.getState();
+    transcriptStore.setSourceHistoryId(historyId);
+    transcriptStore.setTitle(title);
+    transcriptStore.setIcon(icon || null);
+}
+
 /**
  * Determines the supported audio MIME type for the current browser.
  */
@@ -510,7 +517,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     );
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
-                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                        syncSavedRecordingMeta(newItem.title, newItem.id, newItem.icon);
                         void useProjectStore.getState().setActiveProjectId(newItem.projectId);
                         await summaryService.persistSummary(newItem.id);
                     }
@@ -786,7 +793,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     );
                     if (newItem) {
                         useHistoryStore.getState().addItem(newItem);
-                        useTranscriptStore.getState().setSourceHistoryId(newItem.id);
+                        syncSavedRecordingMeta(newItem.title, newItem.id, newItem.icon);
                         void useProjectStore.getState().setActiveProjectId(newItem.projectId);
                         await summaryService.persistSummary(newItem.id);
                     }

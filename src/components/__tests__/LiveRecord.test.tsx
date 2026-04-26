@@ -106,8 +106,8 @@ vi.mock('../../services/modelService', () => ({
 }));
 
 // Mock history service
-const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'test-id' });
-const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'test-id' });
+const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'test-id', title: 'Recording test', projectId: null });
+const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'test-id', title: 'Recording test', projectId: null });
 vi.mock('../../services/historyService', () => ({
     historyService: {
         saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
@@ -304,6 +304,9 @@ describe('LiveRecord', () => {
                 isCaptionMode: false,
                 segments: [],
                 audioUrl: null,
+                sourceHistoryId: null,
+                title: null,
+                icon: null,
             });
             useOnboardingStore.setState({
                 persistedState: { version: 1, status: 'pending' },
@@ -536,6 +539,49 @@ describe('LiveRecord', () => {
             await vi.advanceTimersByTimeAsync(1000);
         });
         expect(timer.textContent).toBe('00:03');
+    });
+
+    it('syncs the saved history title into the editor after web recording fallback is persisted', async () => {
+        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'start_microphone_capture') {
+                throw new Error('native unavailable');
+            }
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
+        mockSaveRecording.mockResolvedValueOnce({
+            id: 'web-history-id',
+            title: 'Recording 2026-04-27 09-00-00',
+            icon: 'system:mic',
+            projectId: null,
+        });
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        act(() => {
+            useTranscriptStore.setState({
+                segments: [{ id: 'web-seg', text: 'Hello web fallback', start: 0, end: 1, isFinal: true }],
+            });
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await vi.advanceTimersByTimeAsync(100);
+            await Promise.resolve();
+        });
+
+        expect(mockSaveRecording).toHaveBeenCalled();
+        expect(useTranscriptStore.getState().sourceHistoryId).toBe('web-history-id');
+        expect(useTranscriptStore.getState().title).toBe('Recording 2026-04-27 09-00-00');
+        expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });
 
     it('should start caption mode independently without recording', async () => {

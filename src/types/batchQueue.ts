@@ -17,6 +17,8 @@ export interface BatchQueueItem {
     id: string;
     /** Original filename (display name). */
     filename: string;
+    /** Saved history title used by the editor after the item is persisted. */
+    historyTitle?: string;
     /** Full file path for processing. */
     filePath: string;
     /** Current processing status. */
