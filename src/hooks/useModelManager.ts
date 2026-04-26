@@ -3,8 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
-import { getRecommendedOnboardingConfig, resolveRecommendedOnboardingPaths } from '../services/onboardingService';
 import { logger } from '../utils/logger';
+
+const DEFAULT_SENSEVOICE_INT8_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
+const DEFAULT_SENSEVOICE_FP32_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
+const DEFAULT_SILERO_VAD_MODEL_ID = 'silero-vad';
 
 type DownloadState = {
     progress: number;
@@ -289,16 +292,38 @@ export function useModelManager(isOpen: boolean) {
         if (!confirmed) return;
 
         try {
-            const recommendedPaths = await resolveRecommendedOnboardingPaths();
-            updateConfig({
-                ...getRecommendedOnboardingConfig(recommendedPaths),
+            const [hasSenseVoiceInt8, hasSenseVoiceFp32, hasSileroVad] = await Promise.all([
+                modelService.isModelInstalled(DEFAULT_SENSEVOICE_INT8_MODEL_ID),
+                modelService.isModelInstalled(DEFAULT_SENSEVOICE_FP32_MODEL_ID),
+                modelService.isModelInstalled(DEFAULT_SILERO_VAD_MODEL_ID),
+            ]);
+
+            const updates: Partial<typeof config> = {
                 punctuationModelPath: '',
                 vadBufferSize: 5,
                 maxConcurrent: 2,
                 enableITN: true,
-            });
+            };
+
+            const fallbackModelId = hasSenseVoiceInt8
+                ? DEFAULT_SENSEVOICE_INT8_MODEL_ID
+                : hasSenseVoiceFp32
+                    ? DEFAULT_SENSEVOICE_FP32_MODEL_ID
+                    : null;
+
+            if (fallbackModelId) {
+                const modelPath = await modelService.getModelPath(fallbackModelId);
+                updates.streamingModelPath = modelPath;
+                updates.offlineModelPath = modelPath;
+            }
+
+            if (hasSileroVad) {
+                updates.vadModelPath = await modelService.getModelPath(DEFAULT_SILERO_VAD_MODEL_ID);
+            }
+
+            updateConfig(updates);
         } catch (e) {
-            logger.warn('Failed to resolve default onboarding model paths', e);
+            logger.warn('Failed to restore default model settings', e);
         }
     }
 

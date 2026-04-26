@@ -59,15 +59,11 @@ vi.mock('../settings/SettingsGeneralTab', () => ({
 vi.mock('../settings/SettingsModelsTab', () => ({
     SettingsModelsTab: () => <div>Models Tab</div>
 }));
-vi.mock('../settings/SettingsLocalTab', () => ({
-    SettingsLocalTab: () => <div>Local Tab</div>
-}));
 vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
     MicIcon: () => <span>Icon</span>,
     SubtitleIcon: () => <span>Icon</span>,
     ModelIcon: () => <span>Icon</span>,
-    LocalIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
     InfoIcon: () => <span>Icon</span>,
     RobotIcon: () => <span>Icon</span>,
@@ -124,6 +120,7 @@ describe('Settings Focus Trap & Navigation', () => {
 
         expect(screen.getByText('settings.vocabulary')).toBeDefined();
         expect(screen.queryByText('settings.context_title')).toBeNull();
+        expect(screen.queryByText('settings.local_path')).toBeNull();
 
         const tablist = screen.getByRole('tablist');
         const tabs = screen.getAllByRole('tab');
@@ -156,5 +153,18 @@ describe('Settings Focus Trap & Navigation', () => {
         // Home -> Should switch to 'general' (first)
         fireEvent.keyDown(tablist, { key: 'Home' });
         expect(setActiveTabMock).toHaveBeenCalledWith('general');
+    });
+
+    it('navigates tabs with ctrl+tab without the removed local tab', () => {
+        const onClose = vi.fn();
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+        expect(setActiveTabMock).toHaveBeenCalledWith('microphone');
+
+        setActiveTabMock.mockClear();
+
+        fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+        expect(setActiveTabMock).toHaveBeenCalledWith('about');
     });
 });

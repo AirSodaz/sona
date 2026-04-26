@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
-import { useModelConfig, useSetConfig } from '../../stores/configStore';
+import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
-import { Mic, Type, Activity, Settings2 } from 'lucide-react';
-import { ModelIcon } from '../Icons';
+import { Mic, Type, Activity, Settings2, PlaySquare } from 'lucide-react';
+import { ModelIcon, RestoreIcon } from '../Icons';
 import { logger } from '../../utils/logger';
 import { useModelManagerContext } from '../../hooks/useModelManager';
+import { Switch } from '../Switch';
 
 interface ModelSectionProps {
     title: string;
@@ -83,21 +84,26 @@ function ModelSection({
 
 export function SettingsModelsTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const config = useModelConfig();
+    const modelConfig = useModelConfig();
+    const transcriptionConfig = useTranscriptionConfig();
     const updateConfig = useSetConfig();
     const {
         installedModels,
         downloads,
         handleDelete,
         handleDownload,
-        handleCancelDownload
+        handleCancelDownload,
+        restoreDefaultModelSettings
     } = useModelManagerContext();
 
     const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
     const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
 
-    const streamingModelPath = config.streamingModelPath;
-    const offlineModelPath = config.offlineModelPath;
+    const streamingModelPath = modelConfig.streamingModelPath;
+    const offlineModelPath = modelConfig.offlineModelPath;
+    const vadBufferSize = transcriptionConfig.vadBufferSize || 5;
+    const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
+    const enableITN = transcriptionConfig.enableITN ?? true;
 
     // Memoize the mapping between paths and model IDs in state to trigger re-renders
     const [pathMap, setPathMap] = useState<Map<string, string>>(new Map());
@@ -158,7 +164,7 @@ export function SettingsModelsTab(): React.JSX.Element {
             if (rules.requiresVad) {
                 const vadModelId = 'silero-vad';
                 // Only sync and save if path is missing in config
-                if (!config.vadModelPath) {
+                if (!modelConfig.vadModelPath) {
                     if (installedModels.has(vadModelId)) {
                         const vadPath = await modelService.getModelPath(vadModelId);
                         updateConfig({ vadModelPath: vadPath });
@@ -171,7 +177,7 @@ export function SettingsModelsTab(): React.JSX.Element {
             if (rules.requiresPunctuation) {
                 const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
                 // Only sync and save if path is missing in config
-                if (!config.punctuationModelPath) {
+                if (!modelConfig.punctuationModelPath) {
                     if (installedModels.has(punctModelId)) {
                         const punctPath = await modelService.getModelPath(punctModelId);
                         updateConfig({ punctuationModelPath: punctPath });
@@ -249,10 +255,11 @@ export function SettingsModelsTab(): React.JSX.Element {
             <SettingsPageHeader 
                 icon={<ModelIcon width={28} height={28} />}
                 title={t('settings.model_hub')} 
-                description={t('settings.model_selection_desc')} 
+                description={t('settings.model_settings_description')} 
             />
             <SettingsSection
                 title={t('settings.model_selection')}
+                description={t('settings.model_selection_desc')}
                 icon={<Settings2 size={20} />}
             >
                 <SettingsItem
@@ -308,6 +315,76 @@ export function SettingsModelsTab(): React.JSX.Element {
                 icon={<Activity size={20} />}
                 {...sectionProps} 
             />
+
+            <SettingsSection
+                title={t('settings.transcription_settings')}
+                icon={<PlaySquare size={20} />}
+                description={t('settings.transcription_settings_hint')}
+            >
+                <SettingsItem
+                    title={t('settings.enable_itn')}
+                    hint={t('settings.enable_itn_hint')}
+                >
+                    <Switch
+                        checked={enableITN}
+                        onChange={(checked) => updateConfig({ enableITN: checked })}
+                    />
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.vad_buffer_size')}
+                    hint={t('settings.vad_buffer_hint')}
+                >
+                    <div style={{ width: '120px' }}>
+                        <input
+                            id="settings-vad-buffer"
+                            type="number"
+                            className="settings-input"
+                            value={vadBufferSize}
+                            onChange={(e) => updateConfig({ vadBufferSize: Number(e.target.value) })}
+                            min={0}
+                            max={30}
+                            step={0.5}
+                            style={{ textAlign: 'center' }}
+                        />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.max_concurrent_label')}
+                    hint={t('settings.max_concurrent_hint')}
+                >
+                    <div style={{ width: '120px' }}>
+                        <input
+                            id="settings-max-concurrent"
+                            type="number"
+                            className="settings-input"
+                            value={maxConcurrent}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                if (val > 0) {
+                                    updateConfig({ maxConcurrent: val });
+                                }
+                            }}
+                            min={1}
+                            max={4}
+                            step={1}
+                            style={{ textAlign: 'center' }}
+                        />
+                    </div>
+                </SettingsItem>
+            </SettingsSection>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
+                <button
+                    className="btn btn-restore-defaults"
+                    onClick={restoreDefaultModelSettings}
+                    aria-label={t('settings.restore_defaults')}
+                >
+                    <RestoreIcon />
+                    {t('settings.restore_defaults')}
+                </button>
+            </div>
         </SettingsTabContainer>
     );
 }

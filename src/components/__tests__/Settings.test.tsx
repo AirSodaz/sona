@@ -143,6 +143,26 @@ describe('Settings', () => {
         });
     });
 
+    it('shows merged transcription settings inside the model settings tab', async () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+
+        fireEvent.click(screen.getByText('settings.model_hub'));
+
+        const streamingModel = await screen.findByText('settings.streaming_model_label');
+        const vadModels = screen.getByText('settings.vad_models');
+        const transcriptionSettings = screen.getByText('settings.transcription_settings');
+        const restoreDefaults = screen.getByText('settings.restore_defaults');
+
+        expect(streamingModel).toBeDefined();
+        expect(screen.getByText('settings.enable_itn')).toBeDefined();
+        expect(screen.getByText('settings.max_concurrent_label')).toBeDefined();
+        expect(screen.getByLabelText('settings.restore_defaults')).toBeDefined();
+        expect(Boolean(vadModels.compareDocumentPosition(transcriptionSettings) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+        expect(Boolean(transcriptionSettings.compareDocumentPosition(restoreDefaults) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+        expect(screen.queryByText('settings.local_path')).toBeNull();
+    });
+
     it('deletes a model', async () => {
         // Setup: Model is installed
         vi.mocked(modelService.isModelInstalled).mockResolvedValue(true);

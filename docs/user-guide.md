@@ -66,7 +66,7 @@ Before Sona can transcribe audio locally, it needs a working offline model setup
 - The onboarding flow is designed to get local transcription working quickly with the recommended offline model pack.
 - You can click `Later` during onboarding and return from the reminder banner.
 - If you hide the reminder banner, it will stop appearing on the home screen until setup is complete.
-- You can change models later in `Settings > Model Hub`.
+- You can change models later in `Settings > Model Settings`.
 - You can change the default microphone later in `Settings > Input Device`.
 
 ## 4. Live Record
@@ -75,7 +75,7 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 ### Preconditions
 
-- You completed `First Run Setup`, or you manually configured a `Live Record Model` in `Settings > Model Hub`.
+- You completed `First Run Setup`, or you manually configured a `Live Record Model` in `Settings > Model Settings`.
 - Your operating system has granted microphone permission if you want to record from a microphone.
 
 ### Steps
@@ -108,7 +108,7 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 - `Ctrl + Space` starts or stops live recording by default.
 - `Space` pauses or resumes while recording is active.
 - `Parameter Settings` covers transcription behavior like `Subtitle Mode` and `Language`, not the full LLM polish workflow.
-- If Sona says a model is missing, reopen onboarding or configure models in `Settings > Model Hub`.
+- If Sona says a model is missing, reopen onboarding or configure models in `Settings > Model Settings`.
 
 ## 5. Batch Import
 
@@ -116,7 +116,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 
 ### Preconditions
 
-- You configured a `Batch Import Model` in `Settings > Model Hub`.
+- You configured a `Batch Import Model` in `Settings > Model Settings`.
 - Your file uses a supported audio or video format.
 
 ### Steps
@@ -137,7 +137,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 ### Notes
 
 - If no offline batch model is configured, Sona reopens onboarding instead of starting import.
-- `Settings > Local Setup` includes `VAD Buffer Size` and `Max Concurrent Transcriptions`, which affect batch behavior.
+- `Settings > Model Settings` includes `VAD Buffer Size` and `Max Concurrent Transcriptions`, which affect batch behavior.
 
 ## 6. Transcript Editing And Playback
 
@@ -320,10 +320,8 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
   microphone selection, system audio selection, microphone boost, mute during recording
 - `Settings > Subtitle Settings`
   live caption startup, click-through lock, always-on-top, font size, width, color, background transparency
-- `Settings > Model Hub`
-  `Live Record Model`, `Batch Import Model`, and downloadable recognition, punctuation, and VAD models
-- `Settings > Local Setup`
-  `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, and `Restore Default Settings`
+- `Settings > Model Settings`
+  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, and VAD models
 - `Settings > Vocabulary`
   `Text Replacement` rule sets plus `Hotwords` rule sets for recognition tuning
 - `Settings > LLM Service`
@@ -350,7 +348,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 ### Sona keeps asking me to finish setup
 
 - Open the onboarding banner and complete the model and microphone steps.
-- If you skipped setup earlier, make sure both `Live Record Model` and `Batch Import Model` are configured in `Settings > Model Hub`.
+- If you skipped setup earlier, make sure both `Live Record Model` and `Batch Import Model` are configured in `Settings > Model Settings`.
 - If you hid the reminder banner, reopen setup manually from the banner flow or settings-related entry points when Sona prompts again.
 
 ### `Live Record` does not start

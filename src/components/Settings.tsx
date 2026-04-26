@@ -10,7 +10,6 @@ import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
 import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
 import { SettingsModelsTab } from './settings/SettingsModelsTab';
 import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
-import { SettingsLocalTab } from './settings/SettingsLocalTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
@@ -23,7 +22,6 @@ import {
     SubtitleIcon,
     ModelIcon,
     RobotIcon,
-    LocalIcon,
     KeyboardIcon,
     InfoIcon,
     XIcon,
@@ -37,10 +35,12 @@ interface SettingsProps {
     initialTab?: SettingsTabInput;
 }
 
+const SETTINGS_TABS = ['general', 'microphone', 'subtitle', 'models', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
+
 /**
  * Modal dialog for application settings.
  *
- * Handles configuration for general settings, model management, and local paths.
+ * Handles configuration for general settings, model management, and app preferences.
  *
  * @param props Component props.
  * @return The settings modal or null if not closed.
@@ -70,13 +70,12 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                 }
 
                 e.preventDefault();
-                const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
-                const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
+                const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
                 const nextIndex = e.shiftKey
-                    ? (currentIndex - 1 + tabs.length) % tabs.length
-                    : (currentIndex + 1) % tabs.length;
+                    ? (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length
+                    : (currentIndex + 1) % SETTINGS_TABS.length;
 
-                const nextTab = tabs[nextIndex];
+                const nextTab = SETTINGS_TABS[nextIndex];
                 setActiveTab(nextTab);
 
                 // Move focus to the new tab button
@@ -92,18 +91,17 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     }, [isOpen, activeTab, setActiveTab]);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const tabs = ['general', 'microphone', 'subtitle', 'models', 'local', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
-        const currentIndex = tabs.indexOf(activeTab as typeof tabs[number]);
+        const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
 
         let nextIndex = -1;
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                nextIndex = (currentIndex + 1) % tabs.length;
+                nextIndex = (currentIndex + 1) % SETTINGS_TABS.length;
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                nextIndex = (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
                 break;
             case 'Home':
                 e.preventDefault();
@@ -111,14 +109,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                 break;
             case 'End':
                 e.preventDefault();
-                nextIndex = tabs.length - 1;
+                nextIndex = SETTINGS_TABS.length - 1;
                 break;
             default:
                 break;
         }
 
         if (nextIndex !== -1) {
-            const nextTab = tabs[nextIndex];
+            const nextTab = SETTINGS_TABS[nextIndex];
             setActiveTab(nextTab);
             // Move focus to the new tab button
             requestAnimationFrame(() => {
@@ -185,14 +183,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
                             tabIndex={activeTab === 'models' ? 0 : -1}
-                        />
-                        <SettingsTabButton
-                            id="local"
-                            label={t('settings.local_path')}
-                            Icon={LocalIcon}
-                            activeTab={activeTab}
-                            setActiveTab={setActiveTab}
-                            tabIndex={activeTab === 'local' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="vocabulary"
@@ -262,8 +252,6 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                         return <SettingsSubtitleTab />;
                                     case 'models':
                                         return <SettingsModelsTab />;
-                                    case 'local':
-                                        return <SettingsLocalTab />;
                                     case 'vocabulary':
                                         return <SettingsVocabularyTab />;
                                     case 'llm_service':
