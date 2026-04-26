@@ -385,6 +385,22 @@ export function KeyboardIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.E
     );
 }
 
+/** Icon for automation rules and pipelines. */
+export function AutomationIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <circle cx="6" cy="6" r="2" />
+            <circle cx="18" cy="6" r="2" />
+            <circle cx="6" cy="18" r="2" />
+            <circle cx="18" cy="18" r="2" />
+            <path d="M8 6h8" />
+            <path d="M6 8v8" />
+            <path d="M18 8v8" />
+            <path d="M8 18h8" />
+        </svg>
+    );
+}
+
 /** Icon for opening settings. */
 export function SettingsIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
     return (

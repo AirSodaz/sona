@@ -44,6 +44,8 @@ vi.mock('../projectStore', () => ({
     useProjectStore: {
         getState: () => ({
             activeProjectId: null,
+            getActiveProject: vi.fn(() => null),
+            getProjectById: vi.fn(() => null),
             setActiveProjectId: vi.fn().mockResolvedValue(undefined),
         }),
     },

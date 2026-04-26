@@ -75,6 +75,17 @@ function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueIt
                     {item.filename}
                 </div>
 
+                {item.origin === 'automation' && (
+                    <div
+                        className="queue-item-error"
+                        title={item.automationRuleName || t('automation.automated', { defaultValue: 'Automated' })}
+                        style={{ color: 'var(--color-text-muted)' }}
+                    >
+                        {t('automation.automated', { defaultValue: 'Automated' })}
+                        {item.automationRuleName ? ` · ${item.automationRuleName}` : ''}
+                    </div>
+                )}
+
                 {item.status === 'processing' && (
                     <div className="queue-item-progress">
                         <div

@@ -13,6 +13,7 @@ import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
 import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
+import { SettingsAutomationTab } from './settings/SettingsAutomationTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsTabInput } from '../hooks/useSettingsLogic';
 import './settings/Settings.css';
@@ -24,6 +25,7 @@ import {
     RobotIcon,
     KeyboardIcon,
     InfoIcon,
+    AutomationIcon,
     XIcon,
     BookIcon
 } from './Icons';
@@ -35,7 +37,7 @@ interface SettingsProps {
     initialTab?: SettingsTabInput;
 }
 
-const SETTINGS_TABS = ['general', 'microphone', 'subtitle', 'models', 'vocabulary', 'llm_service', 'shortcuts', 'about'] as const;
+const SETTINGS_TABS = ['general', 'microphone', 'subtitle', 'models', 'vocabulary', 'automation', 'llm_service', 'shortcuts', 'about'] as const;
 
 /**
  * Modal dialog for application settings.
@@ -193,6 +195,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'vocabulary' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="automation"
+                            label={t('settings.automation', { defaultValue: 'Automation' })}
+                            Icon={AutomationIcon}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            tabIndex={activeTab === 'automation' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="llm_service"
                             label={t('settings.llm.title')}
                             Icon={RobotIcon}
@@ -254,6 +264,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                         return <SettingsModelsTab />;
                                     case 'vocabulary':
                                         return <SettingsVocabularyTab />;
+                                    case 'automation':
+                                        return <SettingsAutomationTab />;
                                     case 'llm_service':
                                         return <SettingsLLMServiceTab />;
                                     case 'shortcuts':

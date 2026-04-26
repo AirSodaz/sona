@@ -3,6 +3,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useAutomationStore } from '../stores/automationStore';
 import i18n from '../i18n';
 import { migrateConfig } from '../services/configMigrationService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../services/storageService';
@@ -29,6 +30,7 @@ export function useAppInitialization() {
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const setPersistedState = useOnboardingStore((state) => state.setPersistedState);
     const loadProjects = useProjectStore((state) => state.loadProjects);
+    const loadAutomation = useAutomationStore((state) => state.loadAndStart);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Initialize decoupled side-effects
@@ -113,6 +115,8 @@ export function useAppInitialization() {
                     await settingsStore.save();
                 }
 
+                await loadAutomation();
+
                 // Initialize Voice Typing shortcut listeners (Main Window Only)
                 voiceTypingService.init();
 
@@ -125,7 +129,7 @@ export function useAppInitialization() {
 
         initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadProjects]); // Run once on mount
+    }, [loadAutomation, loadProjects]); // Run once on mount
 
     return { isLoaded };
 }

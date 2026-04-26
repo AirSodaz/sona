@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptSegment } from '../types/transcript';
+import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
@@ -17,23 +18,39 @@ import {
   PolishTaskChunkPayload,
 } from './llmTaskService';
 
+function applyPolishedChunkToSegments(
+  segments: TranscriptSegment[],
+  polishedChunk: PolishedSegment[],
+): TranscriptSegment[] {
+  const polishedMap = new Map<string, PolishedSegment>();
+  for (let index = 0; index < polishedChunk.length; index += 1) {
+    polishedMap.set(polishedChunk[index].id, polishedChunk[index]);
+  }
+
+  return segments.map((segment) => {
+    const polished = polishedMap.get(segment.id);
+    return polished ? { ...segment, text: polished.text } : segment;
+  });
+}
+
 class PolishService {
-  async polishSegments(
+  async polishSegmentsWithConfig(
+    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
-  ): Promise<void> {
-    const store = useTranscriptStore.getState();
-    const llm = getFeatureLlmConfig(store.config, 'polish');
+    taskIdOverride?: string,
+  ): Promise<PolishedSegment[]> {
+    const llm = getFeatureLlmConfig(config, 'polish');
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
     }
 
     if (!segments || segments.length === 0) {
-      return;
+      return [];
     }
 
-    const taskId = createLlmTaskId('polish');
+    const taskId = taskIdOverride || createLlmTaskId('polish');
     let unlistenChunk: UnlistenFn | null = null;
     let receivedChunkEvent = false;
 
@@ -50,17 +67,27 @@ class PolishService {
       }
 
       const polishedSegments = await invoke<PolishedSegment[]>('polish_transcript_segments', {
-        request: this.buildRequest(taskId, segments),
+        request: this.buildRequest(taskId, config, segments),
       });
 
       if (onChunkPolished && !receivedChunkEvent) {
         await onChunkPolished(polishedSegments);
       }
+
+      return polishedSegments;
     } catch (error) {
       throw new Error(normalizeError(error).message);
     } finally {
       unlistenChunk?.();
     }
+  }
+
+  async polishSegments(
+    segments: TranscriptSegment[],
+    onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
+  ): Promise<PolishedSegment[]> {
+    const store = useTranscriptStore.getState();
+    return this.polishSegmentsWithConfig(store.config, segments, onChunkPolished);
   }
 
   async polishTranscript() {
@@ -79,21 +106,19 @@ class PolishService {
         polishProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
       }, jobHistoryId);
     });
-    const unlistenChunk = await listenToLlmTaskChunks<PolishTaskChunkPayload>(
-      taskId,
-      'polish',
-      async ({ items }) => {
-        receivedChunkEvent = true;
-        await this.applyPolishedSegments(items, jobHistoryId);
-      },
-    );
 
     store.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
 
     try {
-      const polishedSegments = await invoke<PolishedSegment[]>('polish_transcript_segments', {
-        request: this.buildRequest(taskId, segments),
-      });
+      const polishedSegments = await this.polishSegmentsWithConfig(
+        store.config,
+        segments,
+        async (items) => {
+          receivedChunkEvent = true;
+          await this.applyPolishedSegments(items, jobHistoryId);
+        },
+        taskId,
+      );
 
       if (!receivedChunkEvent) {
         await this.applyPolishedSegments(polishedSegments, jobHistoryId);
@@ -101,7 +126,6 @@ class PolishService {
     } catch (error) {
       throw new Error(normalizeError(error).message);
     } finally {
-      unlistenChunk();
       unlistenProgress();
       useTranscriptStore.getState().updateLlmState({
         isPolishing: false,
@@ -110,8 +134,18 @@ class PolishService {
     }
   }
 
-  private buildRequest(taskId: string, segments: TranscriptSegment[]): PolishSegmentsRequest {
-    const config = useTranscriptStore.getState().config;
+  applyPolishedSegmentsInMemory(
+    segments: TranscriptSegment[],
+    polishedChunk: PolishedSegment[],
+  ): TranscriptSegment[] {
+    return applyPolishedChunkToSegments(segments, polishedChunk);
+  }
+
+  private buildRequest(
+    taskId: string,
+    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
+    segments: TranscriptSegment[],
+  ): PolishSegmentsRequest {
     const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
 
     return {
@@ -149,14 +183,10 @@ class PolishService {
         polishedMap.set(polishedSegments[i].id, polishedSegments[i]);
       }
 
-      for (let i = 0; i < bgSegments.length; i++) {
-        const polished = polishedMap.get(bgSegments[i].id);
-        if (polished) {
-          bgSegments[i].text = polished.text;
-        }
-      }
-
-      await historyService.updateTranscript(jobHistoryId, bgSegments);
+      await historyService.updateTranscript(
+        jobHistoryId,
+        applyPolishedChunkToSegments(bgSegments, [...polishedMap.values()]),
+      );
     } catch (error) {
       logger.error('[PolishService] Failed to update background record segments:', error);
     }

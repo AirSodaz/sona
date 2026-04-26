@@ -132,7 +132,14 @@ function App(): React.JSX.Element {
                   <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
                     <LiveRecord />
                   </div>
-                  {mode === 'batch' && <BatchImport />}
+                  {mode === 'batch' && (
+                    <BatchImport
+                      onOpenAutomation={() => {
+                        setSettingsInitialTab('automation');
+                        setIsSettingsOpen(true);
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 

@@ -12,15 +12,7 @@ import { UploadIcon } from './Icons';
 import { TranscriptionOptions } from './TranscriptionOptions';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { logger } from '../utils/logger';
-
-
-
-const SUPPORTED_EXTENSIONS = [
-    // Audio
-    '.wav', '.mp3', '.m4a', '.aiff', '.flac', '.ogg', '.wma', '.aac', '.opus', '.amr',
-    // Video
-    '.mp4', '.webm', '.mov', '.mkv', '.avi', '.wmv', '.flv', '.3gp'
-];
+import { SUPPORTED_MEDIA_EXTENSIONS } from '../constants/mediaExtensions';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -106,6 +98,8 @@ const ActiveItemStatus = React.memo(ActiveItemStatusComponent);
 interface BatchImportProps {
     /** Optional CSS class name. */
     className?: string;
+    /** Opens the automation settings tab. */
+    onOpenAutomation?: () => void;
 }
 
 /**
@@ -116,7 +110,7 @@ interface BatchImportProps {
  * @param props Component props.
  * @return The batch import UI.
  */
-export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
+export function BatchImport({ className = '', onOpenAutomation }: BatchImportProps): React.JSX.Element {
     const showError = useDialogStore((state) => state.showError);
     const [isDragOver, setIsDragOver] = useState(false);
     const { t } = useTranslation();
@@ -128,6 +122,20 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     // Transcript store
     const config = useConfigStore((state) => state.config);
+
+    const renderAutomationEntry = () => {
+        if (!onOpenAutomation) {
+            return null;
+        }
+
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+                <button className="btn btn-secondary" onClick={onOpenAutomation}>
+                    {t('automation.open_settings', { defaultValue: 'Open Automation' })}
+                </button>
+            </div>
+        );
+    };
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -185,7 +193,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
             files.forEach((filePath) => {
                 const ext = filePath.split('.').pop()?.toLowerCase();
-                const isSupported = SUPPORTED_EXTENSIONS.some(e => e.replace('.', '') === ext);
+                const isSupported = SUPPORTED_MEDIA_EXTENSIONS.some(e => e.replace('.', '') === ext);
                 if (isSupported) {
                     validFiles.push(filePath);
                 } else {
@@ -197,7 +205,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 void showError({
                     code: 'batch.unsupported_format',
                     messageKey: 'errors.batch.unsupported_format',
-                    messageParams: { formats: SUPPORTED_EXTENSIONS.join(', ') },
+                    messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
                     showCause: false,
                 });
             }
@@ -246,7 +254,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 multiple: true,
                 filters: [{
                     name: 'Audio',
-                    extensions: SUPPORTED_EXTENSIONS.map(ext => ext.replace('.', ''))
+                    extensions: SUPPORTED_MEDIA_EXTENSIONS.map(ext => ext.replace('.', ''))
                 }]
             });
 
@@ -295,6 +303,8 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                             </button>
                         </div>
                     </div>
+
+                    {renderAutomationEntry()}
                 </div>
 
                 {/* Options */}
@@ -332,10 +342,11 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </div>
 
                 <p className="supported-formats" style={{ marginTop: '8px' }}>
-                    {t('batch.supports', { formats: SUPPORTED_EXTENSIONS.join(', ') })}
+                    {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
                 </p>
             </div>
 
+            {renderAutomationEntry()}
             <TranscriptionOptions />
         </div>
     );

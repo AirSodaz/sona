@@ -4,6 +4,8 @@ import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
+import type { AppConfig } from '../types/config';
+import type { TranscriptSegment } from '../types/transcript';
 import {
   createLlmTaskId,
   listenToLlmTaskChunks,
@@ -13,7 +15,68 @@ import {
   TranslateTaskChunkPayload,
 } from './llmTaskService';
 
+function applyTranslatedChunkToSegments(
+  segments: TranscriptSegment[],
+  translations: TranslatedSegment[],
+): TranscriptSegment[] {
+  const translationMap = new Map<string, TranslatedSegment>();
+  for (let index = 0; index < translations.length; index += 1) {
+    translationMap.set(translations[index].id, translations[index]);
+  }
+
+  return segments.map((segment) => {
+    const translated = translationMap.get(segment.id);
+    return translated ? { ...segment, translation: translated.translation } : segment;
+  });
+}
+
 class TranslationService {
+  async translateSegmentsWithConfig(
+    config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
+    segments: TranscriptSegment[],
+    onChunkTranslated?: (translatedChunk: TranslatedSegment[]) => void | Promise<void>,
+    taskIdOverride?: string,
+  ): Promise<TranslatedSegment[]> {
+    const llm = getFeatureLlmConfig(config, 'translation');
+
+    if (!isLlmConfigComplete(llm)) {
+      throw new Error('LLM Service not fully configured.');
+    }
+
+    if (!segments || segments.length === 0) {
+      return [];
+    }
+
+    const taskId = taskIdOverride || createLlmTaskId('translate');
+    let receivedChunkEvent = false;
+    const unlistenChunk = onChunkTranslated
+      ? await listenToLlmTaskChunks<TranslateTaskChunkPayload>(
+        taskId,
+        'translate',
+        async ({ items }) => {
+          receivedChunkEvent = true;
+          await onChunkTranslated(items);
+        },
+      )
+      : () => undefined;
+
+    try {
+      const translations = await invoke<TranslatedSegment[]>('translate_transcript_segments', {
+        request: this.buildRequest(taskId, config, segments),
+      });
+
+      if (onChunkTranslated && !receivedChunkEvent) {
+        await onChunkTranslated(translations);
+      }
+
+      return translations;
+    } catch (error) {
+      throw new Error(normalizeError(error).message);
+    } finally {
+      unlistenChunk();
+    }
+  }
+
   async translateCurrentTranscript() {
     const store = useTranscriptStore.getState();
     const config = store.config;
@@ -36,21 +99,19 @@ class TranslationService {
       }, jobHistoryId);
     });
     let receivedChunkEvent = false;
-    const unlistenChunk = await listenToLlmTaskChunks<TranslateTaskChunkPayload>(
-      taskId,
-      'translate',
-      async ({ items }) => {
-        receivedChunkEvent = true;
-        await this.applyTranslations(items, jobHistoryId);
-      },
-    );
 
     store.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
 
     try {
-      const translations = await invoke<TranslatedSegment[]>('translate_transcript_segments', {
-        request: this.buildRequest(taskId),
-      });
+      const translations = await this.translateSegmentsWithConfig(
+        config,
+        segments,
+        async (items) => {
+          receivedChunkEvent = true;
+          await this.applyTranslations(items, jobHistoryId);
+        },
+        taskId,
+      );
 
       if (!receivedChunkEvent) {
         await this.applyTranslations(translations, jobHistoryId);
@@ -60,7 +121,6 @@ class TranslationService {
       useTranscriptStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
       throw new Error(normalizeError(error).message);
     } finally {
-      unlistenChunk();
       unlistenProgress();
 
       const currentStore = useTranscriptStore.getState();
@@ -72,14 +132,23 @@ class TranslationService {
     }
   }
 
-  private buildRequest(taskId: string): TranslateSegmentsRequest {
-    const store = useTranscriptStore.getState();
+  applyTranslationsInMemory(
+    segments: TranscriptSegment[],
+    translations: TranslatedSegment[],
+  ): TranscriptSegment[] {
+    return applyTranslatedChunkToSegments(segments, translations);
+  }
 
+  private buildRequest(
+    taskId: string,
+    config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
+    segments: TranscriptSegment[],
+  ): TranslateSegmentsRequest {
     return {
       taskId,
-      config: getFeatureLlmConfig(store.config, 'translation')!,
-      segments: store.segments.map(({ id, text }) => ({ id, text })),
-      targetLanguage: store.config.translationLanguage || 'zh',
+      config: getFeatureLlmConfig(config, 'translation')!,
+      segments: segments.map(({ id, text }) => ({ id, text })),
+      targetLanguage: config.translationLanguage || 'zh',
     };
   }
 
@@ -109,14 +178,10 @@ class TranslationService {
         translationMap.set(translations[i].id, translations[i]);
       }
 
-      for (let i = 0; i < bgSegments.length; i++) {
-        const translated = translationMap.get(bgSegments[i].id);
-        if (translated) {
-          bgSegments[i].translation = translated.translation;
-        }
-      }
-
-      await historyService.updateTranscript(jobHistoryId, bgSegments);
+      await historyService.updateTranscript(
+        jobHistoryId,
+        applyTranslatedChunkToSegments(bgSegments, [...translationMap.values()]),
+      );
     } catch (error) {
       logger.error('[TranslationService] Failed to update background record segments:', error);
     }
