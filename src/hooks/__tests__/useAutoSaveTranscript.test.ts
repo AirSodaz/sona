@@ -7,6 +7,7 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 vi.mock('../../services/historyService', () => ({
   historyService: {
     updateTranscript: vi.fn(),
+    updateItemMeta: vi.fn(),
   },
 }));
 

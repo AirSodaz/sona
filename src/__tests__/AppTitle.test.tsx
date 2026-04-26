@@ -20,7 +20,15 @@ vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialo
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
 vi.mock('../components/UpdateNotification', () => ({ UpdateNotification: () => <div>UpdateNotification</div> }));
-vi.mock('../components/Icons', () => ({ SettingsIcon: () => <span>SettingsIcon</span>, CloseIcon: () => <span>CloseIcon</span> }));
+vi.mock('../components/Icons', () => ({ 
+  SettingsIcon: () => <span>SettingsIcon</span>, 
+  CloseIcon: () => <span>CloseIcon</span>,
+  MicIcon: () => <span>MicIcon</span>,
+  FileTextIcon: () => <span>FileTextIcon</span>,
+  FolderIcon: () => <span>FolderIcon</span>,
+  CodeIcon: () => <span>CodeIcon</span>,
+  ChevronDownIcon: () => <span>ChevronDownIcon</span>
+}));
 
 // Mock hooks
 vi.mock('../hooks/useAppInitialization', () => ({ 

@@ -12,12 +12,13 @@ Sona is a good fit if you want to:
 
 - capture meetings, lectures, interviews, or notes with `Live Record`
 - transcribe existing audio or video files with `Batch Import`
+- organize saved recordings and imports with `Workspace`, `Projects`, and `Inbox`
 - review timestamps and edit transcripts segment by segment
 - optionally use `LLM Polish` or `Translate` after configuring your own provider
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want `Voice Typing`, jump to `History And Settings`, especially the `Settings > Shortcuts` section.
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `History And Settings`, especially the `Settings > Shortcuts` section.
 
 ## 2. Install And Launch
 
@@ -255,9 +256,55 @@ Export is available when the transcript contains at least one segment.
 - `Translation` and `Bilingual` modes are only available when at least one segment contains translation text.
 - `Original` mode is always available.
 
-## 9. History And Settings
+## 9. Workspace, Projects, And Inbox
 
-Use `History` to reopen earlier work, and use `Settings` to manage default behavior.
+Use `Workspace` when you want to organize saved recordings and imports without leaving the main editing surface.
+
+### What Each Scope Means
+
+- `All Items` gives you a cross-project overview of everything saved in `Inbox` and every project.
+- `Inbox` holds recordings and imports that are not assigned to a project yet.
+- A project gives you its own focused workspace, project-specific defaults, and quick entry points for new work.
+
+### Steps
+
+1. Open `Workspace`.
+2. Use the left rail to switch between `All Items`, `Inbox`, and any named project.
+3. Click `New Project` when you want a dedicated space for a client, course, meeting series, or other recurring work.
+4. Enter the project name and optional description, then create it. New projects start without a custom icon.
+5. Open a project when you want new recordings or imports to stay attached to that project.
+6. Use the project header buttons to start `Live Record` or open `Batch Import` while keeping the current project context.
+7. Click any saved item to open it in the built-in detail pane and continue editing without leaving `Workspace`.
+8. Use search, filters, sort, and `List View` / `Grid View` / `Table View` to narrow the current scope.
+9. Turn on selection mode if you want to move items between `Inbox` and projects, or delete several items at once.
+
+### Project Settings
+
+1. Open a project, then click `Project Settings`.
+2. Update the project name and description.
+3. Choose a project icon if you want one. Icons are edited here, not in the `New Project` modal.
+4. Pick the project defaults that should apply whenever you work inside that project:
+   `Default Summary Template`, `Default Translation Language`, `Default Polish Scenario`, optional `Default Polish Context`, and `Export Filename Prefix`.
+5. Turn `Text Replacement` and `Hotword` sets on or off for this project when you want project-specific recognition or cleanup behavior.
+6. Click `Save` to keep the changes, or `Delete Project` if you want to remove the project and move its items back to `Inbox`.
+
+### Result
+
+- `Workspace` becomes the main place to organize saved content while keeping the editor close at hand.
+- Project-specific defaults apply whenever that project is active.
+- New work created from inside a project keeps that project context unless you move it later.
+
+### Notes
+
+- `All Items` is for browsing across saved content. It does not replace the current project's defaults.
+- `Inbox` is the default landing place for new recordings and imports when you are not working inside a project.
+- Project icons support system icons, recommended emoji, and custom emoji.
+- Saved recordings and imports also support title and icon changes through their own rename flow, but that is separate from `Project Settings`.
+- If you switch away from a project while its settings drawer has unsaved changes, Sona asks whether to discard those edits first.
+
+## 10. History And Settings
+
+Use `History` when you mainly want to reopen earlier work without the workspace organization tools, and use `Settings` to manage app-wide defaults.
 
 ### History Steps
 
@@ -301,7 +348,7 @@ Use `History` to reopen earlier work, and use `Settings` to manage default behav
 - In `Settings > Vocabulary`, `Hotwords` are entered one per line. Weighted entries such as `Term :2.0` are supported, and hotwords are currently most relevant for Transducer and Qwen3 ASR models.
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
 
-## 10. FAQ And Troubleshooting
+## 11. FAQ And Troubleshooting
 
 ### Sona keeps asking me to finish setup
 
@@ -335,6 +382,17 @@ Use `History` to reopen earlier work, and use `Settings` to manage default behav
 ### Export only shows `Original`
 
 - `Translation` and `Bilingual` only appear when the transcript already contains translation text.
+
+### Why do new items appear in `Inbox` first
+
+- `Inbox` is the default holding area for recordings and imports that are not assigned to a project yet.
+- Open a specific project before starting `Live Record` or `Batch Import` if you want new items to stay in that project automatically.
+- You can also move saved items later from `Inbox` into a project from `Workspace`.
+
+### What happens when I delete a project
+
+- Deleting a project removes the project itself, but it does not delete the recordings or imports that were inside it.
+- Sona moves those items back to `Inbox`, so you can reassign or continue using them later.
 
 ### `Live Caption` does not appear
 

@@ -69,12 +69,13 @@ export const projectService = {
     await writeProjects(nextProjects);
   },
 
-  async create(input: { name: string; description?: string; defaults: ProjectDefaults }): Promise<ProjectRecord> {
+  async create(input: { name: string; description?: string; icon?: string; defaults: ProjectDefaults }): Promise<ProjectRecord> {
     const now = Date.now();
     const project = normalizeProjectRecord({
       id: uuidv4(),
       name: input.name,
       description: input.description || '',
+      icon: input.icon || '',
       createdAt: now,
       updatedAt: now,
       defaults: input.defaults,
@@ -88,7 +89,7 @@ export const projectService = {
 
   async update(
     id: string,
-    updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'defaults'>>,
+    updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>,
   ): Promise<ProjectRecord | null> {
     const projects = await this.getAll();
     const project = projects.find((item) => item.id === id);

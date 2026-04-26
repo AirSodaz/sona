@@ -25,12 +25,15 @@ import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifier
 import { HistoryItem } from './history/HistoryItem';
 import { TranscriptWorkbench } from './TranscriptWorkbench';
 import { RenameModal } from './RenameModal';
+import { IconPicker, renderIcon } from './IconPicker';
 import { Checkbox } from './Checkbox';
 import { Dropdown } from './Dropdown';
 import {
   FolderIcon,
   PlusCircleIcon,
   SettingsIcon,
+  SummaryIcon,
+  InboxIcon,
   XIcon,
   MicIcon,
   FileTextIcon,
@@ -169,6 +172,38 @@ function buildSavedProjectSettings(project: ProjectRecord) {
   };
 }
 
+function renderScopeIcon(scope: ProjectBrowseScope, project?: ProjectRecord | null): React.ReactNode {
+  if (scope === ALL_ITEMS_SCOPE) {
+    return <SummaryIcon />;
+  }
+
+  if (scope === INBOX_SCOPE) {
+    return <InboxIcon />;
+  }
+
+  return renderIcon(project?.icon, <FolderIcon />);
+}
+
+interface RailItemContentProps {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+}
+
+function RailItemContent({ icon, title, description }: RailItemContentProps): React.JSX.Element {
+  return (
+    <div className="projects-rail-item-main">
+      <span className="projects-rail-item-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="projects-rail-item-copy">
+        <strong>{title}</strong>
+        {description ? <span>{description}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
@@ -241,9 +276,6 @@ function ProjectCreateModal({
           borderBottom: '1px solid var(--color-border)'
         }}>
           <div>
-            <div className="projects-modal-eyebrow">
-              {t('projects.create_project', { defaultValue: 'Create Project' })}
-            </div>
             <h3 id="project-create-title" style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
               {t('projects.new_project_title', { defaultValue: 'New Project' })}
             </h3>
@@ -325,6 +357,7 @@ interface ProjectSettingsModalProps {
   project: ProjectRecord | null;
   draftName: string;
   draftDescription: string;
+  draftIcon: string;
   draftDefaults: ProjectDefaults | null;
   globalConfig: ReturnType<typeof useConfigStore.getState>['config'];
   onClose: () => void;
@@ -332,6 +365,7 @@ interface ProjectSettingsModalProps {
   onDelete: () => void;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onIconChange: (value: string) => void;
   onDefaultsChange: (defaults: ProjectDefaults) => void;
 }
 
@@ -340,6 +374,7 @@ function ProjectSettingsModal({
   project,
   draftName,
   draftDescription,
+  draftIcon,
   draftDefaults,
   globalConfig,
   onClose,
@@ -347,6 +382,7 @@ function ProjectSettingsModal({
   onDelete,
   onNameChange,
   onDescriptionChange,
+  onIconChange,
   onDefaultsChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
@@ -468,14 +504,18 @@ function ProjectSettingsModal({
             <label htmlFor="project-settings-name">
               {t('projects.project_name', { defaultValue: 'Project Name' })}
             </label>
-            <input
-              id="project-settings-name"
-              type="text"
-              className="settings-input"
-              value={draftName}
-              onChange={(event) => onNameChange(event.target.value)}
-              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
-            />
+            <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+              <IconPicker icon={draftIcon} onChange={onIconChange} defaultIcon={<FolderIcon />} />
+              <input
+                id="project-settings-name"
+                type="text"
+                className="settings-input"
+                style={{ flex: 1 }}
+                value={draftName}
+                onChange={(event) => onNameChange(event.target.value)}
+                placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+              />
+            </div>
           </div>
 
           <div className="projects-field">
@@ -695,15 +735,14 @@ function SortableProjectItem({
         onClick={() => void onSwitchScope(project.id)}
         aria-pressed={isActive}
       >
-        <div className="projects-rail-item-copy">
-          <strong>{project.name}</strong>
-          <span>
-            {project.description || t('projects.items_title', {
-              count: projectCount,
-              defaultValue: `${projectCount} items`,
-            })}
-          </span>
-        </div>
+        <RailItemContent
+          icon={renderScopeIcon(project.id, project)}
+          title={project.name}
+          description={project.description || t('projects.items_title', {
+            count: projectCount,
+            defaultValue: `${projectCount} items`,
+          })}
+        />
         <span className="projects-rail-count">{projectCount}</span>
       </button>
     </div>
@@ -739,7 +778,6 @@ export function ProjectsView(): React.JSX.Element {
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
   const showError = useDialogStore((state) => state.showError);
-  const prompt = useDialogStore((state) => state.prompt);
 
   const viewMode = globalConfig.projectsViewMode || 'list';
 
@@ -749,6 +787,7 @@ export function ProjectsView(): React.JSX.Element {
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
+  const [draftIcon, setDraftIcon] = useState('');
   const [draftDefaults, setDraftDefaults] = useState<ProjectDefaults | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -1237,6 +1276,7 @@ export function ProjectsView(): React.JSX.Element {
     await updateProject(browseProject.id, {
       name: draftName.trim() || browseProject.name,
       description: draftDescription,
+      icon: draftIcon,
       defaults: draftDefaults,
     });
     setIsSettingsOpen(false);
@@ -1390,6 +1430,8 @@ export function ProjectsView(): React.JSX.Element {
     });
   const showWorkflowActions = !isAllItemsScope;
   const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
+  const activeDragProject = activeId ? projects.find((project) => project.id === activeId) || null : null;
+  const headerIcon = renderScopeIcon(browseScope, browseProject);
   const summaryChips = [
     {
       key: 'items',
@@ -1451,9 +1493,10 @@ export function ProjectsView(): React.JSX.Element {
             onClick={() => void handleSwitchBrowseScope(ALL_ITEMS_SCOPE)}
             aria-pressed={isAllItemsScope}
           >
-            <div className="projects-rail-item-copy">
-              <strong>{t('projects.all_items', { defaultValue: 'All Items' })}</strong>
-            </div>
+            <RailItemContent
+              icon={renderScopeIcon(ALL_ITEMS_SCOPE)}
+              title={t('projects.all_items', { defaultValue: 'All Items' })}
+            />
             <span className="projects-rail-count">{historyItems.length}</span>
           </button>
 
@@ -1463,9 +1506,10 @@ export function ProjectsView(): React.JSX.Element {
             onClick={() => void handleSwitchBrowseScope(INBOX_SCOPE)}
             aria-pressed={isInboxScope}
           >
-            <div className="projects-rail-item-copy">
-              <strong>{t('projects.inbox', { defaultValue: 'Inbox' })}</strong>
-            </div>
+            <RailItemContent
+              icon={renderScopeIcon(INBOX_SCOPE)}
+              title={t('projects.inbox', { defaultValue: 'Inbox' })}
+            />
             <span className="projects-rail-count">{itemCounts.get(null) || 0}</span>
           </button>
         </div>
@@ -1517,15 +1561,14 @@ export function ProjectsView(): React.JSX.Element {
                       type="button"
                       className={`projects-rail-item ${browseProjectId === activeId ? 'active' : ''}`}
                     >
-                      <div className="projects-rail-item-copy">
-                        <strong>{projects.find((p) => p.id === activeId)?.name}</strong>
-                        <span>
-                          {projects.find((p) => p.id === activeId)?.description || t('projects.items_title', {
-                            count: itemCounts.get(activeId) || 0,
-                            defaultValue: `${itemCounts.get(activeId) || 0} items`,
-                          })}
-                        </span>
-                      </div>
+                      <RailItemContent
+                        icon={renderScopeIcon(activeId, activeDragProject)}
+                        title={activeDragProject?.name || ''}
+                        description={activeDragProject?.description || t('projects.items_title', {
+                          count: itemCounts.get(activeId) || 0,
+                          defaultValue: `${itemCounts.get(activeId) || 0} items`,
+                        })}
+                      />
                       <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
                     </button>
                   </div>
@@ -1542,6 +1585,9 @@ export function ProjectsView(): React.JSX.Element {
           <div className="projects-main-header-top">
             <div className="projects-main-heading">
               <div className="projects-main-title-row">
+                <span className="projects-main-title-icon" aria-hidden="true">
+                  {headerIcon}
+                </span>
                 <h3>{headerTitle}</h3>
               </div>
               <p>{headerDescription}</p>
@@ -1964,6 +2010,7 @@ export function ProjectsView(): React.JSX.Element {
         project={browseProject}
         draftName={draftName}
         draftDescription={draftDescription}
+        draftIcon={draftIcon}
         draftDefaults={draftDefaults}
         globalConfig={globalConfig}
         onClose={handleRequestCloseProjectSettings}
@@ -1971,6 +2018,7 @@ export function ProjectsView(): React.JSX.Element {
         onDelete={handleDeleteProject}
         onNameChange={setDraftName}
         onDescriptionChange={setDraftDescription}
+        onIconChange={setDraftIcon}
         onDefaultsChange={setDraftDefaults}
       />
 

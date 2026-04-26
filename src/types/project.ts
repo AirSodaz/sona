@@ -15,6 +15,7 @@ export interface ProjectRecord {
   id: string;
   name: string;
   description: string;
+  icon?: string;
   createdAt: number;
   updatedAt: number;
   defaults: ProjectDefaults;

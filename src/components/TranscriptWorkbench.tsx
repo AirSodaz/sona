@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
-import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';

@@ -170,7 +170,7 @@ interface TranscriptState {
      * Atomically loads segments and sets the source history ID.
      * Prevents auto-save race conditions when switching items.
      */
-    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null) => void;
+    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => void;
 
     /**
      * Mark the last segment as final if it isn't already.
@@ -498,15 +498,14 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
-    loadTranscript: (segments, sourceHistoryId, title, icon) => {
+    loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => {
         set({
             segments: segments.sort((a, b) => a.start - b.start),
             sourceHistoryId,
-            title: title || null,
+            title: title || '',
             icon: icon || null,
-            activeSegmentIndex: -1,
             activeSegmentId: null,
-            editingSegmentId: null
+            editingSegmentId: null,
         });
     },
 

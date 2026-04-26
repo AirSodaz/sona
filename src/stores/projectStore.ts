@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 interface CreateProjectInput {
   name: string;
   description?: string;
+  icon?: string;
   defaults?: ProjectDefaults;
 }
 
@@ -19,7 +20,7 @@ interface ProjectState {
   error: string | null;
   loadProjects: () => Promise<void>;
   createProject: (input: CreateProjectInput, globalConfig: AppConfig) => Promise<ProjectRecord | null>;
-  updateProject: (id: string, updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'defaults'>>) => Promise<void>;
+  updateProject: (id: string, updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>) => Promise<void>;
   updateProjectDefaults: (id: string, updates: Partial<ProjectDefaults>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   setActiveProjectId: (projectId: string | null) => Promise<void>;
@@ -68,6 +69,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const project = await projectService.create({
       name: input.name,
       description: input.description || '',
+      icon: input.icon || '',
       defaults,
     });
 

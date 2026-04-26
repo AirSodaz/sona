@@ -9,6 +9,7 @@
 - **🔒 Offline & Private**: All speech processing happens locally on your device. No data leaves your machine.
 - **🎙️ Real-time Transcription**: Record and transcribe audio in real-time with low latency.
 - **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
+- **🗂️ Workspace Organization**: Use `Workspace`, `Projects`, and `Inbox` to organize saved recordings and imports.
 - **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
 - **✨ LLM Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
@@ -22,7 +23,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, transcript editing, LLM features, export, history, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, LLM features, export, history, and troubleshooting.
 
 ### CLI
 
@@ -103,7 +104,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 Sona allows you to choose the AI model that best fits your needs, both for offline transcription and online assistance.
 
 ### Offline Transcription
-1.  Navigate to **Settings > Models**.
+1.  Navigate to **Settings > Model Hub**.
 2.  Choose from a curated list of high-performance models:
     *   **SenseVoice**: Best for multilingual support and emotion recognition.
     *   **Whisper (Tiny)**: Lightweight version of OpenAI's Whisper model.

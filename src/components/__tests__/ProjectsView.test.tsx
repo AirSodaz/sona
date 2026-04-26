@@ -99,10 +99,16 @@ vi.mock('react-i18next', () => ({
 
 describe('ProjectsView', () => {
   const getButtonByContent = (label: string) => {
-    const button = screen.getAllByRole('button').find((candidate) => candidate.textContent?.includes(label));
+    const button = screen
+      .getAllByRole('button')
+      .find((candidate) => candidate.tagName === 'BUTTON' && candidate.textContent?.includes(label));
     expect(button).not.toBeNull();
     return button as HTMLButtonElement;
   };
+
+  const getRailItemIcon = (button: HTMLElement) => button.querySelector('.projects-rail-item-icon');
+
+  const getMainTitleIcon = () => document.querySelector('.projects-main-title-icon');
 
   const selectDropdownOption = (ariaLabel: string, optionLabel: string) => {
     fireEvent.click(screen.getByRole('button', { name: ariaLabel }));
@@ -141,6 +147,7 @@ describe('ProjectsView', () => {
           id: 'project-1',
           name: 'Alpha',
           description: 'Project alpha',
+          icon: '🧪',
           createdAt: 1,
           updatedAt: 1,
           defaults: {
@@ -209,6 +216,39 @@ describe('ProjectsView', () => {
     expect(getButtonByContent('All Items')).toBeDefined();
     expect(getButtonByContent('Inbox')).toBeDefined();
     expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
+  });
+
+  it('renders scope icons in the rail and main header consistently', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const allItemsButton = getButtonByContent('All Items');
+    const inboxButton = getButtonByContent('Inbox');
+    const projectButton = getButtonByContent('Alpha');
+
+    expect(getRailItemIcon(allItemsButton)).not.toBeNull();
+    expect(getRailItemIcon(inboxButton)).not.toBeNull();
+    expect(getRailItemIcon(projectButton)).not.toBeNull();
+    expect(getRailItemIcon(projectButton)?.textContent).toContain('🧪');
+
+    await clickAsync(allItemsButton);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'All Items' })).toBeDefined();
+      expect(getMainTitleIcon()).not.toBeNull();
+    });
+
+    await clickAsync(inboxButton);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Inbox' })).toBeDefined();
+      expect(getMainTitleIcon()).not.toBeNull();
+    });
+
+    await clickAsync(projectButton);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
+      expect(getMainTitleIcon()).not.toBeNull();
+      expect(getMainTitleIcon()?.textContent).toContain('🧪');
+    });
   });
 
   it('uses one contextual toolbar area for default controls and selection actions', async () => {
