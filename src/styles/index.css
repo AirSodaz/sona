@@ -650,48 +650,6 @@ body {
   flex-wrap: wrap;
 }
 
-.projects-search-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-}
-
-.projects-search-scope-label {
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.projects-search-scope-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 220px;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-}
-
-.projects-search-scope-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-
-.projects-search-scope-name {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .projects-results-count {
   font-size: 0.8rem;
   color: var(--color-text-muted);

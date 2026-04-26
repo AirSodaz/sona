@@ -272,9 +272,8 @@ describe('ProjectsView', () => {
 
     expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
     expect(screen.queryByTestId('projects-fab')).toBeNull();
-    expect(screen.getByText('Search scope')).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'Search Inbox...' })).toBeDefined();
-    expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
+    expect(screen.queryByTestId('projects-results-count')).toBeNull();
     expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
 
@@ -282,7 +281,7 @@ describe('ProjectsView', () => {
 
     expect(screen.getByTestId('projects-fab')).toBeDefined();
     expect(screen.getByText('0 selected')).toBeDefined();
-    expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
+    expect(screen.queryByTestId('projects-results-count')).toBeNull();
   });
 
   it('creates a project from the modal and makes it the active browse scope', async () => {
@@ -497,7 +496,7 @@ describe('ProjectsView', () => {
 
     await clickAsync(getButtonByContent('All Items'));
     await waitFor(() => {
-      expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 2 of 2');
+      expect(screen.getByRole('textbox', { name: 'Search All Items...' })).toBeDefined();
     });
 
     expect(screen.getByTestId('projects-summary-chips')).toBeDefined();
@@ -508,7 +507,7 @@ describe('ProjectsView', () => {
     expect(screen.getByRole('textbox', { name: 'Search All Items...' })).toBeDefined();
     expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
     expect(screen.getByTestId('projects-summary-type-split').textContent).toBe('1 recordings / 1 imports');
-    expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 2 of 2');
+    expect(screen.queryByTestId('projects-results-count')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Project Settings' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Start Live Record' })).toBeNull();
   });

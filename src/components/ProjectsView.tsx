@@ -1570,10 +1570,6 @@ export function ProjectsView(): React.JSX.Element {
   const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
   const activeDragProject = activeId ? projects.find((project) => project.id === activeId) || null : null;
   const headerIcon = renderScopeIcon(browseScope, browseProject);
-  const searchScopeLabel = headerTitle;
-  const searchScopeAriaLabel = t('projects.search_scope_label', {
-    defaultValue: 'Search scope',
-  });
   const searchInputLabel = isAllItemsScope
     ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
     : browseProject
@@ -1796,24 +1792,6 @@ export function ProjectsView(): React.JSX.Element {
 
         <div className="projects-toolbar" data-testid="projects-toolbar-default">
           <div className="projects-toolbar-left">
-            <div className="projects-search-meta">
-              <span className="projects-search-scope-label">
-                {searchScopeAriaLabel}
-              </span>
-              <span className="projects-search-scope-chip" aria-label={`${searchScopeAriaLabel}: ${searchScopeLabel}`}>
-                <span className="projects-search-scope-icon" aria-hidden="true">
-                  {renderScopeIcon(browseScope, browseProject)}
-                </span>
-                <span className="projects-search-scope-name">{searchScopeLabel}</span>
-              </span>
-              <span className="projects-results-count" data-testid="projects-results-count">
-                {t('projects.results_count', {
-                  visible: filteredAndSortedItems.length,
-                  total: scopedItems.length,
-                  defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
-                })}
-              </span>
-            </div>
             <div className="projects-search">
               <Search size={16} className="projects-search-icon" />
               <input
