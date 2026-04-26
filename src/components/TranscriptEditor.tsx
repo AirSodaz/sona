@@ -146,6 +146,12 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                const activeElement = document.activeElement;
+                const isBodyFocus = activeElement === document.body;
+                if (!isBodyFocus && (!(activeElement instanceof HTMLElement) || !activeElement.closest('.projects-detail-pane'))) {
+                    return;
+                }
+
                 e.preventDefault();
                 openSearch();
             }

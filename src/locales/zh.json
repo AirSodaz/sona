@@ -285,6 +285,10 @@
         "items_title": "{{count}} 项内容",
         "items_hint": "直接打开内容，或在 Inbox 与各项目间移动。",
         "search_placeholder": "搜索当前工作区...",
+        "search_placeholder_all_items": "搜索全部内容...",
+        "search_placeholder_inbox": "搜索 Inbox...",
+        "search_placeholder_project": "在 {{project}} 中搜索...",
+        "search_scope_label": "搜索范围",
         "filter_type_label": "按类型筛选",
         "filter_date_label": "按时间筛选",
         "filter_all_types": "全部类型",
@@ -680,8 +684,12 @@
         "volume_down": "调低音量",
         "toggle_mute": "静音开关",
         "find": "查找",
+        "find_current_context": "在当前上下文中查找",
         "next_match": "下一个匹配项",
         "prev_match": "上一个匹配项",
+        "next_prev_transcript_match": "正文中下一个 / 上一个匹配",
+        "navigate_workspace_results": "在工作区搜索结果中导航",
+        "clear_or_close_search": "清空或关闭当前搜索",
         "close": "关闭"
     },
     "search": {

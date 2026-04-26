@@ -7,6 +7,8 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
 vi.mock('../../services/projectService', () => ({
   projectService: {
     getAll: vi.fn().mockResolvedValue([]),
@@ -50,6 +52,7 @@ vi.mock('../TranscriptWorkbench', () => ({
   TranscriptWorkbench: ({ title, onClose }: any) => (
     <div>
       <div>TranscriptEditor</div>
+      <button>Detail Focus</button>
       <button onClick={onClose}>Close</button>
       {title && <div>{title}</div>}
     </div>
@@ -69,11 +72,17 @@ vi.mock('../ErrorBoundary', () => ({
 }));
 
 vi.mock('../history/HistoryItem', () => ({
-  HistoryItem: ({ item, onLoad, isSelectionMode, isSelected, onToggleSelection, searchQuery }: any) => (
-    <div data-testid={`history-item-${item.id}`} data-search-query={searchQuery || ''}>
+  HistoryItem: ({ item, onLoad, isSelectionMode, isSelected, isKeyboardActive, onToggleSelection, searchQuery, searchSnippet }: any) => (
+    <div
+      id={`workspace-search-result-${item.id}`}
+      data-testid={`history-item-${item.id}`}
+      data-search-query={searchQuery || ''}
+      data-keyboard-active={isKeyboardActive ? 'true' : 'false'}
+    >
       <button onClick={() => onLoad(item)}>{item.title}</button>
       <span>{`Project ${item.projectId ?? 'inbox'}`}</span>
       {searchQuery && <span>{`Query ${searchQuery}`}</span>}
+      {searchSnippet?.text && <span>{`Snippet ${searchSnippet.text}`}</span>}
       {isSelected && <span>{`Active ${item.id}`}</span>}
       {isSelectionMode && (
         <button onClick={() => onToggleSelection?.(item.id)}>
@@ -263,6 +272,8 @@ describe('ProjectsView', () => {
 
     expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
     expect(screen.queryByTestId('projects-fab')).toBeNull();
+    expect(screen.getByText('Search scope')).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Search Inbox...' })).toBeDefined();
     expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 1 of 1');
     expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
@@ -494,6 +505,7 @@ describe('ProjectsView', () => {
     expect(screen.getByText('Inbox Item')).toBeDefined();
     expect(screen.getByText('Project project-1')).toBeDefined();
     expect(screen.getByText('Project inbox')).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Search All Items...' })).toBeDefined();
     expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
     expect(screen.getByTestId('projects-summary-type-split').textContent).toBe('1 recordings / 1 imports');
     expect(screen.getByTestId('projects-results-count').textContent).toBe('Showing 2 of 2');
@@ -711,13 +723,14 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search this workspace...' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search in Alpha...' }), {
       target: { value: 'roadmap' },
     });
 
     expect(screen.getByText('Client Call')).toBeDefined();
     expect(screen.queryByText('Imported Deck')).toBeNull();
     expect(screen.getByText('Query roadmap')).toBeDefined();
+    expect(screen.getByText(/Snippet Quarterly roadmap follow up/i)).toBeDefined();
     expect(screen.queryByText('Inbox Item')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
@@ -789,6 +802,165 @@ describe('ProjectsView', () => {
     expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
   });
 
+  it('focuses the workspace search with Ctrl+F when the detail pane is not focused', async () => {
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const input = screen.getByRole('textbox', { name: 'Search Inbox...' });
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('does not steal Ctrl+F when focus is already inside the detail pane', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-project',
+          title: 'Project Item',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-project.json',
+          previewText: 'Roadmap preview',
+          searchContent: 'Roadmap preview',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project Item' }));
+    await waitFor(() => {
+      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+    });
+
+    const detailButton = screen.getByRole('button', { name: 'Detail Focus' });
+    detailButton.focus();
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+
+    expect(document.activeElement).toBe(detailButton);
+  });
+
+  it('navigates workspace search results with arrow keys and opens the active result on Enter', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Alpha Plan',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Roadmap preview',
+          searchContent: 'Roadmap preview',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+        {
+          id: 'hist-2',
+          title: 'Beta Plan',
+          timestamp: Date.now() - 1000,
+          duration: 90,
+          audioPath: 'audio-2.wav',
+          transcriptPath: 'hist-2.json',
+          previewText: 'Roadmap notes',
+          searchContent: 'Roadmap notes',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
+    fireEvent.change(input, { target: { value: 'roadmap' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('true');
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('history-item-hist-2').getAttribute('data-keyboard-active')).toBe('true');
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-2');
+    });
+  });
+
+  it('disables active-result keyboard navigation while selection mode is enabled', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Alpha Plan',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Roadmap preview',
+          searchContent: 'Roadmap preview',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
+    fireEvent.change(input, { target: { value: 'roadmap' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('false');
+  });
+
+  it('clears the query on first Escape and blurs the search box on second Escape', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Alpha Plan',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Roadmap preview',
+          searchContent: 'Roadmap preview',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const input = screen.getByRole('textbox', { name: 'Search in Alpha...' }) as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: 'roadmap' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(input.value).toBe('');
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(document.activeElement).not.toBe(input);
+  });
+
   it('shows a no-results state and trims hidden selections without dropping the open detail pane', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     useHistoryStore.setState({
@@ -826,7 +998,7 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search this workspace...' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search in Alpha...' }), {
       target: { value: 'missing item' },
     });
 

@@ -285,6 +285,10 @@
         "items_title": "{{count}} items",
         "items_hint": "Open items in place or move them between Inbox and projects.",
         "search_placeholder": "Search this workspace...",
+        "search_placeholder_all_items": "Search All Items...",
+        "search_placeholder_inbox": "Search Inbox...",
+        "search_placeholder_project": "Search in {{project}}...",
+        "search_scope_label": "Search scope",
         "filter_type_label": "Filter by type",
         "filter_date_label": "Filter by date",
         "filter_all_types": "All types",
@@ -680,8 +684,12 @@
         "volume_down": "Volume Down",
         "toggle_mute": "Toggle Mute",
         "find": "Find",
+        "find_current_context": "Find in current context",
         "next_match": "Next Match",
         "prev_match": "Previous Match",
+        "next_prev_transcript_match": "Next / previous transcript match",
+        "navigate_workspace_results": "Navigate workspace search results",
+        "clear_or_close_search": "Clear or close current search",
         "close": "Close"
     },
     "search": {

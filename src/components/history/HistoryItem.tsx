@@ -5,6 +5,7 @@ import { HistoryItem as HistoryItemType } from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
 import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon } from '../Icons';
 import { Checkbox } from '../Checkbox';
+import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
 
 interface HistoryItemProps {
     item: HistoryItemType;
@@ -12,8 +13,11 @@ interface HistoryItemProps {
     onDelete: (e: React.MouseEvent, id: string) => void;
     onRename?: (e: React.MouseEvent, id: string) => void;
     searchQuery?: string;
+    searchTitleMatch?: WorkspaceSearchRange | null;
+    searchSnippet?: WorkspaceSearchSnippet | null;
     isSelectionMode?: boolean;
     isSelected?: boolean;
+    isKeyboardActive?: boolean;
     onToggleSelection?: (id: string) => void;
     layout?: 'list' | 'grid' | 'table';
 }
@@ -42,25 +46,36 @@ function renderIcon(icon: string | undefined, type: string | undefined): React.R
     return type === 'batch' ? <FileTextIcon /> : <MicIcon />;
 }
 
-/**
- * Highlights matching text by wrapping matches in <mark> tags
- */
-function highlightText(text: string, query: string): React.ReactNode {
-    if (!query || !query.trim()) {
+function highlightRange(text: string, range?: WorkspaceSearchRange | null): React.ReactNode {
+    if (!range) {
         return text;
     }
 
-    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escapedQuery})`, 'gi');
-    const parts = text.split(regex);
+    const safeStart = Math.max(0, Math.min(range.start, text.length));
+    const safeEnd = Math.max(safeStart, Math.min(range.end, text.length));
 
-    return parts.map((part, index) =>
-        index % 2 === 1 ? (
-            <mark key={index} className="search-highlight">{part}</mark>
-        ) : (
-            part
-        )
+    if (safeStart === safeEnd) {
+        return text;
+    }
+
+    return (
+        <>
+            {text.slice(0, safeStart)}
+            <mark className="search-highlight">{text.slice(safeStart, safeEnd)}</mark>
+            {text.slice(safeEnd)}
+        </>
     );
+}
+
+function renderSnippet(snippet?: WorkspaceSearchSnippet | null): React.ReactNode {
+    if (!snippet) {
+        return null;
+    }
+
+    return highlightRange(snippet.text, {
+        start: snippet.highlightStart,
+        end: snippet.highlightEnd,
+    });
 }
 
 function formatDuration(seconds: number): string {
@@ -99,8 +114,11 @@ function HistoryItemComponent({
     onDelete,
     onRename,
     searchQuery = '',
+    searchTitleMatch = null,
+    searchSnippet = null,
     isSelectionMode = false,
     isSelected = false,
+    isKeyboardActive = false,
     onToggleSelection,
     layout = 'list',
 }: HistoryItemProps): React.JSX.Element {
@@ -127,7 +145,9 @@ function HistoryItemComponent({
 
     return (
         <div
-            className={`history-item history-item--${layout} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''}`}
+            id={`workspace-search-result-${item.id}`}
+            data-history-item-id={item.id}
+            className={`history-item history-item--${layout} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''}`}
             onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
             role={layout === 'table' ? 'row' : 'listitem'}
         >
@@ -153,7 +173,7 @@ function HistoryItemComponent({
                         <span className="history-item-type-icon" title={itemTypeLabel}>
                             {renderIcon(item.icon, item.type)}
                         </span>
-                        <span className="history-item-title">{highlightText(item.title, searchQuery)}</span>
+                        <span className="history-item-title">{highlightRange(item.title, searchTitleMatch)}</span>
                     </div>
 
                     {layout !== 'table' && (
@@ -169,9 +189,19 @@ function HistoryItemComponent({
                     </div>
                 )}
 
+                {layout === 'table' && searchQuery.trim() && searchSnippet && (
+                    <p className="history-item-preview history-item-preview--table">
+                        {renderSnippet(searchSnippet)}
+                    </p>
+                )}
+
                 {layout !== 'table' && (
                     <p className="history-item-preview">
-                        {item.previewText ? highlightText(item.previewText, searchQuery) : <em>{t('history.no_transcript')}</em>}
+                        {searchQuery.trim() && searchSnippet
+                            ? renderSnippet(searchSnippet)
+                            : item.previewText
+                            ? item.previewText
+                            : <em>{t('history.no_transcript')}</em>}
                     </p>
                 )}
 

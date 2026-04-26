@@ -196,10 +196,10 @@ export function SettingsShortcutsTab(): React.JSX.Element {
             title: t('shortcuts.section_search'),
             icon: <Search size={20} />,
             items: [
-                { key: 'Ctrl + F', description: t('shortcuts.find') },
-                { key: 'Enter', description: t('shortcuts.next_match') },
-                { key: 'Shift + Enter', description: t('shortcuts.prev_match') },
-                { key: 'Esc', description: t('shortcuts.close') },
+                { key: 'Ctrl + F', description: t('shortcuts.find_current_context', { defaultValue: 'Find in current context' }) },
+                { key: 'Enter / Shift + Enter', description: t('shortcuts.next_prev_transcript_match', { defaultValue: 'Next / previous transcript match' }) },
+                { key: '↑ / ↓', description: t('shortcuts.navigate_workspace_results', { defaultValue: 'Navigate workspace search results' }) },
+                { key: 'Esc', description: t('shortcuts.clear_or_close_search', { defaultValue: 'Clear or close current search' }) },
             ]
         },
         {

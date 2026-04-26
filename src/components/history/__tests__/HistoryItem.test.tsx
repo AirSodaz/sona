@@ -98,4 +98,45 @@ describe('HistoryItem', () => {
     expect(onLoad).not.toHaveBeenCalled();
     expect(onDelete).not.toHaveBeenCalled();
   });
+
+  it('renders a search snippet with highlight for list layouts', () => {
+    const { container } = render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        searchQuery="roadmap"
+        searchSnippet={{
+          text: 'Quarterly roadmap follow-up',
+          highlightStart: 10,
+          highlightEnd: 17,
+        }}
+      />,
+    );
+
+    expect(container.querySelector('.history-item-preview')?.textContent).toContain('Quarterly roadmap follow-up');
+    expect(screen.getByText('roadmap').tagName).toBe('MARK');
+  });
+
+  it('shows the snippet as a compact secondary line in table layout', () => {
+    const { container } = render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        searchQuery="planning"
+        searchSnippet={{
+          text: 'Quarterly planning follow-up',
+          highlightStart: 10,
+          highlightEnd: 18,
+        }}
+        layout="table"
+        isKeyboardActive
+      />,
+    );
+
+    expect(container.querySelector('.history-item')?.classList.contains('keyboard-active')).toBe(true);
+    expect(container.querySelector('.history-item-preview--table')).not.toBeNull();
+    expect(screen.getByText('planning').tagName).toBe('MARK');
+  });
 });

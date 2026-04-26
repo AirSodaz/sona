@@ -42,6 +42,7 @@ import { historyService } from '../services/historyService';
 import { generateAiTitleForHistoryItem } from '../services/aiRenameService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
@@ -49,6 +50,7 @@ import type { HistoryItem as HistoryItemType } from '../types/history';
 import type { ProjectDefaults, ProjectRecord } from '../types/project';
 import { getPolishPresetOptions } from '../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../utils/summaryTemplates';
+import { getWorkspaceSearchResultDomId, matchWorkspaceItem } from '../utils/workspaceSearch';
 
 const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 const DEFAULT_FILTER_TYPE = 'all';
@@ -60,6 +62,11 @@ type ProjectFilterType = 'all' | 'recording' | 'batch';
 type ProjectDateFilter = 'all' | 'today' | 'week' | 'month';
 type ProjectSortOrder = 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
 type ProjectBrowseScope = typeof ALL_ITEMS_SCOPE | typeof INBOX_SCOPE | string;
+
+interface FilteredProjectItemEntry {
+  item: HistoryItemType;
+  searchMatch: ReturnType<typeof matchWorkspaceItem>;
+}
 
 function sortRuleSetIds(ids: string[]): string[] {
   return [...ids].sort();
@@ -777,12 +784,14 @@ export function ProjectsView(): React.JSX.Element {
   const [browseScope, setBrowseScope] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearchResultId, setActiveSearchResultId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
   const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
   const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
   const [isScrolled, setIsScrolled] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string; icon?: string; type?: 'recording' | 'batch' } | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -919,31 +928,40 @@ export function ProjectsView(): React.JSX.Element {
     [scopedItems, selectedHistoryId],
   );
 
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredItemEntries = useMemo<FilteredProjectItemEntry[]>(() => {
+    const hasQuery = searchQuery.trim().length > 0;
 
-    return scopedItems.filter((item) => {
-      if (normalizedQuery) {
-        const haystack = [item.title, item.searchContent || item.previewText || '']
-          .join(' ')
-          .toLowerCase();
-
-        if (!haystack.includes(normalizedQuery)) {
-          return false;
-        }
+    return scopedItems.flatMap((item) => {
+      const searchMatch = hasQuery ? matchWorkspaceItem(item, searchQuery) : null;
+      if (hasQuery && !searchMatch) {
+        return [];
       }
 
       if (filterType !== 'all' && (item.type || 'recording') !== filterType) {
-        return false;
+        return [];
       }
 
-      return matchesDateFilter(item, dateFilter);
+      if (!matchesDateFilter(item, dateFilter)) {
+        return [];
+      }
+
+      return [{ item, searchMatch }];
     });
   }, [dateFilter, filterType, scopedItems, searchQuery]);
 
+  const filteredAndSortedItemEntries = useMemo(
+    () => [...filteredItemEntries].sort((a, b) => compareProjectItems(a.item, b.item, sortOrder)),
+    [filteredItemEntries, sortOrder],
+  );
+
   const filteredAndSortedItems = useMemo(
-    () => [...filteredItems].sort((a, b) => compareProjectItems(a, b, sortOrder)),
-    [filteredItems, sortOrder],
+    () => filteredAndSortedItemEntries.map(({ item }) => item),
+    [filteredAndSortedItemEntries],
+  );
+
+  const searchMatchByItemId = useMemo(
+    () => new Map(filteredAndSortedItemEntries.map(({ item, searchMatch }) => [item.id, searchMatch])),
+    [filteredAndSortedItemEntries],
   );
 
   const projectSummary = useMemo(() => {
@@ -1009,6 +1027,78 @@ export function ProjectsView(): React.JSX.Element {
       return next.length === current.length ? current : next;
     });
   }, [filteredAndSortedItems]);
+
+  useEffect(() => {
+    setActiveSearchResultId(null);
+  }, [browseScope, dateFilter, filterType, searchQuery, sortOrder]);
+
+  useEffect(() => {
+    if (!isSelectionMode) {
+      return;
+    }
+
+    setActiveSearchResultId(null);
+  }, [isSelectionMode]);
+
+  useEffect(() => {
+    if (!activeSearchResultId) {
+      return;
+    }
+
+    if (filteredAndSortedItems.some((item) => item.id === activeSearchResultId)) {
+      return;
+    }
+
+    setActiveSearchResultId(null);
+  }, [activeSearchResultId, filteredAndSortedItems]);
+
+  useEffect(() => {
+    if (!activeSearchResultId) {
+      return;
+    }
+
+    const activeElement = document.getElementById(getWorkspaceSearchResultDomId(activeSearchResultId));
+    activeElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeSearchResultId]);
+
+  const focusWorkspaceSearchInput = useCallback(() => {
+    if (!searchInputRef.current) {
+      return false;
+    }
+
+    searchInputRef.current.focus();
+    searchInputRef.current.select();
+    return true;
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'f') {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement && activeElement.closest('.projects-detail-pane')) {
+        return;
+      }
+
+      const isSettingsOpen = !!document.querySelector('.settings-overlay');
+      const isDialogOpen = useDialogStore.getState().isOpen;
+      const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
+      if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) {
+        return;
+      }
+
+      if (!focusWorkspaceSearchInput()) {
+        return;
+      }
+
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [focusWorkspaceSearchInput]);
 
   const moveOptions = useMemo(
     () => [
@@ -1397,6 +1487,67 @@ export function ProjectsView(): React.JSX.Element {
     setIsSelectionMode(false);
   };
 
+  const moveActiveSearchResult = useCallback((direction: 'next' | 'prev') => {
+    if (filteredAndSortedItems.length === 0) {
+      return;
+    }
+
+    setActiveSearchResultId((current) => {
+      const currentIndex = current
+        ? filteredAndSortedItems.findIndex((item) => item.id === current)
+        : -1;
+      const fallbackIndex = direction === 'next' ? 0 : filteredAndSortedItems.length - 1;
+      const nextIndex = currentIndex === -1
+        ? fallbackIndex
+        : (currentIndex + (direction === 'next' ? 1 : -1) + filteredAndSortedItems.length) % filteredAndSortedItems.length;
+
+      return filteredAndSortedItems[nextIndex]?.id ?? null;
+    });
+  }, [filteredAndSortedItems]);
+
+  const handleWorkspaceSearchInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+
+      if (searchQuery.trim()) {
+        setSearchQuery('');
+        setActiveSearchResultId(null);
+        return;
+      }
+
+      setActiveSearchResultId(null);
+      searchInputRef.current?.blur();
+      return;
+    }
+
+    if (isSelectionMode) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveActiveSearchResult('next');
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveActiveSearchResult('prev');
+      return;
+    }
+
+    if (event.key === 'Enter' && activeSearchResultId) {
+      const activeItem = filteredAndSortedItems.find((item) => item.id === activeSearchResultId);
+      if (!activeItem) {
+        return;
+      }
+
+      event.preventDefault();
+      setActiveSearchResultId(null);
+      void handleOpenItem(activeItem);
+    }
+  }, [activeSearchResultId, filteredAndSortedItems, handleOpenItem, isSelectionMode, moveActiveSearchResult, searchQuery]);
+
   const resetBrowseState = useCallback(() => {
     setSearchQuery('');
     setFilterType(DEFAULT_FILTER_TYPE);
@@ -1419,6 +1570,18 @@ export function ProjectsView(): React.JSX.Element {
   const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
   const activeDragProject = activeId ? projects.find((project) => project.id === activeId) || null : null;
   const headerIcon = renderScopeIcon(browseScope, browseProject);
+  const searchScopeLabel = headerTitle;
+  const searchScopeAriaLabel = t('projects.search_scope_label', {
+    defaultValue: 'Search scope',
+  });
+  const searchInputLabel = isAllItemsScope
+    ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
+    : browseProject
+    ? t('projects.search_placeholder_project', {
+      project: browseProject.name,
+      defaultValue: 'Search in {{project}}...',
+    })
+    : t('projects.search_placeholder_inbox', { defaultValue: 'Search Inbox...' });
   const summaryChips = [
     {
       key: 'items',
@@ -1633,26 +1796,35 @@ export function ProjectsView(): React.JSX.Element {
 
         <div className="projects-toolbar" data-testid="projects-toolbar-default">
           <div className="projects-toolbar-left">
-            <span className="projects-results-count" data-testid="projects-results-count" style={{ display: 'none' }}>
-              {t('projects.results_count', {
-                visible: filteredAndSortedItems.length,
-                total: scopedItems.length,
-                defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
-              })}
-            </span>
+            <div className="projects-search-meta">
+              <span className="projects-search-scope-label">
+                {searchScopeAriaLabel}
+              </span>
+              <span className="projects-search-scope-chip" aria-label={`${searchScopeAriaLabel}: ${searchScopeLabel}`}>
+                <span className="projects-search-scope-icon" aria-hidden="true">
+                  {renderScopeIcon(browseScope, browseProject)}
+                </span>
+                <span className="projects-search-scope-name">{searchScopeLabel}</span>
+              </span>
+              <span className="projects-results-count" data-testid="projects-results-count">
+                {t('projects.results_count', {
+                  visible: filteredAndSortedItems.length,
+                  total: scopedItems.length,
+                  defaultValue: `Showing ${filteredAndSortedItems.length} of ${scopedItems.length}`,
+                })}
+              </span>
+            </div>
             <div className="projects-search">
               <Search size={16} className="projects-search-icon" />
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
-                aria-label={t('projects.search_placeholder', { defaultValue: 'Search this workspace...' })}
+                placeholder={searchInputLabel}
+                aria-label={searchInputLabel}
+                aria-activedescendant={activeSearchResultId ? getWorkspaceSearchResultDomId(activeSearchResultId) : undefined}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setSearchQuery('');
-                  }
-                }}
+                onKeyDown={handleWorkspaceSearchInputKeyDown}
               />
               {searchQuery && (
                 <button
@@ -1697,7 +1869,7 @@ export function ProjectsView(): React.JSX.Element {
                       <div className="projects-filter-popover-copy">
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                           <strong>{t('projects.filter_button', { defaultValue: 'Filter & Sort' })}</strong>
-                          <span className="projects-results-count" data-testid="projects-results-count">
+                          <span className="projects-results-count" data-testid="projects-results-count-popover">
                             {t('projects.results_count', {
                               visible: filteredAndSortedItems.length,
                               total: scopedItems.length,
@@ -1956,7 +2128,9 @@ export function ProjectsView(): React.JSX.Element {
                   {!isSelectionMode && <div role="columnheader" style={{ width: '48px' }} />}
                 </div>
               )}
-              {filteredAndSortedItems.map((item) => (
+              {filteredAndSortedItems.map((item) => {
+                const searchMatch = searchMatchByItemId.get(item.id) ?? null;
+                return (
                 <HistoryItem
                   key={item.id}
                   item={item}
@@ -1964,12 +2138,16 @@ export function ProjectsView(): React.JSX.Element {
                   onDelete={handleDeleteHistoryItem}
                   onRename={handleRenameHistoryItem}
                   searchQuery={searchQuery}
+                  searchTitleMatch={searchMatch?.titleMatch ?? null}
+                  searchSnippet={searchMatch?.displaySnippet ?? null}
                   isSelectionMode={isSelectionMode}
                   isSelected={isSelectionMode ? selectedIds.includes(item.id) : selectedHistoryId === item.id}
+                  isKeyboardActive={!isSelectionMode && activeSearchResultId === item.id}
                   onToggleSelection={toggleSelection}
                   layout={viewMode}
                 />
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -646,6 +646,58 @@ body {
   gap: var(--spacing-sm);
 }
 
+.projects-toolbar-left {
+  flex-wrap: wrap;
+}
+
+.projects-search-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.projects-search-scope-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.projects-search-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.projects-search-scope-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.projects-search-scope-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.projects-results-count {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .projects-segmented-control {
   display: flex;
   align-items: center;
@@ -3482,6 +3534,11 @@ input[type="radio"]:focus {
   box-shadow: var(--shadow-sm);
 }
 
+.history-item.keyboard-active:not(.selected) {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
 .history-item-checkbox {
   display: flex;
   align-items: center;
@@ -3583,6 +3640,13 @@ input[type="radio"]:focus {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+}
+
+.history-item-preview--table {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  -webkit-line-clamp: 1;
 }
 
 .history-item .delete-btn,
@@ -3792,6 +3856,10 @@ input[type="radio"]:focus {
   flex: 2;
   min-width: 200px;
   padding: 0 8px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
 }
 
 .history-item--table .history-item-table-project {
