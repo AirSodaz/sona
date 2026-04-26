@@ -1,14 +1,22 @@
-use futures_util::future::BoxFuture;
-use reqwest::Client;
+use futures_util::{future::BoxFuture, stream, StreamExt};
+use log::{info, warn};
+use reqwest::{header::RETRY_AFTER, Client, StatusCode};
 use rig::client::{CompletionClient, Nothing};
 use rig::completion::CompletionModel;
 use rig::providers::{anthropic, gemini, ollama, openai};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::{future::Future, time::Duration};
 use tauri::{AppHandle, Emitter};
 
 const DEFAULT_SEGMENT_CHUNK_SIZE: usize = 30;
+const DEFAULT_SEGMENT_CONTEXT_CHAR_BUDGET: usize = 32_000;
+const DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET: usize = DEFAULT_SEGMENT_CONTEXT_CHAR_BUDGET / 2;
+const GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY: usize = 2;
+const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
+const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
+const GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS: [u64; GOOGLE_TRANSLATE_FREE_MAX_RETRIES] = [500, 1000];
 const DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET: usize = 6000;
 const MIN_SUMMARY_CHUNK_CHAR_BUDGET: usize = 1200;
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
@@ -875,6 +883,347 @@ fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
         .unwrap_or(DEFAULT_SEGMENT_CHUNK_SIZE)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PlannedSegmentChunk {
+    start: usize,
+    end: usize,
+    prompt: String,
+}
+
+#[derive(Debug, Clone)]
+enum GoogleTranslateFreeAttemptError {
+    HttpStatus {
+        status: StatusCode,
+        retry_after: Option<Duration>,
+    },
+    Message(String),
+}
+
+fn prompt_char_count(prompt: &str) -> usize {
+    prompt.chars().count()
+}
+
+fn plan_segment_task_chunks<BuildPrompt>(
+    task_id: &str,
+    task_type: LlmTaskType,
+    segments: &[LlmSegmentInput],
+    chunk_size: Option<usize>,
+    prompt_char_budget: usize,
+    build_prompt: &mut BuildPrompt,
+) -> Vec<PlannedSegmentChunk>
+where
+    BuildPrompt: FnMut(&[LlmSegmentInput]) -> String,
+{
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    if chunk_size.is_some() {
+        let normalized_chunk_size = normalize_chunk_size(chunk_size);
+        let mut planned = Vec::with_capacity(
+            (segments.len() + normalized_chunk_size - 1) / normalized_chunk_size,
+        );
+
+        for start in (0..segments.len()).step_by(normalized_chunk_size) {
+            let end = (start + normalized_chunk_size).min(segments.len());
+            planned.push(PlannedSegmentChunk {
+                start,
+                end,
+                prompt: build_prompt(&segments[start..end]),
+            });
+        }
+
+        info!(
+            "[LLM] {} task {} planned {} chunk(s) with fixed segment override: chunk_size={}",
+            task_label(task_type),
+            task_id,
+            planned.len(),
+            normalized_chunk_size
+        );
+
+        return planned;
+    }
+
+    let prompt_char_budget = prompt_char_budget.max(1);
+    let mut planned = Vec::new();
+    let mut chunk_start = 0usize;
+    let mut chunk_end = 0usize;
+    let mut current_prompt: Option<String> = None;
+
+    while chunk_start < segments.len() {
+        let candidate_end = chunk_end + 1;
+        let candidate_prompt = build_prompt(&segments[chunk_start..candidate_end]);
+        let candidate_prompt_chars = prompt_char_count(&candidate_prompt);
+
+        if candidate_prompt_chars <= prompt_char_budget {
+            chunk_end = candidate_end;
+            current_prompt = Some(candidate_prompt);
+
+            if chunk_end == segments.len() {
+                planned.push(PlannedSegmentChunk {
+                    start: chunk_start,
+                    end: chunk_end,
+                    prompt: current_prompt
+                        .take()
+                        .expect("accepted chunk should always have a prompt"),
+                });
+                break;
+            }
+
+            continue;
+        }
+
+        if chunk_end == chunk_start {
+            warn!(
+                "[LLM] {} task {} single segment exceeded prompt budget and will be sent alone: segment_id={} prompt_chars={} prompt_budget_chars={}",
+                task_label(task_type),
+                task_id,
+                segments[chunk_start].id,
+                candidate_prompt_chars,
+                prompt_char_budget
+            );
+            planned.push(PlannedSegmentChunk {
+                start: chunk_start,
+                end: candidate_end,
+                prompt: candidate_prompt,
+            });
+            chunk_start = candidate_end;
+            chunk_end = chunk_start;
+            current_prompt = None;
+            continue;
+        }
+
+        planned.push(PlannedSegmentChunk {
+            start: chunk_start,
+            end: chunk_end,
+            prompt: current_prompt
+                .take()
+                .expect("previous accepted chunk should always have a prompt"),
+        });
+        chunk_start = chunk_end;
+        chunk_end = chunk_start;
+    }
+
+    info!(
+        "[LLM] {} task {} planned {} chunk(s) with dynamic prompt budget: context_budget_chars={} prompt_budget_chars={}",
+        task_label(task_type),
+        task_id,
+        planned.len(),
+        DEFAULT_SEGMENT_CONTEXT_CHAR_BUDGET,
+        prompt_char_budget
+    );
+
+    planned
+}
+
+fn format_attempt_label(attempts: usize) -> &'static str {
+    if attempts == 1 {
+        "attempt"
+    } else {
+        "attempts"
+    }
+}
+
+fn parse_google_translate_free_retry_after(
+    headers: &reqwest::header::HeaderMap,
+) -> Option<Duration> {
+    headers
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(|seconds| clamp_google_translate_free_retry_after(Duration::from_secs(seconds)))
+}
+
+fn clamp_google_translate_free_retry_after(duration: Duration) -> Duration {
+    duration.min(Duration::from_secs(
+        GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS,
+    ))
+}
+
+fn default_google_translate_free_retry_delay(failed_attempt: usize) -> Duration {
+    let delay_ms = GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS
+        .get(failed_attempt.saturating_sub(1))
+        .copied()
+        .unwrap_or(
+            *GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS
+                .last()
+                .unwrap_or(&1000),
+        );
+    Duration::from_millis(delay_ms)
+}
+
+fn google_translate_free_retry_delay(
+    error: &GoogleTranslateFreeAttemptError,
+    failed_attempt: usize,
+) -> Option<Duration> {
+    match error {
+        GoogleTranslateFreeAttemptError::HttpStatus {
+            status,
+            retry_after,
+        } if *status == StatusCode::TOO_MANY_REQUESTS
+            && failed_attempt <= GOOGLE_TRANSLATE_FREE_MAX_RETRIES =>
+        {
+            Some(
+                retry_after
+                    .map(clamp_google_translate_free_retry_after)
+                    .unwrap_or_else(|| default_google_translate_free_retry_delay(failed_attempt)),
+            )
+        }
+        _ => None,
+    }
+}
+
+fn google_translate_free_error_summary(error: &GoogleTranslateFreeAttemptError) -> String {
+    match error {
+        GoogleTranslateFreeAttemptError::HttpStatus { status, .. } => {
+            format!("Free API Error: {}", status)
+        }
+        GoogleTranslateFreeAttemptError::Message(message) => {
+            format!("Free translation request failed: {}", message)
+        }
+    }
+}
+
+fn google_translate_free_error_message(
+    error: &GoogleTranslateFreeAttemptError,
+    attempts: usize,
+) -> String {
+    format!(
+        "{} after {} {}",
+        google_translate_free_error_summary(error),
+        attempts,
+        format_attempt_label(attempts)
+    )
+}
+
+fn extract_google_translate_free_translation(
+    body: &Value,
+) -> Result<String, GoogleTranslateFreeAttemptError> {
+    let mut translated = String::new();
+
+    if let Some(outer_arr) = body.as_array() {
+        if let Some(inner_arr) = outer_arr.get(0).and_then(|value| value.as_array()) {
+            for part in inner_arr {
+                if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
+                    translated.push_str(text);
+                }
+            }
+        }
+    }
+
+    if translated.is_empty() {
+        return Err(GoogleTranslateFreeAttemptError::Message(
+            "Empty translation".to_string(),
+        ));
+    }
+
+    Ok(translated)
+}
+
+async fn fetch_google_translate_free_translation(
+    client: &Client,
+    base_url: &str,
+    target_language: &str,
+    text: &str,
+) -> Result<String, GoogleTranslateFreeAttemptError> {
+    let url = format!(
+        "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
+        base_url.trim_end_matches('/'),
+        target_language,
+        urlencoding::encode(text)
+    );
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
+
+    if !response.status().is_success() {
+        return Err(GoogleTranslateFreeAttemptError::HttpStatus {
+            status: response.status(),
+            retry_after: parse_google_translate_free_retry_after(response.headers()),
+        });
+    }
+
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
+    extract_google_translate_free_translation(&body)
+}
+
+async fn execute_google_translate_free_request<FetchFn, FetchFuture, SleepFn, SleepFuture>(
+    index: usize,
+    text: String,
+    target_language: String,
+    mut fetch: FetchFn,
+    mut sleep_fn: SleepFn,
+) -> Result<(usize, String), String>
+where
+    FetchFn: FnMut(String, String) -> FetchFuture,
+    FetchFuture: Future<Output = Result<String, GoogleTranslateFreeAttemptError>>,
+    SleepFn: FnMut(Duration) -> SleepFuture,
+    SleepFuture: Future<Output = ()>,
+{
+    let mut attempts = 0usize;
+
+    loop {
+        attempts += 1;
+
+        match fetch(text.clone(), target_language.clone()).await {
+            Ok(translation) => return Ok((index, translation)),
+            Err(error) => {
+                if let Some(delay) = google_translate_free_retry_delay(&error, attempts) {
+                    info!(
+                        "[LLM] google_translate_free request hit 429 and will retry: index={} failed_attempt={} next_attempt={} delay_ms={}",
+                        index,
+                        attempts,
+                        attempts + 1,
+                        delay.as_millis()
+                    );
+                    sleep_fn(delay).await;
+                    continue;
+                }
+
+                warn!(
+                    "[LLM] google_translate_free request failed after retries: index={} attempts={} error={}",
+                    index,
+                    attempts,
+                    google_translate_free_error_summary(&error)
+                );
+                return Err(google_translate_free_error_message(&error, attempts));
+            }
+        }
+    }
+}
+
+async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(
+    texts: Vec<String>,
+    max_concurrency: usize,
+    mut run_request: RunFn,
+) -> Result<Vec<String>, String>
+where
+    RunFn: FnMut(usize, String) -> RunFuture,
+    RunFuture: Future<Output = Result<(usize, String), String>>,
+{
+    let mut indexed_translations = Vec::with_capacity(texts.len());
+    let results = stream::iter(texts.into_iter().enumerate())
+        .map(move |(index, text)| run_request(index, text))
+        .buffer_unordered(max_concurrency.max(1))
+        .collect::<Vec<_>>()
+        .await;
+
+    for result in results {
+        indexed_translations.push(result?);
+    }
+
+    indexed_translations.sort_by_key(|(index, _)| *index);
+    Ok(indexed_translations
+        .into_iter()
+        .map(|(_, translation)| translation)
+        .collect())
+}
+
 fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
     if config.model.trim().is_empty() {
         return Err("Model name cannot be empty".to_string());
@@ -1306,14 +1655,21 @@ where
         return Ok(Vec::new());
     }
 
-    let normalized_chunk_size = normalize_chunk_size(chunk_size);
-    let total_chunks = (segments.len() + normalized_chunk_size - 1) / normalized_chunk_size;
+    let planned_chunks = plan_segment_task_chunks(
+        task_id,
+        task_type,
+        segments,
+        chunk_size,
+        DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
+        &mut build_prompt,
+    );
+    let total_chunks = planned_chunks.len();
     let mut results = Vec::with_capacity(segments.len());
 
-    for (chunk_index, chunk) in segments.chunks(normalized_chunk_size).enumerate() {
+    for (chunk_index, planned_chunk) in planned_chunks.into_iter().enumerate() {
         let chunk_number = chunk_index + 1;
-        let prompt = build_prompt(chunk);
-        let response_text = generate_text(prompt)
+        let chunk = &segments[planned_chunk.start..planned_chunk.end];
+        let response_text = generate_text(planned_chunk.prompt)
             .await
             .map_err(|error| chunk_error(task_type, chunk_number, error))?;
         let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
@@ -1371,13 +1727,7 @@ pub async fn polish_transcript_segments(
         LlmTaskType::Polish,
         &request.segments,
         request.chunk_size,
-        move |chunk| {
-            build_polish_prompt(
-                chunk,
-                context.as_deref(),
-                keywords.as_deref(),
-            )
-        },
+        move |chunk| build_polish_prompt(chunk, context.as_deref(), keywords.as_deref()),
         parse_polish_chunk,
         move |prompt| {
             let config = config.clone();
@@ -1530,49 +1880,46 @@ pub async fn translate_transcript_segments(
 
                         Ok(text)
                     } else {
-                        // Parallel free requests for the chunk
-                        let futures = texts.into_iter().map(|text| {
-                            let client = client.clone();
-                            let target = target_language.clone();
-                            let base_url = config.base_url.clone();
-                            async move {
-                                let url = format!(
-                                    "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
-                                    base_url.trim_end_matches('/'),
-                                    target,
-                                    urlencoding::encode(&text)
-                                );
-                                let response =
-                                    client.get(&url).send().await.map_err(|e| e.to_string())?;
-                                if !response.status().is_success() {
-                                    return Err(format!("Free API Error: {}", response.status()));
-                                }
-                                let body: Value =
-                                    response.json().await.map_err(|e| e.to_string())?;
-                                let mut translated = String::new();
-                                if let Some(outer_arr) = body.as_array() {
-                                    if let Some(inner_arr) =
-                                        outer_arr.get(0).and_then(|v| v.as_array())
-                                    {
-                                        for part in inner_arr {
-                                            if let Some(t) = part.get(0).and_then(|v| v.as_str()) {
-                                                translated.push_str(t);
+                        info!(
+                            "[LLM] google_translate_free chunk fan-out: items={} max_concurrency={}",
+                            texts.len(),
+                            GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY
+                        );
+                        let base_url = config.base_url.clone();
+                        let translations = run_google_translate_free_requests_in_order(
+                            texts,
+                            GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY,
+                            move |index, text| {
+                                let client = client.clone();
+                                let base_url = base_url.clone();
+                                let target_language = target_language.clone();
+                                async move {
+                                    execute_google_translate_free_request(
+                                        index,
+                                        text,
+                                        target_language,
+                                        move |text, target_language| {
+                                            let client = client.clone();
+                                            let base_url = base_url.clone();
+                                            async move {
+                                                fetch_google_translate_free_translation(
+                                                    &client,
+                                                    base_url.as_str(),
+                                                    target_language.as_str(),
+                                                    text.as_str(),
+                                                )
+                                                .await
                                             }
-                                        }
-                                    }
+                                        },
+                                        |delay| async move {
+                                            tokio::time::sleep(delay).await;
+                                        },
+                                    )
+                                    .await
                                 }
-                                if translated.is_empty() {
-                                    return Err("Empty translation".to_string());
-                                }
-                                Ok(translated)
-                            }
-                        });
-
-                        let results = futures_util::future::join_all(futures).await;
-                        let mut translations = Vec::new();
-                        for r in results {
-                            translations.push(r?);
-                        }
+                            },
+                        )
+                        .await?;
                         Ok(serde_json::to_string(&translations).unwrap_or_default())
                     }
                 })
@@ -1676,6 +2023,10 @@ pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<String>, S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
 
     fn sample_segments() -> Vec<LlmSegmentInput> {
         vec![
@@ -1720,11 +2071,7 @@ mod tests {
         ]
     }
 
-    fn sample_summary_template(
-        id: &str,
-        name: &str,
-        instructions: &str,
-    ) -> SummaryTemplateConfig {
+    fn sample_summary_template(id: &str, name: &str, instructions: &str) -> SummaryTemplateConfig {
         SummaryTemplateConfig {
             id: id.to_string(),
             name: name.to_string(),
@@ -1919,12 +2266,7 @@ mod tests {
             "Meeting",
             "1. Meeting overview.\n2. Decisions made.\n3. Action items with owners when the transcript names them.",
         );
-        let prompt = build_summary_chunk_prompt(
-            &template,
-            &sample_summary_segments()[..2],
-            1,
-            2,
-        );
+        let prompt = build_summary_chunk_prompt(&template, &sample_summary_segments()[..2], 1, 2);
 
         assert!(prompt.contains("Use the same language as the transcript."));
         assert!(prompt.contains("Meeting overview."));
@@ -1956,6 +2298,103 @@ mod tests {
         assert_eq!(chunks[0][0].id, "1");
         assert_eq!(chunks[1][0].id, "2");
         assert_eq!(chunks[2][0].id, "3");
+    }
+
+    #[test]
+    fn parse_google_translate_free_retry_after_clamps_seconds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(RETRY_AFTER, reqwest::header::HeaderValue::from_static("9"));
+
+        assert_eq!(
+            parse_google_translate_free_retry_after(&headers),
+            Some(Duration::from_secs(5))
+        );
+    }
+
+    #[test]
+    fn plan_segment_task_chunks_uses_dynamic_prompt_budget() {
+        let segments = vec![
+            LlmSegmentInput {
+                id: "1".to_string(),
+                text: "AAAAAA".to_string(),
+            },
+            LlmSegmentInput {
+                id: "2".to_string(),
+                text: "BBBBBB".to_string(),
+            },
+            LlmSegmentInput {
+                id: "3".to_string(),
+                text: "CCCCCC".to_string(),
+            },
+        ];
+        let mut build_prompt = |chunk: &[LlmSegmentInput]| {
+            chunk
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<Vec<_>>()
+                .join("|")
+        };
+
+        let planned = plan_segment_task_chunks(
+            "task-dynamic-1",
+            LlmTaskType::Polish,
+            &segments,
+            None,
+            19,
+            &mut build_prompt,
+        );
+
+        assert_eq!(
+            planned
+                .iter()
+                .map(|chunk| (chunk.start, chunk.end))
+                .collect::<Vec<_>>(),
+            vec![(0, 2), (2, 3)]
+        );
+        assert_eq!(planned[0].prompt, "AAAAAA|BBBBBB");
+        assert_eq!(planned[1].prompt, "CCCCCC");
+    }
+
+    #[test]
+    fn plan_segment_task_chunks_context_and_keywords_reduce_capacity() {
+        let segments = sample_segments();
+        let context = "Project roadmap context. ".repeat(3);
+        let keywords = "Sona, roadmap, launch. ".repeat(3);
+        let without_context_two =
+            prompt_char_count(&build_polish_prompt(&segments[..2], None, None));
+        let with_context_one = prompt_char_count(&build_polish_prompt(
+            &segments[..1],
+            Some(&context),
+            Some(&keywords),
+        ));
+        let with_context_two = prompt_char_count(&build_polish_prompt(
+            &segments[..2],
+            Some(&context),
+            Some(&keywords),
+        ));
+        let budget = with_context_one.max(without_context_two);
+
+        assert!(budget < with_context_two);
+
+        let without_context = plan_segment_task_chunks(
+            "task-dynamic-2",
+            LlmTaskType::Polish,
+            &segments,
+            None,
+            budget,
+            &mut |chunk| build_polish_prompt(chunk, None, None),
+        );
+        let with_context = plan_segment_task_chunks(
+            "task-dynamic-3",
+            LlmTaskType::Polish,
+            &segments,
+            None,
+            budget,
+            &mut |chunk| build_polish_prompt(chunk, Some(&context), Some(&keywords)),
+        );
+
+        assert!(without_context[0].end - without_context[0].start >= 2);
+        assert_eq!(with_context[0].end - with_context[0].start, 1);
     }
 
     #[test]
@@ -2128,6 +2567,432 @@ mod tests {
             .expect_err("second chunk should fail");
 
         assert_eq!(err, "translate chunk 2 failed: boom");
+    }
+
+    #[tokio::test]
+    async fn run_segment_task_uses_dynamic_prompt_budget_when_chunk_size_is_missing() {
+        let long_text = "A".repeat(7_000);
+        let segments = vec![
+            LlmSegmentInput {
+                id: "1".to_string(),
+                text: long_text.clone(),
+            },
+            LlmSegmentInput {
+                id: "2".to_string(),
+                text: long_text.clone(),
+            },
+            LlmSegmentInput {
+                id: "3".to_string(),
+                text: long_text,
+            },
+        ];
+        let mut chunk_events = Vec::new();
+        let mut progress_events = Vec::new();
+
+        let result = run_segment_task(
+            "task-3",
+            LlmTaskType::Translate,
+            &segments,
+            None,
+            |chunk| {
+                chunk
+                    .iter()
+                    .map(|segment| format!("{}:{}", segment.id, segment.text))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            },
+            parse_translate_chunk,
+            {
+                let mut call_count = 0usize;
+                move |_prompt| {
+                    call_count += 1;
+                    let response = match call_count {
+                        1 => r#"[{"id":"1","translation":"One"},{"id":"2","translation":"Two"}]"#,
+                        2 => r#"[{"id":"3","translation":"Three"}]"#,
+                        _ => unreachable!(),
+                    }
+                    .to_string();
+
+                    Box::pin(async move { Ok(response) })
+                }
+            },
+            |payload| {
+                chunk_events.push(payload);
+                Ok(())
+            },
+            |payload| {
+                progress_events.push(payload);
+                Ok(())
+            },
+        )
+        .await
+        .expect("dynamic task should succeed");
+
+        assert_eq!(
+            result,
+            vec![
+                TranslatedSegment {
+                    id: "1".to_string(),
+                    translation: "One".to_string(),
+                },
+                TranslatedSegment {
+                    id: "2".to_string(),
+                    translation: "Two".to_string(),
+                },
+                TranslatedSegment {
+                    id: "3".to_string(),
+                    translation: "Three".to_string(),
+                },
+            ]
+        );
+        assert_eq!(
+            chunk_events
+                .iter()
+                .map(|payload| {
+                    payload
+                        .items
+                        .iter()
+                        .map(|item| item.id.as_str())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>(),
+            vec![vec!["1", "2"], vec!["3"]]
+        );
+        assert_eq!(
+            progress_events,
+            vec![
+                LlmTaskProgressPayload {
+                    task_id: "task-3".to_string(),
+                    task_type: LlmTaskType::Translate,
+                    completed_chunks: 1,
+                    total_chunks: 2,
+                },
+                LlmTaskProgressPayload {
+                    task_id: "task-3".to_string(),
+                    task_type: LlmTaskType::Translate,
+                    completed_chunks: 2,
+                    total_chunks: 2,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn run_segment_task_sends_single_over_budget_segment_alone() {
+        let huge_text = "A".repeat(DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET + 100);
+        let segments = vec![
+            LlmSegmentInput {
+                id: "1".to_string(),
+                text: huge_text,
+            },
+            LlmSegmentInput {
+                id: "2".to_string(),
+                text: "small".to_string(),
+            },
+            LlmSegmentInput {
+                id: "3".to_string(),
+                text: "tiny".to_string(),
+            },
+        ];
+        let mut chunk_events = Vec::new();
+        let mut progress_events = Vec::new();
+
+        let result = run_segment_task(
+            "task-4",
+            LlmTaskType::Translate,
+            &segments,
+            None,
+            |chunk| {
+                chunk
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join("")
+            },
+            parse_translate_chunk,
+            {
+                let mut call_count = 0usize;
+                move |_prompt| {
+                    call_count += 1;
+                    let response = match call_count {
+                        1 => r#"[{"id":"1","translation":"Huge"}]"#,
+                        2 => {
+                            r#"[{"id":"2","translation":"Small"},{"id":"3","translation":"Tiny"}]"#
+                        }
+                        _ => unreachable!(),
+                    }
+                    .to_string();
+
+                    Box::pin(async move { Ok(response) })
+                }
+            },
+            |payload| {
+                chunk_events.push(payload);
+                Ok(())
+            },
+            |payload| {
+                progress_events.push(payload);
+                Ok(())
+            },
+        )
+        .await
+        .expect("single-over-budget task should succeed");
+
+        assert_eq!(
+            result,
+            vec![
+                TranslatedSegment {
+                    id: "1".to_string(),
+                    translation: "Huge".to_string(),
+                },
+                TranslatedSegment {
+                    id: "2".to_string(),
+                    translation: "Small".to_string(),
+                },
+                TranslatedSegment {
+                    id: "3".to_string(),
+                    translation: "Tiny".to_string(),
+                },
+            ]
+        );
+        assert_eq!(
+            chunk_events
+                .iter()
+                .map(|payload| {
+                    payload
+                        .items
+                        .iter()
+                        .map(|item| item.id.as_str())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>(),
+            vec![vec!["1"], vec!["2", "3"]]
+        );
+        assert_eq!(
+            progress_events,
+            vec![
+                LlmTaskProgressPayload {
+                    task_id: "task-4".to_string(),
+                    task_type: LlmTaskType::Translate,
+                    completed_chunks: 1,
+                    total_chunks: 2,
+                },
+                LlmTaskProgressPayload {
+                    task_id: "task-4".to_string(),
+                    task_type: LlmTaskType::Translate,
+                    completed_chunks: 2,
+                    total_chunks: 2,
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn run_google_translate_free_requests_in_order_limits_concurrency() {
+        let active = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+
+        let translations = run_google_translate_free_requests_in_order(
+            vec![
+                "one".to_string(),
+                "two".to_string(),
+                "three".to_string(),
+                "four".to_string(),
+            ],
+            2,
+            {
+                let active = active.clone();
+                let max_seen = max_seen.clone();
+                move |index, text| {
+                    let active = active.clone();
+                    let max_seen = max_seen.clone();
+                    async move {
+                        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        max_seen.fetch_max(current, Ordering::SeqCst);
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                        active.fetch_sub(1, Ordering::SeqCst);
+                        Ok((index, text.to_uppercase()))
+                    }
+                }
+            },
+        )
+        .await
+        .expect("concurrency-limited run should succeed");
+
+        assert_eq!(
+            translations,
+            vec![
+                "ONE".to_string(),
+                "TWO".to_string(),
+                "THREE".to_string(),
+                "FOUR".to_string(),
+            ]
+        );
+        assert!(max_seen.load(Ordering::SeqCst) <= 2);
+    }
+
+    #[tokio::test]
+    async fn execute_google_translate_free_request_retries_429_then_succeeds() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let delays = Arc::new(Mutex::new(Vec::new()));
+
+        let result = execute_google_translate_free_request(
+            7,
+            "hello".to_string(),
+            "ja".to_string(),
+            {
+                let attempts = attempts.clone();
+                move |_text, _target| {
+                    let attempts = attempts.clone();
+                    async move {
+                        let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                        if attempt <= 2 {
+                            Err(GoogleTranslateFreeAttemptError::HttpStatus {
+                                status: StatusCode::TOO_MANY_REQUESTS,
+                                retry_after: None,
+                            })
+                        } else {
+                            Ok("こんにちは".to_string())
+                        }
+                    }
+                }
+            },
+            {
+                let delays = delays.clone();
+                move |delay| {
+                    let delays = delays.clone();
+                    async move {
+                        delays.lock().unwrap().push(delay);
+                    }
+                }
+            },
+        )
+        .await
+        .expect("request should succeed after retries");
+
+        assert_eq!(result, (7, "こんにちは".to_string()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        assert_eq!(
+            *delays.lock().unwrap(),
+            vec![Duration::from_millis(500), Duration::from_millis(1000)]
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_google_translate_free_request_prefers_retry_after_and_clamps() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let delays = Arc::new(Mutex::new(Vec::new()));
+
+        let result = execute_google_translate_free_request(
+            1,
+            "hello".to_string(),
+            "fr".to_string(),
+            {
+                let attempts = attempts.clone();
+                move |_text, _target| {
+                    let attempts = attempts.clone();
+                    async move {
+                        let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                        if attempt == 1 {
+                            Err(GoogleTranslateFreeAttemptError::HttpStatus {
+                                status: StatusCode::TOO_MANY_REQUESTS,
+                                retry_after: Some(Duration::from_secs(9)),
+                            })
+                        } else {
+                            Ok("bonjour".to_string())
+                        }
+                    }
+                }
+            },
+            {
+                let delays = delays.clone();
+                move |delay| {
+                    let delays = delays.clone();
+                    async move {
+                        delays.lock().unwrap().push(delay);
+                    }
+                }
+            },
+        )
+        .await
+        .expect("request should succeed after honoring retry-after");
+
+        assert_eq!(result, (1, "bonjour".to_string()));
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(*delays.lock().unwrap(), vec![Duration::from_secs(5)]);
+    }
+
+    #[tokio::test]
+    async fn execute_google_translate_free_request_does_not_retry_non_429() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let slept = Arc::new(AtomicUsize::new(0));
+
+        let err = execute_google_translate_free_request(
+            2,
+            "hello".to_string(),
+            "de".to_string(),
+            {
+                let attempts = attempts.clone();
+                move |_text, _target| {
+                    let attempts = attempts.clone();
+                    async move {
+                        attempts.fetch_add(1, Ordering::SeqCst);
+                        Err(GoogleTranslateFreeAttemptError::HttpStatus {
+                            status: StatusCode::INTERNAL_SERVER_ERROR,
+                            retry_after: None,
+                        })
+                    }
+                }
+            },
+            {
+                let slept = slept.clone();
+                move |_delay| {
+                    let slept = slept.clone();
+                    async move {
+                        slept.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            },
+        )
+        .await
+        .expect_err("non-429 should fail immediately");
+
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(slept.load(Ordering::SeqCst), 0);
+        assert!(err.contains("500 Internal Server Error"));
+        assert!(err.contains("after 1 attempt"));
+    }
+
+    #[tokio::test]
+    async fn run_google_translate_free_requests_in_order_fails_chunk_when_retries_exhaust() {
+        let err = run_google_translate_free_requests_in_order(
+            vec!["first".to_string(), "second".to_string()],
+            2,
+            move |index, text| async move {
+                if index == 0 {
+                    execute_google_translate_free_request(
+                        index,
+                        text,
+                        "es".to_string(),
+                        |_text, _target| async {
+                            Err(GoogleTranslateFreeAttemptError::HttpStatus {
+                                status: StatusCode::TOO_MANY_REQUESTS,
+                                retry_after: None,
+                            })
+                        },
+                        |_delay| async {},
+                    )
+                    .await
+                } else {
+                    Ok((index, text))
+                }
+            },
+        )
+        .await
+        .expect_err("chunk should fail when a request exhausts retries");
+
+        assert!(err.contains("429 Too Many Requests"));
+        assert!(err.contains("after 3 attempts"));
     }
 
     #[tokio::test]
