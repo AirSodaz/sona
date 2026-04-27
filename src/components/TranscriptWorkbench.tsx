@@ -15,12 +15,14 @@ interface TranscriptWorkbenchProps {
   onClose: () => void;
   /** Optional title to display. If not provided, will use the one from transcriptStore. */
   title?: string;
+  /** Optional default type for the icon if the item has no icon set. */
+  defaultIconType?: 'recording' | 'batch';
 }
 
 /**
  * Renders an icon based on the icon string or fallback to mode default
  */
-function renderHeaderIcon(icon: string | null, mode: string): React.ReactNode {
+function renderHeaderIcon(icon: string | null, defaultType: string): React.ReactNode {
   if (icon) {
     if (icon.startsWith('system:')) {
       const iconName = icon.replace('system:', '');
@@ -36,14 +38,14 @@ function renderHeaderIcon(icon: string | null, mode: string): React.ReactNode {
     }
   }
 
-  return mode === 'batch' ? <FileTextIcon /> : <MicIcon />;
+  return defaultType === 'batch' ? <FileTextIcon /> : <MicIcon />;
 }
 
 /**
  * A unified workbench for transcript editing.
  * Combines the editor, audio player, AI summary access, and standard header.
  */
-export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWorkbenchProps): React.JSX.Element | null {
+export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconType }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
@@ -67,6 +69,8 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
   // Summary button logic
   const summaryEnabled = config.summaryEnabled ?? true;
   const showSummaryButton = summaryEnabled && hasSegments;
+
+  const displayIconType = defaultIconType || (mode === 'batch' ? 'batch' : 'recording');
 
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
@@ -93,7 +97,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
         <div className="projects-detail-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)' }}>
-              {renderHeaderIcon(storeIcon, mode)}
+              {renderHeaderIcon(storeIcon, displayIconType)}
             </div>
             <h4 
               style={{ 
@@ -168,7 +172,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle }: TranscriptWo
         onClose={() => setIsRenameModalOpen(false)}
         initialTitle={displayTitle}
         initialIcon={storeIcon || undefined}
-        defaultType={mode === 'batch' ? 'batch' : 'recording'}
+        defaultType={displayIconType === 'batch' ? 'batch' : 'recording'}
         onRename={handlePerformRename}
         onAiAction={async () => {
           return await generateAiTitle(segments);

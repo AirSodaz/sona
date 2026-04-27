@@ -2134,10 +2134,13 @@ export function ProjectsView(): React.JSX.Element {
 
       {selectedItem && (
           <aside className="projects-detail-pane">
-            <TranscriptWorkbench onClose={clearOpenedItem} title={selectedItem.title} />
+            <TranscriptWorkbench 
+              onClose={clearOpenedItem} 
+              title={selectedItem.title} 
+              defaultIconType={selectedItem.type} 
+            />
           </aside>
       )}
-
       <ProjectCreateModal
         isOpen={isCreateModalOpen}
         name={newProjectName}

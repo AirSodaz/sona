@@ -116,40 +116,37 @@ function App(): React.JSX.Element {
 
       {/* Main Content */}
       <main id="main-content" className="app-main">
-        {isProjectsMode ? (
-          <div className="projects-mode-shell">
-            <ProjectsView />
-          </div>
-        ) : (
-          <div className="workspace-mode-shell">
-            <div className="panel-container">
-              {/* Left Panel - Input */}
-              <div className="panel panel-left">
-                <div className="panel-header">
-                  <h2>{panelTitle}</h2>
-                </div>
-                <div className="panel-content">
-                  <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
-                    <LiveRecord />
-                  </div>
-                  {mode === 'batch' && (
-                    <BatchImport
-                      onOpenAutomation={() => {
-                        setSettingsInitialTab('automation');
-                        setIsSettingsOpen(true);
-                      }}
-                    />
-                  )}
-                </div>
+        <div className="projects-mode-shell" style={{ display: isProjectsMode ? undefined : 'none' }}>
+          <ProjectsView />
+        </div>
+        <div className="workspace-mode-shell" style={{ display: !isProjectsMode ? undefined : 'none' }}>
+          <div className="panel-container">
+            {/* Left Panel - Input */}
+            <div className="panel panel-left">
+              <div className="panel-header">
+                <h2>{panelTitle}</h2>
               </div>
-
-              {/* Right Panel - Editor */}
-              <div className="panel panel-right">
-                <TranscriptWorkbench onClose={clearSegments} />
+              <div className="panel-content">
+                <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
+                  <LiveRecord />
+                </div>
+                {mode === 'batch' && (
+                  <BatchImport
+                    onOpenAutomation={() => {
+                      setSettingsInitialTab('automation');
+                      setIsSettingsOpen(true);
+                    }}
+                  />
+                )}
               </div>
             </div>
+
+            {/* Right Panel - Editor */}
+            <div className="panel panel-right">
+              <TranscriptWorkbench onClose={clearSegments} />
+            </div>
           </div>
-        )}
+        </div>
       </main>
 
       {/* Live Caption Overlay - rendered at app level to survive tab switches */}
