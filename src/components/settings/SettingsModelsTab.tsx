@@ -274,6 +274,11 @@ export function SettingsModelsTab(): React.JSX.Element {
         return label;
     }, []);
 
+    const speakerDisabledOption = useMemo(() => ({
+        value: '',
+        label: t('settings.value_off', { defaultValue: 'Off' }),
+    }), [t]);
+
     const streamingOptions = useMemo(() => {
         return PRESET_MODELS
             .filter(m => m.modes?.includes('streaming'))
@@ -295,24 +300,26 @@ export function SettingsModelsTab(): React.JSX.Element {
     }, [getModelLabel, installedModels, selectedOfflineModelId]);
 
     const speakerSegmentationOptions = useMemo(() => {
-        return PRESET_MODELS
+        const installedOptions = PRESET_MODELS
             .filter(m => m.type === 'speaker-segmentation')
             .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerSegmentationModelId)
             .map(model => ({
                 value: model.id,
                 label: getModelLabel(model)
             }));
-    }, [getModelLabel, installedModels, selectedSpeakerSegmentationModelId]);
+        return [speakerDisabledOption, ...installedOptions];
+    }, [getModelLabel, installedModels, selectedSpeakerSegmentationModelId, speakerDisabledOption]);
 
     const speakerEmbeddingOptions = useMemo(() => {
-        return PRESET_MODELS
+        const installedOptions = PRESET_MODELS
             .filter(m => m.type === 'speaker-embedding')
             .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerEmbeddingModelId)
             .map(model => ({
                 value: model.id,
                 label: getModelLabel(model)
             }));
-    }, [getModelLabel, installedModels, selectedSpeakerEmbeddingModelId]);
+        return [speakerDisabledOption, ...installedOptions];
+    }, [getModelLabel, installedModels, selectedSpeakerEmbeddingModelId, speakerDisabledOption]);
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
@@ -370,6 +377,7 @@ export function SettingsModelsTab(): React.JSX.Element {
                             placeholder={t('settings.select_speaker_segmentation_model', { defaultValue: 'Select speaker segmentation model' })}
                             options={speakerSegmentationOptions}
                             style={{ flex: 1 }}
+                            aria-label={t('settings.speaker_segmentation_model_label', { defaultValue: 'Speaker Segmentation Model' })}
                         />
                     </div>
                 </SettingsItem>
@@ -386,6 +394,7 @@ export function SettingsModelsTab(): React.JSX.Element {
                             placeholder={t('settings.select_speaker_embedding_model', { defaultValue: 'Select speaker embedding model' })}
                             options={speakerEmbeddingOptions}
                             style={{ flex: 1 }}
+                            aria-label={t('settings.speaker_embedding_model_label', { defaultValue: 'Speaker Embedding Model' })}
                         />
                     </div>
                 </SettingsItem>

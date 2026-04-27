@@ -148,4 +148,81 @@ describe('ModelService', () => {
             expect(zhLocale.settings.descriptions.qwen3_asr).toBeTruthy();
         });
     });
+
+    describe('speaker model metadata', () => {
+        const segmentationIds = [
+            'sherpa-onnx-pyannote-segmentation-3-0',
+            'sherpa-onnx-reverb-diarization-v1',
+            'sherpa-onnx-reverb-diarization-v2',
+        ];
+        const embeddingIds = [
+            '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+            '3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx',
+            '3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx',
+            '3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx',
+        ];
+
+        it('registers the expected speaker segmentation archives and speaker embedding files', () => {
+            const speakerSegmentationModels = PRESET_MODELS.filter((model) => model.type === 'speaker-segmentation');
+            const speakerEmbeddingModels = PRESET_MODELS.filter((model) => model.type === 'speaker-embedding');
+
+            expect(speakerSegmentationModels.map((model) => model.id)).toEqual(segmentationIds);
+            expect(speakerEmbeddingModels.map((model) => model.id)).toEqual(embeddingIds);
+
+            expect(speakerSegmentationModels).toEqual([
+                expect.objectContaining({
+                    id: 'sherpa-onnx-pyannote-segmentation-3-0',
+                    name: 'Pyannote 3.0',
+                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+                    type: 'speaker-segmentation',
+                }),
+                expect.objectContaining({
+                    id: 'sherpa-onnx-reverb-diarization-v1',
+                    name: 'Reverb Diarization V1',
+                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2',
+                    type: 'speaker-segmentation',
+                }),
+                expect.objectContaining({
+                    id: 'sherpa-onnx-reverb-diarization-v2',
+                    name: 'Reverb Diarization V2',
+                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2',
+                    type: 'speaker-segmentation',
+                }),
+            ]);
+
+            expect(speakerEmbeddingModels).toEqual([
+                expect.objectContaining({
+                    id: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+                    name: '3DSpeaker CAMPPlus',
+                    isArchive: false,
+                    filename: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+                }),
+                expect.objectContaining({
+                    id: '3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx',
+                    name: '3DSpeaker ERes2NetV2',
+                    isArchive: false,
+                    filename: '3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx',
+                }),
+                expect.objectContaining({
+                    id: '3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx',
+                    name: '3DSpeaker ERes2Net Large',
+                    isArchive: false,
+                    filename: '3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx',
+                }),
+                expect.objectContaining({
+                    id: '3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx',
+                    name: '3DSpeaker ERes2Net',
+                    isArchive: false,
+                    filename: '3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx',
+                }),
+            ]);
+        });
+
+        it('resolves archive speaker models to directories and file speaker models to filenames', async () => {
+            await expect(modelService.getModelPath('sherpa-onnx-reverb-diarization-v1'))
+                .resolves.toBe('/app/data/models/sherpa-onnx-reverb-diarization-v1');
+            await expect(modelService.getModelPath('3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx'))
+                .resolves.toBe('/app/data/models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx');
+        });
+    });
 });

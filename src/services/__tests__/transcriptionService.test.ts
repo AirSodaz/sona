@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => {
             punctuationModelPath: '',
             vadModelPath: '',
             vadBufferSize: 5.0,
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            speakerProfiles: [],
         } as Record<string, any>,
         getModelRules: vi.fn(() => ({
             requiresPunctuation: false,
@@ -100,6 +103,9 @@ describe('TranscriptionService voice typing diagnostics', () => {
             punctuationModelPath: '',
             vadModelPath: '',
             vadBufferSize: 5.0,
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            speakerProfiles: [],
         };
         mocks.invoke.mockImplementation(async () => undefined);
     });
@@ -208,5 +214,69 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 replacedToEmpty: true,
             })
         );
+    });
+
+    it('sends null speakerProcessing for batch transcription when either speaker model is off', async () => {
+        mocks.config = {
+            ...mocks.config,
+            speakerSegmentationModelPath: '/models/speaker-segmentation',
+            speakerEmbeddingModelPath: '',
+            speakerProfiles: [
+                { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
+            ],
+        };
+        mocks.invoke.mockImplementation((async (...args: any[]) => {
+            const [command] = args;
+            if (command === 'process_batch_file') {
+                return [];
+            }
+            return undefined;
+        }) as any);
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        service.setModelPath('/models/offline');
+
+        await service.transcribeFile('C:/audio/demo.wav');
+
+        expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+            speakerProcessing: null,
+        }));
+    });
+
+    it('sends speakerProcessing for batch transcription when both speaker models are configured', async () => {
+        mocks.config = {
+            ...mocks.config,
+            speakerSegmentationModelPath: '/models/speaker-segmentation',
+            speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+            speakerProfiles: [
+                { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
+            ],
+        };
+        mocks.invoke.mockImplementation((async (...args: any[]) => {
+            const [command] = args;
+            if (command === 'process_batch_file') {
+                return [];
+            }
+            return undefined;
+        }) as any);
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        service.setModelPath('/models/offline');
+
+        await service.transcribeFile('C:/audio/demo.wav');
+
+        expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+            speakerProcessing: {
+                speakerSegmentationModelPath: '/models/speaker-segmentation',
+                speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+                speakerProfiles: [
+                    { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
+                ],
+            },
+        }));
     });
 });

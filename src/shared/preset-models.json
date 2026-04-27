@@ -316,12 +316,12 @@
   },
   {
     "id": "sherpa-onnx-pyannote-segmentation-3-0",
-    "name": "Speaker Segmentation",
+    "name": "Pyannote 3.0",
     "description": "settings.descriptions.speaker_segmentation",
     "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
     "type": "speaker-segmentation",
     "language": "multi",
-    "size": "See release",
+    "size": "6.64 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -329,15 +329,91 @@
     "engine": "sherpa-onnx"
   },
   {
-    "id": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k",
-    "name": "Speaker Embedding",
+    "id": "sherpa-onnx-reverb-diarization-v1",
+    "name": "Reverb Diarization V1",
+    "description": "settings.descriptions.speaker_segmentation",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2",
+    "type": "speaker-segmentation",
+    "language": "multi",
+    "size": "10.4 MB",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "sherpa-onnx-reverb-diarization-v2",
+    "name": "Reverb Diarization V2",
+    "description": "settings.descriptions.speaker_segmentation",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2",
+    "type": "speaker-segmentation",
+    "language": "multi",
+    "size": "242 MB",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "name": "3DSpeaker CAMPPlus",
     "description": "settings.descriptions.speaker_embedding",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "type": "speaker-embedding",
+    "language": "zh,en",
+    "size": "27 MB",
+    "isArchive": false,
+    "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+    "name": "3DSpeaker ERes2NetV2",
+    "description": "settings.descriptions.speaker_embedding",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "type": "speaker-embedding",
     "language": "zh",
-    "size": "See release",
+    "size": "68.1 MB",
     "isArchive": false,
-    "filename": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+    "name": "3DSpeaker ERes2Net Large",
+    "description": "settings.descriptions.speaker_embedding",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+    "type": "speaker-embedding",
+    "language": "zh",
+    "size": "111 MB",
+    "isArchive": false,
+    "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+    "name": "3DSpeaker ERes2Net",
+    "description": "settings.descriptions.speaker_embedding",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+    "type": "speaker-embedding",
+    "language": "zh",
+    "size": "210 MB",
+    "isArchive": false,
+    "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
