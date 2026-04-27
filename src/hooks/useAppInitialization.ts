@@ -17,6 +17,7 @@ import { useFontEffect } from './useFontEffect';
 import { useConfigPersistence } from './useConfigPersistence';
 import { useTraySyncEffect } from './useTraySyncEffect';
 import { voiceTypingService } from '../services/voiceTypingService';
+import { healthCheckService } from '../services/healthCheckService';
 
 /**
  * Hook to handle application initialization.
@@ -119,6 +120,9 @@ export function useAppInitialization() {
 
                 // Initialize Voice Typing shortcut listeners (Main Window Only)
                 voiceTypingService.init();
+
+                // Run background health check to ensure data consistency
+                healthCheckService.runHealthCheck();
 
             } catch (e) {
                 logger.error('Failed to initialize app state:', e);
