@@ -345,6 +345,7 @@ const DEFAULT_LLM_STATE: LlmState = {
 const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
     activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID,
     record: undefined,
+    streamingContent: undefined,
     isGenerating: false,
     generationProgress: 0,
 };
@@ -657,6 +658,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         get().setSummaryState({
             activeTemplateId,
             record,
+            streamingContent: undefined,
             isGenerating: false,
             generationProgress: 0,
         }, historyId);

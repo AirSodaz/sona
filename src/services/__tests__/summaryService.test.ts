@@ -7,6 +7,7 @@ import { DEFAULT_CONFIG } from '../../stores/configStore';
 
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
+const mockListenToLlmTaskText = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('../llmTaskService', async () => {
     ...actual,
     createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
     listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
+    listenToLlmTaskText: (...args: unknown[]) => mockListenToLlmTaskText(...args),
   };
 });
 
@@ -49,6 +51,7 @@ describe('summaryService', () => {
     vi.clearAllMocks();
     mockCreateLlmTaskId.mockReturnValue('summary-task-id');
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockListenToLlmTaskText.mockResolvedValue(vi.fn());
 
     useTranscriptStore.setState({
       segments: [],
@@ -72,6 +75,10 @@ describe('summaryService', () => {
 
     mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
       onProgress({ taskId: 'summary-task-id', taskType: 'summary', completedChunks: 1, totalChunks: 2 });
+      return vi.fn();
+    });
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Meeting stream', delta: 'Meeting stream' });
       return vi.fn();
     });
     vi.mocked(invoke).mockResolvedValue({
@@ -111,7 +118,59 @@ describe('summaryService', () => {
       }),
     );
     expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Meeting summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-a').streamingContent).toBeUndefined();
     expect(useTranscriptStore.getState().getSummaryState('history-a').isGenerating).toBe(false);
+  });
+
+  it('updates temporary streaming content before the final summary record is written', async () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true },
+      ],
+      sourceHistoryId: null,
+    });
+
+    let invokeResolved = false;
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Partial summary', delta: 'Partial ' });
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe('Partial summary');
+      expect(useTranscriptStore.getState().getSummaryState('current').record).toBeUndefined();
+      return vi.fn();
+    });
+    vi.mocked(invoke).mockImplementation(async () => {
+      invokeResolved = true;
+      return {
+        templateId: 'general',
+        content: 'Final summary',
+      };
+    });
+
+    await summaryService.generateSummary('general');
+
+    expect(invokeResolved).toBe(true);
+    expect(useTranscriptStore.getState().getSummaryState('current').record?.content).toBe('Final summary');
+    expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBeUndefined();
+  });
+
+  it('keeps streamed summary text in memory when generation fails', async () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true },
+      ],
+      sourceHistoryId: null,
+    });
+
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Recoverable partial', delta: 'Recoverable partial' });
+      return vi.fn();
+    });
+    vi.mocked(invoke).mockRejectedValue(new Error('network failed'));
+
+    await expect(summaryService.generateSummary('general')).rejects.toThrow('network failed');
+
+    expect(useTranscriptStore.getState().getSummaryState('current').record).toBeUndefined();
+    expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe('Recoverable partial');
+    expect(useTranscriptStore.getState().getSummaryState('current').isGenerating).toBe(false);
   });
 
   it('moves a current summary result onto the new history id after save', async () => {

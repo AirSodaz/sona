@@ -56,9 +56,13 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     [config.summaryCustomTemplates, t],
   );
   const record = summaryState?.record;
+  const streamingContent = summaryState?.streamingContent || '';
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
+  const displayContent = isGenerating
+    ? streamingContent || record?.content || ''
+    : record?.content || streamingContent;
 
   const persistDraftIfNeeded = useCallback(async () => {
     if (saveInFlightRef.current) {
@@ -91,8 +95,11 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   }, [onClose, persistDraftIfNeeded]);
 
   useEffect(() => {
-    setEditContent(record?.content || '');
-    editContentRef.current = record?.content || '';
+    setEditContent(displayContent);
+    editContentRef.current = displayContent;
+  }, [displayContent]);
+
+  useEffect(() => {
     lastSavedContentRef.current = record?.content || '';
   }, [record?.content]);
 

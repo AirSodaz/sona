@@ -16,6 +16,7 @@ import { normalizeError } from '../utils/errorUtils';
 import {
   createLlmTaskId,
   listenToLlmTaskProgress,
+  listenToLlmTaskText,
   SummarizeTranscriptRequest,
   SummarySegmentInput,
   TranscriptSummaryResult,
@@ -30,6 +31,7 @@ function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined)
   return (
     summaryState.isGenerating ||
     summaryState.generationProgress > 0 ||
+    !!summaryState.streamingContent ||
     !!summaryState.record ||
     summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
   );
@@ -135,6 +137,7 @@ class SummaryService {
         generatedAt: new Date().toISOString(),
         sourceFingerprint,
       },
+      streamingContent: undefined,
     }, targetHistoryId);
 
     if (targetHistoryId !== 'current') {
@@ -171,12 +174,19 @@ class SummaryService {
       activeTemplateId,
       isGenerating: true,
       generationProgress: 0,
+      streamingContent: '',
     }, jobHistoryId);
 
     const unlistenProgress = await listenToLlmTaskProgress(taskId, 'summary', ({ completedChunks, totalChunks }) => {
       const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
       useTranscriptStore.getState().updateSummaryState({
         generationProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
+      }, targetHistoryId);
+    });
+    const unlistenText = await listenToLlmTaskText(taskId, 'summary', ({ text }) => {
+      const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
+      useTranscriptStore.getState().updateSummaryState({
+        streamingContent: text,
       }, targetHistoryId);
     });
 
@@ -200,6 +210,7 @@ class SummaryService {
       useTranscriptStore.getState().updateSummaryState({
         activeTemplateId: resultTemplateId,
         record,
+        streamingContent: undefined,
       }, targetHistoryId);
 
       if (targetHistoryId !== 'current') {
@@ -213,6 +224,7 @@ class SummaryService {
       throw new Error(normalizeError(error).message);
     } finally {
       unlistenProgress();
+      unlistenText();
 
       const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
       useTranscriptStore.getState().updateSummaryState({

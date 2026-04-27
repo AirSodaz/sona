@@ -4,6 +4,7 @@ import { LlmConfig, ResolvedSummaryTemplate, SummaryTemplateId } from '../types/
 
 export const LLM_TASK_PROGRESS_EVENT = 'llm-task-progress';
 export const LLM_TASK_CHUNK_EVENT = 'llm-task-chunk';
+export const LLM_TASK_TEXT_EVENT = 'llm-task-text';
 
 export type LlmTaskType = 'polish' | 'translate' | 'summary';
 
@@ -65,6 +66,13 @@ export interface LlmTaskProgressPayload {
   totalChunks: number;
 }
 
+export interface LlmTaskTextPayload {
+  taskId: string;
+  taskType: 'summary';
+  text: string;
+  delta: string;
+}
+
 interface LlmTaskChunkPayloadBase<TItems> {
   taskId: string;
   taskType: LlmTaskType;
@@ -107,6 +115,18 @@ export async function listenToLlmTaskChunks<TPayload extends LlmTaskChunkPayload
   return listen<LlmTaskChunkPayload>(LLM_TASK_CHUNK_EVENT, ({ payload }) => {
     if (payload.taskId === taskId && payload.taskType === taskType) {
       void onChunk(payload as TPayload);
+    }
+  });
+}
+
+export async function listenToLlmTaskText(
+  taskId: string,
+  taskType: LlmTaskTextPayload['taskType'],
+  onText: (payload: LlmTaskTextPayload) => void | Promise<void>,
+): Promise<UnlistenFn> {
+  return listen<LlmTaskTextPayload>(LLM_TASK_TEXT_EVENT, ({ payload }) => {
+    if (payload.taskId === taskId && payload.taskType === taskType) {
+      void onText(payload);
     }
   });
 }

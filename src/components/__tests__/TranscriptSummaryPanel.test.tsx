@@ -99,6 +99,7 @@ describe('TranscriptSummaryPanel', () => {
             generatedAt: '2026-04-22T10:00:00.000Z',
             sourceFingerprint: '1:Transcript text:0:1:true',
           },
+          streamingContent: undefined,
           isGenerating: false,
           generationProgress: 0,
         },
@@ -160,6 +161,7 @@ describe('TranscriptSummaryPanel', () => {
             generatedAt: '2026-04-22T10:00:00.000Z',
             sourceFingerprint: '1:Transcript text:0:1:true',
           },
+          streamingContent: undefined,
           isGenerating: false,
           generationProgress: 0,
         },
@@ -221,6 +223,7 @@ describe('TranscriptSummaryPanel', () => {
         current: {
           activeTemplateId: 'general',
           record: undefined,
+          streamingContent: 'Streaming summary text',
           isGenerating: true,
           generationProgress: 42,
         },
@@ -232,6 +235,7 @@ describe('TranscriptSummaryPanel', () => {
     expect(screen.getByText('summary.generating_progress:42')).toBeDefined();
     expect(screen.getByText('summary.generating_short')).toBeDefined();
     expect((screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByDisplayValue('Streaming summary text')).toBeDefined();
   });
 
   it('shows a textarea immediately when no record exists', async () => {
@@ -243,6 +247,7 @@ describe('TranscriptSummaryPanel', () => {
         current: {
           activeTemplateId: 'general',
           record: undefined,
+          streamingContent: undefined,
           isGenerating: false,
           generationProgress: 0,
         },
@@ -253,6 +258,27 @@ describe('TranscriptSummaryPanel', () => {
 
     expect(screen.getByRole('textbox')).toBeDefined();
     expect(screen.queryByRole('button', { name: 'summary.start_writing' })).toBeNull();
+  });
+
+  it('keeps unsaved streamed content visible after generation stops', async () => {
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
+      ],
+      summaryStates: {
+        current: {
+          activeTemplateId: 'general',
+          record: undefined,
+          streamingContent: 'Recoverable streamed summary',
+          isGenerating: false,
+          generationProgress: 0,
+        },
+      },
+    });
+
+    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+
+    expect(screen.getByDisplayValue('Recoverable streamed summary')).toBeDefined();
   });
 
   it('keeps the panel open for manual editing when summary generation is unavailable', () => {

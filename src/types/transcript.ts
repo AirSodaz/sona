@@ -114,6 +114,8 @@ export interface TranscriptSummaryState {
   activeTemplateId: SummaryTemplateId;
   /** Saved summary record. */
   record?: TranscriptSummaryRecord;
+  /** Temporary streamed summary content that is not persisted automatically. */
+  streamingContent?: string;
   /** Whether a summary is currently being generated. */
   isGenerating: boolean;
   /** Progress percentage for summary generation. */
