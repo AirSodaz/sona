@@ -36,6 +36,10 @@ describe('projectStore', () => {
           { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona' },
           { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Sentence case' },
         ],
+        speakerProfiles: [
+          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
+          { id: 'speaker-2', name: 'Bob', enabled: false, samples: [] },
+        ],
       },
     });
     vi.clearAllMocks();
@@ -58,6 +62,7 @@ describe('projectStore', () => {
           enabledTextReplacementSetIds: [],
           enabledHotwordSetIds: [],
           enabledPolishKeywordSetIds: ['kw-1'],
+          enabledSpeakerProfileIds: ['speaker-1'],
         },
       },
     ]);
@@ -67,6 +72,7 @@ describe('projectStore', () => {
 
     expect(projectService.getAll).toHaveBeenCalledWith({
       fallbackEnabledPolishKeywordSetIds: ['kw-1'],
+      fallbackEnabledSpeakerProfileIds: ['speaker-1'],
     });
     expect(useProjectStore.getState().projects).toHaveLength(1);
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
@@ -121,6 +127,10 @@ describe('projectStore', () => {
         voiceTypingMode: 'hold',
         textReplacementSets: [{ id: 'set-1', name: 'Set', enabled: true, ignoreCase: false, rules: [] }],
         hotwordSets: [{ id: 'hot-1', name: 'Hot', enabled: true, rules: [] }],
+        speakerProfiles: [
+          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
+          { id: 'speaker-2', name: 'Bob', enabled: false, samples: [] },
+        ],
         hotwords: [],
       },
     );
@@ -130,6 +140,7 @@ describe('projectStore', () => {
     expect(project?.defaults.enabledTextReplacementSetIds).toEqual(['set-1']);
     expect(project?.defaults.enabledHotwordSetIds).toEqual(['hot-1']);
     expect(project?.defaults.enabledPolishKeywordSetIds).toEqual(['kw-1']);
+    expect(project?.defaults.enabledSpeakerProfileIds).toEqual(['speaker-1']);
     expect(useProjectStore.getState().projects).toHaveLength(1);
   });
 
@@ -153,6 +164,7 @@ describe('projectStore', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
           },
         },
       ],

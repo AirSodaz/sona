@@ -208,6 +208,7 @@ function handleDelimiter(
     let segmentEnd: number;
     let currentTokens: string[] | undefined;
     let currentTimestamps: number[] | undefined;
+    let currentDurations: number[] | undefined;
 
     const fallbackSegmentEnd = state.currentStart + (totalLength > 0 ? (state.currentText.length / totalLength) * totalDuration : 0);
 
@@ -226,6 +227,9 @@ function handleDelimiter(
         if (sliceEnd > state.nextTokenSliceStart) {
             currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart, sliceEnd);
             currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart, sliceEnd);
+            if (originalSegment.durations && originalSegment.durations.length === originalSegment.tokens!.length) {
+                currentDurations = originalSegment.durations.slice(state.nextTokenSliceStart, sliceEnd);
+            }
             state.nextTokenSliceStart = sliceEnd;
         }
 
@@ -243,7 +247,10 @@ function handleDelimiter(
         end: segmentEnd,
         isFinal: true,
         tokens: currentTokens,
-        timestamps: currentTimestamps
+        timestamps: currentTimestamps,
+        durations: currentDurations,
+        translation: originalSegment.translation,
+        speaker: originalSegment.speaker,
     });
 
     // Prepare for next
@@ -272,10 +279,14 @@ function finalizeSegment(
     let segmentEnd = originalSegment.end;
     let currentTokens: string[] | undefined;
     let currentTimestamps: number[] | undefined;
+    let currentDurations: number[] | undefined;
 
     if (hasTimestamps && tokenMap) {
         currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart);
         currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart);
+        if (originalSegment.durations && originalSegment.durations.length === originalSegment.tokens!.length) {
+            currentDurations = originalSegment.durations.slice(state.nextTokenSliceStart);
+        }
 
         if (currentTimestamps.length > 0) {
             state.currentSegmentStart = currentTimestamps[0];
@@ -289,7 +300,10 @@ function finalizeSegment(
         end: segmentEnd,
         isFinal: true,
         tokens: currentTokens,
-        timestamps: currentTimestamps
+        timestamps: currentTimestamps,
+        durations: currentDurations,
+        translation: originalSegment.translation,
+        speaker: originalSegment.speaker,
     });
 }
 
@@ -458,13 +472,13 @@ export function findSegmentForTime(segments: TranscriptSegment[], time: number):
 
 export function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
     return segments.map(s =>
-        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}`
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}:${s.speaker?.score || ''}`
     ).join('|');
 }
 
 export function computeSummarySourceFingerprint(segments: TranscriptSegment[]): string {
     return segments.map(s =>
-        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}`
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}:${s.speaker?.score || ''}`
     ).join('|');
 }
 

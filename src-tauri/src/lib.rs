@@ -6,6 +6,7 @@ mod llm;
 pub mod pipeline;
 pub mod preset_models;
 pub mod sherpa;
+pub mod speaker;
 pub mod system;
 
 use std::collections::HashMap;
@@ -708,7 +709,9 @@ pub fn run() {
             sherpa::stop_recognizer,
             sherpa::flush_recognizer,
             sherpa::feed_audio_chunk,
-            sherpa::process_batch_file
+            sherpa::process_batch_file,
+            speaker::annotate_speaker_segments_from_file,
+            speaker::import_speaker_profile_sample
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

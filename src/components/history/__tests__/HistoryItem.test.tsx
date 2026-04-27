@@ -50,6 +50,7 @@ describe('HistoryItem', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
           },
         },
       ],

@@ -16,6 +16,7 @@ const testContext = vi.hoisted(() => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
         },
     };
 

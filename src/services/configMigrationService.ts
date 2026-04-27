@@ -17,13 +17,14 @@ import {
   coerceSummaryTemplateId,
   normalizeSummaryCustomTemplates,
 } from '../utils/summaryTemplates';
+import { normalizeSpeakerProfiles } from '../types/speaker';
 
 export interface MigrationResult {
   config: AppConfig;
   migrated: boolean;
 }
 
-const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 5;
+const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 6;
 
 function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
   if (isConfigMigrated) {
@@ -48,6 +49,18 @@ function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
   }
 
   if (!Array.isArray(config?.summaryCustomTemplates)) {
+    return true;
+  }
+
+  if (!Array.isArray(config?.speakerProfiles)) {
+    return true;
+  }
+
+  if (typeof config?.speakerSegmentationModelPath !== 'string') {
+    return true;
+  }
+
+  if (typeof config?.speakerEmbeddingModelPath !== 'string') {
     return true;
   }
 
@@ -123,6 +136,9 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       polishPresetId: normalizedPolishPresetId,
       polishCustomPresets: normalizedPolishCustomPresets,
       polishKeywordSets: normalizedPolishKeywordSets,
+      speakerSegmentationModelPath: (configToLoad as AppConfig).speakerSegmentationModelPath || '',
+      speakerEmbeddingModelPath: (configToLoad as AppConfig).speakerEmbeddingModelPath || '',
+      speakerProfiles: normalizeSpeakerProfiles((configToLoad as AppConfig).speakerProfiles),
     };
 
     const llmChanged =
@@ -142,6 +158,11 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       JSON.stringify((configToLoad as AppConfig).polishKeywordSets ?? []) !==
         JSON.stringify(normalizedPolishKeywordSets)
       || ((configToLoad as AppConfig).polishKeywords || '') !== normalizedConfig.polishKeywords;
+    const speakerProfilesChanged =
+      JSON.stringify((configToLoad as AppConfig).speakerProfiles ?? []) !==
+        JSON.stringify(normalizedConfig.speakerProfiles)
+      || typeof (configToLoad as AppConfig).speakerSegmentationModelPath !== 'string'
+      || typeof (configToLoad as AppConfig).speakerEmbeddingModelPath !== 'string';
 
     if (
       !llmChanged
@@ -149,6 +170,7 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       && !polishPresetsChanged
       && !summaryTemplatesChanged
       && !polishKeywordSetsChanged
+      && !speakerProfilesChanged
     ) {
       return { config: normalizedConfig, migrated: false };
     }
@@ -224,11 +246,14 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     autoCheckUpdates: parsed.autoCheckUpdates ?? true,
     textReplacementSets: parsed.textReplacementSets || [],
     hotwordSets: parsed.hotwordSets || [],
+    speakerProfiles: normalizeSpeakerProfiles(parsed.speakerProfiles),
     hotwords: parsed.hotwords || [],
     liveRecordShortcut: parsed.liveRecordShortcut || 'Ctrl + Space',
     voiceTypingEnabled: parsed.voiceTypingEnabled ?? false,
     voiceTypingShortcut: parsed.voiceTypingShortcut || 'Alt+V',
     voiceTypingMode: parsed.voiceTypingMode || 'hold',
+    speakerSegmentationModelPath: parsed.speakerSegmentationModelPath || '',
+    speakerEmbeddingModelPath: parsed.speakerEmbeddingModelPath || '',
   };
 
   // Migration: textReplacements -> textReplacementSets

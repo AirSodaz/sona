@@ -557,6 +557,8 @@
             "dolphin": "Developed by Dataocean AI and Tsinghua University. A multilingual, multitask ASR model supporting 40 Eastern languages and 22 Chinese dialects.",
             "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts. Optimized with Int8 quantization.",
             "silero_vad": "Developed by Silero. Highly accurate Voice Activity Detection (VAD) model to segment audio into speech and silence.",
+            "speaker_segmentation": "Pyannote-based offline speaker segmentation model for splitting a recording into anonymous speaker turns.",
+            "speaker_embedding": "3D-Speaker embedding model for matching diarized speakers against your known speaker profile library.",
             "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123')."
         },
         "recognition_models": "Recognition Models",

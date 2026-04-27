@@ -315,6 +315,36 @@
     "engine": "sherpa-onnx"
   },
   {
+    "id": "sherpa-onnx-pyannote-segmentation-3-0",
+    "name": "Speaker Segmentation",
+    "description": "settings.descriptions.speaker_segmentation",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+    "type": "speaker-segmentation",
+    "language": "multi",
+    "size": "See release",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
+    "id": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k",
+    "name": "Speaker Embedding",
+    "description": "settings.descriptions.speaker_embedding",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "type": "speaker-embedding",
+    "language": "zh",
+    "size": "See release",
+    "isArchive": false,
+    "filename": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx"
+  },
+  {
     "id": "silero-vad",
     "name": "Silero - VAD",
     "description": "settings.descriptions.silero_vad",

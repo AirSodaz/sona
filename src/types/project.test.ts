@@ -21,6 +21,7 @@ describe('normalizeProjectRecord', () => {
         enabledTextReplacementSetIds: ['set-1'],
         enabledHotwordSetIds: ['hot-1'],
         enabledPolishKeywordSetIds: ['kw-1'],
+        enabledSpeakerProfileIds: ['speaker-1'],
       },
     });
 
@@ -42,6 +43,7 @@ describe('normalizeProjectRecord', () => {
           enabledTextReplacementSetIds: [],
           enabledHotwordSetIds: [],
           enabledPolishKeywordSetIds: [],
+          enabledSpeakerProfileIds: [],
         },
       }),
     ], []);
@@ -51,7 +53,7 @@ describe('normalizeProjectRecord', () => {
     expect(result.migrated).toBe(true);
   });
 
-  it('backfills missing project keyword set ids from the current global selection', () => {
+  it('backfills missing project keyword set ids and speaker profile ids from the current global selection', () => {
     const result = normalizeProjectRecordWithKeywordSetBackfill({
       id: 'project-1',
       name: 'Alpha',
@@ -63,10 +65,11 @@ describe('normalizeProjectRecord', () => {
         enabledTextReplacementSetIds: [],
         enabledHotwordSetIds: [],
       },
-    }, ['kw-1', 'kw-3']);
+    }, ['kw-1', 'kw-3'], ['speaker-1']);
 
     expect(result.migrated).toBe(true);
     expect(result.project.defaults.enabledPolishKeywordSetIds).toEqual(['kw-1', 'kw-3']);
+    expect(result.project.defaults.enabledSpeakerProfileIds).toEqual(['speaker-1']);
   });
 
   it('migrates a legacy summaryTemplate field to summaryTemplateId', () => {
@@ -81,6 +84,7 @@ describe('normalizeProjectRecord', () => {
         enabledTextReplacementSetIds: [],
         enabledHotwordSetIds: [],
         enabledPolishKeywordSetIds: [],
+        enabledSpeakerProfileIds: [],
       },
     });
 

@@ -2,6 +2,8 @@
  * Core data structure for transcript segments.
  * This is the "source of truth" for all transcription data.
  */
+import type { SpeakerTag } from './speaker';
+
 export interface TranscriptSegment {
   /** Unique identifier (UUID). */
   id: string;
@@ -21,6 +23,8 @@ export interface TranscriptSegment {
   durations?: number[];
   /** Translated text content. */
   translation?: string;
+  /** Optional speaker metadata kept separate from transcript text. */
+  speaker?: SpeakerTag;
 }
 
 /**

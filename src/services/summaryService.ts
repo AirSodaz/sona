@@ -245,9 +245,9 @@ class SummaryService {
       taskId,
       config: getFeatureLlmConfig(config, 'summary')!,
       template,
-      segments: segments.map<SummarySegmentInput>(({ id, text, start, end, isFinal }) => ({
+      segments: segments.map<SummarySegmentInput>(({ id, text, start, end, isFinal, speaker }) => ({
         id,
-        text,
+        text: speaker?.label ? `${speaker.label}: ${text}` : text,
         start,
         end,
         isFinal,

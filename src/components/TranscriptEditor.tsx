@@ -12,6 +12,7 @@ import { SearchUI } from './SearchUI';
 import { EditorToolbar } from './EditorToolbar';
 import { useSearchStore } from '../stores/searchStore';
 import { useTranscriptUIState } from '../hooks/useTranscriptUIState';
+import { areSpeakerTagsEqual } from '../types/speaker';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
     return (
@@ -121,19 +122,25 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
         onAnimationEnd: handleAnimationEnd,
     }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleAnimationEnd]);
 
-    const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => (
-        <SegmentItem
-            key={segment.id}
-            segment={segment}
-            index={index}
-            onSeek={context.onSeek}
-            onEdit={context.onEdit}
-            onSave={context.onSave}
-            onDelete={context.onDelete}
-            onMergeWithNext={context.onMergeWithNext}
-            onAnimationEnd={context.onAnimationEnd}
-        />
-    ), []);
+    const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => {
+        const previousSegment = index > 0 ? segmentsRef.current[index - 1] : null;
+        const nextSegment = index < segmentsRef.current.length - 1 ? segmentsRef.current[index + 1] : null;
+        return (
+            <SegmentItem
+                key={segment.id}
+                segment={segment}
+                index={index}
+                showSpeakerLabel={Boolean(segment.speaker) && !areSpeakerTagsEqual(previousSegment?.speaker, segment.speaker)}
+                canMergeWithNext={!nextSegment || areSpeakerTagsEqual(segment.speaker, nextSegment.speaker)}
+                onSeek={context.onSeek}
+                onEdit={context.onEdit}
+                onSave={context.onSave}
+                onDelete={context.onDelete}
+                onMergeWithNext={context.onMergeWithNext}
+                onAnimationEnd={context.onAnimationEnd}
+            />
+        );
+    }, []);
 
     // Search integration
     const {

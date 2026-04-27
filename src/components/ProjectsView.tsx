@@ -156,6 +156,7 @@ function buildComparableProjectSettingsSnapshot(input: {
     enabledTextReplacementSetIds: sortRuleSetIds(input.defaults.enabledTextReplacementSetIds),
     enabledHotwordSetIds: sortRuleSetIds(input.defaults.enabledHotwordSetIds),
     enabledPolishKeywordSetIds: sortRuleSetIds(input.defaults.enabledPolishKeywordSetIds),
+    enabledSpeakerProfileIds: sortRuleSetIds(input.defaults.enabledSpeakerProfileIds),
   };
 }
 
@@ -406,7 +407,11 @@ function ProjectSettingsModal({
   const polishPresetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
 
   const toggleRuleSetId = (
-    key: 'enabledTextReplacementSetIds' | 'enabledHotwordSetIds' | 'enabledPolishKeywordSetIds',
+    key:
+      | 'enabledTextReplacementSetIds'
+      | 'enabledHotwordSetIds'
+      | 'enabledPolishKeywordSetIds'
+      | 'enabledSpeakerProfileIds',
     id: string,
   ) => {
     const current = new Set(draftDefaults[key]);
@@ -643,6 +648,30 @@ function ProjectSettingsModal({
                       checked={draftDefaults.enabledPolishKeywordSetIds.includes(set.id)}
                       onChange={() => toggleRuleSetId('enabledPolishKeywordSetIds', set.id)}
                       label={set.name}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="projects-settings-card">
+              <div className="projects-settings-card-title">
+                {t('projects.speaker_profiles', { defaultValue: 'Enabled Speaker Profiles' })}
+              </div>
+              <div className="projects-settings-card-list">
+                {(globalConfig.speakerProfiles || []).length === 0 ? (
+                  <span className="projects-settings-empty-copy">
+                    {t('projects.no_speaker_profiles', {
+                      defaultValue: 'No global speaker profiles yet.',
+                    })}
+                  </span>
+                ) : (
+                  (globalConfig.speakerProfiles || []).map((profile) => (
+                    <Checkbox
+                      key={profile.id}
+                      checked={draftDefaults.enabledSpeakerProfileIds.includes(profile.id)}
+                      onChange={() => toggleRuleSetId('enabledSpeakerProfileIds', profile.id)}
+                      label={profile.name}
                     />
                   ))
                 )}

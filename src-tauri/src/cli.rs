@@ -410,6 +410,7 @@ pub fn resolve_transcribe_options(
             model_type: model.model_type.clone(),
             file_config: model.file_config.clone(),
             hotwords: cli.hotwords,
+            speaker_processing: None,
         },
     })
 }

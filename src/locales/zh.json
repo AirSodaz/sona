@@ -557,6 +557,8 @@
             "dolphin": "由数据海洋 AI 和清华大学开发。支持 40 种东方语言和 22 种中文方言的多语言、多任务 ASR 模型。",
             "ct_punctuation": "为原始语音转录结果添加准确的标点符号。使用 Int8 量化进行了优化。",
             "silero_vad": "由 Silero 开发。高度准确的语音活动检测 (VAD) 模型，可将音频分割为语音和静音。",
+            "speaker_segmentation": "基于 pyannote 的离线说话人分离模型，用于把录音拆成匿名说话人片段。",
+            "speaker_embedding": "3D-Speaker 说话人 embedding 模型，用于把分离出的说话人与已知说话人档案做匹配。",
             "itn_zh": "中文逆文本标准化模型。将口语数字（如“一二三”）转换为数字（“123”）。"
         },
         "recognition_models": "识别模型",

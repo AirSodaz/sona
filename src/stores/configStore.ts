@@ -20,7 +20,7 @@ import type {
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
-  configVersion: 5,
+  configVersion: 6,
 
   // UI
   appLanguage: 'auto',
@@ -43,6 +43,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   offlineModelPath: '',
   punctuationModelPath: '',
   vadModelPath: '',
+  speakerSegmentationModelPath: '',
+  speakerEmbeddingModelPath: '',
 
   // Caption
   lockWindow: false,
@@ -81,6 +83,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   textReplacementSets: [],
   hotwordSets: [],
   polishKeywordSets: [],
+  speakerProfiles: [],
   hotwords: [],
 };
 
@@ -121,7 +124,12 @@ const AUDIO_KEYS: (keyof AudioConfig)[] = [
 ];
 
 const MODEL_KEYS: (keyof ModelConfig)[] = [
-  'streamingModelPath', 'offlineModelPath', 'punctuationModelPath', 'vadModelPath',
+  'streamingModelPath',
+  'offlineModelPath',
+  'punctuationModelPath',
+  'vadModelPath',
+  'speakerSegmentationModelPath',
+  'speakerEmbeddingModelPath',
 ];
 
 const CAPTION_KEYS: (keyof CaptionConfig)[] = [
@@ -145,6 +153,7 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'textReplacementSets',
   'hotwordSets',
   'polishKeywordSets',
+  'speakerProfiles',
   'hotwords',
 ];
 

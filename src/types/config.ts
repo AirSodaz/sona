@@ -7,6 +7,7 @@
  */
 
 import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './transcript';
+import type { SpeakerProfile } from './speaker';
 
 // ---------------------------------------------------------------------------
 // UI preferences
@@ -68,6 +69,10 @@ export interface ModelConfig {
   punctuationModelPath?: string;
   /** Path to VAD model. */
   vadModelPath?: string;
+  /** Path to the speaker segmentation model. */
+  speakerSegmentationModelPath?: string;
+  /** Path to the speaker embedding model. */
+  speakerEmbeddingModelPath?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +211,8 @@ export interface VocabularyConfig {
   hotwordSets?: HotwordRuleSet[];
   /** List of polish keyword rule sets. */
   polishKeywordSets?: PolishKeywordRuleSet[];
+  /** Global speaker profiles library. */
+  speakerProfiles?: SpeakerProfile[];
   /** Deprecated: Custom hotwords for ASR. Use hotwordSets instead. */
   hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */

@@ -73,6 +73,7 @@ describe('PolishSettingsModal', () => {
         enabledTextReplacementSetIds: [],
         enabledHotwordSetIds: [],
         enabledPolishKeywordSetIds: ['kw-1'],
+        enabledSpeakerProfileIds: [],
       },
     };
     const updateProjectDefaultsSpy = vi.spyOn(useProjectStore.getState(), 'updateProjectDefaults')

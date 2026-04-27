@@ -1,5 +1,5 @@
 use log::{debug, info, trace};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
     SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
@@ -724,9 +724,10 @@ pub struct BatchTranscriptionRequest {
     pub model_type: String,
     pub file_config: Option<ModelFileConfig>,
     pub hotwords: Option<String>,
+    pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
 }
 
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSegment {
     pub id: String,
@@ -737,6 +738,8 @@ pub struct TranscriptSegment {
     pub tokens: Option<Vec<String>>,
     pub timestamps: Option<Vec<f32>>,
     pub durations: Option<Vec<f32>>,
+    pub translation: Option<String>,
+    pub speaker: Option<crate::speaker::SpeakerTag>,
 }
 
 fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
@@ -1053,6 +1056,8 @@ fn run_offline_inference<R: tauri::Runtime>(
                 tokens: Some(result.tokens),
                 timestamps: timestamps_abs,
                 durations,
+                translation: None,
+                speaker: None,
             };
             let event_name = format!("recognizer-output-{}", instance_id);
             log_segment_emit_diagnostics(
@@ -1332,6 +1337,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                         tokens: Some(result.tokens),
                         timestamps: timestamps_f32,
                         durations,
+                        translation: None,
+                        speaker: None,
                     };
                     let event_name = format!("recognizer-output-{}", instance_id);
                     log_segment_emit_diagnostics(
@@ -1645,6 +1652,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         tokens: Some(result.tokens.clone()),
                         timestamps: result.timestamps.clone(),
                         durations: None,
+                        translation: None,
+                        speaker: None,
                     };
                     let event_name = format!("recognizer-output-{}", instance_id);
                     log_segment_emit_diagnostics(
@@ -1689,6 +1698,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             tokens: Some(result.tokens),
                             timestamps: timestamps_f32,
                             durations,
+                            translation: None,
+                            speaker: None,
                         };
                         let event_name = format!("recognizer-output-{}", instance_id);
                         log_segment_emit_diagnostics(
@@ -1747,6 +1758,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     model_type: String,
     file_config: Option<ModelFileConfig>,
     hotwords: Option<String>,
+    speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let request = BatchTranscriptionRequest {
         file_path,
@@ -1761,6 +1773,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         model_type,
         file_config,
         hotwords,
+        speaker_processing,
     };
     let progress_file_path = request.file_path.clone();
 
@@ -1794,7 +1807,7 @@ where
     let recognizer = Recognizer::new(config_type, request.num_threads)?;
     let punctuation = load_punctuation(request.punctuation_model.clone());
 
-    match &recognizer.inner {
+    let segments = match &recognizer.inner {
         RecognizerInner::Offline(r) => {
             process_batch_offline(
                 r,
@@ -1804,12 +1817,18 @@ where
                 punctuation.as_ref(),
                 &mut on_progress,
             )
-            .await
+            .await?
         }
         RecognizerInner::Online(r) => {
-            process_batch_online(r, &samples, punctuation.as_ref(), &mut on_progress).await
+            process_batch_online(r, &samples, punctuation.as_ref(), &mut on_progress).await?
         }
-    }
+    };
+
+    crate::speaker::annotate_segments_with_speakers(
+        &samples,
+        &segments,
+        request.speaker_processing.as_ref(),
+    )
 }
 
 async fn process_batch_offline<F>(
@@ -1885,6 +1904,8 @@ where
                         tokens: Some(res.tokens),
                         timestamps: timestamps_abs,
                         durations,
+                        translation: None,
+                        speaker: None,
                     });
                 }
             }
@@ -1946,6 +1967,8 @@ where
                         tokens: Some(result.tokens),
                         timestamps: timestamps_abs,
                         durations,
+                        translation: None,
+                        speaker: None,
                     });
                 }
             }
@@ -1985,6 +2008,8 @@ where
                 tokens: Some(result.tokens),
                 timestamps: timestamps_abs,
                 durations,
+                translation: None,
+                speaker: None,
             });
         }
     }

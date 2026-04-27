@@ -40,7 +40,20 @@ export interface ModelInfo {
     /** URL to download the model archive or file. */
     url: string;
     /** Type of the model (e.g., zipformer, sensevoice). */
-    type: 'zipformer' | 'sensevoice' | 'paraformer' | 'punctuation' | 'vad' | 'itn' | 'whisper' | 'funasr-nano' | 'fire-red-asr' | 'dolphin' | 'qwen3-asr';
+    type:
+      | 'zipformer'
+      | 'sensevoice'
+      | 'paraformer'
+      | 'punctuation'
+      | 'vad'
+      | 'itn'
+      | 'whisper'
+      | 'funasr-nano'
+      | 'fire-red-asr'
+      | 'dolphin'
+      | 'qwen3-asr'
+      | 'speaker-segmentation'
+      | 'speaker-embedding';
     /** Modes supported by the model (e.g., streaming, offline). */
     modes?: ('streaming' | 'offline')[];
     /** Languages supported by the model (comma-separated). */

@@ -15,6 +15,8 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 export interface SegmentItemProps {
     segment: TranscriptSegment;
     index: number;
+    showSpeakerLabel?: boolean;
+    canMergeWithNext?: boolean;
     onSeek: (time: number) => void;
     onEdit: (id: string) => void;
     onSave: (id: string, text: string) => void;
@@ -112,6 +114,8 @@ ContentEditable.displayName = 'ContentEditable';
 function SegmentItemComponent({
     segment,
     index,
+    showSpeakerLabel = false,
+    canMergeWithNext = true,
     onSeek,
     onEdit,
     onSave,
@@ -241,6 +245,24 @@ function SegmentItemComponent({
             <SegmentTimestamp start={segment.start} onSeek={onSeek} />
 
             <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
+                {showSpeakerLabel && segment.speaker && (
+                    <div
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginBottom: '8px',
+                            padding: '2px 10px',
+                            borderRadius: '999px',
+                            background: 'var(--color-bg-secondary)',
+                            color: 'var(--color-text-secondary)',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                        }}
+                    >
+                        {segment.speaker.label}
+                    </div>
+                )}
                 {isEditing ? (
                     <ContentEditable
                         ref={inputRef}
@@ -293,6 +315,7 @@ function SegmentItemComponent({
                             e.stopPropagation();
                             onMergeWithNext(segment.id);
                         }}
+                        disabled={!canMergeWithNext}
                         data-tooltip={t('editor.merge_tooltip')}
                         aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
                     >

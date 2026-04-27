@@ -86,6 +86,7 @@ describe('SettingsAutomationTab', () => {
                         enabledTextReplacementSetIds: [],
                         enabledHotwordSetIds: [],
                         enabledPolishKeywordSetIds: [],
+                        enabledSpeakerProfileIds: [],
                     },
                 },
             ],
@@ -132,12 +133,11 @@ describe('SettingsAutomationTab', () => {
         fireEvent.click(screen.getByRole('option', { name: optionName }));
     };
 
-    it('renders rule card metadata including template, recent result, and failure summary', () => {
+    it('renders rule card metadata including recent result and failure summary', () => {
         render(<SettingsAutomationTab />);
 
         expect(screen.getByText('Meeting Inbox')).toBeDefined();
         expect(screen.getByText('Team Sync')).toBeDefined();
-        expect(screen.getByText('Meeting Notes')).toBeDefined();
         expect(screen.getByText('Watching')).toBeDefined();
         expect(screen.getByText('Failed')).toBeDefined();
         expect(screen.getByText('2 failures')).toBeDefined();
@@ -146,29 +146,30 @@ describe('SettingsAutomationTab', () => {
         expect(screen.getByText('Translation model is required.')).toBeDefined();
     });
 
-    it('renders the template controls inside the template card', () => {
+    it('renders the direct stage controls inside the expanded rule card', () => {
         render(<SettingsAutomationTab />);
 
         expandRuleCard();
 
-        expect(screen.getByRole('button', { name: 'Apply Template' })).toBeDefined();
-        expect(screen.getByText('Current Template')).toBeDefined();
-        expect(screen.getAllByText('Template-controlled')).toHaveLength(5);
         expect(screen.getByRole('switch', { name: 'Auto-Polish' })).toBeDefined();
         expect(screen.getByRole('switch', { name: 'Auto-Translate' })).toBeDefined();
         expect(screen.getByRole('switch', { name: 'Auto-Export' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Polish Preset' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Format' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Mode' })).toBeDefined();
-        expect(screen.getByText('Templates do not change these project-level defaults.')).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Target Project' })).toBeDefined();
+        expect(screen.getByRole('switch', { name: 'Watch Subfolders' })).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'Target Language' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Apply Template' })).toBeNull();
     });
 
-    it('marks the rule as custom when a template-controlled field is changed and persists custom on save', async () => {
+    it('marks the rule as custom when a stage-controlled field is changed and persists custom on save', async () => {
         render(<SettingsAutomationTab />);
 
         expandRuleCard();
         fireEvent.click(screen.getByRole('switch', { name: 'Auto-Translate' }));
 
-        expect(screen.getAllByText('Custom').length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'Target Language' })).toBeDefined();
 
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
@@ -180,6 +181,7 @@ describe('SettingsAutomationTab', () => {
                     autoPolish: true,
                     autoTranslate: true,
                     exportEnabled: true,
+                    translationLanguage: 'en',
                 }),
                 exportConfig: expect.objectContaining({
                     format: 'txt',
@@ -189,7 +191,7 @@ describe('SettingsAutomationTab', () => {
         });
     });
 
-    it('keeps custom selected until apply and then restores the chosen built-in template', async () => {
+    it('loads an existing custom rule into the editor and preserves updated custom selections on save', async () => {
         useAutomationStore.setState({
             ...useAutomationStore.getState(),
             rules: [
@@ -211,34 +213,23 @@ describe('SettingsAutomationTab', () => {
 
         render(<SettingsAutomationTab />);
 
-        expect(screen.queryAllByText('Custom')).toHaveLength(1);
-
         expandRuleCard();
-        expect(screen.queryAllByText('Custom')).toHaveLength(3);
-        chooseDropdownOption('Template', 'Bilingual Subtitles');
-
-        expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain('Custom');
-        expect(screen.getByText('Selected to apply: Bilingual Subtitles')).toBeDefined();
-        expect(screen.getByRole('switch', { name: 'Auto-Polish' }).getAttribute('aria-checked')).toBe('true');
+        expect(screen.getByRole('switch', { name: 'Auto-Translate' }).getAttribute('aria-checked')).toBe('true');
         expect(screen.getByRole('button', { name: 'Export Mode' }).textContent).toContain('Translation');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Apply Template' }));
-
-        expect(screen.getAllByText('Bilingual Subtitles').length).toBeGreaterThan(0);
-        expect(screen.getByRole('switch', { name: 'Auto-Polish' }).getAttribute('aria-checked')).toBe('false');
-        expect(screen.getByRole('switch', { name: 'Auto-Translate' }).getAttribute('aria-checked')).toBe('true');
-        expect(screen.getByRole('button', { name: 'Export Format' }).textContent).toContain('SRT');
-        expect(screen.getByRole('button', { name: 'Export Mode' }).textContent).toContain('Bilingual');
+        chooseDropdownOption('Export Mode', 'Bilingual');
+        chooseDropdownOption('Export Format', 'SRT');
 
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
         await waitFor(() => {
             expect(saveRuleMock).toHaveBeenCalledWith(expect.objectContaining({
-                presetId: 'bilingual_subtitles',
+                presetId: 'custom',
                 stageConfig: expect.objectContaining({
-                    autoPolish: false,
+                    autoPolish: true,
                     autoTranslate: true,
                     exportEnabled: true,
+                    translationLanguage: 'en',
                 }),
                 exportConfig: expect.objectContaining({
                     format: 'srt',
@@ -335,7 +326,7 @@ describe('SettingsAutomationTab', () => {
         });
     });
 
-    it('changes template only after apply for a new rule and preserves non-template fields', async () => {
+    it('creates a new rule through the direct stage controls and preserves non-stage fields', async () => {
         render(<SettingsAutomationTab />);
 
         fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
@@ -350,18 +341,15 @@ describe('SettingsAutomationTab', () => {
             target: { value: 'C:\\exports\\subs' },
         });
 
+        chooseDropdownOption('Target Project', 'Team Sync');
+        fireEvent.click(screen.getByRole('switch', { name: 'Auto-Translate' }));
+        fireEvent.click(screen.getByRole('switch', { name: 'Auto-Export' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Watch Subfolders' }));
-        chooseDropdownOption('Template', 'Bilingual Subtitles');
+        chooseDropdownOption('Export Format', 'SRT');
+        chooseDropdownOption('Export Mode', 'Bilingual');
 
-        expect(screen.getByRole('switch', { name: 'Auto-Polish' }).getAttribute('aria-checked')).toBe('true');
-        expect(screen.getByRole('switch', { name: 'Auto-Translate' }).getAttribute('aria-checked')).toBe('false');
-        expect(screen.getByRole('button', { name: 'Export Format' }).textContent).toContain('TXT');
-        expect(screen.getByRole('button', { name: 'Export Mode' }).textContent).toContain('Original');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Apply Template' }));
-
-        expect(screen.getByRole('switch', { name: 'Auto-Polish' }).getAttribute('aria-checked')).toBe('false');
         expect(screen.getByRole('switch', { name: 'Auto-Translate' }).getAttribute('aria-checked')).toBe('true');
+        expect(screen.getByRole('switch', { name: 'Auto-Export' }).getAttribute('aria-checked')).toBe('true');
         expect(screen.getByRole('button', { name: 'Export Format' }).textContent).toContain('SRT');
         expect(screen.getByRole('button', { name: 'Export Mode' }).textContent).toContain('Bilingual');
         expect(screen.getByRole('switch', { name: 'Watch Subfolders' }).getAttribute('aria-checked')).toBe('true');
@@ -374,7 +362,7 @@ describe('SettingsAutomationTab', () => {
             expect(saveRuleMock).toHaveBeenCalledWith(expect.objectContaining({
                 name: 'Subtitle Inbox',
                 projectId: 'project-1',
-                presetId: 'bilingual_subtitles',
+                presetId: 'custom',
                 watchDirectory: 'C:\\watch\\subs',
                 recursive: true,
                 exportConfig: expect.objectContaining({
@@ -386,6 +374,7 @@ describe('SettingsAutomationTab', () => {
                     autoPolish: false,
                     autoTranslate: true,
                     exportEnabled: true,
+                    translationLanguage: 'en',
                 }),
             }));
         });

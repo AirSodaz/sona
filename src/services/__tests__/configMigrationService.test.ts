@@ -144,4 +144,21 @@ describe('configMigrationService', () => {
     }));
     expect(result.config.polishKeywords).toBe('');
   });
+
+  it('fills missing speaker model and profile fields with defaults', async () => {
+    const savedConfig: any = {
+      ...DEFAULT_CONFIG,
+      configVersion: 5,
+      speakerProfiles: undefined,
+      speakerSegmentationModelPath: undefined,
+      speakerEmbeddingModelPath: undefined,
+    };
+
+    const result = await migrateConfig(savedConfig);
+
+    expect(result.config.speakerProfiles).toEqual([]);
+    expect(result.config.speakerSegmentationModelPath).toBe('');
+    expect(result.config.speakerEmbeddingModelPath).toBe('');
+    expect(result.migrated).toBe(true);
+  });
 });

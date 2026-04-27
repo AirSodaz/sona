@@ -111,6 +111,12 @@ export function useModelManager(isOpen: boolean) {
                 case 'punctuation':
                     updates.punctuationModelPath = path;
                     break;
+                case 'speaker-segmentation':
+                    updates.speakerSegmentationModelPath = path;
+                    break;
+                case 'speaker-embedding':
+                    updates.speakerEmbeddingModelPath = path;
+                    break;
                 case 'itn':
                     return;
             }
@@ -252,6 +258,12 @@ export function useModelManager(isOpen: boolean) {
             if (config.vadModelPath === deletedPath) {
                 updateConfig({ vadModelPath: '' });
             }
+            if (config.speakerSegmentationModelPath === deletedPath) {
+                updateConfig({ speakerSegmentationModelPath: '' });
+            }
+            if (config.speakerEmbeddingModelPath === deletedPath) {
+                updateConfig({ speakerEmbeddingModelPath: '' });
+            }
         } catch (error) {
             await showError({
                 code: 'model.delete_failed',
@@ -281,6 +293,12 @@ export function useModelManager(isOpen: boolean) {
         if (model.type === 'vad') {
             return (config.vadModelPath || '').includes(model.filename || model.id);
         }
+        if (model.type === 'speaker-segmentation') {
+            return (config.speakerSegmentationModelPath || '').includes(model.filename || model.id);
+        }
+        if (model.type === 'speaker-embedding') {
+            return (config.speakerEmbeddingModelPath || '').includes(model.filename || model.id);
+        }
         return false;
     }
 
@@ -303,6 +321,8 @@ export function useModelManager(isOpen: boolean) {
                 vadBufferSize: 5,
                 maxConcurrent: 2,
                 enableITN: true,
+                speakerSegmentationModelPath: '',
+                speakerEmbeddingModelPath: '',
             };
 
             const fallbackModelId = hasSenseVoiceInt8

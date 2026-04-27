@@ -11,6 +11,7 @@ import { Switch } from '../Switch';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsContextSection } from './SettingsContextSection';
 import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
+import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
 import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
 
 export function SettingsVocabularyTab(): React.JSX.Element {
@@ -825,6 +826,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 </div>
             </SettingsSection>
 
+            <SettingsSpeakerProfilesSection />
             <SettingsContextSection />
             <SettingsSummaryTemplateSection />
         </SettingsTabContainer>

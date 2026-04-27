@@ -15,7 +15,7 @@ interface ModelSectionProps {
     title: string;
     description?: string;
     icon?: React.ReactNode;
-    type: 'asr' | 'punctuation' | 'vad';
+    type: 'asr' | 'punctuation' | 'vad' | 'speaker-segmentation' | 'speaker-embedding';
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -37,7 +37,7 @@ function ModelSection({
     const groupedModels = useMemo(() => {
         const models = PRESET_MODELS.filter(m => {
             if (type === 'asr') {
-                const blacklist = ['vad', 'punctuation', 'itn'];
+                const blacklist = ['vad', 'punctuation', 'itn', 'speaker-segmentation', 'speaker-embedding'];
                 return !blacklist.includes(m.type);
             }
             return m.type === type;
@@ -98,9 +98,13 @@ export function SettingsModelsTab(): React.JSX.Element {
 
     const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
     const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
+    const [selectedSpeakerSegmentationModelId, setSelectedSpeakerSegmentationModelId] = useState<string>('');
+    const [selectedSpeakerEmbeddingModelId, setSelectedSpeakerEmbeddingModelId] = useState<string>('');
 
     const streamingModelPath = modelConfig.streamingModelPath;
     const offlineModelPath = modelConfig.offlineModelPath;
+    const speakerSegmentationModelPath = modelConfig.speakerSegmentationModelPath || '';
+    const speakerEmbeddingModelPath = modelConfig.speakerEmbeddingModelPath || '';
     const vadBufferSize = transcriptionConfig.vadBufferSize || 5;
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
@@ -116,7 +120,12 @@ export function SettingsModelsTab(): React.JSX.Element {
             // Resolve all model paths concurrently to avoid sequential IPC/FS delays
             await Promise.all(
                 PRESET_MODELS.map(async (model) => {
-                    if (model.modes?.includes('streaming') || model.modes?.includes('offline')) {
+                    if (
+                        model.modes?.includes('streaming')
+                        || model.modes?.includes('offline')
+                        || model.type === 'speaker-segmentation'
+                        || model.type === 'speaker-embedding'
+                    ) {
                         try {
                             const path = await modelService.getModelPath(model.id);
                             map.set(path, model.id);
@@ -157,6 +166,28 @@ export function SettingsModelsTab(): React.JSX.Element {
         }
     }, [offlineModelPath, pathMap]);
 
+    useEffect(() => {
+        if (!speakerSegmentationModelPath) {
+            setSelectedSpeakerSegmentationModelId('');
+            return;
+        }
+
+        if (pathMap.size > 0) {
+            setSelectedSpeakerSegmentationModelId(pathMap.get(speakerSegmentationModelPath) || '');
+        }
+    }, [speakerSegmentationModelPath, pathMap]);
+
+    useEffect(() => {
+        if (!speakerEmbeddingModelPath) {
+            setSelectedSpeakerEmbeddingModelId('');
+            return;
+        }
+
+        if (pathMap.size > 0) {
+            setSelectedSpeakerEmbeddingModelId(pathMap.get(speakerEmbeddingModelPath) || '');
+        }
+    }, [speakerEmbeddingModelPath, pathMap]);
+
     const applyModelRules = async (modelId: string) => {
         try {
             const rules = modelService.getModelRules(modelId);
@@ -191,14 +222,27 @@ export function SettingsModelsTab(): React.JSX.Element {
         }
     };
 
-    const handleModelChange = async (type: 'streaming' | 'offline', modelId: string) => {
+    const handleModelChange = async (
+        type: 'streaming' | 'offline' | 'speakerSegmentation' | 'speakerEmbedding',
+        modelId: string,
+    ) => {
         if (type === 'streaming') {
             setSelectedStreamingModelId(modelId);
-        } else {
+        } else if (type === 'offline') {
             setSelectedOfflineModelId(modelId);
+        } else if (type === 'speakerSegmentation') {
+            setSelectedSpeakerSegmentationModelId(modelId);
+        } else {
+            setSelectedSpeakerEmbeddingModelId(modelId);
         }
 
-        const configKey = type === 'streaming' ? 'streamingModelPath' : 'offlineModelPath';
+        const configKey = type === 'streaming'
+            ? 'streamingModelPath'
+            : type === 'offline'
+                ? 'offlineModelPath'
+                : type === 'speakerSegmentation'
+                    ? 'speakerSegmentationModelPath'
+                    : 'speakerEmbeddingModelPath';
 
         if (!modelId) {
             updateConfig({ [configKey]: '' });
@@ -250,6 +294,26 @@ export function SettingsModelsTab(): React.JSX.Element {
             }));
     }, [getModelLabel, installedModels, selectedOfflineModelId]);
 
+    const speakerSegmentationOptions = useMemo(() => {
+        return PRESET_MODELS
+            .filter(m => m.type === 'speaker-segmentation')
+            .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerSegmentationModelId)
+            .map(model => ({
+                value: model.id,
+                label: getModelLabel(model)
+            }));
+    }, [getModelLabel, installedModels, selectedSpeakerSegmentationModelId]);
+
+    const speakerEmbeddingOptions = useMemo(() => {
+        return PRESET_MODELS
+            .filter(m => m.type === 'speaker-embedding')
+            .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerEmbeddingModelId)
+            .map(model => ({
+                value: model.id,
+                label: getModelLabel(model)
+            }));
+    }, [getModelLabel, installedModels, selectedSpeakerEmbeddingModelId]);
+
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
             <SettingsPageHeader 
@@ -293,6 +357,38 @@ export function SettingsModelsTab(): React.JSX.Element {
                         />
                     </div>
                 </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.speaker_segmentation_model_label', { defaultValue: 'Speaker Segmentation Model' })}
+                    hint={t('settings.speaker_segmentation_model_hint', { defaultValue: 'Used to split offline recordings into anonymous speaker turns.' })}
+                >
+                    <div style={{ width: '220px' }}>
+                        <Dropdown
+                            id="settings-speaker-segmentation-path"
+                            value={selectedSpeakerSegmentationModelId}
+                            onChange={(value) => handleModelChange('speakerSegmentation', value)}
+                            placeholder={t('settings.select_speaker_segmentation_model', { defaultValue: 'Select speaker segmentation model' })}
+                            options={speakerSegmentationOptions}
+                            style={{ flex: 1 }}
+                        />
+                    </div>
+                </SettingsItem>
+
+                <SettingsItem
+                    title={t('settings.speaker_embedding_model_label', { defaultValue: 'Speaker Embedding Model' })}
+                    hint={t('settings.speaker_embedding_model_hint', { defaultValue: 'Used to match diarized speakers against your known speaker profiles.' })}
+                >
+                    <div style={{ width: '220px' }}>
+                        <Dropdown
+                            id="settings-speaker-embedding-path"
+                            value={selectedSpeakerEmbeddingModelId}
+                            onChange={(value) => handleModelChange('speakerEmbedding', value)}
+                            placeholder={t('settings.select_speaker_embedding_model', { defaultValue: 'Select speaker embedding model' })}
+                            options={speakerEmbeddingOptions}
+                            style={{ flex: 1 }}
+                        />
+                    </div>
+                </SettingsItem>
             </SettingsSection>
 
             <ModelSection 
@@ -314,6 +410,20 @@ export function SettingsModelsTab(): React.JSX.Element {
                 type="vad"
                 icon={<Activity size={20} />}
                 {...sectionProps} 
+            />
+
+            <ModelSection
+                title={t('settings.speaker_segmentation_models', { defaultValue: 'Speaker Segmentation Models' })}
+                type="speaker-segmentation"
+                icon={<Mic size={20} />}
+                {...sectionProps}
+            />
+
+            <ModelSection
+                title={t('settings.speaker_embedding_models', { defaultValue: 'Speaker Embedding Models' })}
+                type="speaker-embedding"
+                icon={<Mic size={20} />}
+                {...sectionProps}
             />
 
             <SettingsSection
@@ -373,6 +483,7 @@ export function SettingsModelsTab(): React.JSX.Element {
                         />
                     </div>
                 </SettingsItem>
+
             </SettingsSection>
 
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>

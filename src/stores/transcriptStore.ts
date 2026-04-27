@@ -15,6 +15,7 @@ import { useProjectStore } from './projectStore';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 import { coerceSummaryTemplateId } from '../utils/summaryTemplates';
+import { areSpeakerTagsEqual } from '../types/speaker';
 // createLlmSettings is now used in configStore
 
 /** State interface for the transcript store. */
@@ -477,6 +478,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
         // Ensure seg1 comes before seg2
         const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
+        if (!areSpeakerTagsEqual(first.speaker, second.speaker)) {
+            return;
+        }
 
         const mergedSegment: TranscriptSegment = {
             id: first.id,
@@ -484,6 +488,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             end: second.end,
             text: `${first.text} ${second.text}`.trim(),
             isFinal: first.isFinal && second.isFinal,
+            speaker: first.speaker,
         };
 
         set((state) => ({

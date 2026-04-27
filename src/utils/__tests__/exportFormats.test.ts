@@ -10,7 +10,13 @@ describe('exportFormats', () => {
             end: 2.5,
             text: 'Hello world',
             isFinal: true,
-            translation: 'Bonjour le monde'
+            translation: 'Bonjour le monde',
+            speaker: {
+                id: 'speaker-alice',
+                label: 'Alice',
+                kind: 'identified',
+                score: 0.92,
+            },
         },
         {
             id: '2',
@@ -26,22 +32,29 @@ describe('exportFormats', () => {
             end: 8.0,
             text: 'I am fine.',
             isFinal: true,
-            translation: 'Je vais bien.'
+            translation: 'Je vais bien.',
+            speaker: {
+                id: 'speaker-2',
+                label: 'Speaker 2',
+                kind: 'anonymous',
+            },
         }
     ];
 
     describe('SRT Export', () => {
         it('should export original text correctly', () => {
             const result = exportSegments(segments, 'srt', 'original');
-            expect(result).toContain('Hello world');
+            expect(result).toContain('Alice: Hello world');
             expect(result).not.toContain('Bonjour le monde');
             expect(result).toContain('How are you?');
+            expect(result).toContain('Speaker 2: I am fine.');
         });
 
         it('should export translation correctly', () => {
             const result = exportSegments(segments, 'srt', 'translation');
-            expect(result).toContain('Bonjour le monde');
-            expect(result).not.toContain('Hello world');
+            expect(result).toContain('Alice: Bonjour le monde');
+            expect(result).not.toContain('Alice: Hello world');
+            expect(result).toContain('Speaker 2: Je vais bien.');
             // Segment 2 has no translation, should be empty or skipped?
             // Current plan: "If missing, output empty string."
             // In SRT, an empty subtitle might look weird but let's see implementation.
@@ -54,8 +67,8 @@ describe('exportFormats', () => {
         it('should export bilingual correctly', () => {
             const result = exportSegments(segments, 'srt', 'bilingual');
             // Line 1: Translation, Line 2: Original
-            expect(result).toContain('Bonjour le monde\nHello world');
-            expect(result).toContain('Je vais bien.\nI am fine.');
+            expect(result).toContain('Alice: Bonjour le monde\nHello world');
+            expect(result).toContain('Speaker 2: Je vais bien.\nI am fine.');
             // For segment 2 (missing translation):
             // Should be just "How are you?" on second line? Or empty line first?
             // "If missing, output empty string." -> "\nHow are you?"
@@ -67,14 +80,14 @@ describe('exportFormats', () => {
         it('should export bilingual correctly', () => {
             const result = exportSegments(segments, 'vtt', 'bilingual');
             expect(result).toContain('WEBVTT');
-            expect(result).toContain('Bonjour le monde\nHello world');
+            expect(result).toContain('Alice: Bonjour le monde\nHello world');
         });
     });
 
     describe('TXT Export', () => {
         it('should export original text correctly', () => {
             const result = exportSegments(segments, 'txt', 'original');
-            expect(result).toBe('Hello world\n\nHow are you?\n\nI am fine.');
+            expect(result).toBe('Alice: Hello world\n\nHow are you?\n\nSpeaker 2: I am fine.');
         });
 
         it('should export translation correctly', () => {
@@ -84,8 +97,8 @@ describe('exportFormats', () => {
             // If we map to translation and join with \n\n, we might get holes.
             // Let's assume we want to preserve structure or just list translations.
             // Existing `toTXT` filters empty segments.
-            expect(result).toContain('Bonjour le monde');
-            expect(result).toContain('Je vais bien.');
+            expect(result).toContain('Alice: Bonjour le monde');
+            expect(result).toContain('Speaker 2: Je vais bien.');
             expect(result).not.toContain('How are you?');
         });
 
@@ -102,9 +115,9 @@ describe('exportFormats', () => {
             //
             // I am fine.
             // Je vais bien.
-            expect(result).toContain('Hello world\nBonjour le monde');
+            expect(result).toContain('Alice: Hello world\nBonjour le monde');
             expect(result).toContain('How are you?\n'); // Empty translation
-            expect(result).toContain('I am fine.\nJe vais bien.');
+            expect(result).toContain('Speaker 2: I am fine.\nJe vais bien.');
         });
     });
 
@@ -114,6 +127,11 @@ describe('exportFormats', () => {
             const data = JSON.parse(result);
             expect(data[0].text).toBe('Hello world');
             expect(data[0].translation).toBeUndefined();
+            expect(data[0].speaker).toEqual(expect.objectContaining({
+                id: 'speaker-alice',
+                label: 'Alice',
+                kind: 'identified',
+            }));
         });
 
         it('should export translation correctly', () => {
@@ -121,6 +139,7 @@ describe('exportFormats', () => {
             const data = JSON.parse(result);
             expect(data[0].text).toBe('Bonjour le monde');
             expect(data[0].translation).toBeUndefined();
+            expect(data[0].speaker.label).toBe('Alice');
         });
 
         it('should export bilingual correctly', () => {
@@ -128,6 +147,7 @@ describe('exportFormats', () => {
             const data = JSON.parse(result);
             expect(data[0].text).toBe('Hello world');
             expect(data[0].translation).toBe('Bonjour le monde');
+            expect(data[0].speaker.label).toBe('Alice');
             expect(data[1].text).toBe('How are you?');
             // undefined or null or empty string?
             expect(data[1].translation).toBeUndefined(); // or check if key is missing

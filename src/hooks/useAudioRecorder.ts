@@ -10,10 +10,12 @@ import { historyService } from '../services/historyService';
 import { summaryService } from '../services/summaryService';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { remove } from '@tauri-apps/plugin-fs';
+import { join, tempDir } from '@tauri-apps/api/path';
+import { remove, writeFile } from '@tauri-apps/plugin-fs';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { logger } from '../utils/logger';
 import { TranscriptSegment } from '../types/transcript';
+import { speakerService } from '../services/speakerService';
 
 export type RecordSessionPhase =
     | 'idle'
@@ -82,6 +84,14 @@ export function getSupportedMimeType(): string {
         }
     }
     return '';
+}
+
+function getAudioTempExtension(mimeType: string): string {
+    if (mimeType.includes('mp4')) return 'm4a';
+    if (mimeType.includes('aac')) return 'aac';
+    if (mimeType.includes('ogg')) return 'ogg';
+    if (mimeType.includes('wav')) return 'wav';
+    return 'webm';
 }
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
@@ -401,6 +411,28 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         onSegmentRef.current(normalizedSegment, meta);
     }, [getRecordSegmentDeliveryMeta, normalizeRecordSegmentTiming]);
 
+    const annotateRecordedSegments = useCallback(async (
+        filePath: string,
+        segments: TranscriptSegment[],
+    ): Promise<TranscriptSegment[]> => {
+        const annotatedSegments = await speakerService.annotateSegmentsForFile(
+            filePath,
+            segments,
+            useTranscriptStore.getState().config,
+        );
+        useTranscriptStore.getState().setSegments(annotatedSegments);
+        return annotatedSegments;
+    }, []);
+
+    const writeRecordedBlobToTempFile = useCallback(async (blob: Blob, mimeType: string): Promise<string> => {
+        const tempDirectory = await tempDir();
+        const extension = getAudioTempExtension(mimeType);
+        const filePath = await join(tempDirectory, `sona-record-${Date.now()}.${extension}`);
+        const contents = new Uint8Array(await blob.arrayBuffer());
+        await writeFile(filePath, contents);
+        return filePath;
+    }, []);
+
     // Initialize Native Session
     // IMPORTANT: This must be called BEFORE starting audio capture to avoid a race
     // condition where audio is fed to Sherpa before the recognizer is initialized.
@@ -505,10 +537,18 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             const url = URL.createObjectURL(blob);
             useTranscriptStore.getState().setAudioUrl(url);
 
-            const segments = useTranscriptStore.getState().segments;
+            let segments = useTranscriptStore.getState().segments;
             const duration = finalizedDurationSecondsRef.current ?? getRecordedDurationSeconds();
+            let tempAudioPath: string | null = null;
 
             if (segments.length > 0) {
+                    try {
+                        tempAudioPath = await writeRecordedBlobToTempFile(blob, type);
+                        segments = await annotateRecordedSegments(tempAudioPath, segments);
+                    } catch (error) {
+                        logger.warn('[useAudioRecorder] Failed to annotate speaker labels for MediaRecorder fallback audio:', error);
+                    }
+
                     const newItem = await historyService.saveRecording(
                         blob,
                         segments,
@@ -523,12 +563,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                     }
             }
 
+            if (tempAudioPath) {
+                try {
+                    await remove(tempAudioPath);
+                } catch (error) {
+                    logger.warn('[useAudioRecorder] Failed to remove temporary MediaRecorder audio file:', error);
+                }
+            }
+
             finalizedDurationSecondsRef.current = null;
         };
 
         mediaRecorderRef.current.start();
         return activateRecordSession(sessionId);
-    }, [activateRecordSession, getRecordedDurationSeconds]);
+    }, [activateRecordSession, annotateRecordedSegments, getRecordedDurationSeconds, writeRecordedBlobToTempFile]);
 
     const stopFileRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -779,9 +827,15 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         // Finalize Native Recording
         if (usingNativeCaptureRef.current) {
             if (savedWavPath) {
-                const segments = useTranscriptStore.getState().segments;
+                let segments = useTranscriptStore.getState().segments;
 
                 if (segments.length > 0) {
+                    try {
+                        segments = await annotateRecordedSegments(savedWavPath, segments);
+                    } catch (error) {
+                        logger.warn('[useAudioRecorder] Failed to annotate speaker labels for native recording:', error);
+                    }
+
                     const url = convertFileSrc(savedWavPath);
                     useTranscriptStore.getState().setAudioUrl(url);
 
@@ -831,7 +885,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
         );
         resetRecordSession(sessionId, 'stop_completed');
-    }, [config.muteDuringRecording, finalizeLastSegment, finalizeRecordedDurationSeconds, resetRecordSession, stopFileRecording]);
+    }, [annotateRecordedSegments, config.muteDuringRecording, finalizeLastSegment, finalizeRecordedDurationSeconds, resetRecordSession, stopFileRecording]);
 
     const pauseRecording = useCallback(async () => {
         const sessionId = recordSessionIdRef.current;

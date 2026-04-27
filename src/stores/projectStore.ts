@@ -7,6 +7,7 @@ import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import { logger } from '../utils/logger';
 import { normalizePolishKeywordSets } from '../utils/polishKeywords';
+import { normalizeSpeakerProfiles } from '../types/speaker';
 
 interface CreateProjectInput {
   name: string;
@@ -46,8 +47,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       )
         .filter((set) => set.enabled)
         .map((set) => set.id);
+      const fallbackEnabledSpeakerProfileIds = normalizeSpeakerProfiles(
+        useConfigStore.getState().config.speakerProfiles,
+      )
+        .filter((profile) => profile.enabled)
+        .map((profile) => profile.id);
       const [projects, activeProjectId] = await Promise.all([
-        projectService.getAll({ fallbackEnabledPolishKeywordSetIds }),
+        projectService.getAll({
+          fallbackEnabledPolishKeywordSetIds,
+          fallbackEnabledSpeakerProfileIds,
+        }),
         projectService.getActiveProjectId(),
       ]);
 

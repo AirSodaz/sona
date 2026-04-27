@@ -3,6 +3,12 @@ import { stripHtmlTags } from './segmentUtils';
 
 export type ExportMode = 'original' | 'translation' | 'bilingual';
 
+function prefixSpeakerLabel(segment: TranscriptSegment, text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    return segment.speaker?.label ? `${segment.speaker.label}: ${trimmed}` : trimmed;
+}
+
 function decodeHtmlEntities(text: string): string {
     return text
         .replace(/&nbsp;/g, ' ')
@@ -82,17 +88,17 @@ function getSegmentExportText(segment: TranscriptSegment, mode: ExportMode, isHt
     const translation = (segment.translation || '').trim();
 
     if (mode === 'translation') {
-        return translation;
+        return prefixSpeakerLabel(segment, translation);
     }
 
     if (mode === 'bilingual') {
         if (isSubtitle) {
-            return `${translation}\n${original}`;
+            return prefixSpeakerLabel(segment, `${translation}\n${original}`);
         }
-        return `${original}\n${translation}`;
+        return prefixSpeakerLabel(segment, `${original}\n${translation}`);
     }
 
-    return original;
+    return prefixSpeakerLabel(segment, original);
 }
 
 /**
@@ -133,12 +139,23 @@ export function toJSON(segments: TranscriptSegment[], mode: ExportMode = 'origin
             const translation = (segment.translation || '').trim();
 
             if (mode === 'translation') {
-                return { start: segment.start, end: segment.end, text: translation };
+                return {
+                    start: segment.start,
+                    end: segment.end,
+                    text: translation,
+                    speaker: segment.speaker,
+                };
             }
             if (mode === 'bilingual') {
-                return { start: segment.start, end: segment.end, text: original, translation: translation || undefined };
+                return {
+                    start: segment.start,
+                    end: segment.end,
+                    text: original,
+                    translation: translation || undefined,
+                    speaker: segment.speaker,
+                };
             }
-            return { start: segment.start, end: segment.end, text: original };
+            return { start: segment.start, end: segment.end, text: original, speaker: segment.speaker };
         });
 
     return JSON.stringify(exportData, null, 2);

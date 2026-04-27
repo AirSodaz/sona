@@ -3,6 +3,7 @@ import type { ProjectRecord } from '../types/project';
 import {
   resolveProjectAwareHotwordSets,
   resolveProjectAwarePolishKeywordSets,
+  resolveProjectAwareSpeakerProfiles,
   resolveProjectAwareTextReplacementSets,
 } from '../types/project';
 import { coerceSummaryTemplateId } from '../utils/summaryTemplates';
@@ -34,5 +35,6 @@ export function resolveEffectiveConfig(
     textReplacementSets: resolveProjectAwareTextReplacementSets(globalConfig.textReplacementSets, project),
     hotwordSets: resolveProjectAwareHotwordSets(globalConfig.hotwordSets, project),
     polishKeywordSets: resolveProjectAwarePolishKeywordSets(globalConfig.polishKeywordSets, project),
+    speakerProfiles: resolveProjectAwareSpeakerProfiles(globalConfig.speakerProfiles, project),
   };
 }

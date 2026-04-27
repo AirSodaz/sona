@@ -5,6 +5,7 @@ import type {
   PolishKeywordRuleSet,
   TextReplacementRuleSet,
 } from './config';
+import type { SpeakerProfile } from './speaker';
 import type { SummaryTemplateId } from './transcript';
 import {
   DEFAULT_POLISH_PRESET_ID,
@@ -26,6 +27,7 @@ export interface ProjectDefaults {
   enabledTextReplacementSetIds: string[];
   enabledHotwordSetIds: string[];
   enabledPolishKeywordSetIds: string[];
+  enabledSpeakerProfileIds: string[];
 }
 
 export interface ProjectRecord {
@@ -66,6 +68,9 @@ export function buildProjectDefaultsFromConfig(config: AppConfig): ProjectDefaul
     enabledPolishKeywordSetIds: (config.polishKeywordSets || [])
       .filter((set) => set.enabled)
       .map((set) => set.id),
+    enabledSpeakerProfileIds: (config.speakerProfiles || [])
+      .filter((profile) => profile.enabled)
+      .map((profile) => profile.id),
   };
 }
 
@@ -117,6 +122,17 @@ export function resolveProjectAwarePolishKeywordSets(
   return resolveEnabledSetIds(sets, project.defaults.enabledPolishKeywordSetIds);
 }
 
+export function resolveProjectAwareSpeakerProfiles(
+  profiles: SpeakerProfile[] | undefined,
+  project: ProjectRecord | null,
+): SpeakerProfile[] | undefined {
+  if (!project) {
+    return profiles;
+  }
+
+  return resolveEnabledSetIds(profiles, project.defaults.enabledSpeakerProfileIds);
+}
+
 export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord {
   const now = Date.now();
   const defaults = input.defaults || {};
@@ -139,6 +155,7 @@ export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord
       enabledTextReplacementSetIds: defaults.enabledTextReplacementSetIds || [],
       enabledHotwordSetIds: defaults.enabledHotwordSetIds || [],
       enabledPolishKeywordSetIds: defaults.enabledPolishKeywordSetIds || [],
+      enabledSpeakerProfileIds: defaults.enabledSpeakerProfileIds || [],
     },
   };
 }
@@ -146,6 +163,7 @@ export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord
 export function normalizeProjectRecordWithKeywordSetBackfill(
   input: ProjectRecordInput,
   fallbackEnabledPolishKeywordSetIds: string[],
+  fallbackEnabledSpeakerProfileIds: string[],
 ): {
   project: ProjectRecord;
   migrated: boolean;
@@ -153,6 +171,7 @@ export function normalizeProjectRecordWithKeywordSetBackfill(
   const defaults = input.defaults || {};
   const migrated =
     !Array.isArray(defaults.enabledPolishKeywordSetIds)
+    || !Array.isArray(defaults.enabledSpeakerProfileIds)
     || !isNonEmptyString(defaults.summaryTemplateId);
 
   if (!migrated) {
@@ -168,6 +187,7 @@ export function normalizeProjectRecordWithKeywordSetBackfill(
       defaults: {
         ...defaults,
         enabledPolishKeywordSetIds: [...fallbackEnabledPolishKeywordSetIds],
+        enabledSpeakerProfileIds: [...fallbackEnabledSpeakerProfileIds],
       },
     }),
     migrated: true,
@@ -204,6 +224,7 @@ export function migrateProjectPolishDefaults(
       enabledTextReplacementSetIds: [...project.defaults.enabledTextReplacementSetIds],
       enabledHotwordSetIds: [...project.defaults.enabledHotwordSetIds],
       enabledPolishKeywordSetIds: [...project.defaults.enabledPolishKeywordSetIds],
+      enabledSpeakerProfileIds: [...project.defaults.enabledSpeakerProfileIds],
     };
 
     customPresets = selection.customPresets;

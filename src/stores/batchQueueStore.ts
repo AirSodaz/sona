@@ -352,6 +352,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 },
                 language === 'auto' ? undefined : language,
                 tempWavPath,
+                config,
             );
 
             const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;

@@ -169,6 +169,7 @@ describe('ProjectsView', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
           },
         },
       ],
@@ -423,6 +424,7 @@ describe('ProjectsView', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
           },
         },
         {
@@ -440,6 +442,7 @@ describe('ProjectsView', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: [],
+            enabledSpeakerProfileIds: [],
           },
         },
       ],

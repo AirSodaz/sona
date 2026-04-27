@@ -38,6 +38,10 @@ function createBaseConfig(): AppConfig {
       { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
       { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Keep sentence case.' },
     ],
+    speakerProfiles: [
+      { id: 'speaker-a', name: 'Alice', enabled: true, samples: [] },
+      { id: 'speaker-b', name: 'Bob', enabled: false, samples: [] },
+    ],
     autoPolish: false,
     autoPolishFrequency: 5,
     voiceTypingEnabled: false,
@@ -70,6 +74,7 @@ function createProject(): ProjectRecord {
       enabledTextReplacementSetIds: ['set-b'],
       enabledHotwordSetIds: ['hot-a'],
       enabledPolishKeywordSetIds: ['kw-2'],
+      enabledSpeakerProfileIds: ['speaker-b'],
     },
   };
 }
@@ -93,5 +98,7 @@ describe('effectiveConfigService', () => {
     expect(effective.textReplacementSets?.find((set) => set.id === 'set-b')?.enabled).toBe(true);
     expect(effective.hotwordSets?.find((set) => set.id === 'hot-a')?.enabled).toBe(true);
     expect(effective.hotwordSets?.find((set) => set.id === 'hot-b')?.enabled).toBe(false);
+    expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-a')?.enabled).toBe(false);
+    expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-b')?.enabled).toBe(true);
   });
 });

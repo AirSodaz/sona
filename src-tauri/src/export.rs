@@ -1,4 +1,5 @@
 use crate::sherpa::TranscriptSegment;
+use crate::speaker::SpeakerTag;
 
 /// Supported transcript export formats for the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +42,8 @@ struct ExportJsonSegment<'a> {
     start: f64,
     end: f64,
     text: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    speaker: Option<&'a SpeakerTag>,
 }
 
 /// Serializes transcript segments into the requested export format.
@@ -64,6 +67,7 @@ fn export_json(segments: &[TranscriptSegment]) -> Result<String, serde_json::Err
             start: segment.start,
             end: segment.end,
             text: segment.text.trim(),
+            speaker: segment.speaker.as_ref(),
         })
         .filter(|segment| !segment.text.is_empty())
         .collect();
@@ -74,7 +78,7 @@ fn export_txt(segments: &[TranscriptSegment]) -> String {
     segments
         .iter()
         .filter(|segment| segment.is_final)
-        .map(|segment| segment.text.trim())
+        .map(|segment| prefix_speaker_label(segment, segment.text.trim()))
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -89,7 +93,7 @@ fn export_srt(segments: &[TranscriptSegment]) -> String {
             if text.is_empty() {
                 return None;
             }
-            Some((segment.start, segment.end, text))
+            Some((segment.start, segment.end, prefix_speaker_label(segment, text)))
         })
         .enumerate()
         .map(|(index, (start, end, text))| {
@@ -118,7 +122,7 @@ fn export_vtt(segments: &[TranscriptSegment]) -> String {
                 "{} --> {}\n{}\n",
                 format_timestamp(segment.start, "."),
                 format_timestamp(segment.end, "."),
-                text
+                prefix_speaker_label(segment, text)
             ))
         })
         .collect::<Vec<_>>()
@@ -136,6 +140,20 @@ fn format_timestamp(seconds: f64, separator: &str) -> String {
     format!("{hours:02}:{minutes:02}:{whole_seconds:02}{separator}{millis:03}")
 }
 
+fn prefix_speaker_label(segment: &TranscriptSegment, text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    match segment.speaker.as_ref() {
+        Some(speaker) if !speaker.label.trim().is_empty() => {
+            format!("{}: {}", speaker.label.trim(), trimmed)
+        }
+        _ => trimmed.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +169,13 @@ mod tests {
                 tokens: None,
                 timestamps: None,
                 durations: None,
+                translation: None,
+                speaker: Some(SpeakerTag {
+                    id: "speaker-1".to_string(),
+                    label: "Alice".to_string(),
+                    kind: "identified".to_string(),
+                    score: Some(0.88),
+                }),
             },
             TranscriptSegment {
                 id: "2".to_string(),
@@ -161,6 +186,8 @@ mod tests {
                 tokens: None,
                 timestamps: None,
                 durations: None,
+                translation: None,
+                speaker: None,
             },
         ]
     }
@@ -183,18 +210,20 @@ mod tests {
         let output = export_segments(&sample_segments(), ExportFormat::Json).unwrap();
         assert!(output.contains("\"start\": 0.0"));
         assert!(output.contains("\"text\": \"Hello\""));
+        assert!(output.contains("\"label\": \"Alice\""));
     }
 
     #[test]
     fn exports_txt_segments() {
         let output = export_segments(&sample_segments(), ExportFormat::Txt).unwrap();
-        assert_eq!(output, "Hello\n\nWorld");
+        assert_eq!(output, "Alice: Hello\n\nWorld");
     }
 
     #[test]
     fn exports_srt_segments() {
         let output = export_segments(&sample_segments(), ExportFormat::Srt).unwrap();
         assert!(output.contains("00:00:00,000 --> 00:00:01,250"));
+        assert!(output.contains("1\n00:00:00,000 --> 00:00:01,250\nAlice: Hello"));
         assert!(output.contains("2\n00:00:01,250 --> 00:00:02,500\nWorld"));
     }
 

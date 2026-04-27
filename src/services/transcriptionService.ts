@@ -2,9 +2,11 @@ import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
+import type { AppConfig } from '../types/config';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
+import { speakerService } from './speakerService';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -451,21 +453,52 @@ export class TranscriptionService {
         }
     }
 
-    async transcribeFile(filePath: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, saveToPath?: string): Promise<TranscriptSegment[]> {
+    async transcribeFile(
+        filePath: string,
+        onProgress?: (progress: number) => void,
+        onSegment?: TranscriptionCallback,
+        language?: string,
+        saveToPath?: string,
+        configOverride?: AppConfig,
+    ): Promise<TranscriptSegment[]> {
         try {
-            return await this._transcribeFileInternal(filePath, undefined, onProgress, onSegment, language, saveToPath);
+            return await this._transcribeFileInternal(
+                filePath,
+                undefined,
+                onProgress,
+                onSegment,
+                language,
+                saveToPath,
+                configOverride,
+            );
         } catch (error: any) {
             if (error.message && error.message.includes('COREML_FAILURE')) {
-                return await this._transcribeFileInternal(filePath, 'cpu', onProgress, onSegment, language, saveToPath);
+                return await this._transcribeFileInternal(
+                    filePath,
+                    'cpu',
+                    onProgress,
+                    onSegment,
+                    language,
+                    saveToPath,
+                    configOverride,
+                );
             }
             throw error;
         }
     }
 
-    private async _transcribeFileInternal(filePath: string, _provider?: string, onProgress?: (progress: number) => void, onSegment?: TranscriptionCallback, language?: string, _saveToPath?: string): Promise<TranscriptSegment[]> {
+    private async _transcribeFileInternal(
+        filePath: string,
+        _provider?: string,
+        onProgress?: (progress: number) => void,
+        onSegment?: TranscriptionCallback,
+        language?: string,
+        _saveToPath?: string,
+        configOverride?: AppConfig,
+    ): Promise<TranscriptSegment[]> {
         if (!this.modelPath) throw new Error('Model path not configured');
 
-        const appConfig = useTranscriptStore.getState().config;
+        const appConfig = configOverride || useTranscriptStore.getState().config;
         let punctuationPathToUse = '';
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;
@@ -491,7 +524,8 @@ export class TranscriptionService {
             language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
             vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',
             fileConfig: offlineModel?.fileConfig,
-            hotwords: hotwordsStr
+            hotwords: hotwordsStr,
+            speakerProcessing: speakerService.buildProcessingConfig(appConfig),
         });
 
         // Filter segments: some models (like Whisper) occasionally produce single "." segments

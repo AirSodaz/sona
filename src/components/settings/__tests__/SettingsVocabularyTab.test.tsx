@@ -13,6 +13,10 @@ vi.mock('react-i18next', () => ({
       return key;
     },
   }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 vi.mock('../../../services/projectService', () => ({
@@ -34,6 +38,7 @@ vi.mock('../../../services/projectService', () => ({
           enabledTextReplacementSetIds: [],
           enabledHotwordSetIds: [],
           enabledPolishKeywordSetIds: [],
+          enabledSpeakerProfileIds: [],
           ...(updates.defaults || {}),
         },
       })),
@@ -62,6 +67,7 @@ describe('SettingsVocabularyTab', () => {
         polishPresetId: 'general',
         polishCustomPresets: [],
         polishKeywordSets: [],
+        speakerProfiles: [],
       },
     });
 
@@ -82,6 +88,7 @@ describe('SettingsVocabularyTab', () => {
             enabledTextReplacementSetIds: [],
             enabledHotwordSetIds: [],
             enabledPolishKeywordSetIds: ['kw-1'],
+            enabledSpeakerProfileIds: [],
           },
         },
       ],
@@ -278,6 +285,38 @@ describe('SettingsVocabularyTab', () => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
       expect(useConfigStore.getState().config.polishPresetId).toBe('general');
       expect(useProjectStore.getState().projects[0].defaults.polishPresetId).toBe('general');
+    });
+  });
+
+  it('deletes speaker profiles and removes their project-level references', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        speakerProfiles: [
+          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
+        ],
+      },
+    });
+    useProjectStore.setState({
+      ...useProjectStore.getState(),
+      projects: [
+        {
+          ...useProjectStore.getState().projects[0],
+          defaults: {
+            ...useProjectStore.getState().projects[0].defaults,
+            enabledSpeakerProfileIds: ['speaker-1'],
+          },
+        },
+      ],
+    });
+
+    render(<SettingsVocabularyTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Alice' }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.speakerProfiles).toEqual([]);
+      expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([]);
     });
   });
 });

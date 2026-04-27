@@ -37,7 +37,10 @@ export const projectService = {
     await ensureProjectsIndex();
   },
 
-  async getAll(options?: { fallbackEnabledPolishKeywordSetIds?: string[] }): Promise<ProjectRecord[]> {
+  async getAll(options?: {
+    fallbackEnabledPolishKeywordSetIds?: string[];
+    fallbackEnabledSpeakerProfileIds?: string[];
+  }): Promise<ProjectRecord[]> {
     try {
       await ensureProjectsIndex();
       const content = await readTextFile(`${PROJECTS_DIR}/${INDEX_FILE}`, {
@@ -45,11 +48,13 @@ export const projectService = {
       });
       const parsed = JSON.parse(content) as Partial<ProjectRecord>[];
       const fallbackEnabledPolishKeywordSetIds = options?.fallbackEnabledPolishKeywordSetIds ?? [];
+      const fallbackEnabledSpeakerProfileIds = options?.fallbackEnabledSpeakerProfileIds ?? [];
       let migrated = false;
       const projects = parsed.map((item) => {
         const normalized = normalizeProjectRecordWithKeywordSetBackfill(
           item,
           fallbackEnabledPolishKeywordSetIds,
+          fallbackEnabledSpeakerProfileIds,
         );
         migrated = migrated || normalized.migrated;
         return normalized.project;

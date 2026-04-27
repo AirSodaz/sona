@@ -9,7 +9,7 @@ describe('computeSegmentsFingerprint', () => {
             { id: '2', text: 'World', start: 1, end: 2, isFinal: true }
         ];
         const fingerprint = computeSegmentsFingerprint(segments);
-        expect(fingerprint).toBe('1:Hello:0:1:true:|2:World:1:2:true:');
+        expect(fingerprint).toBe('1:Hello:0:1:true:::::|2:World:1:2:true:::::');
     });
 
     it('returns a different fingerprint when translation changes', () => {
@@ -51,6 +51,24 @@ describe('computeSegmentsFingerprint', () => {
 
         expect(fingerprint1).not.toBe(fingerprint2);
     });
+
+    it('returns a different fingerprint when speaker metadata changes', () => {
+        const segments1: TranscriptSegment[] = [
+            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
+        ];
+        const segments2: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified', score: 0.88 },
+            }
+        ];
+
+        expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
+    });
 });
 
 describe('computeSummarySourceFingerprint', () => {
@@ -71,6 +89,24 @@ describe('computeSummarySourceFingerprint', () => {
         ];
         const segments2: TranscriptSegment[] = [
             { id: '1', text: 'Hello there', start: 0, end: 1, isFinal: true }
+        ];
+
+        expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
+    });
+
+    it('changes when speaker metadata changes', () => {
+        const segments1: TranscriptSegment[] = [
+            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
+        ];
+        const segments2: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
+            }
         ];
 
         expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
