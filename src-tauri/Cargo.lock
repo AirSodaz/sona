@@ -5521,6 +5521,7 @@ dependencies = [
 name = "tauri-appsona"
 version = "0.6.3"
 dependencies = [
+ "async-trait",
  "bytes",
  "bzip2",
  "clap",

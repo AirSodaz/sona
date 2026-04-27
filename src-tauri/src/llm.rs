@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use futures_util::{future::BoxFuture, stream, StreamExt};
 use log::{info, warn};
 use reqwest::{header::RETRY_AFTER, Client, StatusCode};
@@ -110,6 +111,381 @@ pub struct LlmConfig {
 pub struct LlmGenerateRequest {
     pub config: LlmConfig,
     pub input: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MessageRole {
+    #[serde(rename = "system")]
+    System,
+    #[serde(rename = "user")]
+    User,
+    #[serde(rename = "assistant")]
+    Assistant,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StandardMessage {
+    pub role: MessageRole,
+    pub content: String,
+}
+
+#[derive(Debug)]
+pub struct StandardLlmRequest {
+    pub messages: Vec<StandardMessage>,
+    pub temperature: f32,
+    #[allow(dead_code)]
+    pub max_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandardLlmResponse {
+    pub text: String,
+    pub usage: Option<TokenUsage>,
+}
+
+#[async_trait]
+pub trait LlmAdapter: Send + Sync {
+    async fn generate(
+        &self,
+        client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String>;
+}
+
+pub struct OpenAiAdapter;
+
+#[async_trait]
+impl LlmAdapter for OpenAiAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let client = openai::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(&config.base_url)
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        // For now, we use the first message's content as input to match current behavior
+        // or join all user messages.
+        let input = req.messages.iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: None, // Rig's current version might not expose usage easily here
+        })
+    }
+}
+
+pub struct AnthropicAdapter;
+
+#[async_trait]
+impl LlmAdapter for AnthropicAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let client = anthropic::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(&config.base_url)
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let input = req.messages.iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: None,
+        })
+    }
+}
+
+pub struct OllamaAdapter;
+
+#[async_trait]
+impl LlmAdapter for OllamaAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let client = ollama::Client::builder()
+            .api_key(Nothing)
+            .base_url(config.base_url.trim_end_matches("/v1"))
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let input = req.messages.iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: None,
+        })
+    }
+}
+
+pub struct GeminiAdapter;
+
+#[async_trait]
+impl LlmAdapter for GeminiAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let client = gemini::Client::builder()
+            .api_key(&config.api_key)
+            .base_url(clean_gemini_base_url(&config.base_url))
+            .build()
+            .map_err(|error| error.to_string())?;
+
+        let input = req.messages.iter()
+            .filter(|m| matches!(m.role, MessageRole::User))
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = client
+            .completion_model(&config.model)
+            .completion_request(&input)
+            .temperature_opt(Some(req.temperature as f64))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(StandardLlmResponse {
+            text: extract_text_response(&response.choice)?,
+            usage: None,
+        })
+    }
+}
+
+pub struct GoogleTranslateAdapter;
+
+#[async_trait]
+impl LlmAdapter for GoogleTranslateAdapter {
+    async fn generate(
+        &self,
+        client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let input = req.messages.iter()
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if config.provider == LlmProvider::GoogleTranslateFree {
+            let base_url = config.base_url.clone();
+            let fetch_client = client.clone();
+            
+            let (_, text) = execute_google_translate_free_request(
+                0,
+                input,
+                "en".to_string(),
+                move |text, target| {
+                    let url = format!(
+                        "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
+                        base_url.trim_end_matches('/'),
+                        target,
+                        urlencoding::encode(&text)
+                    );
+                    let client = fetch_client.clone();
+                    async move {
+                        let response = client.get(&url).send().await.map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
+                        let status = response.status();
+                        if !status.is_success() {
+                            return Err(GoogleTranslateFreeAttemptError::HttpStatus { 
+                                status, 
+                                retry_after: None 
+                            });
+                        }
+                        let body: Value = response.json().await.map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
+                        let mut result = String::new();
+                        if let Some(outer_arr) = body.as_array() {
+                            if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
+                                for part in inner_arr {
+                                    if let Some(text) = part.get(0).and_then(|v| v.as_str()) {
+                                        result.push_str(text);
+                                    }
+                                }
+                            }
+                        }
+                        if result.is_empty() {
+                            return Err(GoogleTranslateFreeAttemptError::Message("No translation returned".to_string()));
+                        }
+                        Ok(result)
+                    }
+                },
+                tokio::time::sleep,
+            ).await?;
+            
+            return Ok(StandardLlmResponse { text, usage: None });
+        }
+
+        let payload = GoogleTranslateRequest {
+            q: vec![input],
+            target: "en".to_string(), // Default fallback
+            format: "text".to_string(),
+        };
+
+        let url = format!(
+            "{}?key={}",
+            config.base_url.trim_end_matches('/'),
+            config.api_key
+        );
+
+        let response = post_json_request(&url, vec![], json!(payload)).await?;
+        let text = extract_text_from_json_response(&response)?;
+
+        Ok(StandardLlmResponse {
+            text,
+            usage: None,
+        })
+    }
+}
+
+pub struct GenericHttpAdapter;
+
+#[async_trait]
+impl LlmAdapter for GenericHttpAdapter {
+    async fn generate(
+        &self,
+        _client: &Client,
+        req: &StandardLlmRequest,
+        config: &LlmConfig,
+    ) -> Result<StandardLlmResponse, String> {
+        let input = req.messages.iter()
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let text = match config.provider {
+            LlmProvider::OpenAiResponses => {
+                generate_with_openai_responses_api(
+                    &config.base_url,
+                    &config.api_key,
+                    &config.model,
+                    &input,
+                    Some(req.temperature),
+                    config.api_path.as_deref(),
+                ).await?
+            }
+            LlmProvider::AzureOpenAi => {
+                generate_with_azure_openai(
+                    &config.base_url,
+                    &config.api_key,
+                    &config.model,
+                    &input,
+                    Some(req.temperature),
+                    config.api_version.as_deref(),
+                ).await?
+            }
+            LlmProvider::Perplexity => {
+                generate_with_perplexity(
+                    &config.api_key,
+                    &config.model,
+                    &input,
+                    Some(req.temperature),
+                ).await?
+            }
+            _ => {
+                generate_with_openai_custom_path(
+                    &config.base_url,
+                    &config.api_key,
+                    &config.model,
+                    &input,
+                    Some(req.temperature),
+                    config.api_path.as_deref(),
+                ).await?
+            }
+        };
+
+        Ok(StandardLlmResponse {
+            text,
+            usage: None,
+        })
+    }
+}
+
+pub struct AdapterFactory;
+
+impl AdapterFactory {
+    pub fn create(provider: LlmProvider) -> Box<dyn LlmAdapter> {
+        match provider {
+            LlmProvider::OpenAi
+            | LlmProvider::DeepSeek
+            | LlmProvider::Kimi
+            | LlmProvider::SiliconFlow
+            | LlmProvider::Qwen
+            | LlmProvider::QwenPortal
+            | LlmProvider::MinimaxGlobal
+            | LlmProvider::MinimaxCn
+            | LlmProvider::OpenRouter
+            | LlmProvider::LmStudio
+            | LlmProvider::Groq
+            | LlmProvider::XAi
+            | LlmProvider::MistralAi
+            | LlmProvider::OpenAiCompatible => Box::new(OpenAiAdapter),
+            LlmProvider::Anthropic => Box::new(AnthropicAdapter),
+            LlmProvider::Ollama => Box::new(OllamaAdapter),
+            LlmProvider::Gemini => Box::new(GeminiAdapter),
+            LlmProvider::GoogleTranslate | LlmProvider::GoogleTranslateFree => {
+                Box::new(GoogleTranslateAdapter)
+            }
+            _ => Box::new(GenericHttpAdapter),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -613,269 +989,25 @@ async fn generate_with_perplexity(
     .await
 }
 
-async fn generate_with_openai_compatible(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = openai::Client::builder()
-        .api_key(api_key)
-        .base_url(base_url)
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
-async fn generate_with_anthropic(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = anthropic::Client::builder()
-        .api_key(api_key)
-        .base_url(base_url)
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
-async fn generate_with_gemini(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = gemini::Client::builder()
-        .api_key(api_key)
-        .base_url(clean_gemini_base_url(base_url))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
-async fn generate_with_ollama(
-    base_url: &str,
-    model: &str,
-    input: &str,
-    temperature: Option<f32>,
-) -> Result<String, String> {
-    let client = ollama::Client::builder()
-        .api_key(Nothing)
-        .base_url(base_url.trim_end_matches("/v1"))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = client
-        .completion_model(model)
-        .completion_request(input)
-        .temperature_opt(temperature.map(|value| value as f64))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    extract_text_response(&response.choice)
-}
-
 async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String> {
-    let config = request.config;
+    let adapter = AdapterFactory::create(request.config.provider);
+    let std_req = StandardLlmRequest {
+        messages: vec![StandardMessage {
+            role: MessageRole::User,
+            content: request.input,
+        }],
+        temperature: request.config.temperature.unwrap_or(0.7),
+        max_tokens: None,
+    };
 
-    match config.provider {
-        LlmProvider::OpenAi
-        | LlmProvider::DeepSeek
-        | LlmProvider::Kimi
-        | LlmProvider::SiliconFlow
-        | LlmProvider::Qwen
-        | LlmProvider::QwenPortal
-        | LlmProvider::MinimaxGlobal
-        | LlmProvider::MinimaxCn
-        | LlmProvider::OpenRouter
-        | LlmProvider::LmStudio
-        | LlmProvider::Groq
-        | LlmProvider::XAi
-        | LlmProvider::MistralAi
-        | LlmProvider::Chatglm
-        | LlmProvider::OpenAiCompatible => {
-            generate_with_openai_compatible(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-            )
-            .await
-        }
-        LlmProvider::Anthropic => {
-            generate_with_anthropic(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-            )
-            .await
-        }
-        LlmProvider::Gemini => {
-            generate_with_gemini(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-            )
-            .await
-        }
-        LlmProvider::Ollama => {
-            generate_with_ollama(
-                &config.base_url,
-                &config.model,
-                &request.input,
-                config.temperature,
-            )
-            .await
-        }
-        LlmProvider::OpenAiResponses => {
-            generate_with_openai_responses_api(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-                config.api_path.as_deref(),
-            )
-            .await
-        }
-        LlmProvider::AzureOpenAi => {
-            generate_with_azure_openai(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-                config.api_version.as_deref(),
-            )
-            .await
-        }
-        LlmProvider::Perplexity => {
-            generate_with_perplexity(
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-            )
-            .await
-        }
-        LlmProvider::Volcengine => {
-            generate_with_openai_custom_path(
-                &config.base_url,
-                &config.api_key,
-                &config.model,
-                &request.input,
-                config.temperature,
-                config.api_path.as_deref(),
-            )
-            .await
-        }
-        LlmProvider::GoogleTranslate => {
-            let payload = GoogleTranslateRequest {
-                q: vec![request.input.clone()],
-                target: "en".to_string(),
-                format: "text".to_string(),
-            };
+    let client = Client::new();
+    let response = adapter
+        .generate(&client, &std_req, &request.config)
+        .await?;
 
-            let url = format!(
-                "{}?key={}",
-                config.base_url.trim_end_matches('/'),
-                config.api_key
-            );
-            let client = Client::new();
-            let response = client
-                .post(&url)
-                .json(&payload)
-                .send()
-                .await
-                .map_err(|e| e.to_string())?;
-
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-
-            if !status.is_success() {
-                return Err(format!("Google Translate API Error: {} {}", status, text));
-            }
-
-            let parsed: GoogleTranslateResponse =
-                serde_json::from_str(&text).map_err(|e| format!("invalid JSON: {}", e))?;
-
-            parsed
-                .data
-                .translations
-                .into_iter()
-                .next()
-                .map(|t| t.translated_text)
-                .ok_or_else(|| "No translation returned".to_string())
-        }
-        LlmProvider::GoogleTranslateFree => {
-            let url = format!(
-                "{}?client=gtx&sl=auto&tl=en&dt=t&q={}",
-                config.base_url.trim_end_matches('/'),
-                urlencoding::encode(&request.input)
-            );
-            let client = Client::new();
-            let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
-
-            let status = response.status();
-            if !status.is_success() {
-                return Err(format!("Google Translate Free API Error: {}", status));
-            }
-
-            let body: Value = response.json().await.map_err(|e| e.to_string())?;
-            let mut result = String::new();
-
-            if let Some(outer_arr) = body.as_array() {
-                if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
-                    for part in inner_arr {
-                        if let Some(text) = part.get(0).and_then(|v| v.as_str()) {
-                            result.push_str(text);
-                        }
-                    }
-                }
-            }
-
-            if result.is_empty() {
-                return Err("No translation returned from Free API".to_string());
-            }
-
-            Ok(result)
-        }
-    }
+    Ok(response.text)
 }
+
 
 fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
     chunk_size
