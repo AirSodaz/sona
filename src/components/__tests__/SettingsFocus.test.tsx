@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Settings } from '../Settings';
+import type { SettingsTab } from '../../hooks/useSettingsLogic';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -15,10 +16,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 const setActiveTabMock = vi.fn();
+let mockActiveTab: SettingsTab = 'general';
 
 vi.mock('../../hooks/useSettingsLogic', () => ({
     useSettingsLogic: () => ({
-        activeTab: 'general',
+        activeTab: mockActiveTab,
         setActiveTab: setActiveTabMock,
         config: {
             appLanguage: 'auto',
@@ -59,6 +61,9 @@ vi.mock('../settings/SettingsGeneralTab', () => ({
 vi.mock('../settings/SettingsModelsTab', () => ({
     SettingsModelsTab: () => <div>Models Tab</div>
 }));
+vi.mock('../settings/SettingsVoiceTypingTab', () => ({
+    SettingsVoiceTypingTab: () => <div>Voice Typing Tab</div>
+}));
 vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
     MicIcon: () => <span>Icon</span>,
@@ -82,6 +87,7 @@ vi.mock('../stores/dialogStore', () => ({
 describe('Settings Focus Trap & Navigation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockActiveTab = 'general';
     });
 
     it('traps focus inside the modal', async () => {
@@ -154,6 +160,40 @@ describe('Settings Focus Trap & Navigation', () => {
         // Home -> Should switch to 'general' (first)
         fireEvent.keyDown(tablist, { key: 'Home' });
         expect(setActiveTabMock).toHaveBeenCalledWith('general');
+    });
+
+    it('renders the voice typing tab between subtitle settings and model hub', () => {
+        const onClose = vi.fn();
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        expect(screen.getByText('settings.voice_typing')).toBeDefined();
+
+        const tabLabels = screen
+            .getAllByRole('tab')
+            .map((tab) => tab.textContent?.trim()?.replace(/^Icon/, ''));
+
+        expect(tabLabels).toEqual([
+            'settings.general',
+            'settings.input_device',
+            'live.subtitle_settings',
+            'settings.voice_typing',
+            'settings.model_hub',
+            'settings.vocabulary',
+            'settings.automation',
+            'settings.llm.title',
+            'shortcuts.title',
+            'settings.about',
+        ]);
+    });
+
+    it('renders the dedicated voice typing panel when that tab is active', () => {
+        mockActiveTab = 'voice_typing';
+        const onClose = vi.fn();
+
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        expect(screen.getByText('Voice Typing Tab')).toBeDefined();
+        expect(screen.queryByText('General Tab Input')).toBeNull();
     });
 
     it('navigates tabs with ctrl+tab without the removed local tab', () => {

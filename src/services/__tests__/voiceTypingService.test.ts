@@ -2,14 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
     const shortcutState: { handler?: (event: any) => void } = {};
+    const configEvents: {
+        listener?: (state: { config: Record<string, any> }) => void;
+    } = {};
 
     return {
         shortcutState,
+        configEvents,
         defaultConfig: {
             voiceTypingEnabled: false,
             voiceTypingShortcut: 'Alt+V',
             voiceTypingMode: 'hold',
             streamingModelPath: 'path/to/model',
+            vadModelPath: 'path/to/vad',
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
@@ -19,6 +24,7 @@ const mocks = vi.hoisted(() => {
             voiceTypingShortcut: 'Alt+V',
             voiceTypingMode: 'hold',
             streamingModelPath: 'path/to/model',
+            vadModelPath: 'path/to/vad',
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
@@ -107,6 +113,10 @@ async function loadService() {
     return module.voiceTypingService as any;
 }
 
+async function loadRuntimeStore() {
+    return await import('../../stores/voiceTypingRuntimeStore');
+}
+
 async function flushMicrotasks(times = 4) {
     for (let i = 0; i < times; i += 1) {
         await Promise.resolve();
@@ -117,6 +127,14 @@ function getInvokeCalls(command: string) {
     return mocks.invoke.mock.calls.filter(([calledCommand]) => calledCommand === command);
 }
 
+function emitConfigChange(patch: Record<string, any>) {
+    mocks.config = {
+        ...mocks.config,
+        ...patch,
+    };
+    mocks.configEvents.listener?.({ config: mocks.config });
+}
+
 describe('voiceTypingService', () => {
     beforeEach(() => {
         vi.useRealTimers();
@@ -124,8 +142,12 @@ describe('voiceTypingService', () => {
         vi.resetModules();
 
         mocks.shortcutState.handler = undefined;
+        mocks.configEvents.listener = undefined;
         mocks.config = { ...mocks.defaultConfig };
-        mocks.configSubscribe.mockImplementation(() => () => undefined);
+        mocks.configSubscribe.mockImplementation((listener: (state: { config: Record<string, any> }) => void) => {
+            mocks.configEvents.listener = listener;
+            return () => undefined;
+        });
         mocks.isRegistered.mockResolvedValue(false);
         mocks.mockPrepare.mockResolvedValue(undefined);
         mocks.mockStart.mockResolvedValue(undefined);
@@ -166,6 +188,108 @@ describe('voiceTypingService', () => {
 
         expect(mocks.mockPrepare).toHaveBeenCalled();
         expect(mocks.windowPrepare).toHaveBeenCalledWith([0, 0]);
+    });
+
+    it('updates runtime status to ready after successful shortcut registration and warm-up', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'ready',
+                warmup: 'ready',
+                lastErrorSource: null,
+                lastErrorMessage: null,
+            })
+        );
+    });
+
+    it('records shortcut registration failures in the runtime status store', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.register.mockRejectedValueOnce(new Error('Shortcut is already in use.'));
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'error',
+                lastErrorSource: 'shortcut_registration',
+                lastErrorMessage: 'Shortcut is already in use.',
+            })
+        );
+    });
+
+    it('records warm-up failures in the runtime status store', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.mockPrepare.mockRejectedValueOnce(new Error('Warm-up failed.'));
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                warmup: 'error',
+                lastErrorSource: 'warmup',
+                lastErrorMessage: 'Warm-up failed.',
+            })
+        );
+    });
+
+    it('records microphone pre-warm failures in the runtime status store', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.invoke.mockImplementation(async (command: string) => {
+            if (command === 'get_text_cursor_position') {
+                return [120, 280];
+            }
+            if (command === 'get_mouse_position') {
+                return [240, 320];
+            }
+            if (command === 'start_microphone_capture') {
+                throw new Error('Microphone is unavailable.');
+            }
+            if (command === 'inject_text' || command === 'stop_microphone_capture') {
+                return undefined;
+            }
+            return undefined;
+        });
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                warmup: 'error',
+                lastErrorSource: 'microphone',
+                lastErrorMessage: 'Microphone is unavailable.',
+            })
+        );
     });
 
     it('anchors the overlay to the text cursor and publishes preparing then listening before capture stays warm', async () => {
@@ -764,6 +888,96 @@ describe('voiceTypingService', () => {
         );
         expect(mocks.mockSoftStop).toHaveBeenCalled();
         expect(mocks.windowClose).toHaveBeenCalled();
+    });
+
+    it('propagates session errors into the runtime status store', async () => {
+        mocks.mockStart.mockImplementation(
+            async (
+                _segmentCallback: (segment: any) => void,
+                errorCallback: (error: string) => void
+            ) => {
+                errorCallback('Recognizer crashed.');
+            }
+        );
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        await service.startListening();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                lastErrorSource: 'session',
+                lastErrorMessage: 'Recognizer crashed.',
+            })
+        );
+    });
+
+    it('clears stale shortcut errors after the shortcut changes and registration recovers', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.register.mockRejectedValueOnce(new Error('Shortcut conflict.'));
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'error',
+                lastErrorSource: 'shortcut_registration',
+            })
+        );
+
+        emitConfigChange({ voiceTypingShortcut: 'Ctrl + Shift + V' });
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'ready',
+                warmup: 'ready',
+                lastErrorSource: null,
+                lastErrorMessage: null,
+            })
+        );
+    });
+
+    it('clears stale warm-up errors after a dependency change triggers recovery', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.mockPrepare.mockRejectedValueOnce(new Error('Warm-up failed once.'));
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                warmup: 'error',
+                lastErrorSource: 'warmup',
+            })
+        );
+
+        emitConfigChange({ microphoneId: 'usb-mic' });
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'ready',
+                warmup: 'ready',
+                lastErrorSource: null,
+                lastErrorMessage: null,
+            })
+        );
     });
 
     it('cancels startup cleanly if the shortcut is released before microphone capture begins', async () => {

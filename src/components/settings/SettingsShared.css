@@ -242,3 +242,97 @@
   background: var(--color-border);
   width: 100%;
 }
+
+.status-badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-badge.ready {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.status-badge.missing {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.status-badge.off {
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  color: var(--color-text-muted);
+}
+
+.status-badge.pending {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+}
+
+.settings-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--spacing-lg, 24px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-bg-secondary) 72%, transparent),
+      var(--color-bg-primary)
+    );
+}
+
+.settings-status-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.settings-status-card-title {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.settings-status-card-description {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.settings-status-card-meta {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.settings-status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-badge.ready {
+    color: #4ade80;
+  }
+
+  .status-badge.missing {
+    color: #f87171;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-status-actions {
+    justify-content: flex-start;
+  }
+}

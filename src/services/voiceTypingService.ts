@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { useConfigStore } from '../stores/configStore';
+import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { logger } from '../utils/logger';
 import { TranscriptionService } from './transcriptionService';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
@@ -11,6 +12,14 @@ const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
 
+function normalizeErrorMessage(error: unknown) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return String(error);
+}
+
 class VoiceTypingService {
     private initialized = false;
     private isShortcutRegistered = false;
@@ -20,6 +29,8 @@ class VoiceTypingService {
     private lastEnabled = false;
     private lastShortcut = '';
     private lastModelPath = '';
+    private lastVadModelPath = '';
+    private lastMicrophoneId = 'default';
     private lastLanguage = '';
     private lastEnableITN = true;
 
@@ -40,6 +51,9 @@ class VoiceTypingService {
                 text,
             });
         },
+        onRuntimeError: (error) => {
+            useVoiceTypingRuntimeStore.getState().reportRuntimeError('session', error);
+        },
     });
 
     public init() {
@@ -53,8 +67,10 @@ class VoiceTypingService {
 
         const initialConfig = useConfigStore.getState().config;
         this.lastEnabled = initialConfig.voiceTypingEnabled || false;
-        this.lastShortcut = initialConfig.voiceTypingShortcut || 'Alt+V';
+        this.lastShortcut = initialConfig.voiceTypingShortcut ?? 'Alt+V';
         this.lastModelPath = initialConfig.streamingModelPath || '';
+        this.lastVadModelPath = initialConfig.vadModelPath || '';
+        this.lastMicrophoneId = initialConfig.microphoneId || 'default';
         this.lastLanguage = initialConfig.language || 'auto';
         this.lastEnableITN = initialConfig.enableITN ?? true;
 
@@ -62,6 +78,8 @@ class VoiceTypingService {
             enabled: this.lastEnabled,
             shortcut: this.lastShortcut,
             modelPath: this.lastModelPath,
+            vadModelPath: this.lastVadModelPath,
+            microphoneId: this.lastMicrophoneId,
             language: this.lastLanguage,
             enableITN: this.lastEnableITN,
         });
@@ -69,17 +87,45 @@ class VoiceTypingService {
         useConfigStore.subscribe((state) => {
             const newConfig = state.config;
             const newEnabled = newConfig.voiceTypingEnabled || false;
-            const newShortcut = newConfig.voiceTypingShortcut || 'Alt+V';
+            const newShortcut = newConfig.voiceTypingShortcut ?? 'Alt+V';
             const newModelPath = newConfig.streamingModelPath || '';
+            const newVadModelPath = newConfig.vadModelPath || '';
+            const newMicrophoneId = newConfig.microphoneId || 'default';
             const newLanguage = newConfig.language || 'auto';
             const newEnableITN = newConfig.enableITN ?? true;
 
             const enabledChanged = newEnabled !== this.lastEnabled;
             const shortcutChanged = newShortcut !== this.lastShortcut;
+            const vadModelChanged = newVadModelPath !== this.lastVadModelPath;
+            const microphoneChanged = newMicrophoneId !== this.lastMicrophoneId;
             const configChanged =
                 newModelPath !== this.lastModelPath ||
+                vadModelChanged ||
+                microphoneChanged ||
                 newLanguage !== this.lastLanguage ||
                 newEnableITN !== this.lastEnableITN;
+            const runtimeDependencyChanged =
+                shortcutChanged ||
+                newModelPath !== this.lastModelPath ||
+                vadModelChanged ||
+                microphoneChanged;
+
+            if (!newEnabled) {
+                useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
+            } else if (enabledChanged) {
+                useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+                    resetShortcutRegistration: true,
+                    resetWarmup: true,
+                });
+            } else if (runtimeDependencyChanged) {
+                useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+                    resetShortcutRegistration: shortcutChanged,
+                    resetWarmup:
+                        newModelPath !== this.lastModelPath ||
+                        vadModelChanged ||
+                        microphoneChanged,
+                });
+            }
 
             if (enabledChanged || shortcutChanged) {
                 logger.info('[VoiceTypingService] Shortcut config changed', {
@@ -96,6 +142,8 @@ class VoiceTypingService {
             this.lastEnabled = newEnabled;
             this.lastShortcut = newShortcut;
             this.lastModelPath = newModelPath;
+            this.lastVadModelPath = newVadModelPath;
+            this.lastMicrophoneId = newMicrophoneId;
             this.lastLanguage = newLanguage;
             this.lastEnableITN = newEnableITN;
 
@@ -113,10 +161,12 @@ class VoiceTypingService {
     private async syncAndPrepare() {
         const config = useConfigStore.getState().config;
         if (!config.voiceTypingEnabled || !config.streamingModelPath) {
+            useVoiceTypingRuntimeStore.getState().setWarmupStatus('idle');
             return;
         }
 
         try {
+            useVoiceTypingRuntimeStore.getState().setWarmupStatus('preparing');
             logger.info('[VoiceTypingService] Pre-warming transcription model and microphone...');
             this.configureTranscriptionService();
             await this.transcriptionService.prepare();
@@ -125,9 +175,19 @@ class VoiceTypingService {
             await this.overlayPresenter.prepare(lastPosition);
             await this.ensureMicrophoneStarted();
 
+            if (useVoiceTypingRuntimeStore.getState().warmup === 'error') {
+                return;
+            }
+
+            useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
+
             logger.info('[VoiceTypingService] Model and mic pre-warmed and ready.');
         } catch (error) {
             logger.error('[VoiceTypingService] Failed to pre-warm:', error);
+            useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
+                errorSource: 'warmup',
+                errorMessage: normalizeErrorMessage(error),
+            });
         }
     }
 
@@ -153,6 +213,10 @@ class VoiceTypingService {
             this.captureStarted = true;
         } catch (error) {
             logger.error('[VoiceTypingService] Failed to start microphone capture:', error);
+            useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
+                errorSource: 'microphone',
+                errorMessage: normalizeErrorMessage(error),
+            });
         }
     }
 
@@ -188,8 +252,13 @@ class VoiceTypingService {
             }
 
             if (!enabled || !normalizedShortcut) {
+                this.currentShortcut = null;
+                useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('idle');
                 return;
             }
+
+            this.currentShortcut = null;
+            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('idle');
 
             await register(normalizedShortcut, (event) => {
                 logger.info('[VoiceTypingService] Shortcut event triggered', {
@@ -220,11 +289,16 @@ class VoiceTypingService {
 
             this.isShortcutRegistered = true;
             this.currentShortcut = normalizedShortcut;
+            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
             logger.info('[VoiceTypingService] Successfully registered voice typing shortcut', {
                 shortcut: normalizedShortcut,
             });
         } catch (error) {
             logger.error('[VoiceTypingService] Failed to update voice typing shortcut:', error);
+            useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus(
+                'error',
+                normalizeErrorMessage(error)
+            );
         }
     }
 
@@ -242,7 +316,7 @@ class VoiceTypingService {
     }
 
     private getCurrentShortcutModifiers(): VoiceTypingShortcutModifier[] {
-        const shortcut = useConfigStore.getState().config.voiceTypingShortcut || 'Alt+V';
+        const shortcut = useConfigStore.getState().config.voiceTypingShortcut ?? 'Alt+V';
         const normalizedParts = shortcut
             .split('+')
             .map((part) => part.trim().toLowerCase())
@@ -388,10 +462,13 @@ class VoiceTypingService {
         this.lastEnabled = false;
         this.lastShortcut = '';
         this.lastModelPath = '';
+        this.lastVadModelPath = '';
+        this.lastMicrophoneId = 'default';
         this.lastLanguage = '';
         this.lastEnableITN = true;
         this.overlayPresenter.resetForTest();
         this.sessionMachine.resetForTest();
+        useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
     }
 }
 

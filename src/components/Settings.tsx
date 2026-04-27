@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Type } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -14,7 +15,9 @@ import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
 import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsAutomationTab } from './settings/SettingsAutomationTab';
+import { SettingsVoiceTypingTab } from './settings/SettingsVoiceTypingTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
+import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
 import { SettingsTabInput } from '../hooks/useSettingsLogic';
 import './settings/Settings.css';
 import {
@@ -37,7 +40,18 @@ interface SettingsProps {
     initialTab?: SettingsTabInput;
 }
 
-const SETTINGS_TABS = ['general', 'microphone', 'subtitle', 'models', 'vocabulary', 'automation', 'llm_service', 'shortcuts', 'about'] as const;
+const SETTINGS_TABS = [
+    'general',
+    'microphone',
+    'subtitle',
+    'voice_typing',
+    'models',
+    'vocabulary',
+    'automation',
+    'llm_service',
+    'shortcuts',
+    'about',
+] as const;
 
 /**
  * Modal dialog for application settings.
@@ -57,6 +71,17 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
     const modelManager = useModelManager(isOpen);
+    const navigateToTab = useCallback((nextTab: typeof SETTINGS_TABS[number]) => {
+        setActiveTab(nextTab);
+        requestAnimationFrame(() => {
+            const btn = document.getElementById(`settings-tab-${nextTab}`);
+            btn?.focus();
+        });
+    }, [setActiveTab]);
+    const navigationContextValue = useMemo(() => ({
+        activeTab,
+        navigateToTab,
+    }), [activeTab, navigateToTab]);
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
@@ -78,19 +103,13 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                     : (currentIndex + 1) % SETTINGS_TABS.length;
 
                 const nextTab = SETTINGS_TABS[nextIndex];
-                setActiveTab(nextTab);
-
-                // Move focus to the new tab button
-                requestAnimationFrame(() => {
-                    const btn = document.getElementById(`settings-tab-${nextTab}`);
-                    btn?.focus();
-                });
+                navigateToTab(nextTab);
             }
         };
 
         window.addEventListener('keydown', handleGlobalKeyDown);
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [isOpen, activeTab, setActiveTab]);
+    }, [isOpen, activeTab, navigateToTab]);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
         const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
@@ -119,12 +138,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
         if (nextIndex !== -1) {
             const nextTab = SETTINGS_TABS[nextIndex];
-            setActiveTab(nextTab);
-            // Move focus to the new tab button
-            requestAnimationFrame(() => {
-                const btn = document.getElementById(`settings-tab-${nextTab}`);
-                btn?.focus();
-            });
+            navigateToTab(nextTab);
         }
     };
 
@@ -159,7 +173,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.general')}
                             Icon={GeneralIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'general' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -167,7 +181,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.input_device', { defaultValue: 'Input Device' })}
                             Icon={MicIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'microphone' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -175,15 +189,23 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                             Icon={SubtitleIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'subtitle' ? 0 : -1}
+                        />
+                        <SettingsTabButton
+                            id="voice_typing"
+                            label={t('settings.voice_typing')}
+                            Icon={() => <Type size={18} />}
+                            activeTab={activeTab}
+                            setActiveTab={navigateToTab}
+                            tabIndex={activeTab === 'voice_typing' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="models"
                             label={t('settings.model_hub')}
                             Icon={ModelIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'models' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -191,7 +213,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.vocabulary')}
                             Icon={BookIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'vocabulary' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -199,7 +221,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.automation', { defaultValue: 'Automation' })}
                             Icon={AutomationIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'automation' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -207,7 +229,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.llm.title')}
                             Icon={RobotIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'llm_service' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -215,7 +237,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('shortcuts.title')}
                             Icon={KeyboardIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'shortcuts' ? 0 : -1}
                         />
                         <SettingsTabButton
@@ -223,7 +245,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             label={t('settings.about')}
                             Icon={InfoIcon}
                             activeTab={activeTab}
-                            setActiveTab={setActiveTab}
+                            setActiveTab={navigateToTab}
                             tabIndex={activeTab === 'about' ? 0 : -1}
                         />
                     </div>
@@ -246,37 +268,41 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
 
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
-                        <ModelManagerContext.Provider value={modelManager}>
-                            {(() => {
-                                switch (activeTab) {
-                                    case 'general':
-                                        return <SettingsGeneralTab />;
-                                    case 'microphone':
-                                        return (
-                                            <SettingsMicrophoneTab
-                                                isActiveTab={activeTab === 'microphone'}
-                                                isOpen={isOpen}
-                                            />
-                                        );
-                                    case 'subtitle':
-                                        return <SettingsSubtitleTab />;
-                                    case 'models':
-                                        return <SettingsModelsTab />;
-                                    case 'vocabulary':
-                                        return <SettingsVocabularyTab />;
-                                    case 'automation':
-                                        return <SettingsAutomationTab />;
-                                    case 'llm_service':
-                                        return <SettingsLLMServiceTab />;
-                                    case 'shortcuts':
-                                        return <SettingsShortcutsTab />;
-                                    case 'about':
-                                        return <SettingsAboutTab />;
-                                    default:
-                                        return null;
-                                }
-                            })()}
-                        </ModelManagerContext.Provider>
+                        <SettingsNavigationProvider value={navigationContextValue}>
+                            <ModelManagerContext.Provider value={modelManager}>
+                                {(() => {
+                                    switch (activeTab) {
+                                        case 'general':
+                                            return <SettingsGeneralTab />;
+                                        case 'microphone':
+                                            return (
+                                                <SettingsMicrophoneTab
+                                                    isActiveTab={activeTab === 'microphone'}
+                                                    isOpen={isOpen}
+                                                />
+                                            );
+                                        case 'subtitle':
+                                            return <SettingsSubtitleTab />;
+                                        case 'voice_typing':
+                                            return <SettingsVoiceTypingTab />;
+                                        case 'models':
+                                            return <SettingsModelsTab />;
+                                        case 'vocabulary':
+                                            return <SettingsVocabularyTab />;
+                                        case 'automation':
+                                            return <SettingsAutomationTab />;
+                                        case 'llm_service':
+                                            return <SettingsLLMServiceTab />;
+                                        case 'shortcuts':
+                                            return <SettingsShortcutsTab />;
+                                        case 'about':
+                                            return <SettingsAboutTab />;
+                                        default:
+                                            return null;
+                                    }
+                                })()}
+                            </ModelManagerContext.Provider>
+                        </SettingsNavigationProvider>
                     </div>
 
                 </div>

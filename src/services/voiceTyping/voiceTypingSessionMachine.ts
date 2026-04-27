@@ -25,6 +25,7 @@ interface VoiceTypingSessionMachineOptions {
     resolveOverlayPositionAfterCommit: VoiceTypingPositionResolver;
     ensureMicrophoneStarted: () => Promise<void>;
     injectText: (text: string) => Promise<void>;
+    onRuntimeError?: (error: string) => void;
 }
 
 function delay(ms: number) {
@@ -471,6 +472,7 @@ export class VoiceTypingSessionMachine {
         this.options.overlayPresenter.clearListeningReset();
         this.sessionState = 'error';
         this.manualStopPending = true;
+        this.options.onRuntimeError?.(error);
 
         await this.publishOverlay(
             {

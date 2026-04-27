@@ -2,7 +2,17 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 
-export type SettingsTab = 'general' | 'microphone' | 'subtitle' | 'models' | 'shortcuts' | 'about' | 'llm_service' | 'vocabulary' | 'automation';
+export type SettingsTab =
+    | 'general'
+    | 'microphone'
+    | 'subtitle'
+    | 'voice_typing'
+    | 'models'
+    | 'shortcuts'
+    | 'about'
+    | 'llm_service'
+    | 'vocabulary'
+    | 'automation';
 export type SettingsTabInput = SettingsTab | 'context';
 
 /**
