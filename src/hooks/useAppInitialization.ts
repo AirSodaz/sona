@@ -31,7 +31,7 @@ export function useAppInitialization() {
     const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
     const setPersistedState = useOnboardingStore((state) => state.setPersistedState);
     const loadProjects = useProjectStore((state) => state.loadProjects);
-    const loadAutomation = useAutomationStore((state) => state.loadAndStart);
+    const loadAutomation = useAutomationStore((state: any) => state.loadAndStart);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Initialize decoupled side-effects

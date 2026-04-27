@@ -83,11 +83,26 @@ interface SettingsItemProps {
     hint?: string | ReactNode;
     layout?: 'horizontal' | 'vertical';
     children: ReactNode;
+    indent?: boolean;
+    style?: React.CSSProperties;
 }
 
-export function SettingsItem({ title, hint, layout = 'horizontal', children }: SettingsItemProps) {
+export function SettingsItem({
+    title,
+    hint,
+    layout = 'horizontal',
+    children,
+    indent,
+    style,
+}: SettingsItemProps) {
     return (
-        <div className={`settings-item-container layout-${layout}`}>
+        <div
+            className={`settings-item-container layout-${layout} ${indent ? 'indented' : ''}`}
+            style={{
+                ...style,
+                ...(indent ? { paddingLeft: '56px' } : {}),
+            }}
+        >
             <div className="settings-item-info">
                 <div className="settings-item-title">{title}</div>
                 {hint && <div className="settings-item-hint">{hint}</div>}

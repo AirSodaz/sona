@@ -27,6 +27,7 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
+import { historyService } from '../services/historyService';
 import { logger } from '../utils/logger';
 
 const FILE_STABLE_WINDOW_MS = 5000;
@@ -122,7 +123,8 @@ function buildPendingFingerprintKey(ruleId: string, sourceFingerprint: string): 
 }
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
-  const project = useProjectStore.getState().getProjectById(rule.projectId);
+  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
+  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
   const validation = await validateAutomationRuleForActivation(
     rule,
     useConfigStore.getState().config,
@@ -190,8 +192,9 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
       return;
     }
 
-    const project = useProjectStore.getState().getProjectById(latestRule.projectId);
-    if (!project) {
+    const isInboxOrNone = latestRule.projectId === 'inbox' || latestRule.projectId === 'none';
+    const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(latestRule.projectId);
+    if (!project && !isInboxOrNone) {
       useAutomationStore.setState((current) => ({
         runtimeStates: {
           ...current.runtimeStates,
@@ -205,7 +208,11 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
       return;
     }
 
-    const effectiveConfig = resolveEffectiveConfig(useConfigStore.getState().config, project);
+    const effectiveConfig = {
+      ...resolveEffectiveConfig(useConfigStore.getState().config, project),
+      translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
+      polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
+    };
     pendingFingerprints.add(pendingKey);
 
     useBatchQueueStore.getState().addFiles([snapshot.filePath], {
@@ -216,12 +223,12 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
       exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
       stageConfig: latestRule.stageConfig,
       sourceFingerprint: snapshot.sourceFingerprint,
-      projectId: latestRule.projectId,
+      projectId: isInboxOrNone ? null : latestRule.projectId,
       fileStat: {
         size: snapshot.size,
         mtimeMs: snapshot.mtimeMs,
       },
-      exportFileNamePrefix: project.defaults.exportFileNamePrefix,
+      exportFileNamePrefix: latestRule.exportConfig.prefix || '',
     });
   }, CANDIDATE_DEBOUNCE_MS));
 }
@@ -233,7 +240,8 @@ async function scanRule(ruleId: string) {
     return;
   }
 
-  const project = useProjectStore.getState().getProjectById(rule.projectId);
+  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
+  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
   const validation = await validateAutomationRuleForActivation(rule, useConfigStore.getState().config, project);
   if (!validation.valid) {
     useAutomationStore.setState((current) => ({
@@ -286,7 +294,8 @@ async function startRuleRuntime(ruleId: string) {
     return;
   }
 
-  const project = useProjectStore.getState().getProjectById(rule.projectId);
+  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
+  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
   const validation = await validateAutomationRuleForActivation(rule, useConfigStore.getState().config, project);
   if (!validation.valid) {
     useAutomationStore.setState((current) => ({
@@ -503,6 +512,15 @@ registerAutomationTaskSettledHandler(async (payload: AutomationTaskSettledPayloa
   pendingFingerprints.delete(buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint));
 
   const state = useAutomationStore.getState();
+
+  // Auto-delete record if projectId is 'none' and status is 'complete'
+  const rule = state.rules.find((r) => r.id === payload.ruleId);
+  if (rule?.projectId === 'none' && payload.status === 'complete' && payload.historyId) {
+    historyService.deleteRecording(payload.historyId).catch((err) => {
+      logger.error('[Automation] Failed to auto-delete record:', err);
+    });
+  }
+
   const nextEntries = [
     ...state.processedEntries.filter((entry) => !(entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint)),
     {

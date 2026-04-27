@@ -9,21 +9,15 @@ import { useAutomationStore } from '../../stores/automationStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import {
-    getAutomationPresetDefinition,
-    AUTOMATION_PRESETS,
-    applyAutomationPreset,
-    DEFAULT_AUTOMATION_PRESET_ID,
-    isBuiltInAutomationPresetId,
-} from '../../utils/automationPresets';
-import { getPolishPresetLabel } from '../../utils/polishPresets';
+import { getPolishPresetOptions } from '../../utils/polishPresets';
 import { SettingsItem, SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import type {
     AutomationRule,
     AutomationRuntimeStatus,
-    BuiltInAutomationPresetId,
 } from '../../types/automation';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
+
+const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 
 interface AutomationRuleDraft {
     id?: string;
@@ -50,44 +44,54 @@ function normalizeExportMode(autoTranslate: boolean, mode: ExportMode): ExportMo
 function normalizeAutomationRuleDraft(draft: AutomationRuleDraft): AutomationRuleDraft {
     const normalizedMode = normalizeExportMode(draft.stageConfig.autoTranslate, draft.exportConfig.mode);
 
-    if (normalizedMode === draft.exportConfig.mode) {
+    const stageConfig = {
+        polishPresetId: 'general',
+        translationLanguage: 'en',
+        ...draft.stageConfig,
+    };
+
+    const exportConfig = {
+        prefix: '',
+        ...draft.exportConfig,
+        mode: normalizedMode,
+    };
+
+    if (
+        normalizedMode === draft.exportConfig.mode &&
+        stageConfig.polishPresetId === draft.stageConfig.polishPresetId &&
+        stageConfig.translationLanguage === draft.stageConfig.translationLanguage &&
+        exportConfig.prefix === draft.exportConfig.prefix
+    ) {
         return draft;
     }
 
     return {
         ...draft,
-        exportConfig: {
-            ...draft.exportConfig,
-            mode: normalizedMode,
-        },
+        stageConfig,
+        exportConfig,
     };
 }
 
 function createRuleDraft(projectId: string): AutomationRuleDraft {
-    const presetConfig = applyAutomationPreset(DEFAULT_AUTOMATION_PRESET_ID, {
+    return normalizeAutomationRuleDraft({
+        name: '',
+        projectId,
+        presetId: 'custom',
+        watchDirectory: '',
+        recursive: false,
+        enabled: false,
         stageConfig: {
             autoPolish: false,
+            polishPresetId: 'general',
             autoTranslate: false,
-            exportEnabled: true,
+            translationLanguage: 'en',
+            exportEnabled: false,
         },
         exportConfig: {
             directory: '',
             format: 'txt',
             mode: 'original',
-        },
-    });
-
-    return normalizeAutomationRuleDraft({
-        name: '',
-        projectId,
-        presetId: DEFAULT_AUTOMATION_PRESET_ID,
-        watchDirectory: '',
-        recursive: false,
-        enabled: false,
-        stageConfig: presetConfig.stageConfig,
-        exportConfig: {
-            ...presetConfig.exportConfig,
-            directory: '',
+            prefix: '',
         },
     });
 }
@@ -101,8 +105,15 @@ function createDraftFromRule(rule: AutomationRule): AutomationRuleDraft {
         watchDirectory: rule.watchDirectory,
         recursive: rule.recursive,
         enabled: rule.enabled,
-        stageConfig: { ...rule.stageConfig },
-        exportConfig: { ...rule.exportConfig },
+        stageConfig: {
+            polishPresetId: 'general',
+            translationLanguage: 'en',
+            ...rule.stageConfig,
+        },
+        exportConfig: {
+            prefix: '',
+            ...rule.exportConfig,
+        },
     });
 }
 
@@ -153,31 +164,37 @@ function SummaryChip({
 
 export function SettingsAutomationTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const rules = useAutomationStore((state) => state.rules);
-    const runtimeStates = useAutomationStore((state) => state.runtimeStates);
-    const saveRule = useAutomationStore((state) => state.saveRule);
-    const deleteRule = useAutomationStore((state) => state.deleteRule);
-    const toggleRuleEnabled = useAutomationStore((state) => state.toggleRuleEnabled);
-    const scanRuleNow = useAutomationStore((state) => state.scanRuleNow);
-    const retryFailed = useAutomationStore((state) => state.retryFailed);
+    const rules = useAutomationStore((state: any) => state.rules);
+    const runtimeStates = useAutomationStore((state: any) => state.runtimeStates);
+    const saveRule = useAutomationStore((state: any) => state.saveRule);
+    const deleteRule = useAutomationStore((state: any) => state.deleteRule);
+    const toggleRuleEnabled = useAutomationStore((state: any) => state.toggleRuleEnabled);
+    const scanRuleNow = useAutomationStore((state: any) => state.scanRuleNow);
+    const retryFailed = useAutomationStore((state: any) => state.retryFailed);
     const config = useConfigStore((state) => state.config);
     const projects = useProjectStore((state) => state.projects);
-    const activeProjectId = useProjectStore((state) => state.activeProjectId);
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
     const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
     const [drafts, setDrafts] = useState<Record<string, AutomationRuleDraft>>({});
-    const [pendingPresetIds, setPendingPresetIds] = useState<Record<string, BuiltInAutomationPresetId | undefined>>({});
 
-    const projectOptions = useMemo(() => (
-        projects.map((project) => ({ value: project.id, label: project.name }))
-    ), [projects]);
-    const presetOptions = useMemo(() => (
-        AUTOMATION_PRESETS.map((preset) => ({
-            value: preset.id,
-            label: t(preset.labelKey, { defaultValue: preset.defaultLabel }),
+    const projectOptions = useMemo(() => [
+        ...projects.map((project) => ({ value: project.id, label: project.name })),
+        { value: 'inbox', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
+        { value: 'none', label: t('automation.target_none', { defaultValue: 'None (Delete record after export)' }) },
+    ], [projects, t]);
+
+    const languageOptions = useMemo(() => (
+        LANGUAGE_OPTIONS.map((language) => ({
+            value: language,
+            label: t(`translation.languages.${language}`),
         }))
     ), [t]);
+
+    const polishPresetOptions = useMemo(() => (
+        getPolishPresetOptions(config.polishCustomPresets, t)
+    ), [config.polishCustomPresets, t]);
+
     const exportFormatOptions = useMemo(() => ([
         { value: 'txt', label: 'TXT' },
         { value: 'srt', label: 'SRT' },
@@ -226,11 +243,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
         return t('automation.last_result_idle', { defaultValue: 'No runs yet' });
     };
 
-    const getPresetLabel = (presetId: AutomationRule['presetId']) => {
-        const preset = getAutomationPresetDefinition(presetId);
-        return t(preset.labelKey, { defaultValue: preset.defaultLabel });
-    };
-
     const updateDraft = (
         draftKey: string,
         updater: (current: AutomationRuleDraft) => AutomationRuleDraft,
@@ -261,41 +273,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
         });
     };
 
-    const clearPendingPreset = (draftKey: string) => {
-        setPendingPresetIds((current) => {
-            if (!(draftKey in current)) {
-                return current;
-            }
-
-            const nextPending = { ...current };
-            delete nextPending[draftKey];
-            return nextPending;
-        });
-    };
-
-    const getPendingBuiltInPresetId = (
-        draftKey: string,
-        draft: AutomationRuleDraft,
-    ): BuiltInAutomationPresetId | undefined => {
-        const pendingPresetId = pendingPresetIds[draftKey];
-        if (pendingPresetId) {
-            return pendingPresetId;
-        }
-
-        return isBuiltInAutomationPresetId(draft.presetId) ? draft.presetId : undefined;
-    };
-
-    const updateTemplateControlledDraft = (
-        draftKey: string,
-        updater: (current: AutomationRuleDraft) => AutomationRuleDraft,
-    ) => {
-        clearPendingPreset(draftKey);
-        updateDraft(draftKey, (currentDraft) => ({
-            ...updater(currentDraft),
-            presetId: 'custom',
-        }));
-    };
-
     const toggleExpanded = (draftKey: string, nextDraft: AutomationRuleDraft) => {
         ensureDraft(draftKey, nextDraft);
         setExpandedRuleIds((current) => {
@@ -315,7 +292,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
             nextExpanded.delete(draftKey);
             return nextExpanded;
         });
-        clearPendingPreset(draftKey);
         setDrafts((current) => {
             const nextDrafts = { ...current };
             delete nextDrafts[draftKey];
@@ -324,8 +300,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
     };
 
     const beginCreateRule = () => {
-        const fallbackProjectId = activeProjectId || projects[0]?.id || '';
-        ensureDraft(NEW_RULE_KEY, createRuleDraft(fallbackProjectId));
+        ensureDraft(NEW_RULE_KEY, createRuleDraft('inbox'));
         setExpandedRuleIds((current) => new Set(current).add(NEW_RULE_KEY));
     };
 
@@ -365,48 +340,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
         });
     };
 
-    const handleTemplateSelectionChange = (draftKey: string, draft: AutomationRuleDraft, value: string) => {
-        if (!isBuiltInAutomationPresetId(value)) {
-            clearPendingPreset(draftKey);
-            return;
-        }
-
-        if (draft.presetId !== 'custom' && value === draft.presetId) {
-            clearPendingPreset(draftKey);
-            return;
-        }
-
-        setPendingPresetIds((current) => ({
-            ...current,
-            [draftKey]: value,
-        }));
-    };
-
-    const handleApplyTemplate = (draftKey: string) => {
-        const draft = drafts[draftKey];
-        if (!draft) {
-            return;
-        }
-
-        const targetPresetId = getPendingBuiltInPresetId(draftKey, draft);
-        if (!targetPresetId) {
-            return;
-        }
-
-        const applied = applyAutomationPreset(targetPresetId, draft);
-        clearPendingPreset(draftKey);
-        updateDraft(draftKey, (currentDraft) => ({
-            ...currentDraft,
-            presetId: targetPresetId,
-            stageConfig: applied.stageConfig,
-            exportConfig: {
-                ...currentDraft.exportConfig,
-                format: applied.exportConfig.format,
-                mode: applied.exportConfig.mode,
-            },
-        }));
-    };
-
     const handleSave = async (draftKey: string) => {
         const draft = drafts[draftKey];
         if (!draft) {
@@ -423,7 +356,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return;
         }
 
-        const liveRule = draft.id ? rules.find((rule) => rule.id === draft.id) : null;
+        const liveRule = draft.id ? rules.find((rule: AutomationRule) => rule.id === draft.id) : null;
 
         try {
             await saveRule({
@@ -479,57 +412,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
         }
     };
 
-    const renderTemplateControlRow = (
-        label: string,
-        control: React.JSX.Element,
-        key: string,
-        bordered = true,
-    ) => (
-        <div
-            key={key}
-            style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 0',
-                borderTop: bordered ? '1px solid var(--color-border-subtle)' : 'none',
-            }}
-        >
-            <div style={{ minWidth: 0 }}>
-                <div className="settings-item-title" style={{ fontSize: '0.92rem' }}>{label}</div>
-                <div className="settings-item-hint">
-                    {t('automation.template_controlled', { defaultValue: 'Template-controlled' })}
-                </div>
-            </div>
-            <div style={{ flexShrink: 0, minWidth: '160px', display: 'flex', justifyContent: 'flex-end' }}>
-                {control}
-            </div>
-        </div>
-    );
-
     const renderRuleEditor = (draftKey: string, draft: AutomationRuleDraft) => {
-        const selectedProject = projects.find((project) => project.id === draft.projectId) || null;
-        const currentPreset = getAutomationPresetDefinition(draft.presetId);
-        const pendingPresetId = pendingPresetIds[draftKey];
-        const pendingPreset = pendingPresetId ? getAutomationPresetDefinition(pendingPresetId) : null;
-        const dropdownValue = draft.presetId === 'custom'
-            ? 'custom'
-            : (pendingPresetId || draft.presetId);
-        const templateOptions = draft.presetId === 'custom'
-            ? [
-                {
-                    value: 'custom',
-                    label: t('automation.presets.custom', { defaultValue: 'Custom' }),
-                },
-                ...presetOptions,
-            ]
-            : presetOptions;
-        const templateApplyTargetId = getPendingBuiltInPresetId(draftKey, draft);
-        const canApplyTemplate = Boolean(templateApplyTargetId);
-        const templateApplyTargetLabel = pendingPreset
-            ? t(pendingPreset.labelKey, { defaultValue: pendingPreset.defaultLabel })
-            : null;
         const exportModeOptions = getExportModeOptions(draft.stageConfig.autoTranslate);
 
         return (
@@ -547,191 +430,143 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         />
                     </SettingsItem>
 
-                    <SettingsItem title={t('automation.target_project', { defaultValue: 'Target Project' })} layout="vertical">
-                        <Dropdown
-                            value={draft.projectId}
+                    <SettingsItem title={t('automation.auto_polish', { defaultValue: 'Auto-Polish' })}>
+                        <Switch
+                            checked={draft.stageConfig.autoPolish}
                             onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
                                 ...currentDraft,
-                                projectId: value,
+                                presetId: 'custom',
+                                stageConfig: {
+                                    ...currentDraft.stageConfig,
+                                    autoPolish: value,
+                                },
                             }))}
-                            options={projectOptions}
-                            style={{ width: '100%' }}
-                            aria-label={t('automation.target_project', { defaultValue: 'Target Project' })}
+                            aria-label={t('automation.auto_polish', { defaultValue: 'Auto-Polish' })}
                         />
                     </SettingsItem>
 
-                    <SettingsItem
-                        title={t('automation.template', { defaultValue: 'Template' })}
-                        hint={t('automation.template_section_description', {
-                            defaultValue: 'Templates shape the automation flow. Projects still control translation language, polish preset, and export prefix.',
-                        })}
-                        layout="vertical"
-                    >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-                            <div
-                                style={{
-                                    padding: '14px 16px',
-                                    borderRadius: '14px',
-                                    background: 'var(--color-bg-secondary)',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '6px',
-                                }}
-                            >
-                                <div className="settings-item-hint">
-                                    {t('automation.current_template', { defaultValue: 'Current Template' })}
-                                </div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <div className="settings-item-title">
-                                        {t(currentPreset.labelKey, { defaultValue: currentPreset.defaultLabel })}
-                                    </div>
-                                </div>
-                                <div className="settings-item-hint">
-                                    {t(currentPreset.descriptionKey, {
-                                        defaultValue: currentPreset.defaultDescription,
-                                    })}
-                                </div>
-                            </div>
+                    {draft.stageConfig.autoPolish && (
+                        <SettingsItem indent title={t('projects.polish_preset', { defaultValue: 'Polish Preset' })}>
+                            <Dropdown
+                                value={draft.stageConfig.polishPresetId || 'general'}
+                                onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                    ...currentDraft,
+                                    presetId: 'custom',
+                                    stageConfig: {
+                                        ...currentDraft.stageConfig,
+                                        polishPresetId: value,
+                                    },
+                                }))}
+                                options={polishPresetOptions}
+                                style={{ width: '160px' }}
+                                aria-label={t('projects.polish_preset', { defaultValue: 'Polish Preset' })}
+                            />
+                        </SettingsItem>
+                    )}
 
-                            <div style={{ display: 'flex', gap: '8px', width: '100%', alignItems: 'stretch' }}>
-                                <Dropdown
-                                    value={dropdownValue}
-                                    onChange={(value) => handleTemplateSelectionChange(draftKey, draft, value)}
-                                    options={templateOptions}
-                                    style={{ flex: 1 }}
-                                    aria-label={t('automation.template', { defaultValue: 'Template' })}
-                                />
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={() => handleApplyTemplate(draftKey)}
-                                    type="button"
-                                    disabled={!canApplyTemplate}
-                                >
-                                    {t('automation.apply_template', { defaultValue: 'Apply Template' })}
-                                </button>
-                            </div>
-
-                            {templateApplyTargetLabel && (
-                                <div className="settings-item-hint">
-                                    {t('automation.template_pending_apply', {
-                                        defaultValue: 'Selected to apply: {{template}}',
-                                        template: templateApplyTargetLabel,
-                                    })}
-                                </div>
-                            )}
-
-                            <div
-                                style={{
-                                    padding: '0 16px',
-                                    borderRadius: '14px',
-                                    border: '1px solid var(--color-border-subtle)',
-                                    background: 'var(--color-bg-primary)',
-                                }}
-                            >
-                                {renderTemplateControlRow(
-                                    t('automation.auto_polish', { defaultValue: 'Auto-Polish' }),
-                                    (
-                                        <Switch
-                                            checked={draft.stageConfig.autoPolish}
-                                            onChange={(value) => updateTemplateControlledDraft(draftKey, (currentDraft) => ({
-                                                ...currentDraft,
-                                                stageConfig: {
-                                                    ...currentDraft.stageConfig,
-                                                    autoPolish: value,
-                                                },
-                                            }))}
-                                            aria-label={t('automation.auto_polish', { defaultValue: 'Auto-Polish' })}
-                                        />
-                                    ),
-                                    'auto-polish',
-                                    false,
-                                )}
-                                {renderTemplateControlRow(
-                                    t('automation.auto_translate', { defaultValue: 'Auto-Translate' }),
-                                    (
-                                        <Switch
-                                            checked={draft.stageConfig.autoTranslate}
-                                            onChange={(value) => updateTemplateControlledDraft(draftKey, (currentDraft) => ({
-                                                ...currentDraft,
-                                                stageConfig: {
-                                                    ...currentDraft.stageConfig,
-                                                    autoTranslate: value,
-                                                },
-                                            }))}
-                                            aria-label={t('automation.auto_translate', { defaultValue: 'Auto-Translate' })}
-                                        />
-                                    ),
-                                    'auto-translate',
-                                )}
-                                {renderTemplateControlRow(
-                                    t('automation.auto_export', { defaultValue: 'Auto-Export' }),
-                                    (
-                                        <Switch
-                                            checked={draft.stageConfig.exportEnabled}
-                                            onChange={(value) => updateTemplateControlledDraft(draftKey, (currentDraft) => ({
-                                                ...currentDraft,
-                                                stageConfig: {
-                                                    ...currentDraft.stageConfig,
-                                                    exportEnabled: value,
-                                                },
-                                            }))}
-                                            aria-label={t('automation.auto_export', { defaultValue: 'Auto-Export' })}
-                                        />
-                                    ),
-                                    'auto-export',
-                                )}
-                                {renderTemplateControlRow(
-                                    t('automation.export_format', { defaultValue: 'Export Format' }),
-                                    (
-                                        <Dropdown
-                                            value={draft.exportConfig.format}
-                                            onChange={(value) => updateTemplateControlledDraft(draftKey, (currentDraft) => ({
-                                                ...currentDraft,
-                                                exportConfig: {
-                                                    ...currentDraft.exportConfig,
-                                                    format: value as ExportFormat,
-                                                },
-                                            }))}
-                                            options={exportFormatOptions}
-                                            style={{ width: '160px' }}
-                                            aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
-                                        />
-                                    ),
-                                    'export-format',
-                                )}
-                                {renderTemplateControlRow(
-                                    t('automation.export_mode', { defaultValue: 'Export Mode' }),
-                                    (
-                                        <Dropdown
-                                            value={draft.exportConfig.mode}
-                                            onChange={(value) => updateTemplateControlledDraft(draftKey, (currentDraft) => ({
-                                                ...currentDraft,
-                                                exportConfig: {
-                                                    ...currentDraft.exportConfig,
-                                                    mode: value as ExportMode,
-                                                },
-                                            }))}
-                                            options={exportModeOptions}
-                                            style={{ width: '160px' }}
-                                            aria-label={t('automation.export_mode', { defaultValue: 'Export Mode' })}
-                                        />
-                                    ),
-                                    'export-mode',
-                                )}
-                            </div>
-
-                            <div className="settings-item-hint">
-                                {t('automation.template_apply_notice', {
-                                    defaultValue: 'Applying a template updates only the template-controlled fields above.',
-                                })}
-                            </div>
-                        </div>
+                    <SettingsItem title={t('automation.auto_translate', { defaultValue: 'Auto-Translate' })}>
+                        <Switch
+                            checked={draft.stageConfig.autoTranslate}
+                            onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                ...currentDraft,
+                                presetId: 'custom',
+                                stageConfig: {
+                                    ...currentDraft.stageConfig,
+                                    autoTranslate: value,
+                                },
+                            }))}
+                            aria-label={t('automation.auto_translate', { defaultValue: 'Auto-Translate' })}
+                        />
                     </SettingsItem>
+
+                    {draft.stageConfig.autoTranslate && (
+                        <SettingsItem indent title={t('translation.target_language', { defaultValue: 'Target Language' })}>
+                            <Dropdown
+                                value={draft.stageConfig.translationLanguage || 'en'}
+                                onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                    ...currentDraft,
+                                    presetId: 'custom',
+                                    stageConfig: {
+                                        ...currentDraft.stageConfig,
+                                        translationLanguage: value,
+                                    },
+                                }))}
+                                options={languageOptions}
+                                style={{ width: '160px' }}
+                                aria-label={t('translation.target_language', { defaultValue: 'Target Language' })}
+                            />
+                        </SettingsItem>
+                    )}
+
+                    <SettingsItem title={t('automation.auto_export', { defaultValue: 'Auto-Export' })}>
+                        <Switch
+                            checked={draft.stageConfig.exportEnabled}
+                            onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                ...currentDraft,
+                                presetId: 'custom',
+                                stageConfig: {
+                                    ...currentDraft.stageConfig,
+                                    exportEnabled: value,
+                                },
+                            }))}
+                            aria-label={t('automation.auto_export', { defaultValue: 'Auto-Export' })}
+                        />
+                    </SettingsItem>
+
+                    {draft.stageConfig.exportEnabled && (
+                        <>
+                            <SettingsItem indent title={t('projects.export_prefix', { defaultValue: 'Filename Prefix' })}>
+                                <input
+                                    className="settings-input"
+                                    value={draft.exportConfig.prefix || ''}
+                                    onChange={(event) => updateDraft(draftKey, (currentDraft) => ({
+                                        ...currentDraft,
+                                        presetId: 'custom',
+                                        exportConfig: {
+                                            ...currentDraft.exportConfig,
+                                            prefix: event.target.value,
+                                        },
+                                    }))}
+                                    placeholder={t('projects.export_prefix', { defaultValue: 'e.g. [Auto]' })}
+                                    style={{ width: '160px' }}
+                                />
+                            </SettingsItem>
+
+                            <SettingsItem indent title={t('automation.export_format', { defaultValue: 'Export Format' })}>
+                                <Dropdown
+                                    value={draft.exportConfig.format}
+                                    onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                        ...currentDraft,
+                                        presetId: 'custom',
+                                        exportConfig: {
+                                            ...currentDraft.exportConfig,
+                                            format: value as ExportFormat,
+                                        },
+                                    }))}
+                                    options={exportFormatOptions}
+                                    style={{ width: '160px' }}
+                                    aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
+                                />
+                            </SettingsItem>
+
+                            <SettingsItem indent title={t('automation.export_mode', { defaultValue: 'Export Mode' })}>
+                                <Dropdown
+                                    value={draft.exportConfig.mode}
+                                    onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                        ...currentDraft,
+                                        presetId: 'custom',
+                                        exportConfig: {
+                                            ...currentDraft.exportConfig,
+                                            mode: value as ExportMode,
+                                        },
+                                    }))}
+                                    options={exportModeOptions}
+                                    style={{ width: '160px' }}
+                                    aria-label={t('automation.export_mode', { defaultValue: 'Export Mode' })}
+                                />
+                            </SettingsItem>
+                        </>
+                    )}
 
                     <SettingsItem title={t('automation.watch_directory', { defaultValue: 'Watch Directory' })} layout="vertical">
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
@@ -785,45 +620,17 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         />
                     </SettingsItem>
 
-                    <SettingsItem
-                        title={t('automation.inherited_defaults', { defaultValue: 'Inherited Project Defaults' })}
-                        hint={t('automation.inherited_defaults_description', {
-                            defaultValue: 'These values come from the selected project and are applied at queue time.',
-                        })}
-                        layout="vertical"
-                    >
-                        <div
-                            style={{
-                                width: '100%',
-                                padding: '12px 14px',
-                                borderRadius: '12px',
-                                background: 'var(--color-bg-secondary)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '6px',
-                            }}
-                        >
-                            <div className="settings-item-hint">
-                                {t('automation.inherited_defaults_hint', {
-                                    defaultValue: 'Templates do not change these project-level defaults.',
-                                })}
-                            </div>
-                            <div className="settings-item-hint">
-                                {t('projects.translation_language')}:
-                                {' '}
-                                {selectedProject?.defaults.translationLanguage || config.translationLanguage || 'zh'}
-                            </div>
-                            <div className="settings-item-hint">
-                                {t('projects.polish_preset')}:
-                                {' '}
-                                {getPolishPresetLabel(selectedProject?.defaults.polishPresetId, config.polishCustomPresets, t)}
-                            </div>
-                            <div className="settings-item-hint">
-                                {t('projects.export_prefix')}:
-                                {' '}
-                                {selectedProject?.defaults.exportFileNamePrefix || t('automation.none', { defaultValue: 'None' })}
-                            </div>
-                        </div>
+                    <SettingsItem title={t('automation.target_project', { defaultValue: 'Target Project' })} layout="vertical">
+                        <Dropdown
+                            value={draft.projectId}
+                            onChange={(value) => updateDraft(draftKey, (currentDraft) => ({
+                                ...currentDraft,
+                                projectId: value,
+                            }))}
+                            options={projectOptions}
+                            style={{ width: '100%' }}
+                            aria-label={t('automation.target_project', { defaultValue: 'Target Project' })}
+                        />
                     </SettingsItem>
                 </div>
 
@@ -844,7 +651,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
         {
             title,
             projectLabel,
-            presetLabel,
             watchDirectory,
             outputDirectory,
             statusLabel,
@@ -862,7 +668,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
         }: {
             title: string;
             projectLabel: string;
-            presetLabel: string;
             watchDirectory: string;
             outputDirectory: string;
             statusLabel?: string;
@@ -930,7 +735,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
 
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <SummaryChip label={projectLabel} tone="neutral" />
-                                <SummaryChip label={presetLabel} tone="neutral" />
                                 {statusLabel && <SummaryChip label={statusLabel} tone="neutral" />}
                                 {resultLabel && <SummaryChip label={resultLabel} tone={resultChipTone} />}
                                 {typeof failureCount === 'number' && (
@@ -1013,7 +817,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
             <SettingsSection
                 title={t('automation.rules', { defaultValue: 'Rules' })}
                 description={t('automation.rules_description', {
-                    defaultValue: 'Each rule binds to a project and inherits its translation language, polish preset, and export prefix.',
+                    defaultValue: 'Each rule binds to a project. Language, Polish Preset, and Export Prefix are configured independently.',
                 })}
             >
                 <div className="settings-section-content">
@@ -1026,7 +830,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                             </div>
                             <div className="settings-item-hint">
                                 {t('automation.list_hint', {
-                                    defaultValue: 'Templates shape the pipeline. Projects keep long-lived defaults like translation language and export prefix.',
+                                    defaultValue: 'Configure folder monitoring and define behavior for each automation stage.',
                                 })}
                             </div>
                         </div>
@@ -1039,15 +843,14 @@ export function SettingsAutomationTab(): React.JSX.Element {
 
                     {newRuleDraft && renderRuleCard(NEW_RULE_KEY, {
                         title: newRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' }),
-                        projectLabel: projects.find((project) => project.id === newRuleDraft.projectId)?.name
+                        projectLabel: projectOptions.find((opt) => opt.value === newRuleDraft.projectId)?.label
                             || t('projects.unknown_project'),
-                        presetLabel: getPresetLabel(newRuleDraft.presetId),
                         watchDirectory: newRuleDraft.watchDirectory,
                         outputDirectory: newRuleDraft.exportConfig.directory,
                         resultLabel: t('automation.draft_badge', { defaultValue: 'Draft' }),
                         enabled: true,
                         canToggle: false,
-                        onToggleExpand: () => toggleExpanded(NEW_RULE_KEY, createRuleDraft(activeProjectId || projects[0]?.id || '')),
+                        onToggleExpand: () => toggleExpanded(NEW_RULE_KEY, createRuleDraft('inbox')),
                         editor: renderRuleEditor(NEW_RULE_KEY, newRuleDraft),
                     })}
 
@@ -1064,16 +867,15 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                 </div>
                             </div>
                         </div>
-                    ) : rules.map((rule) => {
+                    ) : rules.map((rule: AutomationRule) => {
                         const draft = drafts[rule.id];
                         const displayRule = draft || createDraftFromRule(rule);
                         const runtime = runtimeStates[rule.id];
-                        const project = projects.find((projectItem) => projectItem.id === displayRule.projectId) || null;
 
                         return renderRuleCard(rule.id, {
                             title: displayRule.name,
-                            projectLabel: project?.name || t('projects.unknown_project'),
-                            presetLabel: getPresetLabel(displayRule.presetId),
+                            projectLabel: projectOptions.find((opt) => opt.value === displayRule.projectId)?.label
+                                || t('projects.unknown_project'),
                             watchDirectory: displayRule.watchDirectory,
                             outputDirectory: displayRule.exportConfig.directory,
                             statusLabel: getRuntimeStatusLabel(runtime?.status),

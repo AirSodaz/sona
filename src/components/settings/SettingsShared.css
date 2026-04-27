@@ -84,6 +84,13 @@
 }
 
 /* For nested layout options */
+.settings-item-container.indented {
+  border-left: 2px solid var(--color-border);
+  background: var(--color-bg-secondary-soft, color-mix(in srgb, var(--color-bg-primary) 96%, black));
+  padding-top: var(--spacing-md, 16px);
+  padding-bottom: var(--spacing-md, 16px);
+}
+
 .settings-item-container.layout-horizontal {
   flex-direction: row;
   align-items: center;

@@ -6,7 +6,9 @@ export type BuiltInAutomationPresetId = Exclude<AutomationPresetId, 'custom'>;
 
 export interface AutomationStageConfig {
   autoPolish: boolean;
+  polishPresetId?: string;
   autoTranslate: boolean;
+  translationLanguage?: string;
   exportEnabled: boolean;
 }
 
@@ -14,6 +16,7 @@ export interface AutomationExportConfig {
   directory: string;
   format: ExportFormat;
   mode: ExportMode;
+  prefix?: string;
 }
 
 export interface AutomationRule {
