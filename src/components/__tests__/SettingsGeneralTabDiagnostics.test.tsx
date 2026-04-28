@@ -18,6 +18,15 @@ vi.mock('../Icons', () => ({
   GeneralIcon: () => <div />,
 }));
 
+vi.mock('../../services/backupService', () => ({
+  backupService: {
+    applyImportBackup: vi.fn(),
+    disposePreparedImport: vi.fn(),
+    exportBackup: vi.fn(),
+    prepareImportBackup: vi.fn(),
+  },
+}));
+
 vi.mock('../Dropdown', () => ({
   Dropdown: ({ id, value, onChange, options, style }: any) => (
     <select id={id} value={value} onChange={(event) => onChange?.(event.target.value)} style={style}>
@@ -36,6 +45,12 @@ vi.mock('../Switch', () => ({
       {checked ? 'on' : 'off'}
     </button>
   ),
+}));
+
+vi.mock('../../stores/batchQueueStore', () => ({
+  useBatchQueueStore: (selector: any) => selector({
+    queueItems: [],
+  }),
 }));
 
 vi.mock('../settings/SettingsLayout', () => ({
@@ -60,6 +75,19 @@ vi.mock('../settings/SettingsLayout', () => ({
       <div>{description}</div>
     </header>
   ),
+}));
+
+vi.mock('../../stores/dialogStore', () => ({
+  useDialogStore: (selector: any) => selector({
+    alert: vi.fn().mockResolvedValue(undefined),
+    confirm: vi.fn().mockResolvedValue(false),
+  }),
+}));
+
+vi.mock('../../stores/transcriptStore', () => ({
+  useTranscriptStore: (selector: any) => selector({
+    isRecording: false,
+  }),
 }));
 
 describe('SettingsGeneralTab diagnostics entry', () => {

@@ -68,6 +68,27 @@ describe('healthCheckService', () => {
             expect(historyService.deleteRecordings).toHaveBeenCalledWith(['3']);
         });
 
+        it('keeps transcript-only history items created by light backups', async () => {
+            const lightBackupItem = {
+                id: 'light-1',
+                audioPath: 'missing-audio.webm',
+                transcriptPath: 'light-1.json',
+                projectId: null,
+                status: 'complete',
+            };
+
+            (historyService.getAll as any).mockResolvedValue([lightBackupItem]);
+            (exists as any).mockImplementation((path: string) => {
+                if (path.includes('missing-audio.webm')) return Promise.resolve(false);
+                if (path.includes('light-1.json')) return Promise.resolve(true);
+                return Promise.resolve(false);
+            });
+
+            await healthCheckService.checkHistory();
+
+            expect(historyService.deleteRecordings).not.toHaveBeenCalled();
+        });
+
         it('should do nothing if all items are valid', async () => {
             const mockItems = [
                 { id: '1', audioPath: 'a1.wav', transcriptPath: 't1.json' },

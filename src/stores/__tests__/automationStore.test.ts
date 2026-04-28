@@ -233,6 +233,28 @@ describe('automationStore', () => {
         expect(addFilesMock).not.toHaveBeenCalled();
     });
 
+    it('does not re-queue files that already exist in imported processed entries', async () => {
+        const rule = createRule();
+        loadAutomationRulesMock.mockResolvedValue([rule]);
+        loadAutomationProcessedEntriesMock.mockResolvedValue([
+            {
+                ruleId: rule.id,
+                filePath: 'C:\\watch\\meeting.wav',
+                sourceFingerprint: 'fp-1',
+                size: 42,
+                mtimeMs: 1000,
+                status: 'complete',
+                processedAt: 99,
+            },
+        ]);
+        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
+
+        await useAutomationStore.getState().loadAndStart();
+        await vi.advanceTimersByTimeAsync(250);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+    });
+
     it('keeps pending dedupe scoped to each rule so identical files can be processed by multiple rules', async () => {
         const ruleA = createRule({ id: 'rule-a', name: 'Rule A' });
         const ruleB = createRule({ id: 'rule-b', name: 'Rule B' });
