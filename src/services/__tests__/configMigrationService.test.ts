@@ -1,21 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { migrateConfig } from '../configMigrationService';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 
-const mockSet = vi.fn();
-const mockSave = vi.fn();
-
-vi.mock('../storageService', () => ({
-  settingsStore: {
-    set: (...args: unknown[]) => mockSet(...args),
-    save: (...args: unknown[]) => mockSave(...args),
-  },
-  STORE_KEY_CONFIG: 'sona-config',
-}));
-
 describe('configMigrationService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
   });
 
@@ -29,10 +17,6 @@ describe('configMigrationService', () => {
 
     expect(result.config.summaryEnabled).toBe(true);
     expect(result.migrated).toBe(true);
-    expect(mockSet).toHaveBeenCalledWith('sona-config', expect.objectContaining({
-      summaryEnabled: true,
-    }));
-    expect(mockSave).toHaveBeenCalled();
   });
 
   it('preserves an explicitly disabled summary setting without forcing migration', async () => {
@@ -159,6 +143,19 @@ describe('configMigrationService', () => {
     expect(result.config.speakerProfiles).toEqual([]);
     expect(result.config.speakerSegmentationModelPath).toBe('');
     expect(result.config.speakerEmbeddingModelPath).toBe('');
+    expect(result.migrated).toBe(true);
+  });
+
+  it('accepts a legacy config object as pure input without relying on storage side effects', async () => {
+    const legacyConfig = {
+      modelPath: '/legacy/model.onnx',
+      recognitionModelPath: '/legacy/model.onnx',
+    } as any;
+
+    const result = await migrateConfig(null, legacyConfig);
+
+    expect(result.config.streamingModelPath).toBe('/legacy/model.onnx');
+    expect(result.config.offlineModelPath).toBe('/legacy/model.onnx');
     expect(result.migrated).toBe(true);
   });
 });

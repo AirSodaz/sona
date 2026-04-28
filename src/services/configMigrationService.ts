@@ -1,9 +1,7 @@
 import { AppConfig } from '../types/config';
 import { ensureLlmState } from './llm/migration';
-import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import i18n from '../i18n';
 import { DEFAULT_CONFIG } from '../stores/configStore';
-import { logger } from '../utils/logger';
 import {
   coercePolishPresetId,
   migrateLegacyPolishSelection,
@@ -25,6 +23,10 @@ export interface MigrationResult {
 }
 
 const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 6;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
   if (isConfigMigrated) {
@@ -76,32 +78,27 @@ function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
 }
 
 /**
- * Handles migrating legacy configuration from localStorage or upgrading 
- * older versions of the Tauri settings.json store to the latest format.
+ * Handles migrating legacy configuration inputs or upgrading older settings
+ * payloads to the latest config shape without performing any persistence.
  */
-export async function migrateConfig(savedConfig: AppConfig | null | undefined): Promise<MigrationResult> {
+export async function migrateConfig(
+  savedConfig: AppConfig | null | undefined,
+  legacyConfig?: unknown,
+): Promise<MigrationResult> {
   let configToLoad: any = savedConfig;
   let isConfigMigrated = false;
 
-  // 1. Fallback to localStorage if no saved config in Tauri store
-  if (!savedConfig) {
-    const legacyConfig = localStorage.getItem('sona-config');
-    if (legacyConfig) {
-      try {
-        configToLoad = JSON.parse(legacyConfig);
-        isConfigMigrated = true;
-      } catch (e) {
-        logger.error('Failed to parse legacy config:', e);
-      }
-    }
+  if (!savedConfig && isRecord(legacyConfig)) {
+    configToLoad = legacyConfig;
+    isConfigMigrated = true;
   }
 
-  // 2. If we still have no config, use defaults and return
+  // If we still have no config, use defaults and return.
   if (!configToLoad) {
     return { config: { ...DEFAULT_CONFIG }, migrated: false };
   }
 
-  // 3. Determine if an upgrade is needed based on version or missing keys
+  // Determine if an upgrade is needed based on version or missing keys.
   const needsUpgrade = shouldUpgradeConfig(configToLoad, isConfigMigrated);
 
   if (!needsUpgrade) {
@@ -175,17 +172,10 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
       return { config: normalizedConfig, migrated: false };
     }
 
-    try {
-      await settingsStore.set(STORE_KEY_CONFIG, normalizedConfig);
-      await settingsStore.save();
-    } catch (e) {
-      logger.error('Failed to save normalized config to Tauri store:', e);
-    }
-
     return { config: normalizedConfig, migrated: true };
   }
 
-  // 4. Perform Data Normalization & Structural Upgrades
+  // Perform data normalization and structural upgrades.
   const parsed = configToLoad as any;
   const { llmSettings } = ensureLlmState(parsed);
   const normalizedPolishCustomPresets = normalizePolishCustomPresets(parsed.polishCustomPresets);
@@ -285,19 +275,6 @@ export async function migrateConfig(savedConfig: AppConfig | null | undefined): 
     };
     upgradedConfig.hotwordSets = [defaultHotwordSet];
     // Keep hotwords as is for backwards compatibility, but use hotwordSets going forward.
-  }
-
-  // 5. Persist the upgraded config to Tauri store
-  try {
-    await settingsStore.set(STORE_KEY_CONFIG, upgradedConfig);
-    await settingsStore.save();
-    
-    // Clean up localStorage if we migrated from it
-    if (isConfigMigrated) {
-      localStorage.removeItem('sona-config');
-    }
-  } catch (e) {
-    logger.error('Failed to save upgraded config to Tauri store:', e);
   }
 
   return { config: upgradedConfig, migrated: true };
