@@ -1,4 +1,5 @@
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useHistoryStore } from '../stores/historyStore';
 import { historyService } from './historyService';
 import { transcriptionService } from './transcriptionService';
 import { logger } from '../utils/logger';
@@ -50,7 +51,7 @@ class RetranscribeService {
         store.setSegments(finalSegments);
 
         // Save to History File
-        await historyService.updateTranscript(historyId, finalSegments);
+        await useHistoryStore.getState().updateTranscript(historyId, finalSegments);
         logger.info(`[RetranscribeService] Successfully re-transcribed and saved history item: ${historyId}`);
     }
 }

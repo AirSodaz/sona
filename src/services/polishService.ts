@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useHistoryStore } from '../stores/historyStore';
 import { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
@@ -183,7 +184,7 @@ class PolishService {
         polishedMap.set(polishedSegments[i].id, polishedSegments[i]);
       }
 
-      await historyService.updateTranscript(
+      await useHistoryStore.getState().updateTranscript(
         jobHistoryId,
         applyPolishedChunkToSegments(bgSegments, [...polishedMap.values()]),
       );

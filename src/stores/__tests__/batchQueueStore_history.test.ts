@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
+import { useHistoryStore } from '../historyStore';
 import { useTranscriptStore } from '../transcriptStore';
 import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
@@ -48,7 +49,19 @@ vi.mock('../../services/modelService', () => ({
 
 vi.mock('../../services/historyService', () => ({
     historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'history-1', title: 'Batch test.wav', projectId: null })
+        saveImportedFile: vi.fn().mockResolvedValue({
+            id: 'history-1',
+            timestamp: 1,
+            duration: 1,
+            audioPath: 'history-1.wav',
+            transcriptPath: 'history-1.json',
+            title: 'Batch test.wav',
+            previewText: 'Hello...',
+            searchContent: 'Hello',
+            type: 'batch',
+            projectId: null,
+        }),
+        updateTranscript: vi.fn().mockResolvedValue(undefined),
     }
 }));
 
@@ -66,6 +79,11 @@ vi.mock('../projectStore', () => ({
 describe('batchQueueStore History Integration', () => {
     beforeEach(() => {
         useBatchQueueStore.getState().clearQueue();
+        useHistoryStore.setState({
+            items: [],
+            isLoading: false,
+            error: null,
+        });
         useTranscriptStore.getState().setAudioUrl(null);
         useTranscriptStore.getState().clearSegments();
         useTranscriptStore.setState({
@@ -169,5 +187,41 @@ describe('batchQueueStore History Integration', () => {
 
         useBatchQueueStore.getState().setActiveItem(queueItemId);
         expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
+    });
+
+    it('updates in-memory history metadata immediately when a saved batch item is rewritten later', async () => {
+        useHistoryStore.setState({
+            items: [
+                {
+                    id: 'history-1',
+                    timestamp: 1,
+                    duration: 1,
+                    audioPath: 'history-1.wav',
+                    transcriptPath: 'history-1.json',
+                    title: 'Batch post-process.wav',
+                    previewText: 'Hello...',
+                    searchContent: 'Hello',
+                    type: 'batch',
+                    projectId: null,
+                },
+            ],
+            isLoading: false,
+            error: null,
+        });
+
+        await useHistoryStore.getState().updateTranscript('history-1', [
+            { id: 'seg1', start: 0, end: 1, text: 'Hello polished', isFinal: true },
+        ]);
+
+        expect(historyService.updateTranscript).toHaveBeenCalledWith('history-1', [
+            { id: 'seg1', start: 0, end: 1, text: 'Hello polished', isFinal: true },
+        ]);
+        expect(useHistoryStore.getState().items).toEqual([
+            expect.objectContaining({
+                id: 'history-1',
+                previewText: 'Hello polished...',
+                searchContent: 'Hello polished',
+            }),
+        ]);
     });
 });

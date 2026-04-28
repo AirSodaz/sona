@@ -273,7 +273,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             if (!savedHistoryId) {
                 return;
             }
-            await historyService.updateTranscript(savedHistoryId, currentSegments);
+            await useHistoryStore.getState().updateTranscript(savedHistoryId, currentSegments);
         };
 
         const ensureHistorySaved = async (): Promise<void> => {

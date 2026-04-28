@@ -41,6 +41,7 @@ vi.mock('../../services/historyService', () => ({
     getAll: vi.fn().mockResolvedValue([]),
     loadTranscript: vi.fn().mockResolvedValue([]),
     getAudioUrl: vi.fn().mockResolvedValue('asset:///audio.wav'),
+    updateTranscript: vi.fn().mockResolvedValue(undefined),
     updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteRecordings: vi.fn().mockResolvedValue(undefined),
@@ -897,6 +898,44 @@ describe('ProjectsView', () => {
       expect(screen.getByText('TranscriptEditor')).toBeDefined();
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-2');
     });
+  });
+
+  it('refreshes workspace search results and snippets immediately after a transcript metadata sync', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Alpha Plan',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Meeting notes',
+          searchContent: 'Meeting notes',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
+    fireEvent.change(input, { target: { value: 'roadmap' } });
+
+    expect(screen.getByText('No matching items')).toBeDefined();
+
+    await act(async () => {
+      await useHistoryStore.getState().updateTranscript('hist-1', [
+        { id: 'seg-1', start: 0, end: 1, text: 'Fresh roadmap notes', isFinal: true },
+      ]);
+    });
+
+    expect(screen.queryByText('No matching items')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Alpha Plan' })).toBeDefined();
+    expect(screen.getByText('Snippet Fresh roadmap notes...')).toBeDefined();
   });
 
   it('disables active-result keyboard navigation while selection mode is enabled', async () => {

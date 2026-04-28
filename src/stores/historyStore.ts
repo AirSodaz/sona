@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { HistoryItem } from '../types/history';
 import { historyService } from '../services/historyService';
+import { TranscriptSegment } from '../types/transcript';
+import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { useTranscriptStore } from './transcriptStore';
 import { logger } from '../utils/logger';
 
@@ -15,6 +17,14 @@ interface HistoryState {
     deleteItem: (id: string) => Promise<void>;
     deleteItems: (ids: string[]) => Promise<void>;
     refresh: () => Promise<void>;
+    /**
+     * Updates a saved transcript and synchronizes derived metadata back into the in-memory history list.
+     *
+     * @param id The history item ID.
+     * @param segments The latest transcript segments.
+     * @return A promise that resolves when the update is complete.
+     */
+    updateTranscript: (id: string, segments: TranscriptSegment[]) => Promise<void>;
     /**
      * Updates metadata fields for a specific history item in the in-memory list and on disk.
      *
@@ -101,6 +111,23 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     refresh: async () => {
         await get().loadItems();
+    },
+
+    updateTranscript: async (id, segments) => {
+        try {
+            await historyService.updateTranscript(id, segments);
+            const transcriptMetadata = buildHistoryTranscriptMetadata(segments);
+
+            set((state) => ({
+                items: state.items.map((item) => (
+                    item.id === id ? { ...item, ...transcriptMetadata } : item
+                )),
+            }));
+        } catch (err: any) {
+            logger.error('Failed to update history transcript:', err);
+            set({ error: err.message || 'Failed to update history transcript' });
+            throw err;
+        }
     },
 
     updateItemMeta: async (id, updates) => {

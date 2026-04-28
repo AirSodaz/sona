@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { historyService } from '../services/historyService';
 import { useHistoryStore } from '../stores/historyStore';
 import { TranscriptSegment } from '../types/transcript';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
@@ -17,7 +16,7 @@ export function useAutoSaveTranscript() {
     const isSavingRef = useRef(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFingerprintRef = useRef<string>('');
-    const updateItemMeta = useHistoryStore(state => state.updateItemMeta);
+    const updateTranscript = useHistoryStore(state => state.updateTranscript);
 
     // Subscribe to store changes
     useEffect(() => {
@@ -80,7 +79,7 @@ export function useAutoSaveTranscript() {
                 clearTimeout(timeoutRef.current);
             }
         };
-    }, [updateItemMeta]);
+    }, [updateTranscript]);
 
     async function saveToHistory(historyId: string, segments: TranscriptSegment[]) {
         if (isSavingRef.current) return;
@@ -89,25 +88,7 @@ export function useAutoSaveTranscript() {
             isSavingRef.current = true;
             logger.info('[AutoSave] Saving transcript...', historyId);
 
-            // 1. Persist to disk
-            await historyService.updateTranscript(historyId, segments);
-
-            // 2. Update in-memory metadata (Preview Text & Search Content)
-            let fullText = '';
-            for (let i = 0; i < segments.length; i++) {
-                if (i > 0) fullText += ' ';
-                fullText += segments[i].text;
-            }
-
-            let previewText = fullText.substring(0, 100);
-            if (fullText.length > 100) {
-                previewText += '...';
-            }
-
-            updateItemMeta(historyId, {
-                previewText,
-                searchContent: fullText
-            });
+            await updateTranscript(historyId, segments);
             useTranscriptStore.getState().setAutoSaveState(historyId, 'saved');
 
         } catch (err) {

@@ -5,6 +5,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { HistoryItem } from '../types/history';
+import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { v4 as uuidv4 } from 'uuid';
 
 const HISTORY_DIR = 'history';
@@ -90,9 +91,7 @@ export const historyService = {
             { baseDir: BaseDirectory.AppLocalData }
         );
 
-        // Create metadata
-        const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
-        const searchContent = segments.map(s => s.text).join(' ');
+        const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
 
         return { transcriptFileName, previewText, searchContent };
     },
@@ -359,9 +358,7 @@ export const historyService = {
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            // Regenerate metadata
-            const previewText = segments.map(s => s.text).join(' ').substring(0, 100) + (segments.length > 0 ? '...' : '');
-            const searchContent = segments.map(s => s.text).join(' ');
+            const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
 
             // Update item in index
             item.previewText = previewText;

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import { useHistoryStore } from '../stores/historyStore';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
@@ -178,7 +179,7 @@ class TranslationService {
         translationMap.set(translations[i].id, translations[i]);
       }
 
-      await historyService.updateTranscript(
+      await useHistoryStore.getState().updateTranscript(
         jobHistoryId,
         applyTranslatedChunkToSegments(bgSegments, [...translationMap.values()]),
       );
