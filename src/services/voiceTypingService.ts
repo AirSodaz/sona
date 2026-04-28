@@ -454,6 +454,19 @@ class VoiceTypingService {
         return await this.getOverlayPosition();
     }
 
+    async retryWarmup() {
+        if (!this.initialized) {
+            this.init();
+            return;
+        }
+
+        useVoiceTypingRuntimeStore.getState().clearRuntimeFailure({
+            resetWarmup: true,
+        });
+        await this.stopMicrophoneCapture();
+        await this.syncAndPrepare();
+    }
+
     resetForTest() {
         this.initialized = false;
         this.isShortcutRegistered = false;

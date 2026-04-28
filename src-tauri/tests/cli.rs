@@ -26,7 +26,8 @@ fn version_is_printed_to_stdout() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sona 0.6.0"));
+    let expected = format!("sona {}", env!("CARGO_PKG_VERSION"));
+    assert!(stdout.contains(&expected));
 }
 
 #[test]
@@ -45,7 +46,8 @@ fn short_version_is_printed_to_stdout() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sona 0.6.0"));
+    let expected = format!("sona {}", env!("CARGO_PKG_VERSION"));
+    assert!(stdout.contains(&expected));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use hound;
 use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
+use std::path::{Path, PathBuf};
 
 pub struct AudioSegment {
     pub samples: Vec<f32>,
@@ -43,30 +44,34 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &str) -> hound::R
 ///
 /// This mirrors the GUI batch path:
 /// `ffmpeg -i <file> -f s16le -acodec pcm_s16le -ar <rate> -ac 1 -`
-pub async fn extract_and_resample_audio(
-    filepath: &str,
-    target_sample_rate: u32,
-) -> Result<Vec<f32>, String> {
-    // Locate the current executable path
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
-
-    // Get the directory of the current executable
+pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, String> {
     let exe_dir = exe_path
         .parent()
         .ok_or("Failed to get parent directory of executable")?;
-
-    // Build the target triple specific sidecar name
-    let _target = tauri::utils::platform::target_triple()
-        .map_err(|e| format!("Failed to get target triple: {}", e))?;
 
     #[cfg(windows)]
     let ffmpeg_filename = "ffmpeg.exe".to_string();
     #[cfg(not(windows))]
     let ffmpeg_filename = "ffmpeg".to_string();
 
-    // Construct the absolute path to the sidecar
-    let ffmpeg_path = exe_dir.join(ffmpeg_filename);
+    Ok(exe_dir.join(ffmpeg_filename))
+}
+
+pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+
+    resolve_ffmpeg_sidecar_path_from_exe(&exe_path)
+}
+
+pub async fn extract_and_resample_audio(
+    filepath: &str,
+    target_sample_rate: u32,
+) -> Result<Vec<f32>, String> {
+    // Build the target triple specific sidecar name
+    let _target = tauri::utils::platform::target_triple()
+        .map_err(|e| format!("Failed to get target triple: {}", e))?;
+    let ffmpeg_path = resolve_ffmpeg_sidecar_path()?;
 
     // Run ffmpeg using tokio::process::Command
     let mut command = tokio::process::Command::new(ffmpeg_path);
@@ -193,6 +198,19 @@ fn extract_vad_segments(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn resolves_ffmpeg_sidecar_path_from_executable() {
+        let exe_path = Path::new("/tmp/sona/tauri-appsona");
+        let ffmpeg_path = resolve_ffmpeg_sidecar_path_from_exe(exe_path).expect("path");
+
+        #[cfg(windows)]
+        assert!(ffmpeg_path.ends_with("ffmpeg.exe"));
+
+        #[cfg(not(windows))]
+        assert!(ffmpeg_path.ends_with("ffmpeg"));
+    }
 
     #[test]
     fn test_pcm_i16_to_f32() {

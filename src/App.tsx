@@ -9,6 +9,7 @@ import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';
 import { Settings } from './components/Settings';
+import { DiagnosticsModal } from './components/DiagnosticsModal';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
@@ -17,6 +18,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
+import { useOnboardingStore } from './stores/onboardingStore';
 import { SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -24,6 +26,7 @@ import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { SettingsTab } from './hooks/useSettingsLogic';
+import { diagnosticsService } from './services/diagnosticsService';
 
 /**
  * Helper to determine the title of the left panel based on the current mode.
@@ -42,10 +45,12 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
 
 function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setMode = useTranscriptStore((state) => state.setMode);
+  const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const activeProject = useProjectStore((state) => 
@@ -68,6 +73,22 @@ function App(): React.JSX.Element {
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
+
+  const openSettingsTab = (tab: SettingsTab) => {
+    setIsDiagnosticsOpen(false);
+    setSettingsInitialTab(tab);
+    setIsSettingsOpen(true);
+  };
+
+  const openDiagnostics = () => {
+    setIsSettingsOpen(false);
+    setIsDiagnosticsOpen(true);
+  };
+
+  const runFirstRunSetupFromDiagnostics = () => {
+    setIsDiagnosticsOpen(false);
+    reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
+  };
 
   if (!isLoaded) {
     return <></>; // Wait for config and onboarding state to load
@@ -153,7 +174,18 @@ function App(): React.JSX.Element {
       {/* {isCaptionMode && isRecording && <LiveCaptionOverlay />} */}
 
       {/* Settings Modal */}
-      <Settings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        initialTab={settingsInitialTab}
+        onOpenDiagnostics={openDiagnostics}
+      />
+      <DiagnosticsModal
+        isOpen={isDiagnosticsOpen}
+        onClose={() => setIsDiagnosticsOpen(false)}
+        onOpenSettingsTab={openSettingsTab}
+        onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}
+      />
       <GlobalDialog />
       <ErrorDialog />
       <FirstRunGuide />

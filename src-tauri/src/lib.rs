@@ -11,6 +11,7 @@ pub mod system;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use serde::Serialize;
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, Notify};
 
@@ -27,6 +28,14 @@ struct AppSettings {
 
 struct AuxWindowStateStore {
     states: std::sync::Mutex<HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeEnvironmentStatus {
+    ffmpeg_path: String,
+    ffmpeg_exists: bool,
+    log_dir_path: String,
 }
 
 impl Default for AuxWindowStateStore {
@@ -474,6 +483,23 @@ async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<
     Ok(())
 }
 
+#[tauri::command]
+async fn get_runtime_environment_status<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<RuntimeEnvironmentStatus, String> {
+    let ffmpeg_path = pipeline::resolve_ffmpeg_sidecar_path()?;
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e: tauri::Error| e.to_string())?;
+
+    Ok(RuntimeEnvironmentStatus {
+        ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),
+        ffmpeg_exists: ffmpeg_path.exists(),
+        log_dir_path: log_dir.to_string_lossy().into_owned(),
+    })
+}
+
 /// Initializes and runs the Tauri application.
 ///
 /// Sets up the download state, plugins (opener, dialog, fs, shell, http),
@@ -687,6 +713,7 @@ pub fn run() {
             clear_aux_window_state,
             set_system_audio_mute,
             open_log_folder,
+            get_runtime_environment_status,
             system::inject_text,
             system::get_mouse_position,
             system::get_text_cursor_position,

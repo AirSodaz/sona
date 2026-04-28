@@ -1,12 +1,16 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Languages } from 'lucide-react';
+import { Languages, Stethoscope } from 'lucide-react';
 import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import type { UIConfig } from '../../types/config';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+
+interface SettingsGeneralTabProps {
+    onOpenDiagnostics?: () => void;
+}
 
 type FontValue = NonNullable<UIConfig['font']>;
 
@@ -18,7 +22,7 @@ function getFontFamily(fontValue: string): string {
     }
 }
 
-export function SettingsGeneralTab(): React.JSX.Element {
+export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const config = useUIConfig();
     const updateConfig = useSetConfig();
@@ -159,6 +163,30 @@ export function SettingsGeneralTab(): React.JSX.Element {
                         checked={autoCheckUpdates}
                         onChange={(enabled) => updateConfig({ autoCheckUpdates: enabled })}
                     />
+                </SettingsItem>
+            </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}
+                description={t('settings.diagnostics.entry_description', {
+                    defaultValue: 'Open a dedicated diagnostics page for the local transcription path, runtime readiness, and packaged environment checks.',
+                })}
+                icon={<Stethoscope size={20} />}
+            >
+                <SettingsItem
+                    title={t('settings.diagnostics.entry_title', { defaultValue: 'Diagnostics' })}
+                    hint={t('settings.diagnostics.entry_hint', {
+                        defaultValue: 'Review the current local setup and jump straight to the clearest fix when something is off.',
+                    })}
+                >
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={onOpenDiagnostics}
+                        disabled={!onOpenDiagnostics}
+                    >
+                        {t('settings.diagnostics.open_button', { defaultValue: 'Open Diagnostics' })}
+                    </button>
                 </SettingsItem>
             </SettingsSection>
         </SettingsTabContainer>

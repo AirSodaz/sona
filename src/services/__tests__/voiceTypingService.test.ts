@@ -980,6 +980,46 @@ describe('voiceTypingService', () => {
         );
     });
 
+    it('retries warm-up explicitly for diagnostics and restores runtime readiness', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        useVoiceTypingRuntimeStore.getState().reportRuntimeError('warmup', 'Warm-up failed once.');
+        vi.clearAllMocks();
+
+        await service.retryWarmup();
+        await flushMicrotasks(8);
+
+        expect(getInvokeCalls('stop_microphone_capture')).toEqual([[
+            'stop_microphone_capture',
+            { instanceId: 'voice-typing' },
+        ]]);
+        expect(getInvokeCalls('start_microphone_capture')).toEqual([[
+            'start_microphone_capture',
+            {
+                deviceName: null,
+                instanceId: 'voice-typing',
+            },
+        ]]);
+        expect(mocks.mockPrepare).toHaveBeenCalled();
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'ready',
+                warmup: 'ready',
+                lastErrorSource: null,
+                lastErrorMessage: null,
+            })
+        );
+    });
+
     it('cancels startup cleanly if the shortcut is released before microphone capture begins', async () => {
         let resolveStart: (() => void) | undefined;
         vi.useFakeTimers();

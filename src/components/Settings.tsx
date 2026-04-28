@@ -39,6 +39,7 @@ interface SettingsProps {
     isOpen: boolean;
     onClose: () => void;
     initialTab?: SettingsTabInput;
+    onOpenDiagnostics?: () => void;
 }
 
 const SETTINGS_TABS = [
@@ -63,7 +64,7 @@ const SETTINGS_TABS = [
  * @param props Component props.
  * @return The settings modal or null if not closed.
  */
-export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.JSX.Element | null {
+export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
 
@@ -283,7 +284,7 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                 {(() => {
                                     switch (activeTab) {
                                         case 'general':
-                                            return <SettingsGeneralTab />;
+                                            return <SettingsGeneralTab onOpenDiagnostics={onOpenDiagnostics} />;
                                         case 'dashboard':
                                             return <SettingsDashboardTab />;
                                         case 'microphone':

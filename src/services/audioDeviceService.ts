@@ -10,6 +10,15 @@ export interface DeviceOption {
   value: string;
 }
 
+export type MicrophonePermissionState = PermissionState | 'unsupported';
+
+export interface DeviceProbeResult {
+  options: DeviceOption[];
+  available: boolean;
+  source: 'native' | 'browser' | 'fallback';
+  errorMessage?: string;
+}
+
 function dedupeOptions(options: DeviceOption[]): DeviceOption[] {
   return options.filter((option, index, currentOptions) => (
     index === currentOptions.findIndex((candidate) => candidate.value === option.value)
@@ -27,6 +36,37 @@ function toBrowserDeviceOptions(
       value: device.deviceId,
     })),
   ]);
+}
+
+function toNativeDeviceOptions(devices: AudioDevice[], defaultLabel: string): DeviceOption[] {
+  return dedupeOptions([
+    { label: defaultLabel, value: 'default' },
+    ...devices.map((device) => ({
+      label: device.name,
+      value: device.name,
+    })),
+  ]);
+}
+
+export async function getMicrophonePermissionState(): Promise<MicrophonePermissionState> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return 'unsupported';
+  }
+
+  if (!navigator.permissions?.query) {
+    return 'prompt';
+  }
+
+  try {
+    const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+    if (status.state === 'granted' || status.state === 'denied' || status.state === 'prompt') {
+      return status.state;
+    }
+  } catch (error) {
+    logger.debug?.('[AudioDeviceService] Passive microphone permission query failed:', error);
+  }
+
+  return 'prompt';
 }
 
 /**
@@ -47,23 +87,56 @@ export async function requestMicrophonePermission(): Promise<boolean> {
   }
 }
 
+export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
+  try {
+    const nativeDevices = await invoke<AudioDevice[]>('get_microphone_devices');
+    if (nativeDevices && nativeDevices.length > 0) {
+      return {
+        options: toNativeDeviceOptions(nativeDevices, defaultLabel),
+        available: true,
+        source: 'native',
+      };
+    }
+  } catch (error) {
+    logger.warn('[AudioDeviceService] Native microphone lookup failed, falling back:', error);
+  }
+
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    return {
+      options: [{ label: defaultLabel, value: 'default' }],
+      available: false,
+      source: 'fallback',
+      errorMessage: 'Browser device enumeration is unavailable.',
+    };
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter((device) => device.kind === 'audioinput');
+    return {
+      options: toBrowserDeviceOptions(audioInputs, defaultLabel),
+      available: audioInputs.length > 0,
+      source: 'browser',
+      errorMessage: audioInputs.length > 0 ? undefined : 'No microphone devices were returned.',
+    };
+  } catch (error) {
+    logger.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
+    return {
+      options: [{ label: defaultLabel, value: 'default' }],
+      available: false,
+      source: 'fallback',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Lists available microphone devices using native APIs first and browser APIs as fallback.
  */
 export async function listMicrophoneDeviceOptions(defaultLabel: string): Promise<DeviceOption[]> {
-  try {
-    const nativeDevices = await invoke<AudioDevice[]>('get_microphone_devices');
-    if (nativeDevices && nativeDevices.length > 0) {
-      return dedupeOptions([
-        { label: defaultLabel, value: 'default' },
-        ...nativeDevices.map((device) => ({
-          label: device.name,
-          value: device.name,
-        })),
-      ]);
-    }
-  } catch (error) {
-    logger.warn('[AudioDeviceService] Native microphone lookup failed, falling back:', error);
+  const probe = await probeMicrophoneDeviceOptions(defaultLabel);
+  if (probe.source === 'native') {
+    return probe.options;
   }
 
   if (!navigator.mediaDevices?.enumerateDevices) {
@@ -91,21 +164,40 @@ export async function listMicrophoneDeviceOptions(defaultLabel: string): Promise
  * Lists available system-audio capture devices for the settings screen.
  */
 export async function listSystemAudioDeviceOptions(defaultLabel: string): Promise<DeviceOption[]> {
+  const probe = await probeSystemAudioDeviceOptions(defaultLabel);
+  return probe.options;
+}
+
+export async function probeSystemAudioDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
   try {
     const devices = await invoke<AudioDevice[]>('get_system_audio_devices');
     if (!devices || devices.length === 0) {
-      return [{ label: defaultLabel, value: 'default' }];
+      return {
+        options: [{ label: defaultLabel, value: 'default' }],
+        available: false,
+        source: 'fallback',
+        errorMessage: 'No system audio devices were returned.',
+      };
     }
 
-    return dedupeOptions([
-      { label: defaultLabel, value: 'default' },
-      ...devices.map((device) => ({
-        label: device.name,
-        value: device.name,
-      })),
-    ]);
+    return {
+      options: dedupeOptions([
+        { label: defaultLabel, value: 'default' },
+        ...devices.map((device) => ({
+          label: device.name,
+          value: device.name,
+        })),
+      ]),
+      available: true,
+      source: 'native',
+    };
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to get system audio devices:', error);
-    return [{ label: defaultLabel, value: 'default' }];
+    return {
+      options: [{ label: defaultLabel, value: 'default' }],
+      available: false,
+      source: 'fallback',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
   }
 }

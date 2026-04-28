@@ -4,10 +4,11 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
+import { modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
 import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { findSelectedModelByMode } from '../utils/modelSelection';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -266,7 +267,7 @@ export class TranscriptionService {
                 let vadPathToUse = '';
                 let vadBufferToUse = 5.0;
 
-                const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+                const streamingModel = findSelectedModelByMode(this.modelPath, 'streaming');
 
                 if (streamingModel) {
                     const rules = modelService.getModelRules(streamingModel.id);
@@ -354,7 +355,7 @@ export class TranscriptionService {
         const appConfig = useTranscriptStore.getState().config;
         let vadPathToUse = '';
         let punctuationPathToUse = '';
-        const streamingModel = PRESET_MODELS.find(m => m.modes?.includes('streaming') && this.modelPath.includes(m.filename || m.id));
+        const streamingModel = findSelectedModelByMode(this.modelPath, 'streaming');
         
         if (streamingModel) {
             const rules = modelService.getModelRules(streamingModel.id);
@@ -504,7 +505,7 @@ export class TranscriptionService {
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;
 
-        const offlineModel = PRESET_MODELS.find(m => m.modes?.includes('offline') && this.modelPath.includes(m.filename || m.id));
+        const offlineModel = findSelectedModelByMode(this.modelPath, 'offline');
         if (offlineModel) {
             const rules = modelService.getModelRules(offlineModel.id);
             if (rules.requiresPunctuation && appConfig.punctuationModelPath) punctuationPathToUse = appConfig.punctuationModelPath;

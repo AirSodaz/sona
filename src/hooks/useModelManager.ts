@@ -5,6 +5,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { doesModelPathMatch } from '../utils/modelSelection';
 
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const DEFAULT_SENSEVOICE_FP32_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
@@ -281,24 +282,24 @@ export function useModelManager(isOpen: boolean) {
         if (model.modes && model.modes.length > 0) {
             let isSelected = false;
             if (model.modes.includes('streaming')) {
-                isSelected = isSelected || (config.streamingModelPath || '').includes(model.filename || model.id);
+                isSelected = isSelected || doesModelPathMatch(config.streamingModelPath || '', model);
             }
             if (model.modes.includes('offline')) {
-                isSelected = isSelected || (config.offlineModelPath || '').includes(model.filename || model.id);
+                isSelected = isSelected || doesModelPathMatch(config.offlineModelPath || '', model);
             }
             return isSelected;
         }
         if (model.type === 'punctuation') {
-            return (config.punctuationModelPath || '').includes(model.filename || model.id);
+            return doesModelPathMatch(config.punctuationModelPath || '', model);
         }
         if (model.type === 'vad') {
-            return (config.vadModelPath || '').includes(model.filename || model.id);
+            return doesModelPathMatch(config.vadModelPath || '', model);
         }
         if (model.type === 'speaker-segmentation') {
-            return (config.speakerSegmentationModelPath || '').includes(model.filename || model.id);
+            return doesModelPathMatch(config.speakerSegmentationModelPath || '', model);
         }
         if (model.type === 'speaker-embedding') {
-            return (config.speakerEmbeddingModelPath || '').includes(model.filename || model.id);
+            return doesModelPathMatch(config.speakerEmbeddingModelPath || '', model);
         }
         return false;
     }
