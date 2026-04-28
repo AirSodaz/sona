@@ -4,6 +4,7 @@ import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
 
 const checkMock = vi.fn();
+const runGuardedQuitMock = vi.fn();
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: (...args: unknown[]) => checkMock(...args),
@@ -19,6 +20,10 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock('../../services/quitGuard', () => ({
+  runGuardedQuit: (...args: unknown[]) => runGuardedQuitMock(...args),
 }));
 
 vi.mock('../../stores/errorDialogStore', () => ({
@@ -69,6 +74,7 @@ function resetUpdaterStore() {
 describe('SettingsAboutTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runGuardedQuitMock.mockReset();
     resetUpdaterStore();
   });
 

@@ -5,6 +5,7 @@ const checkMock = vi.fn();
 const relaunchMock = vi.fn();
 const openUrlMock = vi.fn();
 const showErrorMock = vi.fn();
+const runGuardedQuitMock = vi.fn();
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: (...args: unknown[]) => checkMock(...args),
@@ -16,6 +17,10 @@ vi.mock('@tauri-apps/plugin-process', () => ({
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
   openUrl: (...args: unknown[]) => openUrlMock(...args),
+}));
+
+vi.mock('../../services/quitGuard', () => ({
+  runGuardedQuit: (...args: unknown[]) => runGuardedQuitMock(...args),
 }));
 
 vi.mock('../../i18n', () => ({
@@ -58,6 +63,10 @@ describe('appUpdaterStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetUpdaterStore();
+    runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
+      await onExit();
+      return true;
+    });
   });
 
   it('shows the notification after an automatic update check finds a new version', async () => {
@@ -158,6 +167,22 @@ describe('appUpdaterStore', () => {
 
     await useAppUpdaterStore.getState().relaunchToUpdate();
 
+    expect(runGuardedQuitMock).toHaveBeenCalledTimes(1);
     expect(relaunchMock).toHaveBeenCalled();
+  });
+
+  it('does not relaunch when the shared quit guard is cancelled', async () => {
+    useAppUpdaterStore.setState({
+      status: 'downloaded',
+      progress: 100,
+      updateInfo: makeUpdate('1.2.3') as any,
+      notificationVisible: true,
+    });
+    runGuardedQuitMock.mockResolvedValueOnce(false);
+
+    await useAppUpdaterStore.getState().relaunchToUpdate();
+
+    expect(runGuardedQuitMock).toHaveBeenCalledTimes(1);
+    expect(relaunchMock).not.toHaveBeenCalled();
   });
 });

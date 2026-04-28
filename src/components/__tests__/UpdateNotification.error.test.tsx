@@ -6,6 +6,7 @@ import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
 const relaunchMock = vi.fn();
 const openUrlMock = vi.fn();
 const showErrorMock = vi.fn();
+const runGuardedQuitMock = vi.fn();
 
 vi.mock('@tauri-apps/plugin-updater', () => ({}));
 
@@ -15,6 +16,10 @@ vi.mock('@tauri-apps/plugin-process', () => ({
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
   openUrl: (...args: unknown[]) => openUrlMock(...args),
+}));
+
+vi.mock('../../services/quitGuard', () => ({
+  runGuardedQuit: (...args: unknown[]) => runGuardedQuitMock(...args),
 }));
 
 vi.mock('../../stores/errorDialogStore', () => ({
@@ -67,6 +72,10 @@ describe('UpdateNotification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetUpdaterStore();
+    runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
+      await onExit();
+      return true;
+    });
   });
 
   it('dismisses the toast and records the version for this session', () => {

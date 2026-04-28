@@ -27,6 +27,13 @@ struct AppSettings {
     minimize_to_tray: std::sync::Mutex<bool>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MainWindowCloseAction {
+    Ignore,
+    HideToTray,
+    RequestQuit,
+}
+
 struct AuxWindowStateStore {
     states: std::sync::Mutex<HashMap<String, serde_json::Value>>,
 }
@@ -167,6 +174,18 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
+}
+
+fn resolve_main_window_close_action(window_label: &str, minimize_to_tray: bool) -> MainWindowCloseAction {
+    if window_label != "main" {
+        return MainWindowCloseAction::Ignore;
+    }
+
+    if minimize_to_tray {
+        MainWindowCloseAction::HideToTray
+    } else {
+        MainWindowCloseAction::RequestQuit
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -713,17 +732,19 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
-                // Check if this is the main window - we only want to intercept close for the main window
-                if window.label() == "main" {
-                    let state = app.state::<AppSettings>();
-                    // Default to true if lock fails (safe fallback)
-                    let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
+                let state = app.state::<AppSettings>();
+                // Default to true if lock fails (safe fallback)
+                let minimize = state.minimize_to_tray.lock().map(|v| *v).unwrap_or(true);
 
-                    if minimize {
+                match resolve_main_window_close_action(window.label(), minimize) {
+                    MainWindowCloseAction::Ignore => {}
+                    MainWindowCloseAction::HideToTray => {
                         let _ = window.hide();
                         api.prevent_close();
-                    } else {
-                        app.exit(0);
+                    }
+                    MainWindowCloseAction::RequestQuit => {
+                        api.prevent_close();
+                        let _ = window.emit("request-quit", ());
                     }
                 }
             }
@@ -803,7 +824,12 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_runtime_path_status, RuntimePathKind};
+    use super::{
+        resolve_main_window_close_action,
+        resolve_runtime_path_status,
+        MainWindowCloseAction,
+        RuntimePathKind,
+    };
     use std::fs::File;
     use tempfile::tempdir;
 
@@ -848,5 +874,26 @@ mod tests {
 
         assert_eq!(status.kind, RuntimePathKind::Unknown);
         assert!(status.error.is_some());
+    }
+
+    #[test]
+    fn main_window_close_hides_to_tray_when_enabled() {
+        let action = resolve_main_window_close_action("main", true);
+
+        assert_eq!(action, MainWindowCloseAction::HideToTray);
+    }
+
+    #[test]
+    fn main_window_close_requests_quit_when_tray_minimize_is_disabled() {
+        let action = resolve_main_window_close_action("main", false);
+
+        assert_eq!(action, MainWindowCloseAction::RequestQuit);
+    }
+
+    #[test]
+    fn non_main_windows_are_ignored_by_quit_guard() {
+        let action = resolve_main_window_close_action("caption", false);
+
+        assert_eq!(action, MainWindowCloseAction::Ignore);
     }
 }

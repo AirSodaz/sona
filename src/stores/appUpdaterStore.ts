@@ -3,6 +3,7 @@ import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import i18n from '../i18n';
+import { runGuardedQuit } from '../services/quitGuard';
 import { buildErrorDialogViewModel } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useErrorDialogStore } from './errorDialogStore';
@@ -204,7 +205,9 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
 
   relaunchToUpdate: async () => {
     try {
-      await relaunch();
+      await runGuardedQuit(async () => {
+        await relaunch();
+      });
     } catch (error) {
       logger.error('Update relaunch failed:', error);
       set({

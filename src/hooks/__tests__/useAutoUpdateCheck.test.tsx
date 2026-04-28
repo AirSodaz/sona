@@ -5,6 +5,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
 
 const checkMock = vi.fn();
+const runGuardedQuitMock = vi.fn();
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: (...args: unknown[]) => checkMock(...args),
@@ -16,6 +17,10 @@ vi.mock('@tauri-apps/plugin-process', () => ({
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
   openUrl: vi.fn(),
+}));
+
+vi.mock('../../services/quitGuard', () => ({
+  runGuardedQuit: (...args: unknown[]) => runGuardedQuitMock(...args),
 }));
 
 vi.mock('../../i18n', () => ({
@@ -57,6 +62,7 @@ describe('useAutoUpdateCheck', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    runGuardedQuitMock.mockReset();
     resetUpdaterStore();
     useConfigStore.setState({
       config: {

@@ -956,7 +956,7 @@
         "check_updates": "检查更新",
         "quit": "退出",
         "quit_warning_title": "仍有活动任务",
-        "quit_warning_message": "仍有活动任务正在运行（录音、下载或处理中）。退出将终止这些任务。\n\n确定要退出吗？",
+        "quit_warning_message": "仍有活动任务正在运行。退出将终止这些任务。\n\n确定要退出吗？",
         "quit_confirm": "仍要退出"
     },
     "translation": {

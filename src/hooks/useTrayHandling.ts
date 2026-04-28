@@ -3,7 +3,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { useDialogStore } from '../stores/dialogStore';
+import { forceExitWithGuard } from '../services/quitGuard';
 import { SettingsTab } from './useSettingsLogic';
 import { logger } from '../utils/logger';
 
@@ -19,7 +19,6 @@ export function useTrayHandling(
     setIsSettingsOpen: (open: boolean) => void,
     setSettingsInitialTab: (tab: SettingsTab) => void
 ) {
-    const { confirm } = useDialogStore();
     const { t, i18n } = useTranslation();
     const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
 
@@ -78,34 +77,10 @@ export function useTrayHandling(
 
                 const unlistenRequestQuit = await listen('request-quit', async () => {
                     if (!isMounted) return;
-                    // Access store state directly (not via hook) to get fresh values
-                    const state = useTranscriptStore.getState();
-                    const isRecording = state.isRecording;
-                    const isProcessing = state.processingStatus === 'processing';
-
-                    let hasDownloads = false;
                     try {
-                        hasDownloads = await invoke<boolean>('has_active_downloads');
-                    } catch (e) {
-                        logger.error('Failed to check downloads:', e);
-                    }
-
-                    if (isRecording || isProcessing || hasDownloads) {
-                        const confirmed = await confirm(
-                            t('tray.quit_warning_message'),
-                            {
-                                title: t('tray.quit_warning_title'),
-                                variant: 'warning',
-                                confirmLabel: t('tray.quit_confirm'),
-                                cancelLabel: t('common.cancel')
-                            }
-                        );
-
-                        if (confirmed) {
-                            await invoke('force_exit');
-                        }
-                    } else {
-                        await invoke('force_exit');
+                        await forceExitWithGuard();
+                    } catch (error) {
+                        logger.error('Failed to handle quit request:', error);
                     }
                 });
                 if (isMounted) unlistenFunctions.push(unlistenRequestQuit);
@@ -122,5 +97,5 @@ export function useTrayHandling(
             isMounted = false;
             unlistenFunctions.forEach(fn => fn());
         };
-    }, [setIsSettingsOpen, setSettingsInitialTab, confirm]);
+    }, [setIsSettingsOpen, setSettingsInitialTab]);
 }

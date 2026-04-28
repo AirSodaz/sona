@@ -956,7 +956,7 @@
         "check_updates": "Check for Updates",
         "quit": "Quit",
         "quit_warning_title": "Active Tasks Running",
-        "quit_warning_message": "You have active tasks running (recording, downloading, or processing). Quitting now will terminate them.\n\nAre you sure you want to quit?",
+        "quit_warning_message": "You have active tasks running. Quitting now will terminate them.\n\nAre you sure you want to quit?",
         "quit_confirm": "Quit Anyway"
     },
     "translation": {
