@@ -10,6 +10,7 @@ pub mod speaker;
 pub mod system;
 
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::sync::Arc;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
@@ -36,6 +37,53 @@ struct RuntimeEnvironmentStatus {
     ffmpeg_path: String,
     ffmpeg_exists: bool,
     log_dir_path: String,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum RuntimePathKind {
+    File,
+    Directory,
+    Missing,
+    Unknown,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePathStatus {
+    path: String,
+    kind: RuntimePathKind,
+    error: Option<String>,
+}
+
+fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::File,
+            error: None,
+        },
+        Ok(metadata) if metadata.is_dir() => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Directory,
+            error: None,
+        },
+        Ok(_) => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Unknown,
+            error: Some("Path exists but is neither a regular file nor directory.".to_string()),
+        },
+        Err(error) if error.kind() == ErrorKind::NotFound => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Missing,
+            error: None,
+        },
+        Err(error) => RuntimePathStatus {
+            path: path.to_string(),
+            kind: RuntimePathKind::Unknown,
+            error: Some(error.to_string()),
+        },
+    }
 }
 
 impl Default for AuxWindowStateStore {
@@ -500,6 +548,14 @@ async fn get_runtime_environment_status<R: tauri::Runtime>(
     })
 }
 
+#[tauri::command]
+async fn get_path_statuses(paths: Vec<String>) -> Result<Vec<RuntimePathStatus>, String> {
+    Ok(paths
+        .into_iter()
+        .map(|path| resolve_runtime_path_status(&path))
+        .collect())
+}
+
 /// Initializes and runs the Tauri application.
 ///
 /// Sets up the download state, plugins (opener, dialog, fs, shell, http),
@@ -714,6 +770,7 @@ pub fn run() {
             set_system_audio_mute,
             open_log_folder,
             get_runtime_environment_status,
+            get_path_statuses,
             system::inject_text,
             system::get_mouse_position,
             system::get_text_cursor_position,
@@ -742,4 +799,54 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_runtime_path_status, RuntimePathKind};
+    use std::fs::File;
+    use tempfile::tempdir;
+
+    #[test]
+    fn resolve_runtime_path_status_detects_existing_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("sample.txt");
+        File::create(&file_path).unwrap();
+
+        let status = resolve_runtime_path_status(file_path.to_string_lossy().as_ref());
+
+        assert_eq!(status.kind, RuntimePathKind::File);
+        assert_eq!(status.error, None);
+    }
+
+    #[test]
+    fn resolve_runtime_path_status_detects_existing_directory() {
+        let dir = tempdir().unwrap();
+
+        let status = resolve_runtime_path_status(dir.path().to_string_lossy().as_ref());
+
+        assert_eq!(status.kind, RuntimePathKind::Directory);
+        assert_eq!(status.error, None);
+    }
+
+    #[test]
+    fn resolve_runtime_path_status_detects_missing_path() {
+        let dir = tempdir().unwrap();
+        let missing_path = dir.path().join("missing.txt");
+
+        let status = resolve_runtime_path_status(missing_path.to_string_lossy().as_ref());
+
+        assert_eq!(status.kind, RuntimePathKind::Missing);
+        assert_eq!(status.error, None);
+    }
+
+    #[test]
+    fn resolve_runtime_path_status_returns_unknown_for_invalid_path() {
+        let invalid_path = "C:\\0\0invalid";
+
+        let status = resolve_runtime_path_status(invalid_path);
+
+        assert_eq!(status.kind, RuntimePathKind::Unknown);
+        assert!(status.error.is_some());
+    }
 }

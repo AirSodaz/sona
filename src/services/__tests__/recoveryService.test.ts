@@ -11,16 +11,21 @@ import {
 } from '../recoveryService';
 
 const testContext = vi.hoisted(() => ({
-    existingPaths: new Set<string>(),
+    filePaths: new Set<string>(),
+    directoryPaths: new Set<string>(),
+    unknownPaths: new Set<string>(),
+    pathStatusError: null as Error | null,
     storedRecoveryFile: '',
     writeTextFileMock: vi.fn(),
     readTextFileMock: vi.fn(),
     existsMock: vi.fn(),
+    invokeMock: vi.fn(),
     mkdirMock: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
     convertFileSrc: (path: string) => `asset://${path}`,
+    invoke: (...args: unknown[]) => testContext.invokeMock(...args),
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -40,7 +45,10 @@ vi.mock('../../utils/logger', () => ({
 describe('recoveryService', () => {
     beforeEach(() => {
         resetRecoveryRuntimeForTests();
-        testContext.existingPaths = new Set<string>();
+        testContext.filePaths = new Set<string>();
+        testContext.directoryPaths = new Set<string>();
+        testContext.unknownPaths = new Set<string>();
+        testContext.pathStatusError = null;
         testContext.storedRecoveryFile = '';
         vi.clearAllMocks();
 
@@ -48,12 +56,33 @@ describe('recoveryService', () => {
             if (path === 'recovery' || path === 'recovery/queue-recovery.json') {
                 return testContext.storedRecoveryFile.length > 0;
             }
-            return testContext.existingPaths.has(path);
+            return false;
         });
         testContext.mkdirMock.mockResolvedValue(undefined);
         testContext.readTextFileMock.mockImplementation(async () => testContext.storedRecoveryFile);
         testContext.writeTextFileMock.mockImplementation(async (_path: string, content: string) => {
             testContext.storedRecoveryFile = content;
+        });
+        testContext.invokeMock.mockImplementation(async (command: string, payload?: { paths?: string[] }) => {
+            if (command !== 'get_path_statuses') {
+                throw new Error(`Unexpected command: ${command}`);
+            }
+
+            if (testContext.pathStatusError) {
+                throw testContext.pathStatusError;
+            }
+
+            return (payload?.paths ?? []).map((path) => ({
+                path,
+                kind: testContext.unknownPaths.has(path)
+                    ? 'unknown'
+                    : testContext.filePaths.has(path)
+                        ? 'file'
+                        : testContext.directoryPaths.has(path)
+                            ? 'directory'
+                            : 'missing',
+                error: testContext.unknownPaths.has(path) ? 'Scope denied' : null,
+            }));
         });
     });
 
@@ -140,6 +169,74 @@ describe('recoveryService', () => {
         ]);
     });
 
+    it('keeps resumable recovery items when the runtime confirms the source file exists', async () => {
+        testContext.storedRecoveryFile = JSON.stringify({
+            version: 1,
+            updatedAt: 100,
+            items: [
+                {
+                    id: 'recovery-1',
+                    filename: 'meeting.wav',
+                    filePath: 'C:\\watch\\meeting.wav',
+                    source: 'batch_import',
+                    resolution: 'pending',
+                    progress: 30,
+                    segments: [],
+                    projectId: null,
+                    lastKnownStage: 'transcribing',
+                    updatedAt: 100,
+                    hasSourceFile: false,
+                    canResume: false,
+                },
+            ],
+        });
+        testContext.filePaths.add('C:\\watch\\meeting.wav');
+
+        const snapshot = await loadRecoverySnapshot();
+
+        expect(snapshot.items).toEqual([
+            expect.objectContaining({
+                id: 'recovery-1',
+                hasSourceFile: true,
+                canResume: true,
+            }),
+        ]);
+    });
+
+    it('preserves the saved recovery flags when path validation falls back to unknown', async () => {
+        testContext.storedRecoveryFile = JSON.stringify({
+            version: 1,
+            updatedAt: 100,
+            items: [
+                {
+                    id: 'recovery-1',
+                    filename: 'meeting.wav',
+                    filePath: 'C:\\watch\\meeting.wav',
+                    source: 'batch_import',
+                    resolution: 'pending',
+                    progress: 30,
+                    segments: [],
+                    projectId: null,
+                    lastKnownStage: 'transcribing',
+                    updatedAt: 100,
+                    hasSourceFile: true,
+                    canResume: true,
+                },
+            ],
+        });
+        testContext.pathStatusError = new Error('Scope denied');
+
+        const snapshot = await loadRecoverySnapshot();
+
+        expect(snapshot.items).toEqual([
+            expect.objectContaining({
+                id: 'recovery-1',
+                hasSourceFile: true,
+                canResume: true,
+            }),
+        ]);
+    });
+
     it('keeps automation recovery items blocked until they settle', async () => {
         testContext.storedRecoveryFile = JSON.stringify({
             version: 1,
@@ -168,7 +265,7 @@ describe('recoveryService', () => {
                 },
             ],
         });
-        testContext.existingPaths.add('C:\\watch\\automation.wav');
+        testContext.filePaths.add('C:\\watch\\automation.wav');
 
         const snapshot = await loadRecoverySnapshot();
 

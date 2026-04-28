@@ -3,12 +3,13 @@ import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { projectService } from './projectService';
+import { getPathStatusMap } from './pathStatusService';
 import type { AppConfig } from '../types/config';
-import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 
 const HISTORY_DIR = 'history';
 type ModelConfigKey = 'offlineModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';
+type ConfiguredModelField = { key: ModelConfigKey; path: string };
 
 /**
  * Service to perform background health checks on application data.
@@ -91,26 +92,21 @@ export const healthCheckService = {
             { key: 'vadModelPath', path: config.vadModelPath }
         ] as const;
 
-        for (const model of modelFields) {
-            if (model.path) {
-                try {
-                    // Model paths are usually absolute paths selected via dialog
-                    const isExist = await exists(model.path);
-                    if (!isExist) {
-                        logger.warn(`[HealthCheck] Model path not found: ${model.path}. Clearing field ${model.key}.`);
-                        patch[model.key] = '';
-                        changed = true;
-                    }
-                } catch (error) {
-                    // If we can't check it, it might be better to leave it, 
-                    // but if it's clearly an error we might want to clear it.
-                    // For now, we only clear if we are sure it doesn't exist.
-                    const errMsg = extractErrorMessage(error);
-                    if (errMsg.includes('No such file') || errMsg.includes('not found')) {
-                        patch[model.key] = '';
-                        changed = true;
-                    }
-                }
+        const configuredModelFields: ConfiguredModelField[] = modelFields
+            .map((model) => ({
+                key: model.key,
+                path: model.path?.trim() || '',
+            }))
+            .filter((model) => model.path.length > 0);
+        const pathStatusMap = await getPathStatusMap(
+            configuredModelFields.map((model) => model.path),
+        );
+
+        for (const model of configuredModelFields) {
+            if (pathStatusMap[model.path]?.kind === 'missing') {
+                logger.warn(`[HealthCheck] Model path not found: ${model.path}. Clearing field ${model.key}.`);
+                patch[model.key] = '';
+                changed = true;
             }
         }
 

@@ -6,6 +6,7 @@ import {
     readTextFile,
     writeTextFile,
 } from '@tauri-apps/plugin-fs';
+import { getPathStatusMap, isRuntimePathFile } from './pathStatusService';
 import type { BatchQueueItem } from '../types/batchQueue';
 import type { RecoverySnapshot, RecoveredQueueItem } from '../types/recovery';
 import { logger } from '../utils/logger';
@@ -227,20 +228,40 @@ export async function loadRecoverySnapshot(): Promise<RecoverySnapshot> {
         const content = await readTextFile(RECOVERY_FILE, { baseDir: BaseDirectory.AppLocalData });
         const parsed = JSON.parse(content) as Partial<RecoverySnapshot> | null;
         const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+        const pathStatusMap = await getPathStatusMap(
+            rawItems.map((rawItem) => (rawItem as RecoveredQueueItem).filePath),
+        );
 
-        const items = await Promise.all(rawItems.map(async (rawItem) => {
+        const items = rawItems.map((rawItem) => {
             const item = rawItem as RecoveredQueueItem;
-            const hasSourceFile = await exists(item.filePath).catch(() => false);
+            const resolution = item.resolution || 'pending';
+            const defaultHasSourceFile = typeof item.hasSourceFile === 'boolean' ? item.hasSourceFile : true;
+            const defaultCanResume = typeof item.canResume === 'boolean'
+                ? item.canResume
+                : defaultHasSourceFile && resolution === 'pending';
+            const pathStatus = pathStatusMap[item.filePath];
+
+            const hasSourceFile = isRuntimePathFile(pathStatus)
+                ? true
+                : pathStatus?.kind === 'missing' || pathStatus?.kind === 'directory'
+                    ? false
+                    : defaultHasSourceFile;
+            const canResume = isRuntimePathFile(pathStatus)
+                ? resolution === 'pending'
+                : pathStatus?.kind === 'missing' || pathStatus?.kind === 'directory'
+                    ? false
+                    : defaultCanResume;
+
             return cloneRecoveredItem({
                 ...item,
                 source: item.source || (item.automationRuleId ? 'automation' : 'batch_import'),
-                resolution: item.resolution || 'pending',
+                resolution,
                 lastKnownStage: item.lastKnownStage || 'queued',
                 updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
                 hasSourceFile,
-                canResume: hasSourceFile && (item.resolution || 'pending') === 'pending',
+                canResume,
             });
-        }));
+        });
 
         const snapshot = {
             version: parsed?.version || RECOVERY_VERSION,

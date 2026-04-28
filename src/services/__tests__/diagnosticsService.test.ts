@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
-  exists: vi.fn(),
   getPermissionState: vi.fn(),
   probeMicrophones: vi.fn(),
   probeSystemAudio: vi.fn(),
@@ -10,10 +9,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: mocks.invoke,
-}));
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  exists: mocks.exists,
 }));
 
 vi.mock('../audioDeviceService', () => ({
@@ -31,14 +26,52 @@ const STREAMING_PARAFORMER_PATH = 'C:\\models\\sherpa-onnx-streaming-paraformer-
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const OFFLINE_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
 const VAD_PATH = 'C:\\models\\silero_vad.onnx';
+const PUNCTUATION_PATH = 'C:\\models\\ct-transformer.onnx';
+
+let runtimeEnvironment = {
+  ffmpegPath: 'C:\\app\\ffmpeg.exe',
+  ffmpegExists: true,
+  logDirPath: 'C:\\app\\logs',
+};
 
 function t(key: string, options?: Record<string, unknown>) {
   return (options?.defaultValue as string | undefined) ?? key;
 }
 
-function setExistingPaths(paths: string[]) {
-  const existing = new Set(paths);
-  mocks.exists.mockImplementation(async (path: string) => existing.has(path));
+function setPathStatuses({
+  filePaths = [],
+  directoryPaths = [],
+  unknownPaths = [],
+}: {
+  filePaths?: string[];
+  directoryPaths?: string[];
+  unknownPaths?: string[];
+}) {
+  const files = new Set(filePaths);
+  const directories = new Set(directoryPaths);
+  const unknown = new Set(unknownPaths);
+
+  mocks.invoke.mockImplementation(async (command: string, payload?: { paths?: string[] }) => {
+    if (command === 'get_runtime_environment_status') {
+      return runtimeEnvironment;
+    }
+
+    if (command === 'get_path_statuses') {
+      return (payload?.paths ?? []).map((path) => ({
+        path,
+        kind: unknown.has(path)
+          ? 'unknown'
+          : files.has(path)
+            ? 'file'
+            : directories.has(path)
+              ? 'directory'
+              : 'missing',
+        error: unknown.has(path) ? 'Scope denied' : null,
+      }));
+    }
+
+    throw new Error(`Unexpected command: ${command}`);
+  });
 }
 
 describe('diagnosticsService', () => {
@@ -69,12 +102,12 @@ describe('diagnosticsService', () => {
       available: true,
       source: 'native',
     });
-    mocks.invoke.mockResolvedValue({
+    runtimeEnvironment = {
       ffmpegPath: 'C:\\app\\ffmpeg.exe',
       ffmpegExists: true,
       logDirPath: 'C:\\app\\logs',
-    });
-    setExistingPaths([]);
+    };
+    setPathStatuses({});
   });
 
   it('marks a missing live model as missing and points to model settings', async () => {
@@ -84,7 +117,7 @@ describe('diagnosticsService', () => {
         offlineModelPath: OFFLINE_QWEN_PATH,
       },
     });
-    setExistingPaths([OFFLINE_QWEN_PATH]);
+    setPathStatuses({ filePaths: [OFFLINE_QWEN_PATH] });
 
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const modelsSection = snapshot.sections.find((section) => section.id === 'models');
@@ -108,7 +141,7 @@ describe('diagnosticsService', () => {
         streamingModelPath: STREAMING_PARAFORMER_PATH,
       },
     });
-    setExistingPaths([STREAMING_PARAFORMER_PATH]);
+    setPathStatuses({ directoryPaths: [STREAMING_PARAFORMER_PATH] });
 
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const modelsSection = snapshot.sections.find((section) => section.id === 'models');
@@ -132,7 +165,7 @@ describe('diagnosticsService', () => {
         streamingModelPath: STREAMING_PARAFORMER_PATH,
       },
     });
-    setExistingPaths([STREAMING_PARAFORMER_PATH]);
+    setPathStatuses({ directoryPaths: [STREAMING_PARAFORMER_PATH] });
     mocks.getPermissionState.mockResolvedValue('denied');
 
     const snapshot = await diagnosticsService.collectSnapshot(t);
@@ -165,13 +198,16 @@ describe('diagnosticsService', () => {
         vadModelPath: VAD_PATH,
       },
     });
-    setExistingPaths([STREAMING_SENSEVOICE_PATH, VAD_PATH]);
+    setPathStatuses({
+      directoryPaths: [STREAMING_SENSEVOICE_PATH],
+      filePaths: [VAD_PATH],
+    });
     useVoiceTypingRuntimeStore.getState().reportRuntimeError('warmup', 'Warm-up failed.');
-    mocks.invoke.mockResolvedValue({
+    runtimeEnvironment = {
       ffmpegPath: 'C:\\app\\ffmpeg.exe',
       ffmpegExists: false,
       logDirPath: 'C:\\app\\logs',
-    });
+    };
 
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const runtimeSection = snapshot.sections.find((section) => section.id === 'runtime-environment');
@@ -192,6 +228,30 @@ describe('diagnosticsService', () => {
         action: expect.objectContaining({
           kind: 'open_log_folder',
         }),
+      }),
+    );
+  });
+
+  it('keeps unverifiable model paths as non-blocking diagnostics', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        offlineModelPath: OFFLINE_QWEN_PATH,
+        punctuationModelPath: PUNCTUATION_PATH,
+      },
+    });
+    setPathStatuses({
+      unknownPaths: [OFFLINE_QWEN_PATH, PUNCTUATION_PATH],
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const modelsSection = snapshot.sections.find((section) => section.id === 'models');
+    const offlineModelCheck = modelsSection?.checks.find((check) => check.id === 'offline-model');
+
+    expect(offlineModelCheck).toEqual(
+      expect.objectContaining({
+        status: 'info',
+        description: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
       }),
     );
   });

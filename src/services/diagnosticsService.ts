@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { exists } from '@tauri-apps/plugin-fs';
 import { getResumeOnboardingStep, hasRequiredOnboardingModels } from '../utils/onboarding';
 import {
   getMicrophonePermissionState,
@@ -12,6 +11,7 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import { modelService } from './modelService';
+import { getPathStatusMap, isRuntimePathAvailable } from './pathStatusService';
 import { resolveVoiceTypingReadinessSnapshot } from '../hooks/useVoiceTypingReadiness';
 import type {
   DiagnosticAction,
@@ -20,9 +20,9 @@ import type {
   DiagnosticSection,
   DiagnosticStatus,
   DiagnosticsSnapshot,
-  RuntimeEnvironmentStatus,
 } from '../types/diagnostics';
 import type { SettingsTab } from '../hooks/useSettingsLogic';
+import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../types/runtime';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -40,16 +40,12 @@ function pickWorseStatus(...statuses: DiagnosticStatus[]): DiagnosticStatus {
   ), 'ready' as DiagnosticStatus);
 }
 
-async function checkPathExists(path: string): Promise<boolean> {
-  if (!path.trim()) {
-    return false;
-  }
+function isRuntimePathMissing(pathStatus?: RuntimePathStatus): boolean {
+  return pathStatus?.kind === 'missing';
+}
 
-  try {
-    return await exists(path);
-  } catch {
-    return false;
-  }
+function isRuntimePathUnknown(pathStatus?: RuntimePathStatus): boolean {
+  return pathStatus?.kind === 'unknown';
 }
 
 function buildOpenSettingsAction(label: string, settingsTab: SettingsTab): DiagnosticAction {
@@ -125,31 +121,35 @@ function buildOverviewCard(
   };
 }
 
+function buildPathUnverifiedDescription(t: Translate): string {
+  return t('settings.diagnostics.model_path_unverified', {
+    defaultValue: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+  });
+}
+
 export const diagnosticsService = {
   async collectSnapshot(t: Translate): Promise<DiagnosticsSnapshot> {
     const config = useConfigStore.getState().config;
     const voiceTypingRuntime = useVoiceTypingRuntimeStore.getState();
-    const [permissionState, microphoneProbe, systemAudioProbe, runtimeEnvironment] = await Promise.all([
+    const streamingModelPath = config.streamingModelPath.trim();
+    const offlineModelPath = config.offlineModelPath.trim();
+    const vadModelPath = (config.vadModelPath || '').trim();
+    const punctuationModelPath = (config.punctuationModelPath || '').trim();
+
+    const [permissionState, microphoneProbe, systemAudioProbe, runtimeEnvironment, pathStatusMap] = await Promise.all([
       getMicrophonePermissionState(),
       probeMicrophoneDeviceOptions(t('settings.mic_auto')),
       probeSystemAudioDeviceOptions(t('settings.mic_auto')),
       invoke<RuntimeEnvironmentStatus>('get_runtime_environment_status'),
+      getPathStatusMap([streamingModelPath, offlineModelPath, vadModelPath, punctuationModelPath]),
     ]);
 
     const liveModel = findSelectedModelByMode(config.streamingModelPath, 'streaming');
     const offlineModel = findSelectedModelByMode(config.offlineModelPath, 'offline');
-
-    const [
-      liveModelPathExists,
-      offlineModelPathExists,
-      vadPathExists,
-      punctuationPathExists,
-    ] = await Promise.all([
-      checkPathExists(config.streamingModelPath),
-      checkPathExists(config.offlineModelPath),
-      checkPathExists(config.vadModelPath || ''),
-      checkPathExists(config.punctuationModelPath || ''),
-    ]);
+    const liveModelPathStatus = pathStatusMap[streamingModelPath];
+    const offlineModelPathStatus = pathStatusMap[offlineModelPath];
+    const vadPathStatus = pathStatusMap[vadModelPath];
+    const punctuationPathStatus = pathStatusMap[punctuationModelPath];
 
     const liveModelCheck: DiagnosticCheck = !config.streamingModelPath.trim()
       ? {
@@ -164,7 +164,7 @@ export const diagnosticsService = {
             'models',
           ),
         }
-      : !liveModelPathExists
+      : isRuntimePathMissing(liveModelPathStatus)
         ? {
             id: 'live-model',
             title: t('settings.diagnostics.live_model_title', { defaultValue: 'Live Record Model' }),
@@ -178,6 +178,18 @@ export const diagnosticsService = {
               'models',
             ),
           }
+        : isRuntimePathUnknown(liveModelPathStatus)
+          ? {
+              id: 'live-model',
+              title: t('settings.diagnostics.live_model_title', { defaultValue: 'Live Record Model' }),
+              status: 'info',
+              description: buildPathUnverifiedDescription(t),
+              meta: streamingModelPath,
+              action: buildOpenSettingsAction(
+                t('settings.diagnostics.open_model_settings', { defaultValue: 'Open Model Settings' }),
+                'models',
+              ),
+            }
         : {
             id: 'live-model',
             title: t('settings.diagnostics.live_model_title', { defaultValue: 'Live Record Model' }),
@@ -201,7 +213,7 @@ export const diagnosticsService = {
             'models',
           ),
         }
-      : !offlineModelPathExists
+      : isRuntimePathMissing(offlineModelPathStatus)
         ? {
             id: 'offline-model',
             title: t('settings.diagnostics.offline_model_title', { defaultValue: 'Batch Import Model' }),
@@ -215,6 +227,18 @@ export const diagnosticsService = {
               'models',
             ),
           }
+        : isRuntimePathUnknown(offlineModelPathStatus)
+          ? {
+              id: 'offline-model',
+              title: t('settings.diagnostics.offline_model_title', { defaultValue: 'Batch Import Model' }),
+              status: 'info',
+              description: buildPathUnverifiedDescription(t),
+              meta: offlineModelPath,
+              action: buildOpenSettingsAction(
+                t('settings.diagnostics.open_model_settings', { defaultValue: 'Open Model Settings' }),
+                'models',
+              ),
+            }
         : {
             id: 'offline-model',
             title: t('settings.diagnostics.offline_model_title', { defaultValue: 'Batch Import Model' }),
@@ -261,7 +285,7 @@ export const diagnosticsService = {
                 'models',
               ),
             }
-          : !vadPathExists
+          : isRuntimePathMissing(vadPathStatus)
             ? {
                 id: 'vad',
                 title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
@@ -275,6 +299,18 @@ export const diagnosticsService = {
                   'models',
                 ),
               }
+            : isRuntimePathUnknown(vadPathStatus)
+              ? {
+                  id: 'vad',
+                  title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
+                  status: 'info',
+                  description: buildPathUnverifiedDescription(t),
+                  meta: vadModelPath,
+                  action: buildOpenSettingsAction(
+                    t('settings.diagnostics.open_model_settings', { defaultValue: 'Open Model Settings' }),
+                    'models',
+                  ),
+                }
             : {
                 id: 'vad',
                 title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
@@ -296,7 +332,7 @@ export const diagnosticsService = {
             defaultValue: 'The current recognition models do not require a separate punctuation model.',
           }),
         }
-      : config.punctuationModelPath?.trim() && punctuationPathExists
+      : config.punctuationModelPath?.trim() && isRuntimePathAvailable(punctuationPathStatus)
         ? {
             id: 'punctuation',
             title: t('settings.diagnostics.punctuation_title', { defaultValue: 'Punctuation Dependency' }),
@@ -305,6 +341,32 @@ export const diagnosticsService = {
               defaultValue: 'The required punctuation model is configured and reachable.',
             }),
           }
+        : config.punctuationModelPath?.trim() && isRuntimePathMissing(punctuationPathStatus)
+          ? {
+              id: 'punctuation',
+              title: t('settings.diagnostics.punctuation_title', { defaultValue: 'Punctuation Dependency' }),
+              status: 'warning',
+              description: t('settings.diagnostics.model_path_missing', {
+                defaultValue: 'The selected model path no longer exists on disk.',
+              }),
+              meta: punctuationModelPath,
+              action: buildOpenSettingsAction(
+                t('settings.diagnostics.open_model_settings', { defaultValue: 'Open Model Settings' }),
+                'models',
+              ),
+            }
+          : config.punctuationModelPath?.trim() && isRuntimePathUnknown(punctuationPathStatus)
+            ? {
+                id: 'punctuation',
+                title: t('settings.diagnostics.punctuation_title', { defaultValue: 'Punctuation Dependency' }),
+                status: 'warning',
+                description: buildPathUnverifiedDescription(t),
+                meta: punctuationModelPath,
+                action: buildOpenSettingsAction(
+                  t('settings.diagnostics.open_model_settings', { defaultValue: 'Open Model Settings' }),
+                  'models',
+                ),
+              }
         : {
             id: 'punctuation',
             title: t('settings.diagnostics.punctuation_title', { defaultValue: 'Punctuation Dependency' }),

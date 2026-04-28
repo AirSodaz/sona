@@ -494,6 +494,7 @@
             "offline_model_title": "批量导入模型",
             "offline_model_missing": "还没有选择批量导入模型。",
             "model_path_missing": "当前选择的模型路径在磁盘上已不存在。",
+            "model_path_unverified": "Sona 当前无法从运行时验证这个路径，现有配置会先保持不变。",
             "model_ready": "当前选择的模型已配置且可访问。",
             "vad_title": "VAD 依赖",
             "vad_unknown": "请先选择实时录音模型，再判断是否需要额外的 VAD 模型。",

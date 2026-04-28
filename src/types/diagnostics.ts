@@ -1,3 +1,4 @@
+import type { RuntimeEnvironmentStatus } from './runtime';
 import type { SettingsTab } from '../hooks/useSettingsLogic';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'missing' | 'failed' | 'info';
@@ -49,15 +50,11 @@ export interface DiagnosticOverviewCard {
   action?: DiagnosticAction;
 }
 
-export interface RuntimeEnvironmentStatus {
-  ffmpegPath: string;
-  ffmpegExists: boolean;
-  logDirPath: string;
-}
-
 export interface DiagnosticsSnapshot {
   scannedAt: string;
   overview: DiagnosticOverviewCard[];
   sections: DiagnosticSection[];
   runtimeEnvironment: RuntimeEnvironmentStatus;
 }
+
+export type { RuntimeEnvironmentStatus } from './runtime';

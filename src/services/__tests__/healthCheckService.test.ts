@@ -5,6 +5,7 @@ import { projectService } from '../projectService';
 import { useConfigStore } from '../../stores/configStore';
 import { exists } from '@tauri-apps/plugin-fs';
 import { settingsStore } from '../storageService';
+import { getPathStatusMap } from '../pathStatusService';
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
     exists: vi.fn(),
@@ -30,6 +31,10 @@ vi.mock('../storageService', () => ({
         save: vi.fn(),
     },
     STORE_KEY_CONFIG: 'sona-config',
+}));
+
+vi.mock('../pathStatusService', () => ({
+    getPathStatusMap: vi.fn(),
 }));
 
 describe('healthCheckService', () => {
@@ -84,10 +89,9 @@ describe('healthCheckService', () => {
                 streamingModelPath: '/invalid/path',
             });
 
-            (exists as any).mockImplementation((path: string) => {
-                if (path === '/valid/path') return Promise.resolve(true);
-                if (path === '/invalid/path') return Promise.resolve(false);
-                return Promise.resolve(false);
+            (getPathStatusMap as any).mockResolvedValue({
+                '/valid/path': { path: '/valid/path', kind: 'directory', error: null },
+                '/invalid/path': { path: '/invalid/path', kind: 'missing', error: null },
             });
 
             await healthCheckService.checkModels();
@@ -96,6 +100,22 @@ describe('healthCheckService', () => {
             expect(useConfigStore.getState().config.offlineModelPath).toBe('/valid/path');
             expect(settingsStore.set).toHaveBeenCalled();
             expect(settingsStore.save).toHaveBeenCalled();
+        });
+
+        it('should keep configured model paths when runtime validation is unknown', async () => {
+            useConfigStore.getState().setConfig({
+                offlineModelPath: '/unknown/path',
+            });
+
+            (getPathStatusMap as any).mockResolvedValue({
+                '/unknown/path': { path: '/unknown/path', kind: 'unknown', error: 'Scope denied' },
+            });
+
+            await healthCheckService.checkModels();
+
+            expect(useConfigStore.getState().config.offlineModelPath).toBe('/unknown/path');
+            expect(settingsStore.set).not.toHaveBeenCalled();
+            expect(settingsStore.save).not.toHaveBeenCalled();
         });
     });
 

@@ -494,6 +494,7 @@
             "offline_model_title": "Batch Import Model",
             "offline_model_missing": "No Batch Import Model is selected yet.",
             "model_path_missing": "The selected model path no longer exists on disk.",
+            "model_path_unverified": "Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.",
             "model_ready": "The selected model is configured and reachable.",
             "vad_title": "VAD Dependency",
             "vad_unknown": "Pick a Live Record Model first to evaluate whether a VAD model is required.",
