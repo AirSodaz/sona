@@ -178,7 +178,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                             onChange={(e) => setFileName(e.target.value)}
                             style={{
                                 padding: '8px 12px',
-                                borderRadius: '4px',
+                                borderRadius: 'var(--radius-sm)',
                                 border: '1px solid var(--color-border)',
                                 background: 'var(--color-bg-input)',
                                 color: 'var(--color-text-primary)',
@@ -201,7 +201,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                                 style={{
                                     flex: 1,
                                     padding: '8px 12px',
-                                    borderRadius: '4px',
+                                    borderRadius: 'var(--radius-sm)',
                                     border: '1px solid var(--color-border)',
                                     background: 'var(--color-bg-subtle)',
                                     color: 'var(--color-text-secondary)',

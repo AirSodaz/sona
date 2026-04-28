@@ -346,7 +346,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             onChange={(e) => handleUpdateSet(set.id, { name: e.target.value })}
                                             style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
                                         />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
                                             {set.rules.length} {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
                                         </span>
                                     </div>
@@ -558,7 +558,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             onChange={(e) => handleUpdateHotwordSet(set.id, { name: e.target.value })}
                                             style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
                                         />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
                                             {set.rules.length} {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
                                         </span>
                                     </div>
@@ -758,7 +758,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                                             onChange={(e) => handleUpdatePolishKeywordSet(set.id, { name: e.target.value })}
                                             style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
                                         />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
                                             {set.keywords.trim()
                                                 ? t('settings.polish_keywords_ready', { defaultValue: 'Ready' })
                                                 : t('settings.polish_keywords_empty', { defaultValue: 'Empty' })}

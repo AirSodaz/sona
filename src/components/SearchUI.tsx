@@ -190,7 +190,7 @@ export function SearchUI(): React.JSX.Element | null {
                     border: none;
                     background: transparent;
                     color: var(--color-text-secondary);
-                    border-radius: 4px;
+                    border-radius: var(--radius-sm);
                     cursor: pointer;
                     transition: all 0.15s ease;
                 }

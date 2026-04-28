@@ -67,16 +67,14 @@
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
 
-  /* Border Radius - Rounded */
-  --radius-sm: 8px;
+  /* Border Radius - Continuous rectangles */
+  --radius-sm: 10px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
 
   /* Apple-style interaction surfaces */
-  --apple-control-radius: 10px;
-  --apple-control-radius-md: 12px;
   --apple-control-surface: var(--color-bg-elevated);
   --apple-control-surface-hover: var(--color-bg-hover);
   --apple-control-surface-pressed: var(--color-bg-tertiary);
@@ -103,6 +101,15 @@
   --apple-control-focus-ring:
     0 0 0 2px var(--color-bg-primary),
     0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 18%, transparent);
+  --apple-field-focus-surface: var(--color-bg-primary);
+  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 72%, var(--color-accent-primary));
+  --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+  --apple-field-focus-shadow:
+    var(--apple-control-shadow-flat),
+    0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow:
+    var(--shadow-sm),
+    0 0 0 3px var(--apple-field-focus-halo);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
@@ -160,6 +167,15 @@
   --apple-control-focus-ring:
     0 0 0 2px var(--color-bg-primary),
     0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 24%, transparent);
+  --apple-field-focus-surface: var(--color-bg-primary);
+  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 64%, var(--color-accent-primary));
+  --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
+  --apple-field-focus-shadow:
+    var(--apple-control-shadow-flat),
+    0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow:
+    var(--shadow-sm),
+    0 0 0 3px var(--apple-field-focus-halo);
 }
 
 /* ===========================
@@ -359,7 +375,7 @@ body {
 .current-project-tag {
   background: var(--color-bg-elevated);
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   font-size: 0.75rem;
   line-height: 1.4;
@@ -711,12 +727,12 @@ body {
 }
 
 .projects-segmented-control {
-  --projects-segmented-inner-radius: calc(var(--apple-control-radius-md) - 1px);
+  --projects-segmented-inner-radius: calc(var(--radius-md) - 1px);
   display: flex;
   align-items: center;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--apple-control-radius-md);
+  border-radius: var(--radius-md);
   padding: 2px;
   gap: 1px;
   box-shadow: var(--apple-control-shadow-flat);
@@ -728,7 +744,7 @@ body {
   align-items: center;
   background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
   border: 1px solid transparent;
-  border-radius: var(--apple-control-radius-md);
+  border-radius: var(--radius-md);
   width: 260px;
   height: 36px;
   box-shadow: none;
@@ -741,8 +757,8 @@ body {
 
 .projects-search:focus-within {
   background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
-  border-color: var(--color-border-hover);
-  box-shadow: 0 0 0 1px var(--color-border-hover), var(--shadow-sm);
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shell-shadow);
 }
 
 .projects-search input {
@@ -795,7 +811,7 @@ body {
 .projects-toolbar-icon {
   width: 32px;
   height: 32px;
-  border-radius: var(--apple-control-radius);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1148,7 +1164,7 @@ body {
   width: 38px;
   height: 38px;
   background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
-  border-radius: var(--apple-control-radius-md);
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   box-shadow: none;
 }
@@ -1491,7 +1507,7 @@ body {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
-  border-radius: var(--apple-control-radius);
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1509,8 +1525,7 @@ body {
 .btn-parameter-settings:focus-visible,
 .toolbar-btn:focus-visible,
 .settings-tab-btn:focus-visible,
-.accordion-header-btn:focus-visible,
-.dropdown-trigger:focus-visible {
+.accordion-header-btn:focus-visible {
   outline: none;
   box-shadow: var(--apple-control-focus-ring), var(--apple-control-shadow-hover);
 }
@@ -1618,7 +1633,7 @@ body {
   padding: var(--spacing-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  border-radius: var(--apple-control-radius);
+  border-radius: var(--radius-sm);
 }
 
 .btn-icon:hover {
@@ -1715,7 +1730,7 @@ select,
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--apple-control-radius);
+  border-radius: var(--radius-sm);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-size: 0.875rem;
@@ -1738,10 +1753,13 @@ input[type="search"]:focus,
 input[type="url"]:focus,
 input[type="tel"]:focus,
 textarea:focus,
-select:focus {
-  border-color: var(--color-text-primary);
-  box-shadow: var(--apple-control-focus-ring);
-  background: var(--color-bg-primary);
+select:focus,
+.input:focus,
+.settings-input:focus,
+.settings-input-minimal:focus {
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shadow);
+  background: var(--apple-field-focus-surface);
 }
 
 
@@ -2628,10 +2646,11 @@ input[type="radio"]:focus {
 }
 
 .dropdown-trigger.active,
-.dropdown-trigger:focus {
-  background: var(--color-bg-primary);
-  border-color: var(--color-text-primary);
-  box-shadow: var(--apple-control-focus-ring);
+.dropdown-trigger:focus,
+.dropdown-trigger:focus-visible {
+  background: var(--apple-field-focus-surface);
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shadow);
 }
 
 .dropdown-value {
@@ -3257,8 +3276,9 @@ input[type="radio"]:focus {
 }
 
 .source-select:focus-visible {
-  border-color: var(--color-text-primary);
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+  background: var(--apple-field-focus-surface);
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shadow);
 }
 
 .source-select option {
@@ -3521,7 +3541,7 @@ input[type="radio"]:focus {
 .theme-preview {
   width: 100%;
   aspect-ratio: 1.5;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 2px solid var(--color-border);
   background: var(--color-bg-secondary);
   position: relative;
@@ -4254,7 +4274,7 @@ input[type="radio"]:focus {
   color: var(--color-text-secondary);
   font-weight: 500;
   padding: 10px 16px;
-  border-radius: var(--apple-control-radius-md);
+  border-radius: var(--radius-md);
   box-shadow: none;
   transition:
     background var(--transition-fast),
@@ -4481,7 +4501,7 @@ input[type="radio"]:focus {
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    border-radius: var(--apple-control-radius);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition:
       background var(--transition-fast),
@@ -4770,7 +4790,7 @@ input[type="radio"]:focus {
   max-height: 88vh;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   overflow: hidden;
   display: flex;

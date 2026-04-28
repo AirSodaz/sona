@@ -136,7 +136,7 @@
 .settings-dashboard-state {
   position: relative;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
 }
 
@@ -206,7 +206,7 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--dashboard-accent) 12%, var(--color-bg-primary));
   color: var(--dashboard-accent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
@@ -265,7 +265,7 @@
 
 .settings-dashboard-trend-surface {
   padding: 14px 14px 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   background: color-mix(in srgb, var(--color-bg-secondary) 68%, var(--color-bg-primary));
 }
@@ -311,7 +311,7 @@
 
 .settings-dashboard-coverage-block,
 .settings-dashboard-distribution-panel {
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   background: color-mix(in srgb, var(--color-bg-secondary) 72%, transparent);
 }

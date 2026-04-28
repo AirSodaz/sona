@@ -138,7 +138,7 @@
 .settings-item-container input.settings-input,
 .settings-item-container .dropdown-container,
 .settings-item-container .dropdown-trigger {
-  border-radius: var(--apple-control-radius, 10px);
+  border-radius: var(--radius-sm);
 }
 
 /* --- Accordion --- */
@@ -154,7 +154,7 @@
   padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
   background: transparent;
   border: none;
-  border-radius: var(--apple-control-radius-md, 12px);
+  border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--color-text-primary);
   font-size: 0.95rem;
@@ -259,7 +259,7 @@
 .status-badge {
   font-size: 0.75rem;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   display: inline-flex;
   align-items: center;

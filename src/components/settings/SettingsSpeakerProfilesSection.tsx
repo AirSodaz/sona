@@ -264,7 +264,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                     onChange={(event) => handleUpdateProfile(profile.id, { name: event.target.value })}
                     style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
                   />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: '10px' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
                     {t('settings.speaker_samples_count', {
                       count: profile.samples.length,
                       defaultValue: `${profile.samples.length} samples`,

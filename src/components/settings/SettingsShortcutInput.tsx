@@ -118,7 +118,7 @@ export function SettingsShortcutInput({
                         background: 'var(--color-bg-secondary)',
                         color: 'var(--color-text-primary)',
                         border: '1px solid var(--color-border)',
-                        borderRadius: '6px',
+                        borderRadius: 'var(--radius-sm)',
                     }}
                 />
             </div>

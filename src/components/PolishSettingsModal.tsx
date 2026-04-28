@@ -146,7 +146,7 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                                 style={{
                                     width: '80px',
                                     padding: '6px 10px',
-                                    borderRadius: '4px',
+                                    borderRadius: 'var(--radius-sm)',
                                     border: '1px solid var(--color-border)',
                                     backgroundColor: 'var(--color-bg-input)',
                                     color: 'var(--color-text-primary)',
@@ -167,7 +167,7 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                         {polishKeywordSets.length === 0 ? (
                             <div style={{
                                 padding: '12px 14px',
-                                borderRadius: '4px',
+                                borderRadius: 'var(--radius-sm)',
                                 border: '1px dashed var(--color-border)',
                                 background: 'var(--color-bg-secondary)',
                                 color: 'var(--color-text-secondary)',
@@ -184,7 +184,7 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                                 flexDirection: 'column',
                                 gap: '10px',
                                 padding: '12px 14px',
-                                borderRadius: '4px',
+                                borderRadius: 'var(--radius-sm)',
                                 border: '1px solid var(--color-border)',
                                 background: 'var(--color-bg-secondary)',
                             }}>

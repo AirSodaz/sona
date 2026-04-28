@@ -25,7 +25,7 @@ const baseContainerStyle = {
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    borderRadius: '16px',
+    borderRadius: 'var(--radius-lg)',
     fontSize: '14px',
     maxWidth: `${VOICE_TYPING_WINDOW_WIDTH - OVERLAY_ROOT_PADDING.left - OVERLAY_ROOT_PADDING.right}px`,
     transition:

@@ -8,7 +8,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-radius: 24px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, #cbd5e1 18%, transparent), transparent 36%),
@@ -75,7 +75,7 @@
 .recovery-error-banner {
   margin: 18px 32px 0;
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, #b91c1c 22%, transparent);
   background: color-mix(in srgb, #b91c1c 10%, var(--color-bg-primary));
   color: var(--color-text-primary);
@@ -101,7 +101,7 @@
   gap: 12px;
   min-height: 180px;
   padding: 20px;
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-bg-primary) 92%, #f2f6fb);
 }
@@ -163,7 +163,7 @@
   flex-direction: column;
   background: var(--color-border);
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
   gap: 1px;
 }
