@@ -5524,6 +5524,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "bzip2",
+ "chrono",
  "clap",
  "cpal",
  "enigo",

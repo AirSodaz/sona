@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Type } from 'lucide-react';
+import { BarChart3, Type } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -16,6 +16,7 @@ import { SettingsAboutTab } from './settings/SettingsAboutTab';
 import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
 import { SettingsAutomationTab } from './settings/SettingsAutomationTab';
 import { SettingsVoiceTypingTab } from './settings/SettingsVoiceTypingTab';
+import { SettingsDashboardTab } from './settings/SettingsDashboardTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
 import { SettingsTabInput } from '../hooks/useSettingsLogic';
@@ -42,6 +43,7 @@ interface SettingsProps {
 
 const SETTINGS_TABS = [
     'general',
+    'dashboard',
     'microphone',
     'subtitle',
     'voice_typing',
@@ -177,6 +179,14 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                             tabIndex={activeTab === 'general' ? 0 : -1}
                         />
                         <SettingsTabButton
+                            id="dashboard"
+                            label={t('settings.dashboard.title', { defaultValue: 'Dashboard' })}
+                            Icon={() => <BarChart3 size={18} />}
+                            activeTab={activeTab}
+                            setActiveTab={navigateToTab}
+                            tabIndex={activeTab === 'dashboard' ? 0 : -1}
+                        />
+                        <SettingsTabButton
                             id="microphone"
                             label={t('settings.input_device', { defaultValue: 'Input Device' })}
                             Icon={MicIcon}
@@ -274,6 +284,8 @@ export function Settings({ isOpen, onClose, initialTab }: SettingsProps): React.
                                     switch (activeTab) {
                                         case 'general':
                                             return <SettingsGeneralTab />;
+                                        case 'dashboard':
+                                            return <SettingsDashboardTab />;
                                         case 'microphone':
                                             return (
                                                 <SettingsMicrophoneTab

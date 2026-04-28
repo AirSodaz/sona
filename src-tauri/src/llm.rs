@@ -27,6 +27,7 @@ const MIN_SUMMARY_CHUNK_CHAR_BUDGET: usize = 1200;
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
 const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";
+const LLM_USAGE_RECORDED_EVENT: &str = "llm-usage-recorded";
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -91,6 +92,35 @@ pub enum LlmTaskType {
     Summary,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmUsageCategory {
+    Summary,
+    Translation,
+    Polish,
+    TitleGeneration,
+    ConnectionTest,
+    Generic,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmGenerateSource {
+    TitleGeneration,
+    ConnectionTest,
+    Generic,
+}
+
+impl From<LlmGenerateSource> for LlmUsageCategory {
+    fn from(value: LlmGenerateSource) -> Self {
+        match value {
+            LlmGenerateSource::TitleGeneration => LlmUsageCategory::TitleGeneration,
+            LlmGenerateSource::ConnectionTest => LlmUsageCategory::ConnectionTest,
+            LlmGenerateSource::Generic => LlmUsageCategory::Generic,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryTemplateConfig {
@@ -116,6 +146,7 @@ pub struct LlmConfig {
 pub struct LlmGenerateRequest {
     pub config: LlmConfig,
     pub input: String,
+    pub source: Option<LlmGenerateSource>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -142,16 +173,27 @@ pub struct StandardLlmRequest {
     pub max_tokens: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct TokenUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StandardLlmResponse {
     pub text: String,
+    pub usage: Option<TokenUsage>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmUsageEventPayload {
+    pub occurred_at: String,
+    pub provider: LlmProvider,
+    pub model: String,
+    pub category: LlmUsageCategory,
     pub usage: Option<TokenUsage>,
 }
 
@@ -199,7 +241,7 @@ impl LlmAdapter for OpenAiAdapter {
 
         Ok(StandardLlmResponse {
             text: extract_text_response(&response.choice)?,
-            usage: None, // Rig's current version might not expose usage easily here
+            usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
 }
@@ -236,7 +278,7 @@ impl LlmAdapter for AnthropicAdapter {
 
         Ok(StandardLlmResponse {
             text: extract_text_response(&response.choice)?,
-            usage: None,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
 }
@@ -273,7 +315,7 @@ impl LlmAdapter for OllamaAdapter {
 
         Ok(StandardLlmResponse {
             text: extract_text_response(&response.choice)?,
-            usage: None,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
 }
@@ -310,7 +352,7 @@ impl LlmAdapter for GeminiAdapter {
 
         Ok(StandardLlmResponse {
             text: extract_text_response(&response.choice)?,
-            usage: None,
+            usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
 }
@@ -415,7 +457,7 @@ impl LlmAdapter for GenericHttpAdapter {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let text = match config.provider {
+        let response = match config.provider {
             LlmProvider::OpenAiResponses => {
                 generate_with_openai_responses_api(
                     &config.base_url,
@@ -456,10 +498,7 @@ impl LlmAdapter for GenericHttpAdapter {
             }
         };
 
-        Ok(StandardLlmResponse {
-            text,
-            usage: None,
-        })
+        Ok(response)
     }
 }
 
@@ -978,6 +1017,73 @@ fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
     Ok(text)
 }
 
+fn normalize_token_usage(prompt_tokens: u64, completion_tokens: u64, total_tokens: u64) -> Option<TokenUsage> {
+    let normalized_total = if total_tokens > 0 {
+        total_tokens
+    } else {
+        prompt_tokens.saturating_add(completion_tokens)
+    };
+
+    if prompt_tokens == 0 && completion_tokens == 0 && normalized_total == 0 {
+        return None;
+    }
+
+    Some(TokenUsage {
+        prompt_tokens: prompt_tokens.min(u32::MAX as u64) as u32,
+        completion_tokens: completion_tokens.min(u32::MAX as u64) as u32,
+        total_tokens: normalized_total.min(u32::MAX as u64) as u32,
+    })
+}
+
+fn token_usage_from_rig_usage(usage: Option<rig::completion::Usage>) -> Option<TokenUsage> {
+    usage.and_then(|usage| {
+        normalize_token_usage(usage.input_tokens, usage.output_tokens, usage.total_tokens)
+    })
+}
+
+fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
+    let usage = response.get("usage")?;
+
+    let prompt_tokens = usage
+        .get("prompt_tokens")
+        .or_else(|| usage.get("input_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let completion_tokens = usage
+        .get("completion_tokens")
+        .or_else(|| usage.get("output_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let total_tokens = usage
+        .get("total_tokens")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+
+    normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)
+}
+
+fn emit_llm_usage_event(
+    app: &AppHandle,
+    config: &LlmConfig,
+    category: LlmUsageCategory,
+    usage: Option<TokenUsage>,
+) {
+    let payload = LlmUsageEventPayload {
+        occurred_at: chrono::Utc::now().to_rfc3339(),
+        provider: config.provider,
+        model: config.model.clone(),
+        category,
+        usage,
+    };
+
+    if let Err(error) = app.emit(LLM_USAGE_RECORDED_EVENT, payload) {
+        warn!(
+            "[LLM] failed to emit usage event: provider={:?} category={:?} error={}",
+            config.provider, category, error
+        );
+    }
+}
+
 fn build_standard_input(req: &StandardLlmRequest) -> String {
     req.messages
         .iter()
@@ -1047,7 +1153,7 @@ async fn stream_rig_completion_model<M, EmitFn>(
     input: &str,
     temperature: f32,
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<String, String>
+) -> Result<StandardLlmResponse, String>
 where
     M: CompletionModel,
     M::StreamingResponse: Clone + Unpin + GetTokenUsage + 'static,
@@ -1068,11 +1174,19 @@ where
         }
     }
 
-    if accumulator.text.is_empty() {
-        return extract_text_response(&stream.choice);
-    }
+    let text = if accumulator.text.is_empty() {
+        extract_text_response(&stream.choice)?
+    } else {
+        accumulator.text()
+    };
 
-    Ok(accumulator.text())
+    Ok(StandardLlmResponse {
+        text,
+        usage: stream
+            .response
+            .as_ref()
+            .and_then(|response| token_usage_from_rig_usage(response.token_usage())),
+    })
 }
 
 fn build_openai_stream_url(config: &LlmConfig) -> String {
@@ -1101,7 +1215,7 @@ async fn stream_openai_chat_completion<EmitFn>(
     config: &LlmConfig,
     input: &str,
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<String, String>
+) -> Result<StandardLlmResponse, String>
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
@@ -1165,7 +1279,10 @@ where
     if !content_type.contains("text/event-stream") {
         let body = response.text().await.map_err(|error| error.to_string())?;
         let json = serde_json::from_str::<Value>(&body).map_err(|error| error.to_string())?;
-        return extract_text_from_json_response(&json);
+        return Ok(StandardLlmResponse {
+            text: extract_text_from_json_response(&json)?,
+            usage: extract_usage_from_json_response(&json),
+        });
     }
 
     let mut sse = SseEventBuffer::default();
@@ -1207,14 +1324,17 @@ where
         return Err("LLM response did not contain text output".to_string());
     }
 
-    Ok(accumulator.text())
+    Ok(StandardLlmResponse {
+        text: accumulator.text(),
+        usage: None,
+    })
 }
 
 async fn stream_openai_responses_completion<EmitFn>(
     config: &LlmConfig,
     input: &str,
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<String, String>
+) -> Result<StandardLlmResponse, String>
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
@@ -1254,7 +1374,10 @@ where
     if !content_type.contains("text/event-stream") {
         let body = response.text().await.map_err(|error| error.to_string())?;
         let json = serde_json::from_str::<Value>(&body).map_err(|error| error.to_string())?;
-        return extract_text_from_json_response(&json);
+        return Ok(StandardLlmResponse {
+            text: extract_text_from_json_response(&json)?,
+            usage: extract_usage_from_json_response(&json),
+        });
     }
 
     let mut sse = SseEventBuffer::default();
@@ -1300,13 +1423,16 @@ where
         return Err("LLM response did not contain text output".to_string());
     }
 
-    Ok(accumulator.text())
+    Ok(StandardLlmResponse {
+        text: accumulator.text(),
+        usage: None,
+    })
 }
 
 async fn try_stream_text<EmitFn>(
     request: &LlmGenerateRequest,
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<Option<String>, String>
+) -> Result<Option<StandardLlmResponse>, String>
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
@@ -1319,7 +1445,7 @@ where
         max_tokens: None,
     });
 
-    let text = match request.config.provider {
+    let response = match request.config.provider {
         LlmProvider::Anthropic => {
             let client = anthropic::Client::builder()
                 .api_key(&request.config.api_key)
@@ -1375,13 +1501,13 @@ where
         _ => Some(stream_openai_chat_completion(&request.config, &input, accumulator).await?),
     };
 
-    Ok(text)
+    Ok(response)
 }
 
 async fn generate_with_optional_streaming<EmitFn>(
     request: LlmGenerateRequest,
     emit_delta: &mut EmitFn,
-) -> Result<String, String>
+) -> Result<StandardLlmResponse, String>
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
@@ -1391,7 +1517,7 @@ where
     drop(accumulator);
 
     match stream_result {
-        Ok(Some(text)) => Ok(text),
+        Ok(Some(response)) => Ok(response),
         Ok(None) => generate_with_rig(request).await,
         Err(error) if !emitted_any => {
             warn!(
@@ -1441,7 +1567,7 @@ async fn generate_with_openai_chat_api(
     input: &str,
     temperature: Option<f32>,
     extra_headers: Vec<(&str, String)>,
-) -> Result<String, String> {
+) -> Result<StandardLlmResponse, String> {
     let mut headers = vec![];
     if !api_key.is_empty() {
         headers.push(("Authorization", format!("Bearer {}", api_key)));
@@ -1460,7 +1586,10 @@ async fn generate_with_openai_chat_api(
     });
 
     let response = post_json_request(url, headers, payload).await?;
-    extract_text_from_json_response(&response)
+    Ok(StandardLlmResponse {
+        text: extract_text_from_json_response(&response)?,
+        usage: extract_usage_from_json_response(&response),
+    })
 }
 
 async fn generate_with_openai_responses_api(
@@ -1470,7 +1599,7 @@ async fn generate_with_openai_responses_api(
     input: &str,
     temperature: Option<f32>,
     api_path: Option<&str>,
-) -> Result<String, String> {
+) -> Result<StandardLlmResponse, String> {
     let url = join_url(base_url, api_path.unwrap_or("/v1/responses"));
     let payload = json!({
         "model": model,
@@ -1485,7 +1614,10 @@ async fn generate_with_openai_responses_api(
     )
     .await?;
 
-    extract_text_from_json_response(&response)
+    Ok(StandardLlmResponse {
+        text: extract_text_from_json_response(&response)?,
+        usage: extract_usage_from_json_response(&response),
+    })
 }
 
 async fn generate_with_azure_openai(
@@ -1495,7 +1627,7 @@ async fn generate_with_azure_openai(
     input: &str,
     temperature: Option<f32>,
     api_version: Option<&str>,
-) -> Result<String, String> {
+) -> Result<StandardLlmResponse, String> {
     let version = api_version.unwrap_or("2024-10-21");
     let deployment = deployment.trim();
     let endpoint = format!(
@@ -1518,7 +1650,10 @@ async fn generate_with_azure_openai(
     let response =
         post_json_request(&endpoint, vec![("api-key", api_key.to_string())], payload).await?;
 
-    extract_text_from_json_response(&response)
+    Ok(StandardLlmResponse {
+        text: extract_text_from_json_response(&response)?,
+        usage: extract_usage_from_json_response(&response),
+    })
 }
 
 async fn generate_with_openai_custom_path(
@@ -1528,7 +1663,7 @@ async fn generate_with_openai_custom_path(
     input: &str,
     temperature: Option<f32>,
     api_path: Option<&str>,
-) -> Result<String, String> {
+) -> Result<StandardLlmResponse, String> {
     let url = join_url(base_url, api_path.unwrap_or("/v1/chat/completions"));
     generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
 }
@@ -1538,7 +1673,7 @@ async fn generate_with_perplexity(
     model: &str,
     input: &str,
     temperature: Option<f32>,
-) -> Result<String, String> {
+) -> Result<StandardLlmResponse, String> {
     generate_with_openai_chat_api(
         "https://api.perplexity.ai/chat/completions",
         api_key,
@@ -1550,7 +1685,7 @@ async fn generate_with_perplexity(
     .await
 }
 
-async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String> {
+async fn generate_with_rig(request: LlmGenerateRequest) -> Result<StandardLlmResponse, String> {
     let adapter = AdapterFactory::create(request.config.provider);
     let std_req = StandardLlmRequest {
         messages: vec![StandardMessage {
@@ -1566,7 +1701,7 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<String, String
         .generate(&client, &std_req, &request.config)
         .await?;
 
-    Ok(response.text)
+    Ok(response)
 }
 
 
@@ -2355,6 +2490,7 @@ async fn run_segment_task<
     BuildPrompt,
     ParseChunk,
     GenerateFn,
+    OnSuccessFn,
     EmitChunkFn,
     EmitProgressFn,
 >(
@@ -2365,6 +2501,7 @@ async fn run_segment_task<
     mut build_prompt: BuildPrompt,
     mut parse_chunk: ParseChunk,
     mut generate_text: GenerateFn,
+    mut on_success: OnSuccessFn,
     mut emit_chunk: EmitChunkFn,
     mut emit_progress: EmitProgressFn,
 ) -> Result<Vec<Output>, String>
@@ -2372,7 +2509,8 @@ where
     Output: Serialize + Clone,
     BuildPrompt: FnMut(&[LlmSegmentInput]) -> String,
     ParseChunk: FnMut(&str, &[LlmSegmentInput], usize) -> Result<Vec<Output>, String>,
-    GenerateFn: FnMut(String) -> BoxFuture<'static, Result<String, String>>,
+    GenerateFn: FnMut(String) -> BoxFuture<'static, Result<StandardLlmResponse, String>>,
+    OnSuccessFn: FnMut(&StandardLlmResponse),
     EmitChunkFn: FnMut(LlmTaskChunkPayload<Output>) -> Result<(), String>,
     EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String>,
 {
@@ -2394,9 +2532,11 @@ where
     for (chunk_index, planned_chunk) in planned_chunks.into_iter().enumerate() {
         let chunk_number = chunk_index + 1;
         let chunk = &segments[planned_chunk.start..planned_chunk.end];
-        let response_text = generate_text(planned_chunk.prompt)
+        let response = generate_text(planned_chunk.prompt)
             .await
             .map_err(|error| chunk_error(task_type, chunk_number, error))?;
+        on_success(&response);
+        let response_text = response.text;
         let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
 
         emit_chunk(LlmTaskChunkPayload {
@@ -2426,6 +2566,7 @@ async fn run_streaming_segment_task<
     ParseChunk,
     BuildRequest,
     GetId,
+    OnSuccessFn,
     EmitChunkFn,
     EmitProgressFn,
 >(
@@ -2437,6 +2578,7 @@ async fn run_streaming_segment_task<
     mut parse_chunk: ParseChunk,
     mut build_request: BuildRequest,
     mut get_output_id: GetId,
+    mut on_success: OnSuccessFn,
     mut emit_chunk: EmitChunkFn,
     mut emit_progress: EmitProgressFn,
 ) -> Result<Vec<Output>, String>
@@ -2446,6 +2588,7 @@ where
     ParseChunk: FnMut(&str, &[LlmSegmentInput], usize) -> Result<Vec<Output>, String>,
     BuildRequest: FnMut(String) -> LlmGenerateRequest,
     GetId: FnMut(&Output) -> &str,
+    OnSuccessFn: FnMut(&StandardLlmResponse),
     EmitChunkFn: FnMut(LlmTaskChunkPayload<Output>) -> Result<(), String>,
     EmitProgressFn: FnMut(LlmTaskProgressPayload) -> Result<(), String>,
 {
@@ -2512,7 +2655,7 @@ where
             })?;
             Ok(())
         };
-        let response_text = generate_with_optional_streaming(
+        let response = generate_with_optional_streaming(
             build_request(planned_chunk.prompt),
             &mut |_, delta| {
                 for line in line_buffer.process(delta) {
@@ -2523,6 +2666,8 @@ where
         )
         .await
         .map_err(|error| chunk_error(task_type, chunk_number, error))?;
+        on_success(&response);
+        let response_text = response.text;
         for line in line_buffer.flush() {
             emit_streamed_line(&line)?;
         }
@@ -2567,14 +2712,21 @@ where
 }
 
 #[tauri::command]
-pub async fn generate_llm_text(request: LlmGenerateRequest) -> Result<String, String> {
+pub async fn generate_llm_text(app: AppHandle, request: LlmGenerateRequest) -> Result<String, String> {
     validate_llm_config(&request.config)?;
 
     if request.input.trim().is_empty() {
         return Err("Input cannot be empty".to_string());
     }
 
-    generate_with_rig(request).await
+    let category = request
+        .source
+        .unwrap_or(LlmGenerateSource::Generic)
+        .into();
+    let config = request.config.clone();
+    let response = generate_with_rig(request).await?;
+    emit_llm_usage_event(&app, &config, category, response.usage.clone());
+    Ok(response.text)
 }
 
 #[tauri::command]
@@ -2589,9 +2741,11 @@ pub async fn polish_transcript_segments(
     }
 
     let config = request.config.clone();
+    let usage_config = request.config.clone();
     let context = request.context.clone();
     let keywords = request.keywords.clone();
     let chunk_app = app.clone();
+    let usage_app = app.clone();
 
     run_streaming_segment_task(
         &request.task_id,
@@ -2604,9 +2758,18 @@ pub async fn polish_transcript_segments(
             LlmGenerateRequest {
                 config: config.clone(),
                 input: prompt,
+                source: None,
             }
         },
         |item| &item.id,
+        move |response| {
+            emit_llm_usage_event(
+                &usage_app,
+                &usage_config,
+                LlmUsageCategory::Polish,
+                response.usage.clone(),
+            );
+        },
         move |payload| {
             chunk_app
                 .emit(LLM_TASK_CHUNK_EVENT, payload)
@@ -2632,8 +2795,10 @@ pub async fn translate_transcript_segments(
     }
 
     let config = request.config.clone();
+    let usage_config = request.config.clone();
     let target_language = request.target_language.clone();
     let chunk_app = app.clone();
+    let usage_app = app.clone();
 
     if config.provider == LlmProvider::GoogleTranslate
         || config.provider == LlmProvider::GoogleTranslateFree
@@ -2746,7 +2911,10 @@ pub async fn translate_transcript_segments(
                             return Err(format!("Google Translate API Error: {} {}", status, text));
                         }
 
-                        Ok(text)
+                        Ok(StandardLlmResponse {
+                            text,
+                            usage: None,
+                        })
                     } else {
                         info!(
                             "[LLM] google_translate_free chunk fan-out: items={} max_concurrency={}",
@@ -2788,9 +2956,20 @@ pub async fn translate_transcript_segments(
                             },
                         )
                         .await?;
-                        Ok(serde_json::to_string(&translations).unwrap_or_default())
+                        Ok(StandardLlmResponse {
+                            text: serde_json::to_string(&translations).unwrap_or_default(),
+                            usage: None,
+                        })
                     }
                 })
+            },
+            move |response| {
+                emit_llm_usage_event(
+                    &usage_app,
+                    &usage_config,
+                    LlmUsageCategory::Translation,
+                    response.usage.clone(),
+                );
             },
             move |payload| {
                 chunk_app
@@ -2816,9 +2995,18 @@ pub async fn translate_transcript_segments(
             LlmGenerateRequest {
                 config: config.clone(),
                 input: prompt,
+                source: None,
             }
         },
         |item| &item.id,
+        move |response| {
+            emit_llm_usage_event(
+                &usage_app,
+                &usage_config,
+                LlmUsageCategory::Translation,
+                response.usage.clone(),
+            );
+        },
         move |payload| {
             chunk_app
                 .emit(LLM_TASK_CHUNK_EVENT, payload)
@@ -2844,9 +3032,13 @@ pub async fn summarize_transcript(
     let streamed_task_id = task_id.clone();
     let buffered_config = request.config.clone();
     let streamed_config = request.config.clone();
+    let buffered_usage_config = request.config.clone();
+    let streamed_usage_config = request.config.clone();
     let template = request.template;
     let progress_app = app.clone();
     let stream_app = app.clone();
+    let buffered_usage_app = app.clone();
+    let streamed_usage_app = app.clone();
 
     run_summary_task(
         &task_id,
@@ -2855,23 +3047,36 @@ pub async fn summarize_transcript(
         request.chunk_char_budget,
         move |prompt| {
             let config = buffered_config.clone();
+            let usage_config = buffered_usage_config.clone();
+            let usage_app = buffered_usage_app.clone();
             Box::pin(async move {
-                generate_with_rig(LlmGenerateRequest {
+                let response = generate_with_rig(LlmGenerateRequest {
                     config,
                     input: prompt,
+                    source: None,
                 })
-                .await
+                .await?;
+                emit_llm_usage_event(
+                    &usage_app,
+                    &usage_config,
+                    LlmUsageCategory::Summary,
+                    response.usage.clone(),
+                );
+                Ok(response.text)
             })
         },
         move |prompt| {
             let config = streamed_config.clone();
             let task_id = streamed_task_id.clone();
             let app = stream_app.clone();
+            let usage_config = streamed_usage_config.clone();
+            let usage_app = streamed_usage_app.clone();
             Box::pin(async move {
-                generate_with_optional_streaming(
+                let response = generate_with_optional_streaming(
                     LlmGenerateRequest {
                         config,
                         input: prompt,
+                        source: None,
                     },
                     &mut |text, delta| {
                         app.emit(
@@ -2886,7 +3091,14 @@ pub async fn summarize_transcript(
                         .map_err(|error| error.to_string())
                     },
                 )
-                .await
+                .await?;
+                emit_llm_usage_event(
+                    &usage_app,
+                    &usage_config,
+                    LlmUsageCategory::Summary,
+                    response.usage.clone(),
+                );
+                Ok(response.text)
             })
         },
         move |payload| {
@@ -3382,6 +3594,7 @@ mod tests {
                     temperature: Some(0.2),
                 },
                 input: "hello".to_string(),
+                source: None,
             };
 
             let mut emit_delta = |_text: &str, _delta: &str| Ok(());
@@ -3420,9 +3633,15 @@ mod tests {
                     }
                     .to_string();
 
-                    Box::pin(async move { Ok(response) })
+                    Box::pin(async move {
+                        Ok(StandardLlmResponse {
+                            text: response,
+                            usage: None,
+                        })
+                    })
                 }
             },
+            |_response| {},
             |payload| {
                 chunk_events.push(payload);
                 Ok(())
@@ -3520,14 +3739,18 @@ mod tests {
                         call_count += 1;
                         Box::pin(async move {
                             match call_count {
-                            1 => Ok(r#"[{"id":"1","translation":"A"},{"id":"2","translation":"B"}]"#
-                                .to_string()),
+                            1 => Ok(StandardLlmResponse {
+                                text: r#"[{"id":"1","translation":"A"},{"id":"2","translation":"B"}]"#
+                                    .to_string(),
+                                usage: None,
+                            }),
                             2 => Err("boom".to_string()),
                             _ => unreachable!(),
                         }
                         })
                     }
                 },
+                |_response| {},
                 |_payload| Ok(()),
                 |_payload| Ok(()),
             )
@@ -3581,9 +3804,15 @@ mod tests {
                     }
                     .to_string();
 
-                    Box::pin(async move { Ok(response) })
+                    Box::pin(async move {
+                        Ok(StandardLlmResponse {
+                            text: response,
+                            usage: None,
+                        })
+                    })
                 }
             },
+            |_response| {},
             |payload| {
                 chunk_events.push(payload);
                 Ok(())
@@ -3691,9 +3920,15 @@ mod tests {
                     }
                     .to_string();
 
-                    Box::pin(async move { Ok(response) })
+                    Box::pin(async move {
+                        Ok(StandardLlmResponse {
+                            text: response,
+                            usage: None,
+                        })
+                    })
                 }
             },
+            |_response| {},
             |payload| {
                 chunk_events.push(payload);
                 Ok(())

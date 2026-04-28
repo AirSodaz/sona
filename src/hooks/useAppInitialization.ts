@@ -18,6 +18,7 @@ import { useConfigPersistence } from './useConfigPersistence';
 import { useTraySyncEffect } from './useTraySyncEffect';
 import { voiceTypingService } from '../services/voiceTypingService';
 import { healthCheckService } from '../services/healthCheckService';
+import { llmUsageService } from '../services/llmUsageService';
 
 /**
  * Hook to handle application initialization.
@@ -117,6 +118,7 @@ export function useAppInitialization() {
                 }
 
                 await loadAutomation();
+                await llmUsageService.init();
 
                 // Initialize Voice Typing shortcut listeners (Main Window Only)
                 voiceTypingService.init();

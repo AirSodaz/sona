@@ -8,6 +8,7 @@ import { Switch } from '../Switch';
 import { LlmFeature, LlmProvider, LlmProviderSetting } from '../../types/transcript';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { LlmAssistantConfig } from '../../types/config';
+import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import { normalizeError } from '../../utils/errorUtils';
 import {
   addLlmModel,
@@ -407,7 +408,11 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
       const testProviderConfig = { ...providerConfig, model: testModel };
 
       await invoke<string>('generate_llm_text', {
-        request: { config: testProviderConfig, input: 'Hello, this is a connection test.' },
+        request: {
+          config: testProviderConfig,
+          input: 'Hello, this is a connection test.',
+          source: 'connection_test',
+        } satisfies LlmGenerateCommandRequest,
       });
       setTestStatus('success');
       setTestMessage(testModel);

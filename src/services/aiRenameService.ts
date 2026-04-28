@@ -5,6 +5,7 @@ import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llmConfig';
 import { normalizeError } from '../utils/errorUtils';
 import i18n from '../i18n';
 import { TranscriptSegment } from '../types/transcript';
+import type { LlmGenerateCommandRequest } from '../types/dashboard';
 
 /**
  * Constructs a prompt for the AI to generate a title based on a transcript snippet.
@@ -49,7 +50,11 @@ export async function generateAiTitle(segments: TranscriptSegment[]): Promise<st
 
     try {
         const title = await invoke<string>('generate_llm_text', {
-            request: { config: llmConfig, input: prompt },
+            request: {
+                config: llmConfig,
+                input: prompt,
+                source: 'title_generation',
+            } satisfies LlmGenerateCommandRequest,
         });
         // Basic cleanup: remove surrounding quotes and extra whitespace
         return title.trim().replace(/^["']|["']$/g, '');

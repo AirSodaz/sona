@@ -58,6 +58,9 @@ vi.mock('../../hooks/useLlmConfig', () => ({
 vi.mock('../settings/SettingsGeneralTab', () => ({
     SettingsGeneralTab: () => <button>General Tab Input</button>
 }));
+vi.mock('../settings/SettingsDashboardTab', () => ({
+    SettingsDashboardTab: () => <div>Dashboard Tab</div>
+}));
 vi.mock('../settings/SettingsModelsTab', () => ({
     SettingsModelsTab: () => <div>Models Tab</div>
 }));
@@ -136,9 +139,9 @@ describe('Settings Focus Trap & Navigation', () => {
         // Focus the first tab
         generalTab.focus();
 
-        // Arrow Down -> Should switch to 'microphone'
+        // Arrow Down -> Should switch to 'dashboard'
         fireEvent.keyDown(tablist, { key: 'ArrowDown' });
-        expect(setActiveTabMock).toHaveBeenCalledWith('microphone');
+        expect(setActiveTabMock).toHaveBeenCalledWith('dashboard');
 
         // Reset mock
         setActiveTabMock.mockClear();
@@ -174,6 +177,7 @@ describe('Settings Focus Trap & Navigation', () => {
 
         expect(tabLabels).toEqual([
             'settings.general',
+            'settings.dashboard.title',
             'settings.input_device',
             'live.subtitle_settings',
             'settings.voice_typing',
@@ -201,7 +205,7 @@ describe('Settings Focus Trap & Navigation', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
 
         fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
-        expect(setActiveTabMock).toHaveBeenCalledWith('microphone');
+        expect(setActiveTabMock).toHaveBeenCalledWith('dashboard');
 
         setActiveTabMock.mockClear();
 

@@ -4,6 +4,7 @@ import { useConfigStore } from '../stores/configStore';
 
 export type SettingsTab =
     | 'general'
+    | 'dashboard'
     | 'microphone'
     | 'subtitle'
     | 'voice_typing'
