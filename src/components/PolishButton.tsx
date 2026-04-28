@@ -7,7 +7,7 @@ import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
 import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon, SettingsIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
 import { PolishSettingsModal } from './PolishSettingsModal';
 
 /** Props for PolishButton. */

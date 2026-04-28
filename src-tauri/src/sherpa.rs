@@ -76,6 +76,8 @@ pub enum ModelType {
     },
 }
 
+/// Resolves one installed model directory plus its file manifest into the
+/// concrete Sherpa recognizer variant needed by the runtime.
 pub fn build_model_config(
     model_path: &Path,
     model_type: &str,
@@ -133,6 +135,9 @@ pub fn build_model_config(
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let tokens = get_path(&fc.tokens)?;
+            // Sherpa treats an empty language as "auto/default behavior" for
+            // Whisper-style models, so the UI's `auto` value is normalized
+            // before we hand the config to the backend.
             let language = if language == "auto" { "" } else { language }.to_string();
             Ok(ModelType::OfflineWhisper {
                 encoder,
@@ -151,6 +156,8 @@ pub fn build_model_config(
                 .as_ref()
                 .map(|_| get_path(&fc.tokens))
                 .transpose()?;
+            // FunASR Nano uses an empty string to keep multilingual inference
+            // enabled instead of forcing one explicit language code.
             let language = if language == "multilingual" {
                 ""
             } else {
@@ -248,6 +255,8 @@ impl Recognizer {
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
             model_type
         );
+        // This builds the heavy recognizer object for one concrete model
+        // configuration. Pooling/reuse happens one level up in `SherpaState`.
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -266,6 +275,8 @@ impl Recognizer {
                 config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
 
                 if let Some(_hw) = hotwords {
+                    // Hotwords require the beam-search path; the default greedy
+                    // decoder does not consult them.
                     config.decoding_method = Some("modified_beam_search".to_string());
                 }
 
@@ -631,6 +642,8 @@ fn buffered_sample_count(chunks: &[Vec<f32>]) -> usize {
 }
 
 fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
+    // Reset only per-run counters and buffers. The shared recognizer/VAD/model
+    // attachments stay on the instance so later starts can reuse them.
     instance.total_samples = 0;
     instance.segment_start_time = 0.0;
     instance.offline_state = OfflineState::default();
@@ -639,12 +652,16 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
 }
 
 fn start_instance_runtime(instance: &mut SherpaInstance, stream: Option<SafeStream>) {
+    // Online recognizers get a fresh stream per run; offline recognizers leave
+    // this as `None` and rebuild utterances from buffered audio chunks.
     instance.stream = stream;
     reset_instance_runtime_state(instance);
     instance.is_running = true;
 }
 
 fn stop_instance_runtime(instance: &mut SherpaInstance) {
+    // Stopping a run clears volatile state only; the instance still keeps its
+    // recognizer and optional VAD/punctuation attachments for the next start.
     instance.stream = None;
     reset_instance_runtime_state(instance);
     instance.is_running = false;
@@ -656,6 +673,9 @@ fn log_segment_emit_diagnostics(
     segment: &TranscriptSegment,
     stage: &str,
 ) {
+    // These logs are intentionally scoped to the long-lived live instances we
+    // debug most often (`record`, `caption`, `voice-typing`), not to every
+    // possible recognizer consumer.
     let Some(label) = diagnostics_instance_label(instance_id) else {
         return;
     };
@@ -690,6 +710,8 @@ pub struct ModelConfigKey {
 }
 
 pub struct SherpaState {
+    // Each logical instance keeps its own runtime buffers and stream state,
+    // while recognizers are pooled separately by configuration.
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
     pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
 }
@@ -969,6 +991,10 @@ fn run_offline_inference<R: tauri::Runtime>(
         }
         return;
     }
+
+    // Offline models decode one aggregated utterance at a time, so we flatten
+    // the buffered speech chunks into one continuous waveform before calling
+    // Sherpa.
     let mut full_audio = Vec::new();
     for chunk in speech_buffer {
         full_audio.extend_from_slice(chunk);
@@ -994,6 +1020,9 @@ fn run_offline_inference<R: tauri::Runtime>(
     if let Some(result) = stream.get_result() {
         let raw_text = result.text.trim();
         if !raw_text.is_empty() {
+            // The offline path emits only meaningful text: raw recognizer output
+            // is normalized first, then final-only formatting/punctuation is
+            // applied when this segment closes an utterance.
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -1039,6 +1068,8 @@ fn run_offline_inference<R: tauri::Runtime>(
             );
 
             let global_end = global_start + (full_audio.len() as f64 / 16000.0);
+            // Sherpa timestamps are relative to the decoded utterance, so we
+            // shift them into the global recording timeline before emitting.
             let timestamps_abs: Option<Vec<f32>> = result
                 .timestamps
                 .as_ref()
@@ -1116,6 +1147,8 @@ pub async fn init_recognizer(
     let recognizer = {
         let mut pool = state.recognizer_pool.lock().await;
         if let Some(r) = pool.get(&config_key) {
+            // Heavy recognizers are reused across logical instances when their
+            // model path and runtime knobs match exactly.
             info!("[init_recognizer] Reusing existing recognizer from pool");
             r.clone()
         } else {
@@ -1142,6 +1175,8 @@ pub async fn init_recognizer(
         .entry(instance_id)
         .or_insert_with(SherpaInstance::default);
 
+    // Instance-local attachments can differ even when the core recognizer is
+    // shared, so VAD/punctuation/runtime settings are refreshed here.
     instance.recognizer = Some(recognizer);
     instance.vad = vad;
     instance.punctuation = punctuation.map(Arc::new);
@@ -1174,9 +1209,13 @@ pub async fn start_recognizer(
         _ => None,
     };
 
+    // Starting a run resets transient buffers and, for online models, creates a
+    // fresh Sherpa stream that will accumulate new incremental state.
     start_instance_runtime(instance, stream);
 
     if instance.vad_model.is_some() {
+        // Reload VAD per start so any prior run-specific detector state cannot
+        // bleed into the next recording/caption session.
         instance.vad = load_vad(instance.vad_model.clone());
     }
 
@@ -1269,6 +1308,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
                     );
                 }
 
+                // Offline decoding can be CPU-heavy, so the final utterance pass
+                // runs on a blocking worker and then emits one final segment.
                 tauri::async_runtime::spawn_blocking(move || {
                     if let RecognizerInner::Offline(safe_r) = &recognizer_copy.inner {
                         run_offline_inference(
@@ -1307,6 +1348,8 @@ pub async fn flush_recognizer<R: tauri::Runtime>(
         if let RecognizerInner::Online(r) = &recognizer.inner {
             let current_time = instance.total_samples as f64 / 16000.0;
 
+            // Online models need a short tail of silence to finalize the last
+            // partial hypothesis before we reset the stream.
             let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
             debug!("FFI: Calling accept_waveform (Online, tail_padding)");
             st.0.accept_waveform(16000, &tail_padding);
@@ -1413,6 +1456,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                 return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
             };
 
+            // Offline live transcription is VAD-driven: we keep feeding audio to
+            // the detector, grow/trim utterance buffers, and only run full
+            // recognizer inference when a speech segment boundary is reached.
             vad.accept_waveform(samples);
             let currently_speaking = vad.detected();
 

@@ -5,7 +5,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
 
 const LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'];
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../configStore';
 import { useProjectStore } from '../projectStore';
-import { createLlmSettings } from '../../services/llmConfig';
+import { createLlmSettings } from '../../services/llm/state';
 
 vi.mock('../../services/projectService', () => ({
   projectService: {

@@ -1,5 +1,5 @@
 import { AppConfig } from '../types/config';
-import { ensureLlmState } from './llmConfig';
+import { ensureLlmState } from './llm/migration';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import i18n from '../i18n';
 import { DEFAULT_CONFIG } from '../stores/configStore';

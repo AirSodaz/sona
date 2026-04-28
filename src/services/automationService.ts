@@ -8,7 +8,7 @@ import type {
   AutomationRuleValidationResult,
 } from '../types/automation';
 import type { ProjectRecord } from '../types/project';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import { logger } from '../utils/logger';
 import { isSupportedMediaPath } from '../constants/mediaExtensions';
 

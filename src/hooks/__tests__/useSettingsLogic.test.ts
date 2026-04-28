@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSettingsLogic } from '../useSettingsLogic';
-import { createLlmSettings, updateProviderSetting, buildLlmConfigPatch } from '../../services/llmConfig';
+import { buildLlmConfigPatch, createLlmSettings, updateProviderSetting } from '../../services/llm/state';
 
 const mockSetConfig = vi.fn();
 

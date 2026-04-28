@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useDialogStore } from '../stores/dialogStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { isSummaryLlmConfigComplete } from '../services/llmConfig';
+import { isSummaryLlmConfigComplete } from '../services/llm/runtime';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import {
   getSummaryTemplateOptions,

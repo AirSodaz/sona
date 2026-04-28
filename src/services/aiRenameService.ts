@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
-import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
 import { normalizeError } from '../utils/errorUtils';
 import i18n from '../i18n';
 import { TranscriptSegment } from '../types/transcript';

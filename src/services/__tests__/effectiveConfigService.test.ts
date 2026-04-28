@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { resolveEffectiveConfig } from '../effectiveConfigService';
 import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
-import { createLlmSettings } from '../llmConfig';
+import { createLlmSettings } from '../llm/state';
 
 function createBaseConfig(): AppConfig {
   return {

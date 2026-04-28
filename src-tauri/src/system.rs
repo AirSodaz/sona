@@ -115,6 +115,9 @@ fn should_use_ascii_virtual_key_path(ch: char) -> bool {
 
 #[cfg(any(test, target_os = "windows"))]
 fn build_injection_steps(text: &str) -> Vec<InjectionStep> {
+    // Split the text into maximal runs that can share one injection strategy.
+    // Mixed-language text often needs both the ASCII virtual-key path and the
+    // Unicode SendInput path within the same payload.
     let mut steps = Vec::new();
     let mut current_kind: Option<InjectionStepKind> = None;
     let mut current_text = String::new();
@@ -225,6 +228,9 @@ pub fn inject_text(
 
     #[cfg(target_os = "windows")]
     {
+        // Wait for the voice-typing shortcut modifiers to clear before we send
+        // the dictated text, otherwise the shortcut keys themselves can affect
+        // the injected output.
         let modifier_wait_result = wait_for_shortcut_modifiers_release(&shortcut_modifiers);
         let modifier_wait_result_label = format_modifier_wait_result(&modifier_wait_result);
 
@@ -259,6 +265,8 @@ pub fn inject_text(
                     return Ok(());
                 }
 
+                // SendInput can partially succeed, so only the unsent suffix is
+                // retried through the broader-but-less-precise Enigo fallback.
                 inject_text_with_enigo(&remaining_text)?;
                 return Ok(());
             }
@@ -297,6 +305,8 @@ fn injection_step_mode(kind: &InjectionStepKind) -> &'static str {
 
 #[cfg(target_os = "windows")]
 fn injection_plan_mode(steps: &[InjectionStep]) -> &'static str {
+    // This labels the overall plan for diagnostics only; execution still
+    // happens one step at a time so mixed text can partially succeed.
     let has_ascii = steps
         .iter()
         .any(|step| matches!(step.kind, InjectionStepKind::AsciiVirtualKey));
@@ -316,6 +326,8 @@ fn injection_plan_mode(steps: &[InjectionStep]) -> &'static str {
 fn wait_for_shortcut_modifiers_release(
     shortcut_modifiers: &[ShortcutModifier],
 ) -> ModifierWaitResult {
+    // Poll briefly instead of blocking indefinitely. A stuck modifier should
+    // not hang text injection, but we still want to capture that state in logs.
     if shortcut_modifiers.is_empty() {
         return ModifierWaitResult {
             released: true,
@@ -381,6 +393,8 @@ fn inject_text_with_windows_sendinput(text: &str) -> Result<&'static str, Window
         return Ok("none");
     }
 
+    // Execute the plan step-by-step so we can report exactly how much prefix
+    // was already delivered if one strategy fails partway through.
     let steps = build_injection_steps(text);
     let plan_mode = injection_plan_mode(&steps);
     let mut sent_prefix_chars = 0usize;
@@ -457,6 +471,8 @@ fn inject_ascii_char_with_virtual_key(ch: char) -> Result<(), String> {
     }
 
     let needs_shift = shift_state & ASCII_SHIFT_STATE_SHIFT != 0;
+    // ASCII uses virtual-key injection so target apps receive the same key
+    // semantics they expect from ordinary keyboard input.
     let mut inputs = Vec::with_capacity(if needs_shift { 4 } else { 2 });
 
     if needs_shift {
@@ -475,6 +491,8 @@ fn inject_ascii_char_with_virtual_key(ch: char) -> Result<(), String> {
 fn inject_unicode_char_with_sendinput(ch: char) -> Result<(), String> {
     let mut utf16_buffer = [0u16; 2];
     let utf16_units = ch.encode_utf16(&mut utf16_buffer);
+    // Non-ASCII text bypasses keyboard layout lookup and sends UTF-16 code
+    // units directly, which covers characters the virtual-key path cannot.
     let mut inputs = Vec::with_capacity(utf16_units.len() * 2);
 
     for scan_code in utf16_units {
@@ -491,6 +509,8 @@ fn send_keyboard_inputs(inputs: &[INPUT]) -> Result<(), String> {
         return Ok(());
     }
 
+    // Dispatch the prepared press/release sequence as one batch so partial
+    // delivery is detectable at the Windows API boundary.
     let sent = unsafe { SendInput(inputs, std::mem::size_of::<INPUT>() as i32) };
     if sent != inputs.len() as u32 {
         let last_error = unsafe { GetLastError() };
@@ -554,6 +574,8 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
     };
 
     unsafe {
+        // Prefer UI Automation for modern editors first, then fall back to
+        // GUI-thread caret data for older Win32 apps that do not expose UIA.
         // 1. Try UI Automation (Modern apps: Chrome, Edge, VS Code, etc.)
         if let Ok(pos) = get_uia_caret_position() {
             if let Some(p) = pos {
@@ -622,6 +644,8 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
     let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
     let focused_element = automation.GetFocusedElement()?;
 
+    // TextPattern2 exposes the caret directly when the focused element supports
+    // it; this is the most reliable path for modern text controls.
     // Try TextPattern2 (Windows 8.1+)
     if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPattern2Id) {
         if let Ok(text_pattern2) = pattern.cast::<IUIAutomationTextPattern2>() {
@@ -640,6 +664,8 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
         }
     }
 
+    // Some apps expose only TextPattern selection rectangles, so fall back to
+    // the first selected range when caret-specific APIs are unavailable.
     // Fallback to TextPattern selection
     if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId) {
         if let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>() {
@@ -681,8 +707,8 @@ unsafe fn safearray_to_f64_vec(
     let vec = slice.to_vec();
     SafeArrayUnaccessData(psa)?;
 
-    // We should ideally free the SAFEARRAY if we're the owner.
-    // In UIA, GetBoundingRectangles returns a new SAFEARRAY that the caller must free.
+    // UIA returns a SAFEARRAY owned by the caller here, so this helper consumes
+    // it fully and frees it before returning the copied coordinates.
     SafeArrayDestroy(psa)?;
 
     Ok(vec)

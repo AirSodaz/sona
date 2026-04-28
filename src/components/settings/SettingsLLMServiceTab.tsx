@@ -13,18 +13,22 @@ import { normalizeError } from '../../utils/errorUtils';
 import {
   addLlmModel,
   buildLlmConfigPatch,
-  DEFAULT_LLM_TEMPERATURE,
-  ensureLlmState,
   getFeatureModelEntry,
-  getProviderDefinition,
-  LLM_PROVIDER_DEFINITIONS,
   setFeatureModelSelection,
   setFeatureTemperature,
   updateProviderSetting,
+} from '../../services/llm/state';
+import { ensureLlmState } from '../../services/llm/migration';
+import {
   isFeatureLlmConfigComplete,
+} from '../../services/llm/runtime';
+import {
   buildLlmConfig,
   createProviderSetting,
-} from '../../services/llmConfig';
+  DEFAULT_LLM_TEMPERATURE,
+  getProviderDefinition,
+  LLM_PROVIDER_DEFINITIONS,
+} from '../../services/llm/providers';
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
 

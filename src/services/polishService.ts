@@ -7,7 +7,7 @@ import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
 import { logger } from '../utils/logger';
 import { normalizeError } from '../utils/errorUtils';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
 import {
@@ -19,15 +19,20 @@ import {
   PolishTaskChunkPayload,
 } from './llmTaskService';
 
-function applyPolishedChunkToSegments(
-  segments: TranscriptSegment[],
-  polishedChunk: PolishedSegment[],
-): TranscriptSegment[] {
+function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
   const polishedMap = new Map<string, PolishedSegment>();
   for (let index = 0; index < polishedChunk.length; index += 1) {
     polishedMap.set(polishedChunk[index].id, polishedChunk[index]);
   }
+  return polishedMap;
+}
 
+function applyPolishedChunkToSegments(
+  segments: TranscriptSegment[],
+  polishedMap: ReadonlyMap<string, PolishedSegment>,
+): TranscriptSegment[] {
+  // Merge by id so polishing only rewrites transcript text and keeps each segment's
+  // existing timing, speaker, and translation fields intact.
   return segments.map((segment) => {
     const polished = polishedMap.get(segment.id);
     return polished ? { ...segment, text: polished.text } : segment;
@@ -71,6 +76,8 @@ class PolishService {
         request: this.buildRequest(taskId, config, segments),
       });
 
+      // Providers without streamed chunk events still need to drive the same incremental
+      // consumer path, so fall back to the final payload when no chunk arrived.
       if (onChunkPolished && !receivedChunkEvent) {
         await onChunkPolished(polishedSegments);
       }
@@ -103,6 +110,8 @@ class PolishService {
     const taskId = createLlmTaskId('polish');
     let receivedChunkEvent = false;
     const unlistenProgress = await listenToLlmTaskProgress(taskId, 'polish', ({ completedChunks, totalChunks }) => {
+      // Progress tracks the transcript that launched the job, not whichever record the
+      // user is viewing by the time a late chunk event arrives.
       useTranscriptStore.getState().updateLlmState({
         polishProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
       }, jobHistoryId);
@@ -139,7 +148,7 @@ class PolishService {
     segments: TranscriptSegment[],
     polishedChunk: PolishedSegment[],
   ): TranscriptSegment[] {
-    return applyPolishedChunkToSegments(segments, polishedChunk);
+    return applyPolishedChunkToSegments(segments, buildPolishedSegmentMap(polishedChunk));
   }
 
   private buildRequest(
@@ -163,12 +172,12 @@ class PolishService {
     const currentHistoryId = currentStore.sourceHistoryId || 'current';
 
     if (currentHistoryId === jobHistoryId) {
-      polishedSegments.forEach(({ id, text }) => {
-        currentStore.updateSegment(id, { text });
-      });
+      this.applyPolishedSegmentsToCurrentTranscript(polishedSegments, currentStore);
       return;
     }
 
+    // Unsaved "current" work has no background history file to patch once the user has
+    // navigated away, so in that case we intentionally drop late results.
     if (jobHistoryId === 'current') {
       return;
     }
@@ -179,18 +188,26 @@ class PolishService {
         return;
       }
 
-      const polishedMap = new Map<string, PolishedSegment>();
-      for (let i = 0; i < polishedSegments.length; i++) {
-        polishedMap.set(polishedSegments[i].id, polishedSegments[i]);
-      }
+      const polishedMap = buildPolishedSegmentMap(polishedSegments);
 
+      // Background writeback keeps the original record consistent when the user switches
+      // context mid-run instead of redirecting late results into the newly active record.
       await useHistoryStore.getState().updateTranscript(
         jobHistoryId,
-        applyPolishedChunkToSegments(bgSegments, [...polishedMap.values()]),
+        applyPolishedChunkToSegments(bgSegments, polishedMap),
       );
     } catch (error) {
       logger.error('[PolishService] Failed to update background record segments:', error);
     }
+  }
+
+  private applyPolishedSegmentsToCurrentTranscript(
+    polishedSegments: PolishedSegment[],
+    store: ReturnType<typeof useTranscriptStore.getState>,
+  ) {
+    polishedSegments.forEach(({ id, text }) => {
+      store.updateSegment(id, { text });
+    });
   }
 }
 

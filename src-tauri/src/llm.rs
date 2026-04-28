@@ -807,6 +807,9 @@ fn extract_text_response(
     Ok(parts.join("\n"))
 }
 
+/// Keeps the progressively built response text and emits both the full text and
+/// the latest delta, because downstream listeners render partial output while
+/// also needing the complete accumulated value for replacement-style updates.
 struct StreamTextAccumulator<'a, EmitFn>
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
@@ -843,6 +846,10 @@ where
     }
 }
 
+/// Reassembles transport chunks into complete lines before higher-level
+/// streaming parsers inspect them. HTTP/SSE providers can split a single line
+/// across arbitrary network chunks, so chunk boundaries are not message
+/// boundaries.
 #[derive(Default)]
 struct StreamingLineBuffer {
     buffer: String,
@@ -851,6 +858,8 @@ struct StreamingLineBuffer {
 impl StreamingLineBuffer {
     fn process(&mut self, chunk: &str) -> Vec<String> {
         if chunk.find('\n').is_none() {
+            // Keep buffering until we see a line terminator. Partial lines are
+            // not safe to parse yet.
             self.buffer.push_str(chunk);
             return Vec::new();
         }
@@ -877,6 +886,9 @@ impl StreamingLineBuffer {
     }
 }
 
+/// Collects SSE `data:` lines and emits one logical event per blank-line
+/// separator. This keeps us aligned with SSE framing instead of assuming each
+/// incoming chunk is already a complete event.
 #[derive(Default)]
 struct SseEventBuffer {
     line_buffer: StreamingLineBuffer,
@@ -919,6 +931,8 @@ impl SseEventBuffer {
         if let Some(rest) = line.strip_prefix("data:") {
             self.data_lines.push(rest.trim_start().to_string());
         }
+        // Ignore other SSE fields such as `event:` or `id:` because current
+        // provider integrations only consume the payload carried in `data:`.
     }
 }
 
@@ -1747,6 +1761,8 @@ where
     }
 
     if chunk_size.is_some() {
+        // An explicit chunk-size override wins over dynamic planning so callers
+        // can force deterministic segment counts when needed.
         let normalized_chunk_size = normalize_chunk_size(chunk_size);
         let mut planned = Vec::with_capacity(
             (segments.len() + normalized_chunk_size - 1) / normalized_chunk_size,
@@ -1784,6 +1800,8 @@ where
         let candidate_prompt_chars = prompt_char_count(&candidate_prompt);
 
         if candidate_prompt_chars <= prompt_char_budget {
+            // Grow the current chunk greedily until adding one more segment
+            // would exceed the prompt budget.
             chunk_end = candidate_end;
             current_prompt = Some(candidate_prompt);
 
@@ -1802,6 +1820,9 @@ where
         }
 
         if chunk_end == chunk_start {
+            // If even a single segment exceeds budget, we still send it alone
+            // instead of dropping it. That preserves task completeness and lets
+            // the provider return the real failure, if any.
             warn!(
                 "[LLM] {} task {} single segment exceeded prompt budget and will be sent alone: segment_id={} prompt_chars={} prompt_budget_chars={}",
                 task_label(task_type),
@@ -1863,6 +1884,8 @@ fn parse_google_translate_free_retry_after(
 }
 
 fn clamp_google_translate_free_retry_after(duration: Duration) -> Duration {
+    // Treat server-provided Retry-After as a hint, but cap it so one response
+    // cannot stall the whole translation task for an excessive amount of time.
     duration.min(Duration::from_secs(
         GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS,
     ))
@@ -1885,6 +1908,9 @@ fn google_translate_free_retry_delay(
     failed_attempt: usize,
 ) -> Option<Duration> {
     match error {
+        // Only 429 responses are retried. Other free-endpoint failures usually
+        // indicate bad input or a non-transient upstream error, so retrying
+        // would just add latency without improving success rate.
         GoogleTranslateFreeAttemptError::HttpStatus {
             status,
             retry_after,
@@ -2291,6 +2317,8 @@ fn build_summary_chunk_prompt(
     chunk_number: usize,
     total_chunks: usize,
 ) -> String {
+    // Phase 1 of long-summary generation: summarize one transcript slice into a
+    // mergeable intermediate result that can later be combined with siblings.
     format!(
         "You are preparing an intermediate transcript summary using the \"{template_name}\" template.\n\
 Use the same language as the transcript. Do not translate or switch languages.\n\
@@ -2313,6 +2341,8 @@ fn build_summary_finalize_prompt(
     template: &SummaryTemplateConfig,
     partial_summaries: &[String],
 ) -> String {
+    // Phase 2 of long-summary generation: merge intermediate summaries into a
+    // single final summary while removing overlap across chunks.
     format!(
         "You are combining intermediate transcript summaries into one final summary using the \"{template_name}\" template.\n\
 Use the same language as the transcript. Do not translate or switch languages.\n\
@@ -2337,6 +2367,8 @@ fn build_summary_direct_prompt(
     template: &SummaryTemplateConfig,
     segments: &[SummarySegmentInput],
 ) -> String {
+    // Short transcripts skip the chunk/finalize pipeline and go straight to one
+    // final-summary prompt.
     format!(
         "You are creating a final transcript summary using the \"{template_name}\" template.\n\
 Use the same language as the transcript. Do not translate or switch languages.\n\
@@ -2359,6 +2391,8 @@ fn normalize_summary_chunk_char_budget(chunk_char_budget: Option<usize>) -> usiz
 }
 
 fn estimate_summary_segment_chars(segment: &SummarySegmentInput) -> usize {
+    // This is a cheap character heuristic, not token accounting. We only need a
+    // stable approximation to keep prompt sizes bounded before model calls.
     segment.text.chars().count() + 24
 }
 
@@ -2378,6 +2412,9 @@ fn split_summary_segments(
         let segment_chars = estimate_summary_segment_chars(segment);
 
         if !current_chunk.is_empty() && current_chars + segment_chars > chunk_char_budget {
+            // Start a new chunk before we exceed the rough prompt budget. The
+            // budget is intentionally approximate; exact token limits are left
+            // to the provider/model layer.
             chunks.push(current_chunk);
             current_chunk = Vec::new();
             current_chars = 0;

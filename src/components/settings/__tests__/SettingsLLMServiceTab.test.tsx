@@ -9,7 +9,7 @@ import {
   createLlmSettings,
   setFeatureModelSelection,
   updateProviderSetting,
-} from '../../../services/llmConfig';
+} from '../../../services/llm/state';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

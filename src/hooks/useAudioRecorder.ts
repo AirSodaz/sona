@@ -43,6 +43,8 @@ function createRecordSessionId(): string {
 }
 
 function shouldAcceptRecordSegment(phase: RecordSessionPhase, segment: TranscriptSegment): boolean {
+    // During pause/stop transitions we still accept final segments so late
+    // recognizer flushes can close the current utterance instead of being lost.
     if (phase === 'starting' || phase === 'recording' || phase === 'resuming') {
         return true;
     }
@@ -55,6 +57,8 @@ function shouldAcceptRecordSegment(phase: RecordSessionPhase, segment: Transcrip
 }
 
 function shouldFeedWebAudioForPhase(phase: RecordSessionPhase): boolean {
+    // Web-audio fallback should stop feeding new samples while paused/stopping,
+    // because those transitions are controlled entirely on the client side.
     return phase === 'starting' || phase === 'recording' || phase === 'resuming';
 }
 
@@ -155,6 +159,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         peakLevelRef.current = Math.min(1, maxAbs / 32767);
     }, []);
 
+    // Duration tracking is maintained separately from transcript timing because
+    // recognizer segment boundaries can drift around pause/resume transitions.
     const resetRecordedDuration = useCallback(() => {
         recordedDurationMsRef.current = 0;
         activeDurationStartedAtRef.current = null;
@@ -195,6 +201,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         return durationSeconds;
     }, [getRecordedDurationSeconds, pauseRecordedDurationWindow, syncRecordingElapsedMs]);
 
+    // Timeline offsets keep emitted segment timestamps monotonic across
+    // pause/resume, even if the recognizer restarts its internal clock at 0.
     const resetRecordTimeline = useCallback(() => {
         segmentTimeOffsetSecondsRef.current = 0;
         recordTimelineCursorSecondsRef.current = 0;
@@ -244,6 +252,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, []);
 
     const openRecordSession = useCallback((): string => {
+        // Opening a session clears UI/runtime state up front so any stale async
+        // callback can be rejected by session id before it mutates the new run.
         const sessionId = createRecordSessionId();
         recordSessionIdRef.current = sessionId;
         recordSessionPhaseRef.current = 'starting';
@@ -267,6 +277,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return false;
         }
 
+        // Activation is the point where capture, recognizer, and UI agree that
+        // this session is the current live recording owner.
         recordSessionPhaseRef.current = 'recording';
         setIsRecording(true);
         setIsPaused(false);
@@ -281,6 +293,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, []);
 
     const resetRecordSession = useCallback((sessionId: string | null, reason: string, clearTranscript = false) => {
+        // Ignore stale resets from older async branches so a failed start/stop
+        // cannot wipe the active session that replaced it.
         if (sessionId && recordSessionIdRef.current !== sessionId) {
             logger.info(
                 `[useAudioRecorder] Ignoring record session reset for stale session. requested=${sessionId} active=${recordSessionIdRef.current ?? 'none'} reason=${reason}`
@@ -315,6 +329,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return;
         }
 
+        // Roll back whichever capture resources were acquired before the start
+        // path failed so fallback/retry attempts begin from a clean baseline.
         if (usingNativeCaptureRef.current) {
             if (nativeAudioUnlistenRef.current) {
                 nativeAudioUnlistenRef.current();
@@ -359,6 +375,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             return;
         }
 
+        // Capture rollback alone is not enough when a partially started session
+        // needs to unwind; the recognizer has its own runtime state to clear.
         try {
             await transcriptionService.softStop();
             logger.info(`[useAudioRecorder] Rolled back recognizer state. session=${sessionId} reason=${reason}`);
@@ -496,6 +514,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
         processor.port.onmessage = (e) => {
             const samples = e.data as Int16Array;
+            // Only forward samples while the session phase says the recognizer
+            // should still be accumulating audio for this run.
             if (shouldFeedWebAudioForPhase(recordSessionPhaseRef.current)) {
                 transcriptionService.sendAudioInt16(samples);
             }
@@ -511,6 +531,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     // File Recording (MediaRecorder)
     const startFileRecording = useCallback((sessionId: string): boolean => {
         if (usingNativeCaptureRef.current) {
+            // Native capture writes its own WAV via Rust, so the browser-side
+            // recorder only exists for the Web API fallback path.
             return activateRecordSession(sessionId);
         }
 
@@ -542,6 +564,10 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             let tempAudioPath: string | null = null;
 
             if (segments.length > 0) {
+                    // Browser fallback still converges onto the same
+                    // post-recording sink as native capture: annotate segments,
+                    // save the history item, then reconnect that metadata to the
+                    // active transcript view.
                     try {
                         tempAudioPath = await writeRecordedBlobToTempFile(blob, type);
                         segments = await annotateRecordedSegments(tempAudioPath, segments);
@@ -622,6 +648,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             let stream: MediaStream | undefined;
             activeInputSourceRef.current = inputSource;
 
+            // Prefer native capture because it keeps recording/transcription in
+            // the same backend pipeline, but fall back to browser capture
+            // without changing the surrounding session state machine.
             if (inputSource === 'desktop') {
                 // Try Native Capture first
                 let nativeSuccess = false;
@@ -821,6 +850,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
 
         // Soft stop service
+        // Stop recognizer delivery before we persist outputs so no late segment
+        // can land after the saved recording has already been finalized.
         await transcriptionService.softStop();
         finalizeLastSegment();
 
@@ -830,6 +861,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 let segments = useTranscriptStore.getState().segments;
 
                 if (segments.length > 0) {
+                    // Native and browser capture ultimately share the same
+                    // persistence sink: finalized segments, audio asset,
+                    // history item, and summary metadata.
                     try {
                         segments = await annotateRecordedSegments(savedWavPath, segments);
                     } catch (error) {
@@ -901,6 +935,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         syncRecordingElapsedMs();
 
         try {
+            // Pause capture first, then pause the recognizer stream, so no new
+            // samples sneak in after we freeze the visible recording duration.
             if (usingNativeCaptureRef.current) {
                 await setNativeCapturePaused(sessionId, true);
             } else {
@@ -933,6 +969,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 return;
             }
 
+            // If pause fails midway, restore recognizer/capture state and move
+            // the segment offset forward so resumed timestamps never overlap the
+            // already accepted timeline.
             try {
                 await transcriptionService.resumeStream();
                 setSegmentTimeOffsetSeconds(getNextSegmentTimeOffsetSeconds(), 'pause_error_recovery');
@@ -991,6 +1030,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setIsTransitioning(true);
 
         try {
+            // Resume recognizer first, then advance the segment time offset, and
+            // only then let capture continue feeding audio into the pipeline.
             await transcriptionService.resumeStream();
             setSegmentTimeOffsetSeconds(getNextSegmentTimeOffsetSeconds(), 'resume');
 

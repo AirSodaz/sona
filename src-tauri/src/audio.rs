@@ -16,6 +16,10 @@ pub enum RecorderCommand {
 }
 
 #[derive(Default)]
+/// Tracks one live hardware capture that can be shared by multiple logical
+/// recorder instances. Ownership lives at the instance-id layer, so attaching a
+/// second consumer should reuse the same device stream instead of starting a
+/// parallel hardware capture.
 struct SharedCaptureState {
     stop_signal: Option<Sender<()>>,
     instance_ids: HashSet<String>,
@@ -24,6 +28,8 @@ struct SharedCaptureState {
     active_device_name: Option<String>,
 }
 
+/// Result of detaching one logical owner from a shared hardware capture.
+/// Callers only stop the underlying device when the final owner leaves.
 struct SharedCaptureDetachResult {
     should_stop_hardware: bool,
     remaining_instances: Vec<String>,
@@ -55,6 +61,8 @@ impl SharedCaptureState {
     }
 
     fn attach_instance(&mut self, instance_id: String) -> Vec<String> {
+        // Re-attaching an existing instance should also make it active again if
+        // it had previously been paused.
         self.paused_instances.remove(&instance_id);
         self.instance_ids.insert(instance_id);
         self.owners()
@@ -67,6 +75,8 @@ impl SharedCaptureState {
         stop_signal: Sender<()>,
         recorder_tx: tokio::sync::mpsc::Sender<RecorderCommand>,
     ) -> Vec<String> {
+        // Starting a brand-new hardware session replaces any stale ownership
+        // state so future attach/detach calls describe only the current run.
         self.instance_ids.clear();
         self.paused_instances.clear();
         self.instance_ids.insert(instance_id);
@@ -102,6 +112,9 @@ impl SharedCaptureState {
         self.paused_instances.remove(instance_id);
         let remaining_instances = self.owners();
         let should_stop_hardware = remaining_instances.is_empty();
+        // Keep the recorder channel available while at least one owner still
+        // depends on the shared capture. Only the final detach consumes the
+        // stop signal and owned resources.
         let recorder_tx = if should_stop_hardware {
             self.recorder_tx.take()
         } else {
@@ -211,6 +224,9 @@ fn queue_recording_start<R: Runtime>(
         return Ok(());
     }
 
+    // Even when we attach to an already-running hardware capture, each logical
+    // recording owner still needs its own output file. This command asks the
+    // recorder task to begin writing a fresh WAV for that owner.
     let Some(tx) = recorder_tx else {
         eprintln!(
             "[Audio] {} recorder missing while starting capture file for instance {}",
@@ -241,6 +257,9 @@ fn update_capture_pause_state(
         return Err(format!("{} capture is not running", capture_label));
     }
 
+    // Pause/resume is tracked per owner. The shared hardware stream keeps
+    // running until the last owner detaches, but paused owners are removed from
+    // the active set and optionally mirrored to the recorder task.
     let active_instances = capture.set_instance_paused(instance_id, paused)?;
 
     if should_record {
@@ -287,6 +306,9 @@ pub fn start_system_audio_capture<R: Runtime>(
     {
         let mut capture = state.system_capture.lock().map_err(|e| e.to_string())?;
         if capture.is_running() {
+            // A live system capture is shared across owners. Attaching here
+            // avoids fighting the OS for duplicate loopback streams and keeps
+            // all logical consumers bound to the same device session.
             let owners = capture.attach_instance(instance_id.clone());
             let active_device = capture.active_device_label().to_string();
             let recorder_tx = capture.recorder_tx.clone();
@@ -1070,6 +1092,8 @@ fn process_mic_audio<R: Runtime>(
     task_producer: &mut impl Producer<Item = f32>,
     boost: f32,
 ) {
+    // Collapse incoming frames to mono first, then apply optional boost before
+    // handing audio to the resampler and downstream recognition pipeline.
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
         for sample in frame {
@@ -1097,6 +1121,8 @@ fn process_mic_audio<R: Runtime>(
                 if out_len > 0 {
                     let output_f32 = &output_buffer[0][..out_len];
 
+                    // The task ring buffer feeds recognition work; the emitted
+                    // peak meter event is only for live UI feedback.
                     let _ = task_producer.push_slice(output_f32);
                     let _ = data_tx.try_send(());
 
@@ -1168,6 +1194,8 @@ pub async fn stop_microphone_capture(
     }
 
     if !detach_result.should_stop_hardware {
+        // Another owner is still using the mic capture, so stopping here would
+        // tear down audio for the remaining session.
         return Ok(saved_path);
     }
 
@@ -1194,6 +1222,8 @@ fn process_audio<R: Runtime>(
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
 ) {
+    // System audio follows the same mono -> resample -> task-buffer pipeline as
+    // microphone audio, minus the per-input boost stage.
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
         for sample in frame {
@@ -1216,6 +1246,8 @@ fn process_audio<R: Runtime>(
                 if out_len > 0 {
                     let output_f32 = &output_buffer[0][..out_len];
 
+                    // Keep recognition input and UI level-meter updates in
+                    // sync, but do not block the capture thread on either.
                     let _ = task_producer.push_slice(output_f32);
                     let _ = data_tx.try_send(());
 
@@ -1287,6 +1319,7 @@ pub async fn stop_system_audio_capture(
     }
 
     if !detach_result.should_stop_hardware {
+        // Shared system capture stays alive until the last logical owner exits.
         return Ok(saved_path);
     }
 

@@ -145,6 +145,9 @@ function buildComparableProjectSettingsSnapshot(input: {
   icon?: string;
   defaults: ProjectDefaults;
 }) {
+  // Normalize order-sensitive fields before dirty-checking so toggling a set on
+  // and off cannot look like a real change just because ids arrived in a new
+  // order from the UI.
   return {
     name: input.name.trim(),
     description: input.description,
@@ -836,6 +839,9 @@ export function ProjectsView(): React.JSX.Element {
     }
   }, []);
 
+  // Workspace browsing is anchored on three mutually exclusive scopes:
+  // `All Items`, `Inbox`, or one concrete project. The rest of the list,
+  // toolbar, and detail-pane state is derived from this root choice.
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const isInboxScope = browseScope === INBOX_SCOPE;
   const browseProjectId = !isAllItemsScope && !isInboxScope ? browseScope : null;
@@ -883,6 +889,9 @@ export function ProjectsView(): React.JSX.Element {
   }, [browseProjectId, projects]);
 
   useEffect(() => {
+    // Search and filter state is local to the active workspace scope. Resetting
+    // here avoids carrying stale constraints between All Items, Inbox, and
+    // project-specific views.
     setSearchQuery('');
     setFilterType(DEFAULT_FILTER_TYPE);
     setDateFilter(DEFAULT_DATE_FILTER);
@@ -938,6 +947,7 @@ export function ProjectsView(): React.JSX.Element {
   }, [clearSegments, setAudioUrl]);
 
   const scopedItems = useMemo(
+    // First narrow the global history list down to the current workspace scope.
     () => historyItems.filter((item) => {
       if (isAllItemsScope) {
         return true;
@@ -960,6 +970,8 @@ export function ProjectsView(): React.JSX.Element {
   const filteredItemEntries = useMemo<FilteredProjectItemEntry[]>(() => {
     const hasQuery = searchQuery.trim().length > 0;
 
+    // Apply search, type, and date filters in one pass while preserving the
+    // workspace-search match object needed later for snippets/highlighting.
     return scopedItems.flatMap((item) => {
       const searchMatch = hasQuery ? matchWorkspaceItem(item, searchQuery) : null;
       if (hasQuery && !searchMatch) {
@@ -979,6 +991,8 @@ export function ProjectsView(): React.JSX.Element {
   }, [dateFilter, filterType, scopedItems, searchQuery]);
 
   const filteredAndSortedItemEntries = useMemo(
+    // Sorting happens after all filters so keyboard navigation and counts map
+    // to exactly what the user can see.
     () => [...filteredItemEntries].sort((a, b) => compareProjectItems(a.item, b.item, sortOrder)),
     [filteredItemEntries, sortOrder],
   );
@@ -989,6 +1003,8 @@ export function ProjectsView(): React.JSX.Element {
   );
 
   const searchMatchByItemId = useMemo(
+    // Keep snippet metadata keyed by visible item id so row rendering can look
+    // it up without recomputing workspace-search matches.
     () => new Map(filteredAndSortedItemEntries.map(({ item, searchMatch }) => [item.id, searchMatch])),
     [filteredAndSortedItemEntries],
   );
@@ -1030,6 +1046,8 @@ export function ProjectsView(): React.JSX.Element {
   }, [historyItems]);
 
   useEffect(() => {
+    // If the opened item disappears from the current scope/filter set, clear
+    // the transcript pane instead of leaving stale content on the right.
     if (selectedHistoryId && !selectedItem) {
       clearOpenedItem();
       return;
@@ -1058,6 +1076,7 @@ export function ProjectsView(): React.JSX.Element {
   }, [filteredAndSortedItems]);
 
   useEffect(() => {
+    // Any change to the visible result set invalidates the previous active hit.
     setActiveSearchResultId(null);
   }, [browseScope, dateFilter, filterType, searchQuery, sortOrder]);
 
@@ -1078,6 +1097,7 @@ export function ProjectsView(): React.JSX.Element {
       return;
     }
 
+    // Drop the active hit once it no longer exists in the filtered view.
     setActiveSearchResultId(null);
   }, [activeSearchResultId, filteredAndSortedItems]);
 
@@ -1107,6 +1127,8 @@ export function ProjectsView(): React.JSX.Element {
       }
 
       const activeElement = document.activeElement;
+      // Detail-pane readers and modal/dialog surfaces own their own focus model;
+      // hijacking Ctrl/Cmd+F there would fight native or nested search flows.
       if (activeElement instanceof HTMLElement && activeElement.closest('.projects-detail-pane')) {
         return;
       }
@@ -1200,6 +1222,9 @@ export function ProjectsView(): React.JSX.Element {
       return false;
     }
 
+    // Compare normalized snapshots rather than raw objects so innocuous
+    // ordering differences in selected-rule arrays do not trigger discard
+    // prompts or save buttons.
     const currentDraft = buildComparableProjectSettingsSnapshot({
       name: draftName.trim() || browseProject.name,
       description: draftDescription,

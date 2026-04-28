@@ -1,6 +1,7 @@
 import { useConfigStore } from '../stores/configStore';
 import { LlmProvider } from '../types/transcript';
-import { buildLlmConfigPatch, ensureLlmState, setActiveProvider } from '../services/llmConfig';
+import { ensureLlmState } from '../services/llm/migration';
+import { buildLlmConfigPatch, setActiveProvider } from '../services/llm/state';
 
 /**
  * Hook for LLM provider configuration.

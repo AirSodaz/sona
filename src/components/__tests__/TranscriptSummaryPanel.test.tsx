@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptSummaryPanel } from '../TranscriptSummaryPanel';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llmConfig';
+import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llm/state';
 
 const mockLoadSummary = vi.fn();
 const mockSetActiveTemplate = vi.fn();

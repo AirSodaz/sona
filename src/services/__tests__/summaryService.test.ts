@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../llmConfig';
+import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../llm/state';
 import { summaryService } from '../summaryService';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { DEFAULT_CONFIG } from '../../stores/configStore';

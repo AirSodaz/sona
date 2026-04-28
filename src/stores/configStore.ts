@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
-import { createLlmSettings } from '../services/llmConfig';
+import { createLlmSettings } from '../services/llm/state';
 import type {
   AppConfig,
   UIConfig,

@@ -15,7 +15,7 @@ import { transcriptionService } from '../services/transcriptionService';
 import { historyService } from '../services/historyService';
 import { polishService } from '../services/polishService';
 import { translationService } from '../services/translationService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llmConfig';
+import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
 import { summaryService } from '../services/summaryService';
 import { exportTranscriptToDirectory } from '../services/exportService';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
