@@ -2,9 +2,6 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptWorkbench } from './components/TranscriptWorkbench';
-import { ExportButton } from './components/ExportButton';
-import { TranslateButton } from './components/TranslateButton';
-import { PolishButton } from './components/PolishButton';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';
@@ -125,9 +122,6 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
-          <PolishButton />
-          <TranslateButton />
-          <ExportButton />
           <button
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}

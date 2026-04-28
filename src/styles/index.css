@@ -689,6 +689,30 @@ body {
   background: linear-gradient(180deg,
       color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
       var(--color-bg-primary));
+  overflow: visible;
+}
+
+.projects-detail-header-primary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  flex: 1;
+}
+
+.projects-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.projects-detail-header-actions .export-menu,
+.projects-detail-header-actions .btn {
+  width: auto;
+  flex-shrink: 0;
 }
 
 .projects-main-header-top {

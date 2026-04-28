@@ -42,6 +42,24 @@ vi.mock('../RenameModal', () => ({
   RenameModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>RenameModal</div> : null),
 }));
 
+vi.mock('../PolishButton', () => ({
+  PolishButton: ({ className = '' }: { className?: string }) => (
+    <button type="button" className={className} aria-label="PolishButton">PolishButton</button>
+  ),
+}));
+
+vi.mock('../TranslateButton', () => ({
+  TranslateButton: ({ className = '' }: { className?: string }) => (
+    <button type="button" className={className} aria-label="TranslateButton">TranslateButton</button>
+  ),
+}));
+
+vi.mock('../ExportButton', () => ({
+  ExportButton: ({ className = '' }: { className?: string }) => (
+    <button type="button" className={className} aria-label="ExportButton">ExportButton</button>
+  ),
+}));
+
 vi.mock('../../services/aiRenameService', () => ({
   generateAiTitle: vi.fn().mockResolvedValue('AI Title'),
 }));
@@ -87,6 +105,19 @@ describe('TranscriptWorkbench', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('renders polish, translate, export, and close in the detail header action group', () => {
+    const { container } = render(<TranscriptWorkbench onClose={() => undefined} />);
+
+    const actionGroup = container.querySelector('.projects-detail-header-actions');
+    expect(actionGroup).not.toBeNull();
+
+    const actionLabels = Array.from(actionGroup?.querySelectorAll('button') || []).map((button) => (
+      button.getAttribute('aria-label') || button.textContent || ''
+    ));
+
+    expect(actionLabels).toEqual(['PolishButton', 'TranslateButton', 'ExportButton', 'common.close']);
+  });
+
   it('disables rename and close while recording is active', async () => {
     const onClose = vi.fn();
     useTranscriptStore.setState({
@@ -98,9 +129,15 @@ describe('TranscriptWorkbench', () => {
 
     const renameButton = screen.getByRole('button', { name: 'common.rename' });
     const closeButton = screen.getByRole('button', { name: 'common.close' });
+    const polishButton = screen.getByRole('button', { name: 'PolishButton' });
+    const translateButton = screen.getByRole('button', { name: 'TranslateButton' });
+    const exportButton = screen.getByRole('button', { name: 'ExportButton' });
 
     expect(renameButton.hasAttribute('disabled')).toBe(true);
     expect(closeButton.hasAttribute('disabled')).toBe(true);
+    expect(polishButton.hasAttribute('disabled')).toBe(false);
+    expect(translateButton.hasAttribute('disabled')).toBe(false);
+    expect(exportButton.hasAttribute('disabled')).toBe(false);
 
     await act(async () => {
       fireEvent.click(renameButton);

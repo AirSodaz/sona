@@ -7,6 +7,9 @@ import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
 import { RenameModal } from './RenameModal';
+import { PolishButton } from './PolishButton';
+import { TranslateButton } from './TranslateButton';
+import { ExportButton } from './ExportButton';
 import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
 import { generateAiTitle } from '../services/aiRenameService';
 
@@ -95,7 +98,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
     <>
       {hasSegments && (
         <div className="projects-detail-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', minWidth: 0, flex: 1 }}>
+          <div className="projects-detail-header-primary">
             <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)' }}>
               {renderHeaderIcon(storeIcon, displayIconType)}
             </div>
@@ -137,20 +140,25 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
               </button>
             )}
           </div>
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={() => {
-              if (isManualHeaderActionsDisabled) {
-                return;
-              }
-              onClose();
-            }}
-            aria-label={t('common.close', { defaultValue: 'Close' })}
-            disabled={isManualHeaderActionsDisabled}
-          >
-            <CloseIcon />
-          </button>
+          <div className="projects-detail-header-actions">
+            <PolishButton className="projects-detail-header-action" />
+            <TranslateButton className="projects-detail-header-action" />
+            <ExportButton className="projects-detail-header-action" />
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={() => {
+                if (isManualHeaderActionsDisabled) {
+                  return;
+                }
+                onClose();
+              }}
+              aria-label={t('common.close', { defaultValue: 'Close' })}
+              disabled={isManualHeaderActionsDisabled}
+            >
+              <CloseIcon />
+            </button>
+          </div>
         </div>
       )}
       
