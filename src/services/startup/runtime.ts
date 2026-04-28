@@ -1,4 +1,5 @@
 import { useAutomationStore } from '../../stores/automationStore';
+import { useRecoveryStore } from '../../stores/recoveryStore';
 import { logger } from '../../utils/logger';
 import { healthCheckService } from '../healthCheckService';
 import { llmUsageService } from '../llmUsageService';
@@ -13,6 +14,10 @@ async function runStartupStep(label: string, action: () => Promise<void>): Promi
 }
 
 export async function startAppRuntimeServices(): Promise<void> {
+  await runStartupStep('load recovery state', () => (
+    useRecoveryStore.getState().loadRecovery()
+  ));
+
   await runStartupStep('load automation runtime', () => (
     useAutomationStore.getState().loadAndStart()
   ));

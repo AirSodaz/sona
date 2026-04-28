@@ -224,4 +224,47 @@ describe('batchQueueStore History Integration', () => {
             }),
         ]);
     });
+
+    it('reuses the existing history draft when a recovered batch item is resumed', async () => {
+        const finalSegments = [
+            { id: 'seg1', start: 0, end: 1, text: 'Recovered final', isFinal: true },
+        ];
+
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+            }
+        });
+        (transcriptionService.transcribeFile as any).mockResolvedValue(finalSegments);
+
+        useBatchQueueStore.getState().enqueueRecoveredItems([{
+            id: 'recovery-1',
+            filename: 'recovered.wav',
+            filePath: '/path/to/recovered.wav',
+            source: 'batch_import',
+            resolution: 'pending',
+            progress: 45,
+            segments: [
+                { id: 'draft-1', start: 0, end: 1, text: 'Draft text', isFinal: true },
+            ],
+            projectId: null,
+            historyId: 'history-1',
+            historyTitle: 'Recovered draft',
+            lastKnownStage: 'transcribing',
+            updatedAt: 1,
+            hasSourceFile: true,
+            canResume: true,
+        }]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        expect(historyService.saveImportedFile).not.toHaveBeenCalled();
+        expect(historyService.updateTranscript).toHaveBeenCalledWith('history-1', finalSegments);
+        expect(useBatchQueueStore.getState().queueItems[0]).toEqual(expect.objectContaining({
+            historyId: 'history-1',
+            historyTitle: 'Recovered draft',
+            status: 'complete',
+        }));
+    });
 });

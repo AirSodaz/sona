@@ -52,7 +52,7 @@ export interface AutomationProcessedEntry {
   sourceFingerprint: string;
   size: number;
   mtimeMs: number;
-  status: 'complete' | 'error';
+  status: 'complete' | 'error' | 'discarded';
   processedAt: number;
   historyId?: string;
   exportPath?: string;

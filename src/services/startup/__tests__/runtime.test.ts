@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { startAppRuntimeServices } from '../runtime';
 
+const mockLoadRecovery = vi.fn();
 const mockLoadAndStart = vi.fn();
 const mockLlmUsageInit = vi.fn();
 const mockVoiceTypingInit = vi.fn();
 const mockRunHealthCheck = vi.fn();
 const mockLoggerError = vi.fn();
+
+vi.mock('../../../stores/recoveryStore', () => ({
+  useRecoveryStore: {
+    getState: vi.fn(() => ({
+      loadRecovery: (...args: unknown[]) => mockLoadRecovery(...args),
+    })),
+  },
+}));
 
 vi.mock('../../../stores/automationStore', () => ({
   useAutomationStore: {
@@ -42,6 +51,7 @@ vi.mock('../../../utils/logger', () => ({
 describe('startAppRuntimeServices', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadRecovery.mockResolvedValue(undefined);
     mockLoadAndStart.mockResolvedValue(undefined);
     mockLlmUsageInit.mockResolvedValue(undefined);
     mockVoiceTypingInit.mockReturnValue(undefined);
@@ -53,6 +63,7 @@ describe('startAppRuntimeServices', () => {
 
     await startAppRuntimeServices();
 
+    expect(mockLoadRecovery).toHaveBeenCalledTimes(1);
     expect(mockLoadAndStart).toHaveBeenCalledTimes(1);
     expect(mockLlmUsageInit).toHaveBeenCalledTimes(1);
     expect(mockVoiceTypingInit).toHaveBeenCalledTimes(1);
@@ -61,5 +72,19 @@ describe('startAppRuntimeServices', () => {
       '[Startup] Failed to load automation runtime:',
       expect.any(Error),
     );
+  });
+
+  it('loads recovery state before restoring the automation runtime', async () => {
+    const callOrder: string[] = [];
+    mockLoadRecovery.mockImplementation(async () => {
+      callOrder.push('recovery');
+    });
+    mockLoadAndStart.mockImplementation(async () => {
+      callOrder.push('automation');
+    });
+
+    await startAppRuntimeServices();
+
+    expect(callOrder).toEqual(['recovery', 'automation']);
   });
 });

@@ -26,6 +26,8 @@ const testContext = vi.hoisted(() => {
         listFilesRecursivelyMock: vi.fn(),
         loadAutomationProcessedEntriesMock: vi.fn(),
         loadAutomationRulesMock: vi.fn(),
+        clearAutomationRecoveryGuardEntryMock: vi.fn(),
+        isAutomationRecoveryBlockedMock: vi.fn(),
         saveAutomationProcessedEntriesMock: vi.fn().mockResolvedValue(undefined),
         saveAutomationRulesMock: vi.fn().mockResolvedValue(undefined),
         validateAutomationRuleForActivationMock: vi.fn(),
@@ -51,7 +53,9 @@ const testContext = vi.hoisted(() => {
 
 const {
     addFilesMock,
+    clearAutomationRecoveryGuardEntryMock,
     ensureAutomationStorageMock,
+    isAutomationRecoveryBlockedMock,
     listFilesRecursivelyMock,
     loadAutomationProcessedEntriesMock,
     loadAutomationRulesMock,
@@ -115,6 +119,11 @@ vi.mock('../../services/automationService', () => ({
     watchAutomationDirectory: testContext.watchAutomationDirectoryMock,
 }));
 
+vi.mock('../../services/recoveryService', () => ({
+    clearAutomationRecoveryGuardEntry: testContext.clearAutomationRecoveryGuardEntryMock,
+    isAutomationRecoveryBlocked: testContext.isAutomationRecoveryBlockedMock,
+}));
+
 import { __notifyAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
 
 function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
@@ -161,6 +170,7 @@ describe('automationStore', () => {
         listFilesRecursivelyMock.mockResolvedValue([]);
         loadAutomationProcessedEntriesMock.mockResolvedValue([]);
         loadAutomationRulesMock.mockResolvedValue([]);
+        isAutomationRecoveryBlockedMock.mockReturnValue(false);
         validateAutomationRuleForActivationMock.mockResolvedValue({ valid: true });
         waitForStableAutomationFileMock.mockResolvedValue({
             filePath: 'C:\\watch\\meeting.wav',
@@ -207,9 +217,20 @@ describe('automationStore', () => {
                 automationRuleName: 'Meeting Inbox',
                 projectId: projectRecord.id,
                 sourceFingerprint: 'fp-1',
-                exportFileNamePrefix: 'TEAM',
             }),
         );
+    });
+
+    it('skips queuing files that are currently blocked by recovery guard', async () => {
+        const rule = createRule();
+        loadAutomationRulesMock.mockResolvedValue([rule]);
+        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
+        isAutomationRecoveryBlockedMock.mockReturnValue(true);
+
+        await useAutomationStore.getState().loadAndStart();
+        await vi.advanceTimersByTimeAsync(250);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
     });
 
     it('keeps pending dedupe scoped to each rule so identical files can be processed by multiple rules', async () => {
@@ -358,6 +379,72 @@ describe('automationStore', () => {
             lastResult: 'success',
             lastProcessedFilePath: 'C:\\watch\\meeting.wav',
             failureCount: 0,
+        }));
+        expect(clearAutomationRecoveryGuardEntryMock).toHaveBeenCalledWith(rule.id, 'fp-complete');
+    });
+
+    it('records discarded recovery items without counting them as failures', async () => {
+        const rule = createRule();
+        const successfulEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\done.wav',
+            sourceFingerprint: 'fp-success',
+            size: 10,
+            mtimeMs: 12,
+            status: 'complete' as const,
+            processedAt: 100,
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [successfulEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'watching',
+                    failureCount: 0,
+                    lastResult: 'success',
+                    lastProcessedAt: 100,
+                },
+            },
+            isLoaded: true,
+            error: null,
+        });
+
+        await useAutomationStore.getState().markRecoveryItemDiscarded({
+            id: 'recovery-1',
+            filename: 'meeting.wav',
+            filePath: 'C:\\watch\\meeting.wav',
+            source: 'automation',
+            resolution: 'pending',
+            progress: 50,
+            segments: [],
+            projectId: projectRecord.id,
+            lastKnownStage: 'transcribing',
+            updatedAt: 200,
+            hasSourceFile: true,
+            canResume: true,
+            automationRuleId: rule.id,
+            automationRuleName: rule.name,
+            sourceFingerprint: 'fp-discarded',
+            fileStat: {
+                size: 42,
+                mtimeMs: 1000,
+            },
+        });
+
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([
+            expect.objectContaining({
+                sourceFingerprint: 'fp-discarded',
+                status: 'discarded',
+            }),
+            successfulEntry,
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            status: 'watching',
+            lastResult: 'success',
+            failureCount: 0,
+            lastProcessedAt: 100,
         }));
     });
 });

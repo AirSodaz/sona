@@ -15,10 +15,12 @@ vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImpor
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
+vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () => <div>RecoveryCenterModal</div> }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
+vi.mock('../components/RecoveryStartupBanner', () => ({ RecoveryStartupBanner: () => null }));
 vi.mock('../components/UpdateNotification', () => ({ UpdateNotification: () => <div>UpdateNotification</div> }));
 vi.mock('../components/Icons', () => ({ 
   SettingsIcon: () => <span>SettingsIcon</span>, 

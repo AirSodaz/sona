@@ -20,40 +20,27 @@ vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishBu
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/Settings', () => ({ Settings: () => null }));
+vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => null }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
-vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
-vi.mock('../components/RecoveryStartupBanner', () => ({ RecoveryStartupBanner: () => null }));
+vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => null }));
 vi.mock('../components/UpdateNotification', () => ({ UpdateNotification: () => <div>UpdateNotification</div> }));
 vi.mock('../components/Icons', () => ({
   SettingsIcon: () => <span>SettingsIcon</span>,
 }));
 
-vi.mock('../components/Settings', () => ({
-  Settings: ({ isOpen, initialTab, onOpenDiagnostics }: any) => (
-    isOpen ? (
-      <div>
-        <div>Settings Tab: {initialTab}</div>
-        <button type="button" onClick={onOpenDiagnostics}>Open Diagnostics</button>
-      </div>
-    ) : null
-  ),
-}));
-
-vi.mock('../components/DiagnosticsModal', () => ({
-  DiagnosticsModal: ({ isOpen, onOpenSettingsTab }: any) => (
-    isOpen ? (
-      <div>
-        <div>Diagnostics Modal</div>
-        <button type="button" onClick={() => onOpenSettingsTab('models')}>Open Model Settings</button>
-      </div>
-    ) : null
+vi.mock('../components/RecoveryStartupBanner', () => ({
+  RecoveryStartupBanner: ({ onOpenRecoveryCenter }: any) => (
+    <button type="button" onClick={onOpenRecoveryCenter}>Open Recovery Banner</button>
   ),
 }));
 
 vi.mock('../components/RecoveryCenterModal', () => ({
-  RecoveryCenterModal: () => null,
+  RecoveryCenterModal: ({ isOpen }: any) => (
+    isOpen ? <div>Recovery Center Modal</div> : null
+  ),
 }));
 
 vi.mock('../hooks/useAppInitialization', () => ({
@@ -85,8 +72,8 @@ vi.mock('../stores/onboardingStore', () => ({
   useOnboardingStore: (selector: any) => mockUseOnboardingStore(selector),
 }));
 
-describe('App diagnostics flow', () => {
-  it('closes settings when opening diagnostics and reopens settings on the requested tab', async () => {
+describe('App recovery flow', () => {
+  it('opens the recovery center from the startup banner entry', () => {
     mockUseTranscriptStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       clearSegments: vi.fn(),
@@ -102,15 +89,8 @@ describe('App diagnostics flow', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'header.settings' }));
-    expect(screen.getByText('Settings Tab: general')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Banner' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Diagnostics' }));
-    expect(screen.queryByText('Settings Tab: general')).toBeNull();
-    expect(screen.getByText('Diagnostics Modal')).toBeDefined();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Model Settings' }));
-    expect(screen.queryByText('Diagnostics Modal')).toBeNull();
-    expect(screen.getByText('Settings Tab: models')).toBeDefined();
+    expect(screen.getByText('Recovery Center Modal')).toBeDefined();
   });
 });

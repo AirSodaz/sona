@@ -1032,5 +1032,60 @@
             "podcast": "Podcast",
             "custom": "Custom"
         }
+    },
+    "recovery": {
+        "badge": "Recovery Center",
+        "title": "Interrupted Batch Recovery",
+        "description": "Review interrupted batch imports and automated runs from your last session, then resume or discard them with one clear action.",
+        "banner": {
+            "title": "Interrupted work is ready to recover",
+            "body": "{{count}} file is waiting in Recovery Center. Batch: {{batchCount}} · Automation: {{automationCount}}",
+            "body_other": "{{count}} files are waiting in Recovery Center. Batch: {{batchCount}} · Automation: {{automationCount}}"
+        },
+        "actions": {
+            "open_center": "Open Recovery Center",
+            "resume_all": "Resume All",
+            "discard_all": "Discard All",
+            "discard": "Discard"
+        },
+        "labels": {
+            "last_recovered": "Recovered From",
+            "unknown_time": "Recovery time unavailable",
+            "overview": "Recovery overview",
+            "stage": "Stage",
+            "saved_at": "Saved",
+            "partial_draft": "Partial draft available",
+            "source_missing": "Source file missing",
+            "no_project": "No project",
+            "automation_rule_unknown": "Unknown rule"
+        },
+        "overview": {
+            "batch_description": "Interrupted files added from Batch Import.",
+            "automation_description": "Interrupted files created by folder automation rules.",
+            "pending_count": "{{count}} file",
+            "pending_count_other": "{{count}} files",
+            "draft_count": "{{count}} draft",
+            "draft_count_other": "{{count}} drafts"
+        },
+        "section": {
+            "batch_description": "Each file will restart from the source media but can keep writing into the same saved history draft.",
+            "automation_description": "Discarded automation files are marked as skipped so the current watch session will not immediately queue them again."
+        },
+        "item": {
+            "source_missing": "The original source file is no longer available. Discard this recovery item before resuming the rest.",
+            "automation_description": "Automation rule: {{ruleName}} · Target project: {{projectName}}",
+            "batch_description": "Target project: {{projectName}}"
+        },
+        "source": {
+            "batch_import": "Batch Import",
+            "automation": "Automation"
+        },
+        "stage": {
+            "queued": "Queued",
+            "transcribing": "Transcribing",
+            "polishing": "Polishing",
+            "translating": "Translating",
+            "exporting": "Exporting"
+        }
     }
 }

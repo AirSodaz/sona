@@ -4474,6 +4474,42 @@ input[type="radio"]:focus {
   border: 1px solid var(--color-border);
 }
 
+.recovery-startup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: 12px var(--spacing-lg);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #2563eb 10%, transparent), color-mix(in srgb, #0f172a 4%, transparent)),
+    var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.recovery-startup-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recovery-startup-copy strong {
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+}
+
+.recovery-startup-copy span {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.recovery-startup-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
 .onboarding-modal {
   width: min(760px, 92vw);
   max-height: 88vh;
@@ -4795,7 +4831,17 @@ input[type="radio"]:focus {
     flex-direction: column;
   }
 
+  .recovery-startup-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .onboarding-reminder-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .recovery-startup-actions {
     width: 100%;
     justify-content: flex-end;
   }

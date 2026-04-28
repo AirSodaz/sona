@@ -20,12 +20,14 @@ import { summaryService } from '../services/summaryService';
 import { exportTranscriptToDirectory } from '../services/exportService';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { notifyAutomationTaskSettled } from '../services/automationRuntimeBridge';
+import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
 import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import { useHistoryStore } from './historyStore';
 import { splitByPunctuation } from '../utils/segmentUtils';
 import { logger } from '../utils/logger';
+import type { RecoveredQueueItem } from '../types/recovery';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -59,6 +61,12 @@ interface BatchQueueState {
      */
     addFiles: (filePaths: string[], options?: AddFilesOptions) => void;
     /**
+     * Re-enqueues items restored by the recovery center.
+     *
+     * @param items Recovery items to resume.
+     */
+    enqueueRecoveredItems: (items: RecoveredQueueItem[]) => void;
+    /**
      * Starts processing the queue sequentially.
      */
     processQueue: () => Promise<void>;
@@ -74,8 +82,9 @@ interface BatchQueueState {
      * @param id Item ID.
      * @param status New status.
      * @param progress New progress value.
+     * @param lastKnownStage Recovery stage metadata.
      */
-    updateItemStatus: (id: string, status: BatchQueueItemStatus, progress?: number) => void;
+    updateItemStatus: (id: string, status: BatchQueueItemStatus, progress?: number, lastKnownStage?: RecoveredQueueItem['lastKnownStage']) => void;
     /**
      * Updates an item's segments.
      *
@@ -100,6 +109,10 @@ interface BatchQueueState {
     clearQueue: () => void;
     /** internal helper */
     _processItem: (itemId: string) => Promise<void>;
+}
+
+function scheduleRecoverySnapshotSync(queueItems: BatchQueueItem[], immediate = false) {
+    persistQueueRecoverySnapshot(queueItems, { immediate });
 }
 
 function resolveQueueItemConfig(item: BatchQueueItem): AppConfig {
@@ -201,16 +214,47 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 sourceFingerprint: options?.sourceFingerprint,
                 fileStat: options?.fileStat,
                 exportFileNamePrefix,
+                lastKnownStage: 'queued',
             };
         });
 
-        set((state) => ({
-            queueItems: [...state.queueItems, ...newItems]
-        }));
+        let nextQueueItems: BatchQueueItem[] = [];
+        set((state) => {
+            nextQueueItems = [...state.queueItems, ...newItems];
+            return {
+                queueItems: nextQueueItems
+            };
+        });
+        scheduleRecoverySnapshotSync(nextQueueItems, true);
 
         const state = get();
         if (!state.activeItemId && newItems.length > 0) {
             get().setActiveItem(newItems[0].id);
+        }
+
+        if (!state.isQueueProcessing) {
+            void get().processQueue();
+        }
+    },
+
+    enqueueRecoveredItems: (items) => {
+        if (items.length === 0) {
+            return;
+        }
+
+        const recoveredQueueItems = items.map((item) => toBatchQueueItem(item));
+        let nextQueueItems: BatchQueueItem[] = [];
+        set((state) => {
+            nextQueueItems = [...state.queueItems, ...recoveredQueueItems];
+            return {
+                queueItems: nextQueueItems,
+            };
+        });
+        scheduleRecoverySnapshotSync(nextQueueItems, true);
+
+        const state = get();
+        if (!state.activeItemId && recoveredQueueItems.length > 0) {
+            get().setActiveItem(recoveredQueueItems[0].id);
         }
 
         if (!state.isQueueProcessing) {
@@ -261,13 +305,13 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             return;
         }
 
-        get().updateItemStatus(itemId, 'processing', 0);
+        get().updateItemStatus(itemId, 'processing', 0, 'transcribing');
 
         let currentSegments: TranscriptSegment[] = [];
         let segmentBuffer: TranscriptSegment[] = [];
         let lastUpdateTime = 0;
         let tempWavPath: string | undefined;
-        let savedHistoryId: string | null = null;
+        let savedHistoryId: string | null = item.historyId || null;
 
         const persistHistorySnapshot = async (): Promise<void> => {
             if (!savedHistoryId) {
@@ -295,8 +339,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
             savedHistoryId = historyItem.id;
             useHistoryStore.getState().addItem(historyItem);
-            set((currentState) => ({
-                queueItems: currentState.queueItems.map((queueItem) => (
+            let nextQueueItems: BatchQueueItem[] = [];
+            set((currentState) => {
+                nextQueueItems = currentState.queueItems.map((queueItem) => (
                     queueItem.id === itemId
                         ? {
                             ...queueItem,
@@ -305,8 +350,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                             projectId: historyItem.projectId ?? queueItem.projectId,
                         }
                         : queueItem
-                )),
-            }));
+                ));
+                return {
+                    queueItems: nextQueueItems,
+                };
+            });
+            scheduleRecoverySnapshotSync(nextQueueItems, true);
 
             if (get().activeItemId === itemId) {
                 const transcriptStore = useTranscriptStore.getState();
@@ -339,15 +388,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     const now = Date.now();
 
                     if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
-                        const currentState = get();
-                        const currentItem = currentState.queueItems.find((queueItem) => queueItem.id === itemId);
-
-                        if (currentItem) {
-                            const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
-                            setCurrentSegments([...currentItem.segments, ...newSegments]);
-                            segmentBuffer = [];
-                            lastUpdateTime = now;
-                        }
+                        const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
+                        setCurrentSegments([...currentSegments, ...newSegments]);
+                        segmentBuffer = [];
+                        lastUpdateTime = now;
                     }
                 },
                 language === 'auto' ? undefined : language,
@@ -358,6 +402,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
             setCurrentSegments(finalSegments);
             await ensureHistorySaved();
+            await persistHistorySnapshot();
 
             if (stageConfig.autoPolish && currentSegments.length > 0) {
                 const llm = getFeatureLlmConfig(config, 'polish');
@@ -365,7 +410,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     throw new Error('Polish model is not configured.');
                 }
 
-                get().updateItemStatus(itemId, 'processing', 96);
+                get().updateItemStatus(itemId, 'processing', 96, 'polishing');
                 await polishService.polishSegmentsWithConfig(
                     config,
                     currentSegments,
@@ -383,7 +428,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     throw new Error('Translation model is not configured.');
                 }
 
-                get().updateItemStatus(itemId, 'processing', 98);
+                get().updateItemStatus(itemId, 'processing', 98, 'translating');
                 await translationService.translateSegmentsWithConfig(
                     config,
                     currentSegments,
@@ -396,7 +441,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             }
 
             if (item.exportConfig) {
-                get().updateItemStatus(itemId, 'processing', 99);
+                get().updateItemStatus(itemId, 'processing', 99, 'exporting');
                 const exportPath = await exportTranscriptToDirectory({
                     segments: currentSegments,
                     directory: item.exportConfig.directory,
@@ -464,28 +509,44 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         }
     },
 
-    updateItemStatus: (id, status, progress) => {
-        set((state) => ({
-            queueItems: state.queueItems.map((item) => {
+    updateItemStatus: (id, status, progress, lastKnownStage) => {
+        let shouldFlushImmediately = false;
+        let nextQueueItems: BatchQueueItem[] = [];
+        set((state) => {
+            nextQueueItems = state.queueItems.map((item) => {
                 if (item.id !== id) {
                     return item;
                 }
 
+                shouldFlushImmediately = item.status !== status || (
+                    lastKnownStage !== undefined && item.lastKnownStage !== lastKnownStage
+                );
                 return {
                     ...item,
                     status,
-                    progress: progress !== undefined ? progress : item.progress
+                    progress: progress !== undefined ? progress : item.progress,
+                    lastKnownStage: lastKnownStage ?? item.lastKnownStage,
                 };
-            }),
-        }));
+            });
+
+            return {
+                queueItems: nextQueueItems,
+            };
+        });
+        scheduleRecoverySnapshotSync(nextQueueItems, shouldFlushImmediately || status !== 'processing');
     },
 
     updateItemSegments: (id, segments) => {
-        set((state) => ({
-            queueItems: state.queueItems.map((item) =>
+        let nextQueueItems: BatchQueueItem[] = [];
+        set((state) => {
+            nextQueueItems = state.queueItems.map((item) => (
                 item.id === id ? { ...item, segments } : item
-            ),
-        }));
+            ));
+            return {
+                queueItems: nextQueueItems,
+            };
+        });
+        scheduleRecoverySnapshotSync(nextQueueItems);
 
         const state = get();
         if (state.activeItemId === id) {
@@ -494,13 +555,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     setItemError: (id, message) => {
-        set((state) => ({
-            queueItems: state.queueItems.map((item) =>
+        let nextQueueItems: BatchQueueItem[] = [];
+        set((state) => {
+            nextQueueItems = state.queueItems.map((item) => (
                 item.id === id
                     ? { ...item, status: 'error', errorMessage: message }
                     : item
-            ),
-        }));
+            ));
+            return {
+                queueItems: nextQueueItems,
+            };
+        });
+        scheduleRecoverySnapshotSync(nextQueueItems, true);
     },
 
     removeItem: (id) => {
@@ -510,6 +576,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const newActiveId = newItems.length > 0 ? newItems[0].id : null;
 
         set({ queueItems: newItems });
+        scheduleRecoverySnapshotSync(newItems, true);
 
         if (isActiveItem) {
             get().setActiveItem(newActiveId);
@@ -522,6 +589,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             activeItemId: null,
             isQueueProcessing: false,
         });
+        scheduleRecoverySnapshotSync([], true);
         useTranscriptStore.getState().clearSegments();
         useTranscriptStore.getState().setAudioUrl(null);
     },

@@ -1,6 +1,7 @@
 import type { AppConfig } from './config';
 import { TranscriptSegment } from './transcript';
 import type { AutomationExportConfig, AutomationStageConfig } from './automation';
+import type { RecoveryItemStage } from './recovery';
 
 /**
  * Status of a batch queue item.
@@ -58,4 +59,8 @@ export interface BatchQueueItem {
     exportPath?: string;
     /** Snapshot of the project export filename prefix used for automation exports. */
     exportFileNamePrefix?: string;
+    /** Recovery snapshot identifier when this item was restored after an interrupted run. */
+    recoveryId?: string;
+    /** Last known pipeline stage used by the recovery center. */
+    lastKnownStage?: RecoveryItemStage;
 }

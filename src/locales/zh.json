@@ -1032,5 +1032,57 @@
             "podcast": "播客",
             "custom": "自定义"
         }
+    },
+    "recovery": {
+        "badge": "恢复中心",
+        "title": "中断批处理恢复",
+        "description": "查看上一次会话中断的批量导入与自动化处理，并用一个明确动作决定继续还是丢弃。",
+        "banner": {
+            "title": "发现可恢复的中断任务",
+            "body": "恢复中心里有 {{count}} 个待处理文件。批处理：{{batchCount}} · 自动化：{{automationCount}}"
+        },
+        "actions": {
+            "open_center": "打开恢复中心",
+            "resume_all": "继续全部任务",
+            "discard_all": "全部丢弃",
+            "discard": "丢弃"
+        },
+        "labels": {
+            "last_recovered": "恢复自",
+            "unknown_time": "恢复时间不可用",
+            "overview": "恢复概览",
+            "stage": "阶段",
+            "saved_at": "保存于",
+            "partial_draft": "已有部分草稿",
+            "source_missing": "源文件缺失",
+            "no_project": "无项目",
+            "automation_rule_unknown": "未知规则"
+        },
+        "overview": {
+            "batch_description": "来自批量导入的中断文件。",
+            "automation_description": "来自文件夹自动化规则的中断文件。",
+            "pending_count": "{{count}} 个文件",
+            "draft_count": "{{count}} 份草稿"
+        },
+        "section": {
+            "batch_description": "每个文件都会从原始媒体重新开始处理，但可以继续写入同一个已保存的历史草稿。",
+            "automation_description": "被丢弃的自动化文件会标记为已跳过，当前监听会话不会立刻再次把它加入队列。"
+        },
+        "item": {
+            "source_missing": "原始源文件已经不可用。请先丢弃这个恢复项，再继续其他任务。",
+            "automation_description": "自动化规则：{{ruleName}} · 目标项目：{{projectName}}",
+            "batch_description": "目标项目：{{projectName}}"
+        },
+        "source": {
+            "batch_import": "批量导入",
+            "automation": "自动化"
+        },
+        "stage": {
+            "queued": "排队中",
+            "transcribing": "转录中",
+            "polishing": "润色中",
+            "translating": "翻译中",
+            "exporting": "导出中"
+        }
     }
 }

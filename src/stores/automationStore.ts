@@ -19,6 +19,10 @@ import {
   registerAutomationTaskSettledHandler,
   type AutomationTaskSettledPayload,
 } from '../services/automationRuntimeBridge';
+import {
+  clearAutomationRecoveryGuardEntry,
+  isAutomationRecoveryBlocked,
+} from '../services/recoveryService';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -27,6 +31,7 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
+import type { RecoveredQueueItem } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import { logger } from '../utils/logger';
 
@@ -61,6 +66,7 @@ interface AutomationState {
   toggleRuleEnabled: (ruleId: string, enabled: boolean) => Promise<void>;
   scanRuleNow: (ruleId: string) => Promise<void>;
   retryFailed: (ruleId: string) => Promise<void>;
+  markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
   stopAll: () => Promise<void>;
 }
 
@@ -71,6 +77,7 @@ function deriveRuntimeState(
   overrides: Partial<AutomationRuntimeState> = {},
 ): AutomationRuntimeState {
   const ruleEntries = entries
+    .filter((entry) => entry.status !== 'discarded')
     .filter((entry) => entry.ruleId === ruleId)
     .sort((a, b) => b.processedAt - a.processedAt);
   const latest = ruleEntries[0];
@@ -174,6 +181,10 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
 
     const snapshot = await waitForStableAutomationFile(filePath, FILE_STABLE_WINDOW_MS);
     if (!snapshot) {
+      return;
+    }
+
+    if (isAutomationRecoveryBlocked(ruleId, snapshot.sourceFingerprint)) {
       return;
     }
 
@@ -502,6 +513,39 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await scanRule(ruleId);
   },
 
+  markRecoveryItemDiscarded: async (item) => {
+    if (!item.automationRuleId || !item.sourceFingerprint) {
+      return;
+    }
+
+    const nextEntry: AutomationProcessedEntry = {
+      ruleId: item.automationRuleId,
+      filePath: item.filePath,
+      sourceFingerprint: item.sourceFingerprint,
+      size: item.fileStat?.size || 0,
+      mtimeMs: item.fileStat?.mtimeMs || 0,
+      status: 'discarded',
+      processedAt: Date.now(),
+      historyId: item.historyId,
+      errorMessage: 'Discarded from recovery center.',
+    };
+
+    const nextProcessedEntries = [
+      ...get().processedEntries.filter((entry) => !(
+        entry.ruleId === nextEntry.ruleId
+        && entry.sourceFingerprint === nextEntry.sourceFingerprint
+      )),
+      nextEntry,
+    ].sort((a, b) => b.processedAt - a.processedAt);
+
+    await saveAutomationProcessedEntries(nextProcessedEntries);
+    clearAutomationRecoveryGuardEntry(item.automationRuleId, item.sourceFingerprint);
+    set((current) => ({
+      processedEntries: nextProcessedEntries,
+      runtimeStates: rebuildRuntimeStates(current.rules, nextProcessedEntries, current.runtimeStates),
+    }));
+  },
+
   stopAll: async () => {
     const ruleIds = get().rules.map((rule) => rule.id);
     await Promise.all(ruleIds.map((ruleId) => stopRuleRuntime(ruleId)));
@@ -510,6 +554,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
 registerAutomationTaskSettledHandler(async (payload: AutomationTaskSettledPayload) => {
   pendingFingerprints.delete(buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint));
+  clearAutomationRecoveryGuardEntry(payload.ruleId, payload.sourceFingerprint);
 
   const state = useAutomationStore.getState();
 

@@ -37,6 +37,7 @@ vi.mock('../../services/transcriptionService', () => ({
 vi.mock('../../services/historyService', () => ({
     historyService: {
         saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id', projectId: null }),
+        updateTranscript: vi.fn().mockResolvedValue(undefined),
     }
 }));
 

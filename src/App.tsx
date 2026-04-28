@@ -10,10 +10,12 @@ import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';
 import { Settings } from './components/Settings';
 import { DiagnosticsModal } from './components/DiagnosticsModal';
+import { RecoveryCenterModal } from './components/RecoveryCenterModal';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
+import { RecoveryStartupBanner } from './components/RecoveryStartupBanner';
 import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -46,6 +48,7 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
 function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [isRecoveryCenterOpen, setIsRecoveryCenterOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptStore((state) => state.mode);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
@@ -83,6 +86,10 @@ function App(): React.JSX.Element {
   const openDiagnostics = () => {
     setIsSettingsOpen(false);
     setIsDiagnosticsOpen(true);
+  };
+
+  const openRecoveryCenter = () => {
+    setIsRecoveryCenterOpen(true);
   };
 
   const runFirstRunSetupFromDiagnostics = () => {
@@ -134,6 +141,7 @@ function App(): React.JSX.Element {
       </header>
 
       <OnboardingReminderBanner />
+      <RecoveryStartupBanner onOpenRecoveryCenter={openRecoveryCenter} />
 
       {/* Main Content */}
       <main id="main-content" className="app-main">
@@ -185,6 +193,10 @@ function App(): React.JSX.Element {
         onClose={() => setIsDiagnosticsOpen(false)}
         onOpenSettingsTab={openSettingsTab}
         onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}
+      />
+      <RecoveryCenterModal
+        isOpen={isRecoveryCenterOpen}
+        onClose={() => setIsRecoveryCenterOpen(false)}
       />
       <GlobalDialog />
       <ErrorDialog />
