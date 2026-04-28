@@ -11,7 +11,20 @@ const testContext = vi.hoisted(() => ({
   confirmMock: vi.fn().mockResolvedValue(false),
   disposePreparedImportMock: vi.fn().mockResolvedValue(undefined),
   exportBackupMock: vi.fn().mockResolvedValue(null),
+  listBackupsMock: vi.fn().mockResolvedValue([]),
+  loadWebDavConfigMock: vi.fn().mockResolvedValue({
+    serverUrl: '',
+    remoteDir: '',
+    username: '',
+    password: '',
+  }),
+  prepareImportFromRemoteMock: vi.fn().mockResolvedValue(null),
   prepareImportBackupMock: vi.fn().mockResolvedValue(null),
+  saveWebDavConfigMock: vi.fn().mockResolvedValue(undefined),
+  testWebDavConnectionMock: vi.fn().mockResolvedValue({
+    status: 'success',
+    message: 'ready',
+  }),
   transcriptState: {
     isRecording: false,
   },
@@ -23,6 +36,31 @@ const testContext = vi.hoisted(() => ({
     minimizeToTrayOnExit: true,
     autoCheckUpdates: true,
   },
+  uploadWebDavBackupMock: vi.fn().mockResolvedValue({
+    fileName: 'sona-backup-test.tar.bz2',
+    manifest: {
+      schemaVersion: 1,
+      createdAt: '2026-04-29T00:00:00.000Z',
+      appVersion: '0.6.3',
+      historyMode: 'light',
+      scopes: {
+        config: true,
+        workspace: true,
+        history: true,
+        automation: true,
+        analytics: true,
+      },
+      counts: {
+        projects: 1,
+        historyItems: 1,
+        transcriptFiles: 1,
+        summaryFiles: 1,
+        automationRules: 1,
+        automationProcessedEntries: 1,
+        analyticsFiles: 1,
+      },
+    },
+  }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -96,6 +134,17 @@ vi.mock('../../services/backupService', () => ({
   },
 }));
 
+vi.mock('../../services/backupWebDavService', () => ({
+  backupWebDavService: {
+    listBackups: testContext.listBackupsMock,
+    loadConfig: testContext.loadWebDavConfigMock,
+    prepareImportFromRemote: testContext.prepareImportFromRemoteMock,
+    saveConfig: testContext.saveWebDavConfigMock,
+    testConnection: testContext.testWebDavConnectionMock,
+    uploadBackup: testContext.uploadWebDavBackupMock,
+  },
+}));
+
 vi.mock('../../stores/batchQueueStore', () => ({
   useBatchQueueStore: (selector: any) => selector(testContext.batchQueueState),
 }));
@@ -121,18 +170,47 @@ describe('SettingsGeneralTab backup entry', () => {
     vi.clearAllMocks();
     testContext.transcriptState.isRecording = false;
     testContext.batchQueueState.queueItems = [];
+    testContext.loadWebDavConfigMock.mockResolvedValue({
+      serverUrl: '',
+      remoteDir: '',
+      username: '',
+      password: '',
+    });
+    testContext.listBackupsMock.mockResolvedValue([]);
+    testContext.prepareImportFromRemoteMock.mockResolvedValue(null);
     testContext.prepareImportBackupMock.mockResolvedValue(null);
     testContext.confirmMock.mockResolvedValue(false);
   });
 
-  it('disables backup actions while live recording is active', () => {
+  it('disables local backup and WebDAV transfer actions while live recording is active', async () => {
     testContext.transcriptState.isRecording = true;
 
     render(<SettingsGeneralTab />);
 
+    await waitFor(() => {
+      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
+    });
+
     expect((screen.getByRole('button', { name: 'Export Backup' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Import Backup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Upload Backup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Stop Live Record before exporting or importing backups.')).toBeDefined();
+  });
+
+  it('shows an HTTP transport warning for WebDAV endpoints that are not encrypted', async () => {
+    testContext.loadWebDavConfigMock.mockResolvedValue({
+      serverUrl: 'http://nas.local/dav',
+      remoteDir: 'backups',
+      username: 'demo',
+      password: 'secret',
+    });
+
+    render(<SettingsGeneralTab />);
+
+    await waitFor(() => {
+      expect(screen.getByText('This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.')).toBeDefined();
+    });
   });
 
   it('shows destructive import summary copy and disposes the prepared archive when the user cancels', async () => {
@@ -187,6 +265,82 @@ describe('SettingsGeneralTab backup entry', () => {
           details: expect.stringContaining('Projects: 2'),
         }),
       );
+    });
+    expect(testContext.confirmMock.mock.calls[0]?.[1]?.details).toContain('restored items may reopen without playback');
+    expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
+    expect(testContext.applyImportBackupMock).not.toHaveBeenCalled();
+  });
+
+  it('restores a remote snapshot through the existing destructive confirm flow and disposes it when cancelled', async () => {
+    const remoteEntry = {
+      href: 'https://dav.example.com/backups/sona-backup-2026-04-29_00-00-00.tar.bz2',
+      fileName: 'sona-backup-2026-04-29_00-00-00.tar.bz2',
+      size: 2048,
+      modifiedAt: '2026-04-29T00:00:00.000Z',
+    };
+    const prepared = {
+      archivePath: 'C:\\backups\\sona-backup.tar.bz2',
+      extractionDir: 'C:\\temp\\prepared-remote-backup',
+      manifest: {
+        schemaVersion: 1,
+        createdAt: '2026-04-29T00:00:00.000Z',
+        appVersion: '0.6.3',
+        historyMode: 'light',
+        scopes: {
+          config: true,
+          workspace: true,
+          history: true,
+          automation: true,
+          analytics: true,
+        },
+        counts: {
+          projects: 2,
+          historyItems: 5,
+          transcriptFiles: 5,
+          summaryFiles: 3,
+          automationRules: 1,
+          automationProcessedEntries: 7,
+          analyticsFiles: 1,
+        },
+      },
+      config: {} as any,
+      projects: [],
+      historyItems: [],
+      transcriptFiles: {},
+      summaryFiles: {},
+      automationRules: [],
+      automationProcessedEntries: [],
+      analyticsContent: '{}',
+    };
+    testContext.listBackupsMock.mockResolvedValue([remoteEntry]);
+    testContext.prepareImportFromRemoteMock.mockResolvedValue(prepared);
+    testContext.confirmMock.mockResolvedValue(false);
+
+    render(<SettingsGeneralTab />);
+
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Cloud Backups' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('sona-backup-2026-04-29_00-00-00.tar.bz2')).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    });
+
+    await waitFor(() => {
+      expect(testContext.prepareImportFromRemoteMock).toHaveBeenCalledWith(remoteEntry, {
+        serverUrl: '',
+        remoteDir: '',
+        username: '',
+        password: '',
+      });
     });
     expect(testContext.confirmMock.mock.calls[0]?.[1]?.details).toContain('restored items may reopen without playback');
     expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);

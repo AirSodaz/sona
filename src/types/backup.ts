@@ -35,6 +35,32 @@ export interface ExportBackupResult {
   manifest: BackupManifestV1;
 }
 
+export interface BackupWebDavConfig {
+  serverUrl: string;
+  remoteDir: string;
+  username: string;
+  password: string;
+}
+
+export interface RemoteBackupEntry {
+  href: string;
+  fileName: string;
+  size: number;
+  modifiedAt: string | null;
+}
+
+export type BackupWebDavConnectionStatus = 'success' | 'warning';
+
+export interface BackupWebDavTestResult {
+  status: BackupWebDavConnectionStatus;
+  message: string;
+}
+
+export interface UploadRemoteBackupResult {
+  fileName: string;
+  manifest: BackupManifestV1;
+}
+
 export interface PreparedBackupImport {
   archivePath: string;
   extractionDir: string;

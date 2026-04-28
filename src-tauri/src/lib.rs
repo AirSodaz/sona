@@ -8,6 +8,7 @@ pub mod preset_models;
 pub mod sherpa;
 pub mod speaker;
 pub mod system;
+mod webdav;
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -841,6 +842,10 @@ pub fn run() {
             extract_tar_bz2,
             create_tar_bz2,
             download_file,
+            webdav::webdav_test_connection,
+            webdav::webdav_list_backups,
+            webdav::webdav_upload_backup,
+            webdav::webdav_download_backup,
             cancel_download,
             hardware::check_gpu_availability,
             force_exit,

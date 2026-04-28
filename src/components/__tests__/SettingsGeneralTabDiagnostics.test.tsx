@@ -27,6 +27,22 @@ vi.mock('../../services/backupService', () => ({
   },
 }));
 
+vi.mock('../../services/backupWebDavService', () => ({
+  backupWebDavService: {
+    listBackups: vi.fn(),
+    loadConfig: vi.fn().mockResolvedValue({
+      serverUrl: '',
+      remoteDir: '',
+      username: '',
+      password: '',
+    }),
+    prepareImportFromRemote: vi.fn(),
+    saveConfig: vi.fn(),
+    testConnection: vi.fn(),
+    uploadBackup: vi.fn(),
+  },
+}));
+
 vi.mock('../Dropdown', () => ({
   Dropdown: ({ id, value, onChange, options, style }: any) => (
     <select id={id} value={value} onChange={(event) => onChange?.(event.target.value)} style={style}>
