@@ -74,6 +74,36 @@
   --radius-xl: 24px;
   --radius-full: 9999px;
 
+  /* Apple-style interaction surfaces */
+  --apple-control-radius: 10px;
+  --apple-control-radius-md: 12px;
+  --apple-control-surface: var(--color-bg-elevated);
+  --apple-control-surface-hover: var(--color-bg-hover);
+  --apple-control-surface-pressed: var(--color-bg-tertiary);
+  --apple-control-ghost-hover: var(--color-bg-hover);
+  --apple-control-ghost-pressed: var(--color-bg-tertiary);
+  --apple-control-border-subtle: var(--color-border);
+  --apple-control-border-strong: var(--color-border-hover);
+  --apple-control-topline: rgba(255, 255, 255, 0.72);
+  --apple-control-shadow-flat:
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
+  --apple-control-shadow-rest:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
+  --apple-control-shadow-hover:
+    0 2px 6px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 44%, transparent);
+  --apple-control-shadow-pressed:
+    inset 0 1px 1px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.46),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 36%, transparent);
+  --apple-control-focus-ring:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 18%, transparent);
+
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
   --font-serif: 'Merriweather', 'Georgia', serif;
@@ -106,6 +136,30 @@
   --color-accent-secondary: #474747;
   --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
   --color-accent-glow: rgba(255, 255, 255, 0.05);
+
+  --apple-control-surface: var(--color-bg-elevated);
+  --apple-control-surface-hover: var(--color-bg-hover);
+  --apple-control-surface-pressed: var(--color-bg-tertiary);
+  --apple-control-ghost-hover: var(--color-bg-hover);
+  --apple-control-ghost-pressed: var(--color-bg-tertiary);
+  --apple-control-border-subtle: var(--color-border);
+  --apple-control-border-strong: var(--color-border-hover);
+  --apple-control-topline: rgba(255, 255, 255, 0.08);
+  --apple-control-shadow-rest:
+    0 1px 2px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
+  --apple-control-shadow-hover:
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --apple-control-shadow-pressed:
+    inset 0 1px 1px rgba(0, 0, 0, 0.24),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
+  --apple-control-focus-ring:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 24%, transparent);
 }
 
 /* ===========================
@@ -657,13 +711,15 @@ body {
 }
 
 .projects-segmented-control {
+  --projects-segmented-inner-radius: calc(var(--apple-control-radius-md) - 1px);
   display: flex;
   align-items: center;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1px;
-  gap: 2px;
+  border-radius: var(--apple-control-radius-md);
+  padding: 2px;
+  gap: 1px;
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .projects-search {
@@ -671,16 +727,21 @@ body {
   display: flex;
   align-items: center;
   background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
-  border: none;
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--apple-control-radius-md);
   width: 260px;
   height: 36px;
-  transition: all var(--transition-fast);
+  box-shadow: none;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   overflow: hidden;
 }
 
 .projects-search:focus-within {
   background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  border-color: var(--color-border-hover);
   box-shadow: 0 0 0 1px var(--color-border-hover), var(--shadow-sm);
 }
 
@@ -720,7 +781,7 @@ body {
 .projects-view-toggles {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 
 .projects-toolbar-divider {
@@ -734,32 +795,80 @@ body {
 .projects-toolbar-icon {
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--apple-control-radius);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
   background: transparent;
   border: none;
 }
 
 .projects-segmented-control .projects-toolbar-icon {
+  position: relative;
+  isolation: isolate;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
+  border-radius: var(--projects-segmented-inner-radius);
+  overflow: hidden;
+  color: color-mix(in srgb, var(--color-text-secondary) 92%, var(--color-text-primary));
+}
+
+.projects-segmented-control .projects-toolbar-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--color-bg-elevated);
+  box-shadow: var(--apple-control-shadow-rest);
+  opacity: 0;
+  transform: scale(0.965);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+  z-index: 0;
+}
+
+.projects-segmented-control .projects-toolbar-icon > * {
+  position: relative;
+  z-index: 1;
 }
 
 .projects-toolbar-icon:hover,
 .projects-toolbar-icon.active {
   background: var(--color-bg-hover);
+  box-shadow: var(--apple-control-shadow-flat);
   color: var(--color-text-primary);
+}
+
+.projects-toolbar-icon:active {
+  background: var(--color-bg-tertiary);
+  box-shadow: var(--apple-control-shadow-flat);
+  transform: scale(0.98);
 }
 
 .projects-segmented-control .projects-toolbar-icon:hover,
 .projects-segmented-control .projects-toolbar-icon.active {
-  background: var(--color-bg-elevated) !important;
-  box-shadow: var(--shadow-sm) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-text-primary);
+}
+
+.projects-segmented-control .projects-toolbar-icon:hover::before {
+  opacity: 0.8;
+  transform: scale(0.985);
+}
+
+.projects-segmented-control .projects-toolbar-icon.active::before {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .projects-main-heading {
@@ -1038,8 +1147,10 @@ body {
 .projects-toolbar-icon {
   width: 38px;
   height: 38px;
-  border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
+  border-radius: var(--apple-control-radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: none;
 }
 
 .projects-toolbar-contextual {
@@ -1380,63 +1491,116 @@ body {
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--apple-control-radius);
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .btn:focus-visible,
-.btn-icon:focus-visible {
-  outline: 2px solid var(--color-accent-primary);
-  outline-offset: 2px;
+.btn-icon:focus-visible,
+.btn-parameter-settings:focus-visible,
+.toolbar-btn:focus-visible,
+.settings-tab-btn:focus-visible,
+.accordion-header-btn:focus-visible,
+.dropdown-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring), var(--apple-control-shadow-hover);
 }
 
 .btn-primary {
   background: var(--color-accent-gradient);
   color: white;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .btn-primary:hover {
-  box-shadow: var(--shadow-glow);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
   transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    inset 0 1px 1px rgba(0, 0, 0, 0.12);
+  transform: translateY(0);
 }
 
 .btn-secondary {
   background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-secondary:hover {
   background: var(--color-bg-hover);
   border-color: var(--color-border-hover);
+  box-shadow: var(--apple-control-shadow-flat);
+}
+
+.btn-secondary:active {
+  background: var(--color-bg-secondary);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-text {
   background: transparent;
   color: var(--color-text-secondary);
-  border: 1px solid transparent;
   box-shadow: none;
 }
 
 .btn-text:hover:not(:disabled) {
   background: transparent;
   color: var(--color-text-primary);
-  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-text:active:not(:disabled) {
+  background: transparent;
   box-shadow: none;
   transform: none;
 }
 
 .btn-danger {
-  background: var(--color-error);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-error) 88%, white 12%),
+    var(--color-error)
+  );
   color: white;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-error) 84%, white 16%),
+    color-mix(in srgb, var(--color-error) 96%, black 4%)
+  );
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-danger:active {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(0, 0, 0, 0.12);
 }
 
 .btn-sm {
@@ -1454,12 +1618,53 @@ body {
   padding: var(--spacing-sm);
   background: transparent;
   color: var(--color-text-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--apple-control-radius);
 }
 
 .btn-icon:hover {
   background: var(--color-bg-hover);
+  box-shadow: var(--apple-control-shadow-flat);
   color: var(--color-text-primary);
+}
+
+.btn-icon:active {
+  background: var(--color-bg-tertiary);
+  box-shadow: var(--apple-control-shadow-flat);
+  transform: scale(0.98);
+}
+
+.btn-secondary-soft {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  box-shadow: var(--apple-control-shadow-flat);
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary-soft:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  box-shadow: var(--apple-control-shadow-flat);
+}
+
+.btn-danger-soft {
+  background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-elevated));
+  color: color-mix(in srgb, var(--color-error) 82%, var(--color-text-primary));
+  box-shadow:
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+
+.btn-danger-soft:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 14%, var(--color-bg-elevated));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-error) 24%, transparent);
+}
+
+.btn-danger-soft:active:not(:disabled),
+.btn-secondary-soft:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn svg {
@@ -1470,14 +1675,21 @@ body {
 .btn-restore-defaults {
   background: var(--color-bg-tertiary);
   color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
   font-size: 0.8125rem;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-restore-defaults:hover {
   background: var(--color-bg-hover);
   border-color: var(--color-border-hover);
+  box-shadow: var(--apple-control-shadow-flat);
   color: var(--color-text-primary);
+}
+
+.btn-restore-defaults:active {
+  background: var(--color-bg-secondary);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-restore-defaults svg {
@@ -1503,12 +1715,16 @@ select,
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--apple-control-radius);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-size: 0.875rem;
   line-height: 1.5;
-  transition: all var(--transition-fast);
+  box-shadow: var(--apple-control-shadow-flat);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -1524,7 +1740,7 @@ input[type="tel"]:focus,
 textarea:focus,
 select:focus {
   border-color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--apple-control-focus-ring);
   background: var(--color-bg-primary);
 }
 
@@ -2413,8 +2629,9 @@ input[type="radio"]:focus {
 
 .dropdown-trigger.active,
 .dropdown-trigger:focus {
+  background: var(--color-bg-primary);
   border-color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .dropdown-value {
@@ -4037,16 +4254,22 @@ input[type="radio"]:focus {
   color: var(--color-text-secondary);
   font-weight: 500;
   padding: 10px 16px;
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  border-radius: var(--apple-control-radius-md);
+  box-shadow: none;
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
   cursor: pointer;
 }
 
 .btn-parameter-settings:hover:not(:disabled) {
-  border-color: var(--color-border);
   color: var(--color-text-primary);
-  background-color: var(--color-bg-elevated);
-  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-parameter-settings:disabled {
@@ -4258,24 +4481,42 @@ input[type="radio"]:focus {
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--apple-control-radius);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      background var(--transition-fast),
+      box-shadow var(--transition-fast),
+      color var(--transition-fast),
+      transform var(--transition-fast);
 }
 
 .toolbar-btn:hover {
     background: var(--color-bg-hover);
+    box-shadow: var(--apple-control-shadow-flat);
     color: var(--color-text-primary);
 }
 
 .toolbar-btn:active {
     background: var(--color-bg-tertiary);
-    transform: scale(0.95);
+    box-shadow: var(--apple-control-shadow-flat);
+    transform: scale(0.98);
 }
 
 .toolbar-btn svg {
     width: 18px;
     height: 18px;
+}
+
+.btn:disabled,
+.btn-icon:disabled,
+.btn-parameter-settings:disabled,
+.toolbar-btn:disabled,
+.settings-tab-btn:disabled,
+.accordion-header-btn:disabled,
+.dropdown-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
 }
 
 .toolbar-divider {

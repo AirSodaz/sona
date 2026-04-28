@@ -136,8 +136,9 @@
 
 /* Remove internal border logic from individual tabs, standardizing input sizes */
 .settings-item-container input.settings-input,
-.settings-item-container .dropdown-container {
-  border-radius: var(--radius-sm, 8px);
+.settings-item-container .dropdown-container,
+.settings-item-container .dropdown-trigger {
+  border-radius: var(--apple-control-radius, 10px);
 }
 
 /* --- Accordion --- */
@@ -153,15 +154,20 @@
   padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
   background: transparent;
   border: none;
+  border-radius: var(--apple-control-radius-md, 12px);
   cursor: pointer;
   color: var(--color-text-primary);
   font-size: 0.95rem;
   font-weight: 500;
-  transition: background-color var(--transition-fast, 0.15s) ease;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
 }
 
 .accordion-header-btn:hover {
   background: var(--color-bg-hover);
+  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .accordion-header-left {
