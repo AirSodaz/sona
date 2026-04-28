@@ -1,20 +1,18 @@
-import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { historyService } from './historyService';
-import { logger } from '../utils/logger';
-import { normalizeError } from '../utils/errorUtils';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
-import {
-  createLlmTaskId,
-  listenToLlmTaskChunks,
-  listenToLlmTaskProgress,
+import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
-  TranslateTaskChunkPayload,
 } from './llmTaskService';
+import {
+  applySegmentItemsToTranscriptJob,
+  runConfiguredSegmentTask,
+  runTranscriptSegmentTaskJob,
+} from './llm/segmentTask';
 
 function buildTranslationMap(translations: TranslatedSegment[]): Map<string, TranslatedSegment> {
   const translationMap = new Map<string, TranslatedSegment>();
@@ -43,46 +41,21 @@ class TranslationService {
     onChunkTranslated?: (translatedChunk: TranslatedSegment[]) => void | Promise<void>,
     taskIdOverride?: string,
   ): Promise<TranslatedSegment[]> {
-    const llm = getFeatureLlmConfig(config, 'translation');
-
-    if (!isLlmConfigComplete(llm)) {
-      throw new Error('LLM Service not fully configured.');
-    }
-
-    if (!segments || segments.length === 0) {
-      return [];
-    }
-
-    const taskId = taskIdOverride || createLlmTaskId('translate');
-    let receivedChunkEvent = false;
-    const unlistenChunk = onChunkTranslated
-      ? await listenToLlmTaskChunks<TranslateTaskChunkPayload>(
+    return runConfiguredSegmentTask({
+      feature: 'translation',
+      taskType: 'translate',
+      command: 'translate_transcript_segments',
+      config,
+      segments,
+      onChunk: onChunkTranslated,
+      taskIdOverride,
+      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) => this.buildRequest(
         taskId,
-        'translate',
-        async ({ items }) => {
-          receivedChunkEvent = true;
-          await onChunkTranslated(items);
-        },
-      )
-      : () => undefined;
-
-    try {
-      const translations = await invoke<TranslatedSegment[]>('translate_transcript_segments', {
-        request: this.buildRequest(taskId, config, segments),
-      });
-
-      // Some providers still complete in one buffered response. Reuse the same consumer
-      // path so callers do not need separate streamed vs non-streamed handling.
-      if (onChunkTranslated && !receivedChunkEvent) {
-        await onChunkTranslated(translations);
-      }
-
-      return translations;
-    } catch (error) {
-      throw new Error(normalizeError(error).message);
-    } finally {
-      unlistenChunk();
-    }
+        llmConfig,
+        config,
+        inputSegments,
+      ),
+    });
   }
 
   async translateCurrentTranscript() {
@@ -95,51 +68,43 @@ class TranslationService {
     }
 
     const segments = store.segments;
-    if (!segments || segments.length === 0) {
-      return;
-    }
+    await runTranscriptSegmentTaskJob({
+      taskType: 'translate',
+      segments,
+      sourceHistoryId: store.sourceHistoryId,
+      onStart: (jobHistoryId) => {
+        store.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
+      },
+      onProgress: (translationProgress, jobHistoryId) => {
+        // Progress belongs to the job's original record even if the user navigates away
+        // before the backend finishes, so keep writing against the captured history id.
+        useTranscriptStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
+      },
+      runTask: async (taskId, jobHistoryId) => {
+        await this.translateSegmentsWithConfig(
+          config,
+          segments,
+          async (items) => {
+            await this.applyTranslations(items, jobHistoryId);
+          },
+          taskId,
+        );
+      },
+      onSuccess: (jobHistoryId) => {
+        useTranscriptStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
+      },
+      onError: (jobHistoryId) => {
+        useTranscriptStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
+      },
+      onFinally: (jobHistoryId) => {
+        const currentStore = useTranscriptStore.getState();
+        currentStore.updateLlmState({ isTranslating: false }, jobHistoryId);
 
-    const jobHistoryId = store.sourceHistoryId || 'current';
-    const taskId = createLlmTaskId('translate');
-    const unlistenProgress = await listenToLlmTaskProgress(taskId, 'translate', ({ completedChunks, totalChunks }) => {
-      // Progress belongs to the job's original record even if the user navigates away
-      // before the backend finishes, so keep writing against the captured history id.
-      useTranscriptStore.getState().updateLlmState({
-        translationProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
-      }, jobHistoryId);
+        if (!currentStore.getLlmState(jobHistoryId).isTranslationVisible) {
+          currentStore.updateLlmState({ isTranslationVisible: true }, jobHistoryId);
+        }
+      },
     });
-    let receivedChunkEvent = false;
-
-    store.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
-
-    try {
-      const translations = await this.translateSegmentsWithConfig(
-        config,
-        segments,
-        async (items) => {
-          receivedChunkEvent = true;
-          await this.applyTranslations(items, jobHistoryId);
-        },
-        taskId,
-      );
-
-      if (!receivedChunkEvent) {
-        await this.applyTranslations(translations, jobHistoryId);
-      }
-      useTranscriptStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
-    } catch (error) {
-      useTranscriptStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
-      throw new Error(normalizeError(error).message);
-    } finally {
-      unlistenProgress();
-
-      const currentStore = useTranscriptStore.getState();
-      currentStore.updateLlmState({ isTranslating: false }, jobHistoryId);
-
-      if (!currentStore.getLlmState(jobHistoryId).isTranslationVisible) {
-        currentStore.updateLlmState({ isTranslationVisible: true }, jobHistoryId);
-      }
-    }
   }
 
   applyTranslationsInMemory(
@@ -151,49 +116,35 @@ class TranslationService {
 
   private buildRequest(
     taskId: string,
+    llmConfig: NonNullable<ReturnType<typeof getFeatureLlmConfig>>,
     config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
     segments: TranscriptSegment[],
   ): TranslateSegmentsRequest {
     return {
       taskId,
-      config: getFeatureLlmConfig(config, 'translation')!,
+      config: llmConfig,
       segments: segments.map(({ id, text }) => ({ id, text })),
       targetLanguage: config.translationLanguage || 'zh',
     };
   }
 
   private async applyTranslations(translations: TranslatedSegment[], jobHistoryId: string) {
-    const currentStore = useTranscriptStore.getState();
-    const currentHistoryId = currentStore.sourceHistoryId || 'current';
-
-    if (currentHistoryId === jobHistoryId) {
-      this.applyTranslationsToCurrentTranscript(translations, currentStore);
-      return;
-    }
-
-    // If the job started from an unsaved "current" transcript and the user later moved
-    // elsewhere, there is no durable record to patch in the background.
-    if (jobHistoryId === 'current') {
-      return;
-    }
-
-    try {
-      const bgSegments = await historyService.loadTranscript(`${jobHistoryId}.json`);
-      if (!bgSegments) {
-        return;
-      }
-
-      const translationMap = buildTranslationMap(translations);
-
-      // Background writeback preserves the original job target when the user switches to
-      // another transcript mid-run, so finished chunks do not leak into the new screen.
-      await useHistoryStore.getState().updateTranscript(
-        jobHistoryId,
-        applyTranslatedChunkToSegments(bgSegments, translationMap),
-      );
-    } catch (error) {
-      logger.error('[TranslationService] Failed to update background record segments:', error);
-    }
+    await applySegmentItemsToTranscriptJob({
+      jobHistoryId,
+      items: translations,
+      logLabel: 'TranslationService',
+      getCurrentHistoryId: () => useTranscriptStore.getState().sourceHistoryId || 'current',
+      applyToCurrentTranscript: (items) => {
+        const currentStore = useTranscriptStore.getState();
+        this.applyTranslationsToCurrentTranscript(items, currentStore);
+      },
+      loadTranscript: (filename) => historyService.loadTranscript(filename),
+      updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
+      mergeIntoSegments: (segmentsToMerge, items) => {
+        const translationMap = buildTranslationMap(items);
+        return applyTranslatedChunkToSegments(segmentsToMerge, translationMap);
+      },
+    });
   }
 
   private applyTranslationsToCurrentTranscript(

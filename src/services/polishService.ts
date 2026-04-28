@@ -1,23 +1,20 @@
-import { invoke } from '@tauri-apps/api/core';
-import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { TranscriptSegment } from '../types/transcript';
+import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
-import { logger } from '../utils/logger';
-import { normalizeError } from '../utils/errorUtils';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
+import { getFeatureLlmConfig } from './llm/runtime';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
-import {
-  createLlmTaskId,
-  listenToLlmTaskChunks,
-  listenToLlmTaskProgress,
+import type {
   PolishSegmentsRequest,
   PolishedSegment,
-  PolishTaskChunkPayload,
 } from './llmTaskService';
+import {
+  applySegmentItemsToTranscriptJob,
+  runConfiguredSegmentTask,
+  runTranscriptSegmentTaskJob,
+} from './llm/segmentTask';
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
   const polishedMap = new Map<string, PolishedSegment>();
@@ -46,48 +43,21 @@ class PolishService {
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
     taskIdOverride?: string,
   ): Promise<PolishedSegment[]> {
-    const llm = getFeatureLlmConfig(config, 'polish');
-
-    if (!isLlmConfigComplete(llm)) {
-      throw new Error('LLM Service not fully configured.');
-    }
-
-    if (!segments || segments.length === 0) {
-      return [];
-    }
-
-    const taskId = taskIdOverride || createLlmTaskId('polish');
-    let unlistenChunk: UnlistenFn | null = null;
-    let receivedChunkEvent = false;
-
-    try {
-      if (onChunkPolished) {
-        unlistenChunk = await listenToLlmTaskChunks<PolishTaskChunkPayload>(
-          taskId,
-          'polish',
-          async ({ items }) => {
-            receivedChunkEvent = true;
-            await onChunkPolished(items);
-          },
-        );
-      }
-
-      const polishedSegments = await invoke<PolishedSegment[]>('polish_transcript_segments', {
-        request: this.buildRequest(taskId, config, segments),
-      });
-
-      // Providers without streamed chunk events still need to drive the same incremental
-      // consumer path, so fall back to the final payload when no chunk arrived.
-      if (onChunkPolished && !receivedChunkEvent) {
-        await onChunkPolished(polishedSegments);
-      }
-
-      return polishedSegments;
-    } catch (error) {
-      throw new Error(normalizeError(error).message);
-    } finally {
-      unlistenChunk?.();
-    }
+    return runConfiguredSegmentTask({
+      feature: 'polish',
+      taskType: 'polish',
+      command: 'polish_transcript_segments',
+      config,
+      segments,
+      onChunk: onChunkPolished,
+      taskIdOverride,
+      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) => this.buildRequest(
+        taskId,
+        llmConfig,
+        config,
+        inputSegments,
+      ),
+    });
   }
 
   async polishSegments(
@@ -101,47 +71,35 @@ class PolishService {
   async polishTranscript() {
     const store = useTranscriptStore.getState();
     const segments = store.segments;
-
-    if (!segments || segments.length === 0) {
-      return;
-    }
-
-    const jobHistoryId = store.sourceHistoryId || 'current';
-    const taskId = createLlmTaskId('polish');
-    let receivedChunkEvent = false;
-    const unlistenProgress = await listenToLlmTaskProgress(taskId, 'polish', ({ completedChunks, totalChunks }) => {
-      // Progress tracks the transcript that launched the job, not whichever record the
-      // user is viewing by the time a late chunk event arrives.
-      useTranscriptStore.getState().updateLlmState({
-        polishProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
-      }, jobHistoryId);
+    await runTranscriptSegmentTaskJob({
+      taskType: 'polish',
+      segments,
+      sourceHistoryId: store.sourceHistoryId,
+      onStart: (jobHistoryId) => {
+        store.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
+      },
+      onProgress: (polishProgress, jobHistoryId) => {
+        // Progress tracks the transcript that launched the job, not whichever record the
+        // user is viewing by the time a late chunk event arrives.
+        useTranscriptStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
+      },
+      runTask: async (taskId, jobHistoryId) => {
+        await this.polishSegmentsWithConfig(
+          store.config,
+          segments,
+          async (items) => {
+            await this.applyPolishedSegments(items, jobHistoryId);
+          },
+          taskId,
+        );
+      },
+      onFinally: (jobHistoryId) => {
+        useTranscriptStore.getState().updateLlmState({
+          isPolishing: false,
+          polishProgress: 0,
+        }, jobHistoryId);
+      },
     });
-
-    store.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
-
-    try {
-      const polishedSegments = await this.polishSegmentsWithConfig(
-        store.config,
-        segments,
-        async (items) => {
-          receivedChunkEvent = true;
-          await this.applyPolishedSegments(items, jobHistoryId);
-        },
-        taskId,
-      );
-
-      if (!receivedChunkEvent) {
-        await this.applyPolishedSegments(polishedSegments, jobHistoryId);
-      }
-    } catch (error) {
-      throw new Error(normalizeError(error).message);
-    } finally {
-      unlistenProgress();
-      useTranscriptStore.getState().updateLlmState({
-        isPolishing: false,
-        polishProgress: 0,
-      }, jobHistoryId);
-    }
   }
 
   applyPolishedSegmentsInMemory(
@@ -153,6 +111,7 @@ class PolishService {
 
   private buildRequest(
     taskId: string,
+    llmConfig: NonNullable<ReturnType<typeof getFeatureLlmConfig>>,
     config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
     segments: TranscriptSegment[],
   ): PolishSegmentsRequest {
@@ -160,7 +119,7 @@ class PolishService {
 
     return {
       taskId,
-      config: getFeatureLlmConfig(config, 'polish')!,
+      config: llmConfig,
       segments: segments.map(({ id, text }) => ({ id, text })),
       context: preset.context,
       keywords: resolvePolishKeywords(config.polishKeywordSets),
@@ -168,37 +127,22 @@ class PolishService {
   }
 
   private async applyPolishedSegments(polishedSegments: PolishedSegment[], jobHistoryId: string) {
-    const currentStore = useTranscriptStore.getState();
-    const currentHistoryId = currentStore.sourceHistoryId || 'current';
-
-    if (currentHistoryId === jobHistoryId) {
-      this.applyPolishedSegmentsToCurrentTranscript(polishedSegments, currentStore);
-      return;
-    }
-
-    // Unsaved "current" work has no background history file to patch once the user has
-    // navigated away, so in that case we intentionally drop late results.
-    if (jobHistoryId === 'current') {
-      return;
-    }
-
-    try {
-      const bgSegments = await historyService.loadTranscript(`${jobHistoryId}.json`);
-      if (!bgSegments) {
-        return;
-      }
-
-      const polishedMap = buildPolishedSegmentMap(polishedSegments);
-
-      // Background writeback keeps the original record consistent when the user switches
-      // context mid-run instead of redirecting late results into the newly active record.
-      await useHistoryStore.getState().updateTranscript(
-        jobHistoryId,
-        applyPolishedChunkToSegments(bgSegments, polishedMap),
-      );
-    } catch (error) {
-      logger.error('[PolishService] Failed to update background record segments:', error);
-    }
+    await applySegmentItemsToTranscriptJob({
+      jobHistoryId,
+      items: polishedSegments,
+      logLabel: 'PolishService',
+      getCurrentHistoryId: () => useTranscriptStore.getState().sourceHistoryId || 'current',
+      applyToCurrentTranscript: (items) => {
+        const currentStore = useTranscriptStore.getState();
+        this.applyPolishedSegmentsToCurrentTranscript(items, currentStore);
+      },
+      loadTranscript: (filename) => historyService.loadTranscript(filename),
+      updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
+      mergeIntoSegments: (segmentsToMerge, items) => {
+        const polishedMap = buildPolishedSegmentMap(items);
+        return applyPolishedChunkToSegments(segmentsToMerge, polishedMap);
+      },
+    });
   }
 
   private applyPolishedSegmentsToCurrentTranscript(
