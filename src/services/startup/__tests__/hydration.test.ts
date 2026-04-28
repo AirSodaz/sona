@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
+import type { AppConfig } from '../../../types/config';
+import type { ProjectDefaults, ProjectRecord } from '../../../types/project';
 import { hydrateAppStartupState } from '../hydration';
 
 const mockMigrateConfig = vi.fn();
@@ -14,9 +16,35 @@ const mockSetCaptionMode = vi.fn();
 const mockSetPersistedState = vi.fn();
 const mockProjectSetState = vi.fn();
 
+function createProjectRecord(
+  overrides: Partial<Omit<ProjectRecord, 'defaults'>> = {},
+  defaultOverrides: Partial<ProjectDefaults> = {},
+): ProjectRecord {
+  return {
+    id: 'project-1',
+    name: 'Project 1',
+    description: '',
+    icon: '',
+    createdAt: 1,
+    updatedAt: 1,
+    defaults: {
+      summaryTemplateId: 'general',
+      translationLanguage: 'zh',
+      polishPresetId: 'general',
+      exportFileNamePrefix: '',
+      enabledTextReplacementSetIds: [],
+      enabledHotwordSetIds: [],
+      enabledPolishKeywordSetIds: [],
+      enabledSpeakerProfileIds: [],
+      ...defaultOverrides,
+    },
+    ...overrides,
+  };
+}
+
 const configState = {
   config: { ...DEFAULT_CONFIG },
-  setConfig: (patch: Partial<typeof DEFAULT_CONFIG>) => {
+  setConfig: (patch: Partial<AppConfig>) => {
     configState.config = { ...configState.config, ...patch };
     mockSetConfig(patch);
   },
@@ -31,9 +59,9 @@ const onboardingState = {
 };
 
 const projectState = {
-  projects: [] as any[],
+  projects: [] as ProjectRecord[],
   loadProjects: vi.fn(async () => {
-    projectState.projects = [{ id: 'project-1', defaults: {} }];
+    projectState.projects = [createProjectRecord()];
   }),
 };
 
@@ -106,7 +134,7 @@ describe('hydrateAppStartupState', () => {
     configState.config = { ...DEFAULT_CONFIG };
     projectState.projects = [];
     projectState.loadProjects = vi.fn(async () => {
-      projectState.projects = [{ id: 'project-1', defaults: {} }];
+      projectState.projects = [createProjectRecord()];
     });
 
     localStorage.clear();
@@ -135,7 +163,7 @@ describe('hydrateAppStartupState', () => {
     });
     mockProjectMigration.mockReturnValue({
       migrated: true,
-      projects: [{ id: 'project-1', defaults: { polishPresetId: 'meeting' } }],
+      projects: [createProjectRecord({}, { polishPresetId: 'meeting' })],
       customPresets: [{ id: 'project-preset', name: 'Migrated Preset', context: 'Context' }],
     });
   });
@@ -154,9 +182,9 @@ describe('hydrateAppStartupState', () => {
     expect(mockSetCaptionMode).toHaveBeenCalledWith(true);
     expect(mockI18nChangeLanguage).toHaveBeenCalledWith('zh-CN');
     expect(projectState.loadProjects).toHaveBeenCalledTimes(1);
-    expect(mockProjectSaveAll).toHaveBeenCalledWith([{ id: 'project-1', defaults: { polishPresetId: 'meeting' } }]);
+    expect(mockProjectSaveAll).toHaveBeenCalledWith([createProjectRecord({}, { polishPresetId: 'meeting' })]);
     expect(mockProjectSetState).toHaveBeenCalledWith({
-      projects: [{ id: 'project-1', defaults: { polishPresetId: 'meeting' } }],
+      projects: [createProjectRecord({}, { polishPresetId: 'meeting' })],
     });
     expect(mockSetPersistedState).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'deferred' }),

@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrateConfig } from '../configMigrationService';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
+import type { AppConfig } from '../../types/config';
+
+function createSavedConfig(overrides: Partial<AppConfig>): AppConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...overrides,
+  };
+}
 
 describe('configMigrationService', () => {
   beforeEach(() => {
@@ -31,12 +39,11 @@ describe('configMigrationService', () => {
   });
 
   it('fills missing summary template registry fields with defaults', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 4,
       summaryTemplateId: undefined,
       summaryCustomTemplates: undefined,
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -46,14 +53,13 @@ describe('configMigrationService', () => {
   });
 
   it('migrates a legacy built-in polish scenario to polishPresetId', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 2,
       polishPresetId: undefined,
       polishCustomPresets: undefined,
       polishScenario: 'meeting',
       polishContext: '',
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -63,14 +69,13 @@ describe('configMigrationService', () => {
   });
 
   it('maps a legacy empty custom context to the general preset', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 2,
       polishPresetId: undefined,
       polishCustomPresets: undefined,
       polishScenario: 'custom',
       polishContext: '',
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -79,14 +84,13 @@ describe('configMigrationService', () => {
   });
 
   it('imports a legacy non-empty custom context into custom presets', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 2,
       polishPresetId: undefined,
       polishCustomPresets: undefined,
       polishScenario: 'custom',
       polishContext: 'Focus on investor updates and roadmap terms.',
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -98,12 +102,11 @@ describe('configMigrationService', () => {
   });
 
   it('migrates an empty legacy polishKeywords string to an empty keyword set array', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 3,
       polishKeywordSets: undefined,
       polishKeywords: '',
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -112,12 +115,11 @@ describe('configMigrationService', () => {
   });
 
   it('imports a legacy non-empty polishKeywords string into an enabled keyword set', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 3,
       polishKeywordSets: undefined,
       polishKeywords: 'Sona\nSherpa-onnx',
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -130,13 +132,12 @@ describe('configMigrationService', () => {
   });
 
   it('fills missing speaker model and profile fields with defaults', async () => {
-    const savedConfig: any = {
-      ...DEFAULT_CONFIG,
+    const savedConfig = createSavedConfig({
       configVersion: 5,
       speakerProfiles: undefined,
       speakerSegmentationModelPath: undefined,
       speakerEmbeddingModelPath: undefined,
-    };
+    });
 
     const result = await migrateConfig(savedConfig);
 
@@ -150,7 +151,7 @@ describe('configMigrationService', () => {
     const legacyConfig = {
       modelPath: '/legacy/model.onnx',
       recognitionModelPath: '/legacy/model.onnx',
-    } as any;
+    };
 
     const result = await migrateConfig(null, legacyConfig);
 

@@ -4,6 +4,7 @@ import { historyService } from '../services/historyService';
 import { TranscriptSegment } from '../types/transcript';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { useTranscriptStore } from './transcriptStore';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 
 interface HistoryState {
@@ -45,9 +46,10 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         try {
             const items = await historyService.getAll();
             set({ items: items || [] }); // Ensure array
-        } catch (err: any) {
-            logger.error('Failed to load history items:', err);
-            set({ error: err.message || 'Failed to load history' });
+        } catch (error) {
+            const errorMessage = extractErrorMessage(error);
+            logger.error('Failed to load history items:', error);
+            set({ error: errorMessage || 'Failed to load history' });
         } finally {
             set({ isLoading: false });
         }
@@ -78,8 +80,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                 transcriptStore.setAudioFile(null);
                 transcriptStore.setSourceHistoryId(null);
             }
-        } catch (err: any) {
-            logger.error('Failed to delete history item:', err);
+        } catch (error) {
+            logger.error('Failed to delete history item:', error);
             // Revert
             set({ items: originalItems, error: 'Failed to delete item' });
         }
@@ -103,8 +105,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                 transcriptStore.setAudioFile(null);
                 transcriptStore.setSourceHistoryId(null);
             }
-        } catch (err: any) {
-            logger.error('Failed to delete history items:', err);
+        } catch (error) {
+            logger.error('Failed to delete history items:', error);
             set({ items: originalItems, error: 'Failed to delete items' });
         }
     },
@@ -123,10 +125,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
                     item.id === id ? { ...item, ...transcriptMetadata } : item
                 )),
             }));
-        } catch (err: any) {
-            logger.error('Failed to update history transcript:', err);
-            set({ error: err.message || 'Failed to update history transcript' });
-            throw err;
+        } catch (error) {
+            const errorMessage = extractErrorMessage(error);
+            logger.error('Failed to update history transcript:', error);
+            set({ error: errorMessage || 'Failed to update history transcript' });
+            throw error;
         }
     },
 
@@ -142,11 +145,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.updateItemMeta(id, updates);
-        } catch (err: any) {
-            logger.error('Failed to update history item meta:', err);
+        } catch (error) {
+            logger.error('Failed to update history item meta:', error);
             // Revert
             set({ items: originalItems, error: 'Failed to update item metadata' });
-            throw err;
+            throw error;
         }
     }
 }));

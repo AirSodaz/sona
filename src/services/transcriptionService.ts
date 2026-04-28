@@ -7,6 +7,7 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { PRESET_MODELS, modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
 import { speakerService } from './speakerService';
+import { extractErrorMessage } from '../utils/errorUtils';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -471,8 +472,8 @@ export class TranscriptionService {
                 saveToPath,
                 configOverride,
             );
-        } catch (error: any) {
-            if (error.message && error.message.includes('COREML_FAILURE')) {
+        } catch (error) {
+            if (extractErrorMessage(error).includes('COREML_FAILURE')) {
                 return await this._transcribeFileInternal(
                     filePath,
                     'cpu',

@@ -137,15 +137,16 @@ export function SettingsVocabularyTab(): React.JSX.Element {
     const stringToRules = (str: string): TextReplacementRule[] => {
         return str.split('\n')
             .filter(line => line.trim() !== '')
-            .map(line => {
-                let from = '';
-                let to = '';
-                if (line.includes('=>')) [from, to] = line.split('=>');
-                else if (line.includes('->')) [from, to] = line.split('->');
-                else if (line.includes('=')) [from, to] = line.split('=');
-                else if (line.includes(':')) [from, to] = line.split(':');
-                else { from = line; to = ''; }
-                return { id: uuidv4(), from: from.trim(), to: to.trim() };
+            .map((line) => {
+                const pairs = ['=>', '->', '=', ':'] as const;
+                for (const separator of pairs) {
+                    if (line.includes(separator)) {
+                        const [fromPart = '', toPart = ''] = line.split(separator);
+                        return { id: uuidv4(), from: fromPart.trim(), to: toPart.trim() };
+                    }
+                }
+
+                return { id: uuidv4(), from: line.trim(), to: '' };
             });
     };
 

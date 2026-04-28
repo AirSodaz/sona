@@ -164,13 +164,13 @@ function SummaryChip({
 
 export function SettingsAutomationTab(): React.JSX.Element {
     const { t } = useTranslation();
-    const rules = useAutomationStore((state: any) => state.rules);
-    const runtimeStates = useAutomationStore((state: any) => state.runtimeStates);
-    const saveRule = useAutomationStore((state: any) => state.saveRule);
-    const deleteRule = useAutomationStore((state: any) => state.deleteRule);
-    const toggleRuleEnabled = useAutomationStore((state: any) => state.toggleRuleEnabled);
-    const scanRuleNow = useAutomationStore((state: any) => state.scanRuleNow);
-    const retryFailed = useAutomationStore((state: any) => state.retryFailed);
+    const rules = useAutomationStore((state) => state.rules);
+    const runtimeStates = useAutomationStore((state) => state.runtimeStates);
+    const saveRule = useAutomationStore((state) => state.saveRule);
+    const deleteRule = useAutomationStore((state) => state.deleteRule);
+    const toggleRuleEnabled = useAutomationStore((state) => state.toggleRuleEnabled);
+    const scanRuleNow = useAutomationStore((state) => state.scanRuleNow);
+    const retryFailed = useAutomationStore((state) => state.retryFailed);
     const config = useConfigStore((state) => state.config);
     const projects = useProjectStore((state) => state.projects);
     const alert = useDialogStore((state) => state.alert);

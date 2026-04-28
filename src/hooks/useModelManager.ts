@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 
 const DEFAULT_SENSEVOICE_INT8_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
@@ -154,8 +155,8 @@ export function useModelManager(isOpen: boolean) {
             await checkInstalledModels();
             await onSuccess(downloadedPath);
 
-        } catch (error: any) {
-            if (error.message === 'Download cancelled') {
+        } catch (error) {
+            if (extractErrorMessage(error) === 'Download cancelled') {
                 logger.info('Download cancelled by user');
             } else {
                 await showError({

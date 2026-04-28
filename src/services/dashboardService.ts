@@ -192,66 +192,64 @@ async function aggregateTranscriptAnalytics(historyItems: HistoryItem[]): Promis
       continue;
     }
 
-    let segments: ParsedTranscriptSegment[] = [];
-
     try {
       const content = await readTextFile(`history/${item.transcriptPath}`, {
         baseDir: BaseDirectory.AppLocalData,
       });
-      segments = parseTranscriptSegments(JSON.parse(content));
+      const segments = parseTranscriptSegments(JSON.parse(content));
+
+      let itemHasSpeaker = false;
+      const anonymousIdsInItem = new Set<string>();
+
+      segments.forEach((segment) => {
+        transcriptCharacterCount += segment.text.length;
+        speakers.totalSegmentCount += 1;
+        speakers.totalSegmentDuration += segment.durationSeconds;
+
+        if (!segment.speaker) {
+          return;
+        }
+
+        itemHasSpeaker = true;
+        speakers.speakerTaggedSegmentCount += 1;
+        speakers.speakerAttributedDuration += segment.durationSeconds;
+
+        if (segment.speaker.kind === 'identified') {
+          speakers.identifiedDuration += segment.durationSeconds;
+          identifiedSpeakerIds.add(segment.speaker.id);
+
+          const existing = leaderMap.get(segment.speaker.id);
+          if (existing) {
+            existing.durationSeconds += segment.durationSeconds;
+            existing.segmentCount += 1;
+            existing.itemIds.add(item.id);
+            return;
+          }
+
+          leaderMap.set(segment.speaker.id, {
+            speakerId: segment.speaker.id,
+            label: segment.speaker.label,
+            durationSeconds: segment.durationSeconds,
+            segmentCount: 1,
+            itemCount: 1,
+            itemIds: new Set([item.id]),
+          });
+          return;
+        }
+
+        speakers.anonymousDuration += segment.durationSeconds;
+        anonymousIdsInItem.add(segment.speaker.id);
+      });
+
+      if (itemHasSpeaker) {
+        speakers.annotatedItemCount += 1;
+      }
+
+      speakers.anonymousSpeakerSlotCount += anonymousIdsInItem.size;
     } catch (error) {
       logger.warn('[Dashboard] Skipping transcript during deep scan:', item.transcriptPath, error);
       continue;
     }
-
-    let itemHasSpeaker = false;
-    const anonymousIdsInItem = new Set<string>();
-
-    segments.forEach((segment) => {
-      transcriptCharacterCount += segment.text.length;
-      speakers.totalSegmentCount += 1;
-      speakers.totalSegmentDuration += segment.durationSeconds;
-
-      if (!segment.speaker) {
-        return;
-      }
-
-      itemHasSpeaker = true;
-      speakers.speakerTaggedSegmentCount += 1;
-      speakers.speakerAttributedDuration += segment.durationSeconds;
-
-      if (segment.speaker.kind === 'identified') {
-        speakers.identifiedDuration += segment.durationSeconds;
-        identifiedSpeakerIds.add(segment.speaker.id);
-
-        const existing = leaderMap.get(segment.speaker.id);
-        if (existing) {
-          existing.durationSeconds += segment.durationSeconds;
-          existing.segmentCount += 1;
-          existing.itemIds.add(item.id);
-          return;
-        }
-
-        leaderMap.set(segment.speaker.id, {
-          speakerId: segment.speaker.id,
-          label: segment.speaker.label,
-          durationSeconds: segment.durationSeconds,
-          segmentCount: 1,
-          itemCount: 1,
-          itemIds: new Set([item.id]),
-        });
-        return;
-      }
-
-      speakers.anonymousDuration += segment.durationSeconds;
-      anonymousIdsInItem.add(segment.speaker.id);
-    });
-
-    if (itemHasSpeaker) {
-      speakers.annotatedItemCount += 1;
-    }
-
-    speakers.anonymousSpeakerSlotCount += anonymousIdsInItem.size;
   }
 
   speakers.identifiedSpeakerCount = identifiedSpeakerIds.size;

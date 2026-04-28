@@ -578,9 +578,8 @@ export function alignTokensToText(
         const subStr = joinedTokens.substring(charPos, charPos + searchLimit);
         const localIdx = subStr.indexOf(normWord);
 
-        let matchPos = charPos;
         if (localIdx !== -1) {
-            matchPos = charPos + localIdx;
+            const matchPos = charPos + localIdx;
             result.push({ text: word, timestamp: getFallbackTimestamp(matchPos) });
             charPos = matchPos + normWord.length;
         } else {

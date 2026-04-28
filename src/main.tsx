@@ -12,15 +12,27 @@ import { voiceTypingService } from "./services/voiceTypingService";
 import { CaptionWindow } from "./components/CaptionWindow";
 import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
 
+declare global {
+  interface Window {
+    useTranscriptStore?: typeof useTranscriptStore;
+    useBatchQueueStore?: typeof useBatchQueueStore;
+    useDialogStore?: typeof useDialogStore;
+    useOnboardingStore?: typeof useOnboardingStore;
+    transcriptionService?: typeof transcriptionService;
+    modelService?: typeof modelService;
+    voiceTypingService?: typeof voiceTypingService;
+  }
+}
+
 // Expose stores and services for E2E testing
 if (import.meta.env.DEV) {
-  (window as any).useTranscriptStore = useTranscriptStore;
-  (window as any).useBatchQueueStore = useBatchQueueStore;
-  (window as any).useDialogStore = useDialogStore;
-  (window as any).useOnboardingStore = useOnboardingStore;
-  (window as any).transcriptionService = transcriptionService;
-  (window as any).modelService = modelService;
-  (window as any).voiceTypingService = voiceTypingService;
+  window.useTranscriptStore = useTranscriptStore;
+  window.useBatchQueueStore = useBatchQueueStore;
+  window.useDialogStore = useDialogStore;
+  window.useOnboardingStore = useOnboardingStore;
+  window.transcriptionService = transcriptionService;
+  window.modelService = modelService;
+  window.voiceTypingService = voiceTypingService;
 }
 
 const isCaptionWindow = window.location.search.includes('window=caption');

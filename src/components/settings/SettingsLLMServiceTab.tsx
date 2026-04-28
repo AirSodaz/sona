@@ -32,6 +32,14 @@ import {
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
 
+function getCurrentLlmSettings(config: LlmAssistantConfig) {
+  return config.llmSettings ?? ensureLlmState(config).llmSettings;
+}
+
+function getCurrentLlmState(config: LlmAssistantConfig) {
+  return config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config);
+}
+
 function getModelPlaceholder(provider: LlmProvider): string {
   switch (provider) {
     case 'azure_openai': return 'gpt-4o-deployment';
@@ -92,7 +100,7 @@ function FeatureCard({
   featureEnabled = true,
   headerAction,
 }: FeatureCardProps) {
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
+  const currentLlmState = getCurrentLlmSettings(config);
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
@@ -390,7 +398,7 @@ interface AccordionItemProps {
 }
 
 function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProviderUpdates, t }: AccordionItemProps) {
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
+  const currentLlmState = getCurrentLlmSettings(config);
   const def = getProviderDefinition(provider);
   const setting = currentLlmState.providers[provider];
   
@@ -579,12 +587,12 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
   }, [updateConfig]);
 
   const applyProviderUpdates = useCallback((provider: LlmProvider, updates: Partial<LlmProviderSetting>) => {
-    const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as any);
+    const currentLlmState = getCurrentLlmState(config);
     const nextLlmSettings = updateProviderSetting(currentLlmState.llmSettings, provider, updates);
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
   }, [config, updateConfig]);
 
-  const currentLlmState = config.llmSettings ? config.llmSettings : ensureLlmState(config as any).llmSettings;
+  const currentLlmState = getCurrentLlmSettings(config);
   
   const activeProviders = useMemo(() => {
     const active = new Set<LlmProvider>();

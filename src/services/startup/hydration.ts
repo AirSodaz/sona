@@ -178,30 +178,27 @@ async function maybeMigrateProjectPolishDefaults(config: AppConfig): Promise<{
 }
 
 export async function hydrateAppStartupState(): Promise<void> {
-  let currentConfig: AppConfig = useConfigStore.getState().config;
-
   try {
     const savedConfig = await settingsStore.get<AppConfig | null>(STORE_KEY_CONFIG);
     const legacyConfigValue = savedConfig ? null : localStorage.getItem(LEGACY_CONFIG_STORAGE_KEY);
     const legacyConfig = savedConfig ? null : parseLegacyConfigValue(legacyConfigValue);
 
     const { config: loadedConfig, migrated: configMigrated } = await migrateConfig(savedConfig, legacyConfig);
-    currentConfig = loadedConfig;
-    applyHydratedConfig(currentConfig);
+    applyHydratedConfig(loadedConfig);
 
-    const onboarding = await hydrateOnboardingState(currentConfig, configMigrated);
+    const onboarding = await hydrateOnboardingState(loadedConfig, configMigrated);
     useOnboardingStore.getState().setPersistedState(
       onboarding.state,
-      Boolean(currentConfig.streamingModelPath && currentConfig.offlineModelPath),
+      Boolean(loadedConfig.streamingModelPath && loadedConfig.offlineModelPath),
     );
 
     await useProjectStore.getState().loadProjects();
 
-    const projectMigration = await maybeMigrateProjectPolishDefaults(currentConfig);
-    currentConfig = projectMigration.config;
+    const projectMigration = await maybeMigrateProjectPolishDefaults(loadedConfig);
+    const configToPersist = projectMigration.config;
 
     await persistHydratedState({
-      configToPersist: (configMigrated || projectMigration.configChanged) ? currentConfig : null,
+      configToPersist: (configMigrated || projectMigration.configChanged) ? configToPersist : null,
       onboardingToPersist: onboarding.migrated ? onboarding.state : null,
       configLegacyKeyToClear: Boolean(legacyConfigValue),
       onboardingLegacyKeyToClear: onboarding.clearLegacyOnboarding,

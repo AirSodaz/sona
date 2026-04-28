@@ -136,43 +136,76 @@ type LegacyBootstrapModel = {
   model: string;
 };
 
-function extractLegacyProviderSetting(source: Record<string, any>): Partial<LlmProviderSetting> {
+type LegacyStoredProviderSetting = Partial<LlmProviderSetting> & {
+  model?: unknown;
+};
+
+type LegacyNestedLlmSource = {
+  provider?: unknown;
+  model?: unknown;
+  baseUrl?: unknown;
+  apiKey?: unknown;
+  apiPath?: unknown;
+  apiVersion?: unknown;
+  temperature?: unknown;
+};
+
+export type LlmMigrationSource = Partial<AppConfig> & {
+  llm?: LegacyNestedLlmSource;
+  llmServiceType?: unknown;
+  llmModel?: unknown;
+  aiModel?: unknown;
+  model?: unknown;
+  llmBaseUrl?: unknown;
+  aiBaseUrl?: unknown;
+  baseUrl?: unknown;
+  llmApiKey?: unknown;
+  aiApiKey?: unknown;
+  apiKey?: unknown;
+  llmApiPath?: unknown;
+  aiApiPath?: unknown;
+  apiPath?: unknown;
+  llmApiVersion?: unknown;
+  aiApiVersion?: unknown;
+  apiVersion?: unknown;
+};
+
+function getTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function extractLegacyProviderSetting(source: LlmMigrationSource): Partial<LlmProviderSetting> {
   return {
-    apiHost: source.llmBaseUrl || source.aiBaseUrl || source.baseUrl || undefined,
-    apiKey: source.llmApiKey || source.aiApiKey || source.apiKey || undefined,
-    apiPath: source.llmApiPath || source.aiApiPath || source.apiPath || undefined,
-    apiVersion: source.llmApiVersion || source.aiApiVersion || source.apiVersion || undefined,
+    apiHost: getTrimmedString(source.llmBaseUrl) ?? getTrimmedString(source.aiBaseUrl) ?? getTrimmedString(source.baseUrl),
+    apiKey: getTrimmedString(source.llmApiKey) ?? getTrimmedString(source.aiApiKey) ?? getTrimmedString(source.apiKey),
+    apiPath: getTrimmedString(source.llmApiPath) ?? getTrimmedString(source.aiApiPath) ?? getTrimmedString(source.apiPath),
+    apiVersion: getTrimmedString(source.llmApiVersion) ?? getTrimmedString(source.aiApiVersion) ?? getTrimmedString(source.apiVersion),
   };
 }
 
-function extractLegacyModel(source: Record<string, any>): { provider: LlmProvider; model: string } | null {
+function extractLegacyModel(source: LlmMigrationSource): { provider: LlmProvider; model: string } | null {
   const provider = normalizeProvider(
     source.llmSettings?.activeProvider ?? source.llm?.provider ?? source.llmServiceType,
   );
-  let model = '';
-  if (typeof source.llm?.model === 'string' && source.llm.model.trim()) {
-    model = source.llm.model.trim();
-  } else if (typeof source.llmModel === 'string' && source.llmModel.trim()) {
-    model = source.llmModel.trim();
-  } else if (typeof source.aiModel === 'string' && source.aiModel.trim()) {
-    model = source.aiModel.trim();
-  } else if (typeof source.model === 'string' && source.model.trim()) {
-    model = source.model.trim();
-  }
+  const model = getTrimmedString(source.llm?.model)
+    ?? getTrimmedString(source.llmModel)
+    ?? getTrimmedString(source.aiModel)
+    ?? getTrimmedString(source.model)
+    ?? '';
 
   return model ? { provider, model } : null;
 }
 
-function resolveLegacyBootstrapModel(source: Partial<AppConfig> & Record<string, any>): LegacyBootstrapModel | null {
+function resolveLegacyBootstrapModel(source: LlmMigrationSource): LegacyBootstrapModel | null {
   const legacyStoredProviderModel = Object.entries(source.llmSettings?.providers ?? {}).find(([, rawSetting]) => {
-    const model = (rawSetting as { model?: string } | undefined)?.model;
+    const model = (rawSetting as LegacyStoredProviderSetting | undefined)?.model;
     return typeof model === 'string' && model.trim();
   });
 
   if (legacyStoredProviderModel) {
     return {
       provider: normalizeProvider(legacyStoredProviderModel[0]),
-      model: ((legacyStoredProviderModel[1] as { model?: string }).model || '').trim(),
+      model: getTrimmedString((legacyStoredProviderModel[1] as LegacyStoredProviderSetting).model) || '',
     };
   }
 
@@ -243,7 +276,7 @@ function ensureSummaryModelSelection(llmSettings: LlmSettings): LlmSettings {
 }
 
 export function ensureLlmState(
-  source?: Partial<AppConfig> & Record<string, any>,
+  source?: LlmMigrationSource,
 ): { llmSettings: LlmSettings } {
   const candidate = source ?? {};
   const currentProvider = normalizeProvider(
@@ -257,10 +290,10 @@ export function ensureLlmState(
   if (candidate.llm) {
     const provider = normalizeProvider(candidate.llm.provider);
     providers[provider] = sanitizeProviderSetting(provider, {
-      apiHost: candidate.llm.baseUrl || undefined,
-      apiKey: candidate.llm.apiKey || undefined,
-      apiPath: candidate.llm.apiPath || undefined,
-      apiVersion: candidate.llm.apiVersion || undefined,
+      apiHost: getTrimmedString(candidate.llm.baseUrl),
+      apiKey: getTrimmedString(candidate.llm.apiKey),
+      apiPath: getTrimmedString(candidate.llm.apiPath),
+      apiVersion: getTrimmedString(candidate.llm.apiVersion),
     });
   } else {
     const legacySetting = extractLegacyProviderSetting(candidate);

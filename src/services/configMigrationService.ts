@@ -1,5 +1,9 @@
-import { AppConfig } from '../types/config';
-import { ensureLlmState } from './llm/migration';
+import type {
+  AppConfig,
+  LegacyTextReplacementRule,
+  TextReplacementRule,
+} from '../types/config';
+import { ensureLlmState, type LlmMigrationSource } from './llm/migration';
 import i18n from '../i18n';
 import { DEFAULT_CONFIG } from '../stores/configStore';
 import {
@@ -24,11 +28,34 @@ export interface MigrationResult {
 
 const CURRENT_CONFIG_VERSION = DEFAULT_CONFIG.configVersion ?? 6;
 
+type LegacyConfigFields = {
+  modelPath?: string;
+  recognitionModelPath?: string;
+  summaryTemplate?: string;
+};
+
+type ConfigMigrationInput =
+  LlmMigrationSource
+  & LegacyConfigFields
+  & {
+    textReplacements?: LegacyTextReplacementRule[];
+  };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function shouldUpgradeConfig(config: any, isConfigMigrated: boolean): boolean {
+function mapLegacyTextReplacementRules(
+  rules: LegacyTextReplacementRule[],
+): TextReplacementRule[] {
+  return rules.map((rule) => ({
+    id: rule.id,
+    from: rule.from,
+    to: rule.to,
+  }));
+}
+
+function shouldUpgradeConfig(config: ConfigMigrationInput, isConfigMigrated: boolean): boolean {
   if (isConfigMigrated) {
     return true;
   }
@@ -85,11 +112,11 @@ export async function migrateConfig(
   savedConfig: AppConfig | null | undefined,
   legacyConfig?: unknown,
 ): Promise<MigrationResult> {
-  let configToLoad: any = savedConfig;
+  let configToLoad: AppConfig | ConfigMigrationInput | null | undefined = savedConfig;
   let isConfigMigrated = false;
 
   if (!savedConfig && isRecord(legacyConfig)) {
-    configToLoad = legacyConfig;
+    configToLoad = legacyConfig as ConfigMigrationInput;
     isConfigMigrated = true;
   }
 
@@ -102,64 +129,65 @@ export async function migrateConfig(
   const needsUpgrade = shouldUpgradeConfig(configToLoad, isConfigMigrated);
 
   if (!needsUpgrade) {
-    const normalizedLlmSettings = ensureLlmState(configToLoad).llmSettings;
+    const existingConfig = configToLoad as AppConfig;
+    const normalizedLlmSettings = ensureLlmState(existingConfig).llmSettings;
     const normalizedPolishCustomPresets = normalizePolishCustomPresets(
-      (configToLoad as AppConfig).polishCustomPresets,
+      existingConfig.polishCustomPresets,
     );
     const normalizedPolishPresetId = coercePolishPresetId(
-      (configToLoad as AppConfig).polishPresetId,
+      existingConfig.polishPresetId,
       normalizedPolishCustomPresets,
     );
     const normalizedSummaryCustomTemplates = normalizeSummaryCustomTemplates(
-      (configToLoad as AppConfig).summaryCustomTemplates,
+      existingConfig.summaryCustomTemplates,
     );
     const normalizedSummaryTemplateId = coerceSummaryTemplateId(
-      (configToLoad as AppConfig).summaryTemplateId,
+      existingConfig.summaryTemplateId,
       normalizedSummaryCustomTemplates,
     );
     const normalizedPolishKeywordSets = migrateLegacyPolishKeywords(
-      (configToLoad as AppConfig).polishKeywords,
-      (configToLoad as AppConfig).polishKeywordSets,
+      existingConfig.polishKeywords,
+      existingConfig.polishKeywordSets,
     );
     const normalizedConfig: AppConfig = {
       ...DEFAULT_CONFIG,
-      ...(configToLoad as AppConfig),
+      ...existingConfig,
       configVersion: CURRENT_CONFIG_VERSION,
       llmSettings: normalizedLlmSettings,
-      summaryEnabled: (configToLoad as AppConfig).summaryEnabled ?? true,
+      summaryEnabled: existingConfig.summaryEnabled ?? true,
       summaryTemplateId: normalizedSummaryTemplateId,
       summaryCustomTemplates: normalizedSummaryCustomTemplates,
       polishKeywords: '',
       polishPresetId: normalizedPolishPresetId,
       polishCustomPresets: normalizedPolishCustomPresets,
       polishKeywordSets: normalizedPolishKeywordSets,
-      speakerSegmentationModelPath: (configToLoad as AppConfig).speakerSegmentationModelPath || '',
-      speakerEmbeddingModelPath: (configToLoad as AppConfig).speakerEmbeddingModelPath || '',
-      speakerProfiles: normalizeSpeakerProfiles((configToLoad as AppConfig).speakerProfiles),
+      speakerSegmentationModelPath: existingConfig.speakerSegmentationModelPath || '',
+      speakerEmbeddingModelPath: existingConfig.speakerEmbeddingModelPath || '',
+      speakerProfiles: normalizeSpeakerProfiles(existingConfig.speakerProfiles),
     };
 
     const llmChanged =
-      JSON.stringify((configToLoad as AppConfig).llmSettings ?? null) !==
+      JSON.stringify(existingConfig.llmSettings ?? null) !==
       JSON.stringify(normalizedLlmSettings);
-    const summaryEnabledChanged = (configToLoad as AppConfig).summaryEnabled !== normalizedConfig.summaryEnabled;
+    const summaryEnabledChanged = existingConfig.summaryEnabled !== normalizedConfig.summaryEnabled;
     const polishPresetsChanged =
-      JSON.stringify((configToLoad as AppConfig).polishCustomPresets ?? []) !==
+      JSON.stringify(existingConfig.polishCustomPresets ?? []) !==
         JSON.stringify(normalizedPolishCustomPresets)
-      || (configToLoad as AppConfig).polishPresetId !== normalizedPolishPresetId
-      || (configToLoad as AppConfig).configVersion !== CURRENT_CONFIG_VERSION;
+      || existingConfig.polishPresetId !== normalizedPolishPresetId
+      || existingConfig.configVersion !== CURRENT_CONFIG_VERSION;
     const summaryTemplatesChanged =
-      JSON.stringify((configToLoad as AppConfig).summaryCustomTemplates ?? []) !==
+      JSON.stringify(existingConfig.summaryCustomTemplates ?? []) !==
         JSON.stringify(normalizedSummaryCustomTemplates)
-      || (configToLoad as AppConfig).summaryTemplateId !== normalizedSummaryTemplateId;
+      || existingConfig.summaryTemplateId !== normalizedSummaryTemplateId;
     const polishKeywordSetsChanged =
-      JSON.stringify((configToLoad as AppConfig).polishKeywordSets ?? []) !==
+      JSON.stringify(existingConfig.polishKeywordSets ?? []) !==
         JSON.stringify(normalizedPolishKeywordSets)
-      || ((configToLoad as AppConfig).polishKeywords || '') !== normalizedConfig.polishKeywords;
+      || (existingConfig.polishKeywords || '') !== normalizedConfig.polishKeywords;
     const speakerProfilesChanged =
-      JSON.stringify((configToLoad as AppConfig).speakerProfiles ?? []) !==
+      JSON.stringify(existingConfig.speakerProfiles ?? []) !==
         JSON.stringify(normalizedConfig.speakerProfiles)
-      || typeof (configToLoad as AppConfig).speakerSegmentationModelPath !== 'string'
-      || typeof (configToLoad as AppConfig).speakerEmbeddingModelPath !== 'string';
+      || typeof existingConfig.speakerSegmentationModelPath !== 'string'
+      || typeof existingConfig.speakerEmbeddingModelPath !== 'string';
 
     if (
       !llmChanged
@@ -176,7 +204,7 @@ export async function migrateConfig(
   }
 
   // Perform data normalization and structural upgrades.
-  const parsed = configToLoad as any;
+  const parsed = configToLoad as ConfigMigrationInput;
   const { llmSettings } = ensureLlmState(parsed);
   const normalizedPolishCustomPresets = normalizePolishCustomPresets(parsed.polishCustomPresets);
   const normalizedSummaryCustomTemplates = normalizeSummaryCustomTemplates(parsed.summaryCustomTemplates);
@@ -253,11 +281,7 @@ export async function migrateConfig(
       name: i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
       enabled: true,
       ignoreCase: false,
-      rules: parsed.textReplacements.map((r: any) => ({
-        id: r.id,
-        from: r.from,
-        to: r.to
-      }))
+      rules: mapLegacyTextReplacementRules(parsed.textReplacements),
     };
     upgradedConfig.textReplacementSets = [defaultSet];
   }

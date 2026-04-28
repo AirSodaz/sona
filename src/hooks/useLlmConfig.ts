@@ -13,7 +13,9 @@ export function useLlmConfig() {
     const setConfig = useConfigStore((state) => state.setConfig);
 
     const changeLlmServiceType = (provider: LlmProvider) => {
-        const currentLlmState = config.llmSettings ? { llmSettings: config.llmSettings } : ensureLlmState(config as typeof config & Record<string, any>);
+        const currentLlmState = config.llmSettings
+            ? { llmSettings: config.llmSettings }
+            : ensureLlmState(config);
         const nextLlmSettings = setActiveProvider(currentLlmState.llmSettings, provider);
         setConfig(buildLlmConfigPatch(nextLlmSettings));
     };

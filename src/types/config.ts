@@ -203,6 +203,12 @@ export interface PolishKeywordRuleSet {
   keywords: string;
 }
 
+export interface LegacyTextReplacementRule {
+  id: string;
+  from: string;
+  to: string;
+}
+
 /** Vocabulary and custom dictionary settings. */
 export interface VocabularyConfig {
   /** List of text replacement rule sets. */
@@ -216,7 +222,7 @@ export interface VocabularyConfig {
   /** Deprecated: Custom hotwords for ASR. Use hotwordSets instead. */
   hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */
-  textReplacements?: any[];
+  textReplacements?: LegacyTextReplacementRule[];
 }
 
 // ---------------------------------------------------------------------------

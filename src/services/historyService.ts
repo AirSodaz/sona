@@ -6,6 +6,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { HistoryItem } from '../types/history';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { v4 as uuidv4 } from 'uuid';
 
 const HISTORY_DIR = 'history';
@@ -35,14 +36,23 @@ async function writeHistoryIndex(items: HistoryItem[]): Promise<void> {
     );
 }
 
+function hasErrorCode(error: unknown): error is { code?: string } {
+    return typeof error === 'object' && error !== null && 'code' in error;
+}
+
+function isMissingHistoryFileError(error: unknown): boolean {
+    const errMsg = extractErrorMessage(error);
+    return errMsg.includes('No such file or directory')
+        || (hasErrorCode(error) && error.code === 'ENOENT');
+}
+
 async function safeRemoveHistoryPath(path: string): Promise<void> {
     try {
         await remove(path, { baseDir: BaseDirectory.AppLocalData });
-    } catch (e: any) {
-        const errMsg = String(e);
-        if (!errMsg.includes('No such file or directory') && e?.code !== 'ENOENT') {
-            logger.error(`[History] Failed to remove file at ${path}:`, e);
-            throw e;
+    } catch (error) {
+        if (!isMissingHistoryFileError(error)) {
+            logger.error(`[History] Failed to remove file at ${path}:`, error);
+            throw error;
         }
     }
 }
@@ -416,9 +426,8 @@ export const historyService = {
                 baseDir: BaseDirectory.AppLocalData,
             });
             return JSON.parse(content);
-        } catch (error: any) {
-            const errMsg = String(error);
-            if (!errMsg.includes('No such file or directory') && error?.code !== 'ENOENT') {
+        } catch (error) {
+            if (!isMissingHistoryFileError(error)) {
                 logger.error('[History] Failed to load summary sidecar:', error);
             }
             return null;

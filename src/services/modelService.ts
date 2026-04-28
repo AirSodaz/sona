@@ -5,6 +5,7 @@ import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import presetModelsData from '../shared/preset-models.json';
+import { extractErrorMessage } from '../utils/errorUtils';
 
 
 /**
@@ -91,6 +92,49 @@ export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
     PRESET_MODELS.map(model => [model.id, model])
 );
 
+interface DownloadProgressPayloadObject {
+    0?: number;
+    1?: number;
+    2?: string;
+    downloaded?: number;
+    total?: number;
+    id?: string;
+}
+
+function parseDownloadProgressPayload(payload: unknown): { downloaded: number; total: number; id: string } {
+    if (Array.isArray(payload)) {
+        const [downloaded, total, id] = payload;
+        return {
+            downloaded: typeof downloaded === 'number' ? downloaded : 0,
+            total: typeof total === 'number' ? total : 0,
+            id: typeof id === 'string' ? id : '',
+        };
+    }
+
+    if (typeof payload === 'object' && payload !== null) {
+        const value = payload as DownloadProgressPayloadObject;
+        const downloaded = typeof value[0] === 'number'
+            ? value[0]
+            : typeof value.downloaded === 'number'
+                ? value.downloaded
+                : 0;
+        const total = typeof value[1] === 'number'
+            ? value[1]
+            : typeof value.total === 'number'
+                ? value.total
+                : 0;
+        const id = typeof value[2] === 'string'
+            ? value[2]
+            : typeof value.id === 'string'
+                ? value.id
+                : '';
+
+        return { downloaded, total, id };
+    }
+
+    return { downloaded: 0, total: 0, id: '' };
+}
+
 /**
  * Callback function for reporting download or extraction progress.
  *
@@ -158,7 +202,7 @@ class ModelService {
         ];
 
         let downloadSuccess = false;
-        let lastError: any = null;
+        let lastError: unknown = null;
 
         // wrapper to manage listener
         let unlisten: (() => void) | undefined;
@@ -179,19 +223,8 @@ class ModelService {
         }
 
         if (onProgress) {
-            unlisten = await listen<any>('download-progress', (event) => {
-                const payload = event.payload;
-                let downloaded = 0;
-                let total = 0;
-                let id = '';
-
-                if (Array.isArray(payload)) {
-                    [downloaded, total, id] = payload;
-                } else if (typeof payload === 'object' && payload !== null) {
-                    downloaded = (payload as any)[0] || (payload as any).downloaded || 0;
-                    total = (payload as any)[1] || (payload as any).total || 0;
-                    id = (payload as any)[2] || (payload as any).id || '';
-                }
+            unlisten = await listen<unknown>('download-progress', (event) => {
+                const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
 
                 // Filter by ID
                 if (id && id !== downloadId) return;
@@ -203,13 +236,9 @@ class ModelService {
                 if (timeDiff > 500 || total === downloaded) { // Update every 500ms or on completion
                     const bytesDiff = downloaded - lastDownloaded;
                     const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-                    let speedStr = '';
-
-                    if (speedBytesPerSec > 1024 * 1024) {
-                        speedStr = `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`;
-                    } else {
-                        speedStr = `${Math.round(speedBytesPerSec / 1024)} KB/s`;
-                    }
+                    const speedStr = speedBytesPerSec > 1024 * 1024
+                        ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+                        : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
                     lastDownloaded = downloaded;
                     lastTime = now;
@@ -254,8 +283,8 @@ class ModelService {
 
                     downloadSuccess = true;
                     break; // Success!
-                } catch (error: any) {
-                    if (signal?.aborted || error.toString().includes('cancelled')) {
+                } catch (error) {
+                    if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
                         throw new Error('Download cancelled');
                     }
                     logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
@@ -268,7 +297,8 @@ class ModelService {
         }
 
         if (!downloadSuccess) {
-            throw new Error(`Download failed after all attempts. Last error: ${lastError}`);
+            const lastErrorMessage = lastError ? extractErrorMessage(lastError) : 'Unknown error';
+            throw new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`);
         }
     }
 

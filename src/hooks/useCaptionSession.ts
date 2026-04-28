@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { captionTranscriptionService, TranscriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
-import { AppConfig } from '../types/transcript';
+import type { AppConfig, TranscriptSegment } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
@@ -217,10 +217,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             // 4. Start Service (Configuration is already handled globally)
             logger.info('[CaptionSession] Starting caption recognizer...');
             await captionService.start(
-                (segment: any) => {
+                (segment: TranscriptSegment) => {
                     captionWindowService.sendSegments([segment]).catch(logger.error);
                 },
-                (error: any) => {
+                (error: string) => {
                     logger.error('[CaptionSession] Service error:', error);
                 }
             );
@@ -280,8 +280,8 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 const captionService = captionTranscriptionService;
                 activeServiceRef.current = captionService;
                 await captionService.start(
-                    (segment: any) => captionWindowService.sendSegments([segment]).catch(logger.error),
-                    (error: any) => logger.error('[CaptionSession] Service error:', error)
+                    (segment: TranscriptSegment) => captionWindowService.sendSegments([segment]).catch(logger.error),
+                    (error: string) => logger.error('[CaptionSession] Service error:', error)
                 );
             }
         };

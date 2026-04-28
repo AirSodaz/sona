@@ -8,6 +8,8 @@ export type DialogType = 'alert' | 'confirm' | 'prompt';
 
 /** Visual variants for dialogs. */
 export type DialogVariant = 'info' | 'success' | 'warning' | 'error';
+export type DialogResult = void | boolean | string | null;
+type DialogResolver = (value: DialogResult) => void;
 
 /** Options for configuring a dialog. */
 export interface DialogOptions {
@@ -40,8 +42,7 @@ interface DialogState {
     /** Current dialog options. */
     options: DialogOptions | null;
     /** Resolver function for the current dialog promise. */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolveRef: ((value: any) => void) | null;
+    resolveRef: DialogResolver | null;
 
     // Actions
     /**
@@ -84,7 +85,7 @@ interface DialogState {
      *
      * @param result The result value.
      */
-    close: (result: any) => void;
+    close: (result: DialogResult) => void;
 }
 
 /**
@@ -136,7 +137,7 @@ export const useDialogStore = create<DialogState>((set, get) => ({
                     variant: 'warning', // Default to warning for confirmations usually
                     ...options,
                 },
-                resolveRef: resolve,
+                resolveRef: (value) => resolve(value === true),
             });
         });
     },
@@ -151,12 +152,14 @@ export const useDialogStore = create<DialogState>((set, get) => ({
                     variant: 'info',
                     ...options,
                 },
-                resolveRef: resolve,
+                resolveRef: (value) => (
+                    resolve(typeof value === 'string' || value === null ? value : null)
+                ),
             });
         });
     },
 
-    close: (result: any) => {
+    close: (result) => {
         const { resolveRef } = get();
         if (resolveRef) {
             resolveRef(result);

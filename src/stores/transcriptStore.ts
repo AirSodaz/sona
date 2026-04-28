@@ -8,6 +8,7 @@ import {
     DEFAULT_SUMMARY_TEMPLATE_ID,
     HistorySummaryPayload,
     SummaryTemplateId,
+    TranscriptSummaryRecord,
     TranscriptSummaryState
 } from '../types/transcript';
 import { useConfigStore, DEFAULT_CONFIG } from './configStore';
@@ -357,6 +358,16 @@ function createDefaultSummaryState(): TranscriptSummaryState {
     };
 }
 
+type LegacySummaryRecord = Partial<TranscriptSummaryRecord> & {
+    template?: string;
+};
+
+interface LegacyHistorySummaryPayload extends Omit<HistorySummaryPayload, 'record'> {
+    activeTemplate?: string;
+    record?: LegacySummaryRecord;
+    records?: Record<string, LegacySummaryRecord | undefined>;
+}
+
 
 /**
  * Zustand store for managing transcript data, audio state, and application configuration.
@@ -631,38 +642,40 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     hydrateSummaryState: (payload, historyId) => {
         const customTemplates = get().config.summaryCustomTemplates;
-        const payloadWithLegacyFields = payload as HistorySummaryPayload & {
-            activeTemplate?: string;
-            records?: Record<string, any>;
-        };
+        const payloadWithLegacyFields = payload as LegacyHistorySummaryPayload;
         const activeTemplateId = coerceSummaryTemplateId(
             payloadWithLegacyFields.activeTemplateId || payloadWithLegacyFields.activeTemplate,
             customTemplates,
         );
 
-        let record = payload.record as any;
+        let record: LegacySummaryRecord | undefined = payloadWithLegacyFields.record;
         if (!record && payloadWithLegacyFields.records) {
             const records = payloadWithLegacyFields.records;
             record = records[
                 payloadWithLegacyFields.activeTemplateId
                 || payloadWithLegacyFields.activeTemplate
                 || activeTemplateId
-            ] || Object.values(records)[0] as any;
+            ] || Object.values(records)[0];
         }
 
-        if (record) {
-            record = {
-                ...record,
+        const normalizedRecord: TranscriptSummaryRecord | undefined = record
+            && typeof record.content === 'string'
+            && typeof record.generatedAt === 'string'
+            && typeof record.sourceFingerprint === 'string'
+            ? {
+                content: record.content,
+                generatedAt: record.generatedAt,
+                sourceFingerprint: record.sourceFingerprint,
                 templateId: coerceSummaryTemplateId(
                     record.templateId || record.template || activeTemplateId,
                     customTemplates,
                 ),
-            };
-        }
+            }
+            : undefined;
 
         get().setSummaryState({
             activeTemplateId,
-            record,
+            record: normalizedRecord,
             streamingContent: undefined,
             isGenerating: false,
             generationProgress: 0,

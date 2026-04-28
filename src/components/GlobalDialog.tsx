@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
-import { useDialogStore } from '../stores/dialogStore';
+import { type DialogVariant, useDialogStore } from '../stores/dialogStore';
 import { SparklesIcon } from './Icons';
 
 /**
  * Renders the appropriate icon based on dialog variant.
  */
-function DialogIcon({ variant }: { variant: string }): React.JSX.Element {
+function DialogIcon({ variant }: { variant: DialogVariant }): React.JSX.Element {
     switch (variant) {
         case 'error':
             return <AlertCircle className="w-6 h-6 text-red-500" style={{ color: 'var(--color-error)' }} />;
@@ -25,8 +26,7 @@ function DialogIcon({ variant }: { variant: string }): React.JSX.Element {
  * Gets the dialog title based on variant if not provided.
  * Note: 't' is passed from the component to avoid hook rules in helper.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getDialogTitle(t: any, variant: string, title?: string): string {
+function getDialogTitle(t: TFunction, variant: DialogVariant, title?: string): string {
     if (title) return title;
     switch (variant) {
         case 'error': return t('common.error', { defaultValue: 'Error' });
@@ -67,7 +67,7 @@ export function GlobalDialog(): React.JSX.Element | null {
         try {
             const result = await options.onAiAction();
             setInputValue(result);
-        } catch (error) {
+        } catch {
             // Error handling is managed by the service
         } finally {
             setIsAiLoading(false);

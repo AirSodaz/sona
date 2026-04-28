@@ -3,9 +3,12 @@ import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { projectService } from './projectService';
+import type { AppConfig } from '../types/config';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 
 const HISTORY_DIR = 'history';
+type ModelConfigKey = 'offlineModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';
 
 /**
  * Service to perform background health checks on application data.
@@ -78,7 +81,7 @@ export const healthCheckService = {
     async checkModels() {
         const config = useConfigStore.getState().config;
         const setConfig = useConfigStore.getState().setConfig;
-        const patch: any = {};
+        const patch: Partial<Pick<AppConfig, ModelConfigKey>> = {};
         let changed = false;
 
         const modelFields = [
@@ -98,11 +101,11 @@ export const healthCheckService = {
                         patch[model.key] = '';
                         changed = true;
                     }
-                } catch (e) {
+                } catch (error) {
                     // If we can't check it, it might be better to leave it, 
                     // but if it's clearly an error we might want to clear it.
                     // For now, we only clear if we are sure it doesn't exist.
-                    const errMsg = String(e);
+                    const errMsg = extractErrorMessage(error);
                     if (errMsg.includes('No such file') || errMsg.includes('not found')) {
                         patch[model.key] = '';
                         changed = true;

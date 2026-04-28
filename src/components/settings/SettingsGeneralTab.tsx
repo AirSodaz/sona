@@ -5,7 +5,10 @@ import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
+import type { UIConfig } from '../../types/config';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+
+type FontValue = NonNullable<UIConfig['font']>;
 
 function getFontFamily(fontValue: string): string {
     switch (fontValue) {
@@ -123,7 +126,7 @@ export function SettingsGeneralTab(): React.JSX.Element {
                         <Dropdown
                             id="settings-font"
                             value={font}
-                            onChange={(value) => updateConfig({ font: value as any })}
+                            onChange={(value) => updateConfig({ font: value as FontValue })}
                             options={[
                                 { value: 'system', label: t('settings.font_system'), style: { fontFamily: 'inherit' } },
                                 { value: 'serif', label: t('settings.font_serif'), style: { fontFamily: 'serif' } },

@@ -5,6 +5,7 @@ import { buildProjectDefaultsFromConfig } from '../types/project';
 import { useConfigStore } from './configStore';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { normalizePolishKeywordSets } from '../utils/polishKeywords';
 import { normalizeSpeakerProfiles } from '../types/speaker';
@@ -72,9 +73,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         activeProjectId: normalizedActiveProjectId,
         isLoading: false,
       });
-    } catch (error: any) {
+    } catch (error) {
       set({
-        error: error?.message || 'Failed to load projects',
+        error: extractErrorMessage(error) || 'Failed to load projects',
         isLoading: false,
       });
     }
@@ -139,11 +140,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       await projectService.setActiveProjectId(projectId);
       set({ activeProjectId: projectId, error: null });
-    } catch (error: any) {
+    } catch (error) {
       logger.error('[Projects] Failed to persist active project id:', error);
       set({
         activeProjectId: projectId,
-        error: error?.message || 'Failed to persist active project',
+        error: extractErrorMessage(error) || 'Failed to persist active project',
       });
     }
   },
