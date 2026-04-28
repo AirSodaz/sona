@@ -26,7 +26,7 @@ fn version_is_printed_to_stdout() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sona 0.6.0"));
+    assert!(stdout.contains("sona 0.6.3"));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn short_version_is_printed_to_stdout() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sona 0.6.0"));
+    assert!(stdout.contains("sona 0.6.3"));
 }
 
 #[test]

@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAutoUpdateCheck } from '../useAutoUpdateCheck';
 import { useConfigStore } from '../../stores/configStore';
@@ -75,7 +75,9 @@ describe('useAutoUpdateCheck', () => {
 
     renderHook(() => useAutoUpdateCheck(true));
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
 
     expect(checkMock).toHaveBeenCalledTimes(1);
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(true);
@@ -91,7 +93,9 @@ describe('useAutoUpdateCheck', () => {
 
     renderHook(() => useAutoUpdateCheck(true));
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
 
     expect(checkMock).not.toHaveBeenCalled();
   });

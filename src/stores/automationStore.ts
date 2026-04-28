@@ -228,7 +228,7 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
         size: snapshot.size,
         mtimeMs: snapshot.mtimeMs,
       },
-      exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+      exportFileNamePrefix: latestRule.exportConfig.prefix || project?.defaults.exportFileNamePrefix || '',
     });
   }, CANDIDATE_DEBOUNCE_MS));
 }

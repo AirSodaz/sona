@@ -295,7 +295,7 @@ fn injection_step_mode(kind: &InjectionStepKind) -> &'static str {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", test))]
 fn injection_plan_mode(steps: &[InjectionStep]) -> &'static str {
     let has_ascii = steps
         .iter()
