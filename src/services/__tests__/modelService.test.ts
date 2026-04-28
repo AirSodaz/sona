@@ -224,5 +224,29 @@ describe('ModelService', () => {
             await expect(modelService.getModelPath('3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx'))
                 .resolves.toBe('/app/data/models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx');
         });
+
+        it('adds localized speaker settings labels to both locale files', () => {
+            expect(enLocale.settings).toMatchObject({
+                speaker_segmentation_model_label: 'Speaker Segmentation Model',
+                speaker_segmentation_model_hint: 'Used to split offline recordings into anonymous speaker turns.',
+                select_speaker_segmentation_model: 'Select speaker segmentation model...',
+                speaker_embedding_model_label: 'Speaker Embedding Model',
+                speaker_embedding_model_hint: 'Used to match diarized speakers against your known speaker profiles.',
+                select_speaker_embedding_model: 'Select speaker embedding model...',
+                speaker_segmentation_models: 'Speaker Segmentation Models',
+                speaker_embedding_models: 'Speaker Embedding Models',
+            });
+
+            expect(zhLocale.settings).toMatchObject({
+                speaker_segmentation_model_label: '说话人分离模型',
+                speaker_segmentation_model_hint: '用于将离线录音拆分为匿名说话人片段。',
+                select_speaker_segmentation_model: '选择说话人分离模型...',
+                speaker_embedding_model_label: '说话人特征模型',
+                speaker_embedding_model_hint: '用于将分离出的说话人与已知说话人档案匹配。',
+                select_speaker_embedding_model: '选择说话人特征模型...',
+                speaker_segmentation_models: '说话人分离模型',
+                speaker_embedding_models: '说话人特征模型',
+            });
+        });
     });
 });
