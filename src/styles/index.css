@@ -3560,6 +3560,20 @@ input[type="radio"]:focus {
   text-overflow: ellipsis;
 }
 
+.history-item-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
 .history-item-project-badge {
   display: inline-flex;
   align-items: center;

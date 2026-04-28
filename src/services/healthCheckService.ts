@@ -5,6 +5,7 @@ import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { projectService } from './projectService';
 import { getPathStatusMap } from './pathStatusService';
 import type { AppConfig } from '../types/config';
+import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
 
 const HISTORY_DIR = 'history';
@@ -49,12 +50,16 @@ export const healthCheckService = {
             const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
 
             try {
-                const [audioExists, transcriptExists] = await Promise.all([
-                    exists(audioPath, { baseDir: BaseDirectory.AppLocalData }),
-                    exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData })
-                ]);
+                const transcriptExists = await exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
+                if (isHistoryItemDraft(item)) {
+                    if (!transcriptExists) {
+                        invalidIds.push(item.id);
+                    }
+                    continue;
+                }
 
-                // If both are missing, the record is invalid
+                const audioExists = await exists(audioPath, { baseDir: BaseDirectory.AppLocalData });
+
                 if (!audioExists && !transcriptExists) {
                     invalidIds.push(item.id);
                 }

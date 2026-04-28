@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { join, tempDir } from '@tauri-apps/api/path';
 import { remove, writeFile } from '@tauri-apps/plugin-fs';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -16,7 +15,11 @@ import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { createAudioRecorderCapture, getSupportedMimeType } from './audioRecorder/capture';
-import { createRecordingPersistence, syncSavedRecordingMeta } from './audioRecorder/persistence';
+import {
+    createRecordingPersistence,
+    getRecordedAudioExtension,
+    syncSavedRecordingMeta,
+} from './audioRecorder/persistence';
 import { createRecordSessionController } from './audioRecorder/session';
 import { createRecordTimingController } from './audioRecorder/timing';
 import type {
@@ -24,6 +27,8 @@ import type {
     RecordSegmentDeliveryMeta,
     RecordSessionPhase,
 } from './audioRecorder/types';
+import type { LiveRecordingDraftHandle } from '../services/historyService';
+import { flushPendingAutoSave } from './useAutoSaveTranscript';
 
 export type {
     RecordSegmentDeliveryMeta,
@@ -45,6 +50,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
     const finalizeLastSegment = useTranscriptStore((state) => state.finalizeLastSegment);
     const clearSegments = useTranscriptStore((state) => state.clearSegments);
+    const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
+    const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
     const showError = useDialogStore((state) => state.showError);
 
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -63,6 +70,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const finalizedDurationSecondsRef = useRef<number | null>(null);
     const segmentTimeOffsetSecondsRef = useRef(0);
     const recordTimelineCursorSecondsRef = useRef(0);
+    const liveDraftRef = useRef<LiveRecordingDraftHandle | null>(null);
 
     const [isInitializing, setIsInitializing] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
@@ -139,6 +147,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const persistence = useMemo(() => createRecordingPersistence({
         logger,
         history: {
+            createLiveRecordingDraft: (...args) => historyService.createLiveRecordingDraft(...args),
+            completeLiveRecordingDraft: (...args) => historyService.completeLiveRecordingDraft(...args),
+            discardLiveRecordingDraft: (...args) => historyService.discardLiveRecordingDraft(...args),
             saveRecording: (...args) => historyService.saveRecording(...args),
             saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
         },
@@ -146,6 +157,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         getActiveProjectId: () => useProjectStore.getState().activeProjectId,
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
+        upsertHistoryItem: (item) => useHistoryStore.getState().upsertItem(item),
+        deleteHistoryItem: (id) => useHistoryStore.getState().deleteItem(id),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         annotateSegmentsForFile: (filePath, segments, transcriptConfig) => (
             speakerService.annotateSegmentsForFile(filePath, segments, transcriptConfig)
@@ -153,20 +166,26 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         syncSavedRecordingMeta: (title, historyId, icon) => (
             syncSavedRecordingMeta(useTranscriptStore.getState(), title, historyId, icon)
         ),
-        resolveTempFilePath: async (extension) => join(await tempDir(), `sona-record-${Date.now()}.${extension}`),
-        writeTempFile: (filePath, contents) => writeFile(filePath, contents),
+        writeFile: (filePath, contents) => writeFile(filePath, contents),
         removeFile: (filePath) => remove(filePath),
         fileSrcFromPath: convertFileSrc,
     }), []);
 
     const handleWebRecordingStop = useCallback(async (blob: Blob, mimeType: string) => {
         const persistedBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
+        const liveDraft = liveDraftRef.current;
+        if (!liveDraft) {
+            timing.clearFinalizedDurationSeconds();
+            return;
+        }
         try {
             await persistence.persistBrowserRecording(
+                liveDraft,
                 persistedBlob,
                 timing.getFinalizedDurationSeconds() ?? timing.getRecordedDurationSeconds(),
             );
         } finally {
+            liveDraftRef.current = null;
             timing.clearFinalizedDurationSeconds();
         }
     }, [persistence, timing]);
@@ -238,34 +257,55 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
 
         const sessionId = session.openRecordSession();
+        setAudioUrl(null);
+        setAudioFile(null);
         setIsInitializing(true);
         setIsTransitioning(true);
 
         try {
             activeInputSourceRef.current = inputSource;
+            liveDraftRef.current = null;
+
+            const createLiveDraft = async (audioExtension: string) => {
+                const draft = await persistence.createLiveRecordingDraft(audioExtension);
+                liveDraftRef.current = draft;
+                return draft;
+            };
 
             let fallbackStream: MediaStream | undefined;
             if (inputSource === 'desktop') {
+                let nativeDraft = await createLiveDraft('wav');
                 const nativeStarted = await capture.tryStartNativeDesktopCapture(
                     sessionId,
                     config.systemAudioDeviceId && config.systemAudioDeviceId !== 'default'
                         ? config.systemAudioDeviceId
                         : null,
+                    nativeDraft.audioAbsolutePath,
                 );
 
                 if (!nativeStarted) {
+                    await persistence.discardLiveRecordingDraft(nativeDraft);
+                    nativeDraft = await createLiveDraft(
+                        getRecordedAudioExtension(getSupportedMimeType() || 'audio/webm'),
+                    );
                     fallbackStream = await capture.requestWebFallbackStream('desktop', config.microphoneId);
                 }
             } else {
+                let nativeDraft = await createLiveDraft('wav');
                 const nativeStarted = await capture.tryStartNativeMicrophoneCapture(sessionId, {
                     deviceName: config.microphoneId && config.microphoneId !== 'default'
                         ? config.microphoneId
                         : null,
                     boost: config.microphoneBoost ?? 1.0,
                     muteDuringRecording: config.muteDuringRecording ?? false,
+                    outputPath: nativeDraft.audioAbsolutePath,
                 });
 
                 if (!nativeStarted) {
+                    await persistence.discardLiveRecordingDraft(nativeDraft);
+                    nativeDraft = await createLiveDraft(
+                        getRecordedAudioExtension(getSupportedMimeType() || 'audio/webm'),
+                    );
                     fallbackStream = await capture.requestWebFallbackStream('microphone', config.microphoneId);
                 }
             }
@@ -286,6 +326,13 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             logger.error(`[useAudioRecorder] Record session start failed. session=${sessionId}:`, error);
             await capture.cleanupPartialStart(sessionId);
             await session.softStopRecordSessionIfActive(sessionId, 'start_failed');
+            if (liveDraftRef.current) {
+                try {
+                    await persistence.discardLiveRecordingDraft(liveDraftRef.current);
+                } finally {
+                    liveDraftRef.current = null;
+                }
+            }
             session.resetRecordSession(sessionId, 'start_failed', true);
 
             if (session.canMutateActiveRecordResources(sessionId)) {
@@ -312,13 +359,14 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 );
             }
         }
-    }, [capture, config, inputSource, session, showError]);
+    }, [capture, config, inputSource, persistence, session, setAudioFile, setAudioUrl, showError]);
 
     const stopRecording = useCallback(async () => {
         const sessionId = session.getSessionId();
         if (!sessionId) {
             return;
         }
+        const liveDraft = liveDraftRef.current;
 
         setIsTransitioning(true);
         const previousPhase = session.getPhase();
@@ -332,11 +380,45 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         // can land after the saved recording has already been finalized.
         await transcriptionService.softStop();
         finalizeLastSegment();
+        const latestSegments = useTranscriptStore.getState().segments;
+        if (liveDraft?.item.id) {
+            await flushPendingAutoSave(liveDraft.item.id, latestSegments);
+        }
+
+        if (!liveDraft || latestSegments.length === 0) {
+            liveDraftRef.current = null;
+            capture.stopFileRecording();
+            await capture.teardownWebCaptureResources();
+
+            if (config.muteDuringRecording) {
+                void capture.setSystemAudioMute(false, 'Failed to unmute system audio:');
+            }
+
+            if (savedWavPath) {
+                try {
+                    await remove(savedWavPath);
+                } catch (error) {
+                    logger.warn('[useAudioRecorder] Failed to remove discarded native recording file:', error);
+                }
+            }
+
+            if (liveDraft) {
+                await persistence.discardLiveRecordingDraft(liveDraft);
+            }
+
+            timing.clearFinalizedDurationSeconds();
+            logger.info(
+                `[useAudioRecorder] Recording session stopped without transcript. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
+            );
+            session.resetRecordSession(sessionId, 'stop_completed');
+            return;
+        }
 
         if (usingNativeCaptureRef.current) {
             if (savedWavPath) {
-                await persistence.persistNativeRecording(savedWavPath, duration);
+                await persistence.persistNativeRecording(liveDraft, savedWavPath, duration);
             }
+            liveDraftRef.current = null;
             usingNativeCaptureRef.current = false;
             timing.clearFinalizedDurationSeconds();
         }
@@ -371,6 +453,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             // samples sneak in after we freeze the visible recording duration.
             await capture.pauseCapture(sessionId);
             await transcriptionService.pauseStream();
+            if (liveDraftRef.current?.item.id) {
+                await flushPendingAutoSave(
+                    liveDraftRef.current.item.id,
+                    useTranscriptStore.getState().segments,
+                );
+            }
 
             if (config.muteDuringRecording) {
                 void capture.setSystemAudioMute(false, 'Failed to unmute system audio on pause:');

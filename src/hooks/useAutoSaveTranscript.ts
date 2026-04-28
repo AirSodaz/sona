@@ -5,6 +5,82 @@ import { TranscriptSegment } from '../types/transcript';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
 import { logger } from '../utils/logger';
 
+const DEFAULT_AUTO_SAVE_DELAY_MS = 2000;
+const LIVE_DRAFT_AUTO_SAVE_DELAY_MS = 500;
+
+const autoSaveRuntime = {
+    isSaving: false,
+    timeout: null as ReturnType<typeof setTimeout> | null,
+    lastFingerprint: '',
+    pendingHistoryId: null as string | null,
+    pendingSegments: null as TranscriptSegment[] | null,
+};
+
+async function saveToHistory(historyId: string, segments: TranscriptSegment[]) {
+    if (autoSaveRuntime.isSaving) return;
+
+    try {
+        autoSaveRuntime.isSaving = true;
+        logger.info('[AutoSave] Saving transcript...', historyId);
+
+        await useHistoryStore.getState().updateTranscript(historyId, segments);
+        useTranscriptStore.getState().setAutoSaveState(historyId, 'saved');
+
+    } catch (err) {
+        logger.error('[AutoSave] Failed to save:', err);
+        useTranscriptStore.getState().setAutoSaveState(historyId, 'error');
+    } finally {
+        autoSaveRuntime.isSaving = false;
+    }
+}
+
+function queueSave(historyId: string, segments: TranscriptSegment[], delayMs: number) {
+    if (autoSaveRuntime.timeout) {
+        clearTimeout(autoSaveRuntime.timeout);
+    }
+
+    autoSaveRuntime.pendingHistoryId = historyId;
+    autoSaveRuntime.pendingSegments = [...segments];
+    useTranscriptStore.getState().setAutoSaveState(historyId, 'saving');
+    autoSaveRuntime.timeout = setTimeout(() => {
+        autoSaveRuntime.timeout = null;
+        const queuedHistoryId = autoSaveRuntime.pendingHistoryId;
+        const queuedSegments = autoSaveRuntime.pendingSegments;
+        autoSaveRuntime.pendingHistoryId = null;
+        autoSaveRuntime.pendingSegments = null;
+        if (!queuedHistoryId || !queuedSegments) {
+            return;
+        }
+        logger.info('[AutoSave] Debounce triggered for:', queuedHistoryId);
+        void saveToHistory(queuedHistoryId, queuedSegments);
+    }, delayMs);
+}
+
+export async function flushPendingAutoSave(
+    historyId?: string | null,
+    segments?: TranscriptSegment[] | null,
+): Promise<void> {
+    const targetHistoryId = historyId || autoSaveRuntime.pendingHistoryId;
+    const targetSegments = segments ? [...segments] : autoSaveRuntime.pendingSegments;
+
+    if (!targetHistoryId || !targetSegments) {
+        return;
+    }
+
+    if (autoSaveRuntime.timeout) {
+        clearTimeout(autoSaveRuntime.timeout);
+        autoSaveRuntime.timeout = null;
+    }
+
+    if (autoSaveRuntime.pendingHistoryId === targetHistoryId) {
+        autoSaveRuntime.pendingHistoryId = null;
+        autoSaveRuntime.pendingSegments = null;
+    }
+
+    useTranscriptStore.getState().setAutoSaveState(targetHistoryId, 'saving');
+    await saveToHistory(targetHistoryId, targetSegments);
+}
+
 /**
  * Hook to auto-save transcript changes to the history file.
  *
@@ -13,8 +89,6 @@ import { logger } from '../utils/logger';
  * - Updates in-memory history list metadata (preview text)
  */
 export function useAutoSaveTranscript() {
-    const isSavingRef = useRef(false);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastFingerprintRef = useRef<string>('');
     const updateTranscript = useHistoryStore(state => state.updateTranscript);
 
@@ -22,6 +96,7 @@ export function useAutoSaveTranscript() {
     useEffect(() => {
         // Initialize fingerprint with current state
         lastFingerprintRef.current = computeSegmentsFingerprint(useTranscriptStore.getState().segments);
+        autoSaveRuntime.lastFingerprint = lastFingerprintRef.current;
 
         const unsubscribe = useTranscriptStore.subscribe(
             (state, prevState) => {
@@ -30,19 +105,14 @@ export function useAutoSaveTranscript() {
 
                 // 1. Handle Switching History Items (Flush pending save for previous item)
                 if (prevId && prevId !== currentId) {
-                    if (timeoutRef.current) {
-                        clearTimeout(timeoutRef.current);
-                        timeoutRef.current = null;
-
-                        // Flush save for PREVIOUS item using PREVIOUS segments
-                        const prevSegments = prevState.segments;
-                        useTranscriptStore.getState().setAutoSaveState(prevId, 'saving');
+                    if (autoSaveRuntime.timeout) {
                         logger.info('[AutoSave] Switching items, flushing save for:', prevId);
-                        saveToHistory(prevId, prevSegments);
+                        void flushPendingAutoSave(prevId, prevState.segments);
                     }
 
                     // Reset fingerprint for new item
                     lastFingerprintRef.current = computeSegmentsFingerprint(state.segments);
+                    autoSaveRuntime.lastFingerprint = lastFingerprintRef.current;
                     return;
                 }
 
@@ -55,17 +125,11 @@ export function useAutoSaveTranscript() {
                         if (currentFingerprint !== lastFingerprintRef.current) {
                             // Change detected
                             lastFingerprintRef.current = currentFingerprint;
-
-                            // Debounce save
-                            if (timeoutRef.current) {
-                                clearTimeout(timeoutRef.current);
-                            }
-
-                            useTranscriptStore.getState().setAutoSaveState(currentId, 'saving');
-                            timeoutRef.current = setTimeout(() => {
-                                logger.info('[AutoSave] Debounce triggered for:', currentId);
-                                saveToHistory(currentId, state.segments);
-                            }, 2000);
+                            autoSaveRuntime.lastFingerprint = currentFingerprint;
+                            const delayMs = state.mode === 'live'
+                                ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS
+                                : DEFAULT_AUTO_SAVE_DELAY_MS;
+                            queueSave(currentId, state.segments, delayMs);
                         }
                     }
                 }
@@ -75,27 +139,10 @@ export function useAutoSaveTranscript() {
 
         return () => {
             unsubscribe();
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
+            if (autoSaveRuntime.timeout) {
+                clearTimeout(autoSaveRuntime.timeout);
+                autoSaveRuntime.timeout = null;
             }
         };
     }, [updateTranscript]);
-
-    async function saveToHistory(historyId: string, segments: TranscriptSegment[]) {
-        if (isSavingRef.current) return;
-
-        try {
-            isSavingRef.current = true;
-            logger.info('[AutoSave] Saving transcript...', historyId);
-
-            await updateTranscript(historyId, segments);
-            useTranscriptStore.getState().setAutoSaveState(historyId, 'saved');
-
-        } catch (err) {
-            logger.error('[AutoSave] Failed to save:', err);
-            useTranscriptStore.getState().setAutoSaveState(historyId, 'error');
-        } finally {
-            isSavingRef.current = false;
-        }
-    }
 }

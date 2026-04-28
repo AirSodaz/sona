@@ -48,19 +48,21 @@ function normalizeHistoryItem(input: unknown): HistoryItem | null {
     return null;
   }
 
-  return {
-    id: input.id.trim(),
-    timestamp: toNonNegativeNumber(input.timestamp),
-    duration: toNonNegativeNumber(input.duration),
-    audioPath: isNonEmptyString(input.audioPath) ? input.audioPath.trim() : '',
+    return {
+        id: input.id.trim(),
+        timestamp: toNonNegativeNumber(input.timestamp),
+        duration: toNonNegativeNumber(input.duration),
+        audioPath: isNonEmptyString(input.audioPath) ? input.audioPath.trim() : '',
     transcriptPath: isNonEmptyString(input.transcriptPath) ? input.transcriptPath.trim() : '',
     title: isNonEmptyString(input.title) ? input.title.trim() : '',
     previewText: isNonEmptyString(input.previewText) ? input.previewText : '',
-    icon: isNonEmptyString(input.icon) ? input.icon : undefined,
-    type: input.type === 'batch' ? 'batch' : 'recording',
-    searchContent: isNonEmptyString(input.searchContent) ? input.searchContent : '',
-    projectId: isNonEmptyString(input.projectId) ? input.projectId.trim() : null,
-  };
+        icon: isNonEmptyString(input.icon) ? input.icon : undefined,
+        type: input.type === 'batch' ? 'batch' : 'recording',
+        searchContent: isNonEmptyString(input.searchContent) ? input.searchContent : '',
+        projectId: isNonEmptyString(input.projectId) ? input.projectId.trim() : null,
+        status: input.status === 'draft' ? 'draft' : 'complete',
+        draftSource: input.draftSource === 'live_record' ? 'live_record' : undefined,
+    };
 }
 
 function createRecentDailyTrend(historyItems: HistoryItem[]): DashboardContentTrendPoint[] {

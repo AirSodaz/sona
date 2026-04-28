@@ -15,6 +15,7 @@ interface HistoryState {
     // Actions
     loadItems: () => Promise<void>;
     addItem: (item: HistoryItem) => void;
+    upsertItem: (item: HistoryItem) => void;
     deleteItem: (id: string) => Promise<void>;
     deleteItems: (ids: string[]) => Promise<void>;
     refresh: () => Promise<void>;
@@ -57,8 +58,25 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     addItem: (item) => {
         set((state) => ({
-            items: [item, ...state.items]
+            items: [item, ...state.items.filter((existing) => existing.id !== item.id)]
         }));
+    },
+
+    upsertItem: (item) => {
+        set((state) => {
+            const existingIndex = state.items.findIndex((existing) => existing.id === item.id);
+            if (existingIndex === -1) {
+                return {
+                    items: [item, ...state.items],
+                };
+            }
+
+            const nextItems = [...state.items];
+            nextItems[existingIndex] = item;
+            return {
+                items: nextItems,
+            };
+        });
     },
 
     deleteItem: async (id) => {

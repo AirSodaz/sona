@@ -214,6 +214,8 @@
         "loading": "正在加载历史记录...",
         "empty": "暂无历史记录。",
         "delete_confirm": "您确定要删除这段录音吗？",
+        "draft_badge": "草稿",
+        "live_record_draft_description": "未完成的实时录音草稿",
         "no_transcript": "无转录文本",
         "delete_tooltip": "删除",
         "search_placeholder": "搜索历史记录...",

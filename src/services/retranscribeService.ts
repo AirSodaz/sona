@@ -1,5 +1,6 @@
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
 import { transcriptionService } from './transcriptionService';
 import { logger } from '../utils/logger';
@@ -19,6 +20,9 @@ class RetranscribeService {
 
         if (!item || !item.audioPath) {
             throw new Error('History item or audio path not found.');
+        }
+        if (isHistoryItemDraft(item)) {
+            throw new Error('Live recording draft must be completed before re-transcribing.');
         }
 
         const audioAbsolutePath = await historyService.getAudioAbsolutePath(item.audioPath);

@@ -214,6 +214,8 @@
         "loading": "Loading history...",
         "empty": "No history yet.",
         "delete_confirm": "Are you sure you want to delete this recording?",
+        "draft_badge": "Draft",
+        "live_record_draft_description": "Interrupted live recording draft",
         "no_transcript": "No transcript",
         "delete_tooltip": "Delete",
         "search_placeholder": "Search history...",

@@ -12,6 +12,11 @@ import { v4 as uuidv4 } from 'uuid';
 const HISTORY_DIR = 'history';
 const INDEX_FILE = 'index.json';
 
+export interface LiveRecordingDraftHandle {
+    item: HistoryItem;
+    audioAbsolutePath: string;
+}
+
 function normalizeHistoryItem(item: Partial<HistoryItem>): HistoryItem {
     return {
         id: item.id || '',
@@ -25,6 +30,8 @@ function normalizeHistoryItem(item: Partial<HistoryItem>): HistoryItem {
         type: item.type || 'recording',
         searchContent: item.searchContent || '',
         projectId: typeof item.projectId === 'string' ? item.projectId : null,
+        status: item.status === 'draft' ? 'draft' : 'complete',
+        draftSource: item.draftSource === 'live_record' ? 'live_record' : undefined,
     };
 }
 
@@ -34,6 +41,16 @@ async function writeHistoryIndex(items: HistoryItem[]): Promise<void> {
         JSON.stringify(items, null, 2),
         { baseDir: BaseDirectory.AppLocalData }
     );
+}
+
+function buildRecordingTitle(timestamp: number): string {
+    const dateStr = new Date(timestamp).toISOString().split('T')[0];
+    const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
+    return `Recording ${dateStr} ${timeStr}`;
+}
+
+function buildDraftAudioFileName(id: string, audioExtension: string): string {
+    return `${id}.${audioExtension.replace(/^\./, '')}`;
 }
 
 function hasErrorCode(error: unknown): error is { code?: string } {
@@ -106,6 +123,84 @@ export const historyService = {
         return { transcriptFileName, previewText, searchContent };
     },
 
+    async createLiveRecordingDraft(
+        audioExtension: string,
+        projectId: string | null = null,
+        icon: string | null = 'system:mic',
+    ): Promise<LiveRecordingDraftHandle> {
+        await this.init();
+
+        const id = uuidv4();
+        const timestamp = Date.now();
+        const title = buildRecordingTitle(timestamp);
+        const audioFileName = buildDraftAudioFileName(id, audioExtension);
+        const appDataDirPath = await appLocalDataDir();
+        const audioAbsolutePath = await join(appDataDirPath, HISTORY_DIR, audioFileName);
+
+        await writeTextFile(
+            `${HISTORY_DIR}/${id}.json`,
+            '[]',
+            { baseDir: BaseDirectory.AppLocalData },
+        );
+
+        const newItem: HistoryItem = {
+            id,
+            timestamp,
+            duration: 0,
+            audioPath: audioFileName,
+            transcriptPath: `${id}.json`,
+            title,
+            previewText: '',
+            icon: icon || undefined,
+            type: 'recording',
+            searchContent: '',
+            projectId,
+            status: 'draft',
+            draftSource: 'live_record',
+        };
+
+        const items = await this.getAll();
+        items.unshift(newItem);
+        await writeHistoryIndex(items);
+
+        return {
+            item: newItem,
+            audioAbsolutePath,
+        };
+    },
+
+    async completeLiveRecordingDraft(
+        historyId: string,
+        segments: TranscriptSegment[],
+        duration: number,
+    ): Promise<HistoryItem> {
+        const items = await this.getAll();
+        const item = items.find((entry) => entry.id === historyId);
+        if (!item) {
+            throw new Error(`History item not found: ${historyId}`);
+        }
+
+        await writeTextFile(
+            `${HISTORY_DIR}/${item.transcriptPath}`,
+            JSON.stringify(segments, null, 2),
+            { baseDir: BaseDirectory.AppLocalData },
+        );
+
+        const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
+        item.previewText = previewText;
+        item.searchContent = searchContent;
+        item.duration = duration;
+        item.status = 'complete';
+        delete item.draftSource;
+
+        await writeHistoryIndex(items);
+        return { ...item };
+    },
+
+    async discardLiveRecordingDraft(historyId: string): Promise<void> {
+        await this.deleteRecording(historyId);
+    },
+
     async saveNativeRecording(absoluteWavPath: string, segments: TranscriptSegment[], duration: number, projectId: string | null = null): Promise<HistoryItem | null> {
         logger.info('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
 
@@ -118,9 +213,7 @@ export const historyService = {
             await this.init();
             const id = uuidv4();
             const timestamp = Date.now();
-            const dateStr = new Date(timestamp).toISOString().split('T')[0];
-            const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
-            const title = `Recording ${dateStr} ${timeStr}`;
+            const title = buildRecordingTitle(timestamp);
 
             const filename = absoluteWavPath.split(/[/\\]/).pop() || `${id}.wav`;
             const audioFileName = filename;
@@ -139,6 +232,7 @@ export const historyService = {
                 type: 'recording',
                 searchContent,
                 projectId,
+                status: 'complete',
             };
 
             // Add to Index
@@ -167,9 +261,7 @@ export const historyService = {
             await this.init();
             const id = uuidv4();
             const timestamp = Date.now();
-            const dateStr = new Date(timestamp).toISOString().split('T')[0];
-            const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
-            const title = `Recording ${dateStr} ${timeStr}`;
+            const title = buildRecordingTitle(timestamp);
 
             // Save Audio
             const audioBuffer = await audioBlob.arrayBuffer();
@@ -198,6 +290,7 @@ export const historyService = {
                 type: 'recording',
                 searchContent,
                 projectId,
+                status: 'complete',
             };
 
             // Add to Index
@@ -261,6 +354,7 @@ export const historyService = {
                 type: 'batch',
                 searchContent,
                 projectId,
+                status: 'complete',
             };
 
             // Add to Index
@@ -465,11 +559,13 @@ export const historyService = {
             try {
                 const fileStat = await stat(`${HISTORY_DIR}/${filename}`, { baseDir: BaseDirectory.AppLocalData });
                 if (fileStat.size === 0) {
-                    logger.error('[History] Audio file is empty:', filename);
+                    logger.warn?.('[History] Audio file is empty:', filename);
                     return null;
                 }
             } catch (e) {
-                logger.error('[History] Audio file not found or inaccessible:', filename, e);
+                if (!isMissingHistoryFileError(e)) {
+                    logger.error('[History] Audio file not found or inaccessible:', filename, e);
+                }
                 return null;
             }
 

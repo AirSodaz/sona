@@ -213,12 +213,26 @@ fn create_history_recording_path<R: Runtime>(app: &AppHandle<R>) -> Result<Strin
     Ok(wav_filepath.to_string_lossy().into_owned())
 }
 
+fn resolve_recording_output_path<F>(
+    output_path: Option<String>,
+    fallback: F,
+) -> Result<String, String>
+where
+    F: FnOnce() -> Result<String, String>,
+{
+    match output_path {
+        Some(path) => Ok(path),
+        None => fallback(),
+    }
+}
+
 fn queue_recording_start<R: Runtime>(
     app: &AppHandle<R>,
     recorder_tx: Option<&tokio::sync::mpsc::Sender<RecorderCommand>>,
     should_record: bool,
     capture_label: &str,
     instance_id: &str,
+    output_path: Option<String>,
 ) -> Result<(), String> {
     if !should_record {
         return Ok(());
@@ -235,7 +249,7 @@ fn queue_recording_start<R: Runtime>(
         return Ok(());
     };
 
-    let wav_filepath = create_history_recording_path(app)?;
+    let wav_filepath = resolve_recording_output_path(output_path, || create_history_recording_path(app))?;
     if let Err(err) = tx.try_send(RecorderCommand::Start(wav_filepath.clone())) {
         eprintln!(
             "[Audio] Failed to queue {} recorder start for instance {} at {}: {}",
@@ -299,6 +313,7 @@ pub fn start_system_audio_capture<R: Runtime>(
     _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
     device_name: Option<String>,
     instance_id: String,
+    output_path: Option<String>,
 ) -> Result<(), String> {
     let _start_guard = state.system_start_guard.lock().map_err(|e| e.to_string())?;
     let requested_device = requested_device_label(&device_name);
@@ -323,6 +338,7 @@ pub fn start_system_audio_capture<R: Runtime>(
                 should_record_system(&instance_id),
                 "System",
                 &instance_id,
+                output_path.clone(),
             )?;
             return Ok(());
         }
@@ -631,6 +647,7 @@ pub fn start_system_audio_capture<R: Runtime>(
         should_record_system(&instance_id),
         "System",
         &instance_id,
+        output_path,
     )?;
 
     Ok(())
@@ -687,6 +704,7 @@ pub fn start_microphone_capture<R: Runtime>(
     _sherpa_state: tauri::State<'_, crate::sherpa::SherpaState>,
     device_name: Option<String>,
     instance_id: String,
+    output_path: Option<String>,
 ) -> Result<(), String> {
     let _start_guard = state.mic_start_guard.lock().map_err(|e| e.to_string())?;
     let requested_device = requested_device_label(&device_name);
@@ -708,6 +726,7 @@ pub fn start_microphone_capture<R: Runtime>(
                 should_record_microphone(&instance_id),
                 "Microphone",
                 &instance_id,
+                output_path.clone(),
             )?;
             return Ok(());
         }
@@ -1043,6 +1062,7 @@ pub fn start_microphone_capture<R: Runtime>(
         should_record_microphone(&instance_id),
         "Microphone",
         &instance_id,
+        output_path,
     )?;
 
     Ok(())
@@ -1507,5 +1527,22 @@ mod tests {
         assert!(detach_result.should_stop_hardware);
         assert!(capture.paused_instances.is_empty());
         assert!(capture.active_instances().is_empty());
+    }
+
+    #[test]
+    fn resolve_recording_output_path_prefers_explicit_output_path() {
+        let resolved = resolve_recording_output_path(Some("C:/tmp/custom.wav".to_string()), || {
+            Err("fallback should not run".to_string())
+        })
+        .unwrap();
+
+        assert_eq!(resolved, "C:/tmp/custom.wav");
+    }
+
+    #[test]
+    fn resolve_recording_output_path_uses_fallback_when_missing() {
+        let resolved = resolve_recording_output_path(None, || Ok("generated.wav".to_string())).unwrap();
+
+        assert_eq!(resolved, "generated.wav");
     }
 }

@@ -21,6 +21,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
+import { isLiveRecordDraftHistoryItem } from '../types/history';
 
 export function ProjectsView(): React.JSX.Element {
   const { t } = useTranslation();
@@ -42,6 +43,7 @@ export function ProjectsView(): React.JSX.Element {
   const updateHistoryItemMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+  const isRecording = useTranscriptStore((state) => state.isRecording);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
   const setMode = useTranscriptStore((state) => state.setMode);
@@ -62,6 +64,11 @@ export function ProjectsView(): React.JSX.Element {
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const activeHistoryItem = useMemo(
+    () => historyItems.find((item) => item.id === sourceHistoryId) || null,
+    [historyItems, sourceHistoryId],
+  );
+  const isLiveDraftSessionLocked = isRecording && !!activeHistoryItem && isLiveRecordDraftHistoryItem(activeHistoryItem);
 
   useEffect(() => {
     void loadHistoryItems();
@@ -74,6 +81,10 @@ export function ProjectsView(): React.JSX.Element {
   }, [clearSegments, setAudioUrl]);
 
   const handleOpenItem = useCallback(async (item: HistoryItemType) => {
+    if (isLiveDraftSessionLocked && item.id !== sourceHistoryId) {
+      return;
+    }
+
     try {
       let segments = await historyService.loadTranscript(item.transcriptPath);
       const url = await historyService.getAudioUrl(item.audioPath);
@@ -104,7 +115,7 @@ export function ProjectsView(): React.JSX.Element {
         cause: error,
       });
     }
-  }, [deleteHistoryItem, refreshHistory, setActiveProjectId, setAudioUrl, showError]);
+  }, [deleteHistoryItem, isLiveDraftSessionLocked, refreshHistory, setActiveProjectId, setAudioUrl, showError, sourceHistoryId]);
 
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
@@ -141,7 +152,15 @@ export function ProjectsView(): React.JSX.Element {
   );
 
   useEffect(() => {
+    if (isLiveDraftSessionLocked && sourceHistoryId && selectedHistoryId !== sourceHistoryId) {
+      setSelectedHistoryId(sourceHistoryId);
+      return;
+    }
+
     if (selectedHistoryId && !selectedItem) {
+      if (isLiveDraftSessionLocked && selectedHistoryId === sourceHistoryId) {
+        return;
+      }
       clearOpenedItem();
       return;
     }
@@ -158,9 +177,31 @@ export function ProjectsView(): React.JSX.Element {
         transcriptState.setAudioUrl(null);
       }
     }
-  }, [browseState.scopedItems, clearOpenedItem, selectedHistoryId, selectedItem, sourceHistoryId]);
+  }, [
+    browseState.scopedItems,
+    clearOpenedItem,
+    isLiveDraftSessionLocked,
+    selectedHistoryId,
+    selectedItem,
+    sourceHistoryId,
+  ]);
+
+  useEffect(() => {
+    if (!isLiveDraftSessionLocked) {
+      return;
+    }
+
+    if (selectionState.isSelectionMode) {
+      selectionState.clearSelection();
+      setIsSelectionMode(false);
+    }
+  }, [isLiveDraftSessionLocked, selectionState, setIsSelectionMode]);
 
   const handleSwitchBrowseScope = async (nextScope: string) => {
+    if (isLiveDraftSessionLocked) {
+      return;
+    }
+
     const shouldDiscard = await projectSettingsDraft.confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
       return;
@@ -183,6 +224,9 @@ export function ProjectsView(): React.JSX.Element {
 
   const handleDeleteHistoryItem = async (event: React.MouseEvent, id: string) => {
     event.stopPropagation();
+    if (isLiveDraftSessionLocked && id === sourceHistoryId) {
+      return;
+    }
 
     const confirmed = await confirm(t('history.delete_confirm'), {
       title: t('history.delete_title', { defaultValue: 'Delete History' }),
@@ -200,6 +244,9 @@ export function ProjectsView(): React.JSX.Element {
 
   const handleRenameHistoryItem = async (event: React.MouseEvent, id: string) => {
     event.stopPropagation();
+    if (isLiveDraftSessionLocked && id === sourceHistoryId) {
+      return;
+    }
     const item = historyItems.find((historyItem) => historyItem.id === id);
     if (!item) {
       return;
@@ -298,6 +345,9 @@ export function ProjectsView(): React.JSX.Element {
   };
 
   const handleToggleSelectionMode = () => {
+    if (isLiveDraftSessionLocked) {
+      return;
+    }
     browseState.setIsFilterMenuOpen(false);
     selectionState.toggleSelectionMode();
   };
@@ -377,7 +427,7 @@ export function ProjectsView(): React.JSX.Element {
             t={t}
           />
 
-          <ProjectsToolbar
+              <ProjectsToolbar
             activeFilterCount={browseState.activeFilterCount}
             currentSearchResultId={browseState.activeSearchResultId}
             dateFilter={browseState.dateFilter}
@@ -400,8 +450,9 @@ export function ProjectsView(): React.JSX.Element {
             onSetFilterType={browseState.setFilterType}
             onSetSortOrder={browseState.setSortOrder}
             onSetViewMode={(nextViewMode) => setConfig({ projectsViewMode: nextViewMode })}
-            onToggleSelectionMode={handleToggleSelectionMode}
-            scopedItemsCount={browseState.scopedItems.length}
+                onToggleSelectionMode={handleToggleSelectionMode}
+                disableSelectionModeToggle={isLiveDraftSessionLocked}
+                scopedItemsCount={browseState.scopedItems.length}
             searchInputLabel={browseState.searchInputLabel}
             searchInputRef={searchInputRef}
             searchQuery={browseState.searchQuery}
@@ -433,6 +484,7 @@ export function ProjectsView(): React.JSX.Element {
               browseProject={browseState.browseProject}
               filteredAndSortedItems={browseState.filteredAndSortedItems}
               handleOpenItem={handleOpenItem}
+              isHistoryInteractionLocked={isLiveDraftSessionLocked}
               isAllItemsScope={browseState.isAllItemsScope}
               isHistoryLoading={isHistoryLoading}
               isSelectionMode={selectionState.isSelectionMode}

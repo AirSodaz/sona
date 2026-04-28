@@ -1,7 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, Clock } from 'lucide-react';
-import { HistoryItem as HistoryItemType } from '../../types/history';
+import {
+    HistoryItem as HistoryItemType,
+    isHistoryItemDraft,
+    isLiveRecordDraftHistoryItem,
+} from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
 import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon } from '../Icons';
 import { Checkbox } from '../Checkbox';
@@ -20,6 +24,9 @@ interface HistoryItemProps {
     isKeyboardActive?: boolean;
     onToggleSelection?: (id: string) => void;
     layout?: 'list' | 'grid' | 'table';
+    isLoadDisabled?: boolean;
+    isRenameDisabled?: boolean;
+    isDeleteDisabled?: boolean;
 }
 
 /**
@@ -121,6 +128,9 @@ function HistoryItemComponent({
     isKeyboardActive = false,
     onToggleSelection,
     layout = 'list',
+    isLoadDisabled = false,
+    isRenameDisabled = false,
+    isDeleteDisabled = false,
 }: HistoryItemProps): React.JSX.Element {
     const { t, i18n } = useTranslation();
     const projectName = useProjectStore((state) => {
@@ -132,12 +142,22 @@ function HistoryItemComponent({
     const itemTypeLabel = item.type === 'batch'
         ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
         : t('projects.filter_recordings', { defaultValue: 'Recordings' });
+    const isDraft = isHistoryItemDraft(item);
+    const isLiveDraft = isLiveRecordDraftHistoryItem(item);
+    const previewText = item.previewText
+        ? item.previewText
+        : isLiveDraft
+            ? t('history.live_record_draft_description', { defaultValue: 'Interrupted live recording draft' })
+            : null;
 
     const handleClick = (e: React.MouseEvent) => {
         if (isSelectionMode && onToggleSelection) {
             e.preventDefault();
             e.stopPropagation();
             onToggleSelection(item.id);
+        } else if (isLoadDisabled) {
+            e.preventDefault();
+            e.stopPropagation();
         } else {
             onLoad(item);
         }
@@ -167,6 +187,7 @@ function HistoryItemComponent({
                 onClick={handleClick}
                 aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
                 role={layout === 'table' ? 'cell' : undefined}
+                disabled={!isSelectionMode && isLoadDisabled}
             >
                 <div className="history-item-header">
                     <div className="history-item-title-row">
@@ -174,6 +195,11 @@ function HistoryItemComponent({
                             {renderIcon(item.icon, item.type)}
                         </span>
                         <span className="history-item-title">{highlightRange(item.title, searchTitleMatch)}</span>
+                        {isDraft && (
+                            <span className="history-item-status-badge">
+                                {t('history.draft_badge', { defaultValue: 'Draft' })}
+                            </span>
+                        )}
                     </div>
 
                     {layout !== 'table' && (
@@ -199,8 +225,8 @@ function HistoryItemComponent({
                     <p className="history-item-preview">
                         {searchQuery.trim() && searchSnippet
                             ? renderSnippet(searchSnippet)
-                            : item.previewText
-                            ? item.previewText
+                            : previewText
+                            ? previewText
                             : <em>{t('history.no_transcript')}</em>}
                     </p>
                 )}
@@ -227,6 +253,7 @@ function HistoryItemComponent({
                             aria-label={t('common.rename_item', { item: item.title, defaultValue: `Rename ${item.title}` })}
                             data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
                             data-tooltip-pos="left"
+                            disabled={isRenameDisabled}
                         >
                             <EditIcon />
                         </button>
@@ -238,6 +265,7 @@ function HistoryItemComponent({
                         aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
                         data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
                         data-tooltip-pos="left"
+                        disabled={isDeleteDisabled}
                     >
                         <TrashIcon />
                     </button>

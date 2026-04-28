@@ -1,6 +1,7 @@
 import type { AppConfig } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { TranscriptSegment } from '../../types/transcript';
+import type { LiveRecordingDraftHandle } from '../../services/historyService';
 
 export type InputSource = 'microphone' | 'desktop';
 
@@ -71,6 +72,17 @@ export interface RecordingPersistenceTranscriptState {
 }
 
 export interface RecordingHistorySaver {
+    createLiveRecordingDraft: (
+        audioExtension: string,
+        projectId?: string | null,
+        icon?: string | null,
+    ) => Promise<LiveRecordingDraftHandle>;
+    completeLiveRecordingDraft: (
+        historyId: string,
+        segments: TranscriptSegment[],
+        duration: number,
+    ) => Promise<HistoryItem>;
+    discardLiveRecordingDraft: (historyId: string) => Promise<void>;
     saveRecording: (
         blob: Blob,
         segments: TranscriptSegment[],

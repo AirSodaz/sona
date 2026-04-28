@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent, renderHook } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
+import type { HistoryItem } from '../../types/history';
+import type { LiveRecordingDraftHandle } from '../../services/historyService';
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
@@ -30,11 +32,70 @@ vi.mock('@tauri-apps/api/event', () => ({
     listen: (event: string, callback: (event: any) => void) => mockEventListen(event, callback),
 }));
 
+function createDraftHandle(
+    id: string,
+    extension = 'wav',
+    overrides: Partial<HistoryItem> = {},
+): LiveRecordingDraftHandle {
+    return {
+        item: {
+            id,
+            timestamp: 1,
+            duration: 0,
+            audioPath: `${id}.${extension}`,
+            transcriptPath: `${id}.json`,
+            title: `Recording ${id}`,
+            previewText: '',
+            projectId: null,
+            icon: 'system:mic',
+            type: 'recording',
+            searchContent: '',
+            status: 'draft',
+            draftSource: 'live_record',
+            ...overrides,
+        },
+        audioAbsolutePath: `C:/mock/history/${id}.${extension}`,
+    };
+}
+
+function createCompletedHistoryItem(
+    id: string,
+    extension = 'wav',
+    overrides: Partial<HistoryItem> = {},
+): HistoryItem {
+    return {
+        id,
+        timestamp: 1,
+        duration: 1,
+        audioPath: `${id}.${extension}`,
+        transcriptPath: `${id}.json`,
+        title: `Recording ${id}`,
+        previewText: '',
+        projectId: null,
+        icon: 'system:mic',
+        type: 'recording',
+        searchContent: '',
+        status: 'complete',
+        ...overrides,
+    };
+}
+
 // Mock historyService
 const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'mock-id', title: 'Recording test', projectId: null });
 const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'mock-id', title: 'Recording test', projectId: null });
+const mockCreateLiveRecordingDraft = vi.fn();
+const mockCompleteLiveRecordingDraft = vi.fn();
+const mockDeleteRecording = vi.fn().mockResolvedValue(undefined);
+let liveDraftCounter = 0;
+const liveDraftHandles = new Map<string, LiveRecordingDraftHandle>();
+
 vi.mock('../../services/historyService', () => ({
     historyService: {
+        createLiveRecordingDraft: (...args: any[]) => mockCreateLiveRecordingDraft(...args),
+        completeLiveRecordingDraft: (...args: any[]) => mockCompleteLiveRecordingDraft(...args),
+        discardLiveRecordingDraft: (...args: any[]) => mockDeleteRecording(...args),
+        deleteRecording: (...args: any[]) => mockDeleteRecording(...args),
+        updateTranscript: vi.fn().mockResolvedValue(undefined),
         saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
         saveNativeRecording: (path: string, segments: any, duration: number) => mockSaveNativeRecording(path, segments, duration),
         saveTranscriptFile: vi.fn(),
@@ -146,6 +207,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     exists: vi.fn(() => Promise.resolve(false)),
     remove: vi.fn(() => Promise.resolve()),
     mkdir: vi.fn(() => Promise.resolve()),
+    writeFile: vi.fn(() => Promise.resolve()),
     writeTextFile: vi.fn(() => Promise.resolve()),
     readTextFile: vi.fn(() => Promise.resolve('')),
     BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
@@ -176,11 +238,39 @@ vi.mock('lucide-react', () => ({
 describe('LiveRecord Native Capture', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
+        liveDraftCounter = 0;
+        liveDraftHandles.clear();
         mockInvoke.mockImplementation(async (cmd: string) => {
             if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
                 return '/mock/path/to/audio.wav';
             }
             return undefined;
+        });
+        mockCreateLiveRecordingDraft.mockReset();
+        mockCompleteLiveRecordingDraft.mockReset();
+        mockDeleteRecording.mockReset();
+        mockDeleteRecording.mockImplementation(async (historyId: string) => {
+            liveDraftHandles.delete(historyId);
+        });
+        mockCreateLiveRecordingDraft.mockImplementation(async (audioExtension: string, projectId?: string | null, icon?: string | null) => {
+            liveDraftCounter += 1;
+            const draft = createDraftHandle(`draft-${liveDraftCounter}`, audioExtension, {
+                projectId: projectId ?? null,
+                icon: icon ?? 'system:mic',
+            });
+            liveDraftHandles.set(draft.item.id, draft);
+            return draft;
+        });
+        mockCompleteLiveRecordingDraft.mockImplementation(async (historyId: string, segments: Array<{ text?: string }>, duration: number) => {
+            const draft = liveDraftHandles.get(historyId) ?? createDraftHandle(historyId);
+            return createCompletedHistoryItem(historyId, draft.item.audioPath.split('.').pop() || 'wav', {
+                title: draft.item.title,
+                icon: draft.item.icon,
+                projectId: draft.item.projectId,
+                duration,
+                previewText: segments[0]?.text || '',
+                searchContent: segments.map((segment) => segment.text || '').join(' ').trim(),
+            });
         });
 
         const raf = vi.fn((cb) => setTimeout(cb, 16));
@@ -390,7 +480,11 @@ describe('LiveRecord Native Capture', () => {
         });
 
         // Check invoke called
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', expect.objectContaining({
+            deviceName: null,
+            instanceId: 'record',
+            outputPath: expect.any(String),
+        }));
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(systemAudioCallback).toBeDefined();
 
@@ -456,7 +550,11 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+            deviceName: null,
+            instanceId: 'record',
+            outputPath: expect.any(String),
+        }));
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(useTranscriptStore.getState().segments).toEqual([
             expect.objectContaining({
@@ -515,22 +613,21 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockSaveNativeRecording).toHaveBeenCalled();
-        const callArgs = mockSaveNativeRecording.mock.calls[0];
-        // 1st arg: Path
-        expect(typeof callArgs[0]).toBe('string');
-        // 2nd arg: segments
+        expect(mockCompleteLiveRecordingDraft).toHaveBeenCalled();
+        const callArgs = mockCompleteLiveRecordingDraft.mock.calls[0];
+        expect(callArgs[0]).toBe('draft-1');
         expect(callArgs[1]).toHaveLength(1);
     });
 
     it('syncs the saved history title into the editor after native recording is persisted', async () => {
         const { useTranscriptStore } = await import('../../stores/transcriptStore');
-        mockSaveNativeRecording.mockResolvedValueOnce({
+        mockCreateLiveRecordingDraft.mockResolvedValueOnce(createDraftHandle('native-history-id', 'wav'));
+        mockCompleteLiveRecordingDraft.mockResolvedValueOnce(createCompletedHistoryItem('native-history-id', 'wav', {
             id: 'native-history-id',
             title: 'Recording 2026-04-27 09-30-00',
             icon: 'system:mic',
             projectId: null,
-        });
+        }));
 
         render(<LiveRecord />);
 
@@ -551,7 +648,11 @@ describe('LiveRecord Native Capture', () => {
             await Promise.resolve();
         });
 
-        expect(mockSaveNativeRecording).toHaveBeenCalled();
+        expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
+            'native-history-id',
+            expect.any(Array),
+            expect.any(Number),
+        );
         expect(useTranscriptStore.getState().sourceHistoryId).toBe('native-history-id');
         expect(useTranscriptStore.getState().title).toBe('Recording 2026-04-27 09-30-00');
         expect(useTranscriptStore.getState().icon).toBe('system:mic');
@@ -607,7 +708,11 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+            deviceName: null,
+            instanceId: 'record',
+            outputPath: expect.any(String),
+        }));
         expect(mockInvoke).not.toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
         expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
         expect(useTranscriptStore.getState().isRecording).toBe(true);
@@ -749,7 +854,11 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', expect.objectContaining({
+            deviceName: null,
+            instanceId: 'record',
+            outputPath: expect.any(String),
+        }));
         expect(mockInvoke).toHaveBeenCalledWith('stop_system_audio_capture', { instanceId: 'record' });
 
         // Switch back to microphone source and start/stop again
@@ -766,7 +875,11 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', { deviceName: null, instanceId: 'record' });
+        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+            deviceName: null,
+            instanceId: 'record',
+            outputPath: expect.any(String),
+        }));
         expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
     });
 

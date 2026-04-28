@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { HistoryItem } from '../history/HistoryItem';
 import { PlusCircleIcon } from '../Icons';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
+import { isLiveRecordDraftHistoryItem } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
 import { matchWorkspaceItem } from '../../utils/workspaceSearch';
 import type { TranslationFn } from './types';
@@ -12,6 +13,7 @@ interface ProjectsResultsProps {
   browseProject: ProjectRecord | null;
   filteredAndSortedItems: HistoryItemType[];
   handleOpenItem: (item: HistoryItemType) => Promise<void>;
+  isHistoryInteractionLocked: boolean;
   isAllItemsScope: boolean;
   isHistoryLoading: boolean;
   isSelectionMode: boolean;
@@ -33,6 +35,7 @@ export function ProjectsResults({
   browseProject,
   filteredAndSortedItems,
   handleOpenItem,
+  isHistoryInteractionLocked,
   isAllItemsScope,
   isHistoryLoading,
   isSelectionMode,
@@ -117,6 +120,7 @@ export function ProjectsResults({
           )}
           {filteredAndSortedItems.map((item) => {
             const searchMatch = searchMatchByItemId.get(item.id) ?? null;
+            const isLockedLiveDraft = isHistoryInteractionLocked && isLiveRecordDraftHistoryItem(item);
             return (
               <HistoryItem
                 key={item.id}
@@ -124,6 +128,9 @@ export function ProjectsResults({
                 onLoad={handleOpenItem}
                 onDelete={onDeleteHistoryItem}
                 onRename={onRenameHistoryItem}
+                isLoadDisabled={isHistoryInteractionLocked && !isLockedLiveDraft}
+                isRenameDisabled={isLockedLiveDraft}
+                isDeleteDisabled={isLockedLiveDraft}
                 searchQuery={searchQuery}
                 searchTitleMatch={searchMatch?.titleMatch ?? null}
                 searchSnippet={searchMatch?.displaySnippet ?? null}

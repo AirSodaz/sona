@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useHistoryStore } from '../stores/historyStore';
 import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
 import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon, SettingsIcon } from './Icons';
 import { TranscriptSegment } from '../types/transcript';
+import { isHistoryItemDraft } from '../types/history';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
 import { PolishSettingsModal } from './PolishSettingsModal';
 
@@ -40,6 +42,9 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
 
     // LLM state
     const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+    const currentHistoryItem = useHistoryStore((state) => (
+        sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
+    ));
     const llmState = useTranscriptStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
     const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = llmState;
     const updateLlmState = useTranscriptStore((state) => state.updateLlmState);
@@ -47,6 +52,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const config = useConfigStore((state) => state.config);
     const setSegments = useTranscriptStore((state) => state.setSegments);
     const segments = useTranscriptStore((state) => state.segments);
+    const canRetranscribeCurrentHistory = !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -276,7 +282,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
                     role="menu"
                     aria-labelledby="polish-menu-button"
                 >
-                    {sourceHistoryId && sourceHistoryId !== 'current' && (
+                    {sourceHistoryId && sourceHistoryId !== 'current' && canRetranscribeCurrentHistory && (
                         <button
                             type="button"
                             className="export-dropdown-item"

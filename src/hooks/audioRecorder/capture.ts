@@ -218,7 +218,11 @@ export function createAudioRecorderCapture({
         processor.connect(refs.audioContextRef.current.destination);
     }
 
-    async function tryStartNativeDesktopCapture(sessionId: string, deviceName: string | null): Promise<boolean> {
+    async function tryStartNativeDesktopCapture(
+        sessionId: string,
+        deviceName: string | null,
+        outputPath: string,
+    ): Promise<boolean> {
         try {
             logger.info(`[useAudioRecorder] Attempting native system audio capture. session=${sessionId}`);
 
@@ -228,7 +232,8 @@ export function createAudioRecorderCapture({
 
             await invoke('start_system_audio_capture', {
                 deviceName,
-                instanceId: 'record'
+                instanceId: 'record',
+                outputPath,
             });
             refs.usingNativeCaptureRef.current = true;
 
@@ -251,6 +256,7 @@ export function createAudioRecorderCapture({
             deviceName: string | null;
             boost: number;
             muteDuringRecording: boolean;
+            outputPath: string;
         },
     ): Promise<boolean> {
         try {
@@ -266,7 +272,8 @@ export function createAudioRecorderCapture({
 
             await invoke('start_microphone_capture', {
                 deviceName: options.deviceName,
-                instanceId: 'record'
+                instanceId: 'record',
+                outputPath: options.outputPath,
             });
             refs.usingNativeCaptureRef.current = true;
 
