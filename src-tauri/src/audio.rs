@@ -176,7 +176,7 @@ pub struct AudioDevice {
     name: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.output_devices().map_err(|e| e.to_string())?;
@@ -305,7 +305,7 @@ fn update_capture_pause_state(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_system_audio_capture<R: Runtime>(
     app: AppHandle<R>,
     window: Window<R>,
@@ -683,7 +683,7 @@ async fn feed_system_audio_to_instances<R: Runtime>(app: &AppHandle<R>, chunk: &
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     let host = cpal::default_host();
     let devices = host.input_devices().map_err(|e| e.to_string())?;
@@ -696,7 +696,7 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     Ok(result)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_microphone_capture<R: Runtime>(
     app: AppHandle<R>,
     window: Window<R>,

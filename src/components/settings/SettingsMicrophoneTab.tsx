@@ -31,6 +31,8 @@ export function SettingsMicrophoneTab({
     const updateConfig = useSetConfig();
     const [devices, setDevices] = useState<{ label: string; value: string }[]>([]);
     const [systemDevices, setSystemDevices] = useState<{ label: string; value: string }[]>([]);
+    const [areMicrophoneDevicesLoaded, setAreMicrophoneDevicesLoaded] = useState(false);
+    const [areSystemDevicesLoaded, setAreSystemDevicesLoaded] = useState(false);
 
     const microphoneId = config.microphoneId || 'default';
     const microphoneBoost = config.microphoneBoost ?? 1.0;
@@ -44,6 +46,9 @@ export function SettingsMicrophoneTab({
     const usingNativeMicRef = useRef<boolean>(false);
     const startedMicCaptureRef = useRef<boolean>(false);
     const startedSystemCaptureRef = useRef<boolean>(false);
+    const micPreviewRequestIdRef = useRef(0);
+    const systemPreviewRequestIdRef = useRef(0);
+    const systemPreviewFrameRef = useRef<number | null>(null);
     const micTargetPeakRef = useRef(0);
     const systemTargetPeakRef = useRef(0);
 
@@ -52,6 +57,7 @@ export function SettingsMicrophoneTab({
 
     // We only control the system capture if it's not already running for recording/captioning
     const isActiveSession = isRecording || isCaptionMode;
+    const arePreviewDependenciesReady = areMicrophoneDevicesLoaded && areSystemDevicesLoaded;
 
     const { startVisualizer: startMicWaveAnimation, stopVisualizer: stopMicWaveAnimation } = useAudioVisualizer({
         canvasRef,
@@ -65,9 +71,35 @@ export function SettingsMicrophoneTab({
         isPaused: false
     });
 
+    async function stopPreviewCapture(command: 'stop_microphone_capture' | 'stop_system_audio_capture', instanceId: 'test_mic' | 'test_system') {
+        const path = await invoke<string>(command, { instanceId });
+        if (path) {
+            await remove(path).catch(logger.error);
+        }
+    }
+
+    function clearQueuedSystemPreviewFrame() {
+        if (systemPreviewFrameRef.current === null) {
+            return;
+        }
+
+        cancelAnimationFrame(systemPreviewFrameRef.current);
+        systemPreviewFrameRef.current = null;
+    }
+
+    function waitForNextSystemPreviewFrame() {
+        return new Promise<void>((resolve) => {
+            systemPreviewFrameRef.current = requestAnimationFrame(() => {
+                systemPreviewFrameRef.current = null;
+                resolve();
+            });
+        });
+    }
+
     // Enumerate devices
     useEffect(() => {
         let isMounted = true;
+        setAreMicrophoneDevicesLoaded(false);
 
         async function getDevices() {
             try {
@@ -77,6 +109,10 @@ export function SettingsMicrophoneTab({
                 }
             } catch (err) {
                 logger.error('Error enumerating devices:', err);
+            } finally {
+                if (isMounted) {
+                    setAreMicrophoneDevicesLoaded(true);
+                }
             }
         }
 
@@ -90,6 +126,7 @@ export function SettingsMicrophoneTab({
     // Enumerate system audio devices
     useEffect(() => {
         let isMounted = true;
+        setAreSystemDevicesLoaded(false);
 
         async function getSystemDevices() {
             try {
@@ -99,6 +136,10 @@ export function SettingsMicrophoneTab({
                 }
             } catch (err) {
                 logger.error('Error getting system audio devices:', err);
+            } finally {
+                if (isMounted) {
+                    setAreSystemDevicesLoaded(true);
+                }
             }
         }
 
@@ -109,99 +150,53 @@ export function SettingsMicrophoneTab({
         };
     }, [t]);
 
-    // System Audio Visualizer Logic
-    useEffect(() => {
-        let isMounted = true;
-
-        async function startSystemVisualizer() {
-            try {
-                if (!isActiveSession) {
-                    await invoke('start_system_audio_capture', {
-                        deviceName: systemAudioDeviceId === 'default' ? null : systemAudioDeviceId,
-                        instanceId: 'test_system'
-                    });
-                    startedSystemCaptureRef.current = true;
-                } else {
-                    startedSystemCaptureRef.current = false;
-                }
-
-                const unlisten = await listen<number>('system-audio', (event) => {
-                    if (!isMounted) return;
-                    systemTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
-                });
-
-                systemUnlistenRef.current = unlisten;
-                startSystemWaveAnimation();
-            } catch (err) {
-                logger.error('Error starting system visualizer:', err);
-            }
-        }
-
-        if (isOpen && isActiveTab) {
-            startSystemVisualizer();
-        }
-
-        return () => {
-            isMounted = false;
-            stopSystemWaveAnimation();
-
-            if (systemUnlistenRef.current) {
-                systemUnlistenRef.current();
-                systemUnlistenRef.current = null;
-            }
-
-            if (startedSystemCaptureRef.current) {
-                invoke<string>('stop_system_audio_capture', { instanceId: 'test_system' })
-                    .then((path) => {
-                        if (path) {
-                            remove(path).catch(logger.error);
-                        }
-                    })
-                    .catch(logger.error);
-                startedSystemCaptureRef.current = false;
-            }
-        };
-    }, [systemAudioDeviceId, isActiveSession, isOpen, isActiveTab]);
-
     // Sync Microphone Boost to Rust backend
     useEffect(() => {
         invoke('set_microphone_boost', { boost: microphoneBoost }).catch(logger.error);
     }, [microphoneBoost]);
 
-    // Mic Visualizer Logic
-    useEffect(() => {
-        let isMounted = true;
-
-        if (isOpen && isActiveTab) {
-            startVisualizer(microphoneId, () => isMounted);
+    async function startMicrophonePreview(deviceId: string, isCurrentRequest: () => boolean) {
+        if (!isCurrentRequest()) {
+            return;
         }
 
-        return () => {
-            isMounted = false;
-            stopVisualizer();
-        };
-    }, [microphoneId, isActiveSession, isOpen, isActiveTab]);
+        usingNativeMicRef.current = false;
+        startedMicCaptureRef.current = false;
 
-    async function startVisualizer(deviceId: string, checkMounted: () => boolean) {
-        stopVisualizer();
         try {
+            let captureStarted = false;
+
             if (!isActiveSession) {
                 await invoke('start_microphone_capture', {
                     deviceName: deviceId === 'default' ? null : deviceId,
                     instanceId: 'test_mic'
                 });
-                startedMicCaptureRef.current = true;
-            } else {
-                startedMicCaptureRef.current = false;
+                captureStarted = true;
+            }
+
+            if (!isCurrentRequest()) {
+                if (captureStarted) {
+                    await stopPreviewCapture('stop_microphone_capture', 'test_mic');
+                }
+                return;
             }
 
             const unlisten = await listen<number>('microphone-audio', (event) => {
-                if (!checkMounted()) return;
+                if (!isCurrentRequest()) return;
                 micTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
             });
 
+            if (!isCurrentRequest()) {
+                unlisten();
+                if (captureStarted) {
+                    await stopPreviewCapture('stop_microphone_capture', 'test_mic');
+                }
+                return;
+            }
+
             nativeUnlistenRef.current = unlisten;
             usingNativeMicRef.current = true;
+            startedMicCaptureRef.current = captureStarted;
 
             startMicWaveAnimation();
         } catch (err) {
@@ -210,7 +205,53 @@ export function SettingsMicrophoneTab({
         }
     }
 
-    function stopVisualizer() {
+    async function startSystemPreview(deviceId: string, isCurrentRequest: () => boolean) {
+        if (!isCurrentRequest()) {
+            return;
+        }
+
+        startedSystemCaptureRef.current = false;
+
+        try {
+            let captureStarted = false;
+
+            if (!isActiveSession) {
+                await invoke('start_system_audio_capture', {
+                    deviceName: deviceId === 'default' ? null : deviceId,
+                    instanceId: 'test_system'
+                });
+                captureStarted = true;
+            }
+
+            if (!isCurrentRequest()) {
+                if (captureStarted) {
+                    await stopPreviewCapture('stop_system_audio_capture', 'test_system');
+                }
+                return;
+            }
+
+            const unlisten = await listen<number>('system-audio', (event) => {
+                if (!isCurrentRequest()) return;
+                systemTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
+            });
+
+            if (!isCurrentRequest()) {
+                unlisten();
+                if (captureStarted) {
+                    await stopPreviewCapture('stop_system_audio_capture', 'test_system');
+                }
+                return;
+            }
+
+            systemUnlistenRef.current = unlisten;
+            startedSystemCaptureRef.current = captureStarted;
+            startSystemWaveAnimation();
+        } catch (err) {
+            logger.error('Error starting system visualizer:', err);
+        }
+    }
+
+    function stopMicrophonePreview() {
         stopMicWaveAnimation();
 
         if (nativeUnlistenRef.current) {
@@ -218,17 +259,70 @@ export function SettingsMicrophoneTab({
             nativeUnlistenRef.current = null;
         }
         if (usingNativeMicRef.current && startedMicCaptureRef.current) {
-            invoke<string>('stop_microphone_capture', { instanceId: 'test_mic' })
-                .then((path) => {
-                    if (path) {
-                        remove(path).catch(logger.error);
-                    }
-                })
-                .catch(logger.error);
+            void stopPreviewCapture('stop_microphone_capture', 'test_mic').catch(logger.error);
         }
         usingNativeMicRef.current = false;
         startedMicCaptureRef.current = false;
     }
+
+    function stopSystemPreview() {
+        clearQueuedSystemPreviewFrame();
+        stopSystemWaveAnimation();
+
+        if (systemUnlistenRef.current) {
+            systemUnlistenRef.current();
+            systemUnlistenRef.current = null;
+        }
+
+        if (startedSystemCaptureRef.current) {
+            void stopPreviewCapture('stop_system_audio_capture', 'test_system').catch(logger.error);
+        }
+        startedSystemCaptureRef.current = false;
+    }
+
+    useEffect(() => {
+        let isMounted = true;
+        const micRequestId = ++micPreviewRequestIdRef.current;
+        const systemRequestId = ++systemPreviewRequestIdRef.current;
+
+        const isCurrentMicRequest = () => isMounted && micRequestId === micPreviewRequestIdRef.current;
+        const isCurrentSystemRequest = () => isMounted && systemRequestId === systemPreviewRequestIdRef.current;
+
+        async function startPreviews() {
+            await startMicrophonePreview(microphoneId, isCurrentMicRequest);
+
+            if (!isCurrentMicRequest() || !isCurrentSystemRequest()) {
+                return;
+            }
+
+            await waitForNextSystemPreviewFrame();
+
+            if (!isCurrentMicRequest() || !isCurrentSystemRequest()) {
+                return;
+            }
+
+            await startSystemPreview(systemAudioDeviceId, isCurrentSystemRequest);
+        }
+
+        if (isOpen && isActiveTab && arePreviewDependenciesReady) {
+            void startPreviews();
+        }
+
+        return () => {
+            isMounted = false;
+            micPreviewRequestIdRef.current += 1;
+            systemPreviewRequestIdRef.current += 1;
+            stopMicrophonePreview();
+            stopSystemPreview();
+        };
+    }, [
+        arePreviewDependenciesReady,
+        isActiveSession,
+        isActiveTab,
+        isOpen,
+        microphoneId,
+        systemAudioDeviceId,
+    ]);
 
     return (
         <SettingsTabContainer id="settings-panel-microphone" ariaLabelledby="settings-tab-microphone">
