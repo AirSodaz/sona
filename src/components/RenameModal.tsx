@@ -84,7 +84,12 @@ export function RenameModal({
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>
                         {t('common.rename', { defaultValue: 'Rename' })}
                     </h3>
-                    <button type="button" className="btn btn-icon" onClick={onClose}>
+                    <button
+                        type="button"
+                        className="btn btn-icon"
+                        onClick={onClose}
+                        aria-label={t('common.close', { defaultValue: 'Close' })}
+                    >
                         <XIcon />
                     </button>
                 </div>
@@ -118,6 +123,7 @@ export function RenameModal({
                                 onClick={handleAiRename}
                                 disabled={isAiLoading}
                                 title={t('common.ai_rename')}
+                                aria-label={t('common.ai_rename')}
                                 style={{
                                     position: 'absolute',
                                     right: '4px',
