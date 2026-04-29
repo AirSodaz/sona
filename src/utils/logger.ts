@@ -20,7 +20,7 @@ function serializeArgs(args: unknown[]): string {
 
   try {
     return ` ${JSON.stringify(serialized)}`;
-  } catch (err) {
+  } catch {
     return ' [Unserializable Object(s) - possibly circular references]';
   }
 }

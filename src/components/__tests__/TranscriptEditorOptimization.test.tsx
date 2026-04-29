@@ -16,7 +16,7 @@ vi.mock('../../hooks/useAutoScroll', () => ({
 vi.mock('react-virtuoso', async () => {
     const React = await import('react');
     return {
-        Virtuoso: React.forwardRef((props: any, _ref: any) => {
+        Virtuoso: React.forwardRef((props: any) => {
             return (
                 <div data-testid="virtuoso-list">
                     {props.data?.map((item: any, index: number) => (
@@ -57,14 +57,17 @@ vi.mock('../transcript/SegmentItem', async () => {
     const React = await import('react');
     const { useContext } = React;
     const { useStore } = await import('zustand');
+    const { createStore } = await import('zustand/vanilla');
     const { TranscriptUIContext } = await import('../transcript/TranscriptUIContext');
+    const fallbackStore = createStore(() => ({ newSegmentIds: new Set<string>() }));
 
     return {
         SegmentItem: (props: any) => {
             const store = useContext(TranscriptUIContext);
-            if (!store) return <div>No Store</div>;
+            const resolvedStore = store ?? fallbackStore;
+            const isNew = useStore(resolvedStore, (s: any) => s.newSegmentIds.has(props.segment.id));
 
-            const isNew = useStore(store, (s: any) => s.newSegmentIds.has(props.segment.id));
+            if (!store) return <div>No Store</div>;
 
             return (
                 <div

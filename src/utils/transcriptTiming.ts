@@ -118,7 +118,7 @@ function buildAlignedTimingUnits(
     const [full, tag] = match;
 
     if (tag) {
-      const tagName = tag.replace(/[<\/>]/g, '').toLowerCase();
+      const tagName = tag.replace(/[</>]/g, '').toLowerCase();
       if (tag.startsWith('</')) {
         activeTags.delete(tagName);
       } else {

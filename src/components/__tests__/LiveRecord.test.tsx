@@ -265,7 +265,7 @@ describe('LiveRecord', () => {
             });
         });
 
-        mockStart.mockImplementation((onSeg: any, _onError: any) => {
+        mockStart.mockImplementation((onSeg: any) => {
             capturedOnSegment = onSeg;
             return Promise.resolve();
         });

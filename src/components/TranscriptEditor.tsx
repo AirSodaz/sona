@@ -36,11 +36,6 @@ interface TranscriptContext {
     onAnimationEnd: (id: string) => void;
 }
 
-/** Props for TranscriptEditor. */
-interface TranscriptEditorProps {
-    // No props currently
-}
-
 /**
  * Editor component for displaying and managing transcript segments.
  *
@@ -48,9 +43,8 @@ interface TranscriptEditorProps {
  * Optimized to minimize re-renders during high-frequency updates.
  *
  * @return The transcript editor interface.
- * @param _props
  */
-export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Element {
+export function TranscriptEditor(): React.JSX.Element {
     const { t } = useTranslation();
     const { confirm } = useDialogStore();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -67,7 +61,10 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
 
     // Keep a ref to segments to make callbacks stable where needed
     const segmentsRef = useRef(segments);
-    segmentsRef.current = segments;
+
+    useEffect(() => {
+        segmentsRef.current = segments;
+    }, [segments]);
 
     // Auto-scroll to active segment during playback
     useAutoScroll(virtuosoRef);
@@ -110,7 +107,7 @@ export function TranscriptEditor(_props: TranscriptEditorProps): React.JSX.Eleme
                 mergeSegments(id, currentSegments[index + 1].id);
             }
         }
-    }, [mergeSegments, t]);
+    }, [confirm, mergeSegments, t]);
 
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({

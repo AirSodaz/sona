@@ -95,8 +95,10 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   }, [onClose, persistDraftIfNeeded]);
 
   useEffect(() => {
-    setEditContent(displayContent);
     editContentRef.current = displayContent;
+    queueMicrotask(() => {
+      setEditContent(displayContent);
+    });
   }, [displayContent]);
 
   useEffect(() => {

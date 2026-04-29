@@ -144,14 +144,18 @@ export function FirstRunGuide(): React.JSX.Element | null {
   useFocusTrap(isOpen, noopClose, modalRef);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      return;
+    }
+
+    queueMicrotask(() => {
       setModelStepStatus('idle');
       setModelError('');
       setDownloads({});
       setPermissionState('idle');
       setIsLoadingDevices(false);
       setSelectedMicrophoneId(config.microphoneId || 'default');
-    }
+    });
   }, [config.microphoneId, isOpen]);
 
   useEffect(() => {

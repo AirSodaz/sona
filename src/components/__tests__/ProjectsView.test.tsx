@@ -309,8 +309,11 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.change(screen.getByDisplayValue('Alpha'), {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    fireEvent.change(await screen.findByDisplayValue('Alpha'), {
       target: { value: 'Alpha Updated' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -331,8 +334,11 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Brand Terms' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Brand Terms' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -359,9 +365,12 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
-    fireEvent.click(screen.getByRole('button', { name: '📄' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
+    fireEvent.click(await screen.findByRole('button', { name: '📄' }));
 
     fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
@@ -390,9 +399,12 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
-    fireEvent.click(screen.getByRole('button', { name: '📄' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
+    fireEvent.click(await screen.findByRole('button', { name: '📄' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => {
@@ -452,17 +464,23 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    fireEvent.click(screen.getByRole('button', { name: '🧪' }));
-    fireEvent.click(screen.getByRole('button', { name: '📄' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
+    fireEvent.click(await screen.findByRole('button', { name: '📄' }));
 
     await clickAsync(getButtonByContent('Beta'));
     await waitFor(() => {
       expect(useProjectStore.getState().activeProjectId).toBe('project-2');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
-    expect(screen.getByRole('button', { name: '🎯' })).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Project Settings' }));
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole('button', { name: '🎯' })).toBeDefined();
     expect(screen.queryByRole('button', { name: '📄' })).toBeNull();
   });
 

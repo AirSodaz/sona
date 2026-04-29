@@ -12,7 +12,7 @@ vi.mock('../../../utils/exportFormats', () => ({
 
 // Mock transcript store to avoid provider errors
 vi.mock('../../../stores/transcriptStore', () => ({
-  useTranscriptStore: (_selector: any) => {
+  useTranscriptStore: () => {
     // Return mock active token timestamp or other values as needed
     // Default to -1 (no active token) unless specifically set
     return -1;

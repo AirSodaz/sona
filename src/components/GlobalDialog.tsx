@@ -55,10 +55,14 @@ export function GlobalDialog(): React.JSX.Element | null {
 
     // Reset input value when dialog opens
     useEffect(() => {
-        if (isOpen && options?.type === 'prompt') {
+        if (!isOpen || options?.type !== 'prompt') {
+            return;
+        }
+
+        queueMicrotask(() => {
             setInputValue(options.defaultValue || '');
             setIsAiLoading(false);
-        }
+        });
     }, [isOpen, options]);
 
     const handleAiClick = async () => {

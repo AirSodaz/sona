@@ -216,7 +216,7 @@ describe('Settings', () => {
 
                 fireEvent.click(option);
             }
-        } catch (e) {
+        } catch {
             // Dropdown not found or didn't open correctly in test env
         }
 

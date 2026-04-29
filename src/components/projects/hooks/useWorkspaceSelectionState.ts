@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type React from 'react';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
@@ -21,16 +21,8 @@ export function useWorkspaceSelectionState({
 }: UseWorkspaceSelectionStateParams) {
   const visibleItemsRef = useRef<HistoryItemType[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [moveTarget, setMoveTarget] = useState(INBOX_SCOPE);
-
-  useEffect(() => {
-    if (browseProjectId) {
-      setMoveTarget(INBOX_SCOPE);
-      return;
-    }
-
-    setMoveTarget(projects[0]?.id || INBOX_SCOPE);
-  }, [browseProjectId, projects]);
+  const defaultMoveTarget = browseProjectId ? INBOX_SCOPE : projects[0]?.id || INBOX_SCOPE;
+  const [moveTarget, setMoveTarget] = useState(defaultMoveTarget);
 
   const syncVisibleItems = useCallback((items: HistoryItemType[]) => {
     visibleItemsRef.current = items;
@@ -50,12 +42,14 @@ export function useWorkspaceSelectionState({
   const clearSelection = useCallback(() => {
     setSelectedIds([]);
     setIsSelectionMode(false);
-  }, []);
+    setMoveTarget(defaultMoveTarget);
+  }, [defaultMoveTarget, setIsSelectionMode]);
 
   const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode((value) => !value);
     setSelectedIds([]);
-  }, []);
+    setMoveTarget(defaultMoveTarget);
+  }, [defaultMoveTarget, setIsSelectionMode]);
 
   const handleToggleSelectAll = useCallback(() => {
     const visibleItems = visibleItemsRef.current;

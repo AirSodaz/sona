@@ -50,13 +50,13 @@ export function useWorkspaceBrowseState({
   t,
   onOpenItem,
 }: UseWorkspaceBrowseStateParams) {
-  const [browseScope, setBrowseScope] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeSearchResultId, setActiveSearchResultId] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
-  const [dateFilter, setDateFilter] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
-  const [sortOrder, setSortOrder] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
+  const [browseScopeState, setBrowseScopeState] = useState<ProjectBrowseScope>(() => activeProjectId || INBOX_SCOPE);
+  const [isFilterMenuOpen, setIsFilterMenuOpenState] = useState(false);
+  const [searchQuery, setSearchQueryState] = useState('');
+  const [activeSearchResultIdState, setActiveSearchResultIdState] = useState<string | null>(null);
+  const [filterType, setFilterTypeState] = useState<ProjectFilterType>(DEFAULT_FILTER_TYPE);
+  const [dateFilter, setDateFilterState] = useState<ProjectDateFilter>(DEFAULT_DATE_FILTER);
+  const [sortOrder, setSortOrderState] = useState<ProjectSortOrder>(DEFAULT_SORT_ORDER);
   const [isScrolled, setIsScrolled] = useState(false);
 
   const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
@@ -71,6 +71,18 @@ export function useWorkspaceBrowseState({
     }
   }, []);
 
+  const browseScope = useMemo<ProjectBrowseScope>(() => {
+    if (browseScopeState === ALL_ITEMS_SCOPE || browseScopeState === INBOX_SCOPE) {
+      return browseScopeState;
+    }
+
+    if (projects.some((item) => item.id === browseScopeState)) {
+      return browseScopeState;
+    }
+
+    return activeProjectId || INBOX_SCOPE;
+  }, [activeProjectId, browseScopeState, projects]);
+
   const isAllItemsScope = browseScope === ALL_ITEMS_SCOPE;
   const isInboxScope = browseScope === INBOX_SCOPE;
   const browseProjectId = !isAllItemsScope && !isInboxScope ? browseScope : null;
@@ -79,12 +91,46 @@ export function useWorkspaceBrowseState({
     [browseProjectId, projects],
   );
 
-  useEffect(() => {
-    setSearchQuery('');
-    setFilterType(DEFAULT_FILTER_TYPE);
-    setDateFilter(DEFAULT_DATE_FILTER);
-    setIsFilterMenuOpen(false);
-  }, [browseScope]);
+  const setActiveSearchResultId = useCallback((nextValue: React.SetStateAction<string | null>) => {
+    setActiveSearchResultIdState((current) => (
+      typeof nextValue === 'function'
+        ? nextValue(current)
+        : nextValue
+    ));
+  }, []);
+
+  const setSearchQuery = useCallback((value: string) => {
+    setSearchQueryState(value);
+    setActiveSearchResultIdState(null);
+  }, []);
+
+  const setFilterType = useCallback((value: ProjectFilterType) => {
+    setFilterTypeState(value);
+    setActiveSearchResultIdState(null);
+  }, []);
+
+  const setDateFilter = useCallback((value: ProjectDateFilter) => {
+    setDateFilterState(value);
+    setActiveSearchResultIdState(null);
+  }, []);
+
+  const setSortOrder = useCallback((value: ProjectSortOrder) => {
+    setSortOrderState(value);
+    setActiveSearchResultIdState(null);
+  }, []);
+
+  const setIsFilterMenuOpen = useCallback((value: React.SetStateAction<boolean>) => {
+    setIsFilterMenuOpenState(value);
+  }, []);
+
+  const setBrowseScope = useCallback((value: ProjectBrowseScope) => {
+    setBrowseScopeState(value);
+    setSearchQueryState('');
+    setFilterTypeState(DEFAULT_FILTER_TYPE);
+    setDateFilterState(DEFAULT_DATE_FILTER);
+    setIsFilterMenuOpenState(false);
+    setActiveSearchResultIdState(null);
+  }, []);
 
   useEffect(() => {
     if (!isFilterMenuOpen) {
@@ -114,19 +160,7 @@ export function useWorkspaceBrowseState({
       document.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [filterMenuRef, isFilterMenuOpen]);
-
-  useEffect(() => {
-    if (browseScope === ALL_ITEMS_SCOPE || browseScope === INBOX_SCOPE) {
-      return;
-    }
-
-    if (projects.some((item) => item.id === browseScope)) {
-      return;
-    }
-
-    setBrowseScope(activeProjectId || INBOX_SCOPE);
-  }, [activeProjectId, browseScope, projects]);
+  }, [filterMenuRef, isFilterMenuOpen, setIsFilterMenuOpen]);
 
   const scopedItems = useMemo(
     () => historyItems.filter((item) => {
@@ -179,6 +213,16 @@ export function useWorkspaceBrowseState({
     [filteredAndSortedItemEntries],
   );
 
+  const activeSearchResultId = useMemo(() => {
+    if (isSelectionMode || !activeSearchResultIdState) {
+      return null;
+    }
+
+    return filteredAndSortedItems.some((item) => item.id === activeSearchResultIdState)
+      ? activeSearchResultIdState
+      : null;
+  }, [activeSearchResultIdState, filteredAndSortedItems, isSelectionMode]);
+
   const projectSummary = useMemo<ProjectSummary>(() => {
     let totalDuration = 0;
     let recordingCount = 0;
@@ -214,30 +258,6 @@ export function useWorkspaceBrowseState({
     });
     return counts;
   }, [historyItems]);
-
-  useEffect(() => {
-    setActiveSearchResultId(null);
-  }, [browseScope, dateFilter, filterType, searchQuery, sortOrder]);
-
-  useEffect(() => {
-    if (!isSelectionMode) {
-      return;
-    }
-
-    setActiveSearchResultId(null);
-  }, [isSelectionMode]);
-
-  useEffect(() => {
-    if (!activeSearchResultId) {
-      return;
-    }
-
-    if (filteredAndSortedItems.some((item) => item.id === activeSearchResultId)) {
-      return;
-    }
-
-    setActiveSearchResultId(null);
-  }, [activeSearchResultId, filteredAndSortedItems]);
 
   useEffect(() => {
     if (!activeSearchResultId) {
@@ -369,7 +389,7 @@ export function useWorkspaceBrowseState({
 
       return filteredAndSortedItems[nextIndex]?.id ?? null;
     });
-  }, [filteredAndSortedItems]);
+  }, [filteredAndSortedItems, setActiveSearchResultId]);
 
   const handleWorkspaceSearchInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
@@ -418,14 +438,17 @@ export function useWorkspaceBrowseState({
     isSelectionMode,
     moveActiveSearchResult,
     onOpenItem,
+    setActiveSearchResultId,
+    setSearchQuery,
     searchInputRef,
     searchQuery,
   ]);
 
   const resetBrowseState = useCallback(() => {
-    setSearchQuery('');
-    setFilterType(DEFAULT_FILTER_TYPE);
-    setDateFilter(DEFAULT_DATE_FILTER);
+    setSearchQueryState('');
+    setFilterTypeState(DEFAULT_FILTER_TYPE);
+    setDateFilterState(DEFAULT_DATE_FILTER);
+    setActiveSearchResultIdState(null);
   }, []);
 
   const headerTitle = isAllItemsScope

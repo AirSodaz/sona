@@ -59,7 +59,7 @@ export async function generateAiTitle(segments: TranscriptSegment[]): Promise<st
         // Basic cleanup: remove surrounding quotes and extra whitespace
         return title.trim().replace(/^["']|["']$/g, '');
     } catch (error) {
-        throw new Error(normalizeError(error).message);
+        throw Object.assign(new Error(normalizeError(error).message), { cause: error });
     }
 }
 
@@ -77,6 +77,6 @@ export async function generateAiTitleForHistoryItem(transcriptPath: string): Pro
         }
         return await generateAiTitle(segments);
     } catch (error) {
-        throw new Error(normalizeError(error).message);
+        throw Object.assign(new Error(normalizeError(error).message), { cause: error });
     }
 }

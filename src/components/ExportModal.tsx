@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { join } from '@tauri-apps/api/path';
@@ -37,27 +37,39 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
     const [isExporting, setIsExporting] = useState(false);
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
+    const defaultFileName = useMemo(() => {
+        const historyItem = historyItems.find(item => item.id === sourceHistoryId);
+        const prefix = (activeProject?.defaults.exportFileNamePrefix || '').trim();
+        const sanitizedPrefix = prefix.replace(/[\\/:*?"<>|]/g, '_').trim();
+
+        if (historyItem) {
+            const sanitized = historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
+            return sanitizedPrefix ? `${sanitizedPrefix} ${sanitized}`.trim() : sanitized;
+        }
+
+        return sanitizedPrefix;
+    }, [activeProject?.defaults.exportFileNamePrefix, historyItems, sourceHistoryId]);
 
     // Initial value for filename from history title
     useEffect(() => {
-        if (isOpen) {
-            const historyItem = historyItems.find(item => item.id === sourceHistoryId);
-            const prefix = (activeProject?.defaults.exportFileNamePrefix || '').trim();
-            const sanitizedPrefix = prefix.replace(/[\\/:*?"<>|]/g, '_').trim();
-            if (historyItem) {
-                // Sanitize filename: remove characters that are usually illegal in filenames
-                const sanitized = historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
-                setFileName(sanitizedPrefix ? `${sanitizedPrefix} ${sanitized}`.trim() : sanitized);
-            } else if (sanitizedPrefix) {
-                setFileName(sanitizedPrefix);
-            }
-            
-            // Reset export mode if no translations
-            if (!hasTranslation && exportMode !== 'original') {
-                setExportMode('original');
-            }
+        if (!isOpen) {
+            return;
         }
-    }, [isOpen, sourceHistoryId, historyItems, hasTranslation, exportMode, activeProject]);
+
+        queueMicrotask(() => {
+            setFileName(defaultFileName);
+        });
+    }, [defaultFileName, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || hasTranslation || exportMode === 'original') {
+            return;
+        }
+
+        queueMicrotask(() => {
+            setExportMode('original');
+        });
+    }, [exportMode, hasTranslation, isOpen]);
 
     // Keyboard support (Escape to close)
     useEffect(() => {

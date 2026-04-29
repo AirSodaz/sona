@@ -22,24 +22,20 @@ function decodeHtmlEntities(text: string): string {
 function htmlToPlainText(html: string): string {
     if (!html) return '';
     // Convert structural tags to newlines
-    let text = html
+    const text = html
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/div>/gi, '\n')
         .replace(/<div>/gi, '')
         .replace(/<\/p>/gi, '\n')
         .replace(/<p>/gi, '');
 
-    // Strip all other tags
-    text = stripHtmlTags(text);
-
-    // Decode entities
-    return decodeHtmlEntities(text);
+    return decodeHtmlEntities(stripHtmlTags(text));
 }
 
 function htmlToFormattedText(html: string): string {
     if (!html) return '';
     // Convert structural tags to newlines, but preserve formatting tags (b, i, u)
-    let text = html
+    const text = html
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/div>/gi, '\n')
         .replace(/<div>/gi, '')

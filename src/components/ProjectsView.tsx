@@ -142,67 +142,84 @@ export function ProjectsView(): React.JSX.Element {
     projects,
     setIsSelectionMode,
   });
+  const clearSelection = selectionState.clearSelection;
+  const workspaceSelectionMode = selectionState.isSelectionMode;
+  const syncVisibleItems = selectionState.syncVisibleItems;
 
   useEffect(() => {
-    selectionState.syncVisibleItems(browseState.filteredAndSortedItems);
-  }, [browseState.filteredAndSortedItems, selectionState.syncVisibleItems]);
+    syncVisibleItems(browseState.filteredAndSortedItems);
+  }, [browseState.filteredAndSortedItems, syncVisibleItems]);
 
-  const selectedItem = useMemo(
-    () => browseState.scopedItems.find((item) => item.id === selectedHistoryId) || null,
-    [browseState.scopedItems, selectedHistoryId],
+  const scopedSourceHistoryId = useMemo(
+    () => (
+      sourceHistoryId && browseState.scopedItems.some((item) => item.id === sourceHistoryId)
+        ? sourceHistoryId
+        : null
+    ),
+    [browseState.scopedItems, sourceHistoryId],
   );
 
-  useEffect(() => {
-    if (isLiveDraftSessionLocked && sourceHistoryId && selectedHistoryId !== sourceHistoryId) {
-      setSelectedHistoryId(sourceHistoryId);
-      return;
-    }
-
-    if (selectedHistoryId && !selectedItem) {
-      if (isLiveDraftSessionLocked && selectedHistoryId === sourceHistoryId) {
-        return;
-      }
-      clearOpenedItem();
-      return;
-    }
-
-    if (selectedHistoryId && selectedItem && !sourceHistoryId && segmentsLength === 0) {
-      setSelectedHistoryId(null);
-      return;
-    }
-
-    if (!selectedHistoryId && sourceHistoryId && browseState.scopedItems.some((item) => item.id === sourceHistoryId)) {
-      setSelectedHistoryId(sourceHistoryId);
-      return;
+  const effectiveSelectedHistoryId = useMemo(() => {
+    if (isLiveDraftSessionLocked && sourceHistoryId) {
+      return sourceHistoryId;
     }
 
     if (!selectedHistoryId) {
+      return scopedSourceHistoryId;
+    }
+
+    const selectedItemStillVisible = browseState.scopedItems.some((item) => item.id === selectedHistoryId);
+    if (!selectedItemStillVisible) {
+      return null;
+    }
+
+    if (!sourceHistoryId && segmentsLength === 0) {
+      return null;
+    }
+
+    return selectedHistoryId;
+  }, [
+    browseState.scopedItems,
+    isLiveDraftSessionLocked,
+    scopedSourceHistoryId,
+    segmentsLength,
+    selectedHistoryId,
+    sourceHistoryId,
+  ]);
+
+  const selectedItem = useMemo(
+    () => browseState.scopedItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
+    [browseState.scopedItems, effectiveSelectedHistoryId],
+  );
+
+  useEffect(() => {
+    if (effectiveSelectedHistoryId === null && selectedHistoryId) {
+      queueMicrotask(() => {
+        setSelectedHistoryId(null);
+        clearSegments();
+        setAudioUrl(null);
+      });
+      return;
+    }
+
+    if (effectiveSelectedHistoryId === null) {
       const transcriptState = useTranscriptStore.getState();
       if (transcriptState.sourceHistoryId || transcriptState.segments.length > 0 || transcriptState.audioUrl) {
         transcriptState.clearSegments();
         transcriptState.setAudioUrl(null);
       }
     }
-  }, [
-    browseState.scopedItems,
-    clearOpenedItem,
-    isLiveDraftSessionLocked,
-    segmentsLength,
-    selectedHistoryId,
-    selectedItem,
-    sourceHistoryId,
-  ]);
+  }, [clearSegments, effectiveSelectedHistoryId, selectedHistoryId, setAudioUrl]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {
       return;
     }
 
-    if (selectionState.isSelectionMode) {
-      selectionState.clearSelection();
-      setIsSelectionMode(false);
+    if (workspaceSelectionMode) {
+      clearSelection();
     }
-  }, [isLiveDraftSessionLocked, selectionState, setIsSelectionMode]);
+  }, [clearSelection, isLiveDraftSessionLocked, workspaceSelectionMode]);
 
   const handleSwitchBrowseScope = async (nextScope: string) => {
     if (isLiveDraftSessionLocked) {
@@ -502,7 +519,7 @@ export function ProjectsView(): React.JSX.Element {
               scopedItems={browseState.scopedItems}
               searchMatchByItemId={browseState.searchMatchByItemId}
               searchQuery={browseState.searchQuery}
-              selectedHistoryId={selectedHistoryId}
+              selectedHistoryId={effectiveSelectedHistoryId}
               selectedIds={selectionState.selectedIds}
               t={t}
               viewMode={viewMode}

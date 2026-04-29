@@ -16,6 +16,14 @@ export type SettingsTab =
     | 'automation';
 export type SettingsTabInput = SettingsTab | 'context';
 
+function normalizeInitialSettingsTab(initialTab?: SettingsTabInput): SettingsTab {
+    if (!initialTab) {
+        return 'general';
+    }
+
+    return initialTab === 'context' ? 'vocabulary' : initialTab;
+}
+
 /**
  * Hook managing local UI state for the Settings dialog:
  * active tab and language synchronisation.
@@ -25,16 +33,17 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setConfig = useConfigStore((state) => state.setConfig);
     const { i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+    const [activeTab, setActiveTab] = useState<SettingsTab>(() => normalizeInitialSettingsTab(initialTab));
 
     useEffect(() => {
-        if (_isOpen) {
-            if (initialTab) {
-                setActiveTab(initialTab === 'context' ? 'vocabulary' : initialTab);
+        queueMicrotask(() => {
+            if (_isOpen) {
+                setActiveTab(normalizeInitialSettingsTab(initialTab));
+                return;
             }
-        } else {
+
             setActiveTab('general');
-        }
+        });
     }, [initialTab, _isOpen]);
 
     // Sync language change

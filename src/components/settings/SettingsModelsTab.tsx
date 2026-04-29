@@ -96,11 +96,6 @@ export function SettingsModelsTab(): React.JSX.Element {
         restoreDefaultModelSettings
     } = useModelManagerContext();
 
-    const [selectedStreamingModelId, setSelectedStreamingModelId] = useState<string>('');
-    const [selectedOfflineModelId, setSelectedOfflineModelId] = useState<string>('');
-    const [selectedSpeakerSegmentationModelId, setSelectedSpeakerSegmentationModelId] = useState<string>('');
-    const [selectedSpeakerEmbeddingModelId, setSelectedSpeakerEmbeddingModelId] = useState<string>('');
-
     const streamingModelPath = modelConfig.streamingModelPath;
     const offlineModelPath = modelConfig.offlineModelPath;
     const speakerSegmentationModelPath = modelConfig.speakerSegmentationModelPath || '';
@@ -141,52 +136,30 @@ export function SettingsModelsTab(): React.JSX.Element {
 
         initPathMap();
     }, []); // Only run once on mount
-
-    // Sync selected streaming model when the path config or the map changes
-    useEffect(() => {
-        if (!streamingModelPath) {
-            setSelectedStreamingModelId('');
-            return;
-        }
-
-        if (pathMap.size > 0) {
-            setSelectedStreamingModelId(pathMap.get(streamingModelPath) || '');
-        }
-    }, [streamingModelPath, pathMap]);
-
-    // Sync selected offline model when the path config or the map changes
-    useEffect(() => {
-        if (!offlineModelPath) {
-            setSelectedOfflineModelId('');
-            return;
-        }
-
-        if (pathMap.size > 0) {
-            setSelectedOfflineModelId(pathMap.get(offlineModelPath) || '');
-        }
-    }, [offlineModelPath, pathMap]);
-
-    useEffect(() => {
-        if (!speakerSegmentationModelPath) {
-            setSelectedSpeakerSegmentationModelId('');
-            return;
-        }
-
-        if (pathMap.size > 0) {
-            setSelectedSpeakerSegmentationModelId(pathMap.get(speakerSegmentationModelPath) || '');
-        }
-    }, [speakerSegmentationModelPath, pathMap]);
-
-    useEffect(() => {
-        if (!speakerEmbeddingModelPath) {
-            setSelectedSpeakerEmbeddingModelId('');
-            return;
-        }
-
-        if (pathMap.size > 0) {
-            setSelectedSpeakerEmbeddingModelId(pathMap.get(speakerEmbeddingModelPath) || '');
-        }
-    }, [speakerEmbeddingModelPath, pathMap]);
+    const selectedStreamingModelId = useMemo(
+        () => (streamingModelPath && pathMap.size > 0 ? pathMap.get(streamingModelPath) || '' : ''),
+        [pathMap, streamingModelPath],
+    );
+    const selectedOfflineModelId = useMemo(
+        () => (offlineModelPath && pathMap.size > 0 ? pathMap.get(offlineModelPath) || '' : ''),
+        [offlineModelPath, pathMap],
+    );
+    const selectedSpeakerSegmentationModelId = useMemo(
+        () => (
+            speakerSegmentationModelPath && pathMap.size > 0
+                ? pathMap.get(speakerSegmentationModelPath) || ''
+                : ''
+        ),
+        [pathMap, speakerSegmentationModelPath],
+    );
+    const selectedSpeakerEmbeddingModelId = useMemo(
+        () => (
+            speakerEmbeddingModelPath && pathMap.size > 0
+                ? pathMap.get(speakerEmbeddingModelPath) || ''
+                : ''
+        ),
+        [pathMap, speakerEmbeddingModelPath],
+    );
 
     const applyModelRules = async (modelId: string) => {
         try {
@@ -226,16 +199,6 @@ export function SettingsModelsTab(): React.JSX.Element {
         type: 'streaming' | 'offline' | 'speakerSegmentation' | 'speakerEmbedding',
         modelId: string,
     ) => {
-        if (type === 'streaming') {
-            setSelectedStreamingModelId(modelId);
-        } else if (type === 'offline') {
-            setSelectedOfflineModelId(modelId);
-        } else if (type === 'speakerSegmentation') {
-            setSelectedSpeakerSegmentationModelId(modelId);
-        } else {
-            setSelectedSpeakerEmbeddingModelId(modelId);
-        }
-
         const configKey = type === 'streaming'
             ? 'streamingModelPath'
             : type === 'offline'

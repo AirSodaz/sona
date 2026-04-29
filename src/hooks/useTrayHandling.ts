@@ -43,7 +43,7 @@ export function useTrayHandling(
 
     useEffect(() => {
         let isMounted = true;
-        let unlistenFunctions: UnlistenFn[] = [];
+        const unlistenFunctions: UnlistenFn[] = [];
 
         const setupListeners = async () => {
             try {

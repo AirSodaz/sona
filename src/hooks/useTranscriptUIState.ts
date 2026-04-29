@@ -23,12 +23,13 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
         aligningSegmentIds: useTranscriptStore.getState().aligningSegmentIds,
     })), []);
 
-    // Compute new segment IDs synchronously during render
-    const newSegmentIds = useMemo(() => {
+    useLayoutEffect(() => {
         const known = knownSegmentIdsRef.current;
+        const prev = prevNewSegmentIdsRef.current;
         const newIds = new Set<string>();
         let hasNew = false;
         let consecutiveKnowns = 0;
+        let nextNewSegmentIds: Set<string>;
 
         for (let i = segments.length - 1; i >= 0; i--) {
             const segment = segments[i];
@@ -41,7 +42,12 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
                 // prevent O(N) calculations on subsequent renders by marking all as known immediately.
                 if (newIds.size > 50) {
                     knownSegmentIdsRef.current = new Set(segments.map(s => s.id));
-                    return new Set<string>();
+                    prevNewSegmentIdsRef.current = new Set<string>();
+                    uiStore.setState({
+                        newSegmentIds: prevNewSegmentIdsRef.current,
+                        totalSegments: segments.length
+                    });
+                    return;
                 }
             } else {
                 consecutiveKnowns++;
@@ -51,13 +57,9 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
             }
         }
 
-        const prev = prevNewSegmentIdsRef.current;
-
         if (!hasNew && prev.size === 0) {
-            return prev;
-        }
-
-        if (newIds.size === prev.size) {
+            nextNewSegmentIds = prev;
+        } else if (newIds.size === prev.size) {
             let allSame = true;
             for (const id of newIds) {
                 if (!prev.has(id)) {
@@ -66,21 +68,20 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
                 }
             }
             if (allSame) {
-                return prev;
+                nextNewSegmentIds = prev;
+            } else {
+                nextNewSegmentIds = newIds;
             }
+        } else {
+            nextNewSegmentIds = newIds;
         }
 
-        prevNewSegmentIdsRef.current = newIds;
-        return newIds;
-    }, [segments]);
-
-    // Sync newSegmentIds and totalSegments to local store
-    useLayoutEffect(() => {
+        prevNewSegmentIdsRef.current = nextNewSegmentIds;
         uiStore.setState({
-            newSegmentIds,
+            newSegmentIds: nextNewSegmentIds,
             totalSegments: segments.length
         });
-    }, [newSegmentIds, segments.length, uiStore]);
+    }, [segments, uiStore]);
 
     // Sync activeSegmentId, editingSegmentId, and aligningSegmentIds from global store to local store
     useEffect(() => {
@@ -111,7 +112,7 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
         knownSegmentIdsRef.current.add(id);
 
         // Update store directly to remove from newSegmentIds without triggering full re-render
-        uiStore.setState(state => {
+        uiStore.setState((state) => {
             if (!state.newSegmentIds.has(id)) return state;
 
             const next = new Set(state.newSegmentIds);

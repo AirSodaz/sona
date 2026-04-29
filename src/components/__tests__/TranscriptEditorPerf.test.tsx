@@ -18,7 +18,7 @@ vi.mock('../../hooks/useAutoScroll', () => ({
 vi.mock('react-virtuoso', async () => {
     const React = await import('react');
     return {
-        Virtuoso: React.forwardRef((props: any, _ref: any) => {
+        Virtuoso: React.forwardRef((props: any) => {
             return (
                 <div data-testid="virtuoso-list">
                     {props.data?.map((item: any) => {

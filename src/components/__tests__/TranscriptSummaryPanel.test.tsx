@@ -230,12 +230,17 @@ describe('TranscriptSummaryPanel', () => {
       },
     });
 
-    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+    await act(async () => {
+      render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+      await Promise.resolve();
+    });
 
     expect(screen.getByText('summary.generating_progress:42')).toBeDefined();
     expect(screen.getByText('summary.generating_short')).toBeDefined();
     expect((screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByDisplayValue('Streaming summary text')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Streaming summary text')).toBeDefined();
+    });
   });
 
   it('shows a textarea immediately when no record exists', async () => {
@@ -276,9 +281,14 @@ describe('TranscriptSummaryPanel', () => {
       },
     });
 
-    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+    await act(async () => {
+      render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+      await Promise.resolve();
+    });
 
-    expect(screen.getByDisplayValue('Recoverable streamed summary')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Recoverable streamed summary')).toBeDefined();
+    });
   });
 
   it('keeps the panel open for manual editing when summary generation is unavailable', () => {

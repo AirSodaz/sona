@@ -39,13 +39,15 @@ export function useProjectSettingsDraft({
   }, [browseProject]);
 
   useEffect(() => {
-    if (!browseProject) {
-      resetProjectSettingsDraft(null);
-      setIsSettingsOpen(false);
-      return;
-    }
+    queueMicrotask(() => {
+      if (!browseProject) {
+        resetProjectSettingsDraft(null);
+        setIsSettingsOpen(false);
+        return;
+      }
 
-    resetProjectSettingsDraft(browseProject);
+      resetProjectSettingsDraft(browseProject);
+    });
   }, [browseProject, resetProjectSettingsDraft]);
 
   const isProjectSettingsDirty = useMemo(() => {

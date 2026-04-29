@@ -90,7 +90,7 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('renders active provider fields from llmSettings in accordion', async () => {
-    let conf = buildConfig();
+    const conf = buildConfig();
     conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
     currentConfig = conf;
     
@@ -106,7 +106,7 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('keeps expanded provider fields grouped inside the matching accordion content', async () => {
-    let conf = buildConfig();
+    const conf = buildConfig();
     conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
     currentConfig = conf;
 
@@ -135,7 +135,7 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('fills Gemini host with the default host in accordion', async () => {
-    let conf = buildConfig('gemini');
+    const conf = buildConfig('gemini');
     conf.llmSettings!.providers['gemini']!.apiHost = 'gemini-host';
     currentConfig = conf;
 

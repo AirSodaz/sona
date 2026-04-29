@@ -113,21 +113,17 @@ function FeatureCard({
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
 
-  // Sync state if external changes happen
-  useEffect(() => {
-    setLocalProvider(selectedProvider);
-    setLocalModelName(selectedModel);
-  }, [selectedProvider, selectedModel]);
-
   // Candidates logic
   const [modelCandidates, setModelCandidates] = useState<string[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
   const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
   const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
+  const providerApiHost = currentLlmState.providers[localProvider]?.apiHost;
+  const providerApiKey = currentLlmState.providers[localProvider]?.apiKey;
   
   const providerOptions = useMemo(() => {
-    let filtered = LLM_PROVIDER_DEFINITIONS.filter(p => {
+    const filtered = LLM_PROVIDER_DEFINITIONS.filter(p => {
       // Always show the currently selected provider to avoid empty selection state
       if (p.id === selectedProvider) return true;
       
@@ -153,7 +149,7 @@ function FeatureCard({
     return modelCandidates.filter((c) => c.toLowerCase().includes(query));
   }, [modelCandidates, localModelName]);
 
-  const fetchModelCandidates = async (provider: LlmProvider) => {
+  const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
     const setting = currentLlmState.providers[provider];
     if (!getProviderDefinition(provider).supportsModelListing || !setting) {
       setModelCandidates([]);
@@ -166,16 +162,18 @@ function FeatureCard({
         request: { provider, baseUrl: setting.apiHost, apiKey: setting.apiKey },
       });
       setModelCandidates(Array.isArray(result) ? result : []);
-    } catch (_error) {
+    } catch {
       setModelCandidates([]);
     } finally {
       setIsLoadingCandidates(false);
     }
-  };
+  }, [currentLlmState.providers]);
 
   useEffect(() => {
-    fetchModelCandidates(localProvider);
-  }, [localProvider, currentLlmState.providers[localProvider]?.apiHost, currentLlmState.providers[localProvider]?.apiKey]);
+    queueMicrotask(() => {
+      void fetchModelCandidates(localProvider);
+    });
+  }, [fetchModelCandidates, localProvider, providerApiHost, providerApiKey]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();
@@ -593,16 +591,14 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
   }, [config, updateConfig]);
 
   const currentLlmState = getCurrentLlmSettings(config);
+  const polishModel = getFeatureModelEntry(config, 'polish');
+  const translationModel = getFeatureModelEntry(config, 'translation');
+  const summaryModel = getFeatureModelEntry(config, 'summary');
   
   const activeProviders = useMemo(() => {
     const active = new Set<LlmProvider>();
-    const polishModel = getFeatureModelEntry(config, 'polish');
     if (polishModel) active.add(polishModel.provider);
-    
-    const translationModel = getFeatureModelEntry(config, 'translation');
     if (translationModel) active.add(translationModel.provider);
-
-    const summaryModel = getFeatureModelEntry(config, 'summary');
     if (summaryModel) active.add(summaryModel.provider);
 
     LLM_PROVIDER_DEFINITIONS.forEach(def => {
@@ -613,15 +609,9 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
     });
     
     return Array.from(active);
-  }, [config, currentLlmState]);
-
-  useEffect(() => {
-    if (!expandedProvider && activeProviders.length > 0) {
-      setExpandedProvider(activeProviders[0]);
-    } else if (!expandedProvider) {
-      setExpandedProvider(LLM_PROVIDER_DEFINITIONS[0].id);
-    }
-  }, [activeProviders, expandedProvider]);
+  }, [currentLlmState, polishModel, summaryModel, translationModel]);
+  const fallbackExpandedProvider = activeProviders[0] ?? LLM_PROVIDER_DEFINITIONS[0].id;
+  const effectiveExpandedProvider = expandedProvider ?? fallbackExpandedProvider;
 
   return (
     <SettingsTabContainer id="settings-panel-llm" ariaLabelledby="settings-tab-llm">
@@ -638,6 +628,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
         icon={<Settings2 size={20} />}
       >
         <FeatureCard
+          key={`polish:${polishModel?.provider ?? 'open_ai'}:${polishModel?.model ?? ''}`}
           stepNumber={1}
           featureId="polish"
           title={t('settings.llm.polish_model')}
@@ -647,6 +638,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           t={t}
         />
         <FeatureCard
+          key={`translation:${translationModel?.provider ?? 'open_ai'}:${translationModel?.model ?? ''}`}
           stepNumber={2}
           featureId="translation"
           title={t('settings.llm.translation_model')}
@@ -656,6 +648,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           t={t}
         />
         <FeatureCard
+          key={`summary:${summaryModel?.provider ?? 'open_ai'}:${summaryModel?.model ?? ''}`}
           stepNumber={3}
           featureId="summary"
           title={t('settings.llm.summary_model')}
@@ -693,12 +686,12 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
              return 0;
            })
            .map(def => (
-             <ProviderAccordionItem
+            <ProviderAccordionItem
                key={def.id}
                provider={def.id}
                config={config}
-               isOpen={expandedProvider === def.id}
-               onToggle={() => setExpandedProvider(expandedProvider === def.id ? null : def.id)}
+               isOpen={effectiveExpandedProvider === def.id}
+               onToggle={() => setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)}
                applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
                t={t}
              />

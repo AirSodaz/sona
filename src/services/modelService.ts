@@ -289,7 +289,7 @@ class ModelService {
                     break; // Success!
                 } catch (error) {
                     if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
-                        throw new Error('Download cancelled');
+                        throw Object.assign(new Error('Download cancelled'), { cause: error });
                     }
                     logger.warn(`Download failed via ${mirror || 'direct'}:`, error);
                     lastError = error;
@@ -355,7 +355,7 @@ class ModelService {
             // Try backend extraction
             await this.extractArchive(tempFilePath, modelsDir, onProgress, signal);
         } catch (error) {
-            throw new Error(`Extraction failed: ${error}`);
+            throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
         } finally {
             if (extractUnlisten) extractUnlisten();
         }
@@ -440,7 +440,7 @@ class ModelService {
                 targetDir: targetDir
             });
         } catch (error) {
-            throw new Error(`Extraction failed: ${error}`);
+            throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
         }
     }
 

@@ -75,7 +75,7 @@ function isCJK(text: string): boolean {
  */
 export function splitByPunctuation(segments: TranscriptSegment[]): TranscriptSegment[] {
     // Pass 1: Sentence Splitting (Strong Punctuation)
-    let intermediateSegments: TranscriptSegment[] = [];
+    const intermediateSegments: TranscriptSegment[] = [];
 
     for (const segment of segments) {
         const parts = splitSegmentByRegex(segment, SPLIT_REGEX, { checkAbbreviations: true });
@@ -276,7 +276,7 @@ function finalizeSegment(
     tokenMap: TokenMap | null,
     results: TranscriptSegment[]
 ) {
-    let segmentEnd = originalSegment.end;
+    const segmentEnd = originalSegment.end;
     let currentTokens: string[] | undefined;
     let currentTimestamps: number[] | undefined;
     let currentDurations: number[] | undefined;
@@ -510,7 +510,7 @@ export function alignTokensToText(
         const [full, tag] = match;
 
         if (tag) {
-            const tagName = tag.replace(/[<\/>]/g, '').toLowerCase();
+            const tagName = tag.replace(/[</>]/g, '').toLowerCase();
             if (tag.startsWith('</')) {
                 activeTags.delete(tagName);
             } else {

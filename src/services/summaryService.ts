@@ -227,7 +227,7 @@ class SummaryService {
       this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
         generationProgress: 0,
       });
-      throw new Error(normalizeError(error).message);
+      throw Object.assign(new Error(normalizeError(error).message), { cause: error });
     } finally {
       unlistenProgress();
       unlistenText();

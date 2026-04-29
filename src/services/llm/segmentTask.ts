@@ -121,7 +121,7 @@ export async function runConfiguredSegmentTask<
 
     return items;
   } catch (error) {
-    throw new Error(normalizeError(error).message);
+    throw Object.assign(new Error(normalizeError(error).message), { cause: error });
   } finally {
     unlistenChunk();
   }
@@ -161,7 +161,7 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
     await onSuccess?.(jobHistoryId);
   } catch (error) {
     await onError?.(jobHistoryId, error);
-    throw new Error(normalizeError(error).message);
+    throw Object.assign(new Error(normalizeError(error).message), { cause: error });
   } finally {
     unlistenProgress();
     await onFinally?.(jobHistoryId);

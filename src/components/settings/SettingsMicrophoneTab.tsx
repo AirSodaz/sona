@@ -99,7 +99,11 @@ export function SettingsMicrophoneTab({
     // Enumerate devices
     useEffect(() => {
         let isMounted = true;
-        setAreMicrophoneDevicesLoaded(false);
+        queueMicrotask(() => {
+            if (isMounted) {
+                setAreMicrophoneDevicesLoaded(false);
+            }
+        });
 
         async function getDevices() {
             try {
@@ -126,7 +130,11 @@ export function SettingsMicrophoneTab({
     // Enumerate system audio devices
     useEffect(() => {
         let isMounted = true;
-        setAreSystemDevicesLoaded(false);
+        queueMicrotask(() => {
+            if (isMounted) {
+                setAreSystemDevicesLoaded(false);
+            }
+        });
 
         async function getSystemDevices() {
             try {

@@ -29,7 +29,15 @@ export default tseslint.config(
   {
     files: ['**/__tests__/**/*.{ts,tsx}'],
     rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
     }
+  },
+  {
+    files: ['**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-console': 'off',
+    },
   }
 );

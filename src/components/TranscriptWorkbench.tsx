@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
@@ -78,12 +78,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
   const isManualHeaderActionsDisabled = isRecording;
-
-  useEffect(() => {
-    if (isManualHeaderActionsDisabled) {
-      setIsRenameModalOpen(false);
-    }
-  }, [isManualHeaderActionsDisabled]);
+  const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
     setTitle(newTitle.trim());
@@ -176,7 +171,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
       />
 
       <RenameModal
-        isOpen={isRenameModalOpen}
+        isOpen={isRenameModalVisible}
         onClose={() => setIsRenameModalOpen(false)}
         initialTitle={displayTitle}
         initialIcon={storeIcon || undefined}

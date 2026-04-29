@@ -34,17 +34,17 @@ export function EditorToolbar(): React.JSX.Element | null {
 
     useEffect(() => {
         if (!sourceHistoryId || autoSaveState?.status !== 'saved') {
-            setIsSavedVisible(false);
+            queueMicrotask(() => setIsSavedVisible(false));
             return undefined;
         }
 
         const elapsed = Date.now() - autoSaveState.updatedAt;
         if (elapsed >= SAVED_STATUS_VISIBLE_MS) {
-            setIsSavedVisible(false);
+            queueMicrotask(() => setIsSavedVisible(false));
             return undefined;
         }
 
-        setIsSavedVisible(true);
+        queueMicrotask(() => setIsSavedVisible(true));
         const timeout = window.setTimeout(() => {
             setIsSavedVisible(false);
         }, SAVED_STATUS_VISIBLE_MS - elapsed);

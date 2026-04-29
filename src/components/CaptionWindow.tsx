@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { TranscriptSegment } from '../types/transcript';
 import '../styles/index.css';
@@ -30,15 +30,15 @@ export function CaptionWindow() {
         },
     });
 
-    const [displaySegments, setDisplaySegments] = useState<TranscriptSegment[]>([]);
+    const [clearedRevision, setClearedRevision] = useState<number | null>(null);
 
     // Track target width to enforce it during height resizing
     const containerRef = useRef<HTMLDivElement>(null);
     const rootRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        setDisplaySegments(captionState.segments);
-    }, [captionState.revision, captionState.segments]);
+    const displaySegments = useMemo<TranscriptSegment[]>(() => (
+        clearedRevision === captionState.revision ? [] : captionState.segments
+    ), [captionState.revision, captionState.segments, clearedRevision]);
 
     // Set transparent background for the window
     useEffect(() => {
@@ -54,12 +54,13 @@ export function CaptionWindow() {
     // Clear text: Clear the window if no new text appears for 3 seconds.
     useEffect(() => {
         if (displaySegments.length > 0) {
+            const revision = captionState.revision;
             const timer = setTimeout(() => {
-                setDisplaySegments([]);
+                setClearedRevision(revision);
             }, 3000);
             return () => clearTimeout(timer);
         }
-    }, [displaySegments]);
+    }, [captionState.revision, displaySegments.length]);
 
     // Dynamic height: Use ResizeObserver to ensure window always matches content height accurately
     useEffect(() => {

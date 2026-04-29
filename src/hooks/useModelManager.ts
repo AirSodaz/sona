@@ -66,7 +66,9 @@ export function useModelManager(isOpen: boolean) {
 
     useEffect(() => {
         if (isOpen) {
-            checkInstalledModels();
+            queueMicrotask(() => {
+                void checkInstalledModels();
+            });
         }
     }, [isOpen]);
 

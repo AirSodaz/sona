@@ -178,7 +178,9 @@ export function DiagnosticsModal({
       return;
     }
 
-    void loadSnapshot();
+    queueMicrotask(() => {
+      void loadSnapshot();
+    });
   }, [isOpen, loadSnapshot]);
 
   const handleAction = useCallback(async (action: DiagnosticAction) => {

@@ -32,11 +32,17 @@ export function RenameModal({
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (isOpen) {
+        if (!isOpen) {
+            return;
+        }
+
+        queueMicrotask(() => {
             setTitle(initialTitle);
             setIcon(initialIcon || '');
-            setTimeout(() => inputRef.current?.focus(), 50);
-        }
+        });
+
+        const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
+        return () => window.clearTimeout(focusTimer);
     }, [isOpen, initialTitle, initialIcon]);
 
     if (!isOpen) return null;

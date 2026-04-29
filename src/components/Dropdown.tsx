@@ -63,13 +63,6 @@ export function Dropdown({
         }
     }, [isOpen]);
 
-    // Reset position when closing
-    useEffect(() => {
-        if (!isOpen) {
-            setPosition('bottom');
-        }
-    }, [isOpen]);
-
     React.useLayoutEffect(() => {
         if (isOpen && dropdownRef.current && menuRef.current) {
             const rect = dropdownRef.current.getBoundingClientRect();

@@ -41,7 +41,6 @@ describe('TranscriptStore', () => {
             useTranscriptStore.getState().setSegments(segments);
 
             // Set active segment with index
-            // @ts-ignore: Argument of type 'number' is not assignable to parameter of type 'never' (yet)
             useTranscriptStore.getState().setActiveSegmentId(id2, 1);
 
             expect(useTranscriptStore.getState().activeSegmentId).toBe(id2);

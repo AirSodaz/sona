@@ -41,7 +41,7 @@ function checkTokenMatch(
     activeMatch: Match | null | undefined
 ): { isMatch: boolean; isActiveMatch: boolean; matchIndex: number } {
     let isMatch = false;
-    let isActiveMatch = false;
+    const isActiveMatch = false;
     let matchIndex = -1;
 
     if (!matches || matches.length === 0) {

@@ -120,6 +120,90 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     // Transcript store
     const config = useConfigStore((state) => state.config);
+    const offlineModelPath = config.offlineModelPath;
+
+    const queueFiles = useCallback((files: string[]) => {
+        if (!offlineModelPath) {
+            const onboardingStore = useOnboardingStore.getState();
+            onboardingStore.reopen(
+                getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
+                'batch_import'
+            );
+            return;
+        }
+
+        addFiles(files);
+    }, [addFiles, config, offlineModelPath]);
+
+    const handleTauriDrop = useCallback((payload: unknown): void => {
+        let files: string[] = [];
+
+        if (Array.isArray(payload)) {
+            files = payload as string[];
+        } else if (payload && typeof payload === 'object' && 'paths' in payload && Array.isArray((payload as { paths: unknown }).paths)) {
+            files = (payload as { paths: string[] }).paths;
+        }
+
+        if (files.length > 0) {
+            const validFiles: string[] = [];
+            const invalidFiles: string[] = [];
+
+            files.forEach((filePath) => {
+                const ext = filePath.split('.').pop()?.toLowerCase();
+                const isSupported = SUPPORTED_MEDIA_EXTENSIONS.some((extension) => extension.replace('.', '') === ext);
+
+                if (isSupported) {
+                    validFiles.push(filePath);
+                } else {
+                    invalidFiles.push(filePath);
+                }
+            });
+
+            if (invalidFiles.length > 0) {
+                void showError({
+                    code: 'batch.unsupported_format',
+                    messageKey: 'errors.batch.unsupported_format',
+                    messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
+                    showCause: false,
+                });
+            }
+
+            if (validFiles.length > 0) {
+                queueFiles(validFiles);
+            }
+        } else {
+            logger.warn('File drop event received but payload is empty or invalid.');
+        }
+
+        setIsDragOver(false);
+    }, [queueFiles, showError]);
+
+    const handleClick = useCallback(async (): Promise<void> => {
+        try {
+            const selected = await open({
+                multiple: true,
+                filters: [{
+                    name: 'Audio',
+                    extensions: SUPPORTED_MEDIA_EXTENSIONS.map(ext => ext.replace('.', ''))
+                }]
+            });
+
+            if (!selected) {
+                return;
+            }
+
+            const files = Array.isArray(selected) ? selected : [selected];
+            if (files.length > 0) {
+                queueFiles(files);
+            }
+        } catch (err) {
+            await showError({
+                code: 'batch.file_picker_failed',
+                messageKey: 'errors.batch.file_picker_failed',
+                cause: err,
+            });
+        }
+    }, [queueFiles, showError]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -159,57 +243,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             mounted = false;
             unlisteners.forEach((unlisten) => unlisten());
         };
-    }, []);
-
-    const handleTauriDrop = (payload: unknown): void => {
-        let files: string[] = [];
-
-        if (Array.isArray(payload)) {
-            files = payload as string[];
-        } else if (payload && typeof payload === 'object' && 'paths' in payload && Array.isArray((payload as { paths: unknown }).paths)) {
-            files = (payload as { paths: string[] }).paths;
-        }
-
-        if (files && files.length > 0) {
-            // Validate all files
-            const validFiles: string[] = [];
-            const invalidFiles: string[] = [];
-
-            files.forEach((filePath) => {
-                const ext = filePath.split('.').pop()?.toLowerCase();
-                const isSupported = SUPPORTED_MEDIA_EXTENSIONS.some(e => e.replace('.', '') === ext);
-                if (isSupported) {
-                    validFiles.push(filePath);
-                } else {
-                    invalidFiles.push(filePath);
-                }
-            });
-
-            if (invalidFiles.length > 0) {
-                void showError({
-                    code: 'batch.unsupported_format',
-                    messageKey: 'errors.batch.unsupported_format',
-                    messageParams: { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') },
-                    showCause: false,
-                });
-            }
-
-            if (validFiles.length > 0) {
-                if (!config.offlineModelPath) {
-                    const onboardingStore = useOnboardingStore.getState();
-                    onboardingStore.reopen(
-                        getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
-                        'batch_import'
-                    );
-                    return;
-                }
-                addFiles(validFiles);
-            }
-        } else {
-            logger.warn('File drop event received but payload is empty or invalid.');
-        }
-        setIsDragOver(false);
-    };
+    }, [handleTauriDrop]);
 
     const handleDragOver = useCallback((e: React.DragEvent): void => {
         e.preventDefault();
@@ -228,42 +262,9 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent): void => {
         if (e.key === 'Enter' || e.key === ' ') {
-            handleClick();
+            void handleClick();
         }
-    }, []);
-
-    const handleClick = async (): Promise<void> => {
-        try {
-            const selected = await open({
-                multiple: true,
-                filters: [{
-                    name: 'Audio',
-                    extensions: SUPPORTED_MEDIA_EXTENSIONS.map(ext => ext.replace('.', ''))
-                }]
-            });
-
-            if (selected) {
-                const files = Array.isArray(selected) ? selected : [selected];
-                if (files.length > 0) {
-                    if (!config.offlineModelPath) {
-                        const onboardingStore = useOnboardingStore.getState();
-                        onboardingStore.reopen(
-                            getResumeOnboardingStep(config, 'batch_import', onboardingStore.persistedState),
-                            'batch_import'
-                        );
-                        return;
-                    }
-                    addFiles(files);
-                }
-            }
-        } catch (err) {
-            await showError({
-                code: 'batch.file_picker_failed',
-                messageKey: 'errors.batch.file_picker_failed',
-                cause: err,
-            });
-        }
-    };
+    }, [handleClick]);
 
 
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FilePenLine } from 'lucide-react';
 
@@ -15,12 +15,6 @@ export function SettingsShortcutInput({
     const [isEditing, setIsEditing] = useState(false);
     const [tempValue, setTempValue] = useState(value);
     const { t } = useTranslation();
-
-    useEffect(() => {
-        if (!isEditing) {
-            setTempValue(value);
-        }
-    }, [value, isEditing]);
 
     const finalizeShortcut = (e: React.KeyboardEvent) => {
         const keys: string[] = [];
@@ -142,7 +136,10 @@ export function SettingsShortcutInput({
             </button>
             <button
                 type="button"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                    setTempValue(value);
+                    setIsEditing(true);
+                }}
                 data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip-pos="top"
                 style={{

@@ -168,10 +168,6 @@ function SegmentItemComponent({
         }
     }, [isEditing]);
 
-    useEffect(() => {
-        setEditText(textToHtml(segment.text));
-    }, [segment.text]);
-
     function handleTextClick(): void {
         if (!isEditing) {
             onSeek(segment.start);
@@ -181,6 +177,7 @@ function SegmentItemComponent({
     function handleTextDoubleClick(e: React.MouseEvent): void {
         if (!isEditing) {
             e.stopPropagation();
+            setEditText(textToHtml(segment.text));
             onEdit(segment.id);
         }
     }

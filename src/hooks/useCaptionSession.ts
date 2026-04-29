@@ -117,7 +117,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
                         instanceId: 'caption'
                     });
-                    const unlisten = await listen<number>('system-audio', (_event) => {
+                    const unlisten = await listen<number>('system-audio', () => {
                         // The Rust backend now feeds itself directly.
                     });
                     systemAudioUnlistenRef.current = unlisten;
@@ -263,13 +263,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
 
     // Effect: Manage Session based on Mode
     useEffect(() => {
-        if (isCaptionMode) {
-            // Start
-            startCaptionSession();
-        } else {
-            // Stop
-            stopCaptionSession();
-        }
+        queueMicrotask(() => {
+            if (isCaptionMode) {
+                void startCaptionSession();
+                return;
+            }
+
+            void stopCaptionSession();
+        });
     }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
 
 
@@ -292,7 +293,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             }
         };
         update();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         config.streamingModelPath,
         config.language,
@@ -319,9 +319,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            stopCaptionSession();
+            void stopCaptionSession();
         };
-    }, []); // Empty deps means unmount only
+    }, [stopCaptionSession]);
 
     return {
         isInitializing

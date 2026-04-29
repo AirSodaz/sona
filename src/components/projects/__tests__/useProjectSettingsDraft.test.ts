@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectSettingsDraft } from '../hooks/useProjectSettingsDraft';
 import type { ProjectRecord } from '../../../types/project';
@@ -47,7 +47,9 @@ describe('useProjectSettingsDraft', () => {
       },
     );
 
-    expect(result.current.draftIcon).toBe('🧪');
+    await waitFor(() => {
+      expect(result.current.draftIcon).toBe('🧪');
+    });
 
     await act(async () => {
       result.current.setDraftIcon('🎯');
@@ -57,8 +59,10 @@ describe('useProjectSettingsDraft', () => {
     expect(result.current.isProjectSettingsDirty).toBe(true);
 
     rerender({ browseProject: projectBeta });
-    expect(result.current.draftIcon).toBe('📁');
-    expect(result.current.isProjectSettingsDirty).toBe(false);
+    await waitFor(() => {
+      expect(result.current.draftIcon).toBe('📁');
+      expect(result.current.isProjectSettingsDirty).toBe(false);
+    });
   });
 
   it('confirms discard only when settings are open and the draft is dirty', async () => {
@@ -69,6 +73,10 @@ describe('useProjectSettingsDraft', () => {
       t,
     }));
 
+    await waitFor(() => {
+      expect(result.current.draftIcon).toBe('🧪');
+    });
+
     await act(async () => {
       result.current.setIsSettingsOpen(true);
       result.current.setDraftIcon('🎯');
@@ -78,8 +86,10 @@ describe('useProjectSettingsDraft', () => {
       await result.current.handleRequestCloseProjectSettings();
     });
 
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(result.current.isSettingsOpen).toBe(false);
-    expect(result.current.draftIcon).toBe('🧪');
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(result.current.isSettingsOpen).toBe(false);
+      expect(result.current.draftIcon).toBe('🧪');
+    });
   });
 });
