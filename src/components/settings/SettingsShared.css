@@ -190,6 +190,30 @@
   align-items: center;
 }
 
+.settings-accordion-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+
+.settings-accordion-copy-title {
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.settings-accordion-copy-hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .accordion-content-panel {
   padding: var(--spacing-lg, 24px);
   border-top: 1px solid var(--color-border);

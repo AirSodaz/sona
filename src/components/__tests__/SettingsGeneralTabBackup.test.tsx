@@ -100,29 +100,34 @@ vi.mock('../Switch', () => ({
   ),
 }));
 
-vi.mock('../settings/SettingsLayout', () => ({
-  SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
-  SettingsSection: ({ children, title, description }: any) => (
-    <section>
-      {title ? <div>{title}</div> : null}
-      {description ? <div>{description}</div> : null}
-      {children}
-    </section>
-  ),
-  SettingsItem: ({ children, title, hint }: any) => (
-    <div>
-      {title ? <div>{title}</div> : null}
-      {hint ? <div>{hint}</div> : null}
-      {children}
-    </div>
-  ),
-  SettingsPageHeader: ({ title, description }: any) => (
-    <header>
-      <div>{title}</div>
-      <div>{description}</div>
-    </header>
-  ),
-}));
+vi.mock('../settings/SettingsLayout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../settings/SettingsLayout')>();
+
+  return {
+    ...actual,
+    SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
+    SettingsSection: ({ children, title, description }: any) => (
+      <section>
+        {title ? <div>{title}</div> : null}
+        {description ? <div>{description}</div> : null}
+        {children}
+      </section>
+    ),
+    SettingsItem: ({ children, title, hint }: any) => (
+      <div>
+        {title ? <div>{title}</div> : null}
+        {hint ? <div>{hint}</div> : null}
+        {children}
+      </div>
+    ),
+    SettingsPageHeader: ({ title, description }: any) => (
+      <header>
+        <div>{title}</div>
+        <div>{description}</div>
+      </header>
+    ),
+  };
+});
 
 vi.mock('../../services/backupService', () => ({
   backupService: {
@@ -166,6 +171,14 @@ vi.mock('../../stores/transcriptStore', () => ({
 }));
 
 describe('SettingsGeneralTab backup entry', () => {
+  const openWebDavAccordion = async () => {
+    fireEvent.click(screen.getByRole('button', { name: /WebDAV Cloud Sync/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Server URL')).toBeDefined();
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     testContext.transcriptState.isRecording = false;
@@ -182,6 +195,37 @@ describe('SettingsGeneralTab backup entry', () => {
     testContext.confirmMock.mockResolvedValue(false);
   });
 
+  it('keeps the WebDAV controls collapsed until the accordion is expanded', async () => {
+    render(<SettingsGeneralTab />);
+
+    await waitFor(() => {
+      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
+    });
+
+    const accordionToggle = screen.getByRole('button', { name: /WebDAV Cloud Sync/i });
+
+    expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByLabelText('Server URL')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh Cloud Backups' })).toBeNull();
+
+    fireEvent.click(accordionToggle);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Server URL')).toBeDefined();
+    });
+    expect(accordionToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Upload Backup' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Refresh Cloud Backups' })).toBeDefined();
+
+    fireEvent.click(accordionToggle);
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Server URL')).toBeNull();
+    });
+    expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('disables local backup and WebDAV transfer actions while live recording is active', async () => {
     testContext.transcriptState.isRecording = true;
 
@@ -190,6 +234,8 @@ describe('SettingsGeneralTab backup entry', () => {
     await waitFor(() => {
       expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
     });
+
+    await openWebDavAccordion();
 
     expect((screen.getByRole('button', { name: 'Export Backup' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Import Backup' }) as HTMLButtonElement).disabled).toBe(true);
@@ -207,6 +253,8 @@ describe('SettingsGeneralTab backup entry', () => {
     });
 
     render(<SettingsGeneralTab />);
+
+    await openWebDavAccordion();
 
     await waitFor(() => {
       expect(screen.getByText('This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.')).toBeDefined();
@@ -318,9 +366,9 @@ describe('SettingsGeneralTab backup entry', () => {
 
     render(<SettingsGeneralTab />);
 
-    await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(false);
-    });
+    await openWebDavAccordion();
+
+    expect((screen.getByRole('button', { name: 'Refresh Cloud Backups' }) as HTMLButtonElement).disabled).toBe(false);
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Refresh Cloud Backups' }));

@@ -69,29 +69,34 @@ vi.mock('../../stores/batchQueueStore', () => ({
   }),
 }));
 
-vi.mock('../settings/SettingsLayout', () => ({
-  SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
-  SettingsSection: ({ children, title, description }: any) => (
-    <section>
-      {title ? <div>{title}</div> : null}
-      {description ? <div>{description}</div> : null}
-      {children}
-    </section>
-  ),
-  SettingsItem: ({ children, title, hint }: any) => (
-    <div>
-      {title ? <div>{title}</div> : null}
-      {hint ? <div>{hint}</div> : null}
-      {children}
-    </div>
-  ),
-  SettingsPageHeader: ({ title, description }: any) => (
-    <header>
-      <div>{title}</div>
-      <div>{description}</div>
-    </header>
-  ),
-}));
+vi.mock('../settings/SettingsLayout', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../settings/SettingsLayout')>();
+
+  return {
+    ...actual,
+    SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
+    SettingsSection: ({ children, title, description }: any) => (
+      <section>
+        {title ? <div>{title}</div> : null}
+        {description ? <div>{description}</div> : null}
+        {children}
+      </section>
+    ),
+    SettingsItem: ({ children, title, hint }: any) => (
+      <div>
+        {title ? <div>{title}</div> : null}
+        {hint ? <div>{hint}</div> : null}
+        {children}
+      </div>
+    ),
+    SettingsPageHeader: ({ title, description }: any) => (
+      <header>
+        <div>{title}</div>
+        <div>{description}</div>
+      </header>
+    ),
+  };
+});
 
 vi.mock('../../stores/dialogStore', () => ({
   useDialogStore: (selector: any) => selector({

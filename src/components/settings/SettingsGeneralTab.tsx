@@ -13,7 +13,7 @@ import { useDialogStore } from '../../stores/dialogStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import type { UIConfig } from '../../types/config';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
     onOpenDiagnostics?: () => void;
@@ -159,6 +159,18 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
             });
     const webDavTransferDisabled = busyAction !== null || isBackupBlocked || !webDavConfigReady;
     const webDavConfigActionDisabled = busyAction !== null || !webDavConfigReady;
+    const webDavAccordionTitle = (
+        <div className="settings-accordion-copy">
+            <div className="settings-accordion-copy-title">
+                {t('settings.backup.cloud_title', { defaultValue: 'WebDAV Cloud Sync' })}
+            </div>
+            <div className="settings-accordion-copy-hint">
+                {t('settings.backup.cloud_hint', {
+                    defaultValue: 'Save WebDAV credentials locally on this device, upload backup archives manually, and restore from any remote snapshot without changing the backup scope.',
+                })}
+            </div>
+        </div>
+    );
 
     React.useEffect(() => {
         let cancelled = false;
@@ -571,12 +583,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                     </button>
                 </SettingsItem>
 
-                <SettingsItem
-                    title={t('settings.backup.cloud_title', { defaultValue: 'WebDAV Cloud Sync' })}
-                    hint={t('settings.backup.cloud_hint', {
-                        defaultValue: 'Save WebDAV credentials locally on this device, upload backup archives manually, and restore from any remote snapshot without changing the backup scope.',
-                    })}
-                >
+                <SettingsAccordion title={webDavAccordionTitle}>
                     <div className="settings-group" style={{ width: '100%' }}>
                         <div className="settings-item">
                             <label className="settings-label" htmlFor="backup-webdav-server">
@@ -783,7 +790,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                             )
                         ) : null}
                     </div>
-                </SettingsItem>
+                </SettingsAccordion>
             </SettingsSection>
 
             <SettingsSection
