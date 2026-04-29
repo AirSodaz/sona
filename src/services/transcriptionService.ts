@@ -1,7 +1,7 @@
 import { logger } from "../utils/logger";
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { TranscriptSegment } from '../types/transcript';
+import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { modelService, ModelFileConfig } from './modelService';
@@ -9,6 +9,7 @@ import { applyTextReplacements } from '../utils/textProcessing';
 import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { findSelectedModelByMode } from '../utils/modelSelection';
+import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -22,7 +23,9 @@ function shouldLogVoiceTypingDiagnostics(instanceId: string) {
     return instanceId === 'voice-typing';
 }
 
-/** Callback for receiving a new transcript segment. */
+/** Callback for receiving a normalized streaming transcript update. */
+export type TranscriptionUpdateCallback = (update: TranscriptUpdate) => void;
+/** Callback for receiving a batch transcript segment. */
 export type TranscriptionCallback = (segment: TranscriptSegment) => void;
 /** Callback for receiving an error message. */
 export type ErrorCallback = (error: string) => void;
@@ -42,6 +45,7 @@ interface ServiceConfig {
     modelType: string;
     fileConfig?: ModelFileConfig;
     hotwords?: string;
+    enableTimeline: boolean;
 }
 
 /**
@@ -52,7 +56,7 @@ export class TranscriptionService {
     private static globalListeners: Map<string, UnlistenFn> = new Map();
     private static callbackRegistrationCounter = 0;
     private static instanceCallbacks: Map<string, {
-        onSegment: TranscriptionCallback,
+        onUpdate: TranscriptionUpdateCallback,
         onError: ErrorCallback,
         owner: string,
         sessionId: string | null,
@@ -76,13 +80,13 @@ export class TranscriptionService {
         if (this.globalListeners.has(instanceId)) return;
 
         const eventName = `recognizer-output-${instanceId}`;
-        const unlisten = await listen<TranscriptSegment>(eventName, (event) => {
-            const segment = event.payload;
+        const unlisten = await listen<TranscriptUpdate>(eventName, (event) => {
+            const update = normalizeTranscriptUpdate(event.payload);
             const instance = this.instanceCallbacks.get(instanceId);
             if (!instance) {
                 if (this.isDiagnosticsInstance(instanceId)) {
                     logger.info(
-                        `[TranscriptionService:${instanceId}] Received recognizer event without an active callback. segment=${segment.id} final=${segment.isFinal}`
+                        `[TranscriptionService:${instanceId}] Received recognizer event without an active callback. removes=${update.removeIds.length} upserts=${update.upsertSegments.length}`
                     );
                 }
                 return;
@@ -90,44 +94,51 @@ export class TranscriptionService {
 
             if (this.isDiagnosticsInstance(instanceId)) {
                 logger.info(
-                    `[TranscriptionService:${instanceId}] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} segment=${segment.id} final=${segment.isFinal} textLength=${segment.text.length}`
+                    `[TranscriptionService:${instanceId}] Received recognizer event. registration=${instance.registrationId} owner=${instance.owner} session=${this.formatSession(instance.sessionId)} removes=${update.removeIds.length} upserts=${update.upsertSegments.length}`
                 );
             }
 
             try {
                 // Apply text replacements from global config
                 const appConfig = useTranscriptStore.getState().config;
-                const originalText = segment.text;
-                const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
-                const replacementChanged = originalText !== processedText;
-                const replacedToEmpty = originalText.trim().length > 0 && processedText.trim().length === 0;
+                const processedUpdate = normalizeTranscriptUpdate({
+                    removeIds: update.removeIds,
+                    upsertSegments: update.upsertSegments.map((segment) => {
+                        const originalText = segment.text;
+                        const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
+                        const replacementChanged = originalText !== processedText;
+                        const replacedToEmpty = originalText.trim().length > 0 && processedText.trim().length === 0;
 
-                if (shouldLogVoiceTypingDiagnostics(instanceId)) {
-                    logger.info(
-                        '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
-                        {
-                            instanceId,
-                            registrationId: instance.registrationId,
-                            segmentId: segment.id,
-                            isFinal: segment.isFinal,
-                            rawTextLength: originalText.length,
-                            processedTextLength: processedText.length,
-                            preview: previewTextForLog(processedText || originalText),
-                            replacementChanged,
-                            replacedToEmpty,
-                            callbackInvoked: false,
+                        if (shouldLogVoiceTypingDiagnostics(instanceId)) {
+                            logger.info(
+                                '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
+                                {
+                                    instanceId,
+                                    registrationId: instance.registrationId,
+                                    segmentId: segment.id,
+                                    isFinal: segment.isFinal,
+                                    rawTextLength: originalText.length,
+                                    processedTextLength: processedText.length,
+                                    preview: previewTextForLog(processedText || originalText),
+                                    replacementChanged,
+                                    replacedToEmpty,
+                                    callbackInvoked: false,
+                                }
+                            );
                         }
-                    );
-                }
 
-                if (replacementChanged) {
-                    logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
-                }
-                const processedSegment = {
-                    ...segment,
-                    text: processedText
-                };
-                instance.onSegment(processedSegment);
+                        if (replacementChanged) {
+                            logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
+                        }
+
+                        return {
+                            ...segment,
+                            text: processedText,
+                        };
+                    }),
+                });
+
+                instance.onUpdate(processedUpdate);
             } catch (e) {
                 logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
             }
@@ -167,7 +178,7 @@ export class TranscriptionService {
         return this._initBackend();
     }
 
-    async start(onSegment: TranscriptionCallback, onError: ErrorCallback, options?: StartOptions): Promise<void> {
+    async start(onUpdate: TranscriptionUpdateCallback, onError: ErrorCallback, options?: StartOptions): Promise<void> {
         this.onError = onError;
 
         if (!this.modelPath) {
@@ -188,7 +199,7 @@ export class TranscriptionService {
         const owner = options?.callbackOwner ?? this.instanceId;
         const sessionId = options?.callbackSessionId ?? null;
         const registrationId = ++TranscriptionService.callbackRegistrationCounter;
-        const wrappedOnSegment: TranscriptionCallback = (segment) => {
+        const wrappedOnUpdate: TranscriptionUpdateCallback = (update) => {
             const currentRegistration = TranscriptionService.instanceCallbacks.get(this.instanceId);
             if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
                 if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
@@ -198,11 +209,11 @@ export class TranscriptionService {
                             instanceId: this.instanceId,
                             registrationId,
                             currentRegistrationId: currentRegistration?.registrationId ?? null,
-                            segmentId: segment.id,
-                            isFinal: segment.isFinal,
+                            segmentIds: update.upsertSegments.map((segment) => segment.id),
+                            removeIds: update.removeIds,
                             rawTextLength: null,
-                            processedTextLength: segment.text.length,
-                            preview: previewTextForLog(segment.text),
+                            processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
+                            preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
                             callbackInvoked: false,
                             dropReason: 'stale_registration',
                         }
@@ -222,20 +233,20 @@ export class TranscriptionService {
                     {
                         instanceId: this.instanceId,
                         registrationId,
-                        segmentId: segment.id,
-                        isFinal: segment.isFinal,
+                        segmentIds: update.upsertSegments.map((segment) => segment.id),
+                        removeIds: update.removeIds,
                         rawTextLength: null,
-                        processedTextLength: segment.text.length,
-                        preview: previewTextForLog(segment.text),
+                        processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
+                        preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
                         callbackInvoked: true,
                     }
                 );
             }
-            onSegment(segment);
+            onUpdate(update);
         };
 
         TranscriptionService.instanceCallbacks.set(this.instanceId, {
-            onSegment: wrappedOnSegment,
+            onUpdate: wrappedOnUpdate,
             onError,
             owner,
             sessionId,
@@ -301,7 +312,8 @@ export class TranscriptionService {
                     language: this.language,
                     modelType: streamingModel?.type || 'sensevoice',
                     fileConfig: streamingModel?.fileConfig,
-                    hotwords: hotwordsStr
+                    hotwords: hotwordsStr,
+                    enableTimeline: this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
                 };
 
                 await invoke('init_recognizer', {
@@ -316,6 +328,9 @@ export class TranscriptionService {
                     modelType: configToUse.modelType,
                     fileConfig: configToUse.fileConfig,
                     hotwords: configToUse.hotwords || null,
+                    normalizationOptions: {
+                        enableTimeline: configToUse.enableTimeline,
+                    },
                 });
 
                 this.runningConfig = configToUse;
@@ -374,6 +389,7 @@ export class TranscriptionService {
         const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
 
         const modelType = streamingModel?.type || 'sensevoice';
+        const enableTimeline = this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false;
 
         const mismatches: string[] = [];
         if (this.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${this.modelPath} vs ${this.runningConfig.modelPath}`);
@@ -383,6 +399,7 @@ export class TranscriptionService {
         if (punctuationPathToUse !== this.runningConfig.punctuationModelPath) mismatches.push(`punctuationModelPath: ${punctuationPathToUse} vs ${this.runningConfig.punctuationModelPath}`);
         if (hotwordsStr !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${hotwordsStr} vs ${this.runningConfig.hotwords}`);
         if (modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${modelType} vs ${this.runningConfig.modelType}`);
+        if (enableTimeline !== this.runningConfig.enableTimeline) mismatches.push(`enableTimeline: ${enableTimeline} vs ${this.runningConfig.enableTimeline}`);
 
         if (mismatches.length > 0) {
             logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
@@ -528,16 +545,21 @@ export class TranscriptionService {
             fileConfig: offlineModel?.fileConfig,
             hotwords: hotwordsStr,
             speakerProcessing: speakerService.buildProcessingConfig(appConfig),
+            normalizationOptions: {
+                enableTimeline: appConfig.enableTimeline ?? false,
+            },
         });
 
         // Filter segments: some models (like Whisper) occasionally produce single "." segments
-        const filteredSegments = segments.filter(seg => !(seg.text === '.' && seg.isFinal));
+        const filteredSegments = normalizeTranscriptSegments(
+            segments.filter(seg => !(seg.text === '.' && seg.isFinal)),
+        );
         
         // Apply text replacements
-        const processedSegments = filteredSegments.map(seg => ({
+        const processedSegments = normalizeTranscriptSegments(filteredSegments.map(seg => ({
             ...seg,
             text: applyTextReplacements(seg.text, appConfig.textReplacementSets)
-        }));
+        })));
 
         if (onProgress) onProgress(100);
         if (onSegment) processedSegments.forEach(seg => onSegment(seg));

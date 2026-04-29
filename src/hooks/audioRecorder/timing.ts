@@ -1,4 +1,5 @@
-import type { TranscriptSegment } from '../../types/transcript';
+import type { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
+import { normalizeTranscriptUpdate, shiftTranscriptSegment } from '../../utils/transcriptTiming';
 import type { AudioRecorderLogger, RecordSessionPhase, RecordTimingRefs } from './types';
 
 export function shouldFeedWebAudioForPhase(phase: RecordSessionPhase): boolean {
@@ -97,14 +98,18 @@ export function createRecordTimingController({
     }
 
     function normalizeRecordSegmentTiming(segment: TranscriptSegment): TranscriptSegment {
-        const adjustedStart = segment.start + refs.segmentTimeOffsetSecondsRef.current;
-        const adjustedEnd = segment.end + refs.segmentTimeOffsetSecondsRef.current;
+        return shiftTranscriptSegment(segment, refs.segmentTimeOffsetSecondsRef.current);
+    }
+
+    function normalizeRecordTranscriptUpdate(update: TranscriptUpdate): TranscriptUpdate {
+        const normalized = normalizeTranscriptUpdate(update);
+        if (refs.segmentTimeOffsetSecondsRef.current === 0) {
+            return normalized;
+        }
 
         return {
-            ...segment,
-            start: adjustedStart,
-            end: adjustedEnd,
-            timestamps: segment.timestamps?.map((timestamp) => timestamp + adjustedStart),
+            ...normalized,
+            upsertSegments: normalized.upsertSegments.map(normalizeRecordSegmentTiming),
         };
     }
 
@@ -113,6 +118,10 @@ export function createRecordTimingController({
             refs.recordTimelineCursorSecondsRef.current,
             segment.end,
         );
+    }
+
+    function trackAcceptedTranscriptUpdate(update: TranscriptUpdate): void {
+        update.upsertSegments.forEach(trackAcceptedSegment);
     }
 
     return {
@@ -128,6 +137,8 @@ export function createRecordTimingController({
         getNextSegmentTimeOffsetSeconds,
         setSegmentTimeOffsetSeconds,
         normalizeRecordSegmentTiming,
+        normalizeRecordTranscriptUpdate,
         trackAcceptedSegment,
+        trackAcceptedTranscriptUpdate,
     };
 }

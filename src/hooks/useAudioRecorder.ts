@@ -11,7 +11,7 @@ import { historyService } from '../services/historyService';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
 import { transcriptionService } from '../services/transcriptionService';
-import type { TranscriptSegment } from '../types/transcript';
+import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { createAudioRecorderCapture, getSupportedMimeType } from './audioRecorder/capture';
@@ -39,7 +39,7 @@ export { getSupportedMimeType };
 
 interface UseAudioRecorderProps {
     inputSource: InputSource;
-    onSegment: (segment: TranscriptSegment, meta: RecordSegmentDeliveryMeta) => void;
+    onSegment: (update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => void;
 }
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
@@ -190,16 +190,27 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         }
     }, [persistence, timing]);
 
-    const forwardRecordSegment = useCallback((segment: TranscriptSegment) => {
-        const meta = session.getRecordSegmentDeliveryMeta(segment);
-        const normalizedSegment = timing.normalizeRecordSegmentTiming(segment);
-        if (meta.accepted) {
-            timing.trackAcceptedSegment(normalizedSegment);
-        }
-        logger.info(
-            `[useAudioRecorder] Record segment received. session=${meta.sessionId ?? 'none'} phase=${meta.phase} accepted=${meta.accepted} final=${segment?.isFinal === true} offset=${segmentTimeOffsetSecondsRef.current.toFixed(3)} start=${normalizedSegment.start.toFixed(3)} end=${normalizedSegment.end.toFixed(3)}`
+    const forwardRecordSegment = useCallback((update: TranscriptUpdate) => {
+        const normalizedUpdate = timing.normalizeRecordTranscriptUpdate(update);
+        const representativeSegment = normalizedUpdate.upsertSegments[normalizedUpdate.upsertSegments.length - 1];
+        const meta = session.getRecordSegmentDeliveryMeta(
+            representativeSegment || ({
+                id: 'record-update-empty',
+                text: '',
+                start: 0,
+                end: 0,
+                isFinal: false,
+            } as TranscriptSegment)
         );
-        onSegmentRef.current(normalizedSegment, meta);
+
+        if (meta.accepted) {
+            timing.trackAcceptedTranscriptUpdate(normalizedUpdate);
+        }
+
+        logger.info(
+            `[useAudioRecorder] Record update received. session=${meta.sessionId ?? 'none'} phase=${meta.phase} accepted=${meta.accepted} removes=${normalizedUpdate.removeIds.length} upserts=${normalizedUpdate.upsertSegments.length} offset=${segmentTimeOffsetSecondsRef.current.toFixed(3)}`
+        );
+        onSegmentRef.current(normalizedUpdate, meta);
     }, [session, timing]);
 
     const capture = useMemo(() => createAudioRecorderCapture({

@@ -84,3 +84,65 @@ describe('historyService.deleteRecordings', () => {
         expect(updatedItems).toHaveLength(1);
     });
 });
+
+describe('historyService transcript timing normalization', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('loads legacy transcript JSON and lazily backfills timing', async () => {
+        (readTextFile as any).mockResolvedValue(JSON.stringify([
+            {
+                id: 'seg-1',
+                text: '你好',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                tokens: ['你', '好'],
+                timestamps: [0, 0.5],
+            },
+        ]));
+
+        const segments = await historyService.loadTranscript('legacy.json');
+
+        expect(segments).toHaveLength(1);
+        expect(segments?.[0].timing).toEqual(expect.objectContaining({
+            level: 'token',
+            source: 'model',
+        }));
+        expect(segments?.[0].timing?.units).toEqual([
+            expect.objectContaining({ text: '你', start: 0, end: 0.5 }),
+            expect.objectContaining({ text: '好', start: 0.5, end: 1 }),
+        ]);
+    });
+
+    it('writes normalized timing when saving transcript files', async () => {
+        (writeTextFile as any).mockResolvedValue(undefined);
+
+        await historyService.saveTranscriptFile('history-1', [
+            {
+                id: 'seg-1',
+                text: 'Hello world',
+                start: 0,
+                end: 2,
+                isFinal: true,
+            },
+        ]);
+
+        const writeCall = (writeTextFile as any).mock.calls.find((call: any[]) => call[0] === 'history/history-1.json');
+        expect(writeCall).toBeDefined();
+
+        const payload = JSON.parse(writeCall[1]);
+        expect(payload[0].timing).toEqual({
+            level: 'segment',
+            source: 'derived',
+            units: [
+                {
+                    text: 'Hello world',
+                    start: 0,
+                    end: 2,
+                },
+            ],
+        });
+    });
+});

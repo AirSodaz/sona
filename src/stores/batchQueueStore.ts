@@ -25,7 +25,6 @@ import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import { useHistoryStore } from './historyStore';
-import { splitByPunctuation } from '../utils/segmentUtils';
 import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
 
@@ -295,7 +294,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         }
 
         const config = resolveQueueItemConfig(item);
-        const enableTimeline = config.enableTimeline ?? false;
         const language = config.language;
         const stageConfig = getAutomationStageConfig(item, config);
 
@@ -389,8 +387,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                     const now = Date.now();
 
                     if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
-                        const newSegments = enableTimeline ? splitByPunctuation(segmentBuffer) : segmentBuffer;
-                        setCurrentSegments([...currentSegments, ...newSegments]);
+                        setCurrentSegments([...currentSegments, ...segmentBuffer]);
                         segmentBuffer = [];
                         lastUpdateTime = now;
                     }
@@ -400,8 +397,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 config,
             );
 
-            const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
-            setCurrentSegments(finalSegments);
+            setCurrentSegments(segments);
             await ensureHistorySaved();
             await persistHistorySnapshot();
 

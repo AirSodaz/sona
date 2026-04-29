@@ -7,6 +7,7 @@ import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { HistoryItem } from '../types/history';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import { v4 as uuidv4 } from 'uuid';
 
 const HISTORY_DIR = 'history';
@@ -108,17 +109,18 @@ export const historyService = {
     },
 
     async saveTranscriptFile(id: string, segments: TranscriptSegment[]) {
+        const normalizedSegments = normalizeTranscriptSegments(segments);
         // Save Transcript
         const transcriptFileName = `${id}.json`;
         const transcriptPathDisplay = `${HISTORY_DIR}/${transcriptFileName}`;
         logger.info('[History] Writing transcript file:', transcriptPathDisplay);
         await writeTextFile(
             transcriptPathDisplay,
-            JSON.stringify(segments, null, 2),
+            JSON.stringify(normalizedSegments, null, 2),
             { baseDir: BaseDirectory.AppLocalData }
         );
 
-        const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
+        const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
         return { transcriptFileName, previewText, searchContent };
     },
@@ -174,6 +176,7 @@ export const historyService = {
         segments: TranscriptSegment[],
         duration: number,
     ): Promise<HistoryItem> {
+        const normalizedSegments = normalizeTranscriptSegments(segments);
         const items = await this.getAll();
         const item = items.find((entry) => entry.id === historyId);
         if (!item) {
@@ -182,11 +185,11 @@ export const historyService = {
 
         await writeTextFile(
             `${HISTORY_DIR}/${item.transcriptPath}`,
-            JSON.stringify(segments, null, 2),
+            JSON.stringify(normalizedSegments, null, 2),
             { baseDir: BaseDirectory.AppLocalData },
         );
 
-        const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
+        const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
         item.previewText = previewText;
         item.searchContent = searchContent;
         item.duration = duration;
@@ -433,7 +436,8 @@ export const historyService = {
         try {
             const path = `${HISTORY_DIR}/${filename}`;
             const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
-            return JSON.parse(content);
+            const parsed = JSON.parse(content);
+            return normalizeTranscriptSegments(Array.isArray(parsed) ? parsed as TranscriptSegment[] : []);
         } catch (error) {
             logger.error('Failed to load transcript:', error);
             return null;
@@ -448,6 +452,7 @@ export const historyService = {
      */
     async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<void> {
         try {
+            const normalizedSegments = normalizeTranscriptSegments(segments);
             const items = await this.getAll();
             const item = items.find(i => i.id === historyId);
             if (!item) {
@@ -458,11 +463,11 @@ export const historyService = {
             // Overwrite transcript file
             await writeTextFile(
                 `${HISTORY_DIR}/${item.transcriptPath}`,
-                JSON.stringify(segments, null, 2),
+                JSON.stringify(normalizedSegments, null, 2),
                 { baseDir: BaseDirectory.AppLocalData }
             );
 
-            const { previewText, searchContent } = buildHistoryTranscriptMetadata(segments);
+            const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
             // Update item in index
             item.previewText = previewText;

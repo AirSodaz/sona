@@ -4,7 +4,6 @@ import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
 import { transcriptionService } from './transcriptionService';
 import { logger } from '../utils/logger';
-import { splitByPunctuation } from '../utils/segmentUtils';
 
 class RetranscribeService {
     async retranscribeCurrentRecord(onProgress?: (progress: number) => void): Promise<void> {
@@ -48,14 +47,11 @@ class RetranscribeService {
             language === 'auto' ? undefined : language
         );
 
-        const enableTimeline = config.enableTimeline ?? false;
-        const finalSegments = enableTimeline ? splitByPunctuation(segments) : segments;
-
         // Update Store
-        store.setSegments(finalSegments);
+        store.setSegments(segments);
 
         // Save to History File
-        await useHistoryStore.getState().updateTranscript(historyId, finalSegments);
+        await useHistoryStore.getState().updateTranscript(historyId, segments);
         logger.info(`[RetranscribeService] Successfully re-transcribed and saved history item: ${historyId}`);
     }
 }

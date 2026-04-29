@@ -132,10 +132,15 @@ describe('TranscriptionService voice typing diagnostics', () => {
 
         expect(onSegment).toHaveBeenCalledWith(
             expect.objectContaining({
-                id: 'seg-1',
-                text: '测试123',
-                isFinal: false,
-            })
+                removeIds: [],
+                upsertSegments: [
+                    expect.objectContaining({
+                        id: 'seg-1',
+                        text: '测试123',
+                        isFinal: false,
+                    }),
+                ],
+            }),
         );
         expect(mocks.loggerInfo).toHaveBeenCalledWith(
             '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
@@ -152,7 +157,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
             '[TranscriptionService:voice-typing] Invoking callback',
             expect.objectContaining({
                 instanceId: 'voice-typing',
-                segmentId: 'seg-1',
+                segmentIds: ['seg-1'],
                 processedTextLength: 5,
                 callbackInvoked: true,
             })
@@ -199,9 +204,14 @@ describe('TranscriptionService voice typing diagnostics', () => {
 
         expect(onSegment).toHaveBeenCalledWith(
             expect.objectContaining({
-                id: 'seg-2',
-                text: '',
-            })
+                removeIds: [],
+                upsertSegments: [
+                    expect.objectContaining({
+                        id: 'seg-2',
+                        text: '',
+                    }),
+                ],
+            }),
         );
         expect(mocks.loggerInfo).toHaveBeenCalledWith(
             '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { captionTranscriptionService, TranscriptionService } from '../services/transcriptionService';
 import { captionWindowService } from '../services/captionWindowService';
-import type { AppConfig, TranscriptSegment } from '../types/transcript';
+import type { AppConfig } from '../types/config';
+import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
 import { logger } from '../utils/logger';
+import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -217,8 +219,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
             // 4. Start Service (Configuration is already handled globally)
             logger.info('[CaptionSession] Starting caption recognizer...');
             await captionService.start(
-                (segment: TranscriptSegment) => {
-                    captionWindowService.sendSegments([segment]).catch(logger.error);
+                (update: TranscriptUpdate | TranscriptSegment) => {
+                    const normalizedUpdate = normalizeTranscriptUpdate(update);
+                    captionWindowService.sendSegments(normalizedUpdate.upsertSegments).catch(logger.error);
                 },
                 (error: string) => {
                     logger.error('[CaptionSession] Service error:', error);
@@ -280,7 +283,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 const captionService = captionTranscriptionService;
                 activeServiceRef.current = captionService;
                 await captionService.start(
-                    (segment: TranscriptSegment) => captionWindowService.sendSegments([segment]).catch(logger.error),
+                    (update: TranscriptUpdate | TranscriptSegment) => {
+                        const normalizedUpdate = normalizeTranscriptUpdate(update);
+                        return captionWindowService.sendSegments(normalizedUpdate.upsertSegments).catch(logger.error);
+                    },
                     (error: string) => logger.error('[CaptionSession] Service error:', error)
                 );
             }

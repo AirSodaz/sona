@@ -1,6 +1,8 @@
 use crate::export::{export_segments, ExportFormat};
 use crate::preset_models::{find_preset_model, preset_models, PresetModel};
-use crate::sherpa::{transcribe_batch_with_progress, BatchTranscriptionRequest};
+use crate::sherpa::{
+    transcribe_batch_with_progress, BatchTranscriptionRequest, TranscriptNormalizationOptions,
+};
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
 use std::ffi::OsString;
@@ -411,6 +413,7 @@ pub fn resolve_transcribe_options(
             file_config: model.file_config.clone(),
             hotwords: cli.hotwords,
             speaker_processing: None,
+            normalization_options: TranscriptNormalizationOptions::default(),
         },
     })
 }

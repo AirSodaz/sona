@@ -101,4 +101,27 @@ describe('TranscriptStore', () => {
             expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
         });
     });
+
+    describe('applyTranscriptUpdate', () => {
+        it('atomically replaces a partial segment with multiple final segments', () => {
+            useTranscriptStore.getState().setSegments([
+                { id: 'seg-partial', text: 'Hello world.', start: 0, end: 2, isFinal: false },
+            ]);
+
+            useTranscriptStore.getState().applyTranscriptUpdate({
+                removeIds: ['seg-partial'],
+                upsertSegments: [
+                    { id: 'seg-final-1', text: 'Hello.', start: 0, end: 1, isFinal: true },
+                    { id: 'seg-final-2', text: 'World.', start: 1, end: 2, isFinal: true },
+                ],
+            }, 'seg-final-2');
+
+            expect(useTranscriptStore.getState().segments.map((segment) => segment.id)).toEqual([
+                'seg-final-1',
+                'seg-final-2',
+            ]);
+            expect(useTranscriptStore.getState().activeSegmentId).toBe('seg-final-2');
+            expect(useTranscriptStore.getState().activeSegmentIndex).toBe(1);
+        });
+    });
 });

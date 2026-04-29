@@ -8,7 +8,16 @@ const PRESET_MODELS_JSON: &str = include_str!("../../src/shared/preset-models.js
 pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
     requires_vad: true,
     requires_punctuation: false,
+    timestamp_support_hint: None,
 };
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TimestampSupportHint {
+    Token,
+    Segment,
+    Unknown,
+}
 
 /// Companion-model requirements for a preset model.
 #[derive(Debug, Clone, Copy, serde::Deserialize, PartialEq, Eq)]
@@ -16,6 +25,7 @@ pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
 pub struct ModelRules {
     pub requires_vad: bool,
     pub requires_punctuation: bool,
+    pub timestamp_support_hint: Option<TimestampSupportHint>,
 }
 
 /// Shared preset metadata consumed by both the GUI and the CLI.

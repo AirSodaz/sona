@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import {
     TranscriptSegment,
+    TranscriptUpdate,
     AppMode,
     ProcessingStatus,
     AppConfig,
@@ -17,6 +18,11 @@ import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { findSegmentAndIndexForTime } from '../utils/segmentUtils';
 import { coerceSummaryTemplateId } from '../utils/summaryTemplates';
 import { areSpeakerTagsEqual } from '../types/speaker';
+import {
+    normalizeTranscriptSegment,
+    normalizeTranscriptSegments,
+    normalizeTranscriptUpdate,
+} from '../utils/transcriptTiming';
 // createLlmSettings is now used in configStore
 
 /** State interface for the transcript store. */
@@ -138,6 +144,14 @@ interface TranscriptState {
      * @param segment The segment to upsert and set active.
      */
     upsertSegmentAndSetActive: (segment: TranscriptSegment) => void;
+
+    /**
+     * Applies a streaming transcript update atomically.
+     *
+     * @param update Removal IDs plus upserted segments.
+     * @param activeSegmentId Optional active segment to select after applying.
+     */
+    applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
 
     /**
      * Updates specific fields of a segment.
@@ -432,7 +446,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Segment CRUD
     addSegment: (segment) => {
         const id = uuidv4();
-        const newSegment: TranscriptSegment = { ...segment, id };
+        const newSegment: TranscriptSegment = normalizeTranscriptSegment({ ...segment, id });
         set((state) => ({
             segments: [...state.segments, newSegment].sort((a, b) => a.start - b.start),
         }));
@@ -441,14 +455,14 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     upsertSegment: (segment) => {
         set((state) => {
-            const result = calculateSegmentUpdate(state.segments, segment);
+            const result = calculateSegmentUpdate(state.segments, normalizeTranscriptSegment(segment));
             return { segments: result.segments };
         });
     },
 
     upsertSegmentAndSetActive: (segment) => {
         set((state) => {
-            const result = calculateSegmentUpdate(state.segments, segment);
+            const result = calculateSegmentUpdate(state.segments, normalizeTranscriptSegment(segment));
             // In caption mode, trim old segments to prevent unbounded growth
             const MAX_CAPTION_SEGMENTS = 50;
             const needsTrim = state.isCaptionMode && result.segments.length > MAX_CAPTION_SEGMENTS;
@@ -464,10 +478,48 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         });
     },
 
+    applyTranscriptUpdate: (update, activeSegmentId) => {
+        const normalizedUpdate = normalizeTranscriptUpdate(update);
+        set((state) => {
+            const removeIds = new Set(normalizedUpdate.removeIds);
+            let nextSegments = removeIds.size > 0
+                ? state.segments.filter((segment) => !removeIds.has(segment.id))
+                : [...state.segments];
+
+            normalizedUpdate.upsertSegments.forEach((segment) => {
+                nextSegments = calculateSegmentUpdate(nextSegments, segment).segments;
+            });
+
+            let nextActiveSegmentId = state.activeSegmentId;
+            let nextActiveSegmentIndex = state.activeSegmentIndex;
+
+            if (activeSegmentId !== undefined) {
+                nextActiveSegmentId = activeSegmentId;
+                nextActiveSegmentIndex = activeSegmentId
+                    ? nextSegments.findIndex((segment) => segment.id === activeSegmentId)
+                    : -1;
+            } else if (nextActiveSegmentId && removeIds.has(nextActiveSegmentId)) {
+                const activeIndex = nextSegments.findIndex((segment) => segment.id === nextActiveSegmentId);
+                if (activeIndex === -1) {
+                    nextActiveSegmentId = null;
+                    nextActiveSegmentIndex = -1;
+                } else {
+                    nextActiveSegmentIndex = activeIndex;
+                }
+            }
+
+            return {
+                segments: nextSegments,
+                activeSegmentId: nextActiveSegmentId,
+                activeSegmentIndex: nextActiveSegmentIndex,
+            };
+        });
+    },
+
     updateSegment: (id, updates) => {
         set((state) => ({
             segments: state.segments.map((seg) =>
-                seg.id === id ? { ...seg, ...updates } : seg
+                seg.id === id ? normalizeTranscriptSegment({ ...seg, ...updates }) : seg
             ),
         }));
     },
@@ -505,20 +557,20 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         set((state) => ({
             segments: state.segments
                 .filter((s) => s.id !== second.id)
-                .map((s) => (s.id === first.id ? mergedSegment : s)),
+                .map((s) => (s.id === first.id ? normalizeTranscriptSegment(mergedSegment) : s)),
         }));
     },
 
     setSegments: (segments) => {
         set({
-            segments: segments.sort((a, b) => a.start - b.start),
+            segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
             activeSegmentIndex: -1 // Reset index on bulk update
         });
     },
 
     loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => {
         set({
-            segments: segments.sort((a, b) => a.start - b.start),
+            segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
             sourceHistoryId,
             title: title || '',
             icon: icon || null,

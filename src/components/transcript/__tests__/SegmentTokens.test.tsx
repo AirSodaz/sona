@@ -10,16 +10,6 @@ vi.mock('../../../utils/exportFormats', () => ({
   formatDisplayTime: (time: number) => `Time: ${time}`
 }));
 
-vi.mock('../../../utils/segmentUtils', () => ({
-  alignTokensToText: (_text: string, tokens: string[], timestamps: number[]) => {
-    // Simple mock alignment
-    return tokens.map((token, index) => ({
-      text: token,
-      timestamp: timestamps[index]
-    }));
-  }
-}));
-
 // Mock transcript store to avoid provider errors
 vi.mock('../../../stores/transcriptStore', () => ({
   useTranscriptStore: (_selector: any) => {
@@ -36,9 +26,15 @@ describe('SegmentTokens', () => {
     start: 0,
     end: 2,
     isFinal: true,
-    tokens: ['Hello', ' ', 'world'],
-    timestamps: [0, 0.5, 1.0],
-    durations: [0.5, 0.5, 1.0]
+    timing: {
+      level: 'token',
+      source: 'model',
+      units: [
+        { text: 'Hello', start: 0, end: 0.5 },
+        { text: ' ', start: 0.5, end: 1.0 },
+        { text: 'world', start: 1.0, end: 2.0 },
+      ],
+    },
   };
 
   const mockOnSeek = vi.fn();

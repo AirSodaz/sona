@@ -4,6 +4,27 @@
  */
 import type { SpeakerTag } from './speaker';
 
+export type TranscriptTimingLevel = 'token' | 'segment';
+export type TranscriptTimingSource = 'model' | 'derived';
+
+export interface TranscriptTimingUnit {
+  /** Text rendered for this timing unit. */
+  text: string;
+  /** Start time in seconds. */
+  start: number;
+  /** End time in seconds. */
+  end: number;
+}
+
+export interface TranscriptTiming {
+  /** Whether this timing data is token-level or only segment-level. */
+  level: TranscriptTimingLevel;
+  /** Whether the timing came directly from the model or was derived later. */
+  source: TranscriptTimingSource;
+  /** Ordered timing units used for rendering and seek interactions. */
+  units: TranscriptTimingUnit[];
+}
+
 export interface TranscriptSegment {
   /** Unique identifier (UUID). */
   id: string;
@@ -15,16 +36,25 @@ export interface TranscriptSegment {
   text: string;
   /** True if the segment is finalized (not a partial/in-progress result). */
   isFinal: boolean;
-  /** List of tokens in the segment. */
+  /** Normalized timing metadata for editor seek/highlight behavior. */
+  timing?: TranscriptTiming;
+  /** Legacy raw token list kept for compatibility and lazy upgrades. */
   tokens?: string[];
-  /** Start time of each token. */
+  /** Legacy token start times kept for compatibility and lazy upgrades. */
   timestamps?: number[];
-  /** Duration of each token. */
+  /** Legacy token durations kept for compatibility and lazy upgrades. */
   durations?: number[];
   /** Translated text content. */
   translation?: string;
   /** Optional speaker metadata kept separate from transcript text. */
   speaker?: SpeakerTag;
+}
+
+export interface TranscriptUpdate {
+  /** Segment IDs that should be removed before upserts are applied. */
+  removeIds: string[];
+  /** Segments to insert or replace after removals. */
+  upsertSegments: TranscriptSegment[];
 }
 
 /**

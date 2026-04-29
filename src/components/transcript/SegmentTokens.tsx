@@ -1,7 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
-import { TranscriptSegment } from '../../types/transcript';
+import { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
 import { useTranscriptStore } from '../../stores/transcriptStore';
-import { alignTokensToText } from '../../utils/segmentUtils';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
 
@@ -18,8 +17,8 @@ export interface SegmentTokensProps {
 interface TokenListProps {
     segmentText: string;
     isFinal: boolean;
-    alignedTokens: { text: string; timestamp: number }[] | null;
-    activeTokenTimestamp: number;
+    alignedUnits: TranscriptTimingUnit[] | null;
+    activeUnitStart: number;
     onSeek: (time: number) => void;
     onMatchClick?: (index: number) => void;
     matches?: Match[];
@@ -83,8 +82,8 @@ function checkTokenMatch(
 function TokenListComponent({
     segmentText,
     isFinal,
-    alignedTokens,
-    activeTokenTimestamp,
+    alignedUnits,
+    activeUnitStart,
     onSeek,
     onMatchClick,
     matches,
@@ -95,24 +94,24 @@ function TokenListComponent({
     // Since this is inside a React.memo, it runs only when props change.
 
     const tokensWithIndices = useMemo(() => {
-        if (!alignedTokens) return null;
+        if (!alignedUnits) return null;
         let idx = 0;
-        return alignedTokens.map(t => {
+        return alignedUnits.map((unit) => {
             const start = idx;
-            idx += t.text.length;
-            return { ...t, start, end: idx };
+            idx += unit.text.length;
+            return { ...unit, startIndex: start, endIndex: idx };
         });
-    }, [alignedTokens]);
+    }, [alignedUnits]);
 
     return (
         <p className={`segment-text ${!isFinal ? 'partial' : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
             {tokensWithIndices ? (
                 tokensWithIndices.map((tokenObj, i) => {
-                    const isTimeActive = tokenObj.timestamp === activeTokenTimestamp;
+                    const isTimeActive = tokenObj.start === activeUnitStart;
 
                     const { isMatch, isActiveMatch, matchIndex } = checkTokenMatch(
-                        tokenObj.start,
-                        tokenObj.end,
+                        tokenObj.startIndex,
+                        tokenObj.endIndex,
                         matches,
                         activeMatch
                     );
@@ -133,13 +132,13 @@ function TokenListComponent({
                     return (
                         <span
                             key={i}
-                            title={formatDisplayTime(tokenObj.timestamp)}
+                            title={formatDisplayTime(tokenObj.start)}
                             className={className}
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onSeek(tokenObj.timestamp);
+                                onSeek(tokenObj.start);
                                 if (isMatch && matchIndex !== -1 && onMatchClick) {
                                     onMatchClick(matchIndex);
                                 }
@@ -148,7 +147,7 @@ function TokenListComponent({
                                 if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    onSeek(tokenObj.timestamp);
+                                    onSeek(tokenObj.start);
                                     if (isMatch && matchIndex !== -1 && onMatchClick) {
                                         onMatchClick(matchIndex);
                                     }
@@ -173,26 +172,27 @@ TokenList.displayName = 'TokenList';
  * Only mounted for the active segment.
  */
 function ActiveSegmentWrapper({
-    alignedTokens,
+    alignedUnits,
     renderTokenList
 }: {
-    alignedTokens: { text: string; timestamp: number }[] | null,
+    alignedUnits: TranscriptTimingUnit[] | null,
     renderTokenList: (timestamp: number) => React.JSX.Element
 }) {
     // Selector to compute active timestamp directly from store state
     // This avoids re-renders when currentTime changes but the active token remains the same
-    const activeTokenTimestamp = useTranscriptStore(useCallback((state) => {
+    const activeUnitStart = useTranscriptStore(useCallback((state) => {
         const currentTime = state.currentTime;
-        if (!alignedTokens || currentTime < 0) return -1;
+        if (!alignedUnits || currentTime < 0) return -1;
 
-        // Find the token that is currently active (timestamp <= currentTime < nextTokenTimestamp)
-        const nextTokenIndex = alignedTokens.findIndex(t => t.timestamp > currentTime);
-        const activeIdx = nextTokenIndex === -1 ? alignedTokens.length - 1 : nextTokenIndex - 1;
+        const activeUnit = alignedUnits.find((unit, index) => (
+            currentTime >= unit.start &&
+            (currentTime < unit.end || index === alignedUnits.length - 1)
+        ));
 
-        return activeIdx >= 0 ? alignedTokens[activeIdx].timestamp : -1;
-    }, [alignedTokens]));
+        return activeUnit ? activeUnit.start : -1;
+    }, [alignedUnits]));
 
-    return renderTokenList(activeTokenTimestamp);
+    return renderTokenList(activeUnitStart);
 }
 
 /**
@@ -209,19 +209,17 @@ function SegmentTokensComponent({
     matches,
     activeMatch
 }: SegmentTokensProps): React.JSX.Element {
-    // Memoize token alignment to avoid re-calculation
-    const alignedTokens = useMemo(() => {
-        if (!segment.tokens || !segment.timestamps) return null;
-        return alignTokensToText(segment.text, segment.tokens, segment.timestamps);
-    }, [segment.text, segment.tokens, segment.timestamps]);
+    const alignedUnits = useMemo(() => (
+        segment.timing?.level === 'token' ? segment.timing.units : null
+    ), [segment.timing]);
 
     // Stable render prop
     const renderTokenList = (timestamp: number) => (
         <TokenList
             segmentText={segment.text}
             isFinal={segment.isFinal ?? true}
-            alignedTokens={alignedTokens}
-            activeTokenTimestamp={timestamp}
+            alignedUnits={alignedUnits}
+            activeUnitStart={timestamp}
             onSeek={onSeek}
             onMatchClick={onMatchClick}
             matches={matches}
@@ -230,7 +228,7 @@ function SegmentTokensComponent({
     );
 
     if (isActive) {
-        return <ActiveSegmentWrapper alignedTokens={alignedTokens} renderTokenList={renderTokenList} />;
+        return <ActiveSegmentWrapper alignedUnits={alignedUnits} renderTokenList={renderTokenList} />;
     }
 
     return renderTokenList(-1);

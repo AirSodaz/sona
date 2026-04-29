@@ -4,7 +4,6 @@ import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 import { polishService } from '../services/polishService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
-import { splitByPunctuation } from '../utils/segmentUtils';
 import { RecordingTimer } from './RecordingTimer';
 import { Dropdown } from './Dropdown';
 import { TranscriptionOptions } from './TranscriptionOptions';
@@ -15,7 +14,7 @@ import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
 import { useAudioRecorder, type RecordSegmentDeliveryMeta } from '../hooks/useAudioRecorder';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { logger } from '../utils/logger';
-import { TranscriptSegment } from '../types/transcript';
+import { TranscriptUpdate } from '../types/transcript';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -74,16 +73,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     useCaptionSession(config, isCaptionMode);
 
     // Config Helpers
-    const enableTimeline = config.enableTimeline ?? false;
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;
-    const enableTimelineRef = useRef(enableTimeline);
-
-    const upsertSegmentAndSetActive = useTranscriptStore((state) => state.upsertSegmentAndSetActive);
-
-    useEffect(() => {
-        enableTimelineRef.current = enableTimeline;
-    }, [enableTimeline]);
+    const applyTranscriptUpdate = useTranscriptStore((state) => state.applyTranscriptUpdate);
 
     useEffect(() => {
         captionWindowService.setClickThrough(lockWindow).catch(logger.error);
@@ -91,28 +83,18 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [lockWindow, alwaysOnTop]);
 
     // Segment Handler
-    const onSegment = useCallback((segment: TranscriptSegment, meta: RecordSegmentDeliveryMeta) => {
+    const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {
         const storeState = useTranscriptStore.getState();
+        const latestSegment = update.upsertSegments[update.upsertSegments.length - 1];
         logger.info(
-            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. segment=${segment.id} final=${segment.isFinal} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${storeState.isRecording}`
+            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. removes=${update.removeIds.length} upserts=${update.upsertSegments.length} latest_segment=${latestSegment?.id ?? 'none'} latest_final=${latestSegment?.isFinal === true} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${storeState.isRecording}`
         );
 
         if (!meta.accepted) {
             return;
         }
 
-        if (enableTimeline && segment.isFinal) {
-            const parts = splitByPunctuation([segment]);
-            if (parts.length > 0) {
-                storeState.deleteSegment(segment.id);
-                parts.forEach(part => storeState.upsertSegment(part));
-                storeState.setActiveSegmentId(parts[parts.length - 1].id);
-            } else {
-                upsertSegmentAndSetActive(segment);
-            }
-        } else {
-            upsertSegmentAndSetActive(segment);
-        }
+        storeState.applyTranscriptUpdate(update, latestSegment?.id ?? null);
 
         // Auto-Polish Logic
         const config = useConfigStore.getState().config;
@@ -135,7 +117,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 });
             }
         }
-    }, [upsertSegmentAndSetActive, enableTimeline]);
+    }, [applyTranscriptUpdate]);
 
     // Audio Recorder Hook
     const {

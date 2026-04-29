@@ -1,5 +1,7 @@
 use crate::pipeline;
-use crate::sherpa::TranscriptSegment;
+use crate::sherpa::{
+    ensure_transcript_segment_timing, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
+};
 use serde::{Deserialize, Serialize};
 use sherpa_onnx::{
     FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig,
@@ -578,6 +580,92 @@ fn assign_speakers_to_segment(
 ) -> Vec<TranscriptSegment> {
     let fallback_speaker = choose_speaker_for_range(segment.start as f32, segment.end as f32, spans, speaker_tags);
 
+    if let Some(timing) = segment
+        .timing
+        .as_ref()
+        .filter(|timing| timing.level == TranscriptTimingLevel::Token && !timing.units.is_empty())
+    {
+        let token_speakers = timing
+            .units
+            .iter()
+            .map(|unit| {
+                choose_speaker_for_range(unit.start as f32, unit.end as f32, spans, speaker_tags)
+                    .or_else(|| fallback_speaker.clone())
+            })
+            .collect::<Vec<_>>();
+
+        if token_speakers.iter().all(|speaker| speaker.is_some()) {
+            let aligned_units = timing
+                .units
+                .iter()
+                .enumerate()
+                .map(|(index, unit)| AlignedTextUnit {
+                    text: unit.text.clone(),
+                    token_index: index,
+                })
+                .collect::<Vec<_>>();
+
+            if let Some(groups) = build_split_groups(&aligned_units, &token_speakers) {
+                if groups.len() == 1 {
+                    return vec![TranscriptSegment {
+                        speaker: Some(groups[0].speaker.clone()),
+                        ..segment.clone()
+                    }];
+                }
+
+                let segments = groups
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, group)| {
+                        let text = group.text.trim().to_string();
+                        if text.is_empty() {
+                            return None;
+                        }
+
+                        let timing_slice = timing.units[group.token_start..group.token_end_exclusive].to_vec();
+                        let start = timing_slice
+                            .first()
+                            .map(|unit| unit.start)
+                            .unwrap_or(segment.start);
+                        let end = timing_slice
+                            .last()
+                            .map(|unit| unit.end.max(unit.start))
+                            .unwrap_or(segment.end)
+                            .max(start);
+
+                        let mut next_segment = TranscriptSegment {
+                            id: if index == 0 {
+                                segment.id.clone()
+                            } else {
+                                uuid::Uuid::new_v4().to_string()
+                            },
+                            text,
+                            start,
+                            end,
+                            is_final: segment.is_final,
+                            timing: Some(TranscriptTiming {
+                                level: timing.level,
+                                source: timing.source,
+                                units: timing_slice,
+                            }),
+                            tokens: None,
+                            timestamps: None,
+                            durations: None,
+                            translation: None,
+                            speaker: Some(group.speaker),
+                        };
+                        ensure_transcript_segment_timing(&mut next_segment);
+                        Some(next_segment)
+                    })
+                    .collect::<Vec<_>>();
+
+                if !segments.is_empty() {
+                    return segments;
+                }
+            }
+        }
+    }
+
     let Some(tokens) = segment.tokens.as_ref() else {
         return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
     };
@@ -631,7 +719,7 @@ fn assign_speakers_to_segment(
         }];
     }
 
-    groups
+    let mut segments = groups
         .into_iter()
         .enumerate()
         .filter_map(|(index, group)| {
@@ -664,6 +752,7 @@ fn assign_speakers_to_segment(
                 start: start as f64,
                 end: end.max(start) as f64,
                 is_final: segment.is_final,
+                timing: None,
                 tokens: Some(token_slice),
                 timestamps: Some(timestamp_slice),
                 durations: duration_slice,
@@ -671,7 +760,13 @@ fn assign_speakers_to_segment(
                 speaker: Some(group.speaker),
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    for segment in &mut segments {
+        ensure_transcript_segment_timing(segment);
+    }
+
+    segments
 }
 
 fn apply_speaker_to_whole_segment(
@@ -941,6 +1036,7 @@ mod tests {
             start,
             end,
             is_final: true,
+            timing: None,
             tokens: None,
             timestamps: None,
             durations: None,
@@ -1020,6 +1116,52 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].speaker.as_ref().map(|value| value.label.as_str()), Some("Bob"));
+    }
+
+    #[test]
+    fn token_level_timing_allows_speaker_split_groups() {
+        let mut segment = sample_segment(0.0, 2.0, "Hello there");
+        segment.timing = Some(TranscriptTiming {
+            level: TranscriptTimingLevel::Token,
+            source: crate::sherpa::TranscriptTimingSource::Model,
+            units: vec![
+                crate::sherpa::TranscriptTimingUnit {
+                    text: "Hello".to_string(),
+                    start: 0.0,
+                    end: 1.0,
+                },
+                crate::sherpa::TranscriptTimingUnit {
+                    text: " there".to_string(),
+                    start: 1.0,
+                    end: 2.0,
+                },
+            ],
+        });
+
+        let spans = vec![
+            SpeakerSpan {
+                start: 0.0,
+                end: 1.0,
+                raw_speaker: 1,
+            },
+            SpeakerSpan {
+                start: 1.0,
+                end: 2.0,
+                raw_speaker: 2,
+            },
+        ];
+        let tags = HashMap::from([
+            (1, speaker("speaker-1", "Alice", "identified", Some(0.9))),
+            (2, speaker("speaker-2", "Bob", "identified", Some(0.85))),
+        ]);
+
+        let result = assign_speakers_to_segment(&segment, &spans, &tags);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].speaker.as_ref().map(|value| value.label.as_str()), Some("Alice"));
+        assert_eq!(result[1].speaker.as_ref().map(|value| value.label.as_str()), Some("Bob"));
+        assert_eq!(result[0].timing.as_ref().map(|timing| timing.units.len()), Some(1));
+        assert_eq!(result[1].timing.as_ref().map(|timing| timing.units.len()), Some(1));
     }
 
     #[test]

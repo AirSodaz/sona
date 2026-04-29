@@ -1,8 +1,9 @@
-import { TranscriptSegment } from '../../types/transcript';
+import { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
 import i18next from 'i18next';
 import { TranscriptionService } from '../transcriptionService';
 import { VoiceTypingOverlayPayload } from '../voiceTypingWindowService';
 import { logger } from '../../utils/logger';
+import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import {
     VoiceTypingOverlayPresenter,
     VoiceTypingPositionResolver,
@@ -122,8 +123,8 @@ export class VoiceTypingSessionMachine {
 
         try {
             const startPromise = this.options.transcriptionService.start(
-                (segment) => {
-                    this.enqueueSegmentUpdate(sessionId, requestId, segment);
+                (update) => {
+                    this.enqueueSegmentUpdate(sessionId, requestId, update);
                 },
                 (error) => {
                     if (!this.isCurrentSession(sessionId, requestId)) {
@@ -247,11 +248,14 @@ export class VoiceTypingSessionMachine {
     private enqueueSegmentUpdate(
         sessionId: string,
         requestId: number,
-        segment: TranscriptSegment
+        update: TranscriptUpdate | TranscriptSegment
     ) {
+        const normalizedUpdate = normalizeTranscriptUpdate(update);
         const run = async () => {
             try {
-                await this.handleSegmentUpdate(sessionId, requestId, segment);
+                for (const segment of normalizedUpdate.upsertSegments) {
+                    await this.handleSegmentUpdate(sessionId, requestId, segment);
+                }
             } catch (error) {
                 logger.error('[VoiceTypingSessionMachine] Failed to process segment update:', error);
             }

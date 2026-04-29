@@ -10,6 +10,7 @@ import { getPathStatusMap, isRuntimePathFile } from './pathStatusService';
 import type { BatchQueueItem } from '../types/batchQueue';
 import type { RecoverySnapshot, RecoveredQueueItem } from '../types/recovery';
 import { logger } from '../utils/logger';
+import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 
 const RECOVERY_VERSION = 1;
 const RECOVERY_DIR = 'recovery';
@@ -42,7 +43,7 @@ function createSnapshot(items: RecoveredQueueItem[]): RecoverySnapshot {
 function cloneRecoveredItem(item: RecoveredQueueItem): RecoveredQueueItem {
     return {
         ...item,
-        segments: [...item.segments],
+        segments: normalizeTranscriptSegments(Array.isArray(item.segments) ? item.segments : []),
         fileStat: item.fileStat ? { ...item.fileStat } : undefined,
         exportConfig: item.exportConfig ? { ...item.exportConfig } : null,
         stageConfig: item.stageConfig ? { ...item.stageConfig } : null,
@@ -127,7 +128,7 @@ export function toRecoveredQueueItem(item: BatchQueueItem): RecoveredQueueItem {
         source: toRecoverySource(item),
         resolution: 'pending',
         progress: item.progress,
-        segments: [...item.segments],
+        segments: normalizeTranscriptSegments(item.segments),
         projectId: item.projectId,
         historyId: item.historyId,
         historyTitle: item.historyTitle,
@@ -162,7 +163,7 @@ export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
         filePath: item.filePath,
         status: 'pending',
         progress: 0,
-        segments: [...item.segments],
+        segments: normalizeTranscriptSegments(item.segments),
         audioUrl: convertFileSrc(item.filePath),
         historyId: item.historyId,
         historyTitle: item.historyTitle,

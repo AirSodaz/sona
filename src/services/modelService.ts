@@ -11,11 +11,15 @@ import { extractErrorMessage } from '../utils/errorUtils';
 /**
  * Interface defining the structure and metadata for an AI model.
  */
+export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
+
 export interface ModelRules {
     /** Whether the model requires Voice Activity Detection (VAD). */
     requiresVad: boolean;
     /** Whether the model requires a Punctuation model. */
     requiresPunctuation: boolean;
+    /** Optional hint for UI/diagnostics about the model's timestamp granularity. */
+    timestampSupportHint?: TimestampSupportHint;
 }
 
 export interface ModelFileConfig {

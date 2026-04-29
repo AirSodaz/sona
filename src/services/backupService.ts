@@ -25,6 +25,7 @@ import type { ProjectRecord } from '../types/project';
 import type { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 
 const CONFIG_DIR_NAME = 'config';
 const CONFIG_FILE_NAME = 'sona-config.json';
@@ -554,10 +555,10 @@ async function loadPreparedImportFromExtractionDir(archivePath: string, extracti
     }
 
     const transcriptPath = item.transcriptPath;
-    transcriptFiles[transcriptPath] = ensureArray(await readJsonFile<unknown>(
+    transcriptFiles[transcriptPath] = normalizeTranscriptSegments(ensureArray(await readJsonFile<unknown>(
       await join(extractionDir, HISTORY_DIR_NAME, transcriptPath),
       `Transcript for history item ${item.id}`,
-    ), `Transcript for history item ${item.id}`) as TranscriptSegment[];
+    ), `Transcript for history item ${item.id}`) as TranscriptSegment[]);
 
     const summaryPath = await join(extractionDir, HISTORY_DIR_NAME, `${item.id}${SUMMARY_FILE_SUFFIX}`);
     const summary = await readOptionalJsonFile<unknown>(summaryPath);

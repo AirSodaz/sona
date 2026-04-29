@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { transcriptionService } from '../../services/transcriptionService';
-import type { TranscriptSegment } from '../../types/transcript';
+import type { TranscriptUpdate } from '../../types/transcript';
 import { shouldFeedWebAudioForPhase } from './timing';
 import type {
     AudioRecorderCaptureRefs,
@@ -36,7 +36,7 @@ export function getSupportedMimeType(): string {
 interface CreateAudioRecorderCaptureArgs {
     refs: AudioRecorderCaptureRefs;
     logger: AudioRecorderLogger;
-    onSegment: (segment: TranscriptSegment) => void;
+    onSegment: (update: TranscriptUpdate) => void;
     showError: (input: CaptureErrorDialogInput) => Promise<void>;
     activateRecordSession: (sessionId: string) => boolean;
     canMutateActiveRecordResources: (sessionId: string) => boolean;
