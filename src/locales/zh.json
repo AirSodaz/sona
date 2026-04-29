@@ -86,7 +86,10 @@
         }
     },
     "header": {
-        "settings": "设置"
+        "settings": "设置",
+        "notifications": "通知",
+        "notifications_panel": "通知",
+        "notifications_empty": "暂时没有通知。"
     },
     "panel": {
         "live_record": "实时录音",

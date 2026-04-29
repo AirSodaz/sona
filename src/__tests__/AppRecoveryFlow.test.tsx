@@ -31,9 +31,9 @@ vi.mock('../components/Icons', () => ({
   SettingsIcon: () => <span>SettingsIcon</span>,
 }));
 
-vi.mock('../components/RecoveryStartupBanner', () => ({
-  RecoveryStartupBanner: ({ onOpenRecoveryCenter }: any) => (
-    <button type="button" onClick={onOpenRecoveryCenter}>Open Recovery Banner</button>
+vi.mock('../components/NotificationCenter', () => ({
+  NotificationCenter: ({ onOpenRecoveryCenter }: any) => (
+    <button type="button" onClick={onOpenRecoveryCenter}>Open Recovery Notification</button>
   ),
 }));
 
@@ -73,7 +73,7 @@ vi.mock('../stores/onboardingStore', () => ({
 }));
 
 describe('App recovery flow', () => {
-  it('opens the recovery center from the startup banner entry', () => {
+  it('opens the recovery center from the notification center entry', () => {
     mockUseTranscriptStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       clearSegments: vi.fn(),
@@ -89,7 +89,7 @@ describe('App recovery flow', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Banner' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Notification' }));
 
     expect(screen.getByText('Recovery Center Modal')).toBeDefined();
   });

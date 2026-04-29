@@ -86,7 +86,10 @@
         }
     },
     "header": {
-        "settings": "Settings"
+        "settings": "Settings",
+        "notifications": "Notifications",
+        "notifications_panel": "Notifications",
+        "notifications_empty": "No notifications right now."
     },
     "panel": {
         "live_record": "Live Record",

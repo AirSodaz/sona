@@ -19,8 +19,8 @@ vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () =>
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
+vi.mock('../components/NotificationCenter', () => ({ NotificationCenter: () => null }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
-vi.mock('../components/RecoveryStartupBanner', () => ({ RecoveryStartupBanner: () => null }));
 vi.mock('../components/UpdateNotification', () => ({ UpdateNotification: () => <div>UpdateNotification</div> }));
 vi.mock('../components/Icons', () => ({ 
   SettingsIcon: () => <span>SettingsIcon</span>, 

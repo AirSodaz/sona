@@ -11,8 +11,8 @@ import { RecoveryCenterModal } from './components/RecoveryCenterModal';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
+import { NotificationCenter } from './components/NotificationCenter';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
-import { RecoveryStartupBanner } from './components/RecoveryStartupBanner';
 import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
@@ -122,6 +122,7 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
+          <NotificationCenter onOpenRecoveryCenter={openRecoveryCenter} />
           <button
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}
@@ -135,7 +136,6 @@ function App(): React.JSX.Element {
       </header>
 
       <OnboardingReminderBanner />
-      <RecoveryStartupBanner onOpenRecoveryCenter={openRecoveryCenter} />
 
       {/* Main Content */}
       <main id="main-content" className="app-main">

@@ -401,6 +401,15 @@ export function AutomationIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX
     );
 }
 
+export function BellIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+    return (
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+            <path d="M10 17a2 2 0 0 0 4 0" />
+        </svg>
+    );
+}
+
 /** Icon for opening settings. */
 export function SettingsIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
     return (
