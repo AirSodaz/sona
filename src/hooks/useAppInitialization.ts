@@ -6,6 +6,7 @@ import { useConfigPersistence } from './useConfigPersistence';
 import { useTraySyncEffect } from './useTraySyncEffect';
 import { hydrateAppStartupState } from '../services/startup/hydration';
 import { startAppRuntimeServices } from '../services/startup/runtime';
+import { transcriptConfigRuntime } from '../services/transcriptConfigRuntime';
 
 /**
  * Hook to handle application initialization.
@@ -26,10 +27,12 @@ export function useAppInitialization() {
     // Initialize config and onboarding state
     useEffect(() => {
         let cancelled = false;
+        transcriptConfigRuntime.init();
 
         async function initialize() {
             try {
                 await hydrateAppStartupState();
+                transcriptConfigRuntime.init();
             } catch (e) {
                 logger.error('[Startup] Failed to initialize app state:', e);
             } finally {
@@ -46,6 +49,7 @@ export function useAppInitialization() {
 
         return () => {
             cancelled = true;
+            transcriptConfigRuntime.stop();
         };
     }, []); // Run once on mount
 

@@ -1,3 +1,4 @@
+import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { TranscriptSegment } from '../types/transcript';
 import { AuxWindowController } from './auxWindowController';
@@ -193,7 +194,6 @@ class CaptionWindowService {
         }
 
         try {
-            const { PhysicalSize } = await import('@tauri-apps/api/dpi');
             const factor = await windowInstance.scaleFactor();
             const size = await windowInstance.innerSize();
             const targetWidth = Math.ceil(style.width * factor);

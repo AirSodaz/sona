@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptWorkbench } from './components/TranscriptWorkbench';
 import { BatchImport } from './components/BatchImport';
 import { LiveRecord } from './components/LiveRecord';
 import { ProjectsView } from './components/ProjectsView';
-import { Settings } from './components/Settings';
-import { DiagnosticsModal } from './components/DiagnosticsModal';
-import { RecoveryCenterModal } from './components/RecoveryCenterModal';
 import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
@@ -25,6 +22,21 @@ import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { SettingsTab } from './hooks/useSettingsLogic';
 import { diagnosticsService } from './services/diagnosticsService';
+
+const SettingsModal = lazy(async () => {
+  const module = await import('./components/Settings');
+  return { default: module.Settings };
+});
+
+const DiagnosticsPanel = lazy(async () => {
+  const module = await import('./components/DiagnosticsModal');
+  return { default: module.DiagnosticsModal };
+});
+
+const RecoveryCenterPanel = lazy(async () => {
+  const module = await import('./components/RecoveryCenterModal');
+  return { default: module.RecoveryCenterModal };
+});
 
 /**
  * Helper to determine the title of the left panel based on the current mode.
@@ -187,22 +199,34 @@ function App(): React.JSX.Element {
       {/* {isCaptionMode && isRecording && <LiveCaptionOverlay />} */}
 
       {/* Settings Modal */}
-      <Settings
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        initialTab={settingsInitialTab}
-        onOpenDiagnostics={openDiagnostics}
-      />
-      <DiagnosticsModal
-        isOpen={isDiagnosticsOpen}
-        onClose={() => setIsDiagnosticsOpen(false)}
-        onOpenSettingsTab={openSettingsTab}
-        onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}
-      />
-      <RecoveryCenterModal
-        isOpen={isRecoveryCenterOpen}
-        onClose={() => setIsRecoveryCenterOpen(false)}
-      />
+      {isSettingsOpen ? (
+        <Suspense fallback={null}>
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            initialTab={settingsInitialTab}
+            onOpenDiagnostics={openDiagnostics}
+          />
+        </Suspense>
+      ) : null}
+      {isDiagnosticsOpen ? (
+        <Suspense fallback={null}>
+          <DiagnosticsPanel
+            isOpen={isDiagnosticsOpen}
+            onClose={() => setIsDiagnosticsOpen(false)}
+            onOpenSettingsTab={openSettingsTab}
+            onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}
+          />
+        </Suspense>
+      ) : null}
+      {isRecoveryCenterOpen ? (
+        <Suspense fallback={null}>
+          <RecoveryCenterPanel
+            isOpen={isRecoveryCenterOpen}
+            onClose={() => setIsRecoveryCenterOpen(false)}
+          />
+        </Suspense>
+      ) : null}
       <GlobalDialog />
       <ErrorDialog />
       <FirstRunGuide />

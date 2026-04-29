@@ -493,16 +493,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const item = state.queueItems.find((queueItem) => queueItem.id === id);
         if (item) {
-            useTranscriptStore.getState().loadTranscript(
-                item.segments,
-                item.historyId || null,
-                item.historyTitle || item.filename,
-            );
-            useTranscriptStore.getState().setAudioUrl(item.audioUrl || null);
+            useTranscriptStore.getState().openTranscriptSession({
+                segments: item.segments,
+                sourceHistoryId: item.historyId || null,
+                title: item.historyTitle || item.filename,
+                audioUrl: item.audioUrl || null,
+            });
             void useProjectStore.getState().setActiveProjectId(item.projectId);
         } else if (id === null) {
-            useTranscriptStore.getState().loadTranscript([], null);
-            useTranscriptStore.getState().setAudioUrl(null);
+            useTranscriptStore.getState().clearActiveTranscriptSession({ clearAudio: true, title: '' });
         }
     },
 
@@ -587,8 +586,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             isQueueProcessing: false,
         });
         scheduleRecoverySnapshotSync([], true);
-        useTranscriptStore.getState().clearSegments();
-        useTranscriptStore.getState().setAudioUrl(null);
+        useTranscriptStore.getState().clearActiveTranscriptSession({ clearAudio: true });
     },
 }));
 

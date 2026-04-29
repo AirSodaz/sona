@@ -10,6 +10,7 @@ export default defineConfig(async () => ({
   test: {
     environment: 'jsdom',
     globals: true,
+    setupFiles: ['./src/__tests__/setup.ts'],
     exclude: ['**/node_modules/**', 'tests/e2e/**'],
   },
 
@@ -37,5 +38,52 @@ export default defineConfig(async () => ({
   optimizeDeps: {
     entries: ["index.html", "src/main.tsx"],
     exclude: ["@tauri-apps/api", "@tauri-apps/plugin-shell"]
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, "/");
+
+          if (normalizedId.includes("/node_modules/react-markdown/")
+            || normalizedId.includes("/node_modules/remark-gfm/")
+            || normalizedId.includes("/node_modules/remark-breaks/")) {
+            return "markdown-vendor";
+          }
+
+          if (normalizedId.includes("/node_modules/@tauri-apps/")) {
+            return "tauri-vendor";
+          }
+
+          if (normalizedId.includes("/node_modules/@dnd-kit/")) {
+            return "dnd-vendor";
+          }
+
+          if (normalizedId.includes("/node_modules/lucide-react/")) {
+            return "icons-vendor";
+          }
+
+          if (normalizedId.includes("/node_modules/i18next/")
+            || normalizedId.includes("/node_modules/react-i18next/")
+            || normalizedId.includes("/node_modules/i18next-browser-languagedetector/")) {
+            return "i18n-vendor";
+          }
+
+          if (normalizedId.includes("/src/components/settings/")
+            || normalizedId.includes("/src/hooks/useModelManager.ts")
+            || normalizedId.includes("/src/components/DiagnosticsModal.tsx")
+            || normalizedId.includes("/src/components/RecoveryCenterModal.tsx")) {
+            return "settings-surface";
+          }
+
+          if (normalizedId.includes("/src/components/projects/")
+            || normalizedId.includes("/src/components/ProjectsView.tsx")) {
+            return "projects-surface";
+          }
+
+          return undefined;
+        },
+      },
+    },
   },
 }));

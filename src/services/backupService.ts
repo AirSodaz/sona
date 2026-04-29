@@ -284,23 +284,24 @@ async function syncOpenTranscriptAfterImport(): Promise<void> {
   const matchingItem = historyItems.find((item) => item.id === currentHistoryId);
 
   if (!matchingItem) {
-    transcriptStore.clearSegments();
-    transcriptStore.setAudioFile(null);
-    transcriptStore.setAudioUrl(null);
+    transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
     return;
   }
 
   const segments = await historyService.loadTranscript(matchingItem.transcriptPath);
   if (!segments) {
-    transcriptStore.clearSegments();
-    transcriptStore.setAudioFile(null);
-    transcriptStore.setAudioUrl(null);
+    transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
     return;
   }
 
-  transcriptStore.loadTranscript(segments, matchingItem.id, matchingItem.title, matchingItem.icon || null);
+  transcriptStore.openTranscriptSession({
+    segments,
+    sourceHistoryId: matchingItem.id,
+    title: matchingItem.title,
+    icon: matchingItem.icon || null,
+    audioUrl: await historyService.getAudioUrl(matchingItem.audioPath),
+  });
   transcriptStore.setAudioFile(null);
-  transcriptStore.setAudioUrl(await historyService.getAudioUrl(matchingItem.audioPath));
 }
 
 export async function exportBackup(options?: {

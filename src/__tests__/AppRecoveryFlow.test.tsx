@@ -72,7 +72,7 @@ vi.mock('../stores/onboardingStore', () => ({
 }));
 
 describe('App recovery flow', () => {
-  it('opens the recovery center from the notification center entry', () => {
+  it('opens the recovery center from the notification center entry', async () => {
     mockUseTranscriptStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       clearSegments: vi.fn(),
@@ -90,6 +90,6 @@ describe('App recovery flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Notification' }));
 
-    expect(screen.getByText('Recovery Center Modal')).toBeDefined();
+    expect(await screen.findByText('Recovery Center Modal')).toBeDefined();
   });
 });

@@ -6,7 +6,6 @@ import {
     AppMode,
     ProcessingStatus,
     AppConfig,
-    DEFAULT_SUMMARY_TEMPLATE_ID,
     HistorySummaryPayload,
     SummaryTemplateId,
     TranscriptSummaryRecord,
@@ -23,6 +22,16 @@ import {
     normalizeTranscriptSegments,
     normalizeTranscriptUpdate,
 } from '../utils/transcriptTiming';
+import {
+    type AutoSaveState,
+    type AutoSaveStatus,
+    createDefaultSummaryState,
+    DEFAULT_LLM_STATE,
+    type LlmState,
+    rekeyCurrentSummaryState,
+    resolveTranscriptHistoryKey,
+} from './transcriptSidecarState';
+import { INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE } from './transcriptSessionState';
 // createLlmSettings is now used in configStore
 
 /** State interface for the transcript store. */
@@ -190,6 +199,22 @@ interface TranscriptState {
     loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => void;
 
     /**
+     * Opens one active transcript session seam for workspace/history/batch callers.
+     */
+    openTranscriptSession: (session: {
+        segments: TranscriptSegment[];
+        sourceHistoryId: string | null;
+        title?: string | null;
+        icon?: string | null;
+        audioUrl?: string | null;
+    }) => void;
+
+    /**
+     * Clears the active transcript session seam and optionally clears audio state too.
+     */
+    clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
+
+    /**
      * Mark the last segment as final if it isn't already.
      * Useful when stopping a recording.
      */
@@ -330,48 +355,6 @@ interface TranscriptState {
     setConfig: (config: Partial<AppConfig>) => void;
 }
 
-
-export interface LlmState {
-    isTranslating: boolean;
-    translationProgress: number;
-    isTranslationVisible: boolean;
-    isPolishing: boolean;
-    polishProgress: number;
-    isRetranscribing: boolean;
-    retranscribeProgress: number;
-}
-
-export type AutoSaveStatus = 'saving' | 'saved' | 'error';
-
-export interface AutoSaveState {
-    status: AutoSaveStatus;
-    updatedAt: number;
-}
-
-const DEFAULT_LLM_STATE: LlmState = {
-    isTranslating: false,
-    translationProgress: 0,
-    isTranslationVisible: false,
-    isPolishing: false,
-    polishProgress: 0,
-    isRetranscribing: false,
-    retranscribeProgress: 0,
-};
-
-const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
-    activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID,
-    record: undefined,
-    streamingContent: undefined,
-    isGenerating: false,
-    generationProgress: 0,
-};
-
-function createDefaultSummaryState(): TranscriptSummaryState {
-    return {
-        ...DEFAULT_SUMMARY_STATE,
-    };
-}
-
 type LegacySummaryRecord = Partial<TranscriptSummaryRecord> & {
     template?: string;
 };
@@ -388,26 +371,13 @@ interface LegacyHistorySummaryPayload extends Omit<HistorySummaryPayload, 'recor
  */
 export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // Initial state
-    segments: [],
-    activeSegmentId: null,
-    activeSegmentIndex: -1,
-    editingSegmentId: null,
+    ...INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE,
     mode: 'live',
     processingStatus: 'idle',
     processingProgress: 0,
-    aligningSegmentIds: new Set<string>(),
-    audioFile: null,
-    audioUrl: null,
-    currentTime: 0,
-    isPlaying: false,
     isRecording: false,
     isCaptionMode: false,
     isPaused: false,
-    lastSeekTimestamp: 0,
-    seekRequest: null,
-    sourceHistoryId: null,
-    title: null,
-    icon: null,
     llmStates: {},
     summaryStates: {},
     autoSaveStates: {},
@@ -415,27 +385,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     // History tracking
     setSourceHistoryId: (id) => set((state) => {
-        if (!id || !state.summaryStates.current) {
-            return { sourceHistoryId: id };
-        }
-
-        const currentSummaryState = state.summaryStates.current;
-        const existingTargetState = state.summaryStates[id];
-        const summaryStates = { ...state.summaryStates };
-
-        summaryStates[id] = existingTargetState
-            ? {
-                ...existingTargetState,
-                ...currentSummaryState,
-                record: currentSummaryState.record || existingTargetState.record,
-            }
-            : currentSummaryState;
-
-        delete summaryStates.current;
-
         return {
             sourceHistoryId: id,
-            summaryStates,
+            summaryStates: rekeyCurrentSummaryState(state.summaryStates, id),
         };
     }),
 
@@ -569,6 +521,15 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     loadTranscript: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => {
+        get().openTranscriptSession({
+            segments,
+            sourceHistoryId,
+            title,
+            icon,
+        });
+    },
+
+    openTranscriptSession: ({ segments, sourceHistoryId, title, icon, audioUrl }) => {
         set({
             segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
             sourceHistoryId,
@@ -576,6 +537,28 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
             icon: icon || null,
             activeSegmentId: null,
             editingSegmentId: null,
+            activeSegmentIndex: -1,
+            ...(audioUrl !== undefined ? { audioUrl } : {}),
+        });
+    },
+
+    clearActiveTranscriptSession: (options) => {
+        set((state) => {
+            const summaryStates = { ...state.summaryStates };
+            delete summaryStates.current;
+
+            return {
+                ...INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE,
+                title: options?.title ?? null,
+                summaryStates,
+                ...(options?.clearAudio ? {
+                    audioFile: null,
+                    audioUrl: null,
+                } : {
+                    audioFile: state.audioFile,
+                    audioUrl: state.audioUrl,
+                }),
+            };
         });
     },
 
@@ -593,21 +576,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     },
 
     clearSegments: () => {
-        set((state) => {
-            const summaryStates = { ...state.summaryStates };
-            delete summaryStates.current;
-
-            return {
-            segments: [],
-            activeSegmentId: null,
-            activeSegmentIndex: -1,
-            editingSegmentId: null,
-            sourceHistoryId: null,
-            title: null,
-            icon: null,
-            summaryStates,
-            };
-        });
+        get().clearActiveTranscriptSession();
     },
 
     // UI actions
@@ -633,13 +602,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
     // LLM state actions
     getLlmState: (historyId) => {
         const state = get();
-        const id = historyId || state.sourceHistoryId || 'current';
+        const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
         return state.llmStates[id] || { ...DEFAULT_LLM_STATE };
     },
 
     updateLlmState: (updates, historyId) => {
         set((state) => {
-            const id = historyId || state.sourceHistoryId || 'current';
+            const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
             const currentState = state.llmStates[id] || { ...DEFAULT_LLM_STATE };
             return {
                 llmStates: {
@@ -652,13 +621,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     getSummaryState: (historyId) => {
         const state = get();
-        const id = historyId || state.sourceHistoryId || 'current';
+        const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
         return state.summaryStates[id] || createDefaultSummaryState();
     },
 
     setSummaryState: (summaryState, historyId) => {
         set((state) => {
-            const id = historyId || state.sourceHistoryId || 'current';
+            const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
             return {
                 summaryStates: {
                     ...state.summaryStates,
@@ -674,7 +643,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     updateSummaryState: (updates, historyId) => {
         set((state) => {
-            const id = historyId || state.sourceHistoryId || 'current';
+            const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
             const currentState = state.summaryStates[id] || createDefaultSummaryState();
             return {
                 summaryStates: {
@@ -736,7 +705,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     clearSummaryState: (historyId) => {
         set((state) => {
-            const id = historyId || state.sourceHistoryId || 'current';
+            const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
             if (!state.summaryStates[id]) {
                 return state;
             }
@@ -765,7 +734,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
 
     clearAutoSaveState: (historyId) => {
         set((state) => {
-            const id = historyId || state.sourceHistoryId || 'current';
+            const id = resolveTranscriptHistoryKey(historyId, state.sourceHistoryId);
             if (!id || id === 'current' || !state.autoSaveStates[id]) {
                 return state;
             }
@@ -843,36 +812,6 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
         set({ config: effectiveConfig });
     },
 }));
-
-function syncEffectiveConfigToTranscriptStore() {
-    const projectState = useProjectStore.getState();
-    const activeProject = typeof projectState.getActiveProject === 'function'
-        ? projectState.getActiveProject()
-        : null;
-    const effectiveConfig = resolveEffectiveConfig(
-        useConfigStore.getState().config,
-        activeProject,
-    );
-    useTranscriptStore.setState({ config: effectiveConfig });
-}
-
-// Keep transcriptStore.config in sync with the active project-aware config.
-// New code should prefer transcriptStore.config for runtime workflow behavior.
-useConfigStore.subscribe((state) => {
-    const projectState = useProjectStore.getState();
-    const activeProject = typeof projectState.getActiveProject === 'function'
-        ? projectState.getActiveProject()
-        : null;
-    useTranscriptStore.setState({
-        config: resolveEffectiveConfig(state.config, activeProject),
-    });
-});
-
-if (typeof useProjectStore.subscribe === 'function') {
-    useProjectStore.subscribe(() => {
-        syncEffectiveConfigToTranscriptStore();
-    });
-}
 
 /**
  * Calculates the new segments array and the index of the updated/inserted segment.

@@ -93,10 +93,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             // Clear current transcript if it matches the deleted item
             const transcriptStore = useTranscriptStore.getState();
             if (transcriptStore.sourceHistoryId === id) {
-                transcriptStore.clearSegments();
-                transcriptStore.setAudioUrl(null);
-                transcriptStore.setAudioFile(null);
-                transcriptStore.setSourceHistoryId(null);
+                transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
             }
         } catch (error) {
             logger.error('Failed to delete history item:', error);
@@ -118,10 +115,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             // Clear current transcript if it matches any of the deleted items
             const transcriptStore = useTranscriptStore.getState();
             if (transcriptStore.sourceHistoryId && ids.includes(transcriptStore.sourceHistoryId)) {
-                transcriptStore.clearSegments();
-                transcriptStore.setAudioUrl(null);
-                transcriptStore.setAudioFile(null);
-                transcriptStore.setSourceHistoryId(null);
+                transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
             }
         } catch (error) {
             logger.error('Failed to delete history items:', error);

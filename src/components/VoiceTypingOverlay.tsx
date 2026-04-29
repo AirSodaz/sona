@@ -1,3 +1,4 @@
+import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +57,6 @@ async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
             return;
         }
 
-        const { PhysicalSize } = await import('@tauri-apps/api/dpi');
         await currentWindow.setSize(
             new PhysicalSize(targetPhysicalWidth, targetPhysicalHeight)
         );

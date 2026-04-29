@@ -2,15 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import {
-  createAutomationFingerprint,
-  ensureAutomationStorage,
   isPathInsideDirectory,
-  loadAutomationProcessedEntries,
-  loadAutomationRules,
-  normalizeAutomationPath,
-  saveAutomationProcessedEntries,
-  saveAutomationRules,
-  validateAutomationRuleForActivation,
 } from '../services/automationService';
 import {
   collectAutomationRuntimeRulePaths,
@@ -23,7 +15,6 @@ import {
   type AutomationRuntimeReplaceResult,
 } from '../services/automationRuntimeService';
 import {
-  emitAutomationTaskSettled,
   subscribeAutomationTaskSettled,
   type AutomationTaskSettledPayload,
 } from '../services/automationRuntimeBridge';
@@ -40,15 +31,35 @@ import type {
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../types/automation';
-import type { RecoveredQueueItem, RecoveryItemStage } from '../types/recovery';
+import type { RecoveredQueueItem } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import { logger } from '../utils/logger';
+import {
+  loadAutomationRepositoryState,
+  persistAutomationProcessedEntries,
+  persistAutomationRepositoryState,
+  persistAutomationRules,
+  validateAutomationRuleActivation,
+} from './automationRepository';
+import {
+  applyRetryBlockedResults,
+  applyRetryFailureResults,
+  applyRuntimeBlockState,
+  applyRuntimeFailureState,
+  applyRuntimeQueuedState,
+  applyRuntimeReplaceResults,
+  applyTaskSettledState,
+  type AutomationSessionNotification,
+  deriveRuntimeState,
+  getUniqueFilePaths,
+  rebuildRuntimeStates,
+  removeRuleNotifications,
+} from './automationSessionState';
 
 const pendingFingerprints = new Set<string>();
 let automationSuccessNotificationSequence = 0;
 let automationRuntimeCandidateUnlisten: (() => void) | null = null;
-const RETRY_SOURCE_MISSING_SIZE = 0;
-const RETRY_SOURCE_MISSING_MTIME_MS = 0;
+let automationTaskSettledUnlisten: (() => void) | null = null;
 
 interface SaveRuleInput {
   id?: string;
@@ -60,23 +71,6 @@ interface SaveRuleInput {
   stageConfig: AutomationRule['stageConfig'];
   exportConfig: AutomationRule['exportConfig'];
   enabled?: boolean;
-}
-
-type AutomationNotificationKind = 'failure' | 'success';
-
-interface AutomationSessionNotification {
-  id: string;
-  kind: AutomationNotificationKind;
-  ruleId: string;
-  ruleName: string;
-  count: number;
-  latestFilePath?: string;
-  latestStage?: RecoveryItemStage;
-  latestMessage?: string;
-  createdAt: number;
-  updatedAt: number;
-  retryable: boolean;
-  waveActive?: boolean;
 }
 
 interface AutomationState {
@@ -112,276 +106,12 @@ function nextAutomationSuccessNotificationId(ruleId: string): string {
   return `automation-success-${ruleId}-${automationSuccessNotificationSequence}`;
 }
 
-function getAutomationFailureNotificationId(ruleId: string): string {
-  return `automation-failure-${ruleId}`;
-}
-
-function hasRetryableFailures(ruleId: string, entries: AutomationProcessedEntry[]): boolean {
-  return entries.some((entry) => entry.ruleId === ruleId && entry.status === 'error');
-}
-
 function hasAutomationItemsInFlight(ruleId: string): boolean {
   return useBatchQueueStore.getState().queueItems.some((item) => (
     item.origin === 'automation'
     && item.automationRuleId === ruleId
     && (item.status === 'pending' || item.status === 'processing')
   ));
-}
-
-function upsertFailureNotification(
-  notifications: AutomationSessionNotification[],
-  {
-    ruleId,
-    ruleName,
-    filePath,
-    stage,
-    message,
-    retryable,
-    occurredAt = Date.now(),
-  }: {
-    ruleId: string;
-    ruleName: string;
-    filePath?: string;
-    stage?: RecoveryItemStage;
-    message?: string;
-    retryable: boolean;
-    occurredAt?: number;
-  },
-): AutomationSessionNotification[] {
-  const notificationId = getAutomationFailureNotificationId(ruleId);
-  const existing = notifications.find((notification) => notification.id === notificationId);
-  const nextNotification: AutomationSessionNotification = {
-    id: notificationId,
-    kind: 'failure',
-    ruleId,
-    ruleName,
-    count: (existing?.count || 0) + 1,
-    latestFilePath: filePath ?? existing?.latestFilePath,
-    latestStage: stage ?? existing?.latestStage,
-    latestMessage: message ?? existing?.latestMessage,
-    createdAt: existing?.createdAt ?? occurredAt,
-    updatedAt: occurredAt,
-    retryable,
-  };
-
-  return [
-    nextNotification,
-    ...notifications.filter((notification) => notification.id !== notificationId),
-  ];
-}
-
-function appendOrMergeSuccessNotification(
-  notifications: AutomationSessionNotification[],
-  {
-    ruleId,
-    ruleName,
-    filePath,
-    stage,
-    occurredAt = Date.now(),
-  }: {
-    ruleId: string;
-    ruleName: string;
-    filePath?: string;
-    stage?: RecoveryItemStage;
-    occurredAt?: number;
-  },
-): AutomationSessionNotification[] {
-  const waveActive = hasAutomationItemsInFlight(ruleId);
-  const existing = notifications.find((notification) => (
-    notification.kind === 'success'
-    && notification.ruleId === ruleId
-    && notification.waveActive
-  ));
-
-  if (!existing) {
-    return [
-      {
-        id: nextAutomationSuccessNotificationId(ruleId),
-        kind: 'success',
-        ruleId,
-        ruleName,
-        count: 1,
-        latestFilePath: filePath,
-        latestStage: stage,
-        createdAt: occurredAt,
-        updatedAt: occurredAt,
-        retryable: false,
-        waveActive,
-      },
-      ...notifications,
-    ];
-  }
-
-  return notifications.map((notification) => (
-    notification.id === existing.id
-      ? {
-        ...notification,
-        ruleName,
-        count: notification.count + 1,
-        latestFilePath: filePath ?? notification.latestFilePath,
-        latestStage: stage ?? notification.latestStage,
-        updatedAt: occurredAt,
-        waveActive,
-      }
-      : notification
-  ));
-}
-
-function removeRuleNotifications(
-  notifications: AutomationSessionNotification[],
-  ruleId: string,
-  kind?: AutomationNotificationKind,
-): AutomationSessionNotification[] {
-  return notifications.filter((notification) => (
-    notification.ruleId !== ruleId
-    || (kind && notification.kind !== kind)
-  ));
-}
-
-function applyRuntimeFailureState(
-  current: Pick<AutomationState, 'processedEntries' | 'runtimeStates' | 'notifications'>,
-  {
-    ruleId,
-    ruleName,
-    message,
-    filePath,
-    stage,
-    lastScanAt,
-  }: {
-    ruleId: string;
-    ruleName: string;
-    message: string;
-    filePath?: string;
-    stage?: RecoveryItemStage;
-    lastScanAt?: number;
-  },
-): Pick<AutomationState, 'runtimeStates' | 'notifications'> {
-  return {
-    runtimeStates: {
-      ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        status: 'error',
-        lastScanAt,
-        lastResult: 'error',
-        lastResultMessage: message,
-        lastProcessedFilePath: filePath ?? current.runtimeStates[ruleId]?.lastProcessedFilePath,
-      }),
-    },
-    notifications: upsertFailureNotification(current.notifications, {
-      ruleId,
-      ruleName,
-      filePath,
-      stage,
-      message,
-      retryable: hasRetryableFailures(ruleId, current.processedEntries),
-      occurredAt: Date.now(),
-    }),
-  };
-}
-
-function applyRuntimeBlockState(
-  current: Pick<AutomationState, 'processedEntries' | 'runtimeStates'>,
-  {
-    ruleId,
-    filePath,
-    reason,
-    occurredAt = Date.now(),
-  }: {
-    ruleId: string;
-    filePath: string;
-    reason: AutomationRuntimeBlockReason;
-    occurredAt?: number;
-  },
-): Pick<AutomationState, 'runtimeStates'> {
-  return {
-    runtimeStates: {
-      ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        lastCandidateAt: occurredAt,
-        lastBlockedAt: occurredAt,
-        lastBlockedReason: reason,
-        lastBlockedFilePath: filePath,
-      }),
-    },
-  };
-}
-
-function applyRuntimeQueuedState(
-  current: Pick<AutomationState, 'processedEntries' | 'runtimeStates'>,
-  {
-    ruleId,
-    occurredAt = Date.now(),
-  }: {
-    ruleId: string;
-    occurredAt?: number;
-  },
-): Pick<AutomationState, 'runtimeStates'> {
-  return {
-    runtimeStates: {
-      ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        lastCandidateAt: occurredAt,
-        lastQueuedAt: occurredAt,
-      }),
-    },
-  };
-}
-
-function resolveRuntimeOverride<K extends keyof AutomationRuntimeState>(
-  overrides: Partial<AutomationRuntimeState>,
-  key: K,
-  fallback: AutomationRuntimeState[K],
-): AutomationRuntimeState[K] {
-  return Object.prototype.hasOwnProperty.call(overrides, key)
-    ? overrides[key] as AutomationRuntimeState[K]
-    : fallback;
-}
-
-function deriveRuntimeState(
-  ruleId: string,
-  entries: AutomationProcessedEntry[],
-  existing: AutomationRuntimeState | undefined,
-  overrides: Partial<AutomationRuntimeState> = {},
-): AutomationRuntimeState {
-  const ruleEntries = entries
-    .filter((entry) => entry.status !== 'discarded')
-    .filter((entry) => entry.ruleId === ruleId)
-    .sort((a, b) => b.processedAt - a.processedAt);
-  const latest = ruleEntries[0];
-  const failureCount = ruleEntries.filter((entry) => entry.status === 'error').length;
-
-  return {
-    ruleId,
-    status: resolveRuntimeOverride(overrides, 'status', existing?.status ?? 'stopped'),
-    lastScanAt: resolveRuntimeOverride(overrides, 'lastScanAt', existing?.lastScanAt),
-    lastCandidateAt: resolveRuntimeOverride(overrides, 'lastCandidateAt', existing?.lastCandidateAt),
-    lastQueuedAt: resolveRuntimeOverride(overrides, 'lastQueuedAt', existing?.lastQueuedAt),
-    lastBlockedAt: resolveRuntimeOverride(overrides, 'lastBlockedAt', existing?.lastBlockedAt),
-    lastBlockedReason: resolveRuntimeOverride(overrides, 'lastBlockedReason', existing?.lastBlockedReason),
-    lastBlockedFilePath: resolveRuntimeOverride(overrides, 'lastBlockedFilePath', existing?.lastBlockedFilePath),
-    lastProcessedAt: resolveRuntimeOverride(overrides, 'lastProcessedAt', latest?.processedAt ?? existing?.lastProcessedAt),
-    lastResult: resolveRuntimeOverride(
-      overrides,
-      'lastResult',
-      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult,
-    ),
-    lastResultMessage: resolveRuntimeOverride(overrides, 'lastResultMessage', latest?.errorMessage ?? existing?.lastResultMessage),
-    lastProcessedFilePath: resolveRuntimeOverride(overrides, 'lastProcessedFilePath', latest?.filePath ?? existing?.lastProcessedFilePath),
-    failureCount: resolveRuntimeOverride(overrides, 'failureCount', failureCount),
-  };
-}
-
-function rebuildRuntimeStates(
-  rules: AutomationRule[],
-  entries: AutomationProcessedEntry[],
-  current: Record<string, AutomationRuntimeState>,
-): Record<string, AutomationRuntimeState> {
-  return rules.reduce<Record<string, AutomationRuntimeState>>((acc, rule) => {
-    acc[rule.id] = deriveRuntimeState(rule.id, entries, current[rule.id], {
-      status: current[rule.id]?.status ?? (rule.enabled ? 'watching' : 'stopped'),
-    });
-    return acc;
-  }, {});
 }
 
 function clearRulePendingFingerprints(ruleId: string) {
@@ -398,91 +128,6 @@ function clearAllPendingFingerprints() {
 
 function buildPendingFingerprintKey(ruleId: string, sourceFingerprint: string): string {
   return `${ruleId}::${sourceFingerprint}`;
-}
-
-function getUniqueFilePaths(paths: string[]): string[] {
-  const pathMap = new Map<string, string>();
-  paths.forEach((filePath) => {
-    const normalizedPath = normalizeAutomationPath(filePath);
-    if (!pathMap.has(normalizedPath)) {
-      pathMap.set(normalizedPath, filePath);
-    }
-  });
-
-  return [...pathMap.values()];
-}
-
-function buildRetryFailureEntry(
-  ruleId: string,
-  filePath: string,
-  message: string,
-  processedAt: number,
-): AutomationProcessedEntry {
-  return {
-    ruleId,
-    filePath,
-    sourceFingerprint: createAutomationFingerprint(
-      filePath,
-      RETRY_SOURCE_MISSING_SIZE,
-      RETRY_SOURCE_MISSING_MTIME_MS,
-    ),
-    size: RETRY_SOURCE_MISSING_SIZE,
-    mtimeMs: RETRY_SOURCE_MISSING_MTIME_MS,
-    status: 'error',
-    processedAt,
-    errorMessage: message,
-  };
-}
-
-function buildRetryBlockedEntry(
-  ruleId: string,
-  candidate: AutomationRuntimeCandidatePayload,
-  message: string,
-  processedAt: number,
-): AutomationProcessedEntry {
-  return {
-    ruleId,
-    filePath: candidate.filePath,
-    sourceFingerprint: candidate.sourceFingerprint,
-    size: candidate.size,
-    mtimeMs: candidate.mtimeMs,
-    status: 'error',
-    processedAt,
-    errorMessage: message,
-  };
-}
-
-function getRetryFailureMessage(result: AutomationRuntimePathCollectionResult): string {
-  switch (result.outcome) {
-    case 'missing':
-      return 'Source file is no longer available for retry.';
-    case 'unsupported':
-    case 'excluded':
-    case 'not_file':
-      return 'Source file is no longer eligible for retry.';
-    case 'error':
-      return result.error
-        ? `Retry source check failed: ${result.error}`
-        : 'Retry source check failed.';
-    default:
-      return 'Source file is no longer available for retry.';
-  }
-}
-
-function getRetryBlockedMessage(reason: AutomationRuntimeBlockReason): string {
-  switch (reason) {
-    case 'recovery_blocked':
-      return 'File is currently blocked by recovery state.';
-    case 'project_missing':
-      return 'Project not found.';
-    case 'already_processed':
-      return 'File has already been processed.';
-    case 'already_pending':
-      return 'File is already pending.';
-    case 'retry_source_missing':
-    default:
-      return 'Source file is no longer available for retry.';
-  }
 }
 
 async function handleAutomationRuntimeCandidatePayload(
@@ -644,61 +289,14 @@ async function recordRetryFailures(
   rule: AutomationRule,
   results: AutomationRuntimePathCollectionResult[],
 ): Promise<void> {
-  const failureResults = results.filter((result) => result.outcome !== 'candidate');
-  if (failureResults.length === 0) {
+  const current = useAutomationStore.getState();
+  const nextState = applyRetryFailureResults(current, rule, results);
+  if (nextState.processedEntries === current.processedEntries) {
     return;
   }
 
-  const current = useAutomationStore.getState();
-  const entriesToAdd = failureResults.map((result, index) => (
-    buildRetryFailureEntry(
-      rule.id,
-      result.filePath,
-      getRetryFailureMessage(result),
-      Date.now() + index,
-    )
-  ));
-  const nextEntries = [
-    ...current.processedEntries.filter((entry) => !(
-      entry.ruleId === rule.id
-      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
-    )),
-    ...entriesToAdd,
-  ].sort((a, b) => b.processedAt - a.processedAt);
-
-  await saveAutomationProcessedEntries(nextEntries);
-
-  useAutomationStore.setState((state) => {
-    let notifications = state.notifications;
-    let runtimeStates = rebuildRuntimeStates(state.rules, nextEntries, state.runtimeStates);
-
-    failureResults.forEach((result, index) => {
-      const occurredAt = entriesToAdd[index].processedAt;
-      notifications = upsertFailureNotification(notifications, {
-        ruleId: rule.id,
-        ruleName: rule.name,
-        filePath: result.filePath,
-        message: entriesToAdd[index].errorMessage,
-        retryable: true,
-        occurredAt,
-      });
-      runtimeStates = {
-        ...runtimeStates,
-        [rule.id]: deriveRuntimeState(rule.id, nextEntries, runtimeStates[rule.id], {
-          lastCandidateAt: occurredAt,
-          lastBlockedAt: occurredAt,
-          lastBlockedReason: 'retry_source_missing',
-          lastBlockedFilePath: result.filePath,
-        }),
-      };
-    });
-
-    return {
-      processedEntries: nextEntries,
-      notifications,
-      runtimeStates,
-    };
-  });
+  await persistAutomationProcessedEntries(nextState.processedEntries);
+  useAutomationStore.setState(nextState);
 }
 
 async function recordRetryBlockedCandidates(
@@ -708,120 +306,18 @@ async function recordRetryBlockedCandidates(
     reason: AutomationRuntimeBlockReason;
   }>,
 ): Promise<void> {
-  if (results.length === 0) {
+  const current = useAutomationStore.getState();
+  const nextState = applyRetryBlockedResults(current, rule, results);
+  if (nextState.processedEntries === current.processedEntries) {
     return;
   }
 
-  const current = useAutomationStore.getState();
-  const entriesToAdd = results.map(({ candidate, reason }, index) => (
-    buildRetryBlockedEntry(
-      rule.id,
-      candidate,
-      getRetryBlockedMessage(reason),
-      Date.now() + index,
-    )
-  ));
-  const nextEntries = [
-    ...current.processedEntries.filter((entry) => !(
-      entry.ruleId === rule.id
-      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
-    )),
-    ...entriesToAdd,
-  ].sort((a, b) => b.processedAt - a.processedAt);
-
-  await saveAutomationProcessedEntries(nextEntries);
-
-  useAutomationStore.setState((state) => {
-    let notifications = state.notifications;
-    let runtimeStates = rebuildRuntimeStates(state.rules, nextEntries, state.runtimeStates);
-
-    results.forEach(({ candidate, reason }, index) => {
-      const occurredAt = entriesToAdd[index].processedAt;
-      notifications = upsertFailureNotification(notifications, {
-        ruleId: rule.id,
-        ruleName: rule.name,
-        filePath: candidate.filePath,
-        message: entriesToAdd[index].errorMessage,
-        retryable: true,
-        occurredAt,
-      });
-      runtimeStates = {
-        ...runtimeStates,
-        [rule.id]: deriveRuntimeState(rule.id, nextEntries, runtimeStates[rule.id], {
-          lastCandidateAt: occurredAt,
-          lastBlockedAt: occurredAt,
-          lastBlockedReason: reason,
-          lastBlockedFilePath: candidate.filePath,
-        }),
-      };
-    });
-
-    return {
-      processedEntries: nextEntries,
-      notifications,
-      runtimeStates,
-    };
-  });
+  await persistAutomationProcessedEntries(nextState.processedEntries);
+  useAutomationStore.setState(nextState);
 }
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
-  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
-  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
-  const validation = await validateAutomationRuleForActivation(
-    rule,
-    useConfigStore.getState().config,
-    project,
-  );
-
-  if (!validation.valid) {
-    throw new Error(validation.message || 'Automation rule validation failed.');
-  }
-}
-
-function applyRuntimeReplaceResults(
-  current: Pick<AutomationState, 'rules' | 'processedEntries' | 'runtimeStates' | 'notifications'>,
-  results: AutomationRuntimeReplaceResult[],
-) {
-  let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
-  let notifications = current.notifications;
-
-  results.forEach((result) => {
-    const rule = current.rules.find((item) => item.id === result.ruleId);
-    if (!rule) {
-      return;
-    }
-
-    if (result.started) {
-      runtimeStates = {
-        ...runtimeStates,
-        [rule.id]: deriveRuntimeState(rule.id, current.processedEntries, runtimeStates[rule.id], {
-          status: 'watching',
-          lastResultMessage: undefined,
-        }),
-      };
-      return;
-    }
-
-    const nextFailureState = applyRuntimeFailureState(
-      {
-        processedEntries: current.processedEntries,
-        runtimeStates,
-        notifications,
-      },
-      {
-        ruleId: rule.id,
-        ruleName: rule.name,
-        message: result.error || 'Automation runtime failed to start.',
-      },
-    );
-    runtimeStates = nextFailureState.runtimeStates;
-    notifications = nextFailureState.notifications;
-  });
-
-  return {
-    runtimeStates,
-    notifications,
-  };
+  await validateAutomationRuleActivation(rule);
 }
 
 async function ensureAutomationRuntimeCandidateListener() {
@@ -841,6 +337,21 @@ function clearAutomationRuntimeCandidateListener() {
 
   automationRuntimeCandidateUnlisten();
   automationRuntimeCandidateUnlisten = null;
+}
+
+function ensureAutomationTaskSettledListener() {
+  if (automationTaskSettledUnlisten) {
+    return;
+  }
+
+  automationTaskSettledUnlisten = subscribeAutomationTaskSettled((payload) => {
+    void handleAutomationTaskSettled(payload);
+  });
+}
+
+function clearAutomationTaskSettledListener() {
+  automationTaskSettledUnlisten?.();
+  automationTaskSettledUnlisten = null;
 }
 
 async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string }) {
@@ -903,19 +414,18 @@ async function scanRule(ruleId: string) {
     return;
   }
 
-  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
-  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
-  const validation = await validateAutomationRuleForActivation(rule, useConfigStore.getState().config, project);
-  if (!validation.valid) {
+  try {
+    await validateAutomationRuleActivation(rule);
+  } catch (error) {
     useAutomationStore.setState((current) => ({
       ...applyRuntimeFailureState(current, {
         ruleId,
         ruleName: rule.name,
-        message: validation.message || 'Automation rule validation failed.',
+        message: error instanceof Error ? error.message : 'Automation rule validation failed.',
         lastScanAt: Date.now(),
       }),
     }));
-    throw new Error(validation.message || 'Automation rule validation failed.');
+    throw error;
   }
 
   await ensureAutomationRuntimeCandidateListener();
@@ -965,13 +475,8 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   error: null,
 
   loadAndStart: async () => {
-    await ensureAutomationStorage();
     await get().stopAll();
-
-    const [rules, processedEntries] = await Promise.all([
-      loadAutomationRules(),
-      loadAutomationProcessedEntries(),
-    ]);
+    const { rules, processedEntries } = await loadAutomationRepositoryState();
 
     set({
       rules,
@@ -982,6 +487,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       error: null,
     });
 
+    ensureAutomationTaskSettledListener();
     await syncAutomationRuntimeRules();
   },
 
@@ -1017,7 +523,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       ? state.rules.map((rule) => (rule.id === existing.id ? nextRule : rule))
       : [nextRule, ...state.rules];
 
-    await saveAutomationRules(nextRules);
+    await persistAutomationRules(nextRules);
     set((current) => ({
       rules: nextRules,
       runtimeStates: rebuildRuntimeStates(nextRules, current.processedEntries, current.runtimeStates),
@@ -1037,10 +543,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRules = get().rules.filter((rule) => rule.id !== ruleId);
     const nextProcessedEntries = get().processedEntries.filter((entry) => entry.ruleId !== ruleId);
 
-    await Promise.all([
-      saveAutomationRules(nextRules),
-      saveAutomationProcessedEntries(nextProcessedEntries),
-    ]);
+    await persistAutomationRepositoryState(nextRules, nextProcessedEntries);
     clearRulePendingFingerprints(ruleId);
 
     set((current) => {
@@ -1077,7 +580,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       updatedAt: Date.now(),
     };
     const nextRules = state.rules.map((rule) => (rule.id === ruleId ? nextRule : rule));
-    await saveAutomationRules(nextRules);
+    await persistAutomationRules(nextRules);
     set((current) => ({
       rules: nextRules,
       runtimeStates: rebuildRuntimeStates(nextRules, current.processedEntries, current.runtimeStates),
@@ -1113,24 +616,19 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       return;
     }
 
-    const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
-    const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
-    const validation = await validateAutomationRuleForActivation(
-      rule,
-      useConfigStore.getState().config,
-      project,
-    );
-    if (!validation.valid) {
+    try {
+      await validateAutomationRuleActivation(rule);
+    } catch (error) {
       const lastScanAt = Date.now();
       useAutomationStore.setState((current) => ({
         ...applyRuntimeFailureState(current, {
           ruleId,
           ruleName: rule.name,
-          message: validation.message || 'Automation rule validation failed.',
+          message: error instanceof Error ? error.message : 'Automation rule validation failed.',
           lastScanAt,
         }),
       }));
-      throw new Error(validation.message || 'Automation rule validation failed.');
+      throw error;
     }
 
     const scanStartedAt = Date.now();
@@ -1155,7 +653,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       const nextProcessedEntries = state.processedEntries.filter((entry) => !(
         entry.ruleId === ruleId && entry.status === 'error'
       ));
-      await saveAutomationProcessedEntries(nextProcessedEntries);
+      await persistAutomationProcessedEntries(nextProcessedEntries);
       set((current) => ({
         processedEntries: nextProcessedEntries,
         runtimeStates: {
@@ -1266,7 +764,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       nextEntry,
     ].sort((a, b) => b.processedAt - a.processedAt);
 
-    await saveAutomationProcessedEntries(nextProcessedEntries);
+    await persistAutomationProcessedEntries(nextProcessedEntries);
     clearAutomationRecoveryGuardEntry(item.automationRuleId, item.sourceFingerprint);
     set((current) => ({
       processedEntries: nextProcessedEntries,
@@ -1277,6 +775,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   stopAll: async () => {
     clearAllPendingFingerprints();
     clearAutomationRuntimeCandidateListener();
+    clearAutomationTaskSettledListener();
     await replaceAutomationRuntimeRules([]);
     set((current) => ({
       runtimeStates: current.rules.reduce<Record<string, AutomationRuntimeState>>((acc, rule) => {
@@ -1319,59 +818,24 @@ async function handleAutomationTaskSettled(payload: AutomationTaskSettledPayload
     },
   ].sort((a, b) => b.processedAt - a.processedAt);
 
-  await saveAutomationProcessedEntries(nextEntries);
+  await persistAutomationProcessedEntries(nextEntries);
 
-  useAutomationStore.setState((current) => {
-    const nextRule = current.rules.find((item) => item.id === payload.ruleId);
-    const nextRuleName = nextRule?.name || rule?.name || 'Automation';
-    const shouldClearBlockedHint = (
-      current.runtimeStates[payload.ruleId]?.lastBlockedFilePath === payload.filePath
-      && (current.runtimeStates[payload.ruleId]?.lastBlockedAt ?? 0) <= payload.processedAt
-    );
-    const nextNotifications = payload.status === 'complete'
-      ? appendOrMergeSuccessNotification(current.notifications, {
-        ruleId: payload.ruleId,
-        ruleName: nextRuleName,
-        filePath: payload.filePath,
-        stage: payload.stage,
-        occurredAt: payload.processedAt,
-      })
-      : upsertFailureNotification(current.notifications, {
-        ruleId: payload.ruleId,
-        ruleName: nextRuleName,
-        filePath: payload.filePath,
-        stage: payload.stage,
-        message: payload.errorMessage,
-        retryable: hasRetryableFailures(payload.ruleId, nextEntries),
-        occurredAt: payload.processedAt,
-      });
-
-    return {
+  useAutomationStore.setState((current) => applyTaskSettledState(
+    {
+      rules: current.rules,
       processedEntries: nextEntries,
-      notifications: nextNotifications,
-      runtimeStates: {
-        ...current.runtimeStates,
-        [payload.ruleId]: deriveRuntimeState(payload.ruleId, nextEntries, current.runtimeStates[payload.ruleId], {
-          status: nextRule?.enabled ? 'watching' : 'stopped',
-          lastProcessedAt: payload.processedAt,
-          lastProcessedFilePath: payload.filePath,
-          lastResult: payload.status === 'complete' ? 'success' : 'error',
-          lastResultMessage: payload.errorMessage,
-          ...(shouldClearBlockedHint
-            ? {
-              lastBlockedAt: undefined,
-              lastBlockedReason: undefined,
-              lastBlockedFilePath: undefined,
-            }
-            : {}),
-        }),
-      },
-    };
-  });
+      runtimeStates: current.runtimeStates,
+      notifications: current.notifications,
+    },
+    payload,
+    {
+      fallbackRuleName: rule?.name,
+      waveActive: hasAutomationItemsInFlight(payload.ruleId),
+      nextSuccessNotificationId: () => nextAutomationSuccessNotificationId(payload.ruleId),
+    },
+  ));
 }
 
-subscribeAutomationTaskSettled(handleAutomationTaskSettled);
-
 export async function __emitAutomationTaskSettledForTests(payload: AutomationTaskSettledPayload) {
-  await emitAutomationTaskSettled(payload);
+  await handleAutomationTaskSettled(payload);
 }

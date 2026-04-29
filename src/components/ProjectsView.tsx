@@ -45,8 +45,8 @@ export function ProjectsView(): React.JSX.Element {
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptStore((state) => state.segments.length);
   const isRecording = useTranscriptStore((state) => state.isRecording);
-  const clearSegments = useTranscriptStore((state) => state.clearSegments);
-  const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
+  const clearActiveTranscriptSession = useTranscriptStore((state) => state.clearActiveTranscriptSession);
+  const openTranscriptSession = useTranscriptStore((state) => state.openTranscriptSession);
   const setMode = useTranscriptStore((state) => state.setMode);
   const setTitle = useTranscriptStore((state) => state.setTitle);
 
@@ -77,9 +77,8 @@ export function ProjectsView(): React.JSX.Element {
 
   const clearOpenedItem = useCallback(() => {
     setSelectedHistoryId(null);
-    clearSegments();
-    setAudioUrl(null);
-  }, [clearSegments, setAudioUrl]);
+    clearActiveTranscriptSession({ clearAudio: true });
+  }, [clearActiveTranscriptSession]);
 
   const handleOpenItem = useCallback(async (item: HistoryItemType) => {
     if (isLiveDraftSessionLocked && item.id !== sourceHistoryId) {
@@ -105,8 +104,13 @@ export function ProjectsView(): React.JSX.Element {
         segments = [];
       }
 
-      useTranscriptStore.getState().loadTranscript(segments, item.id, item.title, item.icon);
-      setAudioUrl(url);
+      openTranscriptSession({
+        segments,
+        sourceHistoryId: item.id,
+        title: item.title,
+        icon: item.icon,
+        audioUrl: url,
+      });
       setSelectedHistoryId(item.id);
       await setActiveProjectId(item.projectId);
     } catch (error) {
@@ -116,7 +120,7 @@ export function ProjectsView(): React.JSX.Element {
         cause: error,
       });
     }
-  }, [deleteHistoryItem, isLiveDraftSessionLocked, refreshHistory, setActiveProjectId, setAudioUrl, showError, sourceHistoryId]);
+  }, [deleteHistoryItem, isLiveDraftSessionLocked, openTranscriptSession, refreshHistory, setActiveProjectId, showError, sourceHistoryId]);
 
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
@@ -196,8 +200,7 @@ export function ProjectsView(): React.JSX.Element {
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
       queueMicrotask(() => {
         setSelectedHistoryId(null);
-        clearSegments();
-        setAudioUrl(null);
+        clearActiveTranscriptSession({ clearAudio: true });
       });
       return;
     }
@@ -205,11 +208,10 @@ export function ProjectsView(): React.JSX.Element {
     if (effectiveSelectedHistoryId === null) {
       const transcriptState = useTranscriptStore.getState();
       if (transcriptState.sourceHistoryId || transcriptState.segments.length > 0 || transcriptState.audioUrl) {
-        transcriptState.clearSegments();
-        transcriptState.setAudioUrl(null);
+        transcriptState.clearActiveTranscriptSession({ clearAudio: true });
       }
     }
-  }, [clearSegments, effectiveSelectedHistoryId, selectedHistoryId, setAudioUrl]);
+  }, [clearActiveTranscriptSession, effectiveSelectedHistoryId, selectedHistoryId]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {

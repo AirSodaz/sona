@@ -1,3 +1,4 @@
+import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { TranscriptSegment } from '../types/transcript';
@@ -90,7 +91,6 @@ export function CaptionWindow() {
                         Math.abs(size.height - targetPhysicalHeight) > 1 ||
                         Math.abs(size.width - widthToUse) > 1
                     ) {
-                        const { PhysicalSize } = await import('@tauri-apps/api/dpi');
                         const targetSize = new PhysicalSize(widthToUse, targetPhysicalHeight);
 
                         // Use Min/Max Size Lock trick to prevent manual dragging by the user

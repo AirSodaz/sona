@@ -4,6 +4,7 @@ import { PolishButton } from '../PolishButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useConfigStore } from '../../stores/configStore';
 import { polishService } from '../../services/polishService';
+import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
 
 // Mock dependencies
 vi.mock('react-i18next', async (importOriginal) => {
@@ -34,12 +35,10 @@ describe('PolishButton', () => {
         vi.clearAllMocks();
 
         // Reset store
-        useTranscriptStore.setState({
-            segments: [
-                { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
-            ],
-            llmStates: {},
-        });
+        useTranscriptStore.getState().setSegments([
+            { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
+        ]);
+        useTranscriptStore.setState({ llmStates: {} });
 
         useConfigStore.setState({
             config: {
@@ -74,6 +73,10 @@ describe('PolishButton', () => {
                     },
                 },
             } as any
+        });
+
+        useTranscriptStore.setState({
+            config: useConfigStore.getState().config as any,
         });
     });
 
@@ -116,8 +119,10 @@ describe('PolishButton', () => {
 
     it('undo restores segments and shows redo', async () => {
         // Setup initial segments
-        const initialSegments = [{ id: '1', start: 0, end: 1, text: 'Original', isFinal: true }];
-        useTranscriptStore.setState({ segments: initialSegments });
+        const initialSegments = normalizeTranscriptSegments([
+            { id: '1', start: 0, end: 1, text: 'Original', isFinal: true },
+        ]);
+        useTranscriptStore.getState().setSegments(initialSegments);
 
         render(<PolishButton />);
 
@@ -126,9 +131,11 @@ describe('PolishButton', () => {
         fireEvent.click(screen.getByText('polish.start'));
 
         // Simulate polish changing segments
-        const polishedSegments = [{ id: '1', start: 0, end: 1, text: 'Polished', isFinal: true }];
+        const polishedSegments = normalizeTranscriptSegments([
+            { id: '1', start: 0, end: 1, text: 'Polished', isFinal: true },
+        ]);
         act(() => {
-            useTranscriptStore.setState({ segments: polishedSegments });
+            useTranscriptStore.getState().setSegments(polishedSegments);
         });
 
         // 2. Undo
@@ -145,8 +152,10 @@ describe('PolishButton', () => {
 
     it('redo restores polished segments', async () => {
         // Setup initial segments
-        const initialSegments = [{ id: '1', start: 0, end: 1, text: 'Original', isFinal: true }];
-        useTranscriptStore.setState({ segments: initialSegments });
+        const initialSegments = normalizeTranscriptSegments([
+            { id: '1', start: 0, end: 1, text: 'Original', isFinal: true },
+        ]);
+        useTranscriptStore.getState().setSegments(initialSegments);
 
         render(<PolishButton />);
 
@@ -155,9 +164,11 @@ describe('PolishButton', () => {
         fireEvent.click(screen.getByText('polish.start'));
 
         // Simulate polish changing segments
-        const polishedSegments = [{ id: '1', start: 0, end: 1, text: 'Polished', isFinal: true }];
+        const polishedSegments = normalizeTranscriptSegments([
+            { id: '1', start: 0, end: 1, text: 'Polished', isFinal: true },
+        ]);
         act(() => {
-            useTranscriptStore.setState({ segments: polishedSegments });
+            useTranscriptStore.getState().setSegments(polishedSegments);
         });
 
         // 2. Undo

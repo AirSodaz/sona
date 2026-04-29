@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 
 vi.mock('react-i18next', () => ({
@@ -102,14 +102,18 @@ describe('App diagnostics flow', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'header.settings' }));
-    expect(screen.getByText('Settings Tab: general')).toBeDefined();
+    expect(await screen.findByText('Settings Tab: general')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Diagnostics' }));
-    expect(screen.queryByText('Settings Tab: general')).toBeNull();
-    expect(screen.getByText('Diagnostics Modal')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.queryByText('Settings Tab: general')).toBeNull();
+    });
+    expect(await screen.findByText('Diagnostics Modal')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Model Settings' }));
-    expect(screen.queryByText('Diagnostics Modal')).toBeNull();
-    expect(screen.getByText('Settings Tab: models')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.queryByText('Diagnostics Modal')).toBeNull();
+    });
+    expect(await screen.findByText('Settings Tab: models')).toBeDefined();
   });
 });
