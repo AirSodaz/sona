@@ -13,7 +13,6 @@ import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { NotificationCenter } from './components/NotificationCenter';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
-import { UpdateNotification } from './components/UpdateNotification';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
@@ -195,7 +194,6 @@ function App(): React.JSX.Element {
       <GlobalDialog />
       <ErrorDialog />
       <FirstRunGuide />
-      <UpdateNotification />
     </div>
   );
 }

@@ -326,6 +326,12 @@ body {
     var(--color-bg-primary);
 }
 
+.notification-center-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
 .notification-center-item-main {
   width: 100%;
   border: none;
@@ -337,6 +343,10 @@ body {
   text-align: left;
   color: inherit;
   cursor: pointer;
+}
+
+.notification-center-item-main-static {
+  cursor: default;
 }
 
 .notification-center-item-main:focus-visible {
@@ -381,6 +391,37 @@ body {
 
 .notification-center-item-action {
   align-self: flex-start;
+}
+
+.notification-center-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.notification-center-item-close {
+  flex-shrink: 0;
+}
+
+.notification-center-item-update {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #0ea5e9 10%, transparent), transparent),
+    var(--color-bg-primary);
+}
+
+.notification-center-update-body {
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.notification-center-update-progress {
+  padding: 0;
+  background: transparent;
+}
+
+.notification-center-update-status {
+  justify-content: flex-start;
 }
 
 .notification-center-empty {

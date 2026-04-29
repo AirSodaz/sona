@@ -21,7 +21,6 @@ vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialo
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/NotificationCenter', () => ({ NotificationCenter: () => null }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
-vi.mock('../components/UpdateNotification', () => ({ UpdateNotification: () => <div>UpdateNotification</div> }));
 vi.mock('../components/Icons', () => ({ 
   SettingsIcon: () => <span>SettingsIcon</span>, 
   CloseIcon: () => <span>CloseIcon</span>,
