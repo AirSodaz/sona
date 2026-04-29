@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prepare": "husky",
     "prebuild": "node scripts/setup-ffmpeg.js",
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
     "tauri": "node scripts/tauri.js",
-    "verify:cli-bundle": "node scripts/verify-cli-bundle.js"
+    "verify:cli-bundle": "node scripts/verify-cli-bundle.js",
+    "commitlint": "commitlint --edit",
+    "check:staged": "node scripts/check-staged.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -44,6 +47,8 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.2",
+    "@commitlint/config-conventional": "^20.5.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.1",
     "@tauri-apps/cli": "^2",
@@ -59,11 +64,16 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "ffmpeg-static": "^5.3.0",
     "globals": "^17.5.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.2",
+    "lint-staged": "^16.4.0",
     "playwright": "^1.58.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
     "vitest": "^4.1.5"
+  },
+  "lint-staged": {
+    "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "node scripts/check-staged.js"
   }
 }

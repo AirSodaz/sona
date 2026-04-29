@@ -1,0 +1,2 @@
+git diff --check --cached
+npx --no -- lint-staged
