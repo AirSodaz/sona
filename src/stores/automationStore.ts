@@ -829,7 +829,9 @@ async function ensureAutomationRuntimeCandidateListener() {
     return;
   }
 
-  automationRuntimeCandidateUnlisten = await listenToAutomationRuntimeCandidates(handleAutomationRuntimeCandidatePayload);
+  automationRuntimeCandidateUnlisten = await listenToAutomationRuntimeCandidates((payload) => {
+    void handleAutomationRuntimeCandidatePayload(payload);
+  });
 }
 
 function clearAutomationRuntimeCandidateListener() {

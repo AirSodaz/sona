@@ -340,7 +340,7 @@ export function normalizeTranscriptUpdate(update: TranscriptUpdate | TranscriptS
   if (isRecord(update)) {
     return {
       removeIds: [],
-      upsertSegments: [normalizeTranscriptSegment(update as TranscriptSegment)],
+      upsertSegments: [normalizeTranscriptSegment(update as unknown as TranscriptSegment)],
     };
   }
 

@@ -240,8 +240,8 @@ describe('SettingsGeneralTab backup entry', () => {
 
   it('shows destructive import summary copy and disposes the prepared archive when the user cancels', async () => {
     const prepared = {
+      importId: 'import-local',
       archivePath: 'C:\\backups\\sona-backup.tar.bz2',
-      extractionDir: 'C:\\temp\\prepared-backup',
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
@@ -266,9 +266,6 @@ describe('SettingsGeneralTab backup entry', () => {
       },
       config: {} as any,
       projects: [],
-      historyItems: [],
-      transcriptFiles: {},
-      summaryFiles: {},
       automationRules: [],
       automationProcessedEntries: [],
       analyticsContent: '{}',
@@ -304,8 +301,8 @@ describe('SettingsGeneralTab backup entry', () => {
       modifiedAt: '2026-04-29T00:00:00.000Z',
     };
     const prepared = {
+      importId: 'import-remote',
       archivePath: 'C:\\backups\\sona-backup.tar.bz2',
-      extractionDir: 'C:\\temp\\prepared-remote-backup',
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
@@ -330,9 +327,6 @@ describe('SettingsGeneralTab backup entry', () => {
       },
       config: {} as any,
       projects: [],
-      historyItems: [],
-      transcriptFiles: {},
-      summaryFiles: {},
       automationRules: [],
       automationProcessedEntries: [],
       analyticsContent: '{}',

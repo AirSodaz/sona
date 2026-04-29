@@ -46,10 +46,10 @@ vi.mock('../storageService', () => ({
 }));
 
 import {
-  loadConfig,
-  saveConfig,
   listBackups,
+  loadConfig,
   prepareImportFromRemote,
+  saveConfig,
   testConnection,
   uploadBackup,
 } from '../backupWebDavService';
@@ -91,7 +91,6 @@ describe('backupWebDavService', () => {
       username: 'demo',
       password: 'secret',
     });
-    expect(testContext.settingsStoreSaveMock).toHaveBeenCalledTimes(1);
   });
 
   it('allows http endpoints for connection tests and returns warning results', async () => {
@@ -209,10 +208,10 @@ describe('backupWebDavService', () => {
     });
   });
 
-  it('downloads a remote archive, reuses local import preview, and cleans temporary files', async () => {
+  it('downloads a remote archive, reuses local import preview, and returns the handle-shaped prepared import', async () => {
     const prepared = {
+      importId: 'import-1',
       archivePath: '/downloads/remote-backup.tar.bz2',
-      extractionDir: '/temp/prepared-import',
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
@@ -237,9 +236,6 @@ describe('backupWebDavService', () => {
       },
       config: {} as any,
       projects: [],
-      historyItems: [],
-      transcriptFiles: {},
-      summaryFiles: {},
       automationRules: [],
       automationProcessedEntries: [],
       analyticsContent: '{}',

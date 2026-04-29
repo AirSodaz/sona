@@ -1,8 +1,6 @@
 import type { AutomationProcessedEntry, AutomationRule } from './automation';
 import type { AppConfig } from './config';
-import type { HistoryItem } from './history';
 import type { ProjectRecord } from './project';
-import type { HistorySummaryPayload, TranscriptSegment } from './transcript';
 
 export const BACKUP_SCHEMA_VERSION = 1 as const;
 export const BACKUP_HISTORY_MODE = 'light' as const;
@@ -62,14 +60,11 @@ export interface UploadRemoteBackupResult {
 }
 
 export interface PreparedBackupImport {
+  importId: string;
   archivePath: string;
-  extractionDir: string;
   manifest: BackupManifestV1;
   config: AppConfig;
   projects: ProjectRecord[];
-  historyItems: HistoryItem[];
-  transcriptFiles: Record<string, TranscriptSegment[]>;
-  summaryFiles: Record<string, HistorySummaryPayload>;
   automationRules: AutomationRule[];
   automationProcessedEntries: AutomationProcessedEntry[];
   analyticsContent: string;

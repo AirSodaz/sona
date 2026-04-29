@@ -1,5 +1,6 @@
 mod audio;
 mod automation_runtime;
+mod history_repository;
 pub mod cli;
 pub mod export;
 mod hardware;
@@ -830,6 +831,8 @@ pub fn run() {
         })
         .manage(AuxWindowStateStore::default())
         .manage(automation_runtime::AutomationRuntimeState::default())
+        .manage(history_repository::HistoryRepositoryState::default())
+        .manage(history_repository::PreparedBackupImportState::default())
         .manage(audio::AudioState::new())
         .manage(sherpa::SherpaState::new())
         .plugin(tauri_plugin_opener::init())
@@ -844,6 +847,26 @@ pub fn run() {
             greet,
             extract_tar_bz2,
             create_tar_bz2,
+            history_repository::history_list_items,
+            history_repository::history_create_live_draft,
+            history_repository::history_complete_live_draft,
+            history_repository::history_save_recording,
+            history_repository::history_save_imported_file,
+            history_repository::history_delete_items,
+            history_repository::history_load_transcript,
+            history_repository::history_update_transcript,
+            history_repository::history_update_item_meta,
+            history_repository::history_update_project_assignments,
+            history_repository::history_reassign_project,
+            history_repository::history_load_summary,
+            history_repository::history_save_summary,
+            history_repository::history_delete_summary,
+            history_repository::history_resolve_audio_path,
+            history_repository::history_open_folder,
+            history_repository::export_backup_archive,
+            history_repository::prepare_backup_import,
+            history_repository::apply_prepared_history_import,
+            history_repository::dispose_prepared_backup_import,
             download_file,
             webdav::webdav_test_connection,
             webdav::webdav_list_backups,
