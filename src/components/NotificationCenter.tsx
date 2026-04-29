@@ -69,6 +69,8 @@ type NotificationEntry =
     | AutomationFailureNotificationEntry
     | AutomationSuccessNotificationEntry;
 
+type NotificationTone = 'update' | 'recovery' | 'automation-failure' | 'automation-success';
+
 function getFileName(filePath?: string): string | null {
     if (!filePath) {
         return null;
@@ -87,6 +89,85 @@ function getStageLabel(
     }
 
     return t(`recovery.stage.${stage}`);
+}
+
+function getNotificationBadgeLabel(count: number): string {
+    return count > 9 ? '9+' : String(count);
+}
+
+function NotificationCard({
+    itemClassName,
+    tone,
+    icon,
+    title,
+    body,
+    bodyClassName,
+    onOpen,
+    closeButton,
+    support,
+    actions,
+}: {
+    itemClassName?: string;
+    tone: NotificationTone;
+    icon: React.ReactNode;
+    title: string;
+    body?: string | null;
+    bodyClassName?: string;
+    onOpen?: () => void;
+    closeButton?: React.ReactNode;
+    support?: React.ReactNode;
+    actions?: React.ReactNode;
+}): React.JSX.Element {
+    const mainClassName = onOpen
+        ? 'notification-center-item-main'
+        : 'notification-center-item-main notification-center-item-main-static';
+
+    const copy = (
+        <>
+            <span className="notification-center-item-icon" aria-hidden="true">
+                {icon}
+            </span>
+            <span className="notification-center-item-copy">
+                <strong className="notification-center-item-title">{title}</strong>
+                {body ? (
+                    <span className={`notification-center-item-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
+                        {body}
+                    </span>
+                ) : null}
+            </span>
+        </>
+    );
+
+    return (
+        <li className={`notification-center-item notification-center-item-tone-${tone}${itemClassName ? ` ${itemClassName}` : ''}`}>
+            <div className="notification-center-item-header">
+                {onOpen ? (
+                    <button
+                        type="button"
+                        className={mainClassName}
+                        onClick={onOpen}
+                    >
+                        {copy}
+                    </button>
+                ) : (
+                    <div className={mainClassName}>
+                        {copy}
+                    </div>
+                )}
+                {closeButton}
+            </div>
+            {support ? (
+                <div className="notification-center-item-support">
+                    {support}
+                </div>
+            ) : null}
+            {actions ? (
+                <div className="notification-center-item-actions">
+                    {actions}
+                </div>
+            ) : null}
+        </li>
+    );
 }
 
 export function NotificationCenter({
@@ -114,7 +195,7 @@ export function NotificationCenter({
 
     const pendingItems = useMemo(
         () => items.filter((item) => item.resolution === 'pending'),
-        [items]
+        [items],
     );
 
     const notifications = useMemo<NotificationEntry[]>(() => {
@@ -242,6 +323,11 @@ export function NotificationCenter({
         updateInfo,
     ]);
 
+    const notificationBadgeLabel = useMemo(
+        () => getNotificationBadgeLabel(notifications.length),
+        [notifications.length],
+    );
+
     useEffect(() => {
         if (!isOpen) {
             return undefined;
@@ -296,85 +382,80 @@ export function NotificationCenter({
         openAutomationSettings();
     };
 
-    const renderUpdateNotification = (notification: UpdateNotificationEntry) => (
-        <li key={notification.id} className="notification-center-item notification-center-item-update">
-            <div className="notification-center-item-header">
-                <div className="notification-center-item-main notification-center-item-main-static">
-                    <span className="notification-center-item-icon" aria-hidden="true">
-                        <DownloadIcon />
-                    </span>
-                    <span className="notification-center-item-copy">
-                        <strong>{notification.title}</strong>
-                        {notification.body ? (
-                            <span className="notification-center-update-body">
-                                {notification.body}
-                            </span>
-                        ) : null}
-                    </span>
-                </div>
-                <button
-                    type="button"
-                    className="btn btn-icon notification-center-item-close"
-                    onClick={dismissUpdateNotification}
-                    aria-label={t('common.close')}
-                    disabled={notification.isBusy}
-                >
-                    <CloseIcon />
-                </button>
-            </div>
+    const renderUpdateNotification = (notification: UpdateNotificationEntry) => {
+        const support = (notification.status === 'downloading' || notification.status === 'installing' || notification.status === 'downloaded')
+            ? (
+                <>
+                    {notification.status === 'downloading' || notification.status === 'installing' ? (
+                        <div className="update-progress-container notification-center-update-progress">
+                            <div className="update-progress-header">
+                                <span>
+                                    {notification.status === 'downloading'
+                                        ? t('settings.update_downloading')
+                                        : t('settings.update_installing')}
+                                </span>
+                                <span>{notification.progress}%</span>
+                            </div>
+                            <div className="progress-bar">
+                                <div className="progress-bar-fill" style={{ width: `${notification.progress}%` }} />
+                            </div>
+                        </div>
+                    ) : null}
+                    {notification.status === 'downloaded' ? (
+                        <div className="update-status success notification-center-update-status">
+                            <CheckIcon />
+                            <span>{t('settings.update_relaunch')}</span>
+                        </div>
+                    ) : null}
+                </>
+            )
+            : null;
 
-            {notification.status === 'downloading' || notification.status === 'installing' ? (
-                <div className="update-progress-container notification-center-update-progress">
-                    <div className="update-progress-header">
-                        <span>
-                            {notification.status === 'downloading'
-                                ? t('settings.update_downloading')
-                                : t('settings.update_installing')}
-                        </span>
-                        <span>{notification.progress}%</span>
-                    </div>
-                    <div className="progress-bar">
-                        <div className="progress-bar-fill" style={{ width: `${notification.progress}%` }} />
-                    </div>
-                </div>
-            ) : null}
-
-            {notification.status === 'downloaded' ? (
-                <div className="update-status success notification-center-update-status">
-                    <CheckIcon />
-                    <span>{t('settings.update_relaunch')}</span>
-                </div>
-            ) : null}
-
-            <div className="notification-center-item-actions">
-                <button
-                    type="button"
-                    className="btn btn-primary notification-center-item-action"
-                    onClick={handleUpdateAction}
-                    disabled={notification.isBusy}
-                >
-                    {notification.actionLabel}
-                </button>
-            </div>
-        </li>
-    );
+        return (
+            <NotificationCard
+                key={notification.id}
+                tone="update"
+                itemClassName="notification-center-item-update"
+                icon={<DownloadIcon />}
+                title={notification.title}
+                body={notification.body}
+                bodyClassName="notification-center-update-body"
+                closeButton={(
+                    <button
+                        type="button"
+                        className="btn btn-icon notification-center-item-close"
+                        onClick={dismissUpdateNotification}
+                        aria-label={t('common.close')}
+                        disabled={notification.isBusy}
+                    >
+                        <CloseIcon />
+                    </button>
+                )}
+                support={support}
+                actions={(
+                    <button
+                        type="button"
+                        className="btn btn-primary notification-center-item-action"
+                        onClick={handleUpdateAction}
+                        disabled={notification.isBusy}
+                    >
+                        {notification.actionLabel}
+                    </button>
+                )}
+            />
+        );
+    };
 
     const renderRecoveryNotification = (notification: RecoveryNotificationEntry) => (
-        <li key={notification.id} className="notification-center-item">
-            <button
-                type="button"
-                className="notification-center-item-main"
-                onClick={openRecoveryCenter}
-            >
-                <span className="notification-center-item-icon" aria-hidden="true">
-                    <RestoreIcon />
-                </span>
-                <span className="notification-center-item-copy">
-                    <strong>{notification.title}</strong>
-                    <span>{notification.body}</span>
-                </span>
-            </button>
-            <div className="notification-center-item-actions">
+        <NotificationCard
+            key={notification.id}
+            tone="recovery"
+            itemClassName="notification-center-item-recovery"
+            icon={<RestoreIcon />}
+            title={notification.title}
+            body={notification.body}
+            onOpen={openRecoveryCenter}
+            actions={(
                 <button
                     type="button"
                     className="btn btn-secondary notification-center-item-action"
@@ -382,49 +463,46 @@ export function NotificationCenter({
                 >
                     {notification.actionLabel}
                 </button>
-            </div>
-        </li>
+            )}
+        />
     );
 
     const renderAutomationNotification = (
-        notification: AutomationFailureNotificationEntry | AutomationSuccessNotificationEntry
+        notification: AutomationFailureNotificationEntry | AutomationSuccessNotificationEntry,
     ) => {
         const isFailure = notification.kind === 'automationFailure';
         const actionClassName = isFailure && notification.retryable
             ? 'btn btn-primary notification-center-item-action'
             : 'btn btn-secondary notification-center-item-action';
+        const support = notification.detail || (isFailure && notification.message)
+            ? (
+                <>
+                    {notification.detail ? (
+                        <div className="notification-center-item-detail">
+                            {notification.detail}
+                        </div>
+                    ) : null}
+                    {isFailure && notification.message ? (
+                        <div className="notification-center-item-message">
+                            {notification.message}
+                        </div>
+                    ) : null}
+                </>
+            )
+            : null;
 
         return (
-            <li
+            <NotificationCard
                 key={notification.id}
-                className={`notification-center-item ${isFailure
+                tone={isFailure ? 'automation-failure' : 'automation-success'}
+                itemClassName={isFailure
                     ? 'notification-center-item-automation-failure'
-                    : 'notification-center-item-automation-success'}`}
-            >
-                <div className="notification-center-item-header">
-                    <button
-                        type="button"
-                        className="notification-center-item-main"
-                        onClick={openAutomationSettings}
-                    >
-                        <span className="notification-center-item-icon" aria-hidden="true">
-                            {isFailure ? <ErrorIcon /> : <AutomationIcon />}
-                        </span>
-                        <span className="notification-center-item-copy">
-                            <strong>{notification.title}</strong>
-                            <span>{notification.body}</span>
-                            {notification.detail ? (
-                                <span className="notification-center-item-detail">
-                                    {notification.detail}
-                                </span>
-                            ) : null}
-                            {isFailure && notification.message ? (
-                                <span className="notification-center-item-message">
-                                    {notification.message}
-                                </span>
-                            ) : null}
-                        </span>
-                    </button>
+                    : 'notification-center-item-automation-success'}
+                icon={isFailure ? <ErrorIcon /> : <AutomationIcon />}
+                title={notification.title}
+                body={notification.body}
+                onOpen={openAutomationSettings}
+                closeButton={(
                     <button
                         type="button"
                         className="btn btn-icon notification-center-item-close"
@@ -433,8 +511,9 @@ export function NotificationCenter({
                     >
                         <CloseIcon />
                     </button>
-                </div>
-                <div className="notification-center-item-actions">
+                )}
+                support={support}
+                actions={(
                     <button
                         type="button"
                         className={actionClassName}
@@ -445,8 +524,8 @@ export function NotificationCenter({
                     >
                         {notification.actionLabel}
                     </button>
-                </div>
-            </li>
+                )}
+            />
         );
     };
 
@@ -466,7 +545,7 @@ export function NotificationCenter({
                 <BellIcon />
                 {notifications.length > 0 ? (
                     <span className="notification-center-trigger-badge" aria-hidden="true">
-                        {notifications.length}
+                        {notificationBadgeLabel}
                     </span>
                 ) : null}
             </button>

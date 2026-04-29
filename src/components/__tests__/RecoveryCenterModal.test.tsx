@@ -142,9 +142,12 @@ describe('RecoveryCenterModal', () => {
   });
 
   it('renders grouped recovery overview and item sections', async () => {
-    render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
+    const { container } = render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
 
     expect(screen.getByText('Interrupted Batch Recovery')).toBeDefined();
+    expect(container.querySelector('.panel-modal-shell')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-header')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
     expect(screen.getAllByText('Batch Import').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Automation').length).toBeGreaterThan(0);
     expect(screen.getByText('meeting.wav')).toBeDefined();

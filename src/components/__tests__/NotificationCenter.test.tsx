@@ -261,6 +261,35 @@ describe('NotificationCenter', () => {
       'Interrupted work is ready to recover',
       'Success Rule completed',
     ]);
+    expect(container.querySelectorAll('.notification-center-item-header')).toHaveLength(4);
+    expect(container.querySelectorAll('.notification-center-item-actions')).toHaveLength(4);
+  });
+
+  it('caps the trigger badge at 9+ while keeping the full notification list', () => {
+    automationState.notifications = Array.from({ length: 10 }, (_, index) => ({
+      id: `automation-success-rule-${index}`,
+      kind: 'success',
+      ruleId: `rule-${index}`,
+      ruleName: `Success Rule ${index}`,
+      count: 1,
+      latestFilePath: `C:\\watch\\done-${index}.wav`,
+      latestStage: 'exporting',
+      createdAt: index,
+      updatedAt: index,
+      retryable: false,
+    }));
+
+    const { container } = render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />
+    );
+
+    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('9+');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(container.querySelectorAll('.notification-center-item')).toHaveLength(10);
   });
 
   it('opens the recovery center from either the notification body or the CTA', () => {

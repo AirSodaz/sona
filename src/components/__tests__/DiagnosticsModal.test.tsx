@@ -91,7 +91,7 @@ describe('DiagnosticsModal', () => {
   });
 
   it('loads diagnostics when opened and renders overview content', async () => {
-    render(
+    const { container } = render(
       <DiagnosticsModal
         isOpen={true}
         onClose={vi.fn()}
@@ -101,6 +101,9 @@ describe('DiagnosticsModal', () => {
     );
 
     expect(await screen.findByText('Model & Environment Diagnostics')).toBeDefined();
+    expect(container.querySelector('.panel-modal-shell')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-header')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
     expect(screen.getByText('Live Record')).toBeDefined();
     expect(screen.getByText('Input & Capture')).toBeDefined();
     expect(mocks.collectSnapshot.mock.calls.length).toBeGreaterThan(0);
