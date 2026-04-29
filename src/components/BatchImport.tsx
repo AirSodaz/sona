@@ -98,8 +98,6 @@ const ActiveItemStatus = React.memo(ActiveItemStatusComponent);
 interface BatchImportProps {
     /** Optional CSS class name. */
     className?: string;
-    /** Opens the automation settings tab. */
-    onOpenAutomation?: () => void;
 }
 
 /**
@@ -110,7 +108,7 @@ interface BatchImportProps {
  * @param props Component props.
  * @return The batch import UI.
  */
-export function BatchImport({ className = '', onOpenAutomation }: BatchImportProps): React.JSX.Element {
+export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
     const showError = useDialogStore((state) => state.showError);
     const [isDragOver, setIsDragOver] = useState(false);
     const { t } = useTranslation();
@@ -122,20 +120,6 @@ export function BatchImport({ className = '', onOpenAutomation }: BatchImportPro
 
     // Transcript store
     const config = useConfigStore((state) => state.config);
-
-    const renderAutomationEntry = () => {
-        if (!onOpenAutomation) {
-            return null;
-        }
-
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
-                <button className="btn btn-secondary" onClick={onOpenAutomation}>
-                    {t('automation.open_settings', { defaultValue: 'Open Automation' })}
-                </button>
-            </div>
-        );
-    };
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -303,8 +287,6 @@ export function BatchImport({ className = '', onOpenAutomation }: BatchImportPro
                             </button>
                         </div>
                     </div>
-
-                    {renderAutomationEntry()}
                 </div>
 
                 {/* Options */}
@@ -345,8 +327,6 @@ export function BatchImport({ className = '', onOpenAutomation }: BatchImportPro
                     {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
                 </p>
             </div>
-
-            {renderAutomationEntry()}
             <TranscriptionOptions />
         </div>
     );

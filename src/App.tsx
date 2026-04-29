@@ -17,7 +17,7 @@ import { OnboardingReminderBanner } from './components/OnboardingReminderBanner'
 import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
 import { useOnboardingStore } from './stores/onboardingStore';
-import { SettingsIcon } from './components/Icons';
+import { AutomationIcon, SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
@@ -154,19 +154,24 @@ function App(): React.JSX.Element {
             <div className="panel panel-left">
               <div className="panel-header">
                 <h2>{panelTitle}</h2>
+                {mode === 'batch' && (
+                  <button
+                    type="button"
+                    className="btn btn-icon projects-rail-create"
+                    onClick={openAutomationSettings}
+                    aria-label={t('automation.open_settings', { defaultValue: 'Open Automation' })}
+                    data-tooltip={t('automation.open_settings', { defaultValue: 'Open Automation' })}
+                    data-tooltip-pos="bottom"
+                  >
+                    <AutomationIcon width={18} height={18} />
+                  </button>
+                )}
               </div>
               <div className="panel-content">
                 <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
                   <LiveRecord />
                 </div>
-                {mode === 'batch' && (
-                  <BatchImport
-                    onOpenAutomation={() => {
-                      setSettingsInitialTab('automation');
-                      setIsSettingsOpen(true);
-                    }}
-                  />
-                )}
+                {mode === 'batch' && <BatchImport />}
               </div>
             </div>
 

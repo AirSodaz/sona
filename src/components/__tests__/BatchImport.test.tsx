@@ -135,6 +135,7 @@ describe('BatchImport Integration', () => {
         render(<BatchImport />);
         expect(screen.getByText('batch.drop_title')).toBeDefined();
         expect(screen.getByText('batch.drop_desc')).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
     });
 
     it('adds files to queue and starts processing automatically', async () => {
@@ -266,6 +267,7 @@ describe('BatchImport Integration', () => {
 
         // Check if processing view is shown
         expect(screen.getByText('batch.processing_title')).toBeDefined();
+        expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
 
         // Check if "Add more files" button is present and NOT disabled
         const addButton = screen.getByRole('button', { name: 'batch.add_more_files' }) as HTMLButtonElement;

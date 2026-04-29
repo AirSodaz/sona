@@ -27,6 +27,7 @@ vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialo
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => null }));
 vi.mock('../components/Icons', () => ({
+  AutomationIcon: () => <span>AutomationIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
 }));
 
@@ -89,6 +90,27 @@ describe('App automation flow', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
+
+    expect(screen.getByText('Settings Tab: automation')).toBeDefined();
+  });
+
+  it('shows a batch-header automation button that opens automation settings', () => {
+    mockUseTranscriptStore.mockImplementation((selector: any) => selector({
+      mode: 'batch',
+      clearSegments: vi.fn(),
+      setMode: vi.fn(),
+    }));
+    mockUseProjectStore.mockImplementation((selector: any) => selector({
+      activeProjectId: null,
+      projects: [],
+    }));
+    mockUseOnboardingStore.mockImplementation((selector: any) => selector({
+      reopen: vi.fn(),
+    }));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'automation.open_settings' }));
 
     expect(screen.getByText('Settings Tab: automation')).toBeDefined();
   });
