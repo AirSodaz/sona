@@ -1,3 +1,5 @@
+import type { RecoveryItemStage } from '../types/recovery';
+
 export interface AutomationTaskSettledPayload {
   ruleId: string;
   filePath: string;
@@ -9,6 +11,7 @@ export interface AutomationTaskSettledPayload {
   historyId?: string;
   exportPath?: string;
   errorMessage?: string;
+  stage?: RecoveryItemStage;
 }
 
 type AutomationTaskSettledHandler = (payload: AutomationTaskSettledPayload) => void | Promise<void>;

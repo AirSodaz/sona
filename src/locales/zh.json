@@ -363,6 +363,14 @@
         "last_result_success": "成功",
         "last_result_error": "失败",
         "last_result_idle": "尚未运行",
+        "notifications": {
+            "failure_title": "{{ruleName}} 需要处理",
+            "failure_body": "失败 {{count}} 个文件。最近：{{fileName}}",
+            "success_title": "{{ruleName}} 已完成",
+            "success_body": "已完成 {{count}} 个文件。最近：{{fileName}}",
+            "stage_detail": "最近阶段：{{stage}}",
+            "file_unknown": "最近文件不可用"
+        },
         "scan_now": "立即扫描",
         "retry_failed": "重试失败项",
         "delete_title": "删除自动化规则",

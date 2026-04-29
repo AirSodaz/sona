@@ -5,6 +5,7 @@ import { useTranscriptStore } from '../transcriptStore';
 import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
+import { notifyAutomationTaskSettled } from '../../services/automationRuntimeBridge';
 
 // Mock dependencies
 vi.mock('uuid', () => ({
@@ -62,6 +63,16 @@ vi.mock('../../services/historyService', () => ({
             projectId: null,
         }),
         updateTranscript: vi.fn().mockResolvedValue(undefined),
+    }
+}));
+
+vi.mock('../../services/automationRuntimeBridge', () => ({
+    notifyAutomationTaskSettled: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../services/summaryService', () => ({
+    summaryService: {
+        persistSummary: vi.fn().mockResolvedValue(undefined),
     }
 }));
 
@@ -265,6 +276,94 @@ describe('batchQueueStore History Integration', () => {
             historyId: 'history-1',
             historyTitle: 'Recovered draft',
             status: 'complete',
+        }));
+    });
+
+    it('passes the latest known stage through settled automation success payloads', async () => {
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+            }
+        });
+        (transcriptionService.transcribeFile as any).mockResolvedValue([
+            { id: 'seg1', start: 0, end: 1, text: 'Done', isFinal: true },
+        ]);
+        (historyService.saveImportedFile as any).mockResolvedValueOnce(null);
+
+        useBatchQueueStore.setState({
+            queueItems: [{
+                id: 'automation-success-1',
+                filename: 'automated.wav',
+                filePath: '/path/to/automated.wav',
+                status: 'pending',
+                progress: 0,
+                segments: [],
+                projectId: null,
+                origin: 'automation',
+                automationRuleId: 'rule-1',
+                automationRuleName: 'Automation Rule',
+                sourceFingerprint: 'fp-success',
+                fileStat: {
+                    size: 42,
+                    mtimeMs: 1000,
+                },
+                lastKnownStage: 'queued',
+            }],
+            activeItemId: null,
+            isQueueProcessing: false,
+        });
+
+        await useBatchQueueStore.getState()._processItem('automation-success-1');
+
+        expect(notifyAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: 'rule-1',
+            sourceFingerprint: 'fp-success',
+            status: 'complete',
+            stage: 'transcribing',
+        }));
+    });
+
+    it('passes the latest known stage through settled automation failure payloads', async () => {
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                enableTimeline: false,
+            }
+        });
+        (transcriptionService.transcribeFile as any).mockRejectedValue(new Error('Transcription failed'));
+
+        useBatchQueueStore.setState({
+            queueItems: [{
+                id: 'automation-failure-1',
+                filename: 'automated-fail.wav',
+                filePath: '/path/to/automated-fail.wav',
+                status: 'pending',
+                progress: 0,
+                segments: [],
+                projectId: null,
+                origin: 'automation',
+                automationRuleId: 'rule-1',
+                automationRuleName: 'Automation Rule',
+                sourceFingerprint: 'fp-failure',
+                fileStat: {
+                    size: 84,
+                    mtimeMs: 1001,
+                },
+                lastKnownStage: 'queued',
+            }],
+            activeItemId: null,
+            isQueueProcessing: false,
+        });
+
+        await useBatchQueueStore.getState()._processItem('automation-failure-1');
+
+        expect(notifyAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: 'rule-1',
+            sourceFingerprint: 'fp-failure',
+            status: 'error',
+            stage: 'transcribing',
+            errorMessage: 'Transcription failed',
         }));
     });
 });

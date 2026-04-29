@@ -1,12 +1,23 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BellIcon, CheckIcon, CloseIcon, DownloadIcon, RestoreIcon } from './Icons';
+import {
+    AutomationIcon,
+    BellIcon,
+    CheckIcon,
+    CloseIcon,
+    DownloadIcon,
+    ErrorIcon,
+    RestoreIcon,
+} from './Icons';
 import { useRecoveryStore } from '../stores/recoveryStore';
+import { useAutomationStore } from '../stores/automationStore';
 import { useAppUpdater } from '../hooks/useAppUpdater';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
+import type { RecoveryItemStage } from '../types/recovery';
 
 interface NotificationCenterProps {
     onOpenRecoveryCenter: () => void;
+    onOpenAutomationSettings: () => void;
 }
 
 interface RecoveryNotificationEntry {
@@ -29,21 +40,72 @@ interface UpdateNotificationEntry {
     isBusy: boolean;
 }
 
-type NotificationEntry = RecoveryNotificationEntry | UpdateNotificationEntry;
+interface AutomationFailureNotificationEntry {
+    id: string;
+    kind: 'automationFailure';
+    notificationId: string;
+    title: string;
+    body: string;
+    detail: string | null;
+    message: string | null;
+    actionLabel: string;
+    retryable: boolean;
+}
+
+interface AutomationSuccessNotificationEntry {
+    id: string;
+    kind: 'automationSuccess';
+    notificationId: string;
+    title: string;
+    body: string;
+    detail: string | null;
+    actionLabel: string;
+    retryable: false;
+}
+
+type NotificationEntry =
+    | RecoveryNotificationEntry
+    | UpdateNotificationEntry
+    | AutomationFailureNotificationEntry
+    | AutomationSuccessNotificationEntry;
+
+function getFileName(filePath?: string): string | null {
+    if (!filePath) {
+        return null;
+    }
+
+    const filename = filePath.split(/[/\\]/).pop();
+    return filename || null;
+}
+
+function getStageLabel(
+    stage: RecoveryItemStage | undefined,
+    t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+    if (!stage) {
+        return null;
+    }
+
+    return t(`recovery.stage.${stage}`);
+}
 
 export function NotificationCenter({
     onOpenRecoveryCenter,
+    onOpenAutomationSettings,
 }: NotificationCenterProps): React.JSX.Element {
     const { t } = useTranslation();
     const items = useRecoveryStore((state) => state.items);
     const isLoaded = useRecoveryStore((state) => state.isLoaded);
+    const automationNotifications = useAutomationStore((state) => state.notifications);
+    const dismissAutomationNotification = useAutomationStore((state) => state.dismissNotification);
+    const retryAutomationNotification = useAutomationStore((state) => state.retryNotification);
     const {
         status,
         updateInfo,
         progress,
         notificationVisible,
         installUpdate,
-        dismissNotification,
+        dismissNotification: dismissUpdateNotification,
         relaunchToUpdate,
     } = useAppUpdater();
     const [isOpen, setIsOpen] = useState(false);
@@ -90,6 +152,38 @@ export function NotificationCenter({
             });
         }
 
+        const failureNotifications = automationNotifications
+            .filter((notification) => notification.kind === 'failure')
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map<AutomationFailureNotificationEntry>((notification) => {
+                const latestFileName = getFileName(notification.latestFilePath)
+                    || t('automation.notifications.file_unknown');
+                const stageLabel = getStageLabel(notification.latestStage, t);
+
+                return {
+                    id: notification.id,
+                    kind: 'automationFailure',
+                    notificationId: notification.id,
+                    title: t('automation.notifications.failure_title', {
+                        ruleName: notification.ruleName,
+                    }),
+                    body: t('automation.notifications.failure_body', {
+                        count: notification.count,
+                        fileName: latestFileName,
+                    }),
+                    detail: stageLabel
+                        ? t('automation.notifications.stage_detail', { stage: stageLabel })
+                        : null,
+                    message: notification.latestMessage || null,
+                    actionLabel: notification.retryable
+                        ? t('automation.retry_failed', { defaultValue: 'Retry Failed' })
+                        : t('automation.open_settings', { defaultValue: 'Open Automation' }),
+                    retryable: notification.retryable,
+                };
+            });
+
+        nextNotifications.push(...failureNotifications);
+
         if (isLoaded && pendingItems.length > 0) {
             const batchCount = pendingItems.filter((item) => item.source === 'batch_import').length;
             const automationCount = pendingItems.filter((item) => item.source === 'automation').length;
@@ -107,8 +201,46 @@ export function NotificationCenter({
             });
         }
 
+        const successNotifications = automationNotifications
+            .filter((notification) => notification.kind === 'success')
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map<AutomationSuccessNotificationEntry>((notification) => {
+                const latestFileName = getFileName(notification.latestFilePath)
+                    || t('automation.notifications.file_unknown');
+                const stageLabel = getStageLabel(notification.latestStage, t);
+
+                return {
+                    id: notification.id,
+                    kind: 'automationSuccess',
+                    notificationId: notification.id,
+                    title: t('automation.notifications.success_title', {
+                        ruleName: notification.ruleName,
+                    }),
+                    body: t('automation.notifications.success_body', {
+                        count: notification.count,
+                        fileName: latestFileName,
+                    }),
+                    detail: stageLabel
+                        ? t('automation.notifications.stage_detail', { stage: stageLabel })
+                        : null,
+                    actionLabel: t('automation.open_settings', { defaultValue: 'Open Automation' }),
+                    retryable: false,
+                };
+            });
+
+        nextNotifications.push(...successNotifications);
+
         return nextNotifications;
-    }, [isLoaded, notificationVisible, pendingItems, progress, status, t, updateInfo]);
+    }, [
+        automationNotifications,
+        isLoaded,
+        notificationVisible,
+        pendingItems,
+        progress,
+        status,
+        t,
+        updateInfo,
+    ]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -141,6 +273,11 @@ export function NotificationCenter({
         onOpenRecoveryCenter();
     };
 
+    const openAutomationSettings = () => {
+        setIsOpen(false);
+        onOpenAutomationSettings();
+    };
+
     const handleUpdateAction = () => {
         if (status === 'downloaded') {
             void relaunchToUpdate();
@@ -148,6 +285,15 @@ export function NotificationCenter({
         }
 
         void installUpdate();
+    };
+
+    const handleAutomationAction = (notificationId: string, retryable: boolean) => {
+        if (retryable) {
+            void retryAutomationNotification(notificationId);
+            return;
+        }
+
+        openAutomationSettings();
     };
 
     const renderUpdateNotification = (notification: UpdateNotificationEntry) => (
@@ -169,7 +315,7 @@ export function NotificationCenter({
                 <button
                     type="button"
                     className="btn btn-icon notification-center-item-close"
-                    onClick={dismissNotification}
+                    onClick={dismissUpdateNotification}
                     aria-label={t('common.close')}
                     disabled={notification.isBusy}
                 >
@@ -240,6 +386,70 @@ export function NotificationCenter({
         </li>
     );
 
+    const renderAutomationNotification = (
+        notification: AutomationFailureNotificationEntry | AutomationSuccessNotificationEntry
+    ) => {
+        const isFailure = notification.kind === 'automationFailure';
+        const actionClassName = isFailure && notification.retryable
+            ? 'btn btn-primary notification-center-item-action'
+            : 'btn btn-secondary notification-center-item-action';
+
+        return (
+            <li
+                key={notification.id}
+                className={`notification-center-item ${isFailure
+                    ? 'notification-center-item-automation-failure'
+                    : 'notification-center-item-automation-success'}`}
+            >
+                <div className="notification-center-item-header">
+                    <button
+                        type="button"
+                        className="notification-center-item-main"
+                        onClick={openAutomationSettings}
+                    >
+                        <span className="notification-center-item-icon" aria-hidden="true">
+                            {isFailure ? <ErrorIcon /> : <AutomationIcon />}
+                        </span>
+                        <span className="notification-center-item-copy">
+                            <strong>{notification.title}</strong>
+                            <span>{notification.body}</span>
+                            {notification.detail ? (
+                                <span className="notification-center-item-detail">
+                                    {notification.detail}
+                                </span>
+                            ) : null}
+                            {isFailure && notification.message ? (
+                                <span className="notification-center-item-message">
+                                    {notification.message}
+                                </span>
+                            ) : null}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-icon notification-center-item-close"
+                        onClick={() => dismissAutomationNotification(notification.notificationId)}
+                        aria-label={t('common.close')}
+                    >
+                        <CloseIcon />
+                    </button>
+                </div>
+                <div className="notification-center-item-actions">
+                    <button
+                        type="button"
+                        className={actionClassName}
+                        onClick={() => handleAutomationAction(
+                            notification.notificationId,
+                            isFailure ? notification.retryable : false,
+                        )}
+                    >
+                        {notification.actionLabel}
+                    </button>
+                </div>
+            </li>
+        );
+    };
+
     return (
         <div className="notification-center" ref={containerRef}>
             <button
@@ -280,11 +490,17 @@ export function NotificationCenter({
                         </div>
                     ) : (
                         <ul className="notification-center-list">
-                            {notifications.map((notification) => (
-                                notification.kind === 'update'
-                                    ? renderUpdateNotification(notification)
-                                    : renderRecoveryNotification(notification)
-                            ))}
+                            {notifications.map((notification) => {
+                                if (notification.kind === 'update') {
+                                    return renderUpdateNotification(notification);
+                                }
+
+                                if (notification.kind === 'recovery') {
+                                    return renderRecoveryNotification(notification);
+                                }
+
+                                return renderAutomationNotification(notification);
+                            })}
                         </ul>
                     )}
                 </div>

@@ -409,10 +409,41 @@ body {
     var(--color-bg-primary);
 }
 
+.notification-center-item-automation-failure {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 10%, transparent), transparent),
+    var(--color-bg-primary);
+}
+
+.notification-center-item-automation-failure .notification-center-item-icon {
+  color: var(--color-danger-text, #b91c1c);
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+}
+
+.notification-center-item-automation-success {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #10b981 10%, transparent), transparent),
+    var(--color-bg-primary);
+}
+
+.notification-center-item-automation-success .notification-center-item-icon {
+  color: var(--color-success-text, #047857);
+  background: color-mix(in srgb, #10b981 12%, transparent);
+}
+
 .notification-center-update-body {
   white-space: pre-wrap;
   max-height: 120px;
   overflow-y: auto;
+}
+
+.notification-center-item-detail {
+  color: var(--color-text-tertiary);
+}
+
+.notification-center-item-message {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .notification-center-update-progress {

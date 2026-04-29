@@ -22,6 +22,10 @@ const testContext = vi.hoisted(() => {
 
     return {
         addFilesMock: vi.fn(),
+        batchQueueState: {
+            addFiles: vi.fn(),
+            queueItems: [] as any[],
+        },
         ensureAutomationStorageMock: vi.fn().mockResolvedValue(undefined),
         listFilesRecursivelyMock: vi.fn(),
         loadAutomationProcessedEntriesMock: vi.fn(),
@@ -53,6 +57,7 @@ const testContext = vi.hoisted(() => {
 
 const {
     addFilesMock,
+    batchQueueState,
     clearAutomationRecoveryGuardEntryMock,
     ensureAutomationStorageMock,
     isAutomationRecoveryBlockedMock,
@@ -75,9 +80,7 @@ vi.mock('uuid', () => ({
 
 vi.mock('../batchQueueStore', () => ({
     useBatchQueueStore: {
-        getState: () => ({
-            addFiles: testContext.addFilesMock,
-        }),
+        getState: () => testContext.batchQueueState,
     },
 }));
 
@@ -166,6 +169,8 @@ describe('automationStore', () => {
             translationLanguage: 'en',
             polishCustomPresets: [],
         };
+        batchQueueState.addFiles = addFilesMock;
+        batchQueueState.queueItems = [];
 
         listFilesRecursivelyMock.mockResolvedValue([]);
         loadAutomationProcessedEntriesMock.mockResolvedValue([]);
@@ -185,6 +190,7 @@ describe('automationStore', () => {
             rules: [],
             processedEntries: [],
             runtimeStates: {},
+            notifications: [],
             isLoaded: false,
             error: null,
         });
@@ -303,6 +309,43 @@ describe('automationStore', () => {
         expect(saveAutomationRulesMock).not.toHaveBeenCalled();
     });
 
+    it('records runtime validation failures as non-retryable notifications', async () => {
+        const rule = createRule({ enabled: false });
+        validateAutomationRuleForActivationMock.mockResolvedValue({
+            valid: false,
+            message: 'Translation model missing.',
+        });
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 0,
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+
+        await expect(useAutomationStore.getState().scanRuleNow(rule.id)).rejects.toThrow('Translation model missing.');
+
+        expect(useAutomationStore.getState().notifications).toEqual([
+            expect.objectContaining({
+                id: 'automation-failure-rule-1',
+                kind: 'failure',
+                ruleId: rule.id,
+                ruleName: rule.name,
+                count: 1,
+                latestMessage: 'Translation model missing.',
+                retryable: false,
+            }),
+        ]);
+    });
+
     it('clears failed entries on retry and schedules a fresh scan', async () => {
         const rule = createRule({ enabled: false });
         const failedEntry = {
@@ -336,6 +379,20 @@ describe('automationStore', () => {
                     lastResult: 'error',
                 },
             },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    latestFilePath: 'C:\\watch\\failed.wav',
+                    latestMessage: 'Network error',
+                    createdAt: 20,
+                    updatedAt: 20,
+                    retryable: true,
+                },
+            ],
             isLoaded: true,
             error: null,
         });
@@ -358,10 +415,88 @@ describe('automationStore', () => {
                 sourceFingerprint: 'failed-fingerprint',
             }),
         );
+        expect(useAutomationStore.getState().notifications).toEqual([]);
+    });
+
+    it('retries failure notifications through the rule-level retry flow', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\failed.wav',
+            sourceFingerprint: 'failed-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    latestFilePath: 'C:\\watch\\failed.wav',
+                    latestStage: 'transcribing',
+                    latestMessage: 'Network error',
+                    createdAt: 20,
+                    updatedAt: 20,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\failed.wav']);
+        waitForStableAutomationFileMock.mockResolvedValue({
+            filePath: 'C:\\watch\\failed.wav',
+            size: 8,
+            mtimeMs: 10,
+            sourceFingerprint: 'failed-fingerprint',
+        });
+
+        await useAutomationStore.getState().retryNotification('automation-failure-rule-1');
+        await vi.advanceTimersByTimeAsync(250);
+
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([]);
+        expect(addFilesMock).toHaveBeenCalledWith(
+            ['C:\\watch\\failed.wav'],
+            expect.objectContaining({
+                automationRuleId: rule.id,
+                sourceFingerprint: 'failed-fingerprint',
+            }),
+        );
+        expect(useAutomationStore.getState().notifications).toEqual([]);
     });
 
     it('records task completion back into the processed manifest and runtime state', async () => {
         const rule = createRule();
+        batchQueueState.queueItems = [
+            {
+                id: 'queue-1',
+                filename: 'meeting.wav',
+                filePath: 'C:\\watch\\meeting.wav',
+                status: 'processing',
+                progress: 90,
+                segments: [],
+                projectId: projectRecord.id,
+                origin: 'automation',
+                automationRuleId: rule.id,
+            },
+        ];
         useAutomationStore.setState({
             rules: [rule],
             processedEntries: [],
@@ -372,6 +507,7 @@ describe('automationStore', () => {
                     failureCount: 0,
                 },
             },
+            notifications: [],
             isLoaded: true,
             error: null,
         });
@@ -386,6 +522,7 @@ describe('automationStore', () => {
             processedAt: 2000,
             historyId: 'history-1',
             exportPath: 'C:\\exports\\meeting.txt',
+            stage: 'exporting',
         });
 
         expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([
@@ -402,7 +539,233 @@ describe('automationStore', () => {
             lastProcessedFilePath: 'C:\\watch\\meeting.wav',
             failureCount: 0,
         }));
+        expect(useAutomationStore.getState().notifications).toEqual([
+            expect.objectContaining({
+                kind: 'success',
+                ruleId: rule.id,
+                ruleName: rule.name,
+                count: 1,
+                latestFilePath: 'C:\\watch\\meeting.wav',
+                latestStage: 'exporting',
+            }),
+        ]);
         expect(clearAutomationRecoveryGuardEntryMock).toHaveBeenCalledWith(rule.id, 'fp-complete');
+    });
+
+    it('merges settled file errors into one retryable failure notification per rule', async () => {
+        const rule = createRule();
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'watching',
+                    failureCount: 0,
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+
+        await __notifyAutomationTaskSettledForTests({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-error-1',
+            size: 42,
+            mtimeMs: 1000,
+            status: 'error',
+            processedAt: 2100,
+            errorMessage: 'Translation failed',
+            stage: 'translating',
+        });
+
+        await __notifyAutomationTaskSettledForTests({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\meeting-2.wav',
+            sourceFingerprint: 'fp-error-2',
+            size: 43,
+            mtimeMs: 1001,
+            status: 'error',
+            processedAt: 2200,
+            errorMessage: 'Export failed',
+            stage: 'exporting',
+        });
+
+        expect(useAutomationStore.getState().notifications).toEqual([
+            expect.objectContaining({
+                id: 'automation-failure-rule-1',
+                kind: 'failure',
+                ruleId: rule.id,
+                ruleName: rule.name,
+                count: 2,
+                latestFilePath: 'C:\\watch\\meeting-2.wav',
+                latestStage: 'exporting',
+                latestMessage: 'Export failed',
+                retryable: true,
+            }),
+        ]);
+    });
+
+    it('aggregates completion notifications within one contiguous rule wave and starts a new notification after the wave drains', async () => {
+        const rule = createRule();
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'watching',
+                    failureCount: 0,
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+
+        batchQueueState.queueItems = [
+            {
+                id: 'queue-1',
+                filename: 'file-1.wav',
+                filePath: 'C:\\watch\\file-1.wav',
+                status: 'complete',
+                progress: 100,
+                segments: [],
+                projectId: projectRecord.id,
+                origin: 'automation',
+                automationRuleId: rule.id,
+            },
+            {
+                id: 'queue-2',
+                filename: 'file-2.wav',
+                filePath: 'C:\\watch\\file-2.wav',
+                status: 'processing',
+                progress: 70,
+                segments: [],
+                projectId: projectRecord.id,
+                origin: 'automation',
+                automationRuleId: rule.id,
+            },
+        ];
+
+        await __notifyAutomationTaskSettledForTests({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\file-1.wav',
+            sourceFingerprint: 'fp-success-1',
+            size: 42,
+            mtimeMs: 1000,
+            status: 'complete',
+            processedAt: 3000,
+            stage: 'transcribing',
+        });
+
+        batchQueueState.queueItems = [
+            {
+                id: 'queue-2',
+                filename: 'file-2.wav',
+                filePath: 'C:\\watch\\file-2.wav',
+                status: 'complete',
+                progress: 100,
+                segments: [],
+                projectId: projectRecord.id,
+                origin: 'automation',
+                automationRuleId: rule.id,
+            },
+        ];
+
+        await __notifyAutomationTaskSettledForTests({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\file-2.wav',
+            sourceFingerprint: 'fp-success-2',
+            size: 43,
+            mtimeMs: 1001,
+            status: 'complete',
+            processedAt: 3100,
+            stage: 'exporting',
+        });
+
+        batchQueueState.queueItems = [
+            {
+                id: 'queue-3',
+                filename: 'file-3.wav',
+                filePath: 'C:\\watch\\file-3.wav',
+                status: 'complete',
+                progress: 100,
+                segments: [],
+                projectId: projectRecord.id,
+                origin: 'automation',
+                automationRuleId: rule.id,
+            },
+        ];
+
+        await __notifyAutomationTaskSettledForTests({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\file-3.wav',
+            sourceFingerprint: 'fp-success-3',
+            size: 44,
+            mtimeMs: 1002,
+            status: 'complete',
+            processedAt: 3200,
+            stage: 'exporting',
+        });
+
+        const successNotifications = useAutomationStore.getState().notifications.filter((notification) => notification.kind === 'success');
+        expect(successNotifications).toHaveLength(2);
+        expect(successNotifications[0]).toEqual(expect.objectContaining({
+            ruleId: rule.id,
+            count: 1,
+            latestFilePath: 'C:\\watch\\file-3.wav',
+        }));
+        expect(successNotifications[1]).toEqual(expect.objectContaining({
+            ruleId: rule.id,
+            count: 2,
+            latestFilePath: 'C:\\watch\\file-2.wav',
+        }));
+    });
+
+    it('removes session notifications when deleting a rule', async () => {
+        const rule = createRule({ enabled: false });
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 0,
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    retryable: true,
+                },
+                {
+                    id: 'automation-success-rule-1-1',
+                    kind: 'success',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 2,
+                    createdAt: 2,
+                    updatedAt: 2,
+                    retryable: false,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+
+        await useAutomationStore.getState().deleteRule(rule.id);
+
+        expect(useAutomationStore.getState().notifications).toEqual([]);
     });
 
     it('records discarded recovery items without counting them as failures', async () => {
@@ -429,6 +792,7 @@ describe('automationStore', () => {
                     lastProcessedAt: 100,
                 },
             },
+            notifications: [],
             isLoaded: true,
             error: null,
         });

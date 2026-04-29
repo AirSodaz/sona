@@ -363,6 +363,16 @@
         "last_result_success": "Success",
         "last_result_error": "Failed",
         "last_result_idle": "No runs yet",
+        "notifications": {
+            "failure_title": "{{ruleName}} needs attention",
+            "failure_body": "{{count}} failed file. Latest: {{fileName}}",
+            "failure_body_other": "{{count}} failed files. Latest: {{fileName}}",
+            "success_title": "{{ruleName}} completed",
+            "success_body": "{{count}} completed file. Latest: {{fileName}}",
+            "success_body_other": "{{count}} completed files. Latest: {{fileName}}",
+            "stage_detail": "Latest stage: {{stage}}",
+            "file_unknown": "Latest item unavailable"
+        },
         "scan_now": "Scan Now",
         "retry_failed": "Retry Failed",
         "delete_title": "Delete Automation Rule",

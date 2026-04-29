@@ -171,6 +171,7 @@ async function notifyAutomationResult(
         historyId: latestItem.historyId,
         exportPath: latestItem.exportPath,
         errorMessage,
+        stage: latestItem.lastKnownStage,
     });
 }
 

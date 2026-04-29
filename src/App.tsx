@@ -88,6 +88,10 @@ function App(): React.JSX.Element {
     setIsRecoveryCenterOpen(true);
   };
 
+  const openAutomationSettings = () => {
+    openSettingsTab('automation');
+  };
+
   const runFirstRunSetupFromDiagnostics = () => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
@@ -121,7 +125,10 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
-          <NotificationCenter onOpenRecoveryCenter={openRecoveryCenter} />
+          <NotificationCenter
+            onOpenRecoveryCenter={openRecoveryCenter}
+            onOpenAutomationSettings={openAutomationSettings}
+          />
           <button
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}
