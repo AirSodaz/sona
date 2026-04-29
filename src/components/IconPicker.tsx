@@ -110,6 +110,7 @@ export function IconPicker({ icon, onChange, defaultIcon }: IconPickerProps): Re
                                     style={{ background: icon === si.id ? 'var(--color-bg-active)' : 'transparent' }}
                                     onClick={(e) => { e.preventDefault(); onChange(si.id); setIsPickerOpen(false); }}
                                     title={si.id.replace('system:', '')}
+                                    aria-label={si.id.replace('system:', '')}
                                 >
                                     {si.icon}
                                 </button>
@@ -136,6 +137,7 @@ export function IconPicker({ icon, onChange, defaultIcon }: IconPickerProps): Re
                                     className="btn btn-icon"
                                     style={{ fontSize: '1.25rem', background: icon === e ? 'var(--color-bg-active)' : 'transparent' }}
                                     onClick={(event) => { event.preventDefault(); onChange(e); setIsPickerOpen(false); }}
+                                    aria-label={e}
                                 >
                                     {e}
                                 </button>
