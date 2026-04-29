@@ -12,7 +12,10 @@
 - **🗂️ Workspace Organization**: Use `Workspace`, `Projects`, and `Inbox` to organize saved recordings and imports.
 - **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
 - **✨ LLM Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
+- **🗣️ Live Caption & Voice Typing**: Reuse the same offline live transcription stack for floating captions or dictation into other applications.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
+- **🛟 Recovery, Backup & Diagnostics**: Resume interrupted work, export lightweight backups, and inspect model/runtime health from the app.
+- **🔔 Notifications & Automation**: Use the header notification center for updates, recovery, and automation results, and configure watched-folder automation rules in Settings.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
 
 ## 🚀 Getting Started
@@ -23,7 +26,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, LLM features, export, history, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
 
 ### CLI
 
@@ -104,18 +107,18 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
 Sona allows you to choose the AI model that best fits your needs, both for offline transcription and online assistance.
 
 ### Offline Transcription
-1.  Navigate to **Settings > Model Hub**.
+1.  Navigate to **Settings > Model Settings**.
 2.  Choose from a curated list of high-performance models:
     *   **SenseVoice**: Best for multilingual support and emotion recognition.
     *   **Whisper (Tiny)**: Lightweight version of OpenAI's Whisper model.
     *   **Paraformer**: Optimized for streaming.
 3.  Click **Download**. The model will be automatically stored locally.
 
-### LLM Assistant (Polish & Translate)
+### LLM Assistant (Polish, Translate, Summary)
 1.  Navigate to **Settings > LLM Service**.
 2.  Select your provider (OpenAI, Anthropic, Gemini, or Ollama).
 3.  Enter your API Key and Base URL (if applicable).
-4.  Select a model to power the Polish and Translate features.
+4.  Select the models that power polish, translation, and summary generation.
 
 ## 🏗️ Building
 

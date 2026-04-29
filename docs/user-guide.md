@@ -18,7 +18,7 @@ Sona is a good fit if you want to:
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Shortcuts` section.
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
 
 ## 2. Install And Launch
 
@@ -100,7 +100,8 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - Transcript segments appear in the editor on the right.
 - The active segment follows the live recording state.
-- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and later reopening from `Workspace`.
+- While recording is still active, Sona can already surface the session as a `Draft` item in `Workspace`.
+- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and later reopening from `Workspace`, and it completes that same draft item instead of creating a second saved copy.
 - If you were not already inside a project, the saved item usually lands in `Inbox`.
 
 ### Notes
@@ -207,16 +208,17 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 
 1. Make sure `AI Summary` is enabled and `Summary Model` is assigned in `Settings > LLM Service`.
 2. Open any transcript that already has segments.
-3. Expand the summary panel at the top of the editor. It starts collapsed by default so it stays out of the way.
-4. Switch between `General`, `Meeting`, or `Lecture`, then click `Generate` to create a summary for the current template, or `Regenerate` to refresh that template later.
-5. Click `Copy` when you want to reuse the summary elsewhere.
-6. If the transcript is edited, polished, or re-transcribed later, the old summary stays visible but shows an outdated warning until you regenerate it manually.
+3. Open the summary editor from the transcript surface.
+4. Switch between `General`, `Meeting`, or `Lecture` if you want the next generation to use a different summary template.
+5. Click `Generate` to create the current summary, or `Regenerate` to replace it later.
+6. Edit the summary directly whenever you want to adjust wording. Sona auto-saves when focus leaves the editor.
+7. Click `Copy` when you want to reuse the summary elsewhere.
 
 ### Result
 
 - `LLM Polish` updates transcript text in place.
 - `Translate` stores translation text per segment and can display it under the original text.
-- `AI Summary` stores a summary beside the transcript without changing the original text.
+- `AI Summary` keeps one current summary record beside the transcript without changing the original text.
 
 ### Notes
 
@@ -224,9 +226,11 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - Translation can use dedicated translation providers such as `Google Translate (Free)` or `Google Translate (API)`, but `LLM Polish` needs an LLM-capable provider and model.
 - `AI Summary` also needs an LLM-capable provider and model; the Google Translate providers are not supported for summaries.
 - You can turn `AI Summary` off in `Settings > LLM Service`. This hides the panel and prevents new summaries from being generated, but existing summary sidecar data is kept.
+- If `AI Summary` is not fully configured yet, you can still open the summary editor and write or revise the text manually.
+- Sona keeps one current summary record per transcript. Changing templates changes the next generation target or project default; it does not create a separate saved summary for every template.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
 - `Re-transcribe` is only available when the current transcript came from a saved workspace item.
-- Summary output is editable in the editor. You can click on the text to modify it, and it will auto-save when you click away. You can also copy it using the panel's copy button.
+- Summary output is editable in the editor. You can revise it directly, let Sona auto-save it, and use the panel's copy button when you need it elsewhere.
 
 ## 8. Export Transcript
 
@@ -299,6 +303,7 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 
 - `All Items` is for browsing across saved content. It does not replace the current project's defaults.
 - `Inbox` is the default landing place for new recordings and imports when you are not working inside a project.
+- The active live recording session can already appear here as a `Draft` item while capture is still running. When you stop recording, that same item becomes the finished saved entry.
 - Project icons support system icons, recommended emoji, and custom emoji.
 - Saved recordings and imports also support title and icon changes through their own rename flow, but that is separate from `Project Settings`.
 - If you switch away from a project while its settings drawer has unsaved changes, Sona asks whether to discard those edits first.
@@ -314,29 +319,48 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### Settings Areas To Review
 
+- `Settings > Dashboard`
+  global content overview, speaker coverage, and LLM usage trends
 - `Settings > General`
-  theme, app language, font, tray behavior, update checks
+  theme, app language, font, tray behavior, update checks, plus `Diagnostics` and `Backup & Restore`
 - `Settings > Input Device`
   microphone selection, system audio selection, microphone boost, mute during recording
 - `Settings > Subtitle Settings`
   live caption startup, click-through lock, always-on-top, font size, width, color, background transparency
+- `Settings > Voice Typing`
+  enable `Voice Typing`, assign its global shortcut, choose `Push to Talk (Hold)` or `Toggle (Press once)`, and check readiness
 - `Settings > Model Settings`
-  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, and VAD models
+  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, speaker, and VAD models
 - `Settings > Vocabulary`
-  `Text Replacement` rule sets plus `Hotwords` rule sets for recognition tuning
+  `Text Replacement`, `Hotwords`, polish keyword sets, polish context presets, and summary templates
+- `Settings > Automation`
+  watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
 - `Settings > LLM Service`
   feature model bindings and provider credentials
 - `Settings > Shortcuts`
-  live recording shortcuts plus `Voice Typing`
+  live recording shortcuts
 - `Settings > About`
   source code, logs, and update-related actions
 
 ### `Voice Typing`
 
 - `Voice Typing` is useful when you want to dictate directly into chat apps, documents, forms, or other applications.
-- Open `Settings > Shortcuts`, turn on `Voice Typing`, choose a global shortcut, and pick either `Push to Talk (Hold)` or `Toggle (Press once)`.
+- Open `Settings > Voice Typing`, turn on `Voice Typing`, choose a global shortcut, and pick either `Push to Talk (Hold)` or `Toggle (Press once)`.
 - `Push to Talk (Hold)` is better for short bursts. `Toggle (Press once)` is better for longer dictation sessions.
-- `Voice Typing` depends on the same offline live transcription setup, so you also need a working `Live Record Model`.
+- `Voice Typing` depends on the same offline live transcription setup, so you also need a working `Live Record Model`, any required `VAD` model, and an available input device.
+- The same page also shows whether the current blocker is the shortcut, model, VAD, input device, or background warm-up state.
+
+### Diagnostics And Backup
+
+- In `Settings > General`, use `Diagnostics` to inspect the local transcription chain, runtime readiness, and packaging environment.
+- In the same page, use `Backup & Restore` to export or import a light archive of config, workspace, light history transcripts and summaries, automation state, and dashboard LLM usage.
+- `WebDAV Cloud Sync` lives inside `Backup & Restore`. It stores credentials locally on this device and helps you upload or restore backup archives manually.
+
+### Notification Center
+
+- The header notification center groups updates, `Recovery Center`, and automation results in one place.
+- Use it when Sona detects interrupted batch or automation work, when an update is ready to relaunch, or when an automation rule succeeds or fails.
+- `Recovery Center` lets you resume or discard interrupted batch and automation items. `Diagnostics` and `Backup & Restore` stay under `Settings > General`.
 
 ### Notes
 
@@ -389,6 +413,12 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - Deleting a project removes the project itself, but it does not delete the recordings or imports that were inside it.
 - Sona moves those items back to `Inbox`, so you can reassign or continue using them later.
 
+### Why do I see a `Draft` item while I am still recording
+
+- During an active live recording, Sona can create a visible `Draft` item so the session already has a saved place in `Workspace`.
+- When you stop recording, Sona completes that same item instead of creating a second saved copy.
+- Treat the draft as the live session while capture is still running; the finished transcript becomes available from the same entry.
+
 ### `Live Caption` does not appear
 
 - Go back to the `Live Record` page and make sure `Live Caption` is turned on there. `Settings > Subtitle Settings` only controls the window behavior and appearance.
@@ -397,9 +427,15 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### Voice Typing does not work
 
-- Turn on `Voice Typing` in `Settings > Shortcuts`.
-- Confirm the voice typing shortcut is set the way you expect.
+- Turn on `Voice Typing` in `Settings > Voice Typing`.
+- Confirm the page shows the shortcut, model, VAD, input device, and readiness state you expect.
 - Make sure a live transcription model is configured, because Voice Typing depends on the same offline transcription setup.
+
+### Where do I recover interrupted batch or automation work
+
+- Open the header notification center if Sona reports pending recovery items.
+- Use `Recovery Center` to resume or discard interrupted batch and automation work.
+- If you were looking for diagnostics or backup instead, go to `Settings > General`.
 
 ### Playback controls are missing
 
