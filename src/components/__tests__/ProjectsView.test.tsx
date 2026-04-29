@@ -587,6 +587,49 @@ describe('ProjectsView', () => {
     });
   });
 
+  it('closes the workspace detail pane when the active transcript is cleared externally', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-1',
+          title: 'Project Item',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio.wav',
+          transcriptPath: 'hist-1.json',
+          previewText: 'Preview',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await act(async () => {
+      useTranscriptStore.getState().loadTranscript(
+        [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+        'hist-1',
+        'Project Item',
+      );
+      useTranscriptStore.getState().setAudioUrl('asset:///audio.wav');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+    });
+
+    await act(async () => {
+      useTranscriptStore.getState().clearSegments();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('TranscriptEditor')).toBeNull();
+      expect(screen.getByRole('textbox', { name: 'Search in Alpha...' })).toBeDefined();
+    });
+  });
+
   it('moves selected items from the active project back to Inbox', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     useHistoryStore.setState({

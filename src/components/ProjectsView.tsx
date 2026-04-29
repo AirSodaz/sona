@@ -43,6 +43,7 @@ export function ProjectsView(): React.JSX.Element {
   const updateHistoryItemMeta = useHistoryStore((state) => state.updateItemMeta);
 
   const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+  const segmentsLength = useTranscriptStore((state) => state.segments.length);
   const isRecording = useTranscriptStore((state) => state.isRecording);
   const clearSegments = useTranscriptStore((state) => state.clearSegments);
   const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
@@ -165,6 +166,11 @@ export function ProjectsView(): React.JSX.Element {
       return;
     }
 
+    if (selectedHistoryId && selectedItem && !sourceHistoryId && segmentsLength === 0) {
+      setSelectedHistoryId(null);
+      return;
+    }
+
     if (!selectedHistoryId && sourceHistoryId && browseState.scopedItems.some((item) => item.id === sourceHistoryId)) {
       setSelectedHistoryId(sourceHistoryId);
       return;
@@ -181,6 +187,7 @@ export function ProjectsView(): React.JSX.Element {
     browseState.scopedItems,
     clearOpenedItem,
     isLiveDraftSessionLocked,
+    segmentsLength,
     selectedHistoryId,
     selectedItem,
     sourceHistoryId,
