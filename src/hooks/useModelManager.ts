@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -44,11 +44,11 @@ export function useModelManager(isOpen: boolean) {
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    const updateConfig = (updates: Partial<typeof config>) => {
+    const updateConfig = useCallback((updates: Partial<typeof config>) => {
         setConfig(updates);
-    };
+    }, [setConfig]);
 
-    async function checkInstalledModels() {
+    const checkInstalledModels = useCallback(async () => {
         const installed = new Set<string>();
         const results = await Promise.all(
             PRESET_MODELS.map(async (model) => {
@@ -62,7 +62,7 @@ export function useModelManager(isOpen: boolean) {
             }
         }
         setInstalledModels(installed);
-    }
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -70,34 +70,9 @@ export function useModelManager(isOpen: boolean) {
                 void checkInstalledModels();
             });
         }
-    }, [isOpen]);
+    }, [checkInstalledModels, isOpen]);
 
-    // Listen for background download requests from components
-    useEffect(() => {
-        const handleBackgroundDownload = async (event: Event) => {
-            const customEvent = event as CustomEvent;
-            if (customEvent.detail && customEvent.detail.modelId) {
-                const modelId = customEvent.detail.modelId;
-                const model = PRESET_MODELS.find(m => m.id === modelId);
-                if (model && !downloads[modelId]) {
-                    try {
-                        const path = await modelService.downloadModel(modelId, undefined);
-                        await checkInstalledModels();
-                        setModelPath(model, path);
-                    } catch (e) {
-                        logger.error(`Background download failed for ${modelId}:`, e);
-                    }
-                }
-            }
-        };
-
-        document.addEventListener('download-background-model', handleBackgroundDownload);
-        return () => {
-            document.removeEventListener('download-background-model', handleBackgroundDownload);
-        };
-    }, [downloads]);
-
-    function setModelPath(model: ModelInfo, path: string) {
+    const setModelPath = useCallback((model: ModelInfo, path: string) => {
         const updates: Partial<typeof config> = {};
 
         if (model.modes && model.modes.length > 0) {
@@ -129,7 +104,32 @@ export function useModelManager(isOpen: boolean) {
         if (Object.keys(updates).length > 0) {
             updateConfig(updates);
         }
-    }
+    }, [updateConfig]);
+
+    // Listen for background download requests from components
+    useEffect(() => {
+        const handleBackgroundDownload = async (event: Event) => {
+            const customEvent = event as CustomEvent;
+            if (customEvent.detail && customEvent.detail.modelId) {
+                const modelId = customEvent.detail.modelId;
+                const model = PRESET_MODELS.find(m => m.id === modelId);
+                if (model && !downloads[modelId]) {
+                    try {
+                        const path = await modelService.downloadModel(modelId, undefined);
+                        await checkInstalledModels();
+                        setModelPath(model, path);
+                    } catch (e) {
+                        logger.error(`Background download failed for ${modelId}:`, e);
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('download-background-model', handleBackgroundDownload);
+        return () => {
+            document.removeEventListener('download-background-model', handleBackgroundDownload);
+        };
+    }, [checkInstalledModels, downloads, setModelPath]);
 
     async function executeDownload(
         modelId: string,

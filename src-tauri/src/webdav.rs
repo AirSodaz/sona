@@ -70,7 +70,8 @@ fn trim_required(value: &str, label: &str) -> Result<String, String> {
 
 fn parse_server_url(value: &str) -> Result<Url, String> {
     let trimmed = trim_required(value, "WebDAV server URL")?;
-    let mut url = Url::parse(&trimmed).map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
+    let mut url =
+        Url::parse(&trimmed).map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
 
     match url.scheme() {
         "http" | "https" => {}
@@ -168,8 +169,12 @@ fn normalize_collection_url(url: &Url) -> Result<Url, String> {
     build_collection_url(&parse_server_url(url.as_str())?, "")
 }
 
-fn parse_propfind_entries(xml: &str, collection_url: &Url) -> Result<Vec<RemoteBackupEntry>, String> {
-    let document = Document::parse(xml).map_err(|error| format!("Failed to parse the WebDAV response: {error}"))?;
+fn parse_propfind_entries(
+    xml: &str,
+    collection_url: &Url,
+) -> Result<Vec<RemoteBackupEntry>, String> {
+    let document = Document::parse(xml)
+        .map_err(|error| format!("Failed to parse the WebDAV response: {error}"))?;
     let normalized_collection = normalize_collection_url(collection_url)?;
     let mut entries = Vec::new();
 
@@ -232,7 +237,8 @@ async fn propfind(
 ) -> Result<reqwest::Response, String> {
     client
         .request(
-            Method::from_bytes(b"PROPFIND").map_err(|error| format!("Failed to build the PROPFIND request: {error}"))?,
+            Method::from_bytes(b"PROPFIND")
+                .map_err(|error| format!("Failed to build the PROPFIND request: {error}"))?,
             url,
         )
         .basic_auth(&config.username, Some(&config.password))
@@ -257,7 +263,9 @@ async fn probe_collection(
             "WebDAV authentication failed with status {}.",
             response.status()
         )),
-        status => Err(format!("WebDAV connection check failed with status {status}.")),
+        status => Err(format!(
+            "WebDAV connection check failed with status {status}."
+        )),
     }
 }
 
@@ -287,7 +295,8 @@ async fn ensure_remote_directory(
 
         let response = client
             .request(
-                Method::from_bytes(b"MKCOL").map_err(|error| format!("Failed to build the MKCOL request: {error}"))?,
+                Method::from_bytes(b"MKCOL")
+                    .map_err(|error| format!("Failed to build the MKCOL request: {error}"))?,
                 segment_url.clone(),
             )
             .basic_auth(&config.username, Some(&config.password))
@@ -334,7 +343,9 @@ fn resolve_warning_message(collection_missing: bool, uses_http: bool) -> WebDavC
 }
 
 #[tauri::command]
-pub async fn webdav_test_connection(config: WebDavConfigPayload) -> Result<WebDavConnectionResult, String> {
+pub async fn webdav_test_connection(
+    config: WebDavConfigPayload,
+) -> Result<WebDavConnectionResult, String> {
     let normalized = normalize_config(&config)?;
     let client = build_client()?;
     let base_url = parse_server_url(&normalized.server_url)?;
@@ -348,7 +359,9 @@ pub async fn webdav_test_connection(config: WebDavConfigPayload) -> Result<WebDa
 }
 
 #[tauri::command]
-pub async fn webdav_list_backups(config: WebDavConfigPayload) -> Result<Vec<RemoteBackupEntry>, String> {
+pub async fn webdav_list_backups(
+    config: WebDavConfigPayload,
+) -> Result<Vec<RemoteBackupEntry>, String> {
     let normalized = normalize_config(&config)?;
     let client = build_client()?;
     let base_url = parse_server_url(&normalized.server_url)?;
@@ -367,7 +380,9 @@ pub async fn webdav_list_backups(config: WebDavConfigPayload) -> Result<Vec<Remo
                 .map_err(|error| format!("Failed to read the WebDAV listing response: {error}"))?;
             parse_propfind_entries(&body, &collection_url)
         }
-        status => Err(format!("Failed to list WebDAV backups with status {status}.")),
+        status => Err(format!(
+            "Failed to list WebDAV backups with status {status}."
+        )),
     }
 }
 
@@ -423,9 +438,9 @@ pub async fn webdav_download_backup(
         .map_err(|error| format!("WebDAV backup URL is invalid: {error}"))?;
 
     if let Some(parent) = Path::new(&output_path).parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|error| format!("Failed to prepare the temporary download directory: {error}"))?;
+        tokio::fs::create_dir_all(parent).await.map_err(|error| {
+            format!("Failed to prepare the temporary download directory: {error}")
+        })?;
     }
 
     let response = client
@@ -449,7 +464,9 @@ pub async fn webdav_download_backup(
 
     if let Err(error) = tokio::fs::write(&output_path, &bytes).await {
         let _ = tokio::fs::remove_file(&output_path).await;
-        return Err(format!("Failed to save the downloaded backup archive: {error}"));
+        return Err(format!(
+            "Failed to save the downloaded backup archive: {error}"
+        ));
     }
 
     Ok(())
@@ -458,9 +475,7 @@ pub async fn webdav_download_backup(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_collection_url,
-        parse_propfind_entries,
-        resolve_warning_message,
+        build_collection_url, parse_propfind_entries, resolve_warning_message,
         WebDavConnectionStatus,
     };
     use reqwest::Url;
@@ -517,13 +532,20 @@ mod tests {
     </d:propstat>
   </d:response>
 </d:multistatus>"#;
-        let collection_url = Url::parse("https://dav.example.com/remote.php/dav/files/demo/backups/sona/").unwrap();
+        let collection_url =
+            Url::parse("https://dav.example.com/remote.php/dav/files/demo/backups/sona/").unwrap();
 
         let result = parse_propfind_entries(xml, &collection_url).unwrap();
 
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].file_name, "sona-backup-2026-04-29_01-00-00.tar.bz2");
-        assert_eq!(result[1].file_name, "sona-backup-2026-04-28_01-00-00.tar.bz2");
+        assert_eq!(
+            result[0].file_name,
+            "sona-backup-2026-04-29_01-00-00.tar.bz2"
+        );
+        assert_eq!(
+            result[1].file_name,
+            "sona-backup-2026-04-28_01-00-00.tar.bz2"
+        );
     }
 
     #[test]

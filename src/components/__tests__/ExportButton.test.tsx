@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ExportButton } from '../ExportButton';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -36,8 +36,19 @@ vi.mock('../../utils/fileExport', () => ({
 }));
 
 describe('ExportButton', () => {
+    const openExportModal = async () => {
+        render(<ExportButton />);
+        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeDefined();
+            expect(screen.getByDisplayValue('Test Recording')).toBeDefined();
+        });
+    };
+
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
 
         // Reset stores
         useTranscriptStore.setState({
@@ -61,14 +72,10 @@ describe('ExportButton', () => {
         expect(screen.getByRole('button', { name: /export.button/i })).toBeDefined();
     });
 
-    it('opens modal when clicked', () => {
-        render(<ExportButton />);
-        const button = screen.getByRole('button', { name: /export.button/i });
-        fireEvent.click(button);
+    it('opens modal when clicked', async () => {
+        await openExportModal();
 
-        expect(screen.getByRole('dialog')).toBeDefined();
         expect(screen.getByText('export.modal_title')).toBeDefined();
-        expect(screen.getByDisplayValue('Test Recording')).toBeDefined();
     });
 
     it('hides button when no segments', () => {
@@ -79,10 +86,8 @@ describe('ExportButton', () => {
     });
 
     it('calls exportToPath when clicking export in modal', async () => {
-        render(<ExportButton />);
-        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+        await openExportModal();
 
-        // Better: filter by class
         const modalExportBtn = screen.getAllByRole('button', { name: 'export.button' }).find(btn => btn.classList.contains('btn-primary'));
         expect(modalExportBtn).toBeDefined();
         if (modalExportBtn) fireEvent.click(modalExportBtn);
@@ -91,8 +96,7 @@ describe('ExportButton', () => {
     });
 
     it('shows translation modes if translation available', async () => {
-        render(<ExportButton />);
-        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+        await openExportModal();
 
         expect(screen.getByLabelText('export.mode_translation')).toBeDefined();
         expect(screen.getByLabelText('export.mode_bilingual')).toBeDefined();
@@ -105,8 +109,7 @@ describe('ExportButton', () => {
             ]
         });
 
-        render(<ExportButton />);
-        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+        await openExportModal();
 
         const translationRadio = screen.getByLabelText('export.mode_translation');
         expect(translationRadio.hasAttribute('disabled')).toBe(true);

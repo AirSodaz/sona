@@ -518,7 +518,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 setIsTransitioning(false);
             }
         }
-    }, [capture, config.muteDuringRecording, session, timing]);
+    }, [capture, config.muteDuringRecording, session, setIsPaused, timing]);
 
     const resumeRecording = useCallback(async () => {
         const sessionId = session.getSessionId();
@@ -562,7 +562,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
                 setIsTransitioning(false);
             }
         }
-    }, [capture, config.muteDuringRecording, session, timing]);
+    }, [capture, config.muteDuringRecording, session, setIsPaused, timing]);
 
     useEffect(() => {
         return () => {

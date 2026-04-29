@@ -830,8 +830,8 @@ pub struct TranscriptSegment {
 const MAX_SEGMENT_LENGTH_CJK: usize = 36;
 const MAX_SEGMENT_LENGTH_WESTERN: usize = 84;
 const ABBREVIATIONS: &[&str] = &[
-    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "no", "op", "vol",
-    "fig", "inc", "ltd", "co", "dept",
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "no", "op", "vol", "fig",
+    "inc", "ltd", "co", "dept",
 ];
 
 #[derive(Clone, Debug)]
@@ -884,7 +884,11 @@ fn normalize_timing_units(
             }
 
             let start = unit.start.max(safe_start).min(safe_end);
-            let fallback_end = if index + 1 == unit_count { safe_end } else { start };
+            let fallback_end = if index + 1 == unit_count {
+                safe_end
+            } else {
+                start
+            };
             let end = unit.end.max(fallback_end).min(safe_end).max(start);
 
             Some(TranscriptTimingUnit {
@@ -955,7 +959,9 @@ fn find_subsequence(haystack: &[char], needle: &[char]) -> Option<usize> {
         return None;
     }
 
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 fn is_cjk_char(ch: char) -> bool {
@@ -1108,7 +1114,8 @@ fn build_timing_from_legacy(segment: &TranscriptSegment) -> Option<TranscriptTim
         .as_ref()
         .filter(|values| values.len() == tokens.len())
         .map(|values| values.as_slice());
-    let units = build_aligned_timing_units(&segment.text, tokens, timestamps, durations, segment.end)?;
+    let units =
+        build_aligned_timing_units(&segment.text, tokens, timestamps, durations, segment.end)?;
     let units = normalize_timing_units(units, segment.start, segment.end);
     if units.is_empty() {
         return None;
@@ -1152,7 +1159,9 @@ fn is_meaningful_segment_char(ch: char) -> bool {
 }
 
 fn effective_length(text: &str) -> usize {
-    text.chars().filter(|ch| is_meaningful_segment_char(*ch)).count()
+    text.chars()
+        .filter(|ch| is_meaningful_segment_char(*ch))
+        .count()
 }
 
 fn ends_with_abbreviation(text: &str) -> bool {
@@ -1357,7 +1366,9 @@ where
         let is_delimiter_part = part.chars().next().map(is_delimiter).unwrap_or(false);
 
         if is_delimiter_part {
-            let should_merge = check_abbreviations && part.contains('.') && ends_with_abbreviation(&state.current_text);
+            let should_merge = check_abbreviations
+                && part.contains('.')
+                && ends_with_abbreviation(&state.current_text);
             state.current_text.push_str(&part);
             state.char_index += part.chars().count();
             state.effective_char_index += part_effective_len;
@@ -1386,10 +1397,12 @@ where
 
                 if slice_end > state.next_token_slice_start {
                     if let Some(tokens) = segment.tokens.as_ref() {
-                        current_tokens = Some(tokens[state.next_token_slice_start..slice_end].to_vec());
+                        current_tokens =
+                            Some(tokens[state.next_token_slice_start..slice_end].to_vec());
                     }
                     if let Some(timestamps) = segment.timestamps.as_ref() {
-                        current_timestamps = Some(timestamps[state.next_token_slice_start..slice_end].to_vec());
+                        current_timestamps =
+                            Some(timestamps[state.next_token_slice_start..slice_end].to_vec());
                     }
                     if let Some(durations) = segment
                         .durations
@@ -1402,7 +1415,10 @@ where
                     state.next_token_slice_start = slice_end;
                 }
 
-                if let Some(timestamps) = current_timestamps.as_ref().filter(|values| !values.is_empty()) {
+                if let Some(timestamps) = current_timestamps
+                    .as_ref()
+                    .filter(|values| !values.is_empty())
+                {
                     state.current_segment_start = timestamps[0] as f64;
                 }
             }
@@ -1422,7 +1438,11 @@ where
             };
 
             if !child.text.is_empty() {
-                results.push(finalize_split_segment(child, results.is_empty(), &original_id));
+                results.push(finalize_split_segment(
+                    child,
+                    results.is_empty(),
+                    &original_id,
+                ));
             }
 
             state.current_start = segment_end;
@@ -1433,7 +1453,8 @@ where
                 if state.last_token_index == state.next_token_slice_start
                     && state.next_token_slice_start < map.timestamps.len()
                 {
-                    state.current_segment_start = map.timestamps[state.next_token_slice_start] as f64;
+                    state.current_segment_start =
+                        map.timestamps[state.next_token_slice_start] as f64;
                     state.current_start = state.current_segment_start;
                 }
             }
@@ -1465,7 +1486,10 @@ where
             {
                 current_durations = Some(durations[state.next_token_slice_start..].to_vec());
             }
-            if let Some(timestamps) = current_timestamps.as_ref().filter(|values| !values.is_empty()) {
+            if let Some(timestamps) = current_timestamps
+                .as_ref()
+                .filter(|values| !values.is_empty())
+            {
                 state.current_segment_start = timestamps[0] as f64;
             }
         }
@@ -1485,7 +1509,11 @@ where
         };
 
         if !child.text.is_empty() {
-            results.push(finalize_split_segment(child, results.is_empty(), &original_id));
+            results.push(finalize_split_segment(
+                child,
+                results.is_empty(),
+                &original_id,
+            ));
         }
     }
 
@@ -1538,7 +1566,11 @@ fn apply_timeline_normalization(
         left.start
             .partial_cmp(&right.start)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.end.partial_cmp(&right.end).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| {
+                left.end
+                    .partial_cmp(&right.end)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     });
 
     normalize_transcript_segments(results)
@@ -2586,7 +2618,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             translation: None,
                             speaker: None,
                         };
-                        let update = build_transcript_update(segment, instance.normalization_options);
+                        let update =
+                            build_transcript_update(segment, instance.normalization_options);
                         emit_transcript_update(
                             app,
                             instance_id,
@@ -3020,7 +3053,12 @@ mod tests {
     fn ensure_transcript_segment_timing_builds_token_level_units_from_legacy_fields() {
         let mut segment = TranscriptSegment {
             text: "你好世界".to_string(),
-            tokens: Some(vec!["你".to_string(), "好".to_string(), "世".to_string(), "界".to_string()]),
+            tokens: Some(vec![
+                "你".to_string(),
+                "好".to_string(),
+                "世".to_string(),
+                "界".to_string(),
+            ]),
             timestamps: Some(vec![0.0, 0.25, 0.5, 0.75]),
             durations: Some(vec![0.25, 0.25, 0.25, 0.25]),
             ..sample_segment("你好世界", 0.0, 1.0)
@@ -3050,11 +3088,14 @@ mod tests {
         let timing = segment.timing.expect("timing should exist");
         assert_eq!(timing.level, TranscriptTimingLevel::Segment);
         assert_eq!(timing.source, TranscriptTimingSource::Derived);
-        assert_eq!(timing.units, vec![TranscriptTimingUnit {
-            text: "Hello world".to_string(),
-            start: 1.0,
-            end: 3.0,
-        }]);
+        assert_eq!(
+            timing.units,
+            vec![TranscriptTimingUnit {
+                text: "Hello world".to_string(),
+                start: 1.0,
+                end: 3.0,
+            }]
+        );
     }
 
     #[test]
@@ -3076,14 +3117,22 @@ mod tests {
 
         let results = apply_timeline_normalization(
             vec![segment],
-            TranscriptNormalizationOptions { enable_timeline: true },
+            TranscriptNormalizationOptions {
+                enable_timeline: true,
+            },
         );
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].text, "你好。");
         assert_eq!(results[1].text, "世界。");
-        assert_eq!(results[0].timing.as_ref().map(|timing| timing.level), Some(TranscriptTimingLevel::Token));
-        assert_eq!(results[0].timing.as_ref().map(|timing| timing.source), Some(TranscriptTimingSource::Model));
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.level),
+            Some(TranscriptTimingLevel::Token)
+        );
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.source),
+            Some(TranscriptTimingSource::Model)
+        );
         assert!(results[1].start >= results[0].end);
     }
 
@@ -3091,20 +3140,33 @@ mod tests {
     fn apply_timeline_normalization_marks_segment_level_splits_as_derived() {
         let results = apply_timeline_normalization(
             vec![sample_segment("Hello. World.", 0.0, 2.0)],
-            TranscriptNormalizationOptions { enable_timeline: true },
+            TranscriptNormalizationOptions {
+                enable_timeline: true,
+            },
         );
 
         assert_eq!(results.len(), 2);
-        assert_eq!(results[0].timing.as_ref().map(|timing| timing.level), Some(TranscriptTimingLevel::Segment));
-        assert_eq!(results[0].timing.as_ref().map(|timing| timing.source), Some(TranscriptTimingSource::Derived));
-        assert_eq!(results[1].timing.as_ref().map(|timing| timing.source), Some(TranscriptTimingSource::Derived));
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.level),
+            Some(TranscriptTimingLevel::Segment)
+        );
+        assert_eq!(
+            results[0].timing.as_ref().map(|timing| timing.source),
+            Some(TranscriptTimingSource::Derived)
+        );
+        assert_eq!(
+            results[1].timing.as_ref().map(|timing| timing.source),
+            Some(TranscriptTimingSource::Derived)
+        );
     }
 
     #[test]
     fn build_transcript_update_replaces_final_segments_atomically_when_timeline_enabled() {
         let update = build_transcript_update(
             sample_segment("Hello. World.", 0.0, 2.0),
-            TranscriptNormalizationOptions { enable_timeline: true },
+            TranscriptNormalizationOptions {
+                enable_timeline: true,
+            },
         );
 
         assert_eq!(update.remove_ids, vec!["segment-1".to_string()]);

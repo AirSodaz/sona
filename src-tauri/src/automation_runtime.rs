@@ -771,9 +771,15 @@ mod tests {
 
         let result = collect_rule_path_result(&rule, file_path.to_string_lossy().as_ref());
 
-        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Candidate);
         assert_eq!(
-            result.candidate.as_ref().map(|candidate| candidate.file_path.as_str()),
+            result.outcome,
+            AutomationRuntimePathCollectionOutcome::Candidate
+        );
+        assert_eq!(
+            result
+                .candidate
+                .as_ref()
+                .map(|candidate| candidate.file_path.as_str()),
             Some(file_path.to_string_lossy().as_ref())
         );
     }
@@ -795,7 +801,10 @@ mod tests {
 
         let result = collect_rule_path_result(&rule, outside_file.to_string_lossy().as_ref());
 
-        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Excluded);
+        assert_eq!(
+            result.outcome,
+            AutomationRuntimePathCollectionOutcome::Excluded
+        );
         assert!(result.candidate.is_none());
     }
 
@@ -816,7 +825,10 @@ mod tests {
 
         let result = collect_rule_path_result(&rule, nested_file.to_string_lossy().as_ref());
 
-        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Excluded);
+        assert_eq!(
+            result.outcome,
+            AutomationRuntimePathCollectionOutcome::Excluded
+        );
         assert!(result.candidate.is_none());
     }
 
@@ -834,7 +846,10 @@ mod tests {
 
         let result = collect_rule_path_result(&rule, file_path.to_string_lossy().as_ref());
 
-        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Missing);
+        assert_eq!(
+            result.outcome,
+            AutomationRuntimePathCollectionOutcome::Missing
+        );
         assert!(result.candidate.is_none());
     }
 

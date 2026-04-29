@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Volume2, SlidersHorizontal } from 'lucide-react';
 import { MicIcon } from '../Icons';
@@ -71,30 +71,33 @@ export function SettingsMicrophoneTab({
         isPaused: false
     });
 
-    async function stopPreviewCapture(command: 'stop_microphone_capture' | 'stop_system_audio_capture', instanceId: 'test_mic' | 'test_system') {
+    const stopPreviewCapture = useCallback(async (
+        command: 'stop_microphone_capture' | 'stop_system_audio_capture',
+        instanceId: 'test_mic' | 'test_system'
+    ) => {
         const path = await invoke<string>(command, { instanceId });
         if (path) {
             await remove(path).catch(logger.error);
         }
-    }
+    }, []);
 
-    function clearQueuedSystemPreviewFrame() {
+    const clearQueuedSystemPreviewFrame = useCallback(() => {
         if (systemPreviewFrameRef.current === null) {
             return;
         }
 
         cancelAnimationFrame(systemPreviewFrameRef.current);
         systemPreviewFrameRef.current = null;
-    }
+    }, []);
 
-    function waitForNextSystemPreviewFrame() {
+    const waitForNextSystemPreviewFrame = useCallback(() => {
         return new Promise<void>((resolve) => {
             systemPreviewFrameRef.current = requestAnimationFrame(() => {
                 systemPreviewFrameRef.current = null;
                 resolve();
             });
         });
-    }
+    }, []);
 
     // Enumerate devices
     useEffect(() => {
@@ -163,7 +166,7 @@ export function SettingsMicrophoneTab({
         invoke('set_microphone_boost', { boost: microphoneBoost }).catch(logger.error);
     }, [microphoneBoost]);
 
-    async function startMicrophonePreview(deviceId: string, isCurrentRequest: () => boolean) {
+    const startMicrophonePreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
         if (!isCurrentRequest()) {
             return;
         }
@@ -211,9 +214,9 @@ export function SettingsMicrophoneTab({
             logger.warn('Native microphone visualizer failed:', err);
             stopMicWaveAnimation();
         }
-    }
+    }, [isActiveSession, startMicWaveAnimation, stopMicWaveAnimation, stopPreviewCapture]);
 
-    async function startSystemPreview(deviceId: string, isCurrentRequest: () => boolean) {
+    const startSystemPreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
         if (!isCurrentRequest()) {
             return;
         }
@@ -257,9 +260,9 @@ export function SettingsMicrophoneTab({
         } catch (err) {
             logger.error('Error starting system visualizer:', err);
         }
-    }
+    }, [isActiveSession, startSystemWaveAnimation, stopPreviewCapture]);
 
-    function stopMicrophonePreview() {
+    const stopMicrophonePreview = useCallback(() => {
         stopMicWaveAnimation();
 
         if (nativeUnlistenRef.current) {
@@ -271,9 +274,9 @@ export function SettingsMicrophoneTab({
         }
         usingNativeMicRef.current = false;
         startedMicCaptureRef.current = false;
-    }
+    }, [stopMicWaveAnimation, stopPreviewCapture]);
 
-    function stopSystemPreview() {
+    const stopSystemPreview = useCallback(() => {
         clearQueuedSystemPreviewFrame();
         stopSystemWaveAnimation();
 
@@ -286,7 +289,7 @@ export function SettingsMicrophoneTab({
             void stopPreviewCapture('stop_system_audio_capture', 'test_system').catch(logger.error);
         }
         startedSystemCaptureRef.current = false;
-    }
+    }, [clearQueuedSystemPreviewFrame, stopPreviewCapture, stopSystemWaveAnimation]);
 
     useEffect(() => {
         let isMounted = true;
@@ -329,7 +332,12 @@ export function SettingsMicrophoneTab({
         isActiveTab,
         isOpen,
         microphoneId,
+        startMicrophonePreview,
+        startSystemPreview,
+        stopMicrophonePreview,
+        stopSystemPreview,
         systemAudioDeviceId,
+        waitForNextSystemPreviewFrame,
     ]);
 
     return (

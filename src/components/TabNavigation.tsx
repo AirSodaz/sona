@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
@@ -25,9 +25,9 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     const mode = useTranscriptStore((state) => state.mode);
     const setMode = useTranscriptStore((state) => state.setMode);
 
-    const handleTabChange = (newMode: AppMode) => {
+    const handleTabChange = useCallback((newMode: AppMode) => {
         setMode(newMode);
-    };
+    }, [setMode]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,7 +52,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [mode]);
+    }, [handleTabChange, mode]);
 
     return (
         <div

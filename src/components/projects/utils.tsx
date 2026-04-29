@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import React from 'react';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
 import type { ProjectDefaults, ProjectRecord } from '../../types/project';

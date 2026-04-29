@@ -249,7 +249,8 @@ fn queue_recording_start<R: Runtime>(
         return Ok(());
     };
 
-    let wav_filepath = resolve_recording_output_path(output_path, || create_history_recording_path(app))?;
+    let wav_filepath =
+        resolve_recording_output_path(output_path, || create_history_recording_path(app))?;
     if let Err(err) = tx.try_send(RecorderCommand::Start(wav_filepath.clone())) {
         eprintln!(
             "[Audio] Failed to queue {} recorder start for instance {} at {}: {}",
@@ -1541,7 +1542,8 @@ mod tests {
 
     #[test]
     fn resolve_recording_output_path_uses_fallback_when_missing() {
-        let resolved = resolve_recording_output_path(None, || Ok("generated.wav".to_string())).unwrap();
+        let resolved =
+            resolve_recording_output_path(None, || Ok("generated.wav".to_string())).unwrap();
 
         assert_eq!(resolved, "generated.wav");
     }

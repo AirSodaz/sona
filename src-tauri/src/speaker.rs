@@ -172,7 +172,11 @@ pub fn annotate_segments_with_speakers(
 
     let clusters = build_cluster_infos(&diarization_segments);
     let speaker_tags = build_cluster_speaker_tags(samples, &clusters, config, &embedding_model)?;
-    Ok(apply_speaker_tags_to_segments(segments, &clusters, &speaker_tags))
+    Ok(apply_speaker_tags_to_segments(
+        segments,
+        &clusters,
+        &speaker_tags,
+    ))
 }
 
 fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
@@ -245,7 +249,9 @@ fn run_diarization(
     Ok(result.sort_by_start_time())
 }
 
-fn build_cluster_infos(diarization_segments: &[OfflineSpeakerDiarizationSegment]) -> Vec<ClusterInfo> {
+fn build_cluster_infos(
+    diarization_segments: &[OfflineSpeakerDiarizationSegment],
+) -> Vec<ClusterInfo> {
     let mut spans_by_speaker: BTreeMap<i32, Vec<SpeakerSpan>> = BTreeMap::new();
 
     for segment in diarization_segments {
@@ -262,7 +268,11 @@ fn build_cluster_infos(diarization_segments: &[OfflineSpeakerDiarizationSegment]
     let mut ordered = spans_by_speaker
         .into_iter()
         .map(|(raw_speaker, mut spans)| {
-            spans.sort_by(|left, right| left.start.partial_cmp(&right.start).unwrap_or(Ordering::Equal));
+            spans.sort_by(|left, right| {
+                left.start
+                    .partial_cmp(&right.start)
+                    .unwrap_or(Ordering::Equal)
+            });
             let first_start = spans.first().map(|span| span.start).unwrap_or_default();
             (raw_speaker, first_start, spans)
         })
@@ -450,8 +460,13 @@ fn identify_cluster_candidate(
     let Some((profile_id, votes)) = vote_counts
         .iter()
         .max_by(|left, right| {
-            let left_avg = score_sums.get(left.0.as_str()).copied().unwrap_or_default() / *left.1 as f32;
-            let right_avg = score_sums.get(right.0.as_str()).copied().unwrap_or_default() / *right.1 as f32;
+            let left_avg =
+                score_sums.get(left.0.as_str()).copied().unwrap_or_default() / *left.1 as f32;
+            let right_avg = score_sums
+                .get(right.0.as_str())
+                .copied()
+                .unwrap_or_default()
+                / *right.1 as f32;
 
             left.1
                 .cmp(right.1)
@@ -462,7 +477,10 @@ fn identify_cluster_candidate(
         return Ok(None);
     };
 
-    let total_score = score_sums.get(profile_id.as_str()).copied().unwrap_or_default();
+    let total_score = score_sums
+        .get(profile_id.as_str())
+        .copied()
+        .unwrap_or_default();
     let average_score = total_score / votes as f32;
     let Some(profile_name) = profile_names.get(profile_id.as_str()).cloned() else {
         return Ok(None);
@@ -514,7 +532,11 @@ fn load_profile_sample_wav(file_path: &str) -> Result<Vec<f32>, String> {
             }
             reader
                 .samples::<i16>()
-                .map(|sample| sample.map(|value| value as f32 / i16::MAX as f32).map_err(|e| e.to_string()))
+                .map(|sample| {
+                    sample
+                        .map(|value| value as f32 / i16::MAX as f32)
+                        .map_err(|e| e.to_string())
+                })
                 .collect()
         }
         hound::SampleFormat::Float => reader
@@ -578,7 +600,12 @@ fn assign_speakers_to_segment(
     spans: &[SpeakerSpan],
     speaker_tags: &HashMap<i32, SpeakerTag>,
 ) -> Vec<TranscriptSegment> {
-    let fallback_speaker = choose_speaker_for_range(segment.start as f32, segment.end as f32, spans, speaker_tags);
+    let fallback_speaker = choose_speaker_for_range(
+        segment.start as f32,
+        segment.end as f32,
+        spans,
+        speaker_tags,
+    );
 
     if let Some(timing) = segment
         .timing
@@ -622,7 +649,8 @@ fn assign_speakers_to_segment(
                             return None;
                         }
 
-                        let timing_slice = timing.units[group.token_start..group.token_end_exclusive].to_vec();
+                        let timing_slice =
+                            timing.units[group.token_start..group.token_end_exclusive].to_vec();
                         let start = timing_slice
                             .first()
                             .map(|unit| unit.start)
@@ -693,7 +721,8 @@ fn assign_speakers_to_segment(
             } else {
                 segment.end as f32
             };
-            choose_speaker_for_range(start, end, spans, speaker_tags).or_else(|| fallback_speaker.clone())
+            choose_speaker_for_range(start, end, spans, speaker_tags)
+                .or_else(|| fallback_speaker.clone())
         })
         .collect::<Vec<_>>();
 
@@ -740,7 +769,8 @@ fn assign_speakers_to_segment(
 
             let token_slice = tokens[group.token_start..group.token_end_exclusive].to_vec();
             let timestamp_slice = timestamps[group.token_start..group.token_end_exclusive].to_vec();
-            let duration_slice = durations.map(|values| values[group.token_start..group.token_end_exclusive].to_vec());
+            let duration_slice = durations
+                .map(|values| values[group.token_start..group.token_end_exclusive].to_vec());
 
             Some(TranscriptSegment {
                 id: if index == 0 {
@@ -828,7 +858,8 @@ fn choose_speaker_for_range(
     }
 
     let midpoint = (start + end) / 2.0;
-    spans.iter()
+    spans
+        .iter()
         .min_by(|left, right| {
             let left_distance = distance_to_range(midpoint, left.start, left.end);
             let right_distance = distance_to_range(midpoint, right.start, right.end);
@@ -1115,7 +1146,10 @@ mod tests {
         let result = assign_speakers_to_segment(&segment, &spans, &tags);
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].speaker.as_ref().map(|value| value.label.as_str()), Some("Bob"));
+        assert_eq!(
+            result[0].speaker.as_ref().map(|value| value.label.as_str()),
+            Some("Bob")
+        );
     }
 
     #[test]
@@ -1158,10 +1192,22 @@ mod tests {
         let result = assign_speakers_to_segment(&segment, &spans, &tags);
 
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].speaker.as_ref().map(|value| value.label.as_str()), Some("Alice"));
-        assert_eq!(result[1].speaker.as_ref().map(|value| value.label.as_str()), Some("Bob"));
-        assert_eq!(result[0].timing.as_ref().map(|timing| timing.units.len()), Some(1));
-        assert_eq!(result[1].timing.as_ref().map(|timing| timing.units.len()), Some(1));
+        assert_eq!(
+            result[0].speaker.as_ref().map(|value| value.label.as_str()),
+            Some("Alice")
+        );
+        assert_eq!(
+            result[1].speaker.as_ref().map(|value| value.label.as_str()),
+            Some("Bob")
+        );
+        assert_eq!(
+            result[0].timing.as_ref().map(|timing| timing.units.len()),
+            Some(1)
+        );
+        assert_eq!(
+            result[1].timing.as_ref().map(|timing| timing.units.len()),
+            Some(1)
+        );
     }
 
     #[test]

@@ -93,7 +93,11 @@ fn export_srt(segments: &[TranscriptSegment]) -> String {
             if text.is_empty() {
                 return None;
             }
-            Some((segment.start, segment.end, prefix_speaker_label(segment, text)))
+            Some((
+                segment.start,
+                segment.end,
+                prefix_speaker_label(segment, text),
+            ))
         })
         .enumerate()
         .map(|(index, (start, end, text))| {

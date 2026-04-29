@@ -85,6 +85,11 @@ vi.stubGlobal('MediaStream', class {
 
 describe('useCaptionSession', () => {
     let mockStream: any;
+    const flushMicrotasks = async () => {
+        await act(async () => {
+            await Promise.resolve();
+        });
+    };
 
     const defaultConfig: AppConfig = {
         streamingModelPath: '/path/to/model',
@@ -142,24 +147,30 @@ describe('useCaptionSession', () => {
             });
         });
 
-        const { rerender } = renderHook(
+        const { rerender, unmount } = renderHook(
             (props) => useCaptionSession(props.config, props.isCaptionMode),
             { initialProps: { config: defaultConfig, isCaptionMode: true } }
         );
 
         await waitFor(() => expect(navigator.mediaDevices.getDisplayMedia).toHaveBeenCalled());
 
-        rerender({ config: defaultConfig, isCaptionMode: false });
-        expect(captionWindowService.close).toHaveBeenCalled();
+        await act(async () => {
+            rerender({ config: defaultConfig, isCaptionMode: false });
+            await Promise.resolve();
+        });
+
+        await waitFor(() => expect(captionWindowService.close).toHaveBeenCalled());
 
         await act(async () => {
             resolveDisplayMedia(mockStream);
+            await Promise.resolve();
         });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await flushMicrotasks();
 
         expect(captionWindowService.open).not.toHaveBeenCalled();
         expect(transcriptionServiceMocks.recordStart).not.toHaveBeenCalled();
         expect(transcriptionServiceMocks.recordStop).not.toHaveBeenCalled();
+
+        unmount();
     });
 });

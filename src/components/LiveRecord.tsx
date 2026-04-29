@@ -75,8 +75,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     // Config Helpers
     const lockWindow = config.lockWindow ?? false;
     const alwaysOnTop = config.alwaysOnTop ?? true;
-    const applyTranscriptUpdate = useTranscriptStore((state) => state.applyTranscriptUpdate);
-
     useEffect(() => {
         captionWindowService.setClickThrough(lockWindow).catch(logger.error);
         captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
@@ -117,7 +115,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 });
             }
         }
-    }, [applyTranscriptUpdate]);
+    }, []);
 
     // Audio Recorder Hook
     const {

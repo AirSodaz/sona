@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {

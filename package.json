@@ -9,9 +9,14 @@
     "prebuild": "node scripts/setup-ffmpeg.js",
     "build": "tsc && vite build",
     "lint": "eslint .",
+    "lint:ci": "eslint . --max-warnings=0",
+    "lint:staged": "node scripts/check-staged.js",
     "preview": "vite preview",
     "test": "vitest",
+    "test:ci": "vitest --run",
     "tauri": "node scripts/tauri.js",
+    "build:ci": "npm run build",
+    "ci:pr": "npm run lint:ci && npm run test:ci && npm run build:ci",
     "verify:cli-bundle": "node scripts/verify-cli-bundle.js",
     "commitlint": "commitlint --edit",
     "check:staged": "node scripts/check-staged.js"
@@ -74,6 +79,6 @@
     "vitest": "^4.1.5"
   },
   "lint-staged": {
-    "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "node scripts/check-staged.js"
+    "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "npm run lint:staged --"
   }
 }

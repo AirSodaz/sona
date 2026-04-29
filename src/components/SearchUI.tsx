@@ -38,19 +38,11 @@ export function SearchUI(): React.JSX.Element | null {
         }
     }, [isOpen]);
 
-    // Re-run search when segments change if open
-    useEffect(() => {
-        if (isOpen && query) {
-            performSearch(segments);
-        }
-    }, [segments, isOpen, performSearch]); // query is excluded to avoid loop if performSearch updates it (it doesn't, but still)
-
-    // Run search when query changes
     useEffect(() => {
         if (isOpen) {
             performSearch(segments);
         }
-    }, [query, isOpen, performSearch, segments]);
+    }, [isOpen, performSearch, query, segments]);
 
     if (!isOpen) return null;
 

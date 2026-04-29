@@ -211,11 +211,15 @@ impl HistoryRepository {
     }
 
     fn transcript_path(&self, file_name: &str) -> Result<PathBuf, String> {
-        Ok(self.history_dir().join(ensure_safe_file_name(file_name, "History transcript path")?))
+        Ok(self
+            .history_dir()
+            .join(ensure_safe_file_name(file_name, "History transcript path")?))
     }
 
     fn audio_path(&self, file_name: &str) -> Result<PathBuf, String> {
-        Ok(self.history_dir().join(ensure_safe_file_name(file_name, "History audio path")?))
+        Ok(self
+            .history_dir()
+            .join(ensure_safe_file_name(file_name, "History audio path")?))
     }
 
     fn summary_path(&self, history_id: &str) -> Result<PathBuf, String> {
@@ -292,7 +296,10 @@ impl HistoryRepository {
                 // Native capture already wrote the file. We only persist transcript/index here.
             }
             (None, None) => {
-                return Err("History recording save requires audio bytes or a native audio path.".to_string());
+                return Err(
+                    "History recording save requires audio bytes or a native audio path."
+                        .to_string(),
+                );
             }
         }
 
@@ -334,7 +341,10 @@ impl HistoryRepository {
             return Ok(());
         }
 
-        let id_set = ids.iter().cloned().collect::<std::collections::HashSet<_>>();
+        let id_set = ids
+            .iter()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
         let items = self.list_items()?;
         let items_to_delete = items
             .iter()
@@ -346,7 +356,9 @@ impl HistoryRepository {
             if let Some(path) = optional_history_child_path(&self.history_dir(), &item.audio_path) {
                 remove_path_if_exists(&path)?;
             }
-            if let Some(path) = optional_history_child_path(&self.history_dir(), &item.transcript_path) {
+            if let Some(path) =
+                optional_history_child_path(&self.history_dir(), &item.transcript_path)
+            {
                 remove_path_if_exists(&path)?;
             }
             if let Ok(path) = self.summary_path(&item.id) {
@@ -418,7 +430,10 @@ impl HistoryRepository {
             return Ok(());
         }
 
-        let id_set = ids.iter().cloned().collect::<std::collections::HashSet<_>>();
+        let id_set = ids
+            .iter()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
         let mut items = self.list_items()?;
         for item in &mut items {
             if id_set.contains(&item.id) {
@@ -531,7 +546,11 @@ impl HistoryRepository {
 }
 
 impl PreparedBackupImportState {
-    fn insert(&self, import_id: String, snapshot: PreparedBackupImportSnapshot) -> Result<(), String> {
+    fn insert(
+        &self,
+        import_id: String,
+        snapshot: PreparedBackupImportSnapshot,
+    ) -> Result<(), String> {
         let mut guard = self.inner.lock().map_err(|error| error.to_string())?;
         guard.insert(import_id, snapshot);
         Ok(())
@@ -678,7 +697,11 @@ fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &Map<String
 
 fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
     let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+    if trimmed.is_empty()
+        || trimmed.contains("..")
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+    {
         return Err(format!("{label} contains an invalid file name."));
     }
     Ok(trimmed.to_string())
@@ -686,7 +709,11 @@ fn ensure_safe_file_name(value: &str, label: &str) -> Result<String, String> {
 
 fn optional_history_child_path(root: &Path, file_name: &str) -> Option<PathBuf> {
     let trimmed = file_name.trim();
-    if trimmed.is_empty() || trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+    if trimmed.is_empty()
+        || trimmed.contains("..")
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+    {
         return None;
     }
     Some(root.join(trimmed))
@@ -731,8 +758,11 @@ fn write_binary_atomic(path: &Path, contents: &[u8]) -> Result<(), String> {
         Uuid::new_v4()
     ));
     {
-        let mut writer = BufWriter::new(File::create(&temp_path).map_err(|error| error.to_string())?);
-        writer.write_all(contents).map_err(|error| error.to_string())?;
+        let mut writer =
+            BufWriter::new(File::create(&temp_path).map_err(|error| error.to_string())?);
+        writer
+            .write_all(contents)
+            .map_err(|error| error.to_string())?;
         writer.flush().map_err(|error| error.to_string())?;
     }
 
@@ -773,7 +803,9 @@ fn replace_path_atomically(temp_path: &Path, final_path: &Path) -> Result<(), St
 
 fn remove_path_if_exists(path: &Path) -> Result<(), String> {
     match fs::metadata(path) {
-        Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(path).map_err(|error| error.to_string()),
+        Ok(metadata) if metadata.is_dir() => {
+            fs::remove_dir_all(path).map_err(|error| error.to_string())
+        }
         Ok(_) => fs::remove_file(path).map_err(|error| error.to_string()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.to_string()),
@@ -792,7 +824,9 @@ fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> 
     for entry in WalkDir::new(source) {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
-        let relative = path.strip_prefix(source).map_err(|error| error.to_string())?;
+        let relative = path
+            .strip_prefix(source)
+            .map_err(|error| error.to_string())?;
         if relative.as_os_str().is_empty() {
             continue;
         }
@@ -829,7 +863,11 @@ fn create_tar_bz2_archive(source_dir: &Path, archive_path: &Path) -> Result<(), 
             let path = entry.path();
             let relative = path.strip_prefix(root).map_err(|error| error.to_string())?;
 
-            if entry.file_type().map_err(|error| error.to_string())?.is_dir() {
+            if entry
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_dir()
+            {
                 builder
                     .append_dir(relative, &path)
                     .map_err(|error| error.to_string())?;
@@ -873,7 +911,9 @@ fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Result<(),
     fs::create_dir_all(target_dir).map_err(|error| error.to_string())?;
     for entry in archive.entries().map_err(|error| error.to_string())? {
         let mut entry = entry.map_err(|error| error.to_string())?;
-        entry.unpack_in(target_dir).map_err(|error| error.to_string())?;
+        entry
+            .unpack_in(target_dir)
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -912,7 +952,8 @@ fn build_backup_manifest(
 }
 
 fn validate_backup_manifest(value: &Value) -> Result<BackupManifest, String> {
-    let manifest: BackupManifest = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+    let manifest: BackupManifest =
+        serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
     if manifest.schema_version != BACKUP_SCHEMA_VERSION {
         return Err(format!(
             "Unsupported backup schema version: {}",
@@ -965,7 +1006,13 @@ fn export_backup_archive_inner(
         let automation_dir = staging_dir.join(AUTOMATION_DIR_NAME);
         let analytics_dir = staging_dir.join(ANALYTICS_DIR_NAME);
 
-        for dir in [&config_dir, &projects_dir, &history_dir, &automation_dir, &analytics_dir] {
+        for dir in [
+            &config_dir,
+            &projects_dir,
+            &history_dir,
+            &automation_dir,
+            &analytics_dir,
+        ] {
             fs::create_dir_all(dir).map_err(|error| error.to_string())?;
         }
 
@@ -975,10 +1022,7 @@ fn export_backup_archive_inner(
             &projects_dir.join(PROJECTS_INDEX_FILE_NAME),
             &request.projects,
         )?;
-        write_json_pretty_atomic(
-            &history_dir.join(PROJECTS_INDEX_FILE_NAME),
-            &history.items,
-        )?;
+        write_json_pretty_atomic(&history_dir.join(PROJECTS_INDEX_FILE_NAME), &history.items)?;
         write_json_pretty_atomic(
             &automation_dir.join(AUTOMATION_RULES_FILE_NAME),
             &request.automation_rules,
@@ -1022,7 +1066,8 @@ fn prepare_backup_import_inner(
     let result = (|| -> Result<(PreparedBackupImport, PreparedBackupImportSnapshot), String> {
         extract_tar_bz2_archive(archive_path, &extraction_dir)?;
 
-        let manifest = validate_backup_manifest(&read_json_value(&extraction_dir.join("manifest.json"))?)?;
+        let manifest =
+            validate_backup_manifest(&read_json_value(&extraction_dir.join("manifest.json"))?)?;
         let config = ensure_json_object_value(
             read_json_value(&extraction_dir.join(CONFIG_DIR_NAME).join(CONFIG_FILE_NAME))?,
             "Backup config",
@@ -1037,7 +1082,9 @@ fn prepare_backup_import_inner(
         .ok_or_else(|| "Backup projects must be an array.".to_string())?;
 
         let history_items_value = read_json_value(
-            &extraction_dir.join(HISTORY_DIR_NAME).join(PROJECTS_INDEX_FILE_NAME),
+            &extraction_dir
+                .join(HISTORY_DIR_NAME)
+                .join(PROJECTS_INDEX_FILE_NAME),
         )?;
         let history_items = history_items_value
             .as_array()
@@ -1056,9 +1103,13 @@ fn prepare_backup_import_inner(
                 ));
             }
 
-            let transcript_file_name =
-                ensure_safe_file_name(&item.transcript_path, &format!("History transcript path for {}", item.id))?;
-            let transcript_path = extraction_dir.join(HISTORY_DIR_NAME).join(transcript_file_name);
+            let transcript_file_name = ensure_safe_file_name(
+                &item.transcript_path,
+                &format!("History transcript path for {}", item.id),
+            )?;
+            let transcript_path = extraction_dir
+                .join(HISTORY_DIR_NAME)
+                .join(transcript_file_name);
             ensure_json_array_value(
                 read_json_value(&transcript_path)?,
                 &format!("Transcript for history item {}", item.id),
@@ -1119,8 +1170,7 @@ fn prepare_backup_import_inner(
         if manifest.counts.automation_rules != automation_rules.len() as u64 {
             return Err("Backup automation-rule count does not match the manifest.".to_string());
         }
-        if manifest.counts.automation_processed_entries
-            != automation_processed_entries.len() as u64
+        if manifest.counts.automation_processed_entries != automation_processed_entries.len() as u64
         {
             return Err("Backup processed-entry count does not match the manifest.".to_string());
         }
@@ -1178,7 +1228,8 @@ fn apply_prepared_history_import_inner(
 
     let had_existing = target_history_dir.exists();
     if had_existing {
-        fs::rename(&target_history_dir, &previous_history_dir).map_err(|error| error.to_string())?;
+        fs::rename(&target_history_dir, &previous_history_dir)
+            .map_err(|error| error.to_string())?;
     }
 
     match fs::rename(&staged_history_dir, &target_history_dir) {
@@ -1199,7 +1250,9 @@ fn apply_prepared_history_import_inner(
 }
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path().app_local_data_dir().map_err(|error| error.to_string())
+    app.path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())
 }
 
 async fn run_history_task<R, T, F>(
@@ -1236,7 +1289,10 @@ pub async fn history_create_live_draft<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     item: Value,
 ) -> Result<LiveRecordingDraftResult, String> {
-    run_history_task(app, state, move |repository| repository.create_live_draft(item)).await
+    run_history_task(app, state, move |repository| {
+        repository.create_live_draft(item)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1305,7 +1361,10 @@ pub async fn history_load_transcript<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     filename: String,
 ) -> Result<Option<Value>, String> {
-    run_history_task(app, state, move |repository| repository.load_transcript(&filename)).await
+    run_history_task(app, state, move |repository| {
+        repository.load_transcript(&filename)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1368,7 +1427,10 @@ pub async fn history_load_summary<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     history_id: String,
 ) -> Result<Option<Value>, String> {
-    run_history_task(app, state, move |repository| repository.load_summary(&history_id)).await
+    run_history_task(app, state, move |repository| {
+        repository.load_summary(&history_id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1390,7 +1452,10 @@ pub async fn history_delete_summary<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     history_id: String,
 ) -> Result<(), String> {
-    run_history_task(app, state, move |repository| repository.delete_summary(&history_id)).await
+    run_history_task(app, state, move |repository| {
+        repository.delete_summary(&history_id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1399,7 +1464,10 @@ pub async fn history_resolve_audio_path<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     filename: String,
 ) -> Result<Option<String>, String> {
-    run_history_task(app, state, move |repository| repository.resolve_audio_path(&filename)).await
+    run_history_task(app, state, move |repository| {
+        repository.resolve_audio_path(&filename)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1415,7 +1483,10 @@ pub async fn history_open_folder<R: Runtime>(
 
     use tauri_plugin_opener::OpenerExt;
     app.opener()
-        .open_path(app_local_data_dir.join(HISTORY_DIR_NAME).to_string_lossy(), None::<&str>)
+        .open_path(
+            app_local_data_dir.join(HISTORY_DIR_NAME).to_string_lossy(),
+            None::<&str>,
+        )
         .map_err(|error| error.to_string())
 }
 
@@ -1593,16 +1664,27 @@ mod tests {
         repository
             .write_index(&vec![keep_item.clone(), delete_item.clone()])
             .unwrap();
-        fs::write(repository.audio_path(&delete_item.audio_path).unwrap(), b"audio").unwrap();
+        fs::write(
+            repository.audio_path(&delete_item.audio_path).unwrap(),
+            b"audio",
+        )
+        .unwrap();
         write_json_pretty_atomic(
-            &repository.transcript_path(&delete_item.transcript_path).unwrap(),
+            &repository
+                .transcript_path(&delete_item.transcript_path)
+                .unwrap(),
             &json!([]),
         )
         .unwrap();
-        write_json_pretty_atomic(&repository.summary_path(&delete_item.id).unwrap(), &json!({}))
-            .unwrap();
+        write_json_pretty_atomic(
+            &repository.summary_path(&delete_item.id).unwrap(),
+            &json!({}),
+        )
+        .unwrap();
 
-        repository.delete_items(&vec![delete_item.id.clone()]).unwrap();
+        repository
+            .delete_items(&vec![delete_item.id.clone()])
+            .unwrap();
 
         let items = repository.list_items().unwrap();
         assert_eq!(items, vec![keep_item]);
@@ -1687,7 +1769,9 @@ mod tests {
             .write_index(&vec![keep_item.clone(), draft_item])
             .unwrap();
         write_json_pretty_atomic(
-            &repository.transcript_path(&keep_item.transcript_path).unwrap(),
+            &repository
+                .transcript_path(&keep_item.transcript_path)
+                .unwrap(),
             &json!([{ "id": "seg-1" }]),
         )
         .unwrap();
@@ -1721,12 +1805,17 @@ mod tests {
         let extract_dir = tempdir().unwrap();
         extract_tar_bz2_archive(&archive_path, extract_dir.path()).unwrap();
         let exported_items = read_json_value(
-            &extract_dir.path().join(HISTORY_DIR_NAME).join(PROJECTS_INDEX_FILE_NAME),
+            &extract_dir
+                .path()
+                .join(HISTORY_DIR_NAME)
+                .join(PROJECTS_INDEX_FILE_NAME),
         )
         .unwrap();
         assert_eq!(exported_items.as_array().unwrap().len(), 1);
         assert_eq!(
-            exported_items.as_array().unwrap()[0]["id"].as_str().unwrap(),
+            exported_items.as_array().unwrap()[0]["id"]
+                .as_str()
+                .unwrap(),
             "keep"
         );
     }
@@ -1747,7 +1836,10 @@ mod tests {
         )
         .unwrap();
         write_json_pretty_atomic(
-            &staging_dir.path().join(CONFIG_DIR_NAME).join(CONFIG_FILE_NAME),
+            &staging_dir
+                .path()
+                .join(CONFIG_DIR_NAME)
+                .join(CONFIG_FILE_NAME),
             &json!({}),
         )
         .unwrap();
@@ -1825,7 +1917,9 @@ mod tests {
 
         let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
         let state = PreparedBackupImportState::default();
-        state.insert(prepared.import_id.clone(), snapshot.clone()).unwrap();
+        state
+            .insert(prepared.import_id.clone(), snapshot.clone())
+            .unwrap();
 
         apply_prepared_history_import_inner(
             app_data_dir.path(),
@@ -1836,7 +1930,9 @@ mod tests {
 
         let replaced_items = read_json_value(&history_dir.join(PROJECTS_INDEX_FILE_NAME)).unwrap();
         assert_eq!(
-            replaced_items.as_array().unwrap()[0]["id"].as_str().unwrap(),
+            replaced_items.as_array().unwrap()[0]["id"]
+                .as_str()
+                .unwrap(),
             "history-1"
         );
 

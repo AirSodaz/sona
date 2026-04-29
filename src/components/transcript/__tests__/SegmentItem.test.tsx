@@ -5,6 +5,7 @@ import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
 import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../../../stores/transcriptStore';
+import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
@@ -28,7 +29,7 @@ vi.mock('../SegmentTimestamp', () => ({
 describe('SegmentItem Highlighting', () => {
     let uiStore: any;
 
-    const segment = {
+    const segment = normalizeTranscriptSegment({
         id: 'test-seg',
         start: 0,
         end: 5,
@@ -36,7 +37,7 @@ describe('SegmentItem Highlighting', () => {
         isFinal: true,
         tokens: ['Hello', 'world', 'test'],
         timestamps: [0.0, 1.5, 3.0]
-    };
+    });
 
     const defaultProps = {
         segment,

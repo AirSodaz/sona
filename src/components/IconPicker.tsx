@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDownIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';

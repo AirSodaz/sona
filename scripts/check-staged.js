@@ -1,5 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const eslintBin = fileURLToPath(new URL('../node_modules/eslint/bin/eslint.js', import.meta.url));
+const LINTABLE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 
 function getStagedFiles() {
   const output = execFileSync(
@@ -20,11 +24,16 @@ if (filesToCheck.length === 0) {
 const conflictMarkerPattern = /^(<{7}|={7}|>{7})( .*)?$/m;
 
 const errors = [];
+const lintTargets = new Set();
 
 for (const fileArg of filesToCheck) {
   const repoRelativePath = path.isAbsolute(fileArg) ? path.relative(process.cwd(), fileArg) : fileArg;
   const relativePath = repoRelativePath.split(path.sep).join('/');
   const extension = path.extname(relativePath).toLowerCase();
+
+  if (LINTABLE_EXTENSIONS.has(extension)) {
+    lintTargets.add(relativePath);
+  }
 
   let stagedContent;
   try {
@@ -56,5 +65,19 @@ if (errors.length > 0) {
   for (const error of errors) {
     console.error(`- ${error}`);
   }
+  process.exit(1);
+}
+
+if (lintTargets.size === 0) {
+  process.exit(0);
+}
+
+try {
+  execFileSync(
+    process.execPath,
+    [eslintBin, '--max-warnings=0', '--no-warn-ignored', ...Array.from(lintTargets)],
+    { stdio: 'inherit' }
+  );
+} catch {
   process.exit(1);
 }

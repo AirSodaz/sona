@@ -5,6 +5,7 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
 import { open } from '@tauri-apps/plugin-dialog';
 
@@ -61,11 +62,10 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
-vi.mock('../../services/historyService', () => ({
-    historyService: {
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'mock-history-id', projectId: null }),
-    }
-}));
+vi.mock('../../services/historyService', async () => {
+    const { createHistoryServiceMockModule } = await import('../../__tests__/testUtils/history');
+    return createHistoryServiceMockModule();
+});
 
 vi.mock('../../stores/projectStore', () => ({
     useProjectStore: {
@@ -78,19 +78,10 @@ vi.mock('../../stores/projectStore', () => ({
     },
 }));
 
-vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string, options?: any) => {
-            if (key === 'batch.supports') return `Supports: ${options.formats}`;
-            if (key === 'batch.queue_title') return `Queue (${options.count})`;
-            return key;
-        },
-    }),
-    initReactI18next: {
-        type: '3rdParty',
-        init: () => undefined,
-    },
-}));
+vi.mock('react-i18next', async () => {
+    const { createReactI18nextMock } = await import('../../__tests__/testUtils/i18n');
+    return createReactI18nextMock();
+});
 
 describe('BatchImport Integration', () => {
     beforeEach(() => {
@@ -177,6 +168,23 @@ describe('BatchImport Integration', () => {
 
         // 4. Check if service was called
         expect(mockTranscribe).toHaveBeenCalled();
+
+        // 5. Verify the full history persistence contract succeeds
+        await waitFor(() => {
+            expect(screen.getByText('batch.file_complete')).toBeDefined();
+        });
+
+        expect(historyService.saveImportedFile).toHaveBeenCalledWith(
+            '/path/to/test.wav',
+            [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
+            1,
+            expect.stringMatching(/^\/tmp\/.+\.wav$/),
+            null,
+        );
+        expect(historyService.updateTranscript).toHaveBeenCalledWith(
+            'mock-history-id',
+            [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
+        );
     });
 
     it('shows error state when transcription fails', async () => {

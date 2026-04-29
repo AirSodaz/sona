@@ -1,9 +1,9 @@
 mod audio;
 mod automation_runtime;
-mod history_repository;
 pub mod cli;
 pub mod export;
 mod hardware;
+mod history_repository;
 mod llm;
 pub mod pipeline;
 pub mod preset_models;

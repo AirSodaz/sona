@@ -22,6 +22,11 @@ vi.mock('react-i18next', () => ({
 describe('EditorToolbar', () => {
     let execCommandMock: any;
     let mockState: any;
+    const flushMicrotasks = async () => {
+        await act(async () => {
+            await Promise.resolve();
+        });
+    };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -80,7 +85,7 @@ describe('EditorToolbar', () => {
         expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
     });
 
-    it('hides the saved status after 1.5 seconds', () => {
+    it('hides the saved status after 1.5 seconds', async () => {
         vi.useFakeTimers();
         mockState.sourceHistoryId = 'hist-1';
         mockState.autoSaveStates = {
@@ -91,11 +96,12 @@ describe('EditorToolbar', () => {
         };
 
         render(<EditorToolbar />);
+        await flushMicrotasks();
 
         expect(screen.getByRole('status').textContent).toContain('Saved');
 
-        act(() => {
-            vi.advanceTimersByTime(1500);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1500);
         });
 
         expect(screen.queryByRole('status')).toBeNull();
