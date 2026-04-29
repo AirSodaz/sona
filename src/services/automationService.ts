@@ -1,6 +1,4 @@
-import { BaseDirectory, exists, mkdir, readDir, readTextFile, stat, watch, writeTextFile } from '@tauri-apps/plugin-fs';
-import type { UnwatchFn } from '@tauri-apps/plugin-fs';
-import { join } from '@tauri-apps/api/path';
+import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { AppConfig } from '../types/config';
 import type {
   AutomationProcessedEntry,
@@ -10,18 +8,10 @@ import type {
 import type { ProjectRecord } from '../types/project';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import { logger } from '../utils/logger';
-import { isSupportedMediaPath } from '../constants/mediaExtensions';
 
 const AUTOMATION_DIR = 'automation';
 const RULES_FILE = `${AUTOMATION_DIR}/rules.json`;
 const PROCESSED_FILE = `${AUTOMATION_DIR}/processed.json`;
-
-export interface AutomationFileSnapshot {
-  filePath: string;
-  size: number;
-  mtimeMs: number;
-  sourceFingerprint: string;
-}
 
 export async function ensureAutomationStorage(): Promise<void> {
   const automationDirExists = await exists(AUTOMATION_DIR, { baseDir: BaseDirectory.AppLocalData });
@@ -86,39 +76,6 @@ export async function ensureDirectoryExists(directoryPath: string): Promise<void
   await mkdir(directoryPath, { recursive: true });
 }
 
-export async function listFilesRecursively(rootDirectory: string, recursive: boolean): Promise<string[]> {
-  const entries = await readDir(rootDirectory);
-  const results: string[] = [];
-
-  for (const entry of entries) {
-    const absolutePath = await join(rootDirectory, entry.name);
-    if (entry.isFile) {
-      results.push(absolutePath);
-      continue;
-    }
-
-    if (recursive && entry.isDirectory) {
-      const childFiles = await listFilesRecursively(absolutePath, true);
-      results.push(...childFiles);
-    }
-  }
-
-  return results;
-}
-
-export async function watchAutomationDirectory(
-  directoryPath: string,
-  recursive: boolean,
-  onEvent: (paths: string[]) => void,
-): Promise<UnwatchFn> {
-  return watch(directoryPath, (event) => {
-    onEvent(event.paths);
-  }, {
-    recursive,
-    delayMs: 750,
-  });
-}
-
 export function normalizeAutomationPath(path: string): string {
   return path.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
 }
@@ -136,53 +93,6 @@ export function isPathInsideDirectory(filePath: string, directoryPath: string): 
 
 export function createAutomationFingerprint(filePath: string, size: number, mtimeMs: number): string {
   return `${normalizeAutomationPath(filePath)}::${size}::${mtimeMs}`;
-}
-
-export async function snapshotAutomationFile(filePath: string): Promise<AutomationFileSnapshot | null> {
-  try {
-    if (!isSupportedMediaPath(filePath)) {
-      return null;
-    }
-
-    const info = await stat(filePath);
-    if (!info.isFile) {
-      return null;
-    }
-
-    const mtimeMs = info.mtime?.getTime() ?? 0;
-    return {
-      filePath,
-      size: info.size,
-      mtimeMs,
-      sourceFingerprint: createAutomationFingerprint(filePath, info.size, mtimeMs),
-    };
-  } catch (error) {
-    logger.warn('[Automation] Failed to stat candidate file:', filePath, error);
-    return null;
-  }
-}
-
-export async function waitForStableAutomationFile(
-  filePath: string,
-  stableForMs: number,
-): Promise<AutomationFileSnapshot | null> {
-  const first = await snapshotAutomationFile(filePath);
-  if (!first) {
-    return null;
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, stableForMs));
-
-  const second = await snapshotAutomationFile(filePath);
-  if (!second) {
-    return null;
-  }
-
-  if (first.size !== second.size || first.mtimeMs !== second.mtimeMs) {
-    return null;
-  }
-
-  return second;
 }
 
 export async function validateAutomationRuleForActivation(

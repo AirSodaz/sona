@@ -27,16 +27,17 @@ const testContext = vi.hoisted(() => {
             queueItems: [] as any[],
         },
         ensureAutomationStorageMock: vi.fn().mockResolvedValue(undefined),
-        listFilesRecursivelyMock: vi.fn(),
         loadAutomationProcessedEntriesMock: vi.fn(),
         loadAutomationRulesMock: vi.fn(),
         clearAutomationRecoveryGuardEntryMock: vi.fn(),
         isAutomationRecoveryBlockedMock: vi.fn(),
+        listenToAutomationRuntimeCandidatesMock: vi.fn(),
+        runtimeCandidateHandler: null as ((payload: any) => void | Promise<void>) | null,
+        replaceAutomationRuntimeRulesMock: vi.fn(),
+        scanAutomationRuntimeRuleMock: vi.fn().mockResolvedValue(undefined),
         saveAutomationProcessedEntriesMock: vi.fn().mockResolvedValue(undefined),
         saveAutomationRulesMock: vi.fn().mockResolvedValue(undefined),
         validateAutomationRuleForActivationMock: vi.fn(),
-        waitForStableAutomationFileMock: vi.fn(),
-        watchAutomationDirectoryMock: vi.fn(),
         projectRecord,
         projectState: {
             activeProjectId: projectRecord.id,
@@ -61,14 +62,14 @@ const {
     clearAutomationRecoveryGuardEntryMock,
     ensureAutomationStorageMock,
     isAutomationRecoveryBlockedMock,
-    listFilesRecursivelyMock,
+    listenToAutomationRuntimeCandidatesMock,
     loadAutomationProcessedEntriesMock,
     loadAutomationRulesMock,
+    replaceAutomationRuntimeRulesMock,
+    scanAutomationRuntimeRuleMock,
     saveAutomationProcessedEntriesMock,
     saveAutomationRulesMock,
     validateAutomationRuleForActivationMock,
-    waitForStableAutomationFileMock,
-    watchAutomationDirectoryMock,
     projectRecord,
     projectState,
     configState,
@@ -111,15 +112,25 @@ vi.mock('../../services/automationService', () => ({
         const normalizedDirectory = normalize(directoryPath);
         return normalizedFile === normalizedDirectory || normalizedFile.startsWith(`${normalizedDirectory}\\`);
     }),
-    listFilesRecursively: testContext.listFilesRecursivelyMock,
     loadAutomationProcessedEntries: testContext.loadAutomationProcessedEntriesMock,
     loadAutomationRules: testContext.loadAutomationRulesMock,
-    normalizeAutomationPath: vi.fn((value: string) => value.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()),
     saveAutomationProcessedEntries: testContext.saveAutomationProcessedEntriesMock,
     saveAutomationRules: testContext.saveAutomationRulesMock,
     validateAutomationRuleForActivation: testContext.validateAutomationRuleForActivationMock,
-    waitForStableAutomationFile: testContext.waitForStableAutomationFileMock,
-    watchAutomationDirectory: testContext.watchAutomationDirectoryMock,
+}));
+
+vi.mock('../../services/automationRuntimeService', () => ({
+    listenToAutomationRuntimeCandidates: testContext.listenToAutomationRuntimeCandidatesMock,
+    replaceAutomationRuntimeRules: testContext.replaceAutomationRuntimeRulesMock,
+    scanAutomationRuntimeRule: testContext.scanAutomationRuntimeRuleMock,
+    toAutomationRuntimeRuleConfig: vi.fn((rule: any) => ({
+        ruleId: rule.id,
+        watchDirectory: rule.watchDirectory,
+        recursive: rule.recursive,
+        excludeDirectory: rule.exportConfig.directory,
+        debounceMs: 250,
+        stableWindowMs: 5000,
+    })),
 }));
 
 vi.mock('../../services/recoveryService', () => ({
@@ -128,6 +139,13 @@ vi.mock('../../services/recoveryService', () => ({
 }));
 
 import { __notifyAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
+
+async function emitRuntimeCandidate(payload: any) {
+    if (!testContext.runtimeCandidateHandler) {
+        throw new Error('Runtime candidate listener not registered.');
+    }
+    await testContext.runtimeCandidateHandler(payload);
+}
 
 function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     return {
@@ -172,20 +190,28 @@ describe('automationStore', () => {
         batchQueueState.addFiles = addFilesMock;
         batchQueueState.queueItems = [];
 
-        listFilesRecursivelyMock.mockResolvedValue([]);
         loadAutomationProcessedEntriesMock.mockResolvedValue([]);
         loadAutomationRulesMock.mockResolvedValue([]);
         isAutomationRecoveryBlockedMock.mockReturnValue(false);
-        validateAutomationRuleForActivationMock.mockResolvedValue({ valid: true });
-        waitForStableAutomationFileMock.mockResolvedValue({
-            filePath: 'C:\\watch\\meeting.wav',
-            size: 42,
-            mtimeMs: 1000,
-            sourceFingerprint: 'fp-1',
+        testContext.runtimeCandidateHandler = null;
+        listenToAutomationRuntimeCandidatesMock.mockImplementation(async (handler: (payload: any) => void | Promise<void>) => {
+            testContext.runtimeCandidateHandler = handler;
+            return vi.fn(() => {
+                testContext.runtimeCandidateHandler = null;
+            });
         });
-        watchAutomationDirectoryMock.mockImplementation(async (_path: string, _recursive: boolean, _onEvent: (paths: string[]) => void) => vi.fn());
+        replaceAutomationRuntimeRulesMock.mockImplementation(async (rules: Array<{ ruleId: string }>) => (
+            rules.map((rule) => ({
+                ruleId: rule.ruleId,
+                started: true,
+                error: null,
+            }))
+        ));
+        scanAutomationRuntimeRuleMock.mockResolvedValue(undefined);
+        validateAutomationRuleForActivationMock.mockResolvedValue({ valid: true });
 
         await useAutomationStore.getState().stopAll();
+        vi.clearAllMocks();
         useAutomationStore.setState({
             rules: [],
             processedEntries: [],
@@ -204,17 +230,25 @@ describe('automationStore', () => {
     it('restores enabled rules and queues matching files on the initial scan', async () => {
         const rule = createRule();
         loadAutomationRulesMock.mockResolvedValue([rule]);
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
 
         await useAutomationStore.getState().loadAndStart();
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-1',
+            size: 42,
+            mtimeMs: 1000,
+        });
 
         expect(ensureAutomationStorageMock).toHaveBeenCalled();
-        expect(watchAutomationDirectoryMock).toHaveBeenCalledWith(
-            'C:\\watch',
-            true,
-            expect.any(Function),
-        );
+        expect(replaceAutomationRuntimeRulesMock).toHaveBeenCalledWith([
+            expect.objectContaining({
+                ruleId: rule.id,
+                watchDirectory: 'C:\\watch',
+                recursive: true,
+                excludeDirectory: 'C:\\exports',
+            }),
+        ]);
         expect(addFilesMock).toHaveBeenCalledWith(
             ['C:\\watch\\meeting.wav'],
             expect.objectContaining({
@@ -230,11 +264,16 @@ describe('automationStore', () => {
     it('skips queuing files that are currently blocked by recovery guard', async () => {
         const rule = createRule();
         loadAutomationRulesMock.mockResolvedValue([rule]);
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
         isAutomationRecoveryBlockedMock.mockReturnValue(true);
 
         await useAutomationStore.getState().loadAndStart();
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-1',
+            size: 42,
+            mtimeMs: 1000,
+        });
 
         expect(addFilesMock).not.toHaveBeenCalled();
     });
@@ -253,10 +292,15 @@ describe('automationStore', () => {
                 processedAt: 99,
             },
         ]);
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
 
         await useAutomationStore.getState().loadAndStart();
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-1',
+            size: 42,
+            mtimeMs: 1000,
+        });
 
         expect(addFilesMock).not.toHaveBeenCalled();
     });
@@ -265,10 +309,22 @@ describe('automationStore', () => {
         const ruleA = createRule({ id: 'rule-a', name: 'Rule A' });
         const ruleB = createRule({ id: 'rule-b', name: 'Rule B' });
         loadAutomationRulesMock.mockResolvedValue([ruleA, ruleB]);
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\meeting.wav']);
 
         await useAutomationStore.getState().loadAndStart();
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: ruleA.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-1',
+            size: 42,
+            mtimeMs: 1000,
+        });
+        await emitRuntimeCandidate({
+            ruleId: ruleB.id,
+            filePath: 'C:\\watch\\meeting.wav',
+            sourceFingerprint: 'fp-1',
+            size: 42,
+            mtimeMs: 1000,
+        });
 
         expect(addFilesMock).toHaveBeenCalledTimes(2);
         expect(addFilesMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
@@ -396,18 +452,20 @@ describe('automationStore', () => {
             isLoaded: true,
             error: null,
         });
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\failed.wav']);
-        waitForStableAutomationFileMock.mockResolvedValue({
-            filePath: 'C:\\watch\\failed.wav',
-            size: 8,
-            mtimeMs: 10,
-            sourceFingerprint: 'failed-fingerprint',
-        });
 
         await useAutomationStore.getState().retryFailed(rule.id);
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\failed.wav',
+            sourceFingerprint: 'failed-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+        });
 
         expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([completeEntry]);
+        expect(scanAutomationRuntimeRuleMock).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: rule.id,
+        }));
         expect(addFilesMock).toHaveBeenCalledWith(
             ['C:\\watch\\failed.wav'],
             expect.objectContaining({
@@ -460,18 +518,20 @@ describe('automationStore', () => {
             isLoaded: true,
             error: null,
         });
-        listFilesRecursivelyMock.mockResolvedValue(['C:\\watch\\failed.wav']);
-        waitForStableAutomationFileMock.mockResolvedValue({
-            filePath: 'C:\\watch\\failed.wav',
-            size: 8,
-            mtimeMs: 10,
-            sourceFingerprint: 'failed-fingerprint',
-        });
 
         await useAutomationStore.getState().retryNotification('automation-failure-rule-1');
-        await vi.advanceTimersByTimeAsync(250);
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\failed.wav',
+            sourceFingerprint: 'failed-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+        });
 
         expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([]);
+        expect(scanAutomationRuntimeRuleMock).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: rule.id,
+        }));
         expect(addFilesMock).toHaveBeenCalledWith(
             ['C:\\watch\\failed.wav'],
             expect.objectContaining({

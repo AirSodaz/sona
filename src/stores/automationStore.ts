@@ -4,16 +4,19 @@ import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import {
   ensureAutomationStorage,
   isPathInsideDirectory,
-  listFilesRecursively,
   loadAutomationProcessedEntries,
   loadAutomationRules,
-  normalizeAutomationPath,
   saveAutomationProcessedEntries,
   saveAutomationRules,
   validateAutomationRuleForActivation,
-  waitForStableAutomationFile,
-  watchAutomationDirectory,
 } from '../services/automationService';
+import {
+  listenToAutomationRuntimeCandidates,
+  replaceAutomationRuntimeRules,
+  scanAutomationRuntimeRule,
+  toAutomationRuntimeRuleConfig,
+  type AutomationRuntimeReplaceResult,
+} from '../services/automationRuntimeService';
 import {
   notifyAutomationTaskSettled,
   registerAutomationTaskSettledHandler,
@@ -35,13 +38,9 @@ import type { RecoveredQueueItem, RecoveryItemStage } from '../types/recovery';
 import { historyService } from '../services/historyService';
 import { logger } from '../utils/logger';
 
-const FILE_STABLE_WINDOW_MS = 5000;
-const CANDIDATE_DEBOUNCE_MS = 250;
-
-const ruleWatchers = new Map<string, () => void>();
-const candidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingFingerprints = new Set<string>();
 let automationSuccessNotificationSequence = 0;
+let automationRuntimeCandidateUnlisten: (() => void) | null = null;
 
 interface SaveRuleInput {
   id?: string;
@@ -301,21 +300,16 @@ function rebuildRuntimeStates(
   }, {});
 }
 
-function clearRuleCandidateTimers(ruleId: string) {
-  for (const [key, timer] of candidateTimers.entries()) {
-    if (key.startsWith(`${ruleId}::`)) {
-      clearTimeout(timer);
-      candidateTimers.delete(key);
-    }
-  }
-}
-
 function clearRulePendingFingerprints(ruleId: string) {
   for (const key of pendingFingerprints.values()) {
     if (key.startsWith(`${ruleId}::`)) {
       pendingFingerprints.delete(key);
     }
   }
+}
+
+function clearAllPendingFingerprints() {
+  pendingFingerprints.clear();
 }
 
 function buildPendingFingerprintKey(ruleId: string, sourceFingerprint: string): string {
@@ -336,62 +330,85 @@ async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void>
   }
 }
 
-async function stopRuleRuntime(ruleId: string) {
-  const unwatch = ruleWatchers.get(ruleId);
-  if (unwatch) {
-    try {
-      unwatch();
-    } catch (error) {
-      logger.warn('[Automation] Failed to unwatch rule:', ruleId, error);
-    }
-    ruleWatchers.delete(ruleId);
-  }
+function applyRuntimeReplaceResults(
+  current: Pick<AutomationState, 'rules' | 'processedEntries' | 'runtimeStates' | 'notifications'>,
+  results: AutomationRuntimeReplaceResult[],
+) {
+  let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
+  let notifications = current.notifications;
 
-  clearRuleCandidateTimers(ruleId);
-  clearRulePendingFingerprints(ruleId);
-}
-
-async function scheduleCandidate(ruleId: string, filePath: string) {
-  const normalizedPath = normalizeAutomationPath(filePath);
-  const timerKey = `${ruleId}::${normalizedPath}`;
-  const existingTimer = candidateTimers.get(timerKey);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-  }
-
-  candidateTimers.set(timerKey, setTimeout(async () => {
-    candidateTimers.delete(timerKey);
-
-    const initialState = useAutomationStore.getState();
-    const rule = initialState.rules.find((item) => item.id === ruleId);
+  results.forEach((result) => {
+    const rule = current.rules.find((item) => item.id === result.ruleId);
     if (!rule) {
       return;
     }
 
-    if (isPathInsideDirectory(filePath, rule.exportConfig.directory)) {
+    if (result.started) {
+      runtimeStates = {
+        ...runtimeStates,
+        [rule.id]: deriveRuntimeState(rule.id, current.processedEntries, runtimeStates[rule.id], {
+          status: 'watching',
+          lastResultMessage: undefined,
+        }),
+      };
       return;
     }
 
-    const snapshot = await waitForStableAutomationFile(filePath, FILE_STABLE_WINDOW_MS);
-    if (!snapshot) {
+    const nextFailureState = applyRuntimeFailureState(
+      {
+        processedEntries: current.processedEntries,
+        runtimeStates,
+        notifications,
+      },
+      {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        message: result.error || 'Automation runtime failed to start.',
+      },
+    );
+    runtimeStates = nextFailureState.runtimeStates;
+    notifications = nextFailureState.notifications;
+  });
+
+  return {
+    runtimeStates,
+    notifications,
+  };
+}
+
+async function ensureAutomationRuntimeCandidateListener() {
+  if (automationRuntimeCandidateUnlisten) {
+    return;
+  }
+
+  automationRuntimeCandidateUnlisten = await listenToAutomationRuntimeCandidates(async (payload) => {
+    const initialState = useAutomationStore.getState();
+    const rule = initialState.rules.find((item) => item.id === payload.ruleId);
+    if (!rule) {
       return;
     }
 
-    if (isAutomationRecoveryBlocked(ruleId, snapshot.sourceFingerprint)) {
+    if (isPathInsideDirectory(payload.filePath, rule.exportConfig.directory)) {
+      return;
+    }
+
+    if (isAutomationRecoveryBlocked(payload.ruleId, payload.sourceFingerprint)) {
       return;
     }
 
     const latestState = useAutomationStore.getState();
-    const latestRule = latestState.rules.find((item) => item.id === ruleId);
+    const latestRule = latestState.rules.find((item) => item.id === payload.ruleId);
     if (!latestRule) {
       return;
     }
 
-    if (latestState.processedEntries.some((entry) => entry.ruleId === ruleId && entry.sourceFingerprint === snapshot.sourceFingerprint)) {
+    if (latestState.processedEntries.some((entry) => (
+      entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint
+    ))) {
       return;
     }
 
-    const pendingKey = buildPendingFingerprintKey(ruleId, snapshot.sourceFingerprint);
+    const pendingKey = buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint);
     if (pendingFingerprints.has(pendingKey)) {
       return;
     }
@@ -401,10 +418,10 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
     if (!project && !isInboxOrNone) {
       useAutomationStore.setState((current) => ({
         ...applyRuntimeFailureState(current, {
-          ruleId,
+          ruleId: payload.ruleId,
           ruleName: latestRule.name,
           message: 'Project not found.',
-          filePath: snapshot.filePath,
+          filePath: payload.filePath,
         }),
       }));
       return;
@@ -417,22 +434,84 @@ async function scheduleCandidate(ruleId: string, filePath: string) {
     };
     pendingFingerprints.add(pendingKey);
 
-    useBatchQueueStore.getState().addFiles([snapshot.filePath], {
+    useBatchQueueStore.getState().addFiles([payload.filePath], {
       origin: 'automation',
       automationRuleId: latestRule.id,
       automationRuleName: latestRule.name,
       resolvedConfigSnapshot: effectiveConfig,
       exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
       stageConfig: latestRule.stageConfig,
-      sourceFingerprint: snapshot.sourceFingerprint,
+      sourceFingerprint: payload.sourceFingerprint,
       projectId: isInboxOrNone ? null : latestRule.projectId,
       fileStat: {
-        size: snapshot.size,
-        mtimeMs: snapshot.mtimeMs,
+        size: payload.size,
+        mtimeMs: payload.mtimeMs,
       },
       exportFileNamePrefix: latestRule.exportConfig.prefix || '',
     });
-  }, CANDIDATE_DEBOUNCE_MS));
+  });
+}
+
+function clearAutomationRuntimeCandidateListener() {
+  if (!automationRuntimeCandidateUnlisten) {
+    return;
+  }
+
+  automationRuntimeCandidateUnlisten();
+  automationRuntimeCandidateUnlisten = null;
+}
+
+async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string }) {
+  const state = useAutomationStore.getState();
+  const enabledRules = state.rules.filter((rule) => rule.enabled);
+
+  await ensureAutomationRuntimeCandidateListener();
+
+  let results: AutomationRuntimeReplaceResult[];
+  try {
+    results = await replaceAutomationRuntimeRules(enabledRules.map((rule) => toAutomationRuntimeRuleConfig(rule)));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    useAutomationStore.setState((current) => {
+      let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
+      let notifications = current.notifications;
+
+      current.rules.filter((rule) => rule.enabled).forEach((rule) => {
+        const nextFailureState = applyRuntimeFailureState(
+          {
+            processedEntries: current.processedEntries,
+            runtimeStates,
+            notifications,
+          },
+          {
+            ruleId: rule.id,
+            ruleName: rule.name,
+            message,
+          },
+        );
+        runtimeStates = nextFailureState.runtimeStates;
+        notifications = nextFailureState.notifications;
+      });
+
+      return {
+        runtimeStates,
+        notifications,
+      };
+    });
+    throw error;
+  }
+
+  useAutomationStore.setState((current) => ({
+    ...applyRuntimeReplaceResults(current, results),
+  }));
+
+  const targetFailure = options?.throwForRuleId
+    ? results.find((result) => result.ruleId === options.throwForRuleId && !result.started)
+    : undefined;
+
+  if (targetFailure?.error) {
+    throw new Error(targetFailure.error);
+  }
 }
 
 async function scanRule(ruleId: string) {
@@ -457,6 +536,8 @@ async function scanRule(ruleId: string) {
     throw new Error(validation.message || 'Automation rule validation failed.');
   }
 
+  await ensureAutomationRuntimeCandidateListener();
+
   useAutomationStore.setState((current) => ({
     runtimeStates: {
       ...current.runtimeStates,
@@ -468,13 +549,7 @@ async function scanRule(ruleId: string) {
   }));
 
   try {
-    const files = await listFilesRecursively(rule.watchDirectory, rule.recursive);
-    for (const filePath of files) {
-      if (isPathInsideDirectory(filePath, rule.exportConfig.directory)) {
-        continue;
-      }
-      await scheduleCandidate(rule.id, filePath);
-    }
+    await scanAutomationRuntimeRule(toAutomationRuntimeRuleConfig(rule));
 
     useAutomationStore.setState((current) => ({
       runtimeStates: {
@@ -497,62 +572,6 @@ async function scanRule(ruleId: string) {
     }));
     throw error;
   }
-}
-
-async function startRuleRuntime(ruleId: string) {
-  const state = useAutomationStore.getState();
-  const rule = state.rules.find((item) => item.id === ruleId);
-  if (!rule) {
-    return;
-  }
-
-  const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
-  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
-  const validation = await validateAutomationRuleForActivation(rule, useConfigStore.getState().config, project);
-  if (!validation.valid) {
-    useAutomationStore.setState((current) => ({
-      ...applyRuntimeFailureState(current, {
-        ruleId,
-        ruleName: rule.name,
-        message: validation.message || 'Automation rule validation failed.',
-      }),
-    }));
-    throw new Error(validation.message || 'Automation rule validation failed.');
-  }
-
-  await stopRuleRuntime(ruleId);
-
-  let unwatch!: () => void;
-  try {
-    unwatch = await watchAutomationDirectory(rule.watchDirectory, rule.recursive, (paths) => {
-      paths.forEach((candidatePath) => {
-        void scheduleCandidate(rule.id, candidatePath);
-      });
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    useAutomationStore.setState((current) => ({
-      ...applyRuntimeFailureState(current, {
-        ruleId,
-        ruleName: rule.name,
-        message,
-      }),
-    }));
-    throw error;
-  }
-  ruleWatchers.set(rule.id, unwatch);
-
-  useAutomationStore.setState((current) => ({
-    runtimeStates: {
-      ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        status: 'watching',
-        lastResultMessage: undefined,
-      }),
-    },
-  }));
-
-  await scanRule(ruleId);
 }
 
 export const useAutomationStore = create<AutomationState>((set, get) => ({
@@ -581,17 +600,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       error: null,
     });
 
-    for (const rule of rules) {
-      if (!rule.enabled) {
-        continue;
-      }
-
-      try {
-        await startRuleRuntime(rule.id);
-      } catch (error) {
-        logger.error('[Automation] Failed to restore enabled rule:', rule.id, error);
-      }
-    }
+    await syncAutomationRuntimeRules();
   },
 
   saveRule: async (input) => {
@@ -633,17 +642,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     }));
 
     if (nextRule.enabled) {
-      await startRuleRuntime(nextRule.id);
-    } else if (existing?.enabled) {
-      await stopRuleRuntime(nextRule.id);
-      set((current) => ({
-        runtimeStates: {
-          ...current.runtimeStates,
-          [nextRule.id]: deriveRuntimeState(nextRule.id, current.processedEntries, current.runtimeStates[nextRule.id], {
-            status: 'stopped',
-          }),
-        },
-      }));
+      await syncAutomationRuntimeRules({ throwForRuleId: nextRule.id });
+    } else {
+      clearRulePendingFingerprints(nextRule.id);
+      await syncAutomationRuntimeRules();
     }
 
     return nextRule;
@@ -653,11 +655,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRules = get().rules.filter((rule) => rule.id !== ruleId);
     const nextProcessedEntries = get().processedEntries.filter((entry) => entry.ruleId !== ruleId);
 
-    await stopRuleRuntime(ruleId);
     await Promise.all([
       saveAutomationRules(nextRules),
       saveAutomationProcessedEntries(nextProcessedEntries),
     ]);
+    clearRulePendingFingerprints(ruleId);
 
     set((current) => {
       const nextRuntimeStates = { ...current.runtimeStates };
@@ -669,6 +671,8 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
         notifications: removeRuleNotifications(current.notifications, ruleId),
       };
     });
+
+    await syncAutomationRuntimeRules();
   },
 
   toggleRuleEnabled: async (ruleId, enabled) => {
@@ -698,19 +702,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     }));
 
     if (enabled) {
-      await startRuleRuntime(ruleId);
+      await syncAutomationRuntimeRules({ throwForRuleId: ruleId });
       return;
     }
 
-    await stopRuleRuntime(ruleId);
-    set((current) => ({
-      runtimeStates: {
-        ...current.runtimeStates,
-        [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-          status: 'stopped',
-        }),
-      },
-    }));
+    clearRulePendingFingerprints(ruleId);
+    await syncAutomationRuntimeRules();
   },
 
   scanRuleNow: async (ruleId) => {
@@ -720,6 +717,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   retryFailed: async (ruleId) => {
     const nextProcessedEntries = get().processedEntries.filter((entry) => !(entry.ruleId === ruleId && entry.status === 'error'));
     await saveAutomationProcessedEntries(nextProcessedEntries);
+    clearRulePendingFingerprints(ruleId);
     set((current) => ({
       processedEntries: nextProcessedEntries,
       runtimeStates: rebuildRuntimeStates(current.rules, nextProcessedEntries, current.runtimeStates),
@@ -777,8 +775,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   stopAll: async () => {
-    const ruleIds = get().rules.map((rule) => rule.id);
-    await Promise.all(ruleIds.map((ruleId) => stopRuleRuntime(ruleId)));
+    clearAllPendingFingerprints();
+    clearAutomationRuntimeCandidateListener();
+    await replaceAutomationRuntimeRules([]);
   },
 }));
 

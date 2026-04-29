@@ -1,4 +1,5 @@
 mod audio;
+mod automation_runtime;
 pub mod cli;
 pub mod export;
 mod hardware;
@@ -10,10 +11,10 @@ pub mod speaker;
 pub mod system;
 mod webdav;
 
+use serde::Serialize;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::sync::Arc;
-use serde::Serialize;
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, Notify};
 
@@ -177,7 +178,10 @@ fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
 }
 
-fn resolve_main_window_close_action(window_label: &str, minimize_to_tray: bool) -> MainWindowCloseAction {
+fn resolve_main_window_close_action(
+    window_label: &str,
+    minimize_to_tray: bool,
+) -> MainWindowCloseAction {
     if window_label != "main" {
         return MainWindowCloseAction::Ignore;
     }
@@ -407,9 +411,7 @@ async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<(), 
         for entry in fs::read_dir(current).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|e| e.to_string())?;
+            let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
 
             if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
                 builder
@@ -827,6 +829,7 @@ pub fn run() {
             minimize_to_tray: std::sync::Mutex::new(true),
         })
         .manage(AuxWindowStateStore::default())
+        .manage(automation_runtime::AutomationRuntimeState::default())
         .manage(audio::AudioState::new())
         .manage(sherpa::SherpaState::new())
         .plugin(tauri_plugin_opener::init())
@@ -859,6 +862,8 @@ pub fn run() {
             open_log_folder,
             get_runtime_environment_status,
             get_path_statuses,
+            automation_runtime::replace_automation_runtime_rules,
+            automation_runtime::scan_automation_runtime_rule,
             system::inject_text,
             system::get_mouse_position,
             system::get_text_cursor_position,
@@ -892,9 +897,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_main_window_close_action,
-        resolve_runtime_path_status,
-        MainWindowCloseAction,
+        resolve_main_window_close_action, resolve_runtime_path_status, MainWindowCloseAction,
         RuntimePathKind,
     };
     use std::fs::File;
