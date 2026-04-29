@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedBackupImport } from '../../types/backup';
+import packageJson from '../../../package.json';
 
 const testContext = vi.hoisted(() => {
   const initialConfig = {

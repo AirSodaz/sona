@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsGeneralTab } from '../settings/SettingsGeneralTab';
+import packageJson from '../../../package.json';
 
 const testContext = vi.hoisted(() => ({
   alertMock: vi.fn().mockResolvedValue(undefined),
@@ -36,31 +37,7 @@ const testContext = vi.hoisted(() => ({
     minimizeToTrayOnExit: true,
     autoCheckUpdates: true,
   },
-  uploadWebDavBackupMock: vi.fn().mockResolvedValue({
-    fileName: 'sona-backup-test.tar.bz2',
-    manifest: {
-      schemaVersion: 1,
-      createdAt: '2026-04-29T00:00:00.000Z',
-      appVersion: '0.6.3',
-      historyMode: 'light',
-      scopes: {
-        config: true,
-        workspace: true,
-        history: true,
-        automation: true,
-        analytics: true,
-      },
-      counts: {
-        projects: 1,
-        historyItems: 1,
-        transcriptFiles: 1,
-        summaryFiles: 1,
-        automationRules: 1,
-        automationProcessedEntries: 1,
-        analyticsFiles: 1,
-      },
-    },
-  }),
+  uploadWebDavBackupMock: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -268,7 +245,7 @@ describe('SettingsGeneralTab backup entry', () => {
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: '0.6.3',
+        appVersion: packageJson.version,
         historyMode: 'light',
         scopes: {
           config: true,
@@ -332,7 +309,7 @@ describe('SettingsGeneralTab backup entry', () => {
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: '0.6.3',
+        appVersion: packageJson.version,
         historyMode: 'light',
         scopes: {
           config: true,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import packageJson from '../../../package.json';
 
 const testContext = vi.hoisted(() => ({
   exportBackupMock: vi.fn(),
@@ -161,7 +162,7 @@ describe('backupWebDavService', () => {
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: '0.6.3',
+        appVersion: packageJson.version,
         historyMode: 'light',
         scopes: {
           config: true,
@@ -215,7 +216,7 @@ describe('backupWebDavService', () => {
       manifest: {
         schemaVersion: 1,
         createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: '0.6.3',
+        appVersion: packageJson.version,
         historyMode: 'light',
         scopes: {
           config: true,
