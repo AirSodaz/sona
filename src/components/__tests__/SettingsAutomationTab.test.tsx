@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsAutomationTab } from '../settings/SettingsAutomationTab';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -101,6 +102,33 @@ describe('SettingsAutomationTab', () => {
             confirm: vi.fn().mockResolvedValue(true),
         });
 
+        useBatchQueueStore.setState({
+            queueItems: [
+                {
+                    id: 'queue-pending',
+                    filename: 'pending.wav',
+                    filePath: 'C:\\watch\\pending.wav',
+                    status: 'pending',
+                    progress: 0,
+                    segments: [],
+                    projectId: 'project-1',
+                    origin: 'automation',
+                    automationRuleId: 'rule-1',
+                },
+                {
+                    id: 'queue-processing',
+                    filename: 'processing.wav',
+                    filePath: 'C:\\watch\\processing.wav',
+                    status: 'processing',
+                    progress: 48,
+                    segments: [],
+                    projectId: 'project-1',
+                    origin: 'automation',
+                    automationRuleId: 'rule-1',
+                },
+            ] as any,
+        });
+
         useAutomationStore.setState({
             rules: [createRule()],
             runtimeStates: {
@@ -110,6 +138,10 @@ describe('SettingsAutomationTab', () => {
                     failureCount: 2,
                     lastResult: 'error',
                     lastResultMessage: 'Translation model is required.',
+                    lastQueuedAt: 100,
+                    lastBlockedAt: 200,
+                    lastBlockedReason: 'already_pending',
+                    lastBlockedFilePath: 'C:\\watch\\duplicate.wav',
                 },
             },
             saveRule: saveRuleMock.mockResolvedValue(undefined),
@@ -133,7 +165,7 @@ describe('SettingsAutomationTab', () => {
         fireEvent.click(screen.getByRole('option', { name: optionName }));
     };
 
-    it('renders rule card metadata including recent result and failure summary', () => {
+    it('renders rule card metadata including recent result, queue summary, and blocked hint', () => {
         render(<SettingsAutomationTab />);
 
         expect(screen.getByText('Meeting Inbox')).toBeDefined();
@@ -141,9 +173,12 @@ describe('SettingsAutomationTab', () => {
         expect(screen.getByText('Watching')).toBeDefined();
         expect(screen.getByText('Failed')).toBeDefined();
         expect(screen.getByText('2 failures')).toBeDefined();
+        expect(screen.getByText('1 pending')).toBeDefined();
+        expect(screen.getByText('1 processing')).toBeDefined();
         expect(screen.getByText(/Watch Directory: C:\\watch/)).toBeDefined();
         expect(screen.getByText(/Output Directory: C:\\exports/)).toBeDefined();
         expect(screen.getByText('Translation model is required.')).toBeDefined();
+        expect(screen.getByText('Skipped duplicate.wav: already queued')).toBeDefined();
     });
 
     it('renders the direct stage controls inside the expanded rule card', () => {

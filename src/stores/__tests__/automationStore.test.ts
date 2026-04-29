@@ -30,6 +30,7 @@ const testContext = vi.hoisted(() => {
         loadAutomationProcessedEntriesMock: vi.fn(),
         loadAutomationRulesMock: vi.fn(),
         clearAutomationRecoveryGuardEntryMock: vi.fn(),
+        collectAutomationRuntimeRulePathsMock: vi.fn(),
         isAutomationRecoveryBlockedMock: vi.fn(),
         listenToAutomationRuntimeCandidatesMock: vi.fn(),
         runtimeCandidateHandler: null as ((payload: any) => void | Promise<void>) | null,
@@ -60,6 +61,7 @@ const {
     addFilesMock,
     batchQueueState,
     clearAutomationRecoveryGuardEntryMock,
+    collectAutomationRuntimeRulePathsMock,
     ensureAutomationStorageMock,
     isAutomationRecoveryBlockedMock,
     listenToAutomationRuntimeCandidatesMock,
@@ -105,6 +107,9 @@ vi.mock('../../services/effectiveConfigService', () => ({
 }));
 
 vi.mock('../../services/automationService', () => ({
+    createAutomationFingerprint: vi.fn((filePath: string, size: number, mtimeMs: number) => (
+        `${filePath.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()}::${size}::${mtimeMs}`
+    )),
     ensureAutomationStorage: testContext.ensureAutomationStorageMock,
     isPathInsideDirectory: vi.fn((filePath: string, directoryPath: string) => {
         const normalize = (value: string) => value.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
@@ -114,12 +119,14 @@ vi.mock('../../services/automationService', () => ({
     }),
     loadAutomationProcessedEntries: testContext.loadAutomationProcessedEntriesMock,
     loadAutomationRules: testContext.loadAutomationRulesMock,
+    normalizeAutomationPath: vi.fn((value: string) => value.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()),
     saveAutomationProcessedEntries: testContext.saveAutomationProcessedEntriesMock,
     saveAutomationRules: testContext.saveAutomationRulesMock,
     validateAutomationRuleForActivation: testContext.validateAutomationRuleForActivationMock,
 }));
 
 vi.mock('../../services/automationRuntimeService', () => ({
+    collectAutomationRuntimeRulePaths: testContext.collectAutomationRuntimeRulePathsMock,
     listenToAutomationRuntimeCandidates: testContext.listenToAutomationRuntimeCandidatesMock,
     replaceAutomationRuntimeRules: testContext.replaceAutomationRuntimeRulesMock,
     scanAutomationRuntimeRule: testContext.scanAutomationRuntimeRuleMock,
@@ -138,7 +145,7 @@ vi.mock('../../services/recoveryService', () => ({
     isAutomationRecoveryBlocked: testContext.isAutomationRecoveryBlockedMock,
 }));
 
-import { __notifyAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
+import { __emitAutomationTaskSettledForTests, useAutomationStore } from '../automationStore';
 
 async function emitRuntimeCandidate(payload: any) {
     if (!testContext.runtimeCandidateHandler) {
@@ -192,6 +199,7 @@ describe('automationStore', () => {
 
         loadAutomationProcessedEntriesMock.mockResolvedValue([]);
         loadAutomationRulesMock.mockResolvedValue([]);
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([]);
         isAutomationRecoveryBlockedMock.mockReturnValue(false);
         testContext.runtimeCandidateHandler = null;
         listenToAutomationRuntimeCandidatesMock.mockImplementation(async (handler: (payload: any) => void | Promise<void>) => {
@@ -402,7 +410,7 @@ describe('automationStore', () => {
         ]);
     });
 
-    it('clears failed entries on retry and schedules a fresh scan', async () => {
+    it('retries only the failed file paths and re-enqueues returned candidates without rescanning the whole rule', async () => {
         const rule = createRule({ enabled: false });
         const failedEntry = {
             ruleId: rule.id,
@@ -452,20 +460,27 @@ describe('automationStore', () => {
             isLoaded: true,
             error: null,
         });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: 'C:\\watch\\failed.wav',
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: 'C:\\watch\\failed.wav',
+                    sourceFingerprint: 'failed-fingerprint',
+                    size: 8,
+                    mtimeMs: 10,
+                },
+            },
+        ]);
 
         await useAutomationStore.getState().retryFailed(rule.id);
-        await emitRuntimeCandidate({
-            ruleId: rule.id,
-            filePath: 'C:\\watch\\failed.wav',
-            sourceFingerprint: 'failed-fingerprint',
-            size: 8,
-            mtimeMs: 10,
-        });
 
         expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([completeEntry]);
-        expect(scanAutomationRuntimeRuleMock).toHaveBeenCalledWith(expect.objectContaining({
+        expect(collectAutomationRuntimeRulePathsMock).toHaveBeenCalledWith(expect.objectContaining({
             ruleId: rule.id,
-        }));
+        }), ['C:\\watch\\failed.wav']);
+        expect(scanAutomationRuntimeRuleMock).not.toHaveBeenCalled();
         expect(addFilesMock).toHaveBeenCalledWith(
             ['C:\\watch\\failed.wav'],
             expect.objectContaining({
@@ -518,20 +533,27 @@ describe('automationStore', () => {
             isLoaded: true,
             error: null,
         });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: 'C:\\watch\\failed.wav',
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: 'C:\\watch\\failed.wav',
+                    sourceFingerprint: 'failed-fingerprint',
+                    size: 8,
+                    mtimeMs: 10,
+                },
+            },
+        ]);
 
         await useAutomationStore.getState().retryNotification('automation-failure-rule-1');
-        await emitRuntimeCandidate({
-            ruleId: rule.id,
-            filePath: 'C:\\watch\\failed.wav',
-            sourceFingerprint: 'failed-fingerprint',
-            size: 8,
-            mtimeMs: 10,
-        });
 
         expect(saveAutomationProcessedEntriesMock).toHaveBeenCalledWith([]);
-        expect(scanAutomationRuntimeRuleMock).toHaveBeenCalledWith(expect.objectContaining({
+        expect(collectAutomationRuntimeRulePathsMock).toHaveBeenCalledWith(expect.objectContaining({
             ruleId: rule.id,
-        }));
+        }), ['C:\\watch\\failed.wav']);
+        expect(scanAutomationRuntimeRuleMock).not.toHaveBeenCalled();
         expect(addFilesMock).toHaveBeenCalledWith(
             ['C:\\watch\\failed.wav'],
             expect.objectContaining({
@@ -540,6 +562,235 @@ describe('automationStore', () => {
             }),
         );
         expect(useAutomationStore.getState().notifications).toEqual([]);
+    });
+
+    it('keeps failed entries retryable when retry path collection fails', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\failed.wav',
+            sourceFingerprint: 'failed-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    latestFilePath: failedEntry.filePath,
+                    latestMessage: failedEntry.errorMessage,
+                    createdAt: 20,
+                    updatedAt: 20,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockRejectedValue(new Error('Retry path collection failed.'));
+
+        await expect(useAutomationStore.getState().retryFailed(rule.id)).rejects.toThrow('Retry path collection failed.');
+
+        expect(saveAutomationProcessedEntriesMock).not.toHaveBeenCalled();
+        expect(useAutomationStore.getState().processedEntries).toEqual([failedEntry]);
+        expect(useAutomationStore.getState().notifications[0]).toEqual(expect.objectContaining({
+            ruleId: rule.id,
+            latestFilePath: failedEntry.filePath,
+            retryable: true,
+        }));
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            status: 'error',
+            failureCount: 1,
+            lastResultMessage: 'Retry path collection failed.',
+        }));
+    });
+
+    it('recreates a retryable failure entry when a retried candidate is blocked by recovery state', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\blocked.wav',
+            sourceFingerprint: 'failed-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    latestFilePath: failedEntry.filePath,
+                    latestMessage: failedEntry.errorMessage,
+                    createdAt: 20,
+                    updatedAt: 20,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        isAutomationRecoveryBlockedMock.mockReturnValue(true);
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntry.filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: failedEntry.filePath,
+                    sourceFingerprint: 'blocked-fingerprint',
+                    size: 12,
+                    mtimeMs: 22,
+                },
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailed(rule.id);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(1, []);
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
+            expect.objectContaining({
+                ruleId: rule.id,
+                filePath: failedEntry.filePath,
+                sourceFingerprint: 'blocked-fingerprint',
+                size: 12,
+                mtimeMs: 22,
+                status: 'error',
+                errorMessage: 'File is currently blocked by recovery state.',
+            }),
+        ]);
+        expect(useAutomationStore.getState().notifications).toEqual([
+            expect.objectContaining({
+                id: 'automation-failure-rule-1',
+                ruleId: rule.id,
+                latestFilePath: failedEntry.filePath,
+                latestMessage: 'File is currently blocked by recovery state.',
+                retryable: true,
+            }),
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            lastBlockedReason: 'recovery_blocked',
+            lastBlockedFilePath: failedEntry.filePath,
+            failureCount: 1,
+        }));
+    });
+
+    it('recreates a fresh retry failure entry when the retry source is now missing', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\missing.wav',
+            sourceFingerprint: 'missing-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 1,
+                    latestFilePath: failedEntry.filePath,
+                    latestMessage: failedEntry.errorMessage,
+                    createdAt: 20,
+                    updatedAt: 20,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntry.filePath,
+                outcome: 'missing',
+                candidate: null,
+                error: null,
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailed(rule.id);
+
+        expect(collectAutomationRuntimeRulePathsMock).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: rule.id,
+        }), ['C:\\watch\\missing.wav']);
+        expect(scanAutomationRuntimeRuleMock).not.toHaveBeenCalled();
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(1, []);
+        expect(saveAutomationProcessedEntriesMock).toHaveBeenNthCalledWith(2, [
+            expect.objectContaining({
+                ruleId: rule.id,
+                filePath: failedEntry.filePath,
+                status: 'error',
+                size: 0,
+                mtimeMs: 0,
+                errorMessage: 'Source file is no longer available for retry.',
+            }),
+        ]);
+        expect(useAutomationStore.getState().notifications).toEqual([
+            expect.objectContaining({
+                id: 'automation-failure-rule-1',
+                ruleId: rule.id,
+                latestFilePath: failedEntry.filePath,
+                latestMessage: 'Source file is no longer available for retry.',
+                retryable: true,
+            }),
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            lastBlockedReason: 'retry_source_missing',
+            lastBlockedFilePath: failedEntry.filePath,
+            failureCount: 1,
+        }));
     });
 
     it('records task completion back into the processed manifest and runtime state', async () => {
@@ -565,6 +816,9 @@ describe('automationStore', () => {
                     ruleId: rule.id,
                     status: 'watching',
                     failureCount: 0,
+                    lastBlockedAt: 1900,
+                    lastBlockedReason: 'already_pending',
+                    lastBlockedFilePath: 'C:\\watch\\meeting.wav',
                 },
             },
             notifications: [],
@@ -572,7 +826,7 @@ describe('automationStore', () => {
             error: null,
         });
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\meeting.wav',
             sourceFingerprint: 'fp-complete',
@@ -599,6 +853,8 @@ describe('automationStore', () => {
             lastProcessedFilePath: 'C:\\watch\\meeting.wav',
             failureCount: 0,
         }));
+        expect(useAutomationStore.getState().runtimeStates[rule.id].lastBlockedReason).toBeUndefined();
+        expect(useAutomationStore.getState().runtimeStates[rule.id].lastBlockedFilePath).toBeUndefined();
         expect(useAutomationStore.getState().notifications).toEqual([
             expect.objectContaining({
                 kind: 'success',
@@ -629,7 +885,7 @@ describe('automationStore', () => {
             error: null,
         });
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\meeting.wav',
             sourceFingerprint: 'fp-error-1',
@@ -641,7 +897,7 @@ describe('automationStore', () => {
             stage: 'translating',
         });
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\meeting-2.wav',
             sourceFingerprint: 'fp-error-2',
@@ -710,7 +966,7 @@ describe('automationStore', () => {
             },
         ];
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\file-1.wav',
             sourceFingerprint: 'fp-success-1',
@@ -735,7 +991,7 @@ describe('automationStore', () => {
             },
         ];
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\file-2.wav',
             sourceFingerprint: 'fp-success-2',
@@ -760,7 +1016,7 @@ describe('automationStore', () => {
             },
         ];
 
-        await __notifyAutomationTaskSettledForTests({
+        await __emitAutomationTaskSettledForTests({
             ruleId: rule.id,
             filePath: 'C:\\watch\\file-3.wav',
             sourceFingerprint: 'fp-success-3',

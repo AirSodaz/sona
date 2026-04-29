@@ -864,6 +864,7 @@ pub fn run() {
             get_path_statuses,
             automation_runtime::replace_automation_runtime_rules,
             automation_runtime::scan_automation_runtime_rule,
+            automation_runtime::collect_automation_runtime_rule_paths,
             system::inject_text,
             system::get_mouse_position,
             system::get_text_cursor_position,

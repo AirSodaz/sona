@@ -5,7 +5,7 @@ import { useTranscriptStore } from '../transcriptStore';
 import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
-import { notifyAutomationTaskSettled } from '../../services/automationRuntimeBridge';
+import { emitAutomationTaskSettled } from '../../services/automationRuntimeBridge';
 
 // Mock dependencies
 vi.mock('uuid', () => ({
@@ -67,7 +67,7 @@ vi.mock('../../services/historyService', () => ({
 }));
 
 vi.mock('../../services/automationRuntimeBridge', () => ({
-    notifyAutomationTaskSettled: vi.fn().mockResolvedValue(undefined),
+    emitAutomationTaskSettled: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../services/summaryService', () => ({
@@ -316,7 +316,7 @@ describe('batchQueueStore History Integration', () => {
 
         await useBatchQueueStore.getState()._processItem('automation-success-1');
 
-        expect(notifyAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
+        expect(emitAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
             ruleId: 'rule-1',
             sourceFingerprint: 'fp-success',
             status: 'complete',
@@ -358,7 +358,7 @@ describe('batchQueueStore History Integration', () => {
 
         await useBatchQueueStore.getState()._processItem('automation-failure-1');
 
-        expect(notifyAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
+        expect(emitAutomationTaskSettled).toHaveBeenCalledWith(expect.objectContaining({
             ruleId: 'rule-1',
             sourceFingerprint: 'fp-failure',
             status: 'error',

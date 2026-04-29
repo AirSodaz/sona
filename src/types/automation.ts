@@ -34,11 +34,22 @@ export interface AutomationRule {
 }
 
 export type AutomationRuntimeStatus = 'stopped' | 'watching' | 'scanning' | 'error';
+export type AutomationRuntimeBlockReason =
+  | 'already_processed'
+  | 'already_pending'
+  | 'recovery_blocked'
+  | 'project_missing'
+  | 'retry_source_missing';
 
 export interface AutomationRuntimeState {
   ruleId: string;
   status: AutomationRuntimeStatus;
   lastScanAt?: number;
+  lastCandidateAt?: number;
+  lastQueuedAt?: number;
+  lastBlockedAt?: number;
+  lastBlockedReason?: AutomationRuntimeBlockReason;
+  lastBlockedFilePath?: string;
   lastProcessedAt?: number;
   lastResult?: 'success' | 'error';
   lastResultMessage?: string;

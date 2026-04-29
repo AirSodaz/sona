@@ -19,7 +19,7 @@ import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtim
 import { summaryService } from '../services/summaryService';
 import { exportTranscriptToDirectory } from '../services/exportService';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
-import { notifyAutomationTaskSettled } from '../services/automationRuntimeBridge';
+import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
 import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
@@ -159,7 +159,7 @@ async function notifyAutomationResult(
     }
 
     const latestItem = useBatchQueueStore.getState().queueItems.find((queueItem) => queueItem.id === item.id) || item;
-    await notifyAutomationTaskSettled({
+    await emitAutomationTaskSettled({
         ruleId: item.automationRuleId,
         filePath: item.filePath,
         sourceFingerprint: item.sourceFingerprint,

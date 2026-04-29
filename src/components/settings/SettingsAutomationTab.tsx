@@ -6,6 +6,7 @@ import { AutomationIcon, FolderIcon, PauseIcon, PlayIcon, TrashIcon } from '../I
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -171,12 +172,33 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const toggleRuleEnabled = useAutomationStore((state) => state.toggleRuleEnabled);
     const scanRuleNow = useAutomationStore((state) => state.scanRuleNow);
     const retryFailed = useAutomationStore((state) => state.retryFailed);
+    const queueItems = useBatchQueueStore((state) => state.queueItems);
     const config = useConfigStore((state) => state.config);
     const projects = useProjectStore((state) => state.projects);
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
     const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
     const [drafts, setDrafts] = useState<Record<string, AutomationRuleDraft>>({});
+
+    const queueSummaryByRuleId = useMemo(() => {
+        const summary = new Map<string, { pending: number; processing: number }>();
+
+        queueItems.forEach((item) => {
+            if (item.origin !== 'automation' || !item.automationRuleId) {
+                return;
+            }
+
+            const counts = summary.get(item.automationRuleId) || { pending: 0, processing: 0 };
+            if (item.status === 'pending') {
+                counts.pending += 1;
+            } else if (item.status === 'processing') {
+                counts.processing += 1;
+            }
+            summary.set(item.automationRuleId, counts);
+        });
+
+        return summary;
+    }, [queueItems]);
 
     const projectOptions = useMemo(() => [
         ...projects.map((project) => ({ value: project.id, label: project.name })),
@@ -241,6 +263,48 @@ export function SettingsAutomationTab(): React.JSX.Element {
         }
 
         return t('automation.last_result_idle', { defaultValue: 'No runs yet' });
+    };
+
+    const getRuntimeBlockedReasonLabel = (reason: string | undefined) => {
+        switch (reason) {
+            case 'already_processed':
+                return t('automation.blocked_reason_already_processed', { defaultValue: 'already processed' });
+            case 'already_pending':
+                return t('automation.blocked_reason_already_pending', { defaultValue: 'already queued' });
+            case 'recovery_blocked':
+                return t('automation.blocked_reason_recovery_blocked', { defaultValue: 'blocked by recovery' });
+            case 'project_missing':
+                return t('automation.blocked_reason_project_missing', { defaultValue: 'target project is missing' });
+            case 'retry_source_missing':
+                return t('automation.blocked_reason_retry_source_missing', { defaultValue: 'retry source is unavailable' });
+            default:
+                return null;
+        }
+    };
+
+    const describeLatestBlockedHint = (ruleId: string) => {
+        const runtime = runtimeStates[ruleId];
+        if (!runtime?.lastBlockedAt || !runtime.lastBlockedReason) {
+            return null;
+        }
+
+        if (runtime.lastQueuedAt && runtime.lastBlockedAt <= runtime.lastQueuedAt) {
+            return null;
+        }
+
+        const reasonLabel = getRuntimeBlockedReasonLabel(runtime.lastBlockedReason);
+        if (!reasonLabel) {
+            return null;
+        }
+
+        const fileName = runtime.lastBlockedFilePath?.split(/[/\\]/).pop()
+            || t('automation.blocked_unknown_file', { defaultValue: 'latest file' });
+
+        return t('automation.latest_blocked_hint', {
+            defaultValue: 'Skipped {{fileName}}: {{reason}}',
+            fileName,
+            reason: reasonLabel,
+        });
     };
 
     const updateDraft = (
@@ -656,7 +720,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
             statusLabel,
             resultLabel,
             failureCount,
+            pendingCount,
+            processingCount,
             resultMessage,
+            blockedHint,
             enabled,
             canToggle,
             onToggleExpand,
@@ -673,7 +740,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
             statusLabel?: string;
             resultLabel?: string;
             failureCount?: number;
+            pendingCount?: number;
+            processingCount?: number;
             resultMessage?: string;
+            blockedHint?: string | null;
             enabled: boolean;
             canToggle: boolean;
             onToggleExpand: () => void;
@@ -746,6 +816,24 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                         tone={failureChipTone}
                                     />
                                 )}
+                                {!!pendingCount && (
+                                    <SummaryChip
+                                        label={t('automation.pending_count', {
+                                            defaultValue: '{{count}} pending',
+                                            count: pendingCount,
+                                        })}
+                                        tone="neutral"
+                                    />
+                                )}
+                                {!!processingCount && (
+                                    <SummaryChip
+                                        label={t('automation.processing_count', {
+                                            defaultValue: '{{count}} processing',
+                                            count: processingCount,
+                                        })}
+                                        tone="warning"
+                                    />
+                                )}
                             </div>
 
                             <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
@@ -757,6 +845,17 @@ export function SettingsAutomationTab(): React.JSX.Element {
                             {resultMessage && (
                                 <div className="settings-item-hint" style={{ wordBreak: 'break-word' }}>
                                     {resultMessage}
+                                </div>
+                            )}
+                            {blockedHint && (
+                                <div
+                                    className="settings-item-hint"
+                                    style={{
+                                        wordBreak: 'break-word',
+                                        color: 'var(--color-warning-text, #b7791f)',
+                                    }}
+                                >
+                                    {blockedHint}
                                 </div>
                             )}
                         </div>
@@ -871,6 +970,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         const draft = drafts[rule.id];
                         const displayRule = draft || createDraftFromRule(rule);
                         const runtime = runtimeStates[rule.id];
+                        const queueSummary = queueSummaryByRuleId.get(rule.id);
 
                         return renderRuleCard(rule.id, {
                             title: displayRule.name,
@@ -881,7 +981,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
                             statusLabel: getRuntimeStatusLabel(runtime?.status),
                             resultLabel: describeLastResult(rule.id),
                             failureCount: runtime?.failureCount || 0,
+                            pendingCount: queueSummary?.pending || 0,
+                            processingCount: queueSummary?.processing || 0,
                             resultMessage: runtime?.lastResultMessage,
+                            blockedHint: describeLatestBlockedHint(rule.id),
                             enabled: rule.enabled,
                             canToggle: true,
                             onToggleExpand: () => toggleExpanded(rule.id, createDraftFromRule(rule)),

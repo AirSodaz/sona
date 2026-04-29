@@ -29,6 +29,21 @@ export interface AutomationRuntimeCandidatePayload {
   mtimeMs: number;
 }
 
+export type AutomationRuntimePathCollectionOutcome =
+  | 'candidate'
+  | 'missing'
+  | 'unsupported'
+  | 'excluded'
+  | 'not_file'
+  | 'error';
+
+export interface AutomationRuntimePathCollectionResult {
+  filePath: string;
+  outcome: AutomationRuntimePathCollectionOutcome;
+  candidate?: AutomationRuntimeCandidatePayload | null;
+  error?: string | null;
+}
+
 export function toAutomationRuntimeRuleConfig(
   rule: Pick<AutomationRule, 'id' | 'watchDirectory' | 'recursive' | 'exportConfig'>,
 ): AutomationRuntimeRuleConfig {
@@ -55,6 +70,16 @@ export async function scanAutomationRuntimeRule(
 ): Promise<void> {
   await invoke('scan_automation_runtime_rule', {
     rule,
+  });
+}
+
+export async function collectAutomationRuntimeRulePaths(
+  rule: AutomationRuntimeRuleConfig,
+  filePaths: string[],
+): Promise<AutomationRuntimePathCollectionResult[]> {
+  return invoke<AutomationRuntimePathCollectionResult[]>('collect_automation_runtime_rule_paths', {
+    rule,
+    filePaths,
   });
 }
 

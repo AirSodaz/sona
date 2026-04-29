@@ -45,6 +45,26 @@ pub struct AutomationRuntimeCandidatePayload {
     pub mtime_ms: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationRuntimePathCollectionOutcome {
+    Candidate,
+    Missing,
+    Unsupported,
+    Excluded,
+    NotFile,
+    Error,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRuntimePathCollectionResult {
+    pub file_path: String,
+    pub outcome: AutomationRuntimePathCollectionOutcome,
+    pub candidate: Option<AutomationRuntimeCandidatePayload>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Default)]
 pub struct AutomationRuntimeState {
     inner: Arc<AutomationRuntimeInner>,
@@ -174,7 +194,52 @@ fn build_pending_candidate_key(rule_id: &str, normalized_path: &str) -> String {
 
 fn should_consider_candidate_path(rule: &AutomationRuntimeRuleConfig, file_path: &str) -> bool {
     is_supported_media_path(file_path)
+        && is_path_within_watch_scope(rule, file_path)
         && !is_path_inside_directory(file_path, &rule.exclude_directory)
+}
+
+fn is_path_within_watch_scope(rule: &AutomationRuntimeRuleConfig, file_path: &str) -> bool {
+    let watch_directory = rule.watch_directory.trim();
+    if watch_directory.is_empty() {
+        return false;
+    }
+
+    if !is_path_inside_directory(file_path, watch_directory) {
+        return false;
+    }
+
+    if rule.recursive {
+        return true;
+    }
+
+    Path::new(file_path)
+        .parent()
+        .map(|parent| normalize_automation_path(parent.to_string_lossy().as_ref()))
+        .map(|parent| parent == normalize_automation_path(watch_directory))
+        .unwrap_or(false)
+}
+
+fn snapshot_from_metadata(
+    file_path: &str,
+    metadata: std::fs::Metadata,
+) -> Result<AutomationCandidateSnapshot, String> {
+    if !metadata.is_file() {
+        return Err("Path is not a file.".to_string());
+    }
+
+    let normalized_path = normalize_automation_path(file_path);
+    let mtime_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0);
+
+    Ok(AutomationCandidateSnapshot {
+        normalized_path,
+        size: metadata.len(),
+        mtime_ms,
+    })
 }
 
 fn snapshot_candidate(file_path: &str) -> Result<Option<AutomationCandidateSnapshot>, String> {
@@ -187,23 +252,90 @@ fn snapshot_candidate(file_path: &str) -> Result<Option<AutomationCandidateSnaps
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.to_string()),
     };
-    if !metadata.is_file() {
-        return Ok(None);
+
+    match snapshot_from_metadata(file_path, metadata) {
+        Ok(snapshot) => Ok(Some(snapshot)),
+        Err(_) => Ok(None),
+    }
+}
+
+enum AutomationRuntimePathIssue {
+    Missing,
+    Unsupported,
+    Excluded,
+    NotFile,
+    Error(String),
+}
+
+fn snapshot_candidate_for_rule(
+    rule: &AutomationRuntimeRuleConfig,
+    file_path: &str,
+) -> Result<AutomationCandidateSnapshot, AutomationRuntimePathIssue> {
+    if !is_supported_media_path(file_path) {
+        return Err(AutomationRuntimePathIssue::Unsupported);
     }
 
-    let normalized_path = normalize_automation_path(file_path);
-    let mtime_ms = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0);
+    if !is_path_within_watch_scope(rule, file_path) {
+        return Err(AutomationRuntimePathIssue::Excluded);
+    }
 
-    Ok(Some(AutomationCandidateSnapshot {
-        normalized_path,
-        size: metadata.len(),
-        mtime_ms,
-    }))
+    if is_path_inside_directory(file_path, &rule.exclude_directory) {
+        return Err(AutomationRuntimePathIssue::Excluded);
+    }
+
+    let metadata = match std::fs::metadata(file_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(AutomationRuntimePathIssue::Missing)
+        }
+        Err(error) => return Err(AutomationRuntimePathIssue::Error(error.to_string())),
+    };
+
+    snapshot_from_metadata(file_path, metadata).map_err(|_| AutomationRuntimePathIssue::NotFile)
+}
+
+fn collect_rule_path_result(
+    rule: &AutomationRuntimeRuleConfig,
+    file_path: &str,
+) -> AutomationRuntimePathCollectionResult {
+    match snapshot_candidate_for_rule(rule, file_path) {
+        Ok(snapshot) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::Candidate,
+            candidate: Some(snapshot.into_payload(&rule.rule_id, file_path)),
+            error: None,
+        },
+        Err(AutomationRuntimePathIssue::Missing) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::Missing,
+            candidate: None,
+            error: None,
+        },
+        Err(AutomationRuntimePathIssue::Unsupported) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::Unsupported,
+            candidate: None,
+            error: None,
+        },
+        Err(AutomationRuntimePathIssue::Excluded) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::Excluded,
+            candidate: None,
+            error: None,
+        },
+        Err(AutomationRuntimePathIssue::NotFile) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::NotFile,
+            candidate: None,
+            error: None,
+        },
+        Err(AutomationRuntimePathIssue::Error(error)) => AutomationRuntimePathCollectionResult {
+            file_path: file_path.to_string(),
+            outcome: AutomationRuntimePathCollectionOutcome::Error,
+            candidate: None,
+            error: Some(error),
+        },
+    }
 }
 
 fn collect_candidate_paths(rule: &AutomationRuntimeRuleConfig) -> Result<Vec<String>, String> {
@@ -484,13 +616,29 @@ pub async fn scan_automation_runtime_rule<R: Runtime>(
     scan_rule_runtime(state.inner().clone(), create_event_sink(app), rule).await
 }
 
+#[tauri::command]
+pub async fn collect_automation_runtime_rule_paths(
+    rule: AutomationRuntimeRuleConfig,
+    file_paths: Vec<String>,
+) -> Result<Vec<AutomationRuntimePathCollectionResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(file_paths
+            .into_iter()
+            .map(|file_path| collect_rule_path_result(&rule, &file_path))
+            .collect())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_candidate_paths, is_path_inside_directory, is_supported_media_path,
-        normalize_automation_path, replace_rule_runtimes_with, schedule_candidate,
-        snapshot_candidate, AutomationRuntimeCandidatePayload, AutomationRuntimeRuleConfig,
-        AutomationRuntimeState,
+        collect_candidate_paths, collect_rule_path_result, is_path_inside_directory,
+        is_path_within_watch_scope, is_supported_media_path, normalize_automation_path,
+        replace_rule_runtimes_with, schedule_candidate, snapshot_candidate,
+        AutomationRuntimeCandidatePayload, AutomationRuntimePathCollectionOutcome,
+        AutomationRuntimeRuleConfig, AutomationRuntimeState,
     };
     use std::fs;
     use std::sync::{Arc, Mutex};
@@ -585,6 +733,109 @@ mod tests {
             paths,
             vec![watch_dir.join("meeting.wav").to_string_lossy().into_owned()]
         );
+    }
+
+    #[test]
+    fn non_recursive_watch_scope_rejects_nested_paths() {
+        let dir = tempdir().unwrap();
+        let watch_dir = dir.path().join("watch");
+        let nested_dir = watch_dir.join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+        let nested_file = nested_dir.join("meeting.wav");
+        fs::write(&nested_file, b"one").unwrap();
+
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = watch_dir.to_string_lossy().into_owned();
+            rule.exclude_directory = watch_dir.join("exports").to_string_lossy().into_owned();
+            rule.recursive = false;
+        });
+
+        assert!(!is_path_within_watch_scope(
+            &rule,
+            nested_file.to_string_lossy().as_ref()
+        ));
+    }
+
+    #[test]
+    fn collect_rule_path_result_returns_candidate_for_current_file_snapshot() {
+        let dir = tempdir().unwrap();
+        let watch_dir = dir.path().join("watch");
+        fs::create_dir_all(&watch_dir).unwrap();
+        let file_path = watch_dir.join("meeting.wav");
+        fs::write(&file_path, b"one").unwrap();
+
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = watch_dir.to_string_lossy().into_owned();
+            rule.exclude_directory = watch_dir.join("exports").to_string_lossy().into_owned();
+        });
+
+        let result = collect_rule_path_result(&rule, file_path.to_string_lossy().as_ref());
+
+        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Candidate);
+        assert_eq!(
+            result.candidate.as_ref().map(|candidate| candidate.file_path.as_str()),
+            Some(file_path.to_string_lossy().as_ref())
+        );
+    }
+
+    #[test]
+    fn collect_rule_path_result_rejects_retry_sources_outside_watch_directory() {
+        let dir = tempdir().unwrap();
+        let watch_dir = dir.path().join("watch");
+        let outside_dir = dir.path().join("outside");
+        fs::create_dir_all(&watch_dir).unwrap();
+        fs::create_dir_all(&outside_dir).unwrap();
+        let outside_file = outside_dir.join("meeting.wav");
+        fs::write(&outside_file, b"one").unwrap();
+
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = watch_dir.to_string_lossy().into_owned();
+            rule.exclude_directory = watch_dir.join("exports").to_string_lossy().into_owned();
+        });
+
+        let result = collect_rule_path_result(&rule, outside_file.to_string_lossy().as_ref());
+
+        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Excluded);
+        assert!(result.candidate.is_none());
+    }
+
+    #[test]
+    fn collect_rule_path_result_rejects_nested_retry_sources_for_non_recursive_rules() {
+        let dir = tempdir().unwrap();
+        let watch_dir = dir.path().join("watch");
+        let nested_dir = watch_dir.join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+        let nested_file = nested_dir.join("meeting.wav");
+        fs::write(&nested_file, b"one").unwrap();
+
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = watch_dir.to_string_lossy().into_owned();
+            rule.exclude_directory = watch_dir.join("exports").to_string_lossy().into_owned();
+            rule.recursive = false;
+        });
+
+        let result = collect_rule_path_result(&rule, nested_file.to_string_lossy().as_ref());
+
+        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Excluded);
+        assert!(result.candidate.is_none());
+    }
+
+    #[test]
+    fn collect_rule_path_result_returns_missing_for_deleted_retry_source() {
+        let dir = tempdir().unwrap();
+        let watch_dir = dir.path().join("watch");
+        fs::create_dir_all(&watch_dir).unwrap();
+        let file_path = watch_dir.join("missing.wav");
+
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = watch_dir.to_string_lossy().into_owned();
+            rule.exclude_directory = watch_dir.join("exports").to_string_lossy().into_owned();
+        });
+
+        let result = collect_rule_path_result(&rule, file_path.to_string_lossy().as_ref());
+
+        assert_eq!(result.outcome, AutomationRuntimePathCollectionOutcome::Missing);
+        assert!(result.candidate.is_none());
     }
 
     #[tokio::test]

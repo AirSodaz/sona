@@ -14,18 +14,24 @@ export interface AutomationTaskSettledPayload {
   stage?: RecoveryItemStage;
 }
 
-type AutomationTaskSettledHandler = (payload: AutomationTaskSettledPayload) => void | Promise<void>;
+type AutomationTaskSettledListener = (payload: AutomationTaskSettledPayload) => void | Promise<void>;
 
-let automationTaskSettledHandler: AutomationTaskSettledHandler | null = null;
+const automationTaskSettledListeners = new Set<AutomationTaskSettledListener>();
 
-export function registerAutomationTaskSettledHandler(handler: AutomationTaskSettledHandler | null) {
-  automationTaskSettledHandler = handler;
+export function subscribeAutomationTaskSettled(listener: AutomationTaskSettledListener): () => void {
+  automationTaskSettledListeners.add(listener);
+
+  return () => {
+    automationTaskSettledListeners.delete(listener);
+  };
 }
 
-export async function notifyAutomationTaskSettled(payload: AutomationTaskSettledPayload): Promise<void> {
-  if (!automationTaskSettledHandler) {
+export async function emitAutomationTaskSettled(payload: AutomationTaskSettledPayload): Promise<void> {
+  if (automationTaskSettledListeners.size === 0) {
     return;
   }
 
-  await automationTaskSettledHandler(payload);
+  await Promise.all(
+    [...automationTaskSettledListeners].map((listener) => listener(payload)),
+  );
 }

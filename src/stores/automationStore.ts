@@ -2,15 +2,20 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import {
+  createAutomationFingerprint,
   ensureAutomationStorage,
   isPathInsideDirectory,
   loadAutomationProcessedEntries,
   loadAutomationRules,
+  normalizeAutomationPath,
   saveAutomationProcessedEntries,
   saveAutomationRules,
   validateAutomationRuleForActivation,
 } from '../services/automationService';
 import {
+  collectAutomationRuntimeRulePaths,
+  type AutomationRuntimeCandidatePayload,
+  type AutomationRuntimePathCollectionResult,
   listenToAutomationRuntimeCandidates,
   replaceAutomationRuntimeRules,
   scanAutomationRuntimeRule,
@@ -18,8 +23,8 @@ import {
   type AutomationRuntimeReplaceResult,
 } from '../services/automationRuntimeService';
 import {
-  notifyAutomationTaskSettled,
-  registerAutomationTaskSettledHandler,
+  emitAutomationTaskSettled,
+  subscribeAutomationTaskSettled,
   type AutomationTaskSettledPayload,
 } from '../services/automationRuntimeBridge';
 import {
@@ -32,6 +37,7 @@ import { useProjectStore } from './projectStore';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
+  AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../types/automation';
 import type { RecoveredQueueItem, RecoveryItemStage } from '../types/recovery';
@@ -41,6 +47,8 @@ import { logger } from '../utils/logger';
 const pendingFingerprints = new Set<string>();
 let automationSuccessNotificationSequence = 0;
 let automationRuntimeCandidateUnlisten: (() => void) | null = null;
+const RETRY_SOURCE_MISSING_SIZE = 0;
+const RETRY_SOURCE_MISSING_MTIME_MS = 0;
 
 interface SaveRuleInput {
   id?: string;
@@ -89,6 +97,15 @@ interface AutomationState {
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
   stopAll: () => Promise<void>;
 }
+
+interface HandleAutomationRuntimeCandidateOptions {
+  suppressFailureNotification?: boolean;
+}
+
+type AutomationRuntimeCandidateHandleResult =
+  | { status: 'queued' }
+  | { status: 'blocked'; reason: AutomationRuntimeBlockReason }
+  | { status: 'ignored' };
 
 function nextAutomationSuccessNotificationId(ruleId: string): string {
   automationSuccessNotificationSequence += 1;
@@ -262,6 +279,64 @@ function applyRuntimeFailureState(
   };
 }
 
+function applyRuntimeBlockState(
+  current: Pick<AutomationState, 'processedEntries' | 'runtimeStates'>,
+  {
+    ruleId,
+    filePath,
+    reason,
+    occurredAt = Date.now(),
+  }: {
+    ruleId: string;
+    filePath: string;
+    reason: AutomationRuntimeBlockReason;
+    occurredAt?: number;
+  },
+): Pick<AutomationState, 'runtimeStates'> {
+  return {
+    runtimeStates: {
+      ...current.runtimeStates,
+      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
+        lastCandidateAt: occurredAt,
+        lastBlockedAt: occurredAt,
+        lastBlockedReason: reason,
+        lastBlockedFilePath: filePath,
+      }),
+    },
+  };
+}
+
+function applyRuntimeQueuedState(
+  current: Pick<AutomationState, 'processedEntries' | 'runtimeStates'>,
+  {
+    ruleId,
+    occurredAt = Date.now(),
+  }: {
+    ruleId: string;
+    occurredAt?: number;
+  },
+): Pick<AutomationState, 'runtimeStates'> {
+  return {
+    runtimeStates: {
+      ...current.runtimeStates,
+      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
+        lastCandidateAt: occurredAt,
+        lastQueuedAt: occurredAt,
+      }),
+    },
+  };
+}
+
+function resolveRuntimeOverride<K extends keyof AutomationRuntimeState>(
+  overrides: Partial<AutomationRuntimeState>,
+  key: K,
+  fallback: AutomationRuntimeState[K],
+): AutomationRuntimeState[K] {
+  return Object.prototype.hasOwnProperty.call(overrides, key)
+    ? overrides[key] as AutomationRuntimeState[K]
+    : fallback;
+}
+
 function deriveRuntimeState(
   ruleId: string,
   entries: AutomationProcessedEntry[],
@@ -277,13 +352,22 @@ function deriveRuntimeState(
 
   return {
     ruleId,
-    status: overrides.status ?? existing?.status ?? 'stopped',
-    lastScanAt: overrides.lastScanAt ?? existing?.lastScanAt,
-    lastProcessedAt: overrides.lastProcessedAt ?? latest?.processedAt ?? existing?.lastProcessedAt,
-    lastResult: overrides.lastResult ?? (latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult),
-    lastResultMessage: overrides.lastResultMessage ?? latest?.errorMessage ?? existing?.lastResultMessage,
-    lastProcessedFilePath: overrides.lastProcessedFilePath ?? latest?.filePath ?? existing?.lastProcessedFilePath,
-    failureCount: overrides.failureCount ?? failureCount,
+    status: resolveRuntimeOverride(overrides, 'status', existing?.status ?? 'stopped'),
+    lastScanAt: resolveRuntimeOverride(overrides, 'lastScanAt', existing?.lastScanAt),
+    lastCandidateAt: resolveRuntimeOverride(overrides, 'lastCandidateAt', existing?.lastCandidateAt),
+    lastQueuedAt: resolveRuntimeOverride(overrides, 'lastQueuedAt', existing?.lastQueuedAt),
+    lastBlockedAt: resolveRuntimeOverride(overrides, 'lastBlockedAt', existing?.lastBlockedAt),
+    lastBlockedReason: resolveRuntimeOverride(overrides, 'lastBlockedReason', existing?.lastBlockedReason),
+    lastBlockedFilePath: resolveRuntimeOverride(overrides, 'lastBlockedFilePath', existing?.lastBlockedFilePath),
+    lastProcessedAt: resolveRuntimeOverride(overrides, 'lastProcessedAt', latest?.processedAt ?? existing?.lastProcessedAt),
+    lastResult: resolveRuntimeOverride(
+      overrides,
+      'lastResult',
+      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult,
+    ),
+    lastResultMessage: resolveRuntimeOverride(overrides, 'lastResultMessage', latest?.errorMessage ?? existing?.lastResultMessage),
+    lastProcessedFilePath: resolveRuntimeOverride(overrides, 'lastProcessedFilePath', latest?.filePath ?? existing?.lastProcessedFilePath),
+    failureCount: resolveRuntimeOverride(overrides, 'failureCount', failureCount),
   };
 }
 
@@ -314,6 +398,370 @@ function clearAllPendingFingerprints() {
 
 function buildPendingFingerprintKey(ruleId: string, sourceFingerprint: string): string {
   return `${ruleId}::${sourceFingerprint}`;
+}
+
+function getUniqueFilePaths(paths: string[]): string[] {
+  const pathMap = new Map<string, string>();
+  paths.forEach((filePath) => {
+    const normalizedPath = normalizeAutomationPath(filePath);
+    if (!pathMap.has(normalizedPath)) {
+      pathMap.set(normalizedPath, filePath);
+    }
+  });
+
+  return [...pathMap.values()];
+}
+
+function buildRetryFailureEntry(
+  ruleId: string,
+  filePath: string,
+  message: string,
+  processedAt: number,
+): AutomationProcessedEntry {
+  return {
+    ruleId,
+    filePath,
+    sourceFingerprint: createAutomationFingerprint(
+      filePath,
+      RETRY_SOURCE_MISSING_SIZE,
+      RETRY_SOURCE_MISSING_MTIME_MS,
+    ),
+    size: RETRY_SOURCE_MISSING_SIZE,
+    mtimeMs: RETRY_SOURCE_MISSING_MTIME_MS,
+    status: 'error',
+    processedAt,
+    errorMessage: message,
+  };
+}
+
+function buildRetryBlockedEntry(
+  ruleId: string,
+  candidate: AutomationRuntimeCandidatePayload,
+  message: string,
+  processedAt: number,
+): AutomationProcessedEntry {
+  return {
+    ruleId,
+    filePath: candidate.filePath,
+    sourceFingerprint: candidate.sourceFingerprint,
+    size: candidate.size,
+    mtimeMs: candidate.mtimeMs,
+    status: 'error',
+    processedAt,
+    errorMessage: message,
+  };
+}
+
+function getRetryFailureMessage(result: AutomationRuntimePathCollectionResult): string {
+  switch (result.outcome) {
+    case 'missing':
+      return 'Source file is no longer available for retry.';
+    case 'unsupported':
+    case 'excluded':
+    case 'not_file':
+      return 'Source file is no longer eligible for retry.';
+    case 'error':
+      return result.error
+        ? `Retry source check failed: ${result.error}`
+        : 'Retry source check failed.';
+    default:
+      return 'Source file is no longer available for retry.';
+  }
+}
+
+function getRetryBlockedMessage(reason: AutomationRuntimeBlockReason): string {
+  switch (reason) {
+    case 'recovery_blocked':
+      return 'File is currently blocked by recovery state.';
+    case 'project_missing':
+      return 'Project not found.';
+    case 'already_processed':
+      return 'File has already been processed.';
+    case 'already_pending':
+      return 'File is already pending.';
+    case 'retry_source_missing':
+    default:
+      return 'Source file is no longer available for retry.';
+  }
+}
+
+async function handleAutomationRuntimeCandidatePayload(
+  payload: AutomationRuntimeCandidatePayload,
+  options?: HandleAutomationRuntimeCandidateOptions,
+): Promise<AutomationRuntimeCandidateHandleResult> {
+  const occurredAt = Date.now();
+  const initialState = useAutomationStore.getState();
+  const rule = initialState.rules.find((item) => item.id === payload.ruleId);
+  if (!rule) {
+    return { status: 'ignored' };
+  }
+
+  if (isPathInsideDirectory(payload.filePath, rule.exportConfig.directory)) {
+    return { status: 'ignored' };
+  }
+
+  if (isAutomationRecoveryBlocked(payload.ruleId, payload.sourceFingerprint)) {
+    useAutomationStore.setState((current) => ({
+      ...applyRuntimeBlockState(current, {
+        ruleId: payload.ruleId,
+        filePath: payload.filePath,
+        reason: 'recovery_blocked',
+        occurredAt,
+      }),
+    }));
+    return { status: 'blocked', reason: 'recovery_blocked' };
+  }
+
+  const latestState = useAutomationStore.getState();
+  const latestRule = latestState.rules.find((item) => item.id === payload.ruleId);
+  if (!latestRule) {
+    return { status: 'ignored' };
+  }
+
+  if (latestState.processedEntries.some((entry) => (
+    entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint
+  ))) {
+    useAutomationStore.setState((current) => ({
+      ...applyRuntimeBlockState(current, {
+        ruleId: payload.ruleId,
+        filePath: payload.filePath,
+        reason: 'already_processed',
+        occurredAt,
+      }),
+    }));
+    return { status: 'blocked', reason: 'already_processed' };
+  }
+
+  const pendingKey = buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint);
+  if (pendingFingerprints.has(pendingKey)) {
+    useAutomationStore.setState((current) => ({
+      ...applyRuntimeBlockState(current, {
+        ruleId: payload.ruleId,
+        filePath: payload.filePath,
+        reason: 'already_pending',
+        occurredAt,
+      }),
+    }));
+    return { status: 'blocked', reason: 'already_pending' };
+  }
+
+  const isInboxOrNone = latestRule.projectId === 'inbox' || latestRule.projectId === 'none';
+  const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(latestRule.projectId);
+  if (!project && !isInboxOrNone) {
+    useAutomationStore.setState((current) => {
+      if (options?.suppressFailureNotification) {
+        const runtimeStatesWithError = {
+          ...current.runtimeStates,
+          [payload.ruleId]: deriveRuntimeState(
+            payload.ruleId,
+            current.processedEntries,
+            current.runtimeStates[payload.ruleId],
+            {
+              status: 'error',
+              lastResult: 'error',
+              lastResultMessage: 'Project not found.',
+              lastProcessedFilePath: payload.filePath,
+            },
+          ),
+        };
+
+        return {
+          runtimeStates: applyRuntimeBlockState(
+            {
+              processedEntries: current.processedEntries,
+              runtimeStates: runtimeStatesWithError,
+            },
+            {
+              ruleId: payload.ruleId,
+              filePath: payload.filePath,
+              reason: 'project_missing',
+              occurredAt,
+            },
+          ).runtimeStates,
+        };
+      }
+
+      const nextFailureState = applyRuntimeFailureState(current, {
+        ruleId: payload.ruleId,
+        ruleName: latestRule.name,
+        message: 'Project not found.',
+        filePath: payload.filePath,
+      });
+
+      return {
+        ...nextFailureState,
+        ...applyRuntimeBlockState(
+          {
+            processedEntries: current.processedEntries,
+            runtimeStates: nextFailureState.runtimeStates,
+          },
+          {
+            ruleId: payload.ruleId,
+            filePath: payload.filePath,
+            reason: 'project_missing',
+            occurredAt,
+          },
+        ),
+      };
+    });
+    return { status: 'blocked', reason: 'project_missing' };
+  }
+
+  const effectiveConfig = {
+    ...resolveEffectiveConfig(useConfigStore.getState().config, project),
+    translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
+    polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
+  };
+  pendingFingerprints.add(pendingKey);
+
+  useBatchQueueStore.getState().addFiles([payload.filePath], {
+    origin: 'automation',
+    automationRuleId: latestRule.id,
+    automationRuleName: latestRule.name,
+    resolvedConfigSnapshot: effectiveConfig,
+    exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
+    stageConfig: latestRule.stageConfig,
+    sourceFingerprint: payload.sourceFingerprint,
+    projectId: isInboxOrNone ? null : latestRule.projectId,
+    fileStat: {
+      size: payload.size,
+      mtimeMs: payload.mtimeMs,
+    },
+    exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+  });
+
+  useAutomationStore.setState((current) => ({
+    ...applyRuntimeQueuedState(current, {
+      ruleId: payload.ruleId,
+      occurredAt,
+    }),
+  }));
+
+  return { status: 'queued' };
+}
+
+async function recordRetryFailures(
+  rule: AutomationRule,
+  results: AutomationRuntimePathCollectionResult[],
+): Promise<void> {
+  const failureResults = results.filter((result) => result.outcome !== 'candidate');
+  if (failureResults.length === 0) {
+    return;
+  }
+
+  const current = useAutomationStore.getState();
+  const entriesToAdd = failureResults.map((result, index) => (
+    buildRetryFailureEntry(
+      rule.id,
+      result.filePath,
+      getRetryFailureMessage(result),
+      Date.now() + index,
+    )
+  ));
+  const nextEntries = [
+    ...current.processedEntries.filter((entry) => !(
+      entry.ruleId === rule.id
+      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
+    )),
+    ...entriesToAdd,
+  ].sort((a, b) => b.processedAt - a.processedAt);
+
+  await saveAutomationProcessedEntries(nextEntries);
+
+  useAutomationStore.setState((state) => {
+    let notifications = state.notifications;
+    let runtimeStates = rebuildRuntimeStates(state.rules, nextEntries, state.runtimeStates);
+
+    failureResults.forEach((result, index) => {
+      const occurredAt = entriesToAdd[index].processedAt;
+      notifications = upsertFailureNotification(notifications, {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        filePath: result.filePath,
+        message: entriesToAdd[index].errorMessage,
+        retryable: true,
+        occurredAt,
+      });
+      runtimeStates = {
+        ...runtimeStates,
+        [rule.id]: deriveRuntimeState(rule.id, nextEntries, runtimeStates[rule.id], {
+          lastCandidateAt: occurredAt,
+          lastBlockedAt: occurredAt,
+          lastBlockedReason: 'retry_source_missing',
+          lastBlockedFilePath: result.filePath,
+        }),
+      };
+    });
+
+    return {
+      processedEntries: nextEntries,
+      notifications,
+      runtimeStates,
+    };
+  });
+}
+
+async function recordRetryBlockedCandidates(
+  rule: AutomationRule,
+  results: Array<{
+    candidate: AutomationRuntimeCandidatePayload;
+    reason: AutomationRuntimeBlockReason;
+  }>,
+): Promise<void> {
+  if (results.length === 0) {
+    return;
+  }
+
+  const current = useAutomationStore.getState();
+  const entriesToAdd = results.map(({ candidate, reason }, index) => (
+    buildRetryBlockedEntry(
+      rule.id,
+      candidate,
+      getRetryBlockedMessage(reason),
+      Date.now() + index,
+    )
+  ));
+  const nextEntries = [
+    ...current.processedEntries.filter((entry) => !(
+      entry.ruleId === rule.id
+      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
+    )),
+    ...entriesToAdd,
+  ].sort((a, b) => b.processedAt - a.processedAt);
+
+  await saveAutomationProcessedEntries(nextEntries);
+
+  useAutomationStore.setState((state) => {
+    let notifications = state.notifications;
+    let runtimeStates = rebuildRuntimeStates(state.rules, nextEntries, state.runtimeStates);
+
+    results.forEach(({ candidate, reason }, index) => {
+      const occurredAt = entriesToAdd[index].processedAt;
+      notifications = upsertFailureNotification(notifications, {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        filePath: candidate.filePath,
+        message: entriesToAdd[index].errorMessage,
+        retryable: true,
+        occurredAt,
+      });
+      runtimeStates = {
+        ...runtimeStates,
+        [rule.id]: deriveRuntimeState(rule.id, nextEntries, runtimeStates[rule.id], {
+          lastCandidateAt: occurredAt,
+          lastBlockedAt: occurredAt,
+          lastBlockedReason: reason,
+          lastBlockedFilePath: candidate.filePath,
+        }),
+      };
+    });
+
+    return {
+      processedEntries: nextEntries,
+      notifications,
+      runtimeStates,
+    };
+  });
 }
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
@@ -381,75 +829,7 @@ async function ensureAutomationRuntimeCandidateListener() {
     return;
   }
 
-  automationRuntimeCandidateUnlisten = await listenToAutomationRuntimeCandidates(async (payload) => {
-    const initialState = useAutomationStore.getState();
-    const rule = initialState.rules.find((item) => item.id === payload.ruleId);
-    if (!rule) {
-      return;
-    }
-
-    if (isPathInsideDirectory(payload.filePath, rule.exportConfig.directory)) {
-      return;
-    }
-
-    if (isAutomationRecoveryBlocked(payload.ruleId, payload.sourceFingerprint)) {
-      return;
-    }
-
-    const latestState = useAutomationStore.getState();
-    const latestRule = latestState.rules.find((item) => item.id === payload.ruleId);
-    if (!latestRule) {
-      return;
-    }
-
-    if (latestState.processedEntries.some((entry) => (
-      entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint
-    ))) {
-      return;
-    }
-
-    const pendingKey = buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint);
-    if (pendingFingerprints.has(pendingKey)) {
-      return;
-    }
-
-    const isInboxOrNone = latestRule.projectId === 'inbox' || latestRule.projectId === 'none';
-    const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(latestRule.projectId);
-    if (!project && !isInboxOrNone) {
-      useAutomationStore.setState((current) => ({
-        ...applyRuntimeFailureState(current, {
-          ruleId: payload.ruleId,
-          ruleName: latestRule.name,
-          message: 'Project not found.',
-          filePath: payload.filePath,
-        }),
-      }));
-      return;
-    }
-
-    const effectiveConfig = {
-      ...resolveEffectiveConfig(useConfigStore.getState().config, project),
-      translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
-      polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
-    };
-    pendingFingerprints.add(pendingKey);
-
-    useBatchQueueStore.getState().addFiles([payload.filePath], {
-      origin: 'automation',
-      automationRuleId: latestRule.id,
-      automationRuleName: latestRule.name,
-      resolvedConfigSnapshot: effectiveConfig,
-      exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
-      stageConfig: latestRule.stageConfig,
-      sourceFingerprint: payload.sourceFingerprint,
-      projectId: isInboxOrNone ? null : latestRule.projectId,
-      fileStat: {
-        size: payload.size,
-        mtimeMs: payload.mtimeMs,
-      },
-      exportFileNamePrefix: latestRule.exportConfig.prefix || '',
-    });
-  });
+  automationRuntimeCandidateUnlisten = await listenToAutomationRuntimeCandidates(handleAutomationRuntimeCandidatePayload);
 }
 
 function clearAutomationRuntimeCandidateListener() {
@@ -715,15 +1095,133 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   retryFailed: async (ruleId) => {
-    const nextProcessedEntries = get().processedEntries.filter((entry) => !(entry.ruleId === ruleId && entry.status === 'error'));
-    await saveAutomationProcessedEntries(nextProcessedEntries);
-    clearRulePendingFingerprints(ruleId);
+    const state = get();
+    const rule = state.rules.find((item) => item.id === ruleId);
+    if (!rule) {
+      return;
+    }
+
+    const failedEntries = state.processedEntries.filter((entry) => (
+      entry.ruleId === ruleId && entry.status === 'error'
+    ));
+    if (failedEntries.length === 0) {
+      set((current) => ({
+        notifications: removeRuleNotifications(current.notifications, ruleId, 'failure'),
+      }));
+      return;
+    }
+
+    const isInboxOrNone = rule.projectId === 'inbox' || rule.projectId === 'none';
+    const project = isInboxOrNone ? null : useProjectStore.getState().getProjectById(rule.projectId);
+    const validation = await validateAutomationRuleForActivation(
+      rule,
+      useConfigStore.getState().config,
+      project,
+    );
+    if (!validation.valid) {
+      const lastScanAt = Date.now();
+      useAutomationStore.setState((current) => ({
+        ...applyRuntimeFailureState(current, {
+          ruleId,
+          ruleName: rule.name,
+          message: validation.message || 'Automation rule validation failed.',
+          lastScanAt,
+        }),
+      }));
+      throw new Error(validation.message || 'Automation rule validation failed.');
+    }
+
+    const scanStartedAt = Date.now();
     set((current) => ({
-      processedEntries: nextProcessedEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextProcessedEntries, current.runtimeStates),
-      notifications: removeRuleNotifications(current.notifications, ruleId, 'failure'),
+      runtimeStates: {
+        ...current.runtimeStates,
+        [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
+          status: 'scanning',
+          lastScanAt: scanStartedAt,
+        }),
+      },
     }));
-    await scanRule(ruleId);
+
+    const filePaths = getUniqueFilePaths(failedEntries.map((entry) => entry.filePath));
+
+    try {
+      const results = await collectAutomationRuntimeRulePaths(
+        toAutomationRuntimeRuleConfig(rule),
+        filePaths,
+      );
+
+      const nextProcessedEntries = state.processedEntries.filter((entry) => !(
+        entry.ruleId === ruleId && entry.status === 'error'
+      ));
+      await saveAutomationProcessedEntries(nextProcessedEntries);
+      set((current) => ({
+        processedEntries: nextProcessedEntries,
+        runtimeStates: {
+          ...current.runtimeStates,
+          [ruleId]: deriveRuntimeState(ruleId, nextProcessedEntries, current.runtimeStates[ruleId], {
+            status: 'scanning',
+            lastScanAt: scanStartedAt,
+          }),
+        },
+        notifications: removeRuleNotifications(current.notifications, ruleId, 'failure'),
+      }));
+
+      const failureResults = results.filter((result) => result.outcome !== 'candidate');
+      const candidateResults = results.filter((result) => (
+        result.outcome === 'candidate' && result.candidate
+      ));
+      const blockedCandidateFailures: Array<{
+        candidate: AutomationRuntimeCandidatePayload;
+        reason: AutomationRuntimeBlockReason;
+      }> = [];
+
+      for (const result of candidateResults) {
+        const candidate = result.candidate!;
+        const handled = await handleAutomationRuntimeCandidatePayload(candidate, {
+          suppressFailureNotification: true,
+        });
+        if (
+          handled.status === 'blocked'
+          && (handled.reason === 'recovery_blocked' || handled.reason === 'project_missing')
+        ) {
+          blockedCandidateFailures.push({
+            candidate,
+            reason: handled.reason,
+          });
+        }
+      }
+
+      await recordRetryFailures(rule, failureResults);
+      await recordRetryBlockedCandidates(rule, blockedCandidateFailures);
+
+      set((current) => {
+        const runtime = current.runtimeStates[ruleId];
+        if (runtime?.status !== 'scanning') {
+          return {};
+        }
+
+        return {
+          runtimeStates: {
+            ...current.runtimeStates,
+            [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, runtime, {
+              status: rule.enabled ? 'watching' : 'stopped',
+              lastScanAt: Date.now(),
+            }),
+          },
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      useAutomationStore.setState((current) => ({
+        ...applyRuntimeFailureState(current, {
+          ruleId,
+          ruleName: rule.name,
+          message,
+          lastScanAt: Date.now(),
+        }),
+      }));
+      throw error;
+    }
   },
 
   dismissNotification: (notificationId) => {
@@ -778,10 +1276,18 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     clearAllPendingFingerprints();
     clearAutomationRuntimeCandidateListener();
     await replaceAutomationRuntimeRules([]);
+    set((current) => ({
+      runtimeStates: current.rules.reduce<Record<string, AutomationRuntimeState>>((acc, rule) => {
+        acc[rule.id] = deriveRuntimeState(rule.id, current.processedEntries, current.runtimeStates[rule.id], {
+          status: 'stopped',
+        });
+        return acc;
+      }, {}),
+    }));
   },
 }));
 
-registerAutomationTaskSettledHandler(async (payload: AutomationTaskSettledPayload) => {
+async function handleAutomationTaskSettled(payload: AutomationTaskSettledPayload) {
   pendingFingerprints.delete(buildPendingFingerprintKey(payload.ruleId, payload.sourceFingerprint));
   clearAutomationRecoveryGuardEntry(payload.ruleId, payload.sourceFingerprint);
 
@@ -816,6 +1322,10 @@ registerAutomationTaskSettledHandler(async (payload: AutomationTaskSettledPayloa
   useAutomationStore.setState((current) => {
     const nextRule = current.rules.find((item) => item.id === payload.ruleId);
     const nextRuleName = nextRule?.name || rule?.name || 'Automation';
+    const shouldClearBlockedHint = (
+      current.runtimeStates[payload.ruleId]?.lastBlockedFilePath === payload.filePath
+      && (current.runtimeStates[payload.ruleId]?.lastBlockedAt ?? 0) <= payload.processedAt
+    );
     const nextNotifications = payload.status === 'complete'
       ? appendOrMergeSuccessNotification(current.notifications, {
         ruleId: payload.ruleId,
@@ -845,12 +1355,21 @@ registerAutomationTaskSettledHandler(async (payload: AutomationTaskSettledPayloa
           lastProcessedFilePath: payload.filePath,
           lastResult: payload.status === 'complete' ? 'success' : 'error',
           lastResultMessage: payload.errorMessage,
+          ...(shouldClearBlockedHint
+            ? {
+              lastBlockedAt: undefined,
+              lastBlockedReason: undefined,
+              lastBlockedFilePath: undefined,
+            }
+            : {}),
         }),
       },
     };
   });
-});
+}
 
-export async function __notifyAutomationTaskSettledForTests(payload: AutomationTaskSettledPayload) {
-  await notifyAutomationTaskSettled(payload);
+subscribeAutomationTaskSettled(handleAutomationTaskSettled);
+
+export async function __emitAutomationTaskSettledForTests(payload: AutomationTaskSettledPayload) {
+  await emitAutomationTaskSettled(payload);
 }
