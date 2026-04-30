@@ -8,6 +8,20 @@ import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
 import { SettingsTabInput, type SettingsTab } from '../hooks/useSettingsLogic';
+import {
+    SETTINGS_TABS,
+    loadSettingsAboutTab,
+    loadSettingsAutomationTab,
+    loadSettingsDashboardTab,
+    loadSettingsGeneralTab,
+    loadSettingsLLMServiceTab,
+    loadSettingsMicrophoneTab,
+    loadSettingsModelsPane,
+    loadSettingsShortcutsTab,
+    loadSettingsSubtitleTab,
+    loadSettingsVocabularyTab,
+    loadSettingsVoiceTypingTab,
+} from './settings/settingsLoaders';
 import './settings/Settings.css';
 import {
     GeneralIcon,
@@ -30,113 +44,17 @@ interface SettingsProps {
     onOpenDiagnostics?: () => void;
 }
 
-const SETTINGS_TABS = [
-    'general',
-    'dashboard',
-    'microphone',
-    'subtitle',
-    'voice_typing',
-    'models',
-    'vocabulary',
-    'automation',
-    'llm_service',
-    'shortcuts',
-    'about',
-] as const;
-
-type SettingsTabId = typeof SETTINGS_TABS[number];
-
-const SETTINGS_PANEL_IDS: Record<SettingsTabId, string> = {
-    general: 'settings-panel-general',
-    dashboard: 'settings-panel-dashboard',
-    microphone: 'settings-panel-microphone',
-    subtitle: 'settings-panel-subtitle',
-    voice_typing: 'settings-panel-voice-typing',
-    models: 'settings-panel-models',
-    vocabulary: 'settings-panel-vocabulary',
-    automation: 'settings-panel-automation',
-    llm_service: 'settings-panel-llm',
-    shortcuts: 'settings-panel-shortcuts',
-    about: 'settings-panel-about',
-};
-
-const SettingsGeneralTab = lazy(async () => {
-    const module = await import('./settings/SettingsGeneralTab');
-    return { default: module.SettingsGeneralTab };
-});
-
-const SettingsDashboardTab = lazy(async () => {
-    const module = await import('./settings/SettingsDashboardTab');
-    return { default: module.SettingsDashboardTab };
-});
-
-const SettingsMicrophoneTab = lazy(async () => {
-    const module = await import('./settings/SettingsMicrophoneTab');
-    return { default: module.SettingsMicrophoneTab };
-});
-
-const SettingsSubtitleTab = lazy(async () => {
-    const module = await import('./settings/SettingsSubtitleTab');
-    return { default: module.SettingsSubtitleTab };
-});
-
-const SettingsVoiceTypingTab = lazy(async () => {
-    const module = await import('./settings/SettingsVoiceTypingTab');
-    return { default: module.SettingsVoiceTypingTab };
-});
-
-const SettingsModelsPane = lazy(async () => {
-    const module = await import('./settings/SettingsModelsPane');
-    return { default: module.SettingsModelsPane };
-});
-
-const SettingsVocabularyTab = lazy(async () => {
-    const module = await import('./settings/SettingsVocabularyTab');
-    return { default: module.SettingsVocabularyTab };
-});
-
-const SettingsAutomationTab = lazy(async () => {
-    const module = await import('./settings/SettingsAutomationTab');
-    return { default: module.SettingsAutomationTab };
-});
-
-const SettingsLLMServiceTab = lazy(async () => {
-    const module = await import('./settings/SettingsLLMServiceTab');
-    return { default: module.SettingsLLMServiceTab };
-});
-
-const SettingsShortcutsTab = lazy(async () => {
-    const module = await import('./settings/SettingsShortcutsTab');
-    return { default: module.SettingsShortcutsTab };
-});
-
-const SettingsAboutTab = lazy(async () => {
-    const module = await import('./settings/SettingsAboutTab');
-    return { default: module.SettingsAboutTab };
-});
-
-function SettingsPaneLoading({
-    id,
-    ariaLabelledby,
-    label,
-}: {
-    id: string;
-    ariaLabelledby: string;
-    label: string;
-}): React.JSX.Element {
-    return (
-        <div
-            className="settings-tab-container settings-tab-loading"
-            role="tabpanel"
-            id={id}
-            aria-labelledby={ariaLabelledby}
-            tabIndex={0}
-        >
-            <div className="settings-tab-loading-spinner" aria-hidden="true" />
-            <span>{label}</span>
-        </div>
-    );
-}
+const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
+const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
+const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
+const SettingsSubtitleTab = lazy(loadSettingsSubtitleTab);
+const SettingsVoiceTypingTab = lazy(loadSettingsVoiceTypingTab);
+const SettingsModelsPane = lazy(loadSettingsModelsPane);
+const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
+const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
+const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
+const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
+const SettingsAboutTab = lazy(loadSettingsAboutTab);
 
 function renderSettingsPane(
     activeTab: SettingsTab,
@@ -265,9 +183,6 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
     };
 
     if (!isOpen) return null;
-
-    const activePanelId = SETTINGS_PANEL_IDS[activeTab];
-    const activePanelLabelledBy = `settings-tab-${activeTab}`;
 
     return (
         <div className="settings-overlay" onClick={onClose}>
@@ -402,15 +317,7 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
                         <SettingsNavigationProvider value={navigationContextValue}>
-                            <Suspense
-                                fallback={(
-                                    <SettingsPaneLoading
-                                        id={activePanelId}
-                                        ariaLabelledby={activePanelLabelledBy}
-                                        label={t('common.loading')}
-                                    />
-                                )}
-                            >
+                            <Suspense fallback={null}>
                                 {renderSettingsPane(activeTab, isOpen, onOpenDiagnostics)}
                             </Suspense>
                         </SettingsNavigationProvider>

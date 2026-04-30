@@ -6,7 +6,7 @@ import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import type { UIConfig } from '../../types/config';
-import { BackupSettingsSection } from './backup/BackupSettingsSection';
+import { loadBackupSettingsSection } from './settingsGeneralDeferredLoaders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
@@ -14,6 +14,8 @@ interface SettingsGeneralTabProps {
 }
 
 type FontValue = NonNullable<UIConfig['font']>;
+
+const BackupSettingsSection = React.lazy(loadBackupSettingsSection);
 
 function getFontFamily(fontValue: string): string {
     switch (fontValue) {
@@ -167,7 +169,9 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 </SettingsItem>
             </SettingsSection>
 
-            <BackupSettingsSection />
+            <React.Suspense fallback={null}>
+                <BackupSettingsSection />
+            </React.Suspense>
 
             <SettingsSection
                 title={t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}

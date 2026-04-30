@@ -21,25 +21,24 @@ import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { SettingsTab } from './hooks/useSettingsLogic';
+import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { diagnosticsService } from './services/diagnosticsService';
 import { clearTranscriptSegments } from './stores/transcriptCoordinator';
 
-type IdleWindow = Window & {
-  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
+let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
 
-let settingsModalPromise: Promise<{ default: typeof import('./components/Settings').Settings }> | null = null;
-
-function loadSettingsModal() {
-  if (!settingsModalPromise) {
-    settingsModalPromise = import('./components/Settings').then((module) => ({ default: module.Settings }));
+function loadSettingsModule() {
+  if (!settingsModulePromise) {
+    settingsModulePromise = import('./components/Settings');
   }
 
-  return settingsModalPromise;
+  return settingsModulePromise;
 }
 
-const SettingsModal = lazy(loadSettingsModal);
+const SettingsModal = lazy(async () => {
+  const module = await loadSettingsModule();
+  return { default: module.Settings };
+});
 
 const DiagnosticsPanel = lazy(async () => {
   const module = await import('./components/DiagnosticsModal');
@@ -94,31 +93,36 @@ function App(): React.JSX.Element {
   // Keep TranscriptionService synced and preloaded in background
   useTranscriptionServiceSync();
 
-  // Handle tray events
-  useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
-
-  const preloadSettings = useCallback(() => {
-    void loadSettingsModal();
+  const preloadSettings = useCallback((tab: SettingsTab = 'general') => {
+    void preloadSettingsTab(tab);
   }, []);
+
+  const preloadAllSettings = useCallback(() => {
+    void loadSettingsModule().then(() => preloadAllSettingsTabs());
+  }, []);
+
+  const setPreloadedSettingsInitialTab = useCallback((tab: SettingsTab) => {
+    preloadSettings(tab);
+    setSettingsInitialTab(tab);
+  }, [preloadSettings]);
+
+  // Handle tray events
+  useTrayHandling(setIsSettingsOpen, setPreloadedSettingsInitialTab);
 
   useEffect(() => {
     if (!isLoaded) return;
 
-    const idleWindow = window as IdleWindow;
-    const schedulePreload = () => {
-      void loadSettingsModal();
-    };
+    preloadAllSettings();
+  }, [isLoaded, preloadAllSettings]);
 
-    if (typeof idleWindow.requestIdleCallback === 'function') {
-      const handle = idleWindow.requestIdleCallback(schedulePreload, { timeout: 2000 });
-      return () => idleWindow.cancelIdleCallback?.(handle);
-    }
-
-    const timeout = window.setTimeout(schedulePreload, 300);
-    return () => window.clearTimeout(timeout);
-  }, [isLoaded]);
+  const openDefaultSettings = () => {
+    preloadSettings('general');
+    setSettingsInitialTab('general');
+    setIsSettingsOpen(true);
+  };
 
   const openSettingsTab = (tab: SettingsTab) => {
+    preloadSettings(tab);
     setIsDiagnosticsOpen(false);
     setSettingsInitialTab(tab);
     setIsSettingsOpen(true);
@@ -176,9 +180,9 @@ function App(): React.JSX.Element {
           />
           <button
             className="btn btn-icon"
-            onClick={() => setIsSettingsOpen(true)}
-            onPointerEnter={preloadSettings}
-            onFocus={preloadSettings}
+            onClick={openDefaultSettings}
+            onPointerEnter={() => preloadSettings('general')}
+            onFocus={() => preloadSettings('general')}
             data-tooltip={t('header.settings')}
             data-tooltip-pos="bottom-left"
             aria-label={t('header.settings')}

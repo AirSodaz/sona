@@ -151,11 +151,17 @@ vi.mock('../../stores/transcriptRuntimeStore', () => ({
 
 describe('SettingsGeneralTab backup entry', () => {
   const openWebDavAccordion = async () => {
-    fireEvent.click(screen.getByRole('button', { name: /WebDAV Cloud Sync/i }));
+    const accordionToggle = await screen.findByRole('button', { name: /WebDAV Cloud Sync/i });
+    fireEvent.click(accordionToggle);
 
+    await waitFor(() => {
+      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
+    });
     await waitFor(() => {
       expect(screen.getByLabelText('Server URL')).toBeDefined();
     });
+
+    return accordionToggle;
   };
 
   beforeEach(() => {
@@ -177,19 +183,25 @@ describe('SettingsGeneralTab backup entry', () => {
   it('keeps the WebDAV controls collapsed until the accordion is expanded', async () => {
     render(<SettingsGeneralTab />);
 
-    await waitFor(() => {
-      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
-    });
+    expect(screen.getByText('settings.general_title')).toBeDefined();
+    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
 
-    const accordionToggle = screen.getByRole('button', { name: /WebDAV Cloud Sync/i });
+    const accordionToggle = await screen.findByRole('button', { name: /WebDAV Cloud Sync/i });
+    expect(await screen.findByRole('button', { name: 'Export Backup' })).toBeDefined();
+    expect(await screen.findByRole('button', { name: 'Import Backup' })).toBeDefined();
+    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
 
     expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByLabelText('Server URL')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh Cloud Backups' })).toBeNull();
+    expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
 
     fireEvent.click(accordionToggle);
 
+    await waitFor(() => {
+      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
+    });
     await waitFor(() => {
       expect(screen.getByLabelText('Server URL')).toBeDefined();
     });
@@ -203,16 +215,13 @@ describe('SettingsGeneralTab backup entry', () => {
       expect(screen.queryByLabelText('Server URL')).toBeNull();
     });
     expect(accordionToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
   });
 
   it('disables local backup and WebDAV transfer actions while live recording is active', async () => {
     testContext.transcriptState.isRecording = true;
 
     render(<SettingsGeneralTab />);
-
-    await waitFor(() => {
-      expect(testContext.loadWebDavConfigMock).toHaveBeenCalledTimes(1);
-    });
 
     await openWebDavAccordion();
 
@@ -250,9 +259,10 @@ describe('SettingsGeneralTab backup entry', () => {
     testContext.exportBackupMock.mockRejectedValueOnce(failure);
 
     render(<SettingsGeneralTab />);
+    const exportButton = await screen.findByRole('button', { name: 'Export Backup' });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+      fireEvent.click(exportButton);
     });
 
     await waitFor(() => {
@@ -302,9 +312,10 @@ describe('SettingsGeneralTab backup entry', () => {
     testContext.confirmMock.mockResolvedValue(false);
 
     render(<SettingsGeneralTab />);
+    const importButton = await screen.findByRole('button', { name: 'Import Backup' });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Import Backup' }));
+      fireEvent.click(importButton);
     });
 
     await waitFor(() => {

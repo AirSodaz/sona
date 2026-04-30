@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 
 const settingsModuleLoaded = vi.hoisted(() => vi.fn());
+const preloadSettingsTabMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const preloadAllSettingsTabsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -24,19 +26,35 @@ vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () =>
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
-vi.mock('../components/NotificationCenter', () => ({ NotificationCenter: () => null }));
+vi.mock('../components/NotificationCenter', () => ({
+  NotificationCenter: ({ onOpenAutomationSettings }: any) => (
+    <button type="button" onClick={onOpenAutomationSettings}>
+      Open Automation Settings
+    </button>
+  ),
+}));
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => null }));
 vi.mock('../components/Icons', () => ({
   AutomationIcon: () => <span>AutomationIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
 }));
 
+vi.mock('../components/settings/settingsLoaders', () => ({
+  preloadSettingsTab: preloadSettingsTabMock,
+  preloadAllSettingsTabs: preloadAllSettingsTabsMock,
+}));
+
 vi.mock('../components/Settings', () => {
   settingsModuleLoaded();
 
   return {
-    Settings: ({ isOpen, initialTab }: any) => (
-      isOpen ? <div>Settings Tab: {initialTab}</div> : null
+    Settings: ({ isOpen, initialTab, onClose }: any) => (
+      isOpen ? (
+        <div>
+          <div>Settings Tab: {initialTab}</div>
+          <button type="button" onClick={onClose}>Close Settings</button>
+        </div>
+      ) : null
     ),
   };
 });
@@ -73,8 +91,8 @@ vi.mock('../stores/onboardingStore', () => ({
 describe('App settings preload', () => {
   beforeEach(() => {
     settingsModuleLoaded.mockClear();
-    vi.stubGlobal('requestIdleCallback', vi.fn(() => 1));
-    vi.stubGlobal('cancelIdleCallback', vi.fn());
+    preloadSettingsTabMock.mockClear();
+    preloadAllSettingsTabsMock.mockClear();
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       setMode: vi.fn(),
@@ -97,17 +115,44 @@ describe('App settings preload', () => {
     render(<App />);
 
     const settingsButton = screen.getByRole('button', { name: 'header.settings' });
-    expect(settingsModuleLoaded).not.toHaveBeenCalled();
-
-    fireEvent.pointerEnter(settingsButton);
 
     await waitFor(() => {
       expect(settingsModuleLoaded).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(preloadAllSettingsTabsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.pointerEnter(settingsButton);
+    await waitFor(() => {
+      expect(settingsModuleLoaded).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(preloadSettingsTabMock).toHaveBeenCalledWith('general');
+    });
+
+    fireEvent.focus(settingsButton);
+    await waitFor(() => {
+      expect(preloadSettingsTabMock).toHaveBeenCalledTimes(2);
     });
 
     fireEvent.click(settingsButton);
 
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();
     expect(screen.queryByRole('dialog', { name: 'common.loading' })).toBeNull();
+
+    fireEvent.click(screen.getByText('Open Automation Settings'));
+    await waitFor(() => {
+      expect(preloadSettingsTabMock).toHaveBeenCalledWith('automation');
+    });
+    expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Close Settings'));
+    await waitFor(() => {
+      expect(screen.queryByText('Settings Tab: automation')).toBeNull();
+    });
+
+    fireEvent.click(settingsButton);
+    expect(await screen.findByText('Settings Tab: general')).toBeDefined();
   });
 });

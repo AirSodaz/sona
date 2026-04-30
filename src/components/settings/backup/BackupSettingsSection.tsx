@@ -113,8 +113,14 @@ export function BackupSettingsSection(): React.JSX.Element {
     const [webDavConfig, setWebDavConfig] = React.useState<BackupWebDavConfig>(EMPTY_WEBDAV_CONFIG);
     const [webDavConfigReady, setWebDavConfigReady] = React.useState(false);
     const [webDavConfigError, setWebDavConfigError] = React.useState<string | null>(null);
+    const [webDavAccordionState, setWebDavAccordionState] = React.useState({
+        isOpen: false,
+        hasRequestedConfig: false,
+    });
     const [remoteBackups, setRemoteBackups] = React.useState<RemoteBackupEntry[]>([]);
     const [hasLoadedRemoteBackups, setHasLoadedRemoteBackups] = React.useState(false);
+    const isWebDavOpen = webDavAccordionState.isOpen;
+    const hasRequestedWebDavConfig = webDavAccordionState.hasRequestedConfig;
 
     const backupBlocker = isRecording
         ? 'recording'
@@ -157,6 +163,10 @@ export function BackupSettingsSection(): React.JSX.Element {
     ), [showError]);
 
     React.useEffect(() => {
+        if (!hasRequestedWebDavConfig || webDavConfigReady) {
+            return;
+        }
+
         let cancelled = false;
 
         void backupWebDavService.loadConfig()
@@ -180,6 +190,17 @@ export function BackupSettingsSection(): React.JSX.Element {
         return () => {
             cancelled = true;
         };
+    }, [hasRequestedWebDavConfig, webDavConfigReady]);
+
+    const handleToggleWebDav = React.useCallback(() => {
+        setWebDavAccordionState((current) => {
+            const isOpen = !current.isOpen;
+
+            return {
+                isOpen,
+                hasRequestedConfig: current.hasRequestedConfig || isOpen,
+            };
+        });
     }, []);
 
     const persistWebDavConfig = React.useCallback((nextConfig: BackupWebDavConfig) => {
@@ -405,7 +426,11 @@ export function BackupSettingsSection(): React.JSX.Element {
                 </button>
             </SettingsItem>
 
-            <SettingsAccordion title={webDavAccordionTitle}>
+            <SettingsAccordion
+                title={webDavAccordionTitle}
+                isOpen={isWebDavOpen}
+                onToggle={handleToggleWebDav}
+            >
                 <div className="settings-group" style={{ width: '100%' }}>
                     <div className="settings-item">
                         <label className="settings-label" htmlFor="backup-webdav-server">
