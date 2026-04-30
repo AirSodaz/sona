@@ -1,15 +1,66 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { polishService } from '../polishService';
+import { DEFAULT_CONFIG } from '../../stores/configStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
+import type { AppConfig } from '../../types/config';
 import { TranscriptSegment } from '../../types/transcript';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
+
+const TEST_LLM_SETTINGS = {
+  activeProvider: 'open_ai',
+  providers: {
+    open_ai: {
+      apiHost: 'test-url',
+      apiKey: 'test-key',
+    },
+  },
+  models: {
+    'open-ai-test': {
+      id: 'open-ai-test',
+      provider: 'open_ai',
+      model: 'test-model',
+    },
+  },
+  modelOrder: ['open-ai-test'],
+  selections: {
+    polishModelId: 'open-ai-test',
+  },
+} satisfies NonNullable<AppConfig['llmSettings']>;
+
+type TestConfigOverrides = Omit<Partial<AppConfig>, 'llmSettings'> & {
+  llmSettings?: Partial<NonNullable<AppConfig['llmSettings']>>;
+};
+
+function buildTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...overrides,
+    llmSettings: {
+      ...TEST_LLM_SETTINGS,
+      ...overrides.llmSettings,
+      providers: {
+        ...TEST_LLM_SETTINGS.providers,
+        ...overrides.llmSettings?.providers,
+      },
+      models: {
+        ...TEST_LLM_SETTINGS.models,
+        ...overrides.llmSettings?.models,
+      },
+      modelOrder: overrides.llmSettings?.modelOrder ?? TEST_LLM_SETTINGS.modelOrder,
+      selections: {
+        ...TEST_LLM_SETTINGS.selections,
+        ...overrides.llmSettings?.selections,
+      },
+    },
+  };
+}
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -30,32 +81,7 @@ describe('PolishService', () => {
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
 
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            polishModelId: 'open-ai-test',
-          },
-        },
-        polishPresetId: 'general',
-        polishCustomPresets: [],
-        polishKeywords: '',
-        polishKeywordSets: [],
-      },
+      config: buildTestConfig(),
       segments: [],
       sourceHistoryId: null,
     });
@@ -127,34 +153,12 @@ describe('PolishService', () => {
     ];
 
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            polishModelId: 'open-ai-test',
-          },
-        },
+      config: buildTestConfig({
         polishPresetId: 'custom-team',
         polishCustomPresets: [
           { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
         ],
-        polishKeywords: '',
-        polishKeywordSets: [],
-      },
+      }),
     });
 
     (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
@@ -174,36 +178,13 @@ describe('PolishService', () => {
     ];
 
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            polishModelId: 'open-ai-test',
-          },
-        },
-        polishPresetId: 'general',
-        polishCustomPresets: [],
-        polishKeywords: '',
+      config: buildTestConfig({
         polishKeywordSets: [
           { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
           { id: 'kw-2', name: 'Disabled', enabled: false, keywords: 'Ignore me' },
           { id: 'kw-3', name: 'Style', enabled: true, keywords: 'Preserve speaker names' },
         ],
-      },
+      }),
     });
 
     (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);

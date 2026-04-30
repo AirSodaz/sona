@@ -79,7 +79,6 @@ describe('segmentTask helpers', () => {
     const result = await runConfiguredSegmentTask({
       feature: 'translation',
       taskType: 'translate',
-      command: 'translate_transcript_segments',
       config,
       segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
       onChunk,

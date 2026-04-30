@@ -2,14 +2,65 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { translationService } from '../translationService';
 import { historyService } from '../historyService';
+import { DEFAULT_CONFIG } from '../../stores/configStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
+import type { AppConfig } from '../../types/config';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
+
+const TEST_LLM_SETTINGS = {
+  activeProvider: 'open_ai',
+  providers: {
+    open_ai: {
+      apiHost: 'test-url',
+      apiKey: 'test-key',
+    },
+  },
+  models: {
+    'open-ai-test': {
+      id: 'open-ai-test',
+      provider: 'open_ai',
+      model: 'test-model',
+    },
+  },
+  modelOrder: ['open-ai-test'],
+  selections: {
+    translationModelId: 'open-ai-test',
+  },
+} satisfies NonNullable<AppConfig['llmSettings']>;
+
+type TestConfigOverrides = Omit<Partial<AppConfig>, 'llmSettings'> & {
+  llmSettings?: Partial<NonNullable<AppConfig['llmSettings']>>;
+};
+
+function buildTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...overrides,
+    llmSettings: {
+      ...TEST_LLM_SETTINGS,
+      ...overrides.llmSettings,
+      providers: {
+        ...TEST_LLM_SETTINGS.providers,
+        ...overrides.llmSettings?.providers,
+      },
+      models: {
+        ...TEST_LLM_SETTINGS.models,
+        ...overrides.llmSettings?.models,
+      },
+      modelOrder: overrides.llmSettings?.modelOrder ?? TEST_LLM_SETTINGS.modelOrder,
+      selections: {
+        ...TEST_LLM_SETTINGS.selections,
+        ...overrides.llmSettings?.selections,
+      },
+    },
+  };
+}
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -39,29 +90,9 @@ describe('TranslationService', () => {
 
   it('translates the active transcript incrementally and toggles visibility when finished', async () => {
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            translationModelId: 'open-ai-test',
-          },
-        },
+      config: buildTestConfig({
         translationLanguage: 'ja',
-      },
+      }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
       sourceHistoryId: null,
     });
@@ -105,29 +136,9 @@ describe('TranslationService', () => {
 
   it('falls back to final result when no chunk event arrives', async () => {
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            translationModelId: 'open-ai-test',
-          },
-        },
+      config: buildTestConfig({
         translationLanguage: 'ja',
-      },
+      }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
       sourceHistoryId: null,
       llmStates: {
@@ -146,29 +157,9 @@ describe('TranslationService', () => {
 
   it('updates background history when the active record changes mid-translation', async () => {
     useTranscriptStore.setState({
-      config: {
-        llmSettings: {
-          activeProvider: 'open_ai',
-          providers: {
-            open_ai: {
-              apiHost: 'test-url',
-              apiKey: 'test-key',
-            },
-          },
-          models: {
-            'open-ai-test': {
-              id: 'open-ai-test',
-              provider: 'open_ai',
-              model: 'test-model',
-            },
-          },
-          modelOrder: ['open-ai-test'],
-          selections: {
-            translationModelId: 'open-ai-test',
-          },
-        },
+      config: buildTestConfig({
         translationLanguage: 'zh',
-      },
+      }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
       sourceHistoryId: 'history-a',
       llmStates: {

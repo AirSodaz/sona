@@ -209,8 +209,11 @@ class VoiceTypingService {
         try {
             const config = useConfigStore.getState().config;
             logger.info('[VoiceTypingService] Starting microphone capture for pre-warming...');
+            const deviceName = config.microphoneId && config.microphoneId !== 'default'
+                ? config.microphoneId
+                : null;
             await startMicrophoneCapture({
-                deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
+                deviceName,
                 instanceId: 'voice-typing',
             });
             this.captureStarted = true;

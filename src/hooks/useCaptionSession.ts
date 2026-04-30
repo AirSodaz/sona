@@ -117,8 +117,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 let nativeSuccess = false;
                 try {
                     logger.info('[CaptionSession] Attempting native system audio capture...');
+                    const deviceName = config.systemAudioDeviceId && config.systemAudioDeviceId !== 'default'
+                        ? config.systemAudioDeviceId
+                        : null;
                     await startSystemAudioCapture({
-                        deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
+                        deviceName,
                         instanceId: 'caption',
                     });
                     const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {

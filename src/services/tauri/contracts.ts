@@ -17,6 +17,7 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from '../llmTaskService';
+import type { ModelFileConfig } from '../modelService';
 import { TauriCommand, type TauriCommandName } from './commands';
 
 type AudioDevice = {
@@ -283,7 +284,7 @@ export type TauriCommandContractMap = {
       vadModel: string | null;
       vadBuffer: number;
       modelType: string;
-      fileConfig?: Record<string, string | undefined>;
+      fileConfig?: ModelFileConfig;
       hotwords: string | null;
       normalizationOptions: {
         enableTimeline: boolean;
@@ -322,7 +323,7 @@ export type TauriCommandContractMap = {
       vadModel: string | null;
       vadBuffer: number;
       modelType: string;
-      fileConfig?: Record<string, string | undefined>;
+      fileConfig?: ModelFileConfig;
       hotwords: string | null;
       speakerProcessing: SpeakerProcessingConfig | null;
       normalizationOptions: {
