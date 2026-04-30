@@ -6,7 +6,7 @@
  * unnecessary re-renders.
  */
 
-import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './transcript';
+import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
 import type { SpeakerProfile } from './speaker';
 
 // ---------------------------------------------------------------------------

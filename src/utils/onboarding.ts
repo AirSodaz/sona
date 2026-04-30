@@ -1,4 +1,4 @@
-import { AppConfig } from '../types/transcript';
+import type { AppConfig } from '../types/config';
 import { logger } from './logger';
 import {
   OnboardingEntryContext,

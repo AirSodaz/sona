@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { LiveRecord } from '../LiveRecord';
 import { useOnboardingStore } from '../../stores/onboardingStore';
-import type { HistoryItem } from '../../types/history';
-import type { LiveRecordingDraftHandle } from '../../services/historyService';
+import {
+    createCompletedHistoryItem,
+    createLiveRecordingDraftHandle as createDraftHandle,
+    resetLiveRecordHistoryMocks,
+} from '../../__tests__/testUtils/liveRecord';
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
@@ -107,76 +110,27 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
-function createDraftHandle(
-    id: string,
-    extension = 'wav',
-    overrides: Partial<HistoryItem> = {},
-): LiveRecordingDraftHandle {
-    return {
-        item: {
-            id,
-            timestamp: 1,
-            duration: 0,
-            audioPath: `${id}.${extension}`,
-            transcriptPath: `${id}.json`,
-            title: `Recording ${id}`,
-            previewText: '',
-            projectId: null,
-            icon: 'system:mic',
-            type: 'recording',
-            searchContent: '',
-            status: 'draft',
-            draftSource: 'live_record',
-            ...overrides,
-        },
-        audioAbsolutePath: `C:/mock/history/${id}.${extension}`,
-    };
-}
-
-function createCompletedHistoryItem(
-    id: string,
-    extension = 'wav',
-    overrides: Partial<HistoryItem> = {},
-): HistoryItem {
-    return {
-        id,
-        timestamp: 1,
-        duration: 1,
-        audioPath: `${id}.${extension}`,
-        transcriptPath: `${id}.json`,
-        title: `Recording ${id}`,
-        previewText: '',
-        projectId: null,
-        icon: 'system:mic',
-        type: 'recording',
-        searchContent: '',
-        status: 'complete',
-        ...overrides,
-    };
-}
-
 // Mock history service
-const mockSaveRecording = vi.fn().mockResolvedValue({ id: 'test-id', title: 'Recording test', projectId: null });
-const mockSaveNativeRecording = vi.fn().mockResolvedValue({ id: 'test-id', title: 'Recording test', projectId: null });
-const mockCreateLiveRecordingDraft = vi.fn();
-const mockCompleteLiveRecordingDraft = vi.fn();
-const mockDeleteRecording = vi.fn().mockResolvedValue(undefined);
-let liveDraftCounter = 0;
-const liveDraftHandles = new Map<string, LiveRecordingDraftHandle>();
-
-vi.mock('../../services/historyService', () => ({
-    historyService: {
-        createLiveRecordingDraft: (...args: any[]) => mockCreateLiveRecordingDraft(...args),
-        completeLiveRecordingDraft: (...args: any[]) => mockCompleteLiveRecordingDraft(...args),
-        discardLiveRecordingDraft: (...args: any[]) => mockDeleteRecording(...args),
-        deleteRecording: (...args: any[]) => mockDeleteRecording(...args),
-        updateTranscript: vi.fn().mockResolvedValue(undefined),
-        saveRecording: (blob: Blob, segments: any, duration: number) => mockSaveRecording(blob, segments, duration),
-        saveNativeRecording: (path: string, segments: any, duration: number) => mockSaveNativeRecording(path, segments, duration),
-        saveImportedFile: vi.fn().mockResolvedValue({ id: 'test-id' }),
-        getAll: vi.fn().mockResolvedValue([]),
-    }
+const mockLiveRecordHistory = vi.hoisted(() => ({
+    mockSaveRecording: vi.fn(),
+    mockSaveNativeRecording: vi.fn(),
+    mockCreateLiveRecordingDraft: vi.fn(),
+    mockCompleteLiveRecordingDraft: vi.fn(),
+    mockDeleteRecording: vi.fn(),
 }));
+const {
+    mockCreateLiveRecordingDraft,
+    mockCompleteLiveRecordingDraft,
+} = mockLiveRecordHistory;
+
+vi.mock('../../services/historyService', async () => {
+    const { createLiveRecordHistoryServiceMockModule } = await vi.importActual<
+        typeof import('../../__tests__/testUtils/liveRecord')
+    >('../../__tests__/testUtils/liveRecord');
+    return createLiveRecordHistoryServiceMockModule(mockLiveRecordHistory, {
+        saveImportedFileResult: { id: 'test-id' },
+    });
+});
 
 // Mock caption window service
 vi.mock('../../services/captionWindowService', () => ({
@@ -229,8 +183,6 @@ describe('LiveRecord', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
         capturedOnSegment = null;
-        liveDraftCounter = 0;
-        liveDraftHandles.clear();
         localStorage.clear();
         mockInvoke.mockImplementation(async (cmd: string) => {
             if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
@@ -238,31 +190,9 @@ describe('LiveRecord', () => {
             }
             return undefined;
         });
-        mockCreateLiveRecordingDraft.mockReset();
-        mockCompleteLiveRecordingDraft.mockReset();
-        mockDeleteRecording.mockReset();
-        mockDeleteRecording.mockImplementation(async (historyId: string) => {
-            liveDraftHandles.delete(historyId);
-        });
-        mockCreateLiveRecordingDraft.mockImplementation(async (audioExtension: string, projectId?: string | null, icon?: string | null) => {
-            liveDraftCounter += 1;
-            const draft = createDraftHandle(`draft-${liveDraftCounter}`, audioExtension, {
-                projectId: projectId ?? null,
-                icon: icon ?? 'system:mic',
-            });
-            liveDraftHandles.set(draft.item.id, draft);
-            return draft;
-        });
-        mockCompleteLiveRecordingDraft.mockImplementation(async (historyId: string, segments: Array<{ text?: string }>, duration: number) => {
-            const draft = liveDraftHandles.get(historyId) ?? createDraftHandle(historyId);
-            return createCompletedHistoryItem(historyId, draft.item.audioPath.split('.').pop() || 'wav', {
-                title: draft.item.title,
-                icon: draft.item.icon,
-                projectId: draft.item.projectId,
-                duration,
-                previewText: segments[0]?.text || '',
-                searchContent: segments.map((segment) => segment.text || '').join(' ').trim(),
-            });
+        resetLiveRecordHistoryMocks(mockLiveRecordHistory, {
+            saveRecordingResult: { id: 'test-id', title: 'Recording test', projectId: null },
+            saveNativeRecordingResult: { id: 'test-id', title: 'Recording test', projectId: null },
         });
 
         mockStart.mockImplementation((onSeg: any) => {

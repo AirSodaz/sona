@@ -1,4 +1,4 @@
-import { AppConfig } from '../types/transcript';
+import type { AppConfig } from '../types/config';
 import { ModelInfo, PRESET_MODELS, modelService } from './modelService';
 
 export const RECOMMENDED_RECOGNITION_MODEL_ID =
