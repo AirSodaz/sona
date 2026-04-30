@@ -18,6 +18,10 @@ vi.mock('../Icons', () => ({
   GeneralIcon: () => <div />,
 }));
 
+vi.mock('../settings/backup/BackupSettingsSection', () => ({
+  BackupSettingsSection: () => <div data-testid="backup-settings-section" />,
+}));
+
 vi.mock('../../services/backupService', () => ({
   backupService: {
     applyImportBackup: vi.fn(),

@@ -18,6 +18,10 @@ vi.mock('react-i18next', () => ({
     },
 }));
 
+vi.mock('../settings/backup/BackupSettingsSection', () => ({
+    BackupSettingsSection: () => <div data-testid="backup-settings-section" />,
+}));
+
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [
         { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'sherpa-onnx', filename: 'test-model' },

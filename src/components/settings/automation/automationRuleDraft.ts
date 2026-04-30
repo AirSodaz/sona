@@ -1,7 +1,7 @@
 import type { AutomationRule } from '../../../types/automation';
 import type { ExportMode } from '../../../utils/exportFormats';
 
-export const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'] as const;
+export { LANGUAGE_OPTIONS } from '../../../constants/languages';
 export const NEW_RULE_KEY = '__new__';
 
 export interface AutomationRuleDraft {

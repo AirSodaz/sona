@@ -1,4 +1,4 @@
-export const LANGUAGE_OPTIONS = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es'] as const;
+export { LANGUAGE_OPTIONS } from '../../constants/languages';
 
 export const DEFAULT_FILTER_TYPE = 'all';
 export const DEFAULT_DATE_FILTER = 'all';

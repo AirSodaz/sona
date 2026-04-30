@@ -131,14 +131,19 @@ describe('BatchImport Integration', () => {
     });
 
     it('adds files to queue and starts processing automatically', async () => {
-        // Mock transcribeFile to simulate progress with delay
+        let finishTranscription!: () => void;
+        const transcriptionGate = new Promise<void>((resolve) => {
+            finishTranscription = resolve;
+        });
+        const transcriptSegments = [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }];
+
+        // Keep transcription pending until the processing-state assertions complete.
         const mockTranscribe = vi.mocked(transcriptionService.transcribeFile).mockImplementation(
             async (_path, onProgress, onSegment) => {
                 if (onProgress) onProgress(10);
-                if (onSegment) onSegment({ id: '1', start: 0, end: 1, text: 'Test', isFinal: true });
-                // Wait to allow assertion of processing state
-                await new Promise(resolve => setTimeout(resolve, 100));
-                return [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }];
+                if (onSegment) onSegment(transcriptSegments[0]);
+                await transcriptionGate;
+                return transcriptSegments;
             }
         );
 
@@ -169,6 +174,11 @@ describe('BatchImport Integration', () => {
 
         // 4. Check if service was called
         expect(mockTranscribe).toHaveBeenCalled();
+
+        await act(async () => {
+            finishTranscription();
+            await transcriptionGate;
+        });
 
         // 5. Verify the full history persistence contract succeeds
         await waitFor(() => {

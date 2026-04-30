@@ -22,7 +22,7 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from '../llmTaskService';
-import type { ModelFileConfig } from '../modelService';
+import type { ModelFileConfig } from '../../types/model';
 import { TauriCommand, type TauriCommandName } from './commands';
 
 type AudioDevice = {

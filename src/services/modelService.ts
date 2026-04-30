@@ -11,6 +11,9 @@ import {
     extractTarBz2,
 } from './tauri/app';
 import { TauriEvent } from './tauri/events';
+import type { ModelFileConfig } from '../types/model';
+
+export type { ModelFileConfig } from '../types/model';
 
 
 /**
@@ -25,19 +28,6 @@ export interface ModelRules {
     requiresPunctuation: boolean;
     /** Optional hint for UI/diagnostics about the model's timestamp granularity. */
     timestampSupportHint?: TimestampSupportHint;
-}
-
-export interface ModelFileConfig {
-    encoder?: string;
-    decoder?: string;
-    model?: string;
-    joiner?: string;
-    tokens?: string;
-    convFrontend?: string;
-    encoderAdaptor?: string;
-    llm?: string;
-    embedding?: string;
-    tokenizer?: string;
 }
 
 export interface ModelInfo {
