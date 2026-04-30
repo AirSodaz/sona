@@ -58,6 +58,8 @@ describe('SettingsAutomationTab', () => {
     const toggleRuleEnabledMock = vi.fn();
     const scanRuleNowMock = vi.fn();
     const retryFailedMock = vi.fn();
+    const alertMock = vi.fn();
+    const showErrorMock = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -98,8 +100,9 @@ describe('SettingsAutomationTab', () => {
 
         useDialogStore.setState({
             ...useDialogStore.getState(),
-            alert: vi.fn().mockResolvedValue(undefined),
+            alert: alertMock.mockResolvedValue(undefined),
             confirm: vi.fn().mockResolvedValue(true),
+            showError: showErrorMock.mockResolvedValue(undefined),
         });
 
         useBatchQueueStore.setState({
@@ -412,6 +415,45 @@ describe('SettingsAutomationTab', () => {
                     translationLanguage: 'en',
                 }),
             }));
+        });
+    });
+
+    it('keeps required-field validation on the warning alert path', async () => {
+        render(<SettingsAutomationTab />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+        await waitFor(() => {
+            expect(alertMock).toHaveBeenCalledWith(
+                'Complete the name, project, watch directory, and output directory before saving.',
+                { variant: 'warning' },
+            );
+        });
+        expect(showErrorMock).not.toHaveBeenCalled();
+        expect(saveRuleMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the standardized error dialog when saving a rule fails', async () => {
+        const failure = {
+            code: 'E_AUTOMATION_SAVE',
+            error: {
+                message: 'Watch directory is unavailable.',
+            },
+        };
+        saveRuleMock.mockRejectedValueOnce(failure);
+
+        render(<SettingsAutomationTab />);
+
+        expandRuleCard();
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+        await waitFor(() => {
+            expect(showErrorMock).toHaveBeenCalledWith({
+                code: 'automation.save_failed',
+                messageKey: 'errors.automation.save_failed',
+                cause: failure,
+            });
         });
     });
 });

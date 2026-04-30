@@ -56,6 +56,20 @@
             "unsupported_format": "不支持的文件格式。请使用：{{formats}}",
             "file_picker_failed": "无法打开文件选择器。"
         },
+        "automation": {
+            "save_failed": "保存自动化规则失败。",
+            "toggle_failed": "更新自动化规则失败。",
+            "scan_failed": "扫描自动化文件夹失败。",
+            "retry_failed": "重试失败的自动化项目失败。"
+        },
+        "backup": {
+            "export_failed": "导出备份归档失败。",
+            "import_failed": "导入备份归档失败。",
+            "webdav_test_failed": "测试 WebDAV 连接失败。",
+            "webdav_refresh_failed": "刷新 WebDAV 备份失败。",
+            "webdav_upload_failed": "上传备份归档到 WebDAV 失败。",
+            "webdav_restore_failed": "恢复 WebDAV 备份失败。"
+        },
         "history": {
             "missing_files_deleted": "音频文件和转录文件均已丢失。此记录将被删除。",
             "load_failed": "加载记录失败。"

@@ -22,6 +22,7 @@ const testContext = vi.hoisted(() => ({
   prepareImportFromRemoteMock: vi.fn().mockResolvedValue(null),
   prepareImportBackupMock: vi.fn().mockResolvedValue(null),
   saveWebDavConfigMock: vi.fn().mockResolvedValue(undefined),
+  showErrorMock: vi.fn().mockResolvedValue(undefined),
   testWebDavConnectionMock: vi.fn().mockResolvedValue({
     status: 'success',
     message: 'ready',
@@ -140,6 +141,7 @@ vi.mock('../../stores/dialogStore', () => ({
   useDialogStore: (selector: any) => selector({
     alert: testContext.alertMock,
     confirm: testContext.confirmMock,
+    showError: testContext.showErrorMock,
   }),
 }));
 
@@ -236,6 +238,32 @@ describe('SettingsGeneralTab backup entry', () => {
     await waitFor(() => {
       expect(screen.getByText('This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.')).toBeDefined();
     });
+  });
+
+  it('uses the standardized error dialog when backup export fails', async () => {
+    const failure = {
+      code: 'E_BACKUP_EXPORT',
+      error: {
+        message: 'Disk is full.',
+      },
+    };
+    testContext.exportBackupMock.mockRejectedValueOnce(failure);
+
+    render(<SettingsGeneralTab />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export Backup' }));
+    });
+
+    await waitFor(() => {
+      expect(testContext.showErrorMock).toHaveBeenCalledWith({
+        code: 'backup.export_failed',
+        messageKey: 'errors.backup.export_failed',
+        cause: failure,
+        titleKey: 'settings.backup.error_title',
+      });
+    });
+    expect(testContext.alertMock).not.toHaveBeenCalled();
   });
 
   it('shows destructive import summary copy and disposes the prepared archive when the user cancels', async () => {

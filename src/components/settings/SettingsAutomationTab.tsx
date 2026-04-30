@@ -47,6 +47,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const projects = useProjectStore((state) => state.projects);
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
+    const showError = useDialogStore((state) => state.showError);
     const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
     const [drafts, setDrafts] = useState<Record<string, AutomationRuleDraft>>({});
 
@@ -288,7 +289,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
             });
             closeDraft(draftKey);
         } catch (error) {
-            await alert(error instanceof Error ? error.message : String(error), { variant: 'error' });
+            await showError({
+                code: 'automation.save_failed',
+                messageKey: 'errors.automation.save_failed',
+                cause: error,
+            });
         }
     };
 
@@ -312,7 +317,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
             await toggleRuleEnabled(rule.id, enabled);
             updateDraft(rule.id, setDraftField('enabled', enabled));
         } catch (error) {
-            await alert(error instanceof Error ? error.message : String(error), { variant: 'error' });
+            await showError({
+                code: 'automation.toggle_failed',
+                messageKey: 'errors.automation.toggle_failed',
+                cause: error,
+            });
         }
     };
 
@@ -320,7 +329,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
         try {
             await scanRuleNow(ruleId);
         } catch (error) {
-            await alert(error instanceof Error ? error.message : String(error), { variant: 'error' });
+            await showError({
+                code: 'automation.scan_failed',
+                messageKey: 'errors.automation.scan_failed',
+                cause: error,
+            });
         }
     };
 
@@ -328,7 +341,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
         try {
             await retryFailed(ruleId);
         } catch (error) {
-            await alert(error instanceof Error ? error.message : String(error), { variant: 'error' });
+            await showError({
+                code: 'automation.retry_failed',
+                messageKey: 'errors.automation.retry_failed',
+                cause: error,
+            });
         }
     };
 

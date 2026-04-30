@@ -1,6 +1,7 @@
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { useConfigStore } from '../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { TranscriptionService } from './transcriptionService';
 import {
@@ -19,14 +20,6 @@ const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
 type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
-
-function normalizeErrorMessage(error: unknown) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-
-    return String(error);
-}
 
 class VoiceTypingService {
     private initialized = false;
@@ -189,7 +182,7 @@ class VoiceTypingService {
             logger.error('[VoiceTypingService] Failed to pre-warm:', error);
             useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
                 errorSource: 'warmup',
-                errorMessage: normalizeErrorMessage(error),
+                errorMessage: extractErrorMessage(error),
             });
         }
     }
@@ -221,7 +214,7 @@ class VoiceTypingService {
             logger.error('[VoiceTypingService] Failed to start microphone capture:', error);
             useVoiceTypingRuntimeStore.getState().setWarmupStatus('error', {
                 errorSource: 'microphone',
-                errorMessage: normalizeErrorMessage(error),
+                errorMessage: extractErrorMessage(error),
             });
         }
     }
@@ -303,7 +296,7 @@ class VoiceTypingService {
             logger.error('[VoiceTypingService] Failed to update voice typing shortcut:', error);
             useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus(
                 'error',
-                normalizeErrorMessage(error)
+                extractErrorMessage(error)
             );
         }
     }

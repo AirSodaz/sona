@@ -2,6 +2,7 @@ import { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
 import i18next from 'i18next';
 import { TranscriptionService } from '../transcriptionService';
 import { VoiceTypingOverlayPayload } from '../voiceTypingWindowService';
+import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import {
@@ -431,7 +432,7 @@ export class VoiceTypingSessionMachine {
         } catch (error) {
             logger.error('[VoiceTypingSessionMachine] Failed to inject dictated text:', error);
             if (this.isCurrentSession(sessionId, requestId)) {
-                await this.handleSessionError(sessionId, requestId, String(error));
+                await this.handleSessionError(sessionId, requestId, extractErrorMessage(error));
             }
             return;
         }

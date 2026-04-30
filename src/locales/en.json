@@ -56,6 +56,20 @@
             "unsupported_format": "Unsupported file format. Please use: {{formats}}",
             "file_picker_failed": "Failed to open the file picker."
         },
+        "automation": {
+            "save_failed": "Failed to save the automation rule.",
+            "toggle_failed": "Failed to update the automation rule.",
+            "scan_failed": "Failed to scan the automation folder.",
+            "retry_failed": "Failed to retry failed automation items."
+        },
+        "backup": {
+            "export_failed": "Failed to export the backup archive.",
+            "import_failed": "Failed to import the backup archive.",
+            "webdav_test_failed": "Failed to test the WebDAV connection.",
+            "webdav_refresh_failed": "Failed to refresh WebDAV backups.",
+            "webdav_upload_failed": "Failed to upload the backup archive to WebDAV.",
+            "webdav_restore_failed": "Failed to restore the WebDAV backup."
+        },
         "history": {
             "missing_files_deleted": "Both the audio and transcript files are missing. This record will be deleted.",
             "load_failed": "Failed to load the history item."

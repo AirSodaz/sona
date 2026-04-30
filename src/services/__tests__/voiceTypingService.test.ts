@@ -234,6 +234,30 @@ describe('voiceTypingService', () => {
         );
     });
 
+    it('normalizes Tauri-shaped shortcut registration failures in runtime status', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.register.mockRejectedValueOnce(
+            new Error('error invoking command: register_shortcut\nCaused by: Shortcut already registered by another app.')
+        );
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                shortcutRegistration: 'error',
+                lastErrorSource: 'shortcut_registration',
+                lastErrorMessage: 'Shortcut already registered by another app.',
+            })
+        );
+    });
+
     it('records warm-up failures in the runtime status store', async () => {
         mocks.config = {
             ...mocks.defaultConfig,
@@ -252,6 +276,33 @@ describe('voiceTypingService', () => {
                 warmup: 'error',
                 lastErrorSource: 'warmup',
                 lastErrorMessage: 'Warm-up failed.',
+            })
+        );
+    });
+
+    it('normalizes object-shaped warm-up failures in runtime status', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            voiceTypingEnabled: true,
+        };
+        mocks.mockPrepare.mockRejectedValueOnce({
+            code: 'E_WARMUP',
+            error: {
+                message: 'Nested warm-up failed.',
+            },
+        });
+
+        const service = await loadService();
+        const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+
+        service.init();
+        await flushMicrotasks(8);
+
+        expect(useVoiceTypingRuntimeStore.getState()).toEqual(
+            expect.objectContaining({
+                warmup: 'error',
+                lastErrorSource: 'warmup',
+                lastErrorMessage: 'Nested warm-up failed.',
             })
         );
     });

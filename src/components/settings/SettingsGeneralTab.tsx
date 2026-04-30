@@ -124,6 +124,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
     const updateConfig = useSetConfig();
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
+    const showError = useDialogStore((state) => state.showError);
     const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
     const hasBlockingQueueItems = useBatchQueueStore((state) => state.queueItems.some((item) => (
         item.status === 'pending' || item.status === 'processing'
@@ -171,6 +172,14 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
             </div>
         </div>
     );
+    const showBackupError = React.useCallback((code: string, messageKey: string, cause: unknown) => (
+        showError({
+            code,
+            messageKey,
+            cause,
+            titleKey: 'settings.backup.error_title',
+        })
+    ), [showError]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -227,12 +236,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 },
             );
         } catch (error) {
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.export_failed', 'errors.backup.export_failed', error);
         } finally {
             setBusyAction(null);
         }
@@ -277,12 +281,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 },
             );
         } catch (error) {
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.import_failed', 'errors.backup.import_failed', error);
         } finally {
             setBusyAction(null);
         }
@@ -297,12 +296,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 variant: result.status === 'warning' ? 'warning' : 'success',
             });
         } catch (error) {
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.webdav_test_failed', 'errors.backup.webdav_test_failed', error);
         } finally {
             setBusyAction(null);
         }
@@ -315,12 +309,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
             setRemoteBackups(backups);
             setHasLoadedRemoteBackups(true);
         } catch (error) {
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.webdav_refresh_failed', 'errors.backup.webdav_refresh_failed', error);
         } finally {
             setBusyAction(null);
         }
@@ -343,12 +332,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 },
             );
         } catch (error) {
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.webdav_upload_failed', 'errors.backup.webdav_upload_failed', error);
         } finally {
             setBusyAction(null);
         }
@@ -398,12 +382,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
                 await backupService.disposePreparedImport(prepared).catch(() => undefined);
             }
 
-            await alert(extractErrorMessage(error), {
-                title: t('settings.backup.error_title', {
-                    defaultValue: 'Backup failed',
-                }),
-                variant: 'error',
-            });
+            await showBackupError('backup.webdav_restore_failed', 'errors.backup.webdav_restore_failed', error);
         } finally {
             setBusyAction(null);
         }
