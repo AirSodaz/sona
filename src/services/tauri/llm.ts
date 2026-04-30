@@ -11,7 +11,7 @@ import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
 export async function generateLlmText(request: LlmGenerateCommandRequest): Promise<string> {
-  return invokeTauri<string>(TauriCommand.llm.generateText, { request });
+  return invokeTauri(TauriCommand.llm.generateText, { request });
 }
 
 export async function listLlmModels(request: {
@@ -19,23 +19,23 @@ export async function listLlmModels(request: {
   baseUrl?: string;
   apiKey?: string;
 }): Promise<string[]> {
-  return invokeTauri<string[]>(TauriCommand.llm.listModels, { request });
+  return invokeTauri(TauriCommand.llm.listModels, { request });
 }
 
 export async function polishTranscriptSegments(
   request: PolishSegmentsRequest,
 ): Promise<PolishedSegment[]> {
-  return invokeTauri<PolishedSegment[]>(TauriCommand.llm.polishTranscriptSegments, { request });
+  return invokeTauri(TauriCommand.llm.polishTranscriptSegments, { request });
 }
 
 export async function summarizeTranscript(
   request: SummarizeTranscriptRequest,
 ): Promise<TranscriptSummaryResult> {
-  return invokeTauri<TranscriptSummaryResult>(TauriCommand.llm.summarizeTranscript, { request });
+  return invokeTauri(TauriCommand.llm.summarizeTranscript, { request });
 }
 
 export async function translateTranscriptSegments(
   request: TranslateSegmentsRequest,
 ): Promise<TranslatedSegment[]> {
-  return invokeTauri<TranslatedSegment[]>(TauriCommand.llm.translateTranscriptSegments, { request });
+  return invokeTauri(TauriCommand.llm.translateTranscriptSegments, { request });
 }

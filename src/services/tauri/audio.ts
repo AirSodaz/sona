@@ -1,57 +1,52 @@
 import { TauriCommand } from './commands';
+import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
 
-export interface AudioDevice {
-  name: string;
-}
+export type AudioDevice =
+  TauriCommandResult<typeof TauriCommand.audio.getSystemAudioDevices>[number];
 
-export interface StartAudioCaptureRequest {
-  deviceName: string | null;
-  instanceId: string;
-  outputPath?: string;
-}
+export type StartAudioCaptureRequest =
+  TauriCommandArgs<typeof TauriCommand.audio.startSystemAudioCapture>;
 
-export interface SetCapturePausedRequest {
-  instanceId: string;
-  paused: boolean;
-}
+export type SetCapturePausedRequest =
+  TauriCommandArgs<typeof TauriCommand.audio.setSystemAudioCapturePaused>;
 
 export async function setSystemAudioMute(mute: boolean): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.setSystemAudioMute, { mute });
+  await invokeTauri(TauriCommand.audio.setSystemAudioMute, { mute });
 }
 
 export async function getSystemAudioDevices(): Promise<AudioDevice[]> {
-  return invokeTauri<AudioDevice[]>(TauriCommand.audio.getSystemAudioDevices);
+  return invokeTauri(TauriCommand.audio.getSystemAudioDevices);
 }
 
 export async function startSystemAudioCapture(request: StartAudioCaptureRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.startSystemAudioCapture, request);
+  await invokeTauri(TauriCommand.audio.startSystemAudioCapture, request);
 }
 
 export async function stopSystemAudioCapture(instanceId: string): Promise<string> {
-  return invokeTauri<string>(TauriCommand.audio.stopSystemAudioCapture, { instanceId });
+  return invokeTauri(TauriCommand.audio.stopSystemAudioCapture, { instanceId });
 }
 
 export async function setSystemAudioCapturePaused(request: SetCapturePausedRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.setSystemAudioCapturePaused, request);
+  await invokeTauri(TauriCommand.audio.setSystemAudioCapturePaused, request);
 }
 
 export async function setMicrophoneBoost(boost: number): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.setMicrophoneBoost, { boost });
+  await invokeTauri(TauriCommand.audio.setMicrophoneBoost, { boost });
 }
 
 export async function getMicrophoneDevices(): Promise<AudioDevice[]> {
-  return invokeTauri<AudioDevice[]>(TauriCommand.audio.getMicrophoneDevices);
+  return invokeTauri(TauriCommand.audio.getMicrophoneDevices);
 }
 
 export async function startMicrophoneCapture(request: StartAudioCaptureRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.startMicrophoneCapture, request);
+  await invokeTauri(TauriCommand.audio.startMicrophoneCapture, request);
 }
 
 export async function stopMicrophoneCapture(instanceId: string): Promise<string> {
-  return invokeTauri<string>(TauriCommand.audio.stopMicrophoneCapture, { instanceId });
+  return invokeTauri(TauriCommand.audio.stopMicrophoneCapture, { instanceId });
 }
 
 export async function setMicrophoneCapturePaused(request: SetCapturePausedRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.audio.setMicrophoneCapturePaused, request);
+  await invokeTauri(TauriCommand.audio.setMicrophoneCapturePaused, request);
 }

@@ -1,63 +1,50 @@
 import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../../types/runtime';
 import { TauriCommand } from './commands';
+import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
 
-export interface DownloadFileRequest {
-  url: string;
-  outputPath: string;
-  id: string;
-}
+export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
 
-export interface ExtractTarBz2Request {
-  archivePath: string;
-  targetDir: string;
-}
+export type ExtractTarBz2Request = TauriCommandArgs<typeof TauriCommand.app.extractTarBz2>;
 
-export interface UpdateTrayMenuRequest {
-  showText: string;
-  settingsText: string;
-  updatesText: string;
-  quitText: string;
-  captionText: string;
-  captionChecked: boolean;
-}
+export type UpdateTrayMenuRequest = TauriCommandArgs<typeof TauriCommand.app.updateTrayMenu>;
 
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.extractTarBz2, request);
+  await invokeTauri(TauriCommand.app.extractTarBz2, request);
 }
 
 export async function downloadFile(request: DownloadFileRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.downloadFile, request);
+  await invokeTauri(TauriCommand.app.downloadFile, request);
 }
 
 export async function cancelDownload(id: string): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.cancelDownload, { id });
+  await invokeTauri(TauriCommand.app.cancelDownload, { id });
 }
 
 export async function openLogFolder(): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.openLogFolder);
+  await invokeTauri(TauriCommand.app.openLogFolder);
 }
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {
-  return invokeTauri<RuntimeEnvironmentStatus>(TauriCommand.app.getRuntimeEnvironmentStatus);
+  return invokeTauri(TauriCommand.app.getRuntimeEnvironmentStatus);
 }
 
 export async function getPathStatuses(paths: string[]): Promise<RuntimePathStatus[]> {
-  return invokeTauri<RuntimePathStatus[]>(TauriCommand.app.getPathStatuses, { paths });
+  return invokeTauri(TauriCommand.app.getPathStatuses, { paths });
 }
 
 export async function hasActiveDownloads(): Promise<boolean> {
-  return invokeTauri<boolean>(TauriCommand.app.hasActiveDownloads);
+  return invokeTauri(TauriCommand.app.hasActiveDownloads);
 }
 
 export async function forceExit(): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.forceExit);
+  await invokeTauri(TauriCommand.app.forceExit);
 }
 
 export async function updateTrayMenu(request: UpdateTrayMenuRequest): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.updateTrayMenu, request);
+  await invokeTauri(TauriCommand.app.updateTrayMenu, request);
 }
 
 export async function setMinimizeToTray(enabled: boolean): Promise<void> {
-  await invokeTauri<void>(TauriCommand.app.setMinimizeToTray, { enabled });
+  await invokeTauri(TauriCommand.app.setMinimizeToTray, { enabled });
 }

@@ -8,7 +8,7 @@ export async function annotateSpeakerSegmentsFromFile(
   segments: TranscriptSegment[],
   speakerProcessing: SpeakerProcessingConfig,
 ): Promise<TranscriptSegment[]> {
-  return invokeTauri<TranscriptSegment[]>(TauriCommand.speaker.annotateSegmentsFromFile, {
+  return invokeTauri(TauriCommand.speaker.annotateSegmentsFromFile, {
     filePath,
     segments,
     speakerProcessing,
@@ -20,7 +20,7 @@ export async function importSpeakerProfileSample(
   sourcePath: string,
   sourceName?: string,
 ): Promise<SpeakerProfileSample> {
-  return invokeTauri<SpeakerProfileSample>(TauriCommand.speaker.importProfileSample, {
+  return invokeTauri(TauriCommand.speaker.importProfileSample, {
     profileId,
     sourcePath,
     sourceName: sourceName || null,

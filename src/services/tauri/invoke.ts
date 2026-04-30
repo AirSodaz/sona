@@ -1,11 +1,24 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { TauriCommandName } from './commands';
+import type {
+  KnownTauriCommandName,
+  TauriCommandArgs,
+  TauriCommandResult,
+  TauriCommandsWithArgs,
+  TauriCommandsWithoutArgs,
+} from './contracts';
 
-export async function invokeTauri<TResult>(
-  command: TauriCommandName,
-  args?: Record<string, unknown>,
-): Promise<TResult> {
+export async function invokeTauri<TCommand extends TauriCommandsWithoutArgs>(
+  command: TCommand,
+): Promise<TauriCommandResult<TCommand>>;
+export async function invokeTauri<TCommand extends TauriCommandsWithArgs>(
+  command: TCommand,
+  args: TauriCommandArgs<TCommand>,
+): Promise<TauriCommandResult<TCommand>>;
+export async function invokeTauri<TCommand extends KnownTauriCommandName>(
+  command: TCommand,
+  args?: TauriCommandArgs<TCommand>,
+): Promise<TauriCommandResult<TCommand>> {
   return args === undefined
-    ? invoke<TResult>(command)
-    : invoke<TResult>(command, args);
+    ? invoke<TauriCommandResult<TCommand>>(command)
+    : invoke<TauriCommandResult<TCommand>>(command, args as Record<string, unknown>);
 }

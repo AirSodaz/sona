@@ -4,19 +4,19 @@ import { invokeTauri } from './invoke';
 export async function replaceAutomationRuntimeRules<TResult = unknown>(
   rules: unknown[],
 ): Promise<TResult> {
-  return invokeTauri<TResult>(TauriCommand.automation.replaceRuntimeRules, { rules });
+  return invokeTauri(TauriCommand.automation.replaceRuntimeRules, { rules }) as Promise<TResult>;
 }
 
 export async function scanAutomationRuntimeRule(rule: unknown): Promise<void> {
-  await invokeTauri<void>(TauriCommand.automation.scanRuntimeRule, { rule });
+  await invokeTauri(TauriCommand.automation.scanRuntimeRule, { rule });
 }
 
 export async function collectAutomationRuntimeRulePaths<TResult = unknown>(
   rule: unknown,
   filePaths: string[],
 ): Promise<TResult> {
-  return invokeTauri<TResult>(TauriCommand.automation.collectRuntimeRulePaths, {
+  return invokeTauri(TauriCommand.automation.collectRuntimeRulePaths, {
     rule,
     filePaths,
-  });
+  }) as Promise<TResult>;
 }

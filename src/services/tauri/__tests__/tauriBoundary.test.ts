@@ -11,7 +11,7 @@ import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import { applyPreparedHistoryImport } from '../backup';
 import { annotateSpeakerSegmentsFromFile } from '../speaker';
-import { getMousePosition, injectText } from '../system';
+import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -23,24 +23,24 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('invokeTauri omits the payload argument when none is provided', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce('ok');
+    vi.mocked(invoke).mockResolvedValueOnce(true);
 
-    const result = await invokeTauri<string>(TauriCommand.app.openLogFolder);
+    const result = await invokeTauri(TauriCommand.app.hasActiveDownloads);
 
-    expect(result).toBe('ok');
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.openLogFolder);
+    expect(result).toBe(true);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.hasActiveDownloads);
   });
 
   it('invokeTauri forwards the payload when provided', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce(true);
+    vi.mocked(invoke).mockResolvedValueOnce([{ kind: 'ok', path: 'C:/models/live' }]);
 
-    const result = await invokeTauri<boolean>(TauriCommand.app.setMinimizeToTray, {
-      enabled: true,
+    const result = await invokeTauri(TauriCommand.app.getPathStatuses, {
+      paths: ['C:/models/live'],
     });
 
-    expect(result).toBe(true);
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.setMinimizeToTray, {
-      enabled: true,
+    expect(result).toEqual([{ kind: 'ok', path: 'C:/models/live' }]);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getPathStatuses, {
+      paths: ['C:/models/live'],
     });
   });
 
@@ -94,7 +94,7 @@ describe('tauri boundary wrappers', () => {
     const result = await generateLlmText({
       config: {} as any,
       input: 'hello',
-      source: 'test',
+      source: 'generic',
     });
 
     expect(result).toBe('generated');
@@ -102,7 +102,7 @@ describe('tauri boundary wrappers', () => {
       request: {
         config: {} as any,
         input: 'hello',
-        source: 'test',
+        source: 'generic',
       },
     });
   });
@@ -181,6 +181,24 @@ describe('tauri boundary wrappers', () => {
       shortcutModifiers: ['alt'],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.system.getMousePosition);
+  });
+
+  it('system aux-window wrappers preserve generic call sites', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ theme: 'dark' });
+
+    await setAuxWindowState('voice-typing', { theme: 'dark' });
+    const state = await getAuxWindowState<{ theme: string }>('voice-typing');
+
+    expect(state).toEqual({ theme: 'dark' });
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.system.setAuxWindowState, {
+      label: 'voice-typing',
+      payload: { theme: 'dark' },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.system.getAuxWindowState, {
+      label: 'voice-typing',
+    });
   });
 
   it('exposes stable fixed events and the recognizer event builder', () => {

@@ -5,51 +5,49 @@ import type {
   RemoteBackupEntry,
 } from '../../types/backup';
 import { TauriCommand } from './commands';
+import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
 
-export async function exportBackupArchive<TResult = BackupManifestV1>(request: {
-  archivePath: string;
-  appVersion: string;
-  config: unknown;
-  projects: unknown[];
-  automationRules: unknown[];
-  automationProcessedEntries: unknown[];
-  analyticsContent: string;
-}): Promise<TResult> {
-  return invokeTauri<TResult>(TauriCommand.backup.exportArchive, { request });
+type ExportBackupArchiveRequest =
+  TauriCommandArgs<typeof TauriCommand.backup.exportArchive>['request'];
+
+export async function exportBackupArchive<TResult = BackupManifestV1>(
+  request: ExportBackupArchiveRequest,
+): Promise<TResult> {
+  return invokeTauri(TauriCommand.backup.exportArchive, { request }) as Promise<TResult>;
 }
 
 export async function prepareBackupImport<TResult = unknown>(
   archivePath: string,
 ): Promise<TResult> {
-  return invokeTauri<TResult>(TauriCommand.backup.prepareImport, { archivePath });
+  return invokeTauri(TauriCommand.backup.prepareImport, { archivePath }) as Promise<TResult>;
 }
 
 export async function applyPreparedHistoryImport(importId: string): Promise<void> {
-  await invokeTauri<void>(TauriCommand.backup.applyPreparedImport, { importId });
+  await invokeTauri(TauriCommand.backup.applyPreparedImport, { importId });
 }
 
 export async function disposePreparedBackupImport(importId: string): Promise<void> {
-  await invokeTauri<void>(TauriCommand.backup.disposePreparedImport, { importId });
+  await invokeTauri(TauriCommand.backup.disposePreparedImport, { importId });
 }
 
 export async function webdavTestConnection(
   config: BackupWebDavConfig,
 ): Promise<BackupWebDavTestResult> {
-  return invokeTauri<BackupWebDavTestResult>(TauriCommand.backup.webdavTestConnection, { config });
+  return invokeTauri(TauriCommand.backup.webdavTestConnection, { config });
 }
 
 export async function webdavListBackups(
   config: BackupWebDavConfig,
 ): Promise<RemoteBackupEntry[]> {
-  return invokeTauri<RemoteBackupEntry[]>(TauriCommand.backup.webdavListBackups, { config });
+  return invokeTauri(TauriCommand.backup.webdavListBackups, { config });
 }
 
 export async function webdavUploadBackup(
   config: BackupWebDavConfig,
   localArchivePath: string,
 ): Promise<void> {
-  await invokeTauri<void>(TauriCommand.backup.webdavUploadBackup, {
+  await invokeTauri(TauriCommand.backup.webdavUploadBackup, {
     config,
     localArchivePath,
   });
@@ -60,7 +58,7 @@ export async function webdavDownloadBackup(
   href: string,
   outputPath: string,
 ): Promise<void> {
-  await invokeTauri<void>(TauriCommand.backup.webdavDownloadBackup, {
+  await invokeTauri(TauriCommand.backup.webdavDownloadBackup, {
     config,
     href,
     outputPath,
