@@ -132,7 +132,8 @@ function TokenListComponent({
                     return (
                         <span
                             key={i}
-                            title={formatDisplayTime(tokenObj.start)}
+                            data-tooltip={formatDisplayTime(tokenObj.start)}
+                            data-tooltip-pos="top"
                             className={className}
                             role="button"
                             tabIndex={0}

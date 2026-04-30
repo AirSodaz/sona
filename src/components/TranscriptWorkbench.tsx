@@ -130,6 +130,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
                 onClick={() => setIsSummaryOpen(true)}
                 data-tooltip={t('summary.title')}
                 data-tooltip-pos="bottom"
+                aria-label={t('summary.title')}
               >
                 <SummaryIcon />
               </button>

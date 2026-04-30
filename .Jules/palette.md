@@ -1,0 +1,3 @@
+## $(date +%Y-%m-%d) - Adding Tooltips and Aria-Labels to Icon Buttons
+**Learning:** Icon-only buttons lacking `aria-label`s fail basic accessibility checks because screen readers cannot announce their purpose. Additionally, using standard browser `title` attributes on tokens instead of custom design system tooltips creates an inconsistent UI experience.
+**Action:** Always scan for `btn-icon` classes and ensure they have a corresponding `aria-label` or matching `data-tooltip`. Replace standard `title` attributes with custom `data-tooltip` implementations where the UI design system expects them.
