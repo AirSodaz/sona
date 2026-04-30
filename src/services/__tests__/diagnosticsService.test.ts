@@ -25,6 +25,7 @@ import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore
 const STREAMING_PARAFORMER_PATH = 'C:\\models\\sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en';
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const OFFLINE_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
+const OFFLINE_FUNASR_NANO_PATH = 'C:\\models\\sherpa-onnx-funasr-nano-int8-2025-12-30';
 const VAD_PATH = 'C:\\models\\silero_vad.onnx';
 const PUNCTUATION_PATH = 'C:\\models\\ct-transformer.onnx';
 
@@ -158,6 +159,45 @@ describe('diagnosticsService', () => {
     );
   });
 
+  it('uses the same unverified-path policy for live and offline model checks', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        streamingModelPath: STREAMING_SENSEVOICE_PATH,
+        offlineModelPath: OFFLINE_QWEN_PATH,
+      },
+    });
+    setPathStatuses({
+      unknownPaths: [STREAMING_SENSEVOICE_PATH, OFFLINE_QWEN_PATH],
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const modelsSection = snapshot.sections.find((section) => section.id === 'models');
+    const liveModelCheck = modelsSection?.checks.find((check) => check.id === 'live-model');
+    const offlineModelCheck = modelsSection?.checks.find((check) => check.id === 'offline-model');
+
+    expect(liveModelCheck).toEqual(
+      expect.objectContaining({
+        status: 'info',
+        description: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+        action: expect.objectContaining({
+          kind: 'open_settings',
+          settingsTab: 'models',
+        }),
+      }),
+    );
+    expect(offlineModelCheck).toEqual(
+      expect.objectContaining({
+        status: 'info',
+        description: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+        action: expect.objectContaining({
+          kind: 'open_settings',
+          settingsTab: 'models',
+        }),
+      }),
+    );
+  });
+
   it('surfaces microphone permission denial as the clearest live-record repair action', async () => {
     useConfigStore.setState({
       config: {
@@ -252,6 +292,140 @@ describe('diagnosticsService', () => {
       expect.objectContaining({
         status: 'info',
         description: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+      }),
+    );
+  });
+
+  it('keeps vad missing-path failures and punctuation unknown-path warnings on their current severities', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        streamingModelPath: STREAMING_SENSEVOICE_PATH,
+        offlineModelPath: OFFLINE_FUNASR_NANO_PATH,
+        vadModelPath: VAD_PATH,
+        punctuationModelPath: PUNCTUATION_PATH,
+      },
+    });
+    setPathStatuses({
+      directoryPaths: [STREAMING_SENSEVOICE_PATH, OFFLINE_FUNASR_NANO_PATH],
+      unknownPaths: [PUNCTUATION_PATH],
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const modelsSection = snapshot.sections.find((section) => section.id === 'models');
+    const vadCheck = modelsSection?.checks.find((check) => check.id === 'vad');
+    const punctuationCheck = modelsSection?.checks.find((check) => check.id === 'punctuation');
+
+    expect(vadCheck).toEqual(
+      expect.objectContaining({
+        status: 'failed',
+        action: expect.objectContaining({
+          kind: 'open_settings',
+          settingsTab: 'models',
+        }),
+      }),
+    );
+    expect(punctuationCheck).toEqual(
+      expect.objectContaining({
+        status: 'warning',
+        description: 'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+        action: expect.objectContaining({
+          kind: 'open_settings',
+          settingsTab: 'models',
+        }),
+      }),
+    );
+  });
+
+  it('keeps live-record overview action precedence on models before permission', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+      },
+    });
+    mocks.getPermissionState.mockResolvedValue('denied');
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const liveOverview = snapshot.overview.find((card) => card.id === 'live-record');
+
+    expect(liveOverview?.action).toEqual(
+      expect.objectContaining({
+        kind: 'open_settings',
+        settingsTab: 'models',
+      }),
+    );
+  });
+
+  it('falls back to input-device repair when live-record models and permission are ready', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        streamingModelPath: STREAMING_SENSEVOICE_PATH,
+        vadModelPath: VAD_PATH,
+        microphoneId: 'missing-mic',
+      },
+    });
+    setPathStatuses({
+      directoryPaths: [STREAMING_SENSEVOICE_PATH],
+      filePaths: [VAD_PATH],
+    });
+    mocks.getPermissionState.mockResolvedValue('granted');
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const liveOverview = snapshot.overview.find((card) => card.id === 'live-record');
+
+    expect(liveOverview?.action).toEqual(
+      expect.objectContaining({
+        kind: 'open_settings',
+        settingsTab: 'microphone',
+      }),
+    );
+  });
+
+  it('keeps batch-import overview action precedence on models before ffmpeg logs', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        offlineModelPath: OFFLINE_QWEN_PATH,
+      },
+    });
+    runtimeEnvironment = {
+      ffmpegPath: 'C:\\app\\ffmpeg.exe',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const batchImportOverview = snapshot.overview.find((card) => card.id === 'batch-import');
+
+    expect(batchImportOverview?.action).toEqual(
+      expect.objectContaining({
+        kind: 'open_settings',
+        settingsTab: 'models',
+      }),
+    );
+  });
+
+  it('uses open-log-folder as the batch-import overview action once models are ready', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        offlineModelPath: OFFLINE_QWEN_PATH,
+      },
+    });
+    setPathStatuses({ directoryPaths: [OFFLINE_QWEN_PATH] });
+    runtimeEnvironment = {
+      ffmpegPath: 'C:\\app\\ffmpeg.exe',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const batchImportOverview = snapshot.overview.find((card) => card.id === 'batch-import');
+
+    expect(batchImportOverview?.action).toEqual(
+      expect.objectContaining({
+        kind: 'open_log_folder',
       }),
     );
   });
