@@ -1,25 +1,13 @@
-import React, { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, Type } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
-import { useModelManager, ModelManagerContext } from '../hooks/useModelManager';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
-import { SettingsGeneralTab } from './settings/SettingsGeneralTab';
-import { SettingsMicrophoneTab } from './settings/SettingsMicrophoneTab';
-import { SettingsSubtitleTab } from './settings/SettingsSubtitleTab';
-import { SettingsModelsTab } from './settings/SettingsModelsTab';
-import { SettingsLLMServiceTab } from './settings/SettingsLLMServiceTab';
-import { SettingsShortcutsTab } from './settings/SettingsShortcutsTab';
-import { SettingsAboutTab } from './settings/SettingsAboutTab';
-import { SettingsVocabularyTab } from './settings/SettingsVocabularyTab';
-import { SettingsAutomationTab } from './settings/SettingsAutomationTab';
-import { SettingsVoiceTypingTab } from './settings/SettingsVoiceTypingTab';
-import { SettingsDashboardTab } from './settings/SettingsDashboardTab';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
-import { SettingsTabInput } from '../hooks/useSettingsLogic';
+import { SettingsTabInput, type SettingsTab } from '../hooks/useSettingsLogic';
 import './settings/Settings.css';
 import {
     GeneralIcon,
@@ -56,6 +44,138 @@ const SETTINGS_TABS = [
     'about',
 ] as const;
 
+type SettingsTabId = typeof SETTINGS_TABS[number];
+
+const SETTINGS_PANEL_IDS: Record<SettingsTabId, string> = {
+    general: 'settings-panel-general',
+    dashboard: 'settings-panel-dashboard',
+    microphone: 'settings-panel-microphone',
+    subtitle: 'settings-panel-subtitle',
+    voice_typing: 'settings-panel-voice-typing',
+    models: 'settings-panel-models',
+    vocabulary: 'settings-panel-vocabulary',
+    automation: 'settings-panel-automation',
+    llm_service: 'settings-panel-llm',
+    shortcuts: 'settings-panel-shortcuts',
+    about: 'settings-panel-about',
+};
+
+const SettingsGeneralTab = lazy(async () => {
+    const module = await import('./settings/SettingsGeneralTab');
+    return { default: module.SettingsGeneralTab };
+});
+
+const SettingsDashboardTab = lazy(async () => {
+    const module = await import('./settings/SettingsDashboardTab');
+    return { default: module.SettingsDashboardTab };
+});
+
+const SettingsMicrophoneTab = lazy(async () => {
+    const module = await import('./settings/SettingsMicrophoneTab');
+    return { default: module.SettingsMicrophoneTab };
+});
+
+const SettingsSubtitleTab = lazy(async () => {
+    const module = await import('./settings/SettingsSubtitleTab');
+    return { default: module.SettingsSubtitleTab };
+});
+
+const SettingsVoiceTypingTab = lazy(async () => {
+    const module = await import('./settings/SettingsVoiceTypingTab');
+    return { default: module.SettingsVoiceTypingTab };
+});
+
+const SettingsModelsPane = lazy(async () => {
+    const module = await import('./settings/SettingsModelsPane');
+    return { default: module.SettingsModelsPane };
+});
+
+const SettingsVocabularyTab = lazy(async () => {
+    const module = await import('./settings/SettingsVocabularyTab');
+    return { default: module.SettingsVocabularyTab };
+});
+
+const SettingsAutomationTab = lazy(async () => {
+    const module = await import('./settings/SettingsAutomationTab');
+    return { default: module.SettingsAutomationTab };
+});
+
+const SettingsLLMServiceTab = lazy(async () => {
+    const module = await import('./settings/SettingsLLMServiceTab');
+    return { default: module.SettingsLLMServiceTab };
+});
+
+const SettingsShortcutsTab = lazy(async () => {
+    const module = await import('./settings/SettingsShortcutsTab');
+    return { default: module.SettingsShortcutsTab };
+});
+
+const SettingsAboutTab = lazy(async () => {
+    const module = await import('./settings/SettingsAboutTab');
+    return { default: module.SettingsAboutTab };
+});
+
+function SettingsPaneLoading({
+    id,
+    ariaLabelledby,
+    label,
+}: {
+    id: string;
+    ariaLabelledby: string;
+    label: string;
+}): React.JSX.Element {
+    return (
+        <div
+            className="settings-tab-container settings-tab-loading"
+            role="tabpanel"
+            id={id}
+            aria-labelledby={ariaLabelledby}
+            tabIndex={0}
+        >
+            <div className="settings-tab-loading-spinner" aria-hidden="true" />
+            <span>{label}</span>
+        </div>
+    );
+}
+
+function renderSettingsPane(
+    activeTab: SettingsTab,
+    isOpen: boolean,
+    onOpenDiagnostics?: () => void,
+): React.JSX.Element | null {
+    switch (activeTab) {
+        case 'general':
+            return <SettingsGeneralTab onOpenDiagnostics={onOpenDiagnostics} />;
+        case 'dashboard':
+            return <SettingsDashboardTab />;
+        case 'microphone':
+            return (
+                <SettingsMicrophoneTab
+                    isActiveTab={activeTab === 'microphone'}
+                    isOpen={isOpen}
+                />
+            );
+        case 'subtitle':
+            return <SettingsSubtitleTab />;
+        case 'voice_typing':
+            return <SettingsVoiceTypingTab />;
+        case 'models':
+            return <SettingsModelsPane isOpen={isOpen} />;
+        case 'vocabulary':
+            return <SettingsVocabularyTab />;
+        case 'automation':
+            return <SettingsAutomationTab />;
+        case 'llm_service':
+            return <SettingsLLMServiceTab />;
+        case 'shortcuts':
+            return <SettingsShortcutsTab />;
+        case 'about':
+            return <SettingsAboutTab />;
+        default:
+            return null;
+    }
+}
+
 /**
  * Modal dialog for application settings.
  *
@@ -73,7 +193,6 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
         setActiveTab,
     } = useSettingsLogic(isOpen, onClose, initialTab);
 
-    const modelManager = useModelManager(isOpen);
     const navigateToTab = useCallback((nextTab: typeof SETTINGS_TABS[number]) => {
         setActiveTab(nextTab);
         requestAnimationFrame(() => {
@@ -146,6 +265,9 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
     };
 
     if (!isOpen) return null;
+
+    const activePanelId = SETTINGS_PANEL_IDS[activeTab];
+    const activePanelLabelledBy = `settings-tab-${activeTab}`;
 
     return (
         <div className="settings-overlay" onClick={onClose}>
@@ -280,41 +402,17 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
                         <SettingsNavigationProvider value={navigationContextValue}>
-                            <ModelManagerContext.Provider value={modelManager}>
-                                {(() => {
-                                    switch (activeTab) {
-                                        case 'general':
-                                            return <SettingsGeneralTab onOpenDiagnostics={onOpenDiagnostics} />;
-                                        case 'dashboard':
-                                            return <SettingsDashboardTab />;
-                                        case 'microphone':
-                                            return (
-                                                <SettingsMicrophoneTab
-                                                    isActiveTab={activeTab === 'microphone'}
-                                                    isOpen={isOpen}
-                                                />
-                                            );
-                                        case 'subtitle':
-                                            return <SettingsSubtitleTab />;
-                                        case 'voice_typing':
-                                            return <SettingsVoiceTypingTab />;
-                                        case 'models':
-                                            return <SettingsModelsTab />;
-                                        case 'vocabulary':
-                                            return <SettingsVocabularyTab />;
-                                        case 'automation':
-                                            return <SettingsAutomationTab />;
-                                        case 'llm_service':
-                                            return <SettingsLLMServiceTab />;
-                                        case 'shortcuts':
-                                            return <SettingsShortcutsTab />;
-                                        case 'about':
-                                            return <SettingsAboutTab />;
-                                        default:
-                                            return null;
-                                    }
-                                })()}
-                            </ModelManagerContext.Provider>
+                            <Suspense
+                                fallback={(
+                                    <SettingsPaneLoading
+                                        id={activePanelId}
+                                        ariaLabelledby={activePanelLabelledBy}
+                                        label={t('common.loading')}
+                                    />
+                                )}
+                            >
+                                {renderSettingsPane(activeTab, isOpen, onOpenDiagnostics)}
+                            </Suspense>
                         </SettingsNavigationProvider>
                     </div>
 

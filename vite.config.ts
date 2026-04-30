@@ -69,9 +69,7 @@ export default defineConfig(async () => ({
             return "i18n-vendor";
           }
 
-          if (normalizedId.includes("/src/components/settings/")
-            || normalizedId.includes("/src/hooks/useModelManager.ts")
-            || normalizedId.includes("/src/components/DiagnosticsModal.tsx")
+          if (normalizedId.includes("/src/components/DiagnosticsModal.tsx")
             || normalizedId.includes("/src/components/RecoveryCenterModal.tsx")) {
             return "settings-surface";
           }

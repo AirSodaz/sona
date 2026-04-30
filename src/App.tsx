@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptWorkbench } from './components/TranscriptWorkbench';
@@ -24,10 +24,22 @@ import { SettingsTab } from './hooks/useSettingsLogic';
 import { diagnosticsService } from './services/diagnosticsService';
 import { clearTranscriptSegments } from './stores/transcriptCoordinator';
 
-const SettingsModal = lazy(async () => {
-  const module = await import('./components/Settings');
-  return { default: module.Settings };
-});
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+let settingsModalPromise: Promise<{ default: typeof import('./components/Settings').Settings }> | null = null;
+
+function loadSettingsModal() {
+  if (!settingsModalPromise) {
+    settingsModalPromise = import('./components/Settings').then((module) => ({ default: module.Settings }));
+  }
+
+  return settingsModalPromise;
+}
+
+const SettingsModal = lazy(loadSettingsModal);
 
 const DiagnosticsPanel = lazy(async () => {
   const module = await import('./components/DiagnosticsModal');
@@ -84,6 +96,27 @@ function App(): React.JSX.Element {
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setSettingsInitialTab);
+
+  const preloadSettings = useCallback(() => {
+    void loadSettingsModal();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const idleWindow = window as IdleWindow;
+    const schedulePreload = () => {
+      void loadSettingsModal();
+    };
+
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      const handle = idleWindow.requestIdleCallback(schedulePreload, { timeout: 2000 });
+      return () => idleWindow.cancelIdleCallback?.(handle);
+    }
+
+    const timeout = window.setTimeout(schedulePreload, 300);
+    return () => window.clearTimeout(timeout);
+  }, [isLoaded]);
 
   const openSettingsTab = (tab: SettingsTab) => {
     setIsDiagnosticsOpen(false);
@@ -144,6 +177,8 @@ function App(): React.JSX.Element {
           <button
             className="btn btn-icon"
             onClick={() => setIsSettingsOpen(true)}
+            onPointerEnter={preloadSettings}
+            onFocus={preloadSettings}
             data-tooltip={t('header.settings')}
             data-tooltip-pos="bottom-left"
             aria-label={t('header.settings')}

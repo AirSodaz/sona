@@ -64,17 +64,36 @@ describe('Settings', () => {
         });
     });
 
+    async function openModelsTab() {
+        await screen.findByText('settings.general_title');
+        fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+    }
+
     it('renders with vertical layout structure', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
         expect(screen.getAllByText('settings.general').length).toBeGreaterThanOrEqual(1);
+        expect(await screen.findByText('settings.general_title')).toBeDefined();
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    });
+
+    it('checks installed models only after the model settings tab is opened', async () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+
+        await openModelsTab();
+    });
+
+    it('checks installed models immediately when opening directly on the model settings tab', async () => {
+        render(<Settings isOpen={true} onClose={onClose} initialTab="models" />);
+
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
     });
 
     it('downloads a model successfully', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
-
-        fireEvent.click(screen.getByText('settings.model_hub'));
+        await openModelsTab();
 
         // Find download button for 'Test Model'
         // Since we mock translation, label is "common.download Test Model"
@@ -117,9 +136,7 @@ describe('Settings', () => {
 
     it('shows merged transcription settings inside the model settings tab', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
-
-        fireEvent.click(screen.getByText('settings.model_hub'));
+        await openModelsTab();
 
         const streamingModel = await screen.findByText('settings.streaming_model_label');
         const vadModels = screen.getByText('settings.vad_models');
@@ -141,10 +158,8 @@ describe('Settings', () => {
         vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValue(true);
 
         render(<Settings isOpen={true} onClose={onClose} />);
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+        await openModelsTab();
         const initialCalls = vi.mocked(modelService.isModelInstalled).mock.calls.length;
-
-        fireEvent.click(screen.getByText('settings.model_hub'));
 
         // Find delete button
         const deleteBtn = await screen.findByLabelText('common.delete Test Model');
@@ -169,9 +184,7 @@ describe('Settings', () => {
         vi.mocked(modelService.isModelInstalled).mockImplementation((id) => Promise.resolve(id === 'test-model'));
 
         render(<Settings isOpen={true} onClose={onClose} />);
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
-
-        fireEvent.click(screen.getByText('settings.model_hub'));
+        await openModelsTab();
 
         const dropdownLabel = await screen.findByText('settings.streaming_model_label');
         expect(dropdownLabel).toBeDefined();

@@ -190,13 +190,13 @@ describe('Settings Focus Trap & Navigation', () => {
         ]);
     });
 
-    it('renders the dedicated voice typing panel when that tab is active', () => {
+    it('renders the dedicated voice typing panel when that tab is active', async () => {
         mockActiveTab = 'voice_typing';
         const onClose = vi.fn();
 
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(screen.getByText('Voice Typing Tab')).toBeDefined();
+        expect(await screen.findByText('Voice Typing Tab')).toBeDefined();
         expect(screen.queryByText('General Tab Input')).toBeNull();
     });
 
