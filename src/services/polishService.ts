@@ -6,6 +6,7 @@ import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
+import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { getFeatureLlmConfig } from './llm/runtime';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
@@ -87,6 +88,7 @@ class PolishService {
         useTranscriptSidecarStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
+        await transcriptSnapshotService.createSnapshot(jobHistoryId, 'polish', segments);
         await this.polishSegmentsWithConfig(
           config,
           segments,

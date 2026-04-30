@@ -10,7 +10,8 @@ use super::repository::HistoryRepository;
 use super::state::{HistoryRepositoryState, PreparedBackupImportState};
 use super::{
     BackupManifest, ExportBackupArchiveRequest, HistoryItemRecord, LiveRecordingDraftResult,
-    PreparedBackupImport, HISTORY_DIR_NAME,
+    PreparedBackupImport, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord, HISTORY_DIR_NAME,
 };
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -142,6 +143,45 @@ pub async fn history_update_transcript<R: Runtime>(
 ) -> Result<(), String> {
     run_history_task(app, state, move |repository| {
         repository.update_transcript(&history_id, segments, preview_text, search_content)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_create_transcript_snapshot<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    history_id: String,
+    reason: TranscriptSnapshotReason,
+    segments: Value,
+) -> Result<TranscriptSnapshotMetadata, String> {
+    run_history_task(app, state, move |repository| {
+        repository.create_transcript_snapshot(&history_id, reason, segments)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_list_transcript_snapshots<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    history_id: String,
+) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
+    run_history_task(app, state, move |repository| {
+        repository.list_transcript_snapshots(&history_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_load_transcript_snapshot<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    history_id: String,
+    snapshot_id: String,
+) -> Result<Option<TranscriptSnapshotRecord>, String> {
+    run_history_task(app, state, move |repository| {
+        repository.load_transcript_snapshot(&history_id, &snapshot_id)
     })
     .await
 }

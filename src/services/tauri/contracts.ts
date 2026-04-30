@@ -10,6 +10,11 @@ import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../../types/ru
 import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
+  TranscriptSnapshotMetadata,
+  TranscriptSnapshotReason,
+  TranscriptSnapshotRecord,
+} from '../../types/transcriptSnapshot';
+import type {
   PolishedSegment,
   PolishSegmentsRequest,
   SummarizeTranscriptRequest,
@@ -208,6 +213,27 @@ export type TauriCommandContractMap = {
       searchContent: string;
     };
     result: void;
+  };
+  [TauriCommand.history.createTranscriptSnapshot]: {
+    args: {
+      historyId: string;
+      reason: TranscriptSnapshotReason;
+      segments: TranscriptSegment[];
+    };
+    result: TranscriptSnapshotMetadata;
+  };
+  [TauriCommand.history.listTranscriptSnapshots]: {
+    args: {
+      historyId: string;
+    };
+    result: TranscriptSnapshotMetadata[];
+  };
+  [TauriCommand.history.loadTranscriptSnapshot]: {
+    args: {
+      historyId: string;
+      snapshotId: string;
+    };
+    result: TranscriptSnapshotRecord | null;
   };
   [TauriCommand.history.updateItemMeta]: {
     args: {

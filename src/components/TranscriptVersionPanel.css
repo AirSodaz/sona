@@ -1,0 +1,207 @@
+.transcript-version-overlay {
+  z-index: 2070;
+}
+
+.transcript-version-modal {
+  width: min(1180px, calc(100vw - 48px));
+}
+
+.transcript-version-error {
+  margin: 18px 32px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #b91c1c 22%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, #b91c1c 10%, var(--color-bg-primary));
+  color: var(--color-text-primary);
+}
+
+.transcript-version-content {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.transcript-version-sidebar,
+.transcript-version-diff {
+  min-width: 0;
+  min-height: 0;
+}
+
+.transcript-version-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.transcript-version-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.transcript-version-item:hover:not(:disabled),
+.transcript-version-item.active {
+  border-color: color-mix(in srgb, var(--color-text-primary) 50%, var(--color-border));
+  background: var(--color-bg-elevated);
+}
+
+.transcript-version-item-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.transcript-version-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.transcript-version-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transcript-version-diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.transcript-version-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.transcript-version-diff-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+}
+
+.transcript-version-diff-row.is-modified {
+  border-left-color: #2563eb;
+}
+
+.transcript-version-diff-row.is-added {
+  border-left-color: #16a34a;
+}
+
+.transcript-version-diff-row.is-removed {
+  border-left-color: #d97706;
+}
+
+.transcript-version-diff-row.is-unchanged {
+  opacity: 0.72;
+}
+
+.transcript-version-diff-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-version-check {
+  width: 28px;
+  height: 28px;
+}
+
+.transcript-version-status {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.transcript-version-time {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.transcript-version-diff-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.transcript-version-diff-cell {
+  min-width: 0;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.transcript-version-diff-cell span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transcript-version-diff-cell p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.transcript-version-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  padding: 20px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .transcript-version-content {
+    grid-template-columns: 1fr;
+  }
+
+  .transcript-version-sidebar,
+  .transcript-version-diff-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .transcript-version-diff-columns {
+    grid-template-columns: 1fr;
+  }
+}

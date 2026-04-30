@@ -5,7 +5,12 @@ import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
 import { openLogFolder, setMinimizeToTray } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
-import { historyUpdateTranscript } from '../history';
+import {
+  historyCreateTranscriptSnapshot,
+  historyListTranscriptSnapshots,
+  historyLoadTranscriptSnapshot,
+  historyUpdateTranscript,
+} from '../history';
 import { generateLlmText } from '../llm';
 import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
@@ -85,6 +90,30 @@ describe('tauri boundary wrappers', () => {
       segments: [],
       previewText: 'preview',
       searchContent: 'search',
+    });
+  });
+
+  it('history wrappers forward transcript snapshot payloads', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({ id: 'snapshot-1' })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(null);
+
+    await historyCreateTranscriptSnapshot('history-1', 'polish', []);
+    await historyListTranscriptSnapshots('history-1');
+    await historyLoadTranscriptSnapshot('history-1', 'snapshot-1');
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.createTranscriptSnapshot, {
+      historyId: 'history-1',
+      reason: 'polish',
+      segments: [],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.listTranscriptSnapshots, {
+      historyId: 'history-1',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.loadTranscriptSnapshot, {
+      historyId: 'history-1',
+      snapshotId: 'snapshot-1',
     });
   });
 

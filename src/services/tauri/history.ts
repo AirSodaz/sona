@@ -1,5 +1,10 @@
 import type { HistoryItem } from '../../types/history';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
+import type {
+  TranscriptSnapshotMetadata,
+  TranscriptSnapshotReason,
+  TranscriptSnapshotRecord,
+} from '../../types/transcriptSnapshot';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
@@ -71,6 +76,31 @@ export async function historyUpdateTranscript(
     previewText,
     searchContent,
   });
+}
+
+export async function historyCreateTranscriptSnapshot(
+  historyId: string,
+  reason: TranscriptSnapshotReason,
+  segments: TranscriptSegment[],
+): Promise<TranscriptSnapshotMetadata> {
+  return invokeTauri(TauriCommand.history.createTranscriptSnapshot, {
+    historyId,
+    reason,
+    segments,
+  });
+}
+
+export async function historyListTranscriptSnapshots(
+  historyId: string,
+): Promise<TranscriptSnapshotMetadata[]> {
+  return invokeTauri(TauriCommand.history.listTranscriptSnapshots, { historyId });
+}
+
+export async function historyLoadTranscriptSnapshot(
+  historyId: string,
+  snapshotId: string,
+): Promise<TranscriptSnapshotRecord | null> {
+  return invokeTauri(TauriCommand.history.loadTranscriptSnapshot, { historyId, snapshotId });
 }
 
 export async function historyUpdateItemMeta(

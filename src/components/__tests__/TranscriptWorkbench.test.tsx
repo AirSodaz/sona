@@ -17,7 +17,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../stores/historyStore', () => ({
-  useHistoryStore: (selector: (state: { updateItemMeta: typeof mockUpdateItemMeta }) => unknown) => selector({
+  useHistoryStore: (selector: (state: { items: any[]; updateItemMeta: typeof mockUpdateItemMeta }) => unknown) => selector({
+    items: [],
     updateItemMeta: mockUpdateItemMeta,
   }),
 }));
@@ -36,6 +37,10 @@ vi.mock('../AudioPlayer', () => ({
 
 vi.mock('../TranscriptSummaryPanel', () => ({
   TranscriptSummaryPanel: () => null,
+}));
+
+vi.mock('../TranscriptVersionPanel', () => ({
+  TranscriptVersionPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptVersionPanel</div> : null),
 }));
 
 vi.mock('../RenameModal', () => ({
@@ -116,6 +121,17 @@ describe('TranscriptWorkbench', () => {
     ));
 
     expect(actionLabels).toEqual(['PolishButton', 'TranslateButton', 'ExportButton', 'common.close']);
+  });
+
+  it('opens the version panel for saved transcript records', async () => {
+    useTranscriptStore.setState({ sourceHistoryId: 'history-a' });
+    render(<TranscriptWorkbench onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'versions.title' }));
+    });
+
+    expect(screen.getByText('TranscriptVersionPanel')).toBeDefined();
   });
 
   it('disables rename and close while recording is active', async () => {

@@ -54,6 +54,32 @@ pub struct LiveRecordingDraftResult {
     pub audio_absolute_path: String,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TranscriptSnapshotReason {
+    Polish,
+    Translate,
+    Retranscribe,
+    Restore,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSnapshotMetadata {
+    pub id: String,
+    pub history_id: String,
+    pub reason: TranscriptSnapshotReason,
+    pub created_at: u64,
+    pub segment_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSnapshotRecord {
+    pub metadata: TranscriptSnapshotMetadata,
+    pub segments: Value,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportBackupArchiveRequest {

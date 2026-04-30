@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { History as VersionHistoryIcon } from 'lucide-react';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
@@ -13,8 +14,10 @@ import { RenameModal } from './RenameModal';
 import { PolishButton } from './PolishButton';
 import { TranslateButton } from './TranslateButton';
 import { ExportButton } from './ExportButton';
+import { TranscriptVersionPanel } from './TranscriptVersionPanel';
 import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from './Icons';
 import { generateAiTitle } from '../services/aiRenameService';
+import { isHistoryItemDraft } from '../types/history';
 
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */
@@ -54,6 +57,7 @@ function renderHeaderIcon(icon: string | null, defaultType: string): React.React
 export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconType }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
   // Store state
@@ -69,12 +73,21 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
+  const currentHistoryItem = useHistoryStore((state) => (
+    sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
+  ));
 
   const hasSegments = segments.length > 0;
   
   // Summary button logic
   const summaryEnabled = config.summaryEnabled ?? true;
   const showSummaryButton = summaryEnabled && hasSegments;
+  const showVersionButton = Boolean(
+    hasSegments
+    && sourceHistoryId
+    && sourceHistoryId !== 'current'
+    && (!currentHistoryItem || !isHistoryItemDraft(currentHistoryItem)),
+  );
 
   const displayIconType = defaultIconType || (mode === 'batch' ? 'batch' : 'recording');
 
@@ -137,6 +150,18 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
                 <SummaryIcon />
               </button>
             )}
+            {showVersionButton && (
+              <button
+                className="btn btn-icon btn-sm"
+                type="button"
+                onClick={() => setIsVersionPanelOpen(true)}
+                aria-label={t('versions.title', { defaultValue: 'Versions' })}
+                data-tooltip={t('versions.title', { defaultValue: 'Versions' })}
+                data-tooltip-pos="bottom"
+              >
+                <VersionHistoryIcon size={16} />
+              </button>
+            )}
           </div>
           <div className="projects-detail-header-actions">
             <PolishButton className="projects-detail-header-action" />
@@ -171,6 +196,12 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
       <TranscriptSummaryPanel 
         isOpen={isSummaryOpen} 
         onClose={() => setIsSummaryOpen(false)} 
+      />
+
+      <TranscriptVersionPanel
+        isOpen={isVersionPanelOpen}
+        historyId={sourceHistoryId}
+        onClose={() => setIsVersionPanelOpen(false)}
       />
 
       <RenameModal

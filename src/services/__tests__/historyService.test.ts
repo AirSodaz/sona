@@ -106,4 +106,56 @@ describe('historyService', () => {
       expect.objectContaining({ text: '好', start: 0.5, end: 1 }),
     ]);
   });
+
+  it('creates and loads transcript snapshots through the Rust bridge', async () => {
+    testContext.invokeMock
+      .mockResolvedValueOnce({
+        id: 'snapshot-1',
+        historyId: 'history-1',
+        reason: 'polish',
+        createdAt: 1,
+        segmentCount: 1,
+      })
+      .mockResolvedValueOnce({
+        metadata: {
+          id: 'snapshot-1',
+          historyId: 'history-1',
+          reason: 'polish',
+          createdAt: 1,
+          segmentCount: 1,
+        },
+        segments: [
+          {
+            id: 'seg-1',
+            text: '你好',
+            start: 0,
+            end: 1,
+            isFinal: true,
+            tokens: ['你', '好'],
+            timestamps: [0, 0.5],
+          },
+        ],
+      });
+
+    await historyService.createTranscriptSnapshot('history-1', 'polish', [
+      { id: 'seg-1', text: '你好', start: 0, end: 1, isFinal: true },
+    ]);
+    const record = await historyService.loadTranscriptSnapshot('history-1', 'snapshot-1');
+
+    expect(testContext.invokeMock).toHaveBeenNthCalledWith(1, 'history_create_transcript_snapshot', {
+      historyId: 'history-1',
+      reason: 'polish',
+      segments: [
+        expect.objectContaining({ id: 'seg-1', text: '你好' }),
+      ],
+    });
+    expect(testContext.invokeMock).toHaveBeenNthCalledWith(2, 'history_load_transcript_snapshot', {
+      historyId: 'history-1',
+      snapshotId: 'snapshot-1',
+    });
+    expect(record?.segments[0].timing).toEqual(expect.objectContaining({
+      level: 'token',
+      source: 'model',
+    }));
+  });
 });

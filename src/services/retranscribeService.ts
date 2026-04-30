@@ -4,6 +4,7 @@ import { setTranscriptSegments } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
+import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { transcriptionService } from './transcriptionService';
 import { logger } from '../utils/logger';
 
@@ -39,6 +40,9 @@ class RetranscribeService {
         transcriptionService.setModelPath(config.offlineModelPath);
         transcriptionService.setEnableITN(config.enableITN ?? false);
         const language = config.language;
+        const currentSegments = useTranscriptSessionStore.getState().segments;
+
+        await transcriptSnapshotService.createSnapshot(historyId, 'retranscribe', currentSegments);
 
         // Perform transcription
         const segments = await transcriptionService.transcribeFile(

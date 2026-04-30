@@ -2,6 +2,11 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { v4 as uuidv4 } from 'uuid';
 import { HistoryItem } from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
+import {
+    TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
+} from '../types/transcriptSnapshot';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
@@ -10,9 +15,12 @@ import {
     historyCreateLiveDraft,
     historyDeleteItems,
     historyDeleteSummary,
+    historyCreateTranscriptSnapshot,
     historyListItems,
     historyLoadSummary,
     historyLoadTranscript,
+    historyListTranscriptSnapshots,
+    historyLoadTranscriptSnapshot,
     historyOpenFolder,
     historyReassignProject,
     historyResolveAudioPath,
@@ -298,6 +306,34 @@ export const historyService = {
             logger.error('[History] Failed to update transcript:', error);
             throw error;
         }
+    },
+
+    async createTranscriptSnapshot(
+        historyId: string,
+        reason: TranscriptSnapshotReason,
+        segments: TranscriptSegment[],
+    ): Promise<TranscriptSnapshotMetadata> {
+        const normalizedSegments = normalizeTranscriptSegments(segments);
+        return historyCreateTranscriptSnapshot(historyId, reason, normalizedSegments);
+    },
+
+    async listTranscriptSnapshots(historyId: string): Promise<TranscriptSnapshotMetadata[]> {
+        return historyListTranscriptSnapshots(historyId);
+    },
+
+    async loadTranscriptSnapshot(
+        historyId: string,
+        snapshotId: string,
+    ): Promise<TranscriptSnapshotRecord | null> {
+        const record = await historyLoadTranscriptSnapshot(historyId, snapshotId);
+        if (!record) {
+            return null;
+        }
+
+        return {
+            ...record,
+            segments: normalizeTranscriptSegments(record.segments),
+        };
     },
 
     async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {

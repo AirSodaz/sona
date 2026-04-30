@@ -1125,6 +1125,48 @@
             "custom": "Custom"
         }
     },
+    "versions": {
+        "badge": "Versions",
+        "title": "Version Snapshots",
+        "description": "Review snapshots saved before bulk transcript rewrites, then restore only the changes you need.",
+        "snapshot_count": "Snapshots",
+        "changed_count": "Changes",
+        "list_label": "Version snapshot list",
+        "diff_label": "Snapshot diff",
+        "loading": "Loading snapshots...",
+        "empty": "No version snapshots yet.",
+        "choose_snapshot": "Choose a snapshot to review its diff.",
+        "segment_count": "{{count}} segment",
+        "segment_count_other": "{{count}} segments",
+        "selected_count": "{{count}} change selected",
+        "selected_count_other": "{{count}} changes selected",
+        "select_all_changes": "Select All Changes",
+        "clear_selection": "Clear Selection",
+        "restore_selected": "Restore Selected",
+        "restore_all": "Revert Whole Transcript",
+        "restore_selected_confirm": "Restore {{count}} selected change and save the current transcript as a snapshot first?",
+        "restore_selected_confirm_other": "Restore {{count}} selected changes and save the current transcript as a snapshot first?",
+        "restore_all_confirm": "Revert the whole transcript to this snapshot and save the current transcript as a snapshot first?",
+        "before": "Snapshot",
+        "after": "Current",
+        "empty_segment": "No content",
+        "error_load": "Failed to load version snapshots.",
+        "error_load_snapshot": "Failed to load snapshot content.",
+        "error_restore_selected": "Failed to restore selected changes.",
+        "error_restore_all": "Failed to revert the transcript.",
+        "reason": {
+            "polish": "Before Polish",
+            "translate": "Before Translation",
+            "retranscribe": "Before Re-transcribe",
+            "restore": "Before Restore"
+        },
+        "diff": {
+            "unchanged": "Unchanged",
+            "modified": "Modified",
+            "added": "Added",
+            "removed": "Removed"
+        }
+    },
     "recovery": {
         "badge": "Recovery Center",
         "title": "Interrupted Batch Recovery",

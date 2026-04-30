@@ -1123,6 +1123,45 @@
             "custom": "自定义"
         }
     },
+    "versions": {
+        "badge": "版本",
+        "title": "版本快照",
+        "description": "查看这条转录在批量改写前保留的快照，并按差异恢复需要的内容。",
+        "snapshot_count": "快照数",
+        "changed_count": "差异数",
+        "list_label": "版本快照列表",
+        "diff_label": "快照差异",
+        "loading": "正在加载快照...",
+        "empty": "还没有版本快照。",
+        "choose_snapshot": "选择一个快照查看差异。",
+        "segment_count": "{{count}} 段",
+        "selected_count": "已选择 {{count}} 处差异",
+        "select_all_changes": "选择全部差异",
+        "clear_selection": "清空选择",
+        "restore_selected": "恢复选中",
+        "restore_all": "整份回退",
+        "restore_selected_confirm": "将恢复选中的 {{count}} 处差异，并在恢复前保留当前版本快照。",
+        "restore_all_confirm": "将把当前转录整份回退到这个快照，并在回退前保留当前版本快照。",
+        "before": "快照",
+        "after": "当前",
+        "empty_segment": "无内容",
+        "error_load": "版本快照加载失败。",
+        "error_load_snapshot": "快照内容加载失败。",
+        "error_restore_selected": "局部恢复失败。",
+        "error_restore_all": "整份回退失败。",
+        "reason": {
+            "polish": "润色前",
+            "translate": "翻译前",
+            "retranscribe": "重新转录前",
+            "restore": "恢复前"
+        },
+        "diff": {
+            "unchanged": "未变化",
+            "modified": "已修改",
+            "added": "新增",
+            "removed": "已删除"
+        }
+    },
     "recovery": {
         "badge": "恢复中心",
         "title": "中断批处理恢复",

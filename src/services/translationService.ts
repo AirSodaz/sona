@@ -4,6 +4,7 @@ import { updateTranscriptSegment } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { historyService } from './historyService';
+import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
@@ -84,6 +85,7 @@ class TranslationService {
         useTranscriptSidecarStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
+        await transcriptSnapshotService.createSnapshot(jobHistoryId, 'translate', segments);
         await this.translateSegmentsWithConfig(
           config,
           segments,

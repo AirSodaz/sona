@@ -12,6 +12,7 @@ import { TranscriptSegment } from '../../types/transcript';
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
+const mockCreateSnapshot = vi.fn();
 
 const TEST_LLM_SETTINGS = {
   activeProvider: 'open_ai',
@@ -74,6 +75,12 @@ vi.mock('../llmTaskService', () => ({
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
 }));
 
+vi.mock('../transcriptSnapshotService', () => ({
+  transcriptSnapshotService: {
+    createSnapshot: (...args: unknown[]) => mockCreateSnapshot(...args),
+  },
+}));
+
 describe('PolishService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,6 +88,7 @@ describe('PolishService', () => {
     mockCreateLlmTaskId.mockReturnValue('polish-task-id');
     mockListenToLlmTaskChunks.mockResolvedValue(vi.fn());
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockCreateSnapshot.mockResolvedValue(null);
 
     useTranscriptStore.setState({
       config: buildPolishTestConfig(),
@@ -256,5 +264,22 @@ describe('PolishService', () => {
       isPolishing: false,
       polishProgress: 0,
     }));
+  });
+
+  it('creates one saved-history snapshot before polishing writes chunks', async () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
+    ];
+
+    useTranscriptStore.setState({
+      segments,
+      sourceHistoryId: 'history-a',
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
+
+    await polishService.polishTranscript();
+
+    expect(mockCreateSnapshot).toHaveBeenCalledTimes(1);
+    expect(mockCreateSnapshot).toHaveBeenCalledWith('history-a', 'polish', segments);
   });
 });

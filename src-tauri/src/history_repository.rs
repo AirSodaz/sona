@@ -11,12 +11,15 @@ pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
     HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
-    LiveRecordingDraftResult, PreparedBackupImport,
+    LiveRecordingDraftResult, PreparedBackupImport, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
 pub(super) const HISTORY_DIR_NAME: &str = "history";
 pub(super) const HISTORY_INDEX_FILE_NAME: &str = "index.json";
 pub(super) const SUMMARY_FILE_SUFFIX: &str = ".summary.json";
+pub(super) const HISTORY_VERSIONS_DIR_NAME: &str = "versions";
+pub(super) const TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT: usize = 20;
 
 pub(super) const CONFIG_DIR_NAME: &str = "config";
 pub(super) const CONFIG_FILE_NAME: &str = "sona-config.json";

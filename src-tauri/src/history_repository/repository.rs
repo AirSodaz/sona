@@ -2,6 +2,8 @@ use serde_json::{Map, Value};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 use super::fs_utils::{
     ensure_json_array_value, ensure_json_object_value, ensure_safe_file_name,
@@ -11,9 +13,20 @@ use super::fs_utils::{
 use super::types::HistoryBackupSnapshot;
 use super::{
     HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
-    LiveRecordingDraftResult,
+    LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
-use super::{HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, SUMMARY_FILE_SUFFIX};
+use super::{
+    HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
+    TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
+};
+
+fn current_time_millis() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|error| error.to_string())
+}
 
 #[derive(Clone)]
 pub(super) struct HistoryRepository {
@@ -89,6 +102,34 @@ impl HistoryRepository {
         Ok(self
             .history_dir()
             .join(format!("{safe_history_id}{SUMMARY_FILE_SUFFIX}")))
+    }
+
+    pub(super) fn transcript_versions_dir(&self, history_id: &str) -> Result<PathBuf, String> {
+        let safe_history_id = ensure_safe_file_name(history_id, "History version id")?;
+        Ok(self
+            .history_dir()
+            .join(HISTORY_VERSIONS_DIR_NAME)
+            .join(safe_history_id))
+    }
+
+    pub(super) fn transcript_snapshot_index_path(
+        &self,
+        history_id: &str,
+    ) -> Result<PathBuf, String> {
+        Ok(self
+            .transcript_versions_dir(history_id)?
+            .join(HISTORY_INDEX_FILE_NAME))
+    }
+
+    pub(super) fn transcript_snapshot_path(
+        &self,
+        history_id: &str,
+        snapshot_id: &str,
+    ) -> Result<PathBuf, String> {
+        let safe_snapshot_id = ensure_safe_file_name(snapshot_id, "Transcript snapshot id")?;
+        Ok(self
+            .transcript_versions_dir(history_id)?
+            .join(format!("{safe_snapshot_id}.json")))
     }
 
     pub(super) fn create_live_draft(
@@ -229,6 +270,9 @@ impl HistoryRepository {
             if let Ok(path) = self.summary_path(&item.id) {
                 remove_path_if_exists(&path)?;
             }
+            if let Ok(path) = self.transcript_versions_dir(&item.id) {
+                remove_path_if_exists(&path)?;
+            }
         }
 
         let next_items = items
@@ -250,6 +294,100 @@ impl HistoryRepository {
             value,
             "History transcript file",
         )?))
+    }
+
+    pub(super) fn create_transcript_snapshot(
+        &self,
+        history_id: &str,
+        reason: TranscriptSnapshotReason,
+        segments: Value,
+    ) -> Result<TranscriptSnapshotMetadata, String> {
+        self.ensure_ready()?;
+        let segments = ensure_json_array_value(segments, "Transcript snapshot segments")?;
+        let items = self.list_items()?;
+        if !items.iter().any(|entry| entry.id == history_id) {
+            return Err(format!("History item not found: {history_id}"));
+        }
+
+        let created_at = current_time_millis()?;
+        let metadata = TranscriptSnapshotMetadata {
+            id: format!("{created_at}-{}", Uuid::new_v4()),
+            history_id: history_id.to_string(),
+            reason,
+            created_at,
+            segment_count: segments.as_array().map_or(0, |items| items.len() as u64),
+        };
+
+        let versions_dir = self.transcript_versions_dir(history_id)?;
+        fs::create_dir_all(&versions_dir).map_err(|error| error.to_string())?;
+
+        let record = TranscriptSnapshotRecord {
+            metadata: metadata.clone(),
+            segments,
+        };
+        write_json_pretty_atomic(
+            &self.transcript_snapshot_path(history_id, &metadata.id)?,
+            &record,
+        )?;
+
+        let mut index = self.list_transcript_snapshots(history_id)?;
+        index.retain(|entry| entry.id != metadata.id);
+        index.insert(0, metadata.clone());
+        index.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+
+        let pruned = if index.len() > TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT {
+            index.split_off(TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT)
+        } else {
+            Vec::new()
+        };
+
+        for snapshot in &pruned {
+            remove_path_if_exists(&self.transcript_snapshot_path(history_id, &snapshot.id)?)?;
+        }
+
+        write_json_pretty_atomic(&self.transcript_snapshot_index_path(history_id)?, &index)?;
+        Ok(metadata)
+    }
+
+    pub(super) fn list_transcript_snapshots(
+        &self,
+        history_id: &str,
+    ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
+        let index_path = self.transcript_snapshot_index_path(history_id)?;
+        if !index_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let raw = read_json_value(&index_path)?;
+        let mut entries: Vec<TranscriptSnapshotMetadata> =
+            serde_json::from_value(raw).map_err(|error| error.to_string())?;
+        entries.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        Ok(entries)
+    }
+
+    pub(super) fn load_transcript_snapshot(
+        &self,
+        history_id: &str,
+        snapshot_id: &str,
+    ) -> Result<Option<TranscriptSnapshotRecord>, String> {
+        let snapshot_path = self.transcript_snapshot_path(history_id, snapshot_id)?;
+        if !snapshot_path.exists() {
+            return Ok(None);
+        }
+
+        let raw = read_json_value(&snapshot_path)?;
+        let record: TranscriptSnapshotRecord =
+            serde_json::from_value(raw).map_err(|error| error.to_string())?;
+        ensure_json_array_value(record.segments.clone(), "Transcript snapshot file")?;
+        Ok(Some(record))
     }
 
     pub(super) fn update_transcript(
@@ -654,5 +792,110 @@ mod tests {
 
         repository.delete_summary("history-1").unwrap();
         assert_eq!(repository.load_summary("history-1").unwrap(), None);
+    }
+
+    #[test]
+    fn transcript_snapshot_round_trip_lists_newest_first() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        let first = repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Polish,
+                json!([{ "id": "seg-1", "text": "before" }]),
+            )
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let second = repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Translate,
+                json!([{ "id": "seg-1", "text": "after" }]),
+            )
+            .unwrap();
+
+        let snapshots = repository.list_transcript_snapshots(&item.id).unwrap();
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(snapshots[0].id, second.id);
+        assert_eq!(snapshots[1].id, first.id);
+
+        let record = repository
+            .load_transcript_snapshot(&item.id, &first.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.metadata.reason, TranscriptSnapshotReason::Polish);
+        assert_eq!(record.segments.as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn transcript_snapshots_are_pruned_to_retention_limit() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        for index in 0..(TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT + 2) {
+            repository
+                .create_transcript_snapshot(
+                    &item.id,
+                    TranscriptSnapshotReason::Polish,
+                    json!([{ "id": format!("seg-{index}"), "text": format!("text {index}") }]),
+                )
+                .unwrap();
+        }
+
+        let snapshots = repository.list_transcript_snapshots(&item.id).unwrap();
+        assert_eq!(snapshots.len(), TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT);
+
+        let versions_dir = repository.transcript_versions_dir(&item.id).unwrap();
+        let json_file_count = fs::read_dir(versions_dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry.path().extension().and_then(|value| value.to_str()) == Some("json")
+            })
+            .count();
+        assert_eq!(json_file_count, TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT + 1);
+    }
+
+    #[test]
+    fn transcript_snapshot_paths_reject_unsafe_ids() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        assert!(repository.list_transcript_snapshots("../bad").is_err());
+        assert!(repository
+            .load_transcript_snapshot("history-1", "../bad")
+            .is_err());
+    }
+
+    #[test]
+    fn history_delete_items_removes_snapshot_versions() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let item = sample_history_item("delete", HistoryItemStatus::Complete);
+        repository.write_index(&vec![item.clone()]).unwrap();
+        repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Polish,
+                json!([{ "id": "seg-1", "text": "before" }]),
+            )
+            .unwrap();
+        let versions_dir = repository.transcript_versions_dir(&item.id).unwrap();
+        assert!(versions_dir.exists());
+
+        repository.delete_items(&vec![item.id.clone()]).unwrap();
+
+        assert!(!versions_dir.exists());
     }
 }

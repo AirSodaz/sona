@@ -12,6 +12,7 @@ import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
+const mockCreateSnapshot = vi.fn();
 
 const TEST_LLM_SETTINGS = {
   activeProvider: 'open_ai',
@@ -74,8 +75,15 @@ vi.mock('../llmTaskService', () => ({
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
 }));
 
+vi.mock('../transcriptSnapshotService', () => ({
+  transcriptSnapshotService: {
+    createSnapshot: (...args: unknown[]) => mockCreateSnapshot(...args),
+  },
+}));
+
 vi.mock('../historyService', () => ({
   historyService: {
+    createTranscriptSnapshot: vi.fn(),
     loadTranscript: vi.fn(),
     updateTranscript: vi.fn(),
   },
@@ -88,6 +96,7 @@ describe('TranslationService', () => {
     mockCreateLlmTaskId.mockReturnValue('translate-task-id');
     mockListenToLlmTaskChunks.mockResolvedValue(vi.fn());
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockCreateSnapshot.mockResolvedValue(null);
   });
 
   it('translates the active transcript incrementally and toggles visibility when finished', async () => {
@@ -195,6 +204,9 @@ describe('TranslationService', () => {
     expect(historyService.loadTranscript).toHaveBeenCalledWith('history-a.json');
     expect(historyService.updateTranscript).toHaveBeenCalledWith('history-a', [
       { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' },
+    ]);
+    expect(mockCreateSnapshot).toHaveBeenCalledWith('history-a', 'translate', [
+      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
     ]);
   });
 });
