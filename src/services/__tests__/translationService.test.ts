@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { translationService } from '../translationService';
 import { historyService } from '../historyService';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
+import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../test-utils/configTestUtils';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -34,32 +34,34 @@ const TEST_LLM_SETTINGS = {
   },
 } satisfies NonNullable<AppConfig['llmSettings']>;
 
-type TestConfigOverrides = Omit<Partial<AppConfig>, 'llmSettings'> & {
-  llmSettings?: Partial<NonNullable<AppConfig['llmSettings']>>;
-};
+type TestConfigOverrides = DeepPartial<AppConfig>;
 
-function buildTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
-  return {
-    ...DEFAULT_CONFIG,
+function buildTranslationTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
+  const baseLlmSettings = buildBaseTestConfig({
+    llmSettings: TEST_LLM_SETTINGS,
+  }).llmSettings!;
+  const overrideLlmSettings = overrides.llmSettings;
+
+  return buildBaseTestConfig({
     ...overrides,
     llmSettings: {
-      ...TEST_LLM_SETTINGS,
-      ...overrides.llmSettings,
+      ...baseLlmSettings,
+      ...overrideLlmSettings,
       providers: {
-        ...TEST_LLM_SETTINGS.providers,
-        ...overrides.llmSettings?.providers,
+        ...baseLlmSettings.providers,
+        ...overrideLlmSettings?.providers,
       },
       models: {
-        ...TEST_LLM_SETTINGS.models,
-        ...overrides.llmSettings?.models,
+        ...baseLlmSettings.models,
+        ...overrideLlmSettings?.models,
       },
-      modelOrder: overrides.llmSettings?.modelOrder ?? TEST_LLM_SETTINGS.modelOrder,
+      modelOrder: overrideLlmSettings?.modelOrder ?? baseLlmSettings.modelOrder,
       selections: {
-        ...TEST_LLM_SETTINGS.selections,
-        ...overrides.llmSettings?.selections,
+        ...baseLlmSettings.selections,
+        ...overrideLlmSettings?.selections,
       },
     },
-  };
+  });
 }
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -90,7 +92,7 @@ describe('TranslationService', () => {
 
   it('translates the active transcript incrementally and toggles visibility when finished', async () => {
     useTranscriptStore.setState({
-      config: buildTestConfig({
+      config: buildTranslationTestConfig({
         translationLanguage: 'ja',
       }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
@@ -136,7 +138,7 @@ describe('TranslationService', () => {
 
   it('falls back to final result when no chunk event arrives', async () => {
     useTranscriptStore.setState({
-      config: buildTestConfig({
+      config: buildTranslationTestConfig({
         translationLanguage: 'ja',
       }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
@@ -157,7 +159,7 @@ describe('TranslationService', () => {
 
   it('updates background history when the active record changes mid-translation', async () => {
     useTranscriptStore.setState({
-      config: buildTestConfig({
+      config: buildTranslationTestConfig({
         translationLanguage: 'zh',
       }),
       segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],

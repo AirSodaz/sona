@@ -2,8 +2,9 @@ import { renderHook, act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useModelManager } from '../useModelManager';
 import { modelService } from '../../services/modelService';
-import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { setTestConfig } from '../../test-utils/configTestUtils';
 
 const SENSEVOICE_INT8_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const SENSEVOICE_FP32_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
@@ -35,19 +36,16 @@ describe('useModelManager restoreDefaultModelSettings', () => {
     beforeEach(() => {
         vi.clearAllMocks();
 
-        useConfigStore.setState({
-            config: {
-                ...DEFAULT_CONFIG,
-                streamingModelPath: '/current/live',
-                offlineModelPath: '/current/offline',
-                vadModelPath: '/current/vad',
-                punctuationModelPath: '/current/punctuation',
-                speakerSegmentationModelPath: '/current/speaker-segmentation',
-                speakerEmbeddingModelPath: '/current/speaker-embedding',
-                enableITN: false,
-                vadBufferSize: 9,
-                maxConcurrent: 4,
-            }
+        setTestConfig({
+            streamingModelPath: '/current/live',
+            offlineModelPath: '/current/offline',
+            vadModelPath: '/current/vad',
+            punctuationModelPath: '/current/punctuation',
+            speakerSegmentationModelPath: '/current/speaker-segmentation',
+            speakerEmbeddingModelPath: '/current/speaker-embedding',
+            enableITN: false,
+            vadBufferSize: 9,
+            maxConcurrent: 4,
         });
 
         useDialogStore.setState({

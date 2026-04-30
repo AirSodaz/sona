@@ -2,7 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCaptionSession } from '../useCaptionSession';
 import { captionWindowService } from '../../services/captionWindowService';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AppConfig } from '../../types/transcript';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
 
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: vi.fn().mockRejectedValue(new Error('Native capture not supported')),
@@ -91,11 +91,11 @@ describe('useCaptionSession', () => {
         });
     };
 
-    const defaultConfig: AppConfig = {
+    const defaultConfig = buildTestConfig({
         streamingModelPath: '/path/to/model',
         offlineModelPath: '/path/to/model',
         language: 'en',
-    } as AppConfig;
+    });
 
     beforeEach(() => {
         vi.clearAllMocks();

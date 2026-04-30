@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsModelsTab } from '../SettingsModelsTab';
-import { DEFAULT_CONFIG, useConfigStore } from '../../../stores/configStore';
+import { useConfigStore } from '../../../stores/configStore';
 import { ModelManagerContext } from '../../../hooks/useModelManager';
+import { setTestConfig } from '../../../test-utils/configTestUtils';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -81,12 +82,9 @@ function renderTab(installedModels: Set<string>) {
 describe('SettingsModelsTab speaker model selections', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        useConfigStore.setState({
-            config: {
-                ...DEFAULT_CONFIG,
-                speakerSegmentationModelPath: '',
-                speakerEmbeddingModelPath: '',
-            },
+        setTestConfig({
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
         });
     });
 
@@ -103,12 +101,9 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
 
     it('clears selected speaker model paths when Off is chosen', async () => {
-        useConfigStore.setState({
-            config: {
-                ...DEFAULT_CONFIG,
-                speakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
-                speakerEmbeddingModelPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-            },
+        setTestConfig({
+            speakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
+            speakerEmbeddingModelPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
         });
 
         renderTab(new Set([

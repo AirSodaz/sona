@@ -8,7 +8,7 @@ import type {
   TranscriptUpdate,
 } from '../types/transcript';
 import type { LlmState } from '../stores/transcriptSidecarStore';
-import { DEFAULT_CONFIG, useConfigStore } from '../stores/configStore';
+import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
@@ -34,6 +34,7 @@ import {
   updateTranscriptSegment,
   upsertTranscriptSegmentAndSetActive,
 } from '../stores/transcriptCoordinator';
+import { buildTestConfig } from './configTestUtils';
 
 type LegacyTranscriptState = ReturnType<typeof getTranscriptTestState>;
 type TranscriptStateSelector<T> = (state: LegacyTranscriptState) => T;
@@ -217,7 +218,7 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
 export function resetTranscriptStores(): void {
   useConfigStore.setState((state) => ({
     ...state,
-    config: { ...DEFAULT_CONFIG },
+    config: buildTestConfig(),
   }));
   useProjectStore.setState((state) => ({
     ...state,

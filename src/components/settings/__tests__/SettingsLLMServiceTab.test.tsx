@@ -2,7 +2,8 @@ import { expect, vi, beforeEach, describe, it } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as tauriApi from '@tauri-apps/api/core';
 import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
-import { AppConfig, LlmProvider } from '../../../types/transcript';
+import type { AppConfig } from '../../../types/config';
+import type { LlmProvider } from '../../../types/transcript';
 import {
   addLlmModel,
   buildLlmConfigPatch,
@@ -10,6 +11,7 @@ import {
   setFeatureModelSelection,
   updateProviderSetting,
 } from '../../../services/llm/state';
+import { buildTestConfig } from '../../../test-utils/configTestUtils';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -22,14 +24,13 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): AppConfig {
-  const baseConfig: AppConfig = {
+  const baseConfig = buildTestConfig({
     streamingModelPath: '/path/to/model',
     offlineModelPath: '',
     language: 'auto',
-    appLanguage: 'auto',
     summaryEnabled: true,
     llmSettings: createLlmSettings(provider),
-  } as AppConfig;
+  });
 
   let llmSettings = updateProviderSetting(baseConfig.llmSettings, provider, {
     apiKey: includeApiKey ? 'test-key' : '',
@@ -51,10 +52,14 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
 const mockUpdateConfig = vi.fn();
 let currentConfig = buildConfig();
 
-vi.mock('../../../stores/configStore', () => ({
-  useLlmAssistantConfig: () => currentConfig,
-  useSetConfig: () => mockUpdateConfig,
-}));
+vi.mock('../../../stores/configStore', async () => {
+  const actual = await vi.importActual<typeof import('../../../stores/configStore')>('../../../stores/configStore');
+  return {
+    ...actual,
+    useLlmAssistantConfig: () => currentConfig,
+    useSetConfig: () => mockUpdateConfig,
+  };
+});
 
 describe('SettingsLLMServiceTab', () => {
   beforeEach(() => {

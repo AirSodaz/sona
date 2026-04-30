@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../llm/state';
 import { summaryService } from '../summaryService';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
 
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -40,10 +40,9 @@ function createSummaryReadyConfig() {
   llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
   llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
 
-  return {
-    ...DEFAULT_CONFIG,
+  return buildTestConfig({
     llmSettings,
-  };
+  });
 }
 
 describe('summaryService', () => {

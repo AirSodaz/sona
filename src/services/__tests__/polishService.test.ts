@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { polishService } from '../polishService';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
+import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../test-utils/configTestUtils';
 import { TranscriptSegment } from '../../types/transcript';
 
 const mockListenToLlmTaskChunks = vi.fn();
@@ -34,32 +34,34 @@ const TEST_LLM_SETTINGS = {
   },
 } satisfies NonNullable<AppConfig['llmSettings']>;
 
-type TestConfigOverrides = Omit<Partial<AppConfig>, 'llmSettings'> & {
-  llmSettings?: Partial<NonNullable<AppConfig['llmSettings']>>;
-};
+type TestConfigOverrides = DeepPartial<AppConfig>;
 
-function buildTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
-  return {
-    ...DEFAULT_CONFIG,
+function buildPolishTestConfig(overrides: TestConfigOverrides = {}): AppConfig {
+  const baseLlmSettings = buildBaseTestConfig({
+    llmSettings: TEST_LLM_SETTINGS,
+  }).llmSettings!;
+  const overrideLlmSettings = overrides.llmSettings;
+
+  return buildBaseTestConfig({
     ...overrides,
     llmSettings: {
-      ...TEST_LLM_SETTINGS,
-      ...overrides.llmSettings,
+      ...baseLlmSettings,
+      ...overrideLlmSettings,
       providers: {
-        ...TEST_LLM_SETTINGS.providers,
-        ...overrides.llmSettings?.providers,
+        ...baseLlmSettings.providers,
+        ...overrideLlmSettings?.providers,
       },
       models: {
-        ...TEST_LLM_SETTINGS.models,
-        ...overrides.llmSettings?.models,
+        ...baseLlmSettings.models,
+        ...overrideLlmSettings?.models,
       },
-      modelOrder: overrides.llmSettings?.modelOrder ?? TEST_LLM_SETTINGS.modelOrder,
+      modelOrder: overrideLlmSettings?.modelOrder ?? baseLlmSettings.modelOrder,
       selections: {
-        ...TEST_LLM_SETTINGS.selections,
-        ...overrides.llmSettings?.selections,
+        ...baseLlmSettings.selections,
+        ...overrideLlmSettings?.selections,
       },
     },
-  };
+  });
 }
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -81,7 +83,7 @@ describe('PolishService', () => {
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
 
     useTranscriptStore.setState({
-      config: buildTestConfig(),
+      config: buildPolishTestConfig(),
       segments: [],
       sourceHistoryId: null,
     });
@@ -153,7 +155,7 @@ describe('PolishService', () => {
     ];
 
     useTranscriptStore.setState({
-      config: buildTestConfig({
+      config: buildPolishTestConfig({
         polishPresetId: 'custom-team',
         polishCustomPresets: [
           { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
@@ -178,7 +180,7 @@ describe('PolishService', () => {
     ];
 
     useTranscriptStore.setState({
-      config: buildTestConfig({
+      config: buildPolishTestConfig({
         polishKeywordSets: [
           { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
           { id: 'kw-2', name: 'Disabled', enabled: false, keywords: 'Ignore me' },

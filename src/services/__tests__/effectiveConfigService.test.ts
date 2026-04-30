@@ -3,33 +3,18 @@ import { resolveEffectiveConfig } from '../effectiveConfigService';
 import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
 import { createLlmSettings } from '../llm/state';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
 
 function createBaseConfig(): AppConfig {
-  return {
+  return buildTestConfig({
     configVersion: 5,
     appLanguage: 'en',
     theme: 'light',
-    font: 'system',
-    minimizeToTrayOnExit: true,
-    autoCheckUpdates: true,
-    liveRecordShortcut: 'Ctrl + Space',
-    microphoneId: 'default',
-    systemAudioDeviceId: 'default',
-    muteDuringRecording: false,
     streamingModelPath: '/models/live',
     offlineModelPath: '/models/offline',
     punctuationModelPath: '',
     vadModelPath: '',
-    language: 'auto',
-    enableTimeline: false,
-    enableITN: true,
-    vadBufferSize: 5,
-    maxConcurrent: 2,
     llmSettings: createLlmSettings(),
-    summaryEnabled: true,
-    summaryTemplateId: 'general',
-    summaryCustomTemplates: [],
-    translationLanguage: 'zh',
     polishPresetId: 'general',
     polishCustomPresets: [
       { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
@@ -56,7 +41,7 @@ function createBaseConfig(): AppConfig {
       { id: 'hot-b', name: 'Hot B', enabled: false, rules: [] },
     ],
     hotwords: [],
-  };
+  });
 }
 
 function createProject(): ProjectRecord {

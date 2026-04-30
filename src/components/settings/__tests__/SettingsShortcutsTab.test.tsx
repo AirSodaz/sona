@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SettingsShortcutsTab } from '../SettingsShortcutsTab';
-import { DEFAULT_CONFIG, useConfigStore } from '../../../stores/configStore';
+import { setTestConfig } from '../../../test-utils/configTestUtils';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -12,11 +12,8 @@ vi.mock('react-i18next', () => ({
 describe('SettingsShortcutsTab', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        useConfigStore.setState({
-            config: {
-                ...DEFAULT_CONFIG,
-                liveRecordShortcut: 'Ctrl + Space',
-            },
+        setTestConfig({
+            liveRecordShortcut: 'Ctrl + Space',
         });
     });
 

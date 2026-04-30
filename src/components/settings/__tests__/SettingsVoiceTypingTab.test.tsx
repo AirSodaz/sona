@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SettingsVoiceTypingTab } from '../SettingsVoiceTypingTab';
 import { SettingsNavigationProvider } from '../SettingsNavigationContext';
-import { DEFAULT_CONFIG, useConfigStore } from '../../../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../../../stores/voiceTypingRuntimeStore';
+import { setTestConfig } from '../../../test-utils/configTestUtils';
 
 function interpolate(template: string, options?: Record<string, unknown>) {
     return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
@@ -75,19 +75,10 @@ function renderVoiceTypingTab() {
     );
 }
 
-function setConfig(patch: Partial<typeof DEFAULT_CONFIG>) {
-    useConfigStore.setState({
-        config: {
-            ...DEFAULT_CONFIG,
-            ...patch,
-        },
-    });
-}
-
 describe('SettingsVoiceTypingTab', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        setConfig({});
+        setTestConfig();
         useVoiceTypingRuntimeStore.getState().resetRuntimeStatus();
     });
 
@@ -100,7 +91,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the missing shortcut state when enabled without a shortcut', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: '   ',
             streamingModelPath: '/models/streaming-test-model',
@@ -117,7 +108,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the missing live model state when enabled without a model', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '',
@@ -132,7 +123,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the missing VAD state when the selected model requires VAD', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
@@ -150,7 +141,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the preparing state while registration and warm-up are still settling', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
@@ -165,7 +156,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the ready state when runtime registration and warm-up are complete', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
@@ -182,7 +173,7 @@ describe('SettingsVoiceTypingTab', () => {
     });
 
     it('shows the failed state with the last observed error and remediation CTA', () => {
-        setConfig({
+        setTestConfig({
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
