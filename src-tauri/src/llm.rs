@@ -67,6 +67,14 @@ include!("llm/streaming_impl.rs");
 
 include!("llm/tasks_impl.rs");
 
+fn polished_segment_id(item: &PolishedSegment) -> &str {
+    item.id.as_str()
+}
+
+fn translated_segment_id(item: &TranslatedSegment) -> &str {
+    item.id.as_str()
+}
+
 #[tauri::command]
 pub async fn generate_llm_text(
     app: AppHandle,
@@ -104,34 +112,41 @@ pub async fn polish_transcript_segments(
     let usage_app = app.clone();
 
     run_streaming_segment_task(
-        &request.task_id,
-        LlmTaskType::Polish,
-        &request.segments,
-        request.chunk_size,
-        move |chunk| build_polish_prompt(chunk, context.as_deref(), keywords.as_deref()),
-        parse_polish_chunk,
-        move |prompt| LlmGenerateRequest {
-            config: config.clone(),
-            input: prompt,
-            source: None,
+        SegmentTaskContext {
+            task_id: &request.task_id,
+            task_type: LlmTaskType::Polish,
+            segments: &request.segments,
+            chunk_size: request.chunk_size,
+            prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
         },
-        |item| &item.id,
-        move |response| {
-            emit_llm_usage_event(
-                &usage_app,
-                &usage_config,
-                LlmUsageCategory::Polish,
-                response.usage.clone(),
-            );
-        },
-        move |payload| {
-            chunk_app
-                .emit(LLM_TASK_CHUNK_EVENT, payload)
-                .map_err(|error| error.to_string())
-        },
-        move |payload| {
-            app.emit(LLM_TASK_PROGRESS_EVENT, payload)
-                .map_err(|error| error.to_string())
+        StreamingSegmentTaskConfig {
+            build_prompt: move |chunk: &[LlmSegmentInput]| {
+                build_polish_prompt(chunk, context.as_deref(), keywords.as_deref())
+            },
+            parse_chunk: parse_polish_chunk,
+            build_request: move |prompt: String| LlmGenerateRequest {
+                config: config.clone(),
+                input: prompt,
+                source: None,
+            },
+            get_output_id: polished_segment_id,
+            on_success: move |response: &StandardLlmResponse| {
+                emit_llm_usage_event(
+                    &usage_app,
+                    &usage_config,
+                    LlmUsageCategory::Polish,
+                    response.usage.clone(),
+                );
+            },
+            emit_chunk: move |payload| {
+                chunk_app
+                    .emit(LLM_TASK_CHUNK_EVENT, payload)
+                    .map_err(|error| error.to_string())
+            },
+            emit_progress: move |payload| {
+                app.emit(LLM_TASK_PROGRESS_EVENT, payload)
+                    .map_err(|error| error.to_string())
+            },
         },
     )
     .await
@@ -158,166 +173,219 @@ pub async fn translate_transcript_segments(
         || config.provider == LlmProvider::GoogleTranslateFree
     {
         let client = Client::new();
+        let translate_provider = config.provider;
         return run_segment_task(
-            &request.task_id,
-            LlmTaskType::Translate,
-            &request.segments,
-            request.chunk_size,
-            move |chunk| {
-                let texts: Vec<String> = chunk.iter().map(|s| s.text.clone()).collect();
-                serde_json::to_string(&texts).unwrap_or_default()
+            SegmentTaskContext {
+                task_id: &request.task_id,
+                task_type: LlmTaskType::Translate,
+                segments: &request.segments,
+                chunk_size: request.chunk_size,
+                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             },
-            move |response_text, chunk, chunk_number| {
-                if config.provider == LlmProvider::GoogleTranslate {
-                    let parsed: GoogleTranslateResponse = serde_json::from_str(response_text)
-                        .map_err(|error| {
-                            chunk_error(
+            BufferedSegmentTaskConfig {
+                build_prompt: move |chunk: &[LlmSegmentInput]| {
+                    let texts: Vec<String> = chunk.iter().map(|s| s.text.clone()).collect();
+                    serde_json::to_string(&texts).unwrap_or_default()
+                },
+                parse_chunk: move |response_text: &str,
+                                   chunk: &[LlmSegmentInput],
+                                   chunk_number: usize| {
+                    if translate_provider == LlmProvider::GoogleTranslate {
+                        let parsed: GoogleTranslateResponse =
+                            serde_json::from_str(response_text).map_err(|error| {
+                                chunk_error(
+                                    LlmTaskType::Translate,
+                                    chunk_number,
+                                    format!("invalid JSON response: {error}"),
+                                )
+                            })?;
+
+                        if parsed.data.translations.len() != chunk.len() {
+                            return Err(chunk_error(
                                 LlmTaskType::Translate,
                                 chunk_number,
-                                format!("invalid JSON response: {error}"),
-                            )
-                        })?;
-
-                    if parsed.data.translations.len() != chunk.len() {
-                        return Err(chunk_error(
-                            LlmTaskType::Translate,
-                            chunk_number,
-                            format!(
-                                "expected {} objects but received {}",
-                                chunk.len(),
-                                parsed.data.translations.len()
-                            ),
-                        ));
-                    }
-
-                    let mut translated_segments = Vec::with_capacity(chunk.len());
-                    for (index, translation) in parsed.data.translations.into_iter().enumerate() {
-                        translated_segments.push(TranslatedSegment {
-                            id: chunk[index].id.clone(),
-                            translation: translation.translated_text,
-                        });
-                    }
-
-                    Ok(translated_segments)
-                } else {
-                    // GoogleTranslateFree returns raw JSON array of translations
-                    let translations: Vec<String> =
-                        serde_json::from_str(response_text).map_err(|e| {
-                            chunk_error(
-                                LlmTaskType::Translate,
-                                chunk_number,
-                                format!("invalid free translation JSON: {e}"),
-                            )
-                        })?;
-
-                    if translations.len() != chunk.len() {
-                        return Err(chunk_error(
-                            LlmTaskType::Translate,
-                            chunk_number,
-                            format!(
-                                "expected {} translations but received {}",
-                                chunk.len(),
-                                translations.len()
-                            ),
-                        ));
-                    }
-
-                    Ok(chunk
-                        .iter()
-                        .zip(translations)
-                        .map(|(s, t)| TranslatedSegment {
-                            id: s.id.clone(),
-                            translation: t,
-                        })
-                        .collect())
-                }
-            },
-            move |prompt| {
-                let config = config.clone();
-                let target_language = target_language.clone();
-                let client = client.clone();
-                Box::pin(async move {
-                    let texts: Vec<String> = serde_json::from_str(&prompt).unwrap_or_default();
-
-                    if config.provider == LlmProvider::GoogleTranslate {
-                        let payload = GoogleTranslateRequest {
-                            q: texts,
-                            target: target_language,
-                            format: "text".to_string(),
-                        };
-
-                        let url = format!(
-                            "{}?key={}",
-                            config.base_url.trim_end_matches('/'),
-                            config.api_key
-                        );
-                        let response = client
-                            .post(&url)
-                            .json(&payload)
-                            .send()
-                            .await
-                            .map_err(|e| e.to_string())?;
-
-                        let status = response.status();
-                        let text = response.text().await.unwrap_or_default();
-
-                        if !status.is_success() {
-                            return Err(format!("Google Translate API Error: {} {}", status, text));
+                                format!(
+                                    "expected {} objects but received {}",
+                                    chunk.len(),
+                                    parsed.data.translations.len()
+                                ),
+                            ));
                         }
 
-                        Ok(StandardLlmResponse {
-                            text,
-                            usage: None,
-                        })
+                        let mut translated_segments = Vec::with_capacity(chunk.len());
+                        for (index, translation) in parsed.data.translations.into_iter().enumerate()
+                        {
+                            translated_segments.push(TranslatedSegment {
+                                id: chunk[index].id.clone(),
+                                translation: translation.translated_text,
+                            });
+                        }
+
+                        Ok(translated_segments)
                     } else {
-                        info!(
-                            "[LLM] google_translate_free chunk fan-out: items={} max_concurrency={}",
-                            texts.len(),
-                            GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY
-                        );
-                        let base_url = config.base_url.clone();
-                        let translations = run_google_translate_free_requests_in_order(
-                            texts,
-                            GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY,
-                            move |index, text| {
-                                let client = client.clone();
-                                let base_url = base_url.clone();
-                                let target_language = target_language.clone();
-                                async move {
-                                    execute_google_translate_free_request(
-                                        index,
-                                        text,
-                                        target_language,
-                                        move |text, target_language| {
-                                            let client = client.clone();
-                                            let base_url = base_url.clone();
-                                            async move {
-                                                fetch_google_translate_free_translation(
-                                                    &client,
-                                                    base_url.as_str(),
-                                                    target_language.as_str(),
-                                                    text.as_str(),
-                                                )
-                                                .await
-                                            }
-                                        },
-                                        |delay| async move {
-                                            tokio::time::sleep(delay).await;
-                                        },
-                                    )
-                                    .await
-                                }
-                            },
-                        )
-                        .await?;
-                        Ok(StandardLlmResponse {
-                            text: serde_json::to_string(&translations).unwrap_or_default(),
-                            usage: None,
-                        })
+                        // GoogleTranslateFree returns raw JSON array of translations
+                        let translations: Vec<String> =
+                            serde_json::from_str(response_text).map_err(|e| {
+                                chunk_error(
+                                    LlmTaskType::Translate,
+                                    chunk_number,
+                                    format!("invalid free translation JSON: {e}"),
+                                )
+                            })?;
+
+                        if translations.len() != chunk.len() {
+                            return Err(chunk_error(
+                                LlmTaskType::Translate,
+                                chunk_number,
+                                format!(
+                                    "expected {} translations but received {}",
+                                    chunk.len(),
+                                    translations.len()
+                                ),
+                            ));
+                        }
+
+                        Ok(chunk
+                            .iter()
+                            .zip(translations)
+                            .map(|(s, t)| TranslatedSegment {
+                                id: s.id.clone(),
+                                translation: t,
+                            })
+                            .collect())
                     }
-                })
+                },
+                generate_text: move |prompt: String| {
+                    let config = config.clone();
+                    let target_language = target_language.clone();
+                    let client = client.clone();
+                    let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
+                        Box::pin(async move {
+                            let texts: Vec<String> =
+                                serde_json::from_str(&prompt).unwrap_or_default();
+
+                            if config.provider == LlmProvider::GoogleTranslate {
+                                let payload = GoogleTranslateRequest {
+                                    q: texts,
+                                    target: target_language,
+                                    format: "text".to_string(),
+                                };
+
+                                let url = format!(
+                                    "{}?key={}",
+                                    config.base_url.trim_end_matches('/'),
+                                    config.api_key
+                                );
+                                let response = client
+                                    .post(&url)
+                                    .json(&payload)
+                                    .send()
+                                    .await
+                                    .map_err(|e| e.to_string())?;
+
+                                let status = response.status();
+                                let text = response.text().await.unwrap_or_default();
+
+                                if !status.is_success() {
+                                    return Err(format!(
+                                        "Google Translate API Error: {} {}",
+                                        status, text
+                                    ));
+                                }
+
+                                Ok(StandardLlmResponse { text, usage: None })
+                            } else {
+                                info!(
+                                    "[LLM] google_translate_free chunk fan-out: items={} max_concurrency={}",
+                                    texts.len(),
+                                    GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY
+                                );
+                                let base_url = config.base_url.clone();
+                                let translations = run_google_translate_free_requests_in_order(
+                                    texts,
+                                    GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY,
+                                    move |index, text| {
+                                        let client = client.clone();
+                                        let base_url = base_url.clone();
+                                        let target_language = target_language.clone();
+                                        async move {
+                                            execute_google_translate_free_request(
+                                                index,
+                                                text,
+                                                target_language,
+                                                move |text, target_language| {
+                                                    let client = client.clone();
+                                                    let base_url = base_url.clone();
+                                                    async move {
+                                                        fetch_google_translate_free_translation(
+                                                            &client,
+                                                            base_url.as_str(),
+                                                            target_language.as_str(),
+                                                            text.as_str(),
+                                                        )
+                                                        .await
+                                                    }
+                                                },
+                                                |delay| async move {
+                                                    tokio::time::sleep(delay).await;
+                                                },
+                                            )
+                                            .await
+                                        }
+                                    },
+                                )
+                                .await?;
+                                Ok(StandardLlmResponse {
+                                    text: serde_json::to_string(&translations)
+                                        .unwrap_or_default(),
+                                    usage: None,
+                                })
+                            }
+                        });
+                    future
+                },
+                on_success: move |response: &StandardLlmResponse| {
+                    emit_llm_usage_event(
+                        &usage_app,
+                        &usage_config,
+                        LlmUsageCategory::Translation,
+                        response.usage.clone(),
+                    );
+                },
+                emit_chunk: move |payload| {
+                    chunk_app
+                        .emit(LLM_TASK_CHUNK_EVENT, payload)
+                        .map_err(|error| error.to_string())
+                },
+                emit_progress: move |payload| {
+                    app.emit(LLM_TASK_PROGRESS_EVENT, payload)
+                        .map_err(|error| error.to_string())
+                },
             },
-            move |response| {
+        )
+        .await;
+    }
+
+    run_streaming_segment_task(
+        SegmentTaskContext {
+            task_id: &request.task_id,
+            task_type: LlmTaskType::Translate,
+            segments: &request.segments,
+            chunk_size: request.chunk_size,
+            prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
+        },
+        StreamingSegmentTaskConfig {
+            build_prompt: move |chunk: &[LlmSegmentInput]| {
+                build_translate_prompt(chunk, &target_language)
+            },
+            parse_chunk: parse_translate_chunk,
+            build_request: move |prompt: String| LlmGenerateRequest {
+                config: config.clone(),
+                input: prompt,
+                source: None,
+            },
+            get_output_id: translated_segment_id,
+            on_success: move |response: &StandardLlmResponse| {
                 emit_llm_usage_event(
                     &usage_app,
                     &usage_config,
@@ -325,48 +393,15 @@ pub async fn translate_transcript_segments(
                     response.usage.clone(),
                 );
             },
-            move |payload| {
+            emit_chunk: move |payload| {
                 chunk_app
                     .emit(LLM_TASK_CHUNK_EVENT, payload)
                     .map_err(|error| error.to_string())
             },
-            move |payload| {
+            emit_progress: move |payload| {
                 app.emit(LLM_TASK_PROGRESS_EVENT, payload)
                     .map_err(|error| error.to_string())
             },
-        )
-        .await;
-    }
-
-    run_streaming_segment_task(
-        &request.task_id,
-        LlmTaskType::Translate,
-        &request.segments,
-        request.chunk_size,
-        move |chunk| build_translate_prompt(chunk, &target_language),
-        parse_translate_chunk,
-        move |prompt| LlmGenerateRequest {
-            config: config.clone(),
-            input: prompt,
-            source: None,
-        },
-        |item| &item.id,
-        move |response| {
-            emit_llm_usage_event(
-                &usage_app,
-                &usage_config,
-                LlmUsageCategory::Translation,
-                response.usage.clone(),
-            );
-        },
-        move |payload| {
-            chunk_app
-                .emit(LLM_TASK_CHUNK_EVENT, payload)
-                .map_err(|error| error.to_string())
-        },
-        move |payload| {
-            app.emit(LLM_TASK_PROGRESS_EVENT, payload)
-                .map_err(|error| error.to_string())
         },
     )
     .await
@@ -968,41 +1003,60 @@ mod tests {
         let segments = sample_segments();
         let mut chunk_events = Vec::new();
         let mut progress_events = Vec::new();
+        #[derive(Debug, PartialEq, Eq)]
+        enum SegmentEvent {
+            Chunk(usize),
+            Progress(usize),
+        }
+        let ordered_events = std::cell::RefCell::new(Vec::new());
 
         let result = run_segment_task(
-            "task-1",
-            LlmTaskType::Polish,
-            &segments,
-            Some(2),
-            |chunk| serde_json::to_string(chunk).unwrap(),
-            parse_polish_chunk,
-            {
-                let mut call_count = 0usize;
-                move |_prompt| {
-                    call_count += 1;
-                    let response = match call_count {
-                        1 => r#"[{"id":"1","text":"Hello"},{"id":"2","text":"World"}]"#,
-                        2 => r#"[{"id":"3","text":"Again"}]"#,
-                        _ => unreachable!(),
-                    }
-                    .to_string();
+            SegmentTaskContext {
+                task_id: "task-1",
+                task_type: LlmTaskType::Polish,
+                segments: &segments,
+                chunk_size: Some(2),
+                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
+            },
+            BufferedSegmentTaskConfig {
+                build_prompt: |chunk: &[LlmSegmentInput]| serde_json::to_string(chunk).unwrap(),
+                parse_chunk: parse_polish_chunk,
+                generate_text: {
+                    let mut call_count = 0usize;
+                    move |_prompt: String| {
+                        call_count += 1;
+                        let response = match call_count {
+                            1 => r#"[{"id":"1","text":"Hello"},{"id":"2","text":"World"}]"#,
+                            2 => r#"[{"id":"3","text":"Again"}]"#,
+                            _ => unreachable!(),
+                        }
+                        .to_string();
 
-                    Box::pin(async move {
-                        Ok(StandardLlmResponse {
-                            text: response,
-                            usage: None,
-                        })
-                    })
-                }
-            },
-            |_response| {},
-            |payload| {
-                chunk_events.push(payload);
-                Ok(())
-            },
-            |payload| {
-                progress_events.push(payload);
-                Ok(())
+                        let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
+                            Box::pin(async move {
+                                Ok(StandardLlmResponse {
+                                    text: response,
+                                    usage: None,
+                                })
+                            });
+                        future
+                    }
+                },
+                on_success: |_response: &StandardLlmResponse| {},
+                emit_chunk: |payload: LlmTaskChunkPayload<PolishedSegment>| {
+                    ordered_events
+                        .borrow_mut()
+                        .push(SegmentEvent::Chunk(payload.chunk_index));
+                    chunk_events.push(payload);
+                    Ok(())
+                },
+                emit_progress: |payload: LlmTaskProgressPayload| {
+                    ordered_events
+                        .borrow_mut()
+                        .push(SegmentEvent::Progress(payload.completed_chunks));
+                    progress_events.push(payload);
+                    Ok(())
+                },
             },
         )
         .await
@@ -1073,6 +1127,15 @@ mod tests {
                 },
             ]
         );
+        assert_eq!(
+            ordered_events.into_inner(),
+            vec![
+                SegmentEvent::Chunk(1),
+                SegmentEvent::Progress(1),
+                SegmentEvent::Chunk(2),
+                SegmentEvent::Progress(2),
+            ]
+        );
     }
 
     #[tokio::test]
@@ -1080,33 +1143,39 @@ mod tests {
         let segments = sample_segments();
 
         let err = run_segment_task(
-            "task-2",
-            LlmTaskType::Translate,
-            &segments,
-            Some(2),
-            |chunk| serde_json::to_string(chunk).unwrap(),
-            parse_translate_chunk,
-            {
-                let mut call_count = 0usize;
-                move |_prompt| {
-                    call_count += 1;
-                    Box::pin(async move {
-                        match call_count {
-                            1 => Ok(StandardLlmResponse {
-                                text:
-                                    r#"[{"id":"1","translation":"A"},{"id":"2","translation":"B"}]"#
-                                        .to_string(),
-                                usage: None,
-                            }),
-                            2 => Err("boom".to_string()),
-                            _ => unreachable!(),
-                        }
-                    })
-                }
+            SegmentTaskContext {
+                task_id: "task-2",
+                task_type: LlmTaskType::Translate,
+                segments: &segments,
+                chunk_size: Some(2),
+                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             },
-            |_response| {},
-            |_payload| Ok(()),
-            |_payload| Ok(()),
+            BufferedSegmentTaskConfig {
+                build_prompt: |chunk: &[LlmSegmentInput]| serde_json::to_string(chunk).unwrap(),
+                parse_chunk: parse_translate_chunk,
+                generate_text: {
+                    let mut call_count = 0usize;
+                    move |_prompt: String| {
+                        call_count += 1;
+                        let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
+                            Box::pin(async move {
+                                match call_count {
+                                    1 => Ok(StandardLlmResponse {
+                                        text: r#"[{"id":"1","translation":"A"},{"id":"2","translation":"B"}]"#
+                                            .to_string(),
+                                        usage: None,
+                                    }),
+                                    2 => Err("boom".to_string()),
+                                    _ => unreachable!(),
+                                }
+                            });
+                        future
+                    }
+                },
+                on_success: |_response: &StandardLlmResponse| {},
+                emit_chunk: |_payload: LlmTaskChunkPayload<TranslatedSegment>| Ok(()),
+                emit_progress: |_payload: LlmTaskProgressPayload| Ok(()),
+            },
         )
         .await
         .expect_err("second chunk should fail");
@@ -1135,45 +1204,54 @@ mod tests {
         let mut progress_events = Vec::new();
 
         let result = run_segment_task(
-            "task-3",
-            LlmTaskType::Translate,
-            &segments,
-            None,
-            |chunk| {
-                chunk
-                    .iter()
-                    .map(|segment| format!("{}:{}", segment.id, segment.text))
-                    .collect::<Vec<_>>()
-                    .join("\n")
+            SegmentTaskContext {
+                task_id: "task-3",
+                task_type: LlmTaskType::Translate,
+                segments: &segments,
+                chunk_size: None,
+                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             },
-            parse_translate_chunk,
-            {
-                let mut call_count = 0usize;
-                move |_prompt| {
-                    call_count += 1;
-                    let response = match call_count {
-                        1 => r#"[{"id":"1","translation":"One"},{"id":"2","translation":"Two"}]"#,
-                        2 => r#"[{"id":"3","translation":"Three"}]"#,
-                        _ => unreachable!(),
-                    }
-                    .to_string();
+            BufferedSegmentTaskConfig {
+                build_prompt: |chunk: &[LlmSegmentInput]| {
+                    chunk
+                        .iter()
+                        .map(|segment| format!("{}:{}", segment.id, segment.text))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                },
+                parse_chunk: parse_translate_chunk,
+                generate_text: {
+                    let mut call_count = 0usize;
+                    move |_prompt: String| {
+                        call_count += 1;
+                        let response = match call_count {
+                            1 => {
+                                r#"[{"id":"1","translation":"One"},{"id":"2","translation":"Two"}]"#
+                            }
+                            2 => r#"[{"id":"3","translation":"Three"}]"#,
+                            _ => unreachable!(),
+                        }
+                        .to_string();
 
-                    Box::pin(async move {
-                        Ok(StandardLlmResponse {
-                            text: response,
-                            usage: None,
-                        })
-                    })
-                }
-            },
-            |_response| {},
-            |payload| {
-                chunk_events.push(payload);
-                Ok(())
-            },
-            |payload| {
-                progress_events.push(payload);
-                Ok(())
+                        let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
+                            Box::pin(async move {
+                                Ok(StandardLlmResponse {
+                                    text: response,
+                                    usage: None,
+                                })
+                            });
+                        future
+                    }
+                },
+                on_success: |_response: &StandardLlmResponse| {},
+                emit_chunk: |payload: LlmTaskChunkPayload<TranslatedSegment>| {
+                    chunk_events.push(payload);
+                    Ok(())
+                },
+                emit_progress: |payload: LlmTaskProgressPayload| {
+                    progress_events.push(payload);
+                    Ok(())
+                },
             },
         )
         .await
@@ -1249,47 +1327,54 @@ mod tests {
         let mut progress_events = Vec::new();
 
         let result = run_segment_task(
-            "task-4",
-            LlmTaskType::Translate,
-            &segments,
-            None,
-            |chunk| {
-                chunk
-                    .iter()
-                    .map(|segment| segment.text.as_str())
-                    .collect::<Vec<_>>()
-                    .join("")
+            SegmentTaskContext {
+                task_id: "task-4",
+                task_type: LlmTaskType::Translate,
+                segments: &segments,
+                chunk_size: None,
+                prompt_char_budget: DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             },
-            parse_translate_chunk,
-            {
-                let mut call_count = 0usize;
-                move |_prompt| {
-                    call_count += 1;
-                    let response = match call_count {
-                        1 => r#"[{"id":"1","translation":"Huge"}]"#,
-                        2 => {
-                            r#"[{"id":"2","translation":"Small"},{"id":"3","translation":"Tiny"}]"#
+            BufferedSegmentTaskConfig {
+                build_prompt: |chunk: &[LlmSegmentInput]| {
+                    chunk
+                        .iter()
+                        .map(|segment| segment.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join("")
+                },
+                parse_chunk: parse_translate_chunk,
+                generate_text: {
+                    let mut call_count = 0usize;
+                    move |_prompt: String| {
+                        call_count += 1;
+                        let response = match call_count {
+                            1 => r#"[{"id":"1","translation":"Huge"}]"#,
+                            2 => {
+                                r#"[{"id":"2","translation":"Small"},{"id":"3","translation":"Tiny"}]"#
+                            }
+                            _ => unreachable!(),
                         }
-                        _ => unreachable!(),
-                    }
-                    .to_string();
+                        .to_string();
 
-                    Box::pin(async move {
-                        Ok(StandardLlmResponse {
-                            text: response,
-                            usage: None,
-                        })
-                    })
-                }
-            },
-            |_response| {},
-            |payload| {
-                chunk_events.push(payload);
-                Ok(())
-            },
-            |payload| {
-                progress_events.push(payload);
-                Ok(())
+                        let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
+                            Box::pin(async move {
+                                Ok(StandardLlmResponse {
+                                    text: response,
+                                    usage: None,
+                                })
+                            });
+                        future
+                    }
+                },
+                on_success: |_response: &StandardLlmResponse| {},
+                emit_chunk: |payload: LlmTaskChunkPayload<TranslatedSegment>| {
+                    chunk_events.push(payload);
+                    Ok(())
+                },
+                emit_progress: |payload: LlmTaskProgressPayload| {
+                    progress_events.push(payload);
+                    Ok(())
+                },
             },
         )
         .await
