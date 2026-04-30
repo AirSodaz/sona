@@ -1,0 +1,47 @@
+/* ===========================
+   Floating Action Bar (FAB)
+   =========================== */
+.projects-fab {
+  position: absolute !important;
+  bottom: var(--spacing-xl) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: var(--spacing-lg) !important;
+  padding: 12px 24px !important;
+  background: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-full) !important;
+  box-shadow: var(--shadow-xl), var(--shadow-glow) !important;
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  width: max-content !important;
+  max-width: 90% !important;
+  white-space: nowrap !important;
+}
+
+.projects-fab-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: var(--spacing-sm) !important;
+  flex-shrink: 0 !important;
+}
+
+.projects-fab-actions .btn {
+  width: auto !important;
+}
+
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

@@ -5,6 +5,7 @@ use super::types::{
     TranscriptNormalizationOptions, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
     TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
 };
+use crate::text_alignment::{align_text_units_to_tokens, is_cjk_char};
 use log::info;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -16,12 +17,6 @@ const ABBREVIATIONS: &[&str] = &[
     "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "no", "op", "vol", "fig",
     "inc", "ltd", "co", "dept",
 ];
-
-#[derive(Clone, Debug)]
-struct TimingTextUnit {
-    text: String,
-    normalized: String,
-}
 
 #[derive(Clone, Debug)]
 struct TokenMap {
@@ -39,13 +34,6 @@ struct SplitterState {
     effective_char_index: usize,
     last_token_index: usize,
     next_token_slice_start: usize,
-}
-
-fn normalize_text_search_key(text: &str) -> String {
-    text.chars()
-        .flat_map(|ch| ch.to_lowercase())
-        .filter(|ch| ch.is_alphanumeric())
-        .collect()
 }
 
 fn normalize_timing_units(
@@ -121,98 +109,6 @@ fn build_token_windows(
         .collect()
 }
 
-fn fallback_token_index(char_pos: usize, char_to_token_index: &[usize]) -> usize {
-    if char_to_token_index.is_empty() {
-        return 0;
-    }
-
-    if char_pos >= char_to_token_index.len() {
-        char_to_token_index[char_to_token_index.len() - 1]
-    } else {
-        char_to_token_index[char_pos]
-    }
-}
-
-fn find_subsequence(haystack: &[char], needle: &[char]) -> Option<usize> {
-    if needle.is_empty() {
-        return Some(0);
-    }
-
-    if needle.len() > haystack.len() {
-        return None;
-    }
-
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
-}
-
-fn is_cjk_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{3400}'..='\u{4DBF}'
-            | '\u{4E00}'..='\u{9FFF}'
-            | '\u{3040}'..='\u{309F}'
-            | '\u{30A0}'..='\u{30FF}'
-            | '\u{AC00}'..='\u{D7AF}'
-    )
-}
-
-fn lex_timing_text_units(text: &str) -> Vec<TimingTextUnit> {
-    let mut units = Vec::new();
-    let chars = text.chars().collect::<Vec<_>>();
-    let mut index = 0usize;
-
-    while index < chars.len() {
-        let ch = chars[index];
-
-        if ch.is_whitespace() {
-            let start = index;
-            index += 1;
-            while index < chars.len() && chars[index].is_whitespace() {
-                index += 1;
-            }
-            units.push(TimingTextUnit {
-                text: chars[start..index].iter().collect(),
-                normalized: String::new(),
-            });
-            continue;
-        }
-
-        if is_cjk_char(ch) {
-            let text = ch.to_string();
-            units.push(TimingTextUnit {
-                normalized: normalize_text_search_key(&text),
-                text,
-            });
-            index += 1;
-            continue;
-        }
-
-        let start = index;
-        index += 1;
-        while index < chars.len() && !chars[index].is_whitespace() && !is_cjk_char(chars[index]) {
-            index += 1;
-        }
-
-        let text = chars[start..index].iter().collect::<String>();
-        let normalized = normalize_text_search_key(&text);
-
-        if normalized.is_empty() {
-            if let Some(previous) = units.last_mut() {
-                if !previous.normalized.is_empty() {
-                    previous.text.push_str(&text);
-                    continue;
-                }
-            }
-        }
-
-        units.push(TimingTextUnit { text, normalized });
-    }
-
-    units
-}
-
 fn build_aligned_timing_units(
     text: &str,
     tokens: &[String],
@@ -224,65 +120,25 @@ fn build_aligned_timing_units(
         return None;
     }
 
-    let normalized_tokens = tokens
-        .iter()
-        .map(|token| normalize_text_search_key(token))
-        .collect::<Vec<_>>();
     let windows = build_token_windows(timestamps, durations, segment_end);
-    let units = lex_timing_text_units(text);
+    let aligned_units = align_text_units_to_tokens(text, tokens)?;
 
-    let mut joined_token_chars = Vec::new();
-    let mut char_to_token_index = Vec::new();
-    for (token_index, token) in normalized_tokens.iter().enumerate() {
-        for ch in token.chars() {
-            joined_token_chars.push(ch);
-            char_to_token_index.push(token_index);
-        }
-    }
-
-    if char_to_token_index.is_empty() {
-        return None;
-    }
-
-    let mut char_pos = 0usize;
-    let mut result = Vec::new();
-
-    for unit in units {
-        if unit.text.is_empty() {
-            continue;
-        }
-
-        let token_index = if unit.normalized.is_empty() {
-            fallback_token_index(char_pos, &char_to_token_index)
-        } else {
-            let needle = unit.normalized.chars().collect::<Vec<_>>();
-            let search_limit = needle.len().saturating_mul(2).max(20);
-            let window_end = (char_pos + search_limit).min(joined_token_chars.len());
-            let local_index = find_subsequence(&joined_token_chars[char_pos..window_end], &needle);
-
-            if let Some(local_index) = local_index {
-                let match_pos = char_pos + local_index;
-                char_pos = (match_pos + needle.len()).min(joined_token_chars.len());
-                fallback_token_index(match_pos, &char_to_token_index)
-            } else {
-                let fallback = fallback_token_index(char_pos, &char_to_token_index);
-                char_pos = (char_pos + needle.len().max(1)).min(joined_token_chars.len());
-                fallback
-            }
-        };
-
-        let (start, end) = windows
-            .get(token_index)
-            .copied()
-            .unwrap_or((segment_end, segment_end));
-        result.push(TranscriptTimingUnit {
-            text: unit.text,
-            start,
-            end,
-        });
-    }
-
-    Some(result)
+    Some(
+        aligned_units
+            .into_iter()
+            .map(|unit| {
+                let (start, end) = windows
+                    .get(unit.token_index)
+                    .copied()
+                    .unwrap_or((segment_end, segment_end));
+                TranscriptTimingUnit {
+                    text: unit.text,
+                    start,
+                    end,
+                }
+            })
+            .collect(),
+    )
 }
 
 fn build_timing_from_legacy(segment: &TranscriptSegment) -> Option<TranscriptTiming> {

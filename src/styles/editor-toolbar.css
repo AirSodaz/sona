@@ -1,0 +1,137 @@
+/* ===========================
+   Editor Toolbar
+   =========================== */
+
+.editor-toolbar {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 6px 8px;
+    box-shadow: var(--shadow-lg);
+    animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: calc(100% - 48px);
+}
+
+.editor-autosave-status {
+    position: absolute;
+    top: 20px;
+    right: var(--spacing-lg);
+    z-index: 85;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    opacity: 0.82;
+    transition: opacity 0.16s ease;
+}
+
+.editor-autosave-status.is-saving {
+    color: color-mix(in srgb, var(--color-text-secondary) 78%, var(--color-info));
+}
+
+.editor-autosave-status.is-saved {
+    color: color-mix(in srgb, var(--color-text-muted) 90%, var(--color-success));
+    opacity: 0.68;
+}
+
+.editor-autosave-status.is-error {
+    color: color-mix(in srgb, var(--color-text-secondary) 35%, var(--color-error));
+    opacity: 0.92;
+}
+
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition:
+      background var(--transition-fast),
+      box-shadow var(--transition-fast),
+      color var(--transition-fast),
+      transform var(--transition-fast);
+}
+
+.toolbar-btn:hover {
+    background: var(--color-bg-hover);
+    box-shadow: var(--apple-control-shadow-flat);
+    color: var(--color-text-primary);
+}
+
+.toolbar-btn:active {
+    background: var(--color-bg-tertiary);
+    box-shadow: var(--apple-control-shadow-flat);
+    transform: scale(0.98);
+}
+
+.toolbar-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.btn:disabled,
+.btn-icon:disabled,
+.btn-parameter-settings:disabled,
+.toolbar-btn:disabled,
+.settings-tab-btn:disabled,
+.accordion-header-btn:disabled,
+.dropdown-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--color-border);
+    margin: 0 4px;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translate(-50%, -10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ===========================
+   Word Count Badge
+   =========================== */
+
+.word-count-badge {
+  position: absolute;
+  bottom: var(--spacing-md);
+  right: var(--spacing-lg);
+  z-index: 90;
+  padding: 4px 10px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none; /* Don't block clicks underneath */
+  user-select: none;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+
+.transcript-editor:hover .word-count-badge {
+  opacity: 1;
+}

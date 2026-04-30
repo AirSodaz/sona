@@ -10,6 +10,7 @@ pub mod preset_models;
 pub mod sherpa;
 pub mod speaker;
 pub mod system;
+mod text_alignment;
 mod webdav;
 
 use serde::Serialize;

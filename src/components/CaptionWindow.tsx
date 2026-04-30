@@ -2,7 +2,6 @@ import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { TranscriptSegment } from '../types/transcript';
-import '../styles/index.css';
 import { logger } from '../utils/logger';
 import {
     CAPTION_EVENT_STATE,

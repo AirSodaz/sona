@@ -1,0 +1,58 @@
+/* ===========================
+   Update UI
+   =========================== */
+
+.active-token {
+  font-weight: 400;
+  /* Keep normal weight to avoid layout shift */
+  color: var(--color-text-primary);
+  background-color: rgba(223, 171, 1, 0.15);
+  border-bottom: 2px solid rgba(223, 171, 1, 0.4);
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+/* Dark mode override for active token */
+:root[data-theme="dark"] .active-token {
+  background-color: rgba(223, 171, 1, 0.25);
+  color: var(--color-text-primary);
+  border-bottom-color: rgba(223, 171, 1, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .active-token {
+    background-color: rgba(223, 171, 1, 0.25);
+    color: var(--color-text-primary);
+    border-bottom-color: rgba(223, 171, 1, 0.6);
+  }
+}
+
+.token-hover {
+  /* Removed padding to fix spacing issue */
+  border-radius: 2px;
+  transition: background-color var(--transition-fast);
+}
+
+.token-hover:hover {
+  background-color: var(--color-bg-hover);
+  cursor: pointer;
+}
+
+/* ===========================
+   Search Highlighting
+   =========================== */
+
+.search-match {
+  background-color: rgba(223, 171, 1, 0.25);
+  color: var(--color-text-primary);
+  border-radius: 2px;
+}
+
+.search-match-active {
+  background-color: rgba(223, 171, 1, 0.45);
+  color: var(--color-text-primary);
+  border-radius: 2px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(223, 171, 1, 0.6);
+}

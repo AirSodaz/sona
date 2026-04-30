@@ -1,0 +1,247 @@
+/* ===========================
+   Sona Design System - Warm Minimalism (Notion Style)
+   =========================== */
+
+:root {
+  /* Color Palette - Light Theme (Default) */
+  /* Warm White / Paper Backgrounds */
+  --color-bg-primary: #fbfbfa;
+  /* Notion Page Background */
+  --color-bg-secondary: #f3f3f2;
+  /* Sidebar / Headers */
+  --color-bg-tertiary: #e5e5e5;
+  /* Inputs / Active States */
+  --color-bg-elevated: #ffffff;
+  /* Cards / Dropdowns */
+  --color-bg-hover: #ebebeb;
+
+  /* Accent Colors - Neutral / Earthy */
+  --color-accent-primary: #2f2f2f;
+  /* Soft Black */
+  --color-accent-secondary: #e6e6e6;
+  /* Soft Gray for secondary elements */
+  --color-accent-gradient: linear-gradient(135deg, #2f2f2f 0%, #575757 100%);
+  --color-accent-glow: rgba(0, 0, 0, 0.05);
+
+  /* Text Colors - High Contrast but Warm */
+  --color-text-primary: #37352f;
+  /* Notion Black */
+  --color-text-secondary: #787774;
+  /* Notion Gray */
+  --color-text-muted: #9b9a97;
+  --color-text-disabled: #d3d1cb;
+
+  /* Status Colors (Softened) */
+  --color-success: #4ea067;
+  /* Muted Green */
+  --color-warning: #dfab01;
+  /* Muted Yellow */
+  --color-error: #e03e3e;
+  /* Muted Red */
+  --color-info: #0b6e99;
+  /* Muted Blue */
+
+  /* Recording Colors */
+  --color-recording: #e03e3e;
+  --color-recording-glow: rgba(224, 62, 62, 0.2);
+
+  /* Border & Dividers */
+  --color-border: rgba(55, 53, 47, 0.09);
+  --color-border-hover: rgba(55, 53, 47, 0.16);
+
+  /* Shadows - Very Subtle */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.06);
+  --shadow-glow: 0 0 10px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Spacing - Relaxed */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border Radius - Continuous rectangles */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Apple-style interaction surfaces */
+  --apple-control-surface: var(--color-bg-elevated);
+  --apple-control-surface-hover: var(--color-bg-hover);
+  --apple-control-surface-pressed: var(--color-bg-tertiary);
+  --apple-control-ghost-hover: var(--color-bg-hover);
+  --apple-control-ghost-pressed: var(--color-bg-tertiary);
+  --apple-control-border-subtle: var(--color-border);
+  --apple-control-border-strong: var(--color-border-hover);
+  --apple-control-topline: rgba(255, 255, 255, 0.72);
+  --apple-control-shadow-flat:
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
+  --apple-control-shadow-rest:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
+  --apple-control-shadow-hover:
+    0 2px 6px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 44%, transparent);
+  --apple-control-shadow-pressed:
+    inset 0 1px 1px rgba(0, 0, 0, 0.06),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.46),
+    inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 36%, transparent);
+  --apple-control-focus-ring:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 18%, transparent);
+  --apple-field-focus-surface: var(--color-bg-primary);
+  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 72%, var(--color-accent-primary));
+  --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+  --apple-field-focus-shadow:
+    var(--apple-control-shadow-flat),
+    0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow:
+    var(--shadow-sm),
+    0 0 0 3px var(--apple-field-focus-halo);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-serif: 'Merriweather', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+
+  /* Transitions */
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 250ms ease-out;
+  --transition-slow: 350ms ease-out;
+}
+
+/* Dark Theme - Manual Override */
+:root[data-theme="dark"] {
+  /* Warm Carbon Theme */
+  --color-bg-primary: #191919;
+  --color-bg-secondary: #202020;
+  --color-bg-tertiary: #2c2c2c;
+  --color-bg-elevated: #2f2f2f;
+  --color-bg-hover: #373737;
+
+  --color-text-primary: #d4d4d4;
+  --color-text-secondary: #9b9a97;
+  --color-text-muted: #707070;
+  --color-text-disabled: #4a4a4a;
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+
+  --color-accent-primary: #e0e0e0;
+  --color-accent-secondary: #474747;
+  --color-accent-gradient: linear-gradient(135deg, #e0e0e0 0%, #a0a0a0 100%);
+  --color-accent-glow: rgba(255, 255, 255, 0.05);
+
+  --apple-control-surface: var(--color-bg-elevated);
+  --apple-control-surface-hover: var(--color-bg-hover);
+  --apple-control-surface-pressed: var(--color-bg-tertiary);
+  --apple-control-ghost-hover: var(--color-bg-hover);
+  --apple-control-ghost-pressed: var(--color-bg-tertiary);
+  --apple-control-border-subtle: var(--color-border);
+  --apple-control-border-strong: var(--color-border-hover);
+  --apple-control-topline: rgba(255, 255, 255, 0.08);
+  --apple-control-shadow-rest:
+    0 1px 2px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 var(--apple-control-topline),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
+  --apple-control-shadow-hover:
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --apple-control-shadow-pressed:
+    inset 0 1px 1px rgba(0, 0, 0, 0.24),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
+  --apple-control-focus-ring:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 24%, transparent);
+  --apple-field-focus-surface: var(--color-bg-primary);
+  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 64%, var(--color-accent-primary));
+  --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
+  --apple-field-focus-shadow:
+    var(--apple-control-shadow-flat),
+    0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow:
+    var(--shadow-sm),
+    0 0 0 3px var(--apple-field-focus-halo);
+}
+
+/* ===========================
+   Reset & Base Styles
+   =========================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  /* Slightly larger base size */
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===========================
+   App Layout
+   =========================== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-primary);
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  /* True centering */
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  height: 56px;
+  /* Slightly taller for better proportions */
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  justify-self: start;
+  opacity: 0.9;
+  transition: opacity var(--transition-normal);
+}
+
+.header-actions {
+  display: flex;
+  justify-self: end;
+  gap: var(--spacing-sm);
+  align-items: center;
+}

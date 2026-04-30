@@ -3,7 +3,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Mic } from 'lucide-react';
-import '../styles/index.css';
 import { logger } from '../utils/logger';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
