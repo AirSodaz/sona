@@ -1,7 +1,8 @@
 import i18n from '../i18n';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { logger } from '../utils/logger';
 import {
   forceExit,
@@ -9,8 +10,11 @@ import {
 } from './tauri/app';
 
 type TranscriptQuitTaskSnapshot = Pick<
-  ReturnType<typeof useTranscriptStore.getState>,
-  'isRecording' | 'isPaused' | 'isCaptionMode' | 'processingStatus' | 'llmStates' | 'summaryStates'
+  ReturnType<typeof useTranscriptRuntimeStore.getState>,
+  'isRecording' | 'isPaused' | 'isCaptionMode' | 'processingStatus'
+> & Pick<
+  ReturnType<typeof useTranscriptSidecarStore.getState>,
+  'llmStates' | 'summaryStates'
 >;
 
 type BatchQueueQuitTaskSnapshot = Pick<
@@ -54,7 +58,11 @@ export function hasActiveFrontendQuitTasks(
 }
 
 export async function shouldWarnBeforeQuit(
-  transcriptState: TranscriptQuitTaskSnapshot = useTranscriptStore.getState(),
+  transcriptState: TranscriptQuitTaskSnapshot = {
+    ...useTranscriptRuntimeStore.getState(),
+    llmStates: useTranscriptSidecarStore.getState().llmStates,
+    summaryStates: useTranscriptSidecarStore.getState().summaryStates,
+  },
   batchQueueState: BatchQueueQuitTaskSnapshot = useBatchQueueStore.getState(),
 ): Promise<boolean> {
   if (hasActiveFrontendQuitTasks(transcriptState, batchQueueState)) {

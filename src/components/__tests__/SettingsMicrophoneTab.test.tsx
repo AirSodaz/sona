@@ -2,7 +2,7 @@ import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsMicrophoneTab } from '../settings/SettingsMicrophoneTab';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 const mockInvoke = vi.fn();
 const mockListen = vi.fn();

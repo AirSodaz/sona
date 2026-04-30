@@ -12,7 +12,10 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { clearActiveTranscriptSession, openTranscriptSession } from '../stores/transcriptCoordinator';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { AutomationProcessedEntry, AutomationRule } from '../types/automation';
 import {
   BACKUP_HISTORY_MODE,
@@ -77,7 +80,7 @@ export function buildDefaultBackupFileName(date = new Date()): string {
 }
 
 export function getBackupOperationBlocker(): BackupOperationBlocker | null {
-  if (useTranscriptStore.getState().isRecording) {
+  if (useTranscriptRuntimeStore.getState().isRecording) {
     return 'recording';
   }
 
@@ -278,8 +281,8 @@ function normalizePreparedImport(raw: PreparedBackupImportPayload): PreparedBack
 }
 
 async function syncOpenTranscriptAfterImport(): Promise<void> {
-  const transcriptStore = useTranscriptStore.getState();
-  const currentHistoryId = transcriptStore.sourceHistoryId;
+  const transcriptSession = useTranscriptSessionStore.getState();
+  const currentHistoryId = transcriptSession.sourceHistoryId;
 
   if (!currentHistoryId) {
     return;
@@ -289,24 +292,24 @@ async function syncOpenTranscriptAfterImport(): Promise<void> {
   const matchingItem = historyItems.find((item) => item.id === currentHistoryId);
 
   if (!matchingItem) {
-    transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
+    clearActiveTranscriptSession({ clearAudio: true });
     return;
   }
 
   const segments = await historyService.loadTranscript(matchingItem.transcriptPath);
   if (!segments) {
-    transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
+    clearActiveTranscriptSession({ clearAudio: true });
     return;
   }
 
-  transcriptStore.openTranscriptSession({
+  openTranscriptSession({
     segments,
     sourceHistoryId: matchingItem.id,
     title: matchingItem.title,
     icon: matchingItem.icon || null,
     audioUrl: await historyService.getAudioUrl(matchingItem.audioPath),
   });
-  transcriptStore.setAudioFile(null);
+  useTranscriptPlaybackStore.getState().setAudioFile(null);
 }
 
 export async function exportBackup(options?: {

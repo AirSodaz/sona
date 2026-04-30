@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { DownloadIcon } from './Icons';
 import { ExportModal } from './ExportModal';
 
@@ -19,7 +19,7 @@ interface ExportButtonProps {
 export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const segments = useTranscriptStore((state) => state.segments);
+    const segments = useTranscriptSessionStore((state) => state.segments);
 
     // Only show if there's transcript content
     if (segments.length === 0) {

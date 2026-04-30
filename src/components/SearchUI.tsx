@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchStore } from '../stores/searchStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { ChevronUpIcon, ChevronDownIcon, CloseIcon } from './Icons';
 
 function getMatchCountText(matchCount: number, currentIndex: number, query: string): string {
@@ -28,7 +28,7 @@ export function SearchUI(): React.JSX.Element | null {
         performSearch
     } = useSearchStore();
 
-    const segments = useTranscriptStore(state => state.segments);
+    const segments = useTranscriptSessionStore((state) => state.segments);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Autofocus input when opened

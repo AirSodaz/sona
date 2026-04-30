@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { forceExitWithGuard } from '../services/quitGuard';
 import { SettingsTab } from './useSettingsLogic';
 import { logger } from '../utils/logger';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { updateTrayMenu } from '../services/tauri/app';
 import { TauriEvent } from '../services/tauri/events';
 
@@ -19,7 +19,7 @@ export function useTrayHandling(
     setSettingsInitialTab: (tab: SettingsTab) => void
 ) {
     const { t, i18n } = useTranslation();
-    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+    const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
 
     // Update tray menu language when locale changes or caption state changes
     useEffect(() => {
@@ -56,8 +56,8 @@ export function useTrayHandling(
 
                 const unlistenToggleCaption = await listen(TauriEvent.tray.toggleCaption, () => {
                     if (!isMounted) return;
-                    const currentMode = useTranscriptStore.getState().isCaptionMode;
-                    useTranscriptStore.getState().setIsCaptionMode(!currentMode);
+                    const runtimeStore = useTranscriptRuntimeStore.getState();
+                    runtimeStore.setIsCaptionMode(!runtimeStore.isCaptionMode);
                 });
                 if (isMounted) unlistenFunctions.push(unlistenToggleCaption);
                 else unlistenToggleCaption();

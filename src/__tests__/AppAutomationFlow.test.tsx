@@ -56,12 +56,12 @@ vi.mock('../services/diagnosticsService', () => ({
   },
 }));
 
-const mockUseTranscriptStore = vi.fn();
+const mockUseTranscriptRuntimeStore = vi.fn();
 const mockUseProjectStore = vi.fn();
 const mockUseOnboardingStore = vi.fn();
 
-vi.mock('../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => mockUseTranscriptStore(selector),
+vi.mock('../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: (selector: any) => mockUseTranscriptRuntimeStore(selector),
 }));
 
 vi.mock('../stores/projectStore', () => ({
@@ -74,9 +74,8 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App automation flow', () => {
   it('opens settings on the automation tab from the notification center entry', async () => {
-    mockUseTranscriptStore.mockImplementation((selector: any) => selector({
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
-      clearSegments: vi.fn(),
       setMode: vi.fn(),
     }));
     mockUseProjectStore.mockImplementation((selector: any) => selector({
@@ -95,9 +94,8 @@ describe('App automation flow', () => {
   });
 
   it('shows a batch-header automation button that opens automation settings', async () => {
-    mockUseTranscriptStore.mockImplementation((selector: any) => selector({
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'batch',
-      clearSegments: vi.fn(),
       setMode: vi.fn(),
     }));
     mockUseProjectStore.mockImplementation((selector: any) => selector({

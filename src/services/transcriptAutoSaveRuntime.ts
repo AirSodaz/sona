@@ -1,6 +1,8 @@
 import type { TranscriptSegment } from '../types/transcript';
 import { useHistoryStore } from '../stores/historyStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
 import { logger } from '../utils/logger';
 
@@ -29,10 +31,10 @@ class TranscriptAutoSaveRuntime {
       this.isSaving = true;
       logger.info('[AutoSave] Saving transcript...', historyId);
       await useHistoryStore.getState().updateTranscript(historyId, segments);
-      useTranscriptStore.getState().setAutoSaveState(historyId, 'saved');
+      useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
     } catch (error) {
       logger.error('[AutoSave] Failed to save:', error);
-      useTranscriptStore.getState().setAutoSaveState(historyId, 'error');
+      useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error');
     } finally {
       this.isSaving = false;
     }
@@ -45,7 +47,7 @@ class TranscriptAutoSaveRuntime {
 
     this.pendingHistoryId = historyId;
     this.pendingSegments = [...segments];
-    useTranscriptStore.getState().setAutoSaveState(historyId, 'saving');
+    useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saving');
     this.timeout = setTimeout(() => {
       this.timeout = null;
       const queuedHistoryId = this.pendingHistoryId;
@@ -78,7 +80,7 @@ class TranscriptAutoSaveRuntime {
       this.pendingSegments = null;
     }
 
-    useTranscriptStore.getState().setAutoSaveState(targetHistoryId, 'saving');
+    useTranscriptSidecarStore.getState().setAutoSaveState(targetHistoryId, 'saving');
     await this.saveToHistory(targetHistoryId, targetSegments);
   }
 
@@ -87,9 +89,9 @@ class TranscriptAutoSaveRuntime {
       return;
     }
 
-    this.lastFingerprint = computeSegmentsFingerprint(useTranscriptStore.getState().segments);
+    this.lastFingerprint = computeSegmentsFingerprint(useTranscriptSessionStore.getState().segments);
 
-    this.unsubscribe = useTranscriptStore.subscribe((state, prevState) => {
+    this.unsubscribe = useTranscriptSessionStore.subscribe((state, prevState) => {
       const currentId = state.sourceHistoryId;
       const prevId = prevState.sourceHistoryId;
 
@@ -113,7 +115,7 @@ class TranscriptAutoSaveRuntime {
       }
 
       this.lastFingerprint = currentFingerprint;
-      const delayMs = state.mode === 'live'
+      const delayMs = useTranscriptRuntimeStore.getState().mode === 'live'
         ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS
         : DEFAULT_AUTO_SAVE_DELAY_MS;
       this.queueSave(currentId, state.segments, delayMs);

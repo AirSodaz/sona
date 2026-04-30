@@ -2,8 +2,14 @@ import React, { useRef, useCallback, useMemo, useEffect } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
+import {
+    deleteTranscriptSegment,
+    mergeTranscriptSegments,
+    updateTranscriptSegment,
+} from '../stores/transcriptCoordinator';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { TranscriptSegment } from '../types/transcript';
 import { PlusCircleIcon } from './Icons';
 import { SegmentItem } from './transcript/SegmentItem';
@@ -49,12 +55,9 @@ export function TranscriptEditor(): React.JSX.Element {
     const { confirm } = useDialogStore();
     const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-    const segments = useTranscriptStore((state) => state.segments);
-    const updateSegment = useTranscriptStore((state) => state.updateSegment);
-    const deleteSegment = useTranscriptStore((state) => state.deleteSegment);
-    const mergeSegments = useTranscriptStore((state) => state.mergeSegments);
-    const setEditingSegmentId = useTranscriptStore((state) => state.setEditingSegmentId);
-    const requestSeek = useTranscriptStore((state) => state.requestSeek);
+    const segments = useTranscriptSessionStore((state) => state.segments);
+    const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
+    const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
     // Hooks for UI state and alignment
     const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
@@ -78,10 +81,10 @@ export function TranscriptEditor(): React.JSX.Element {
     }, [setEditingSegmentId]);
 
     const handleSave = useCallback((id: string, text: string) => {
-        updateSegment(id, { text });
+        updateTranscriptSegment(id, { text });
         setEditingSegmentId(null);
 
-    }, [updateSegment, setEditingSegmentId]);
+    }, [setEditingSegmentId]);
 
     const handleDelete = useCallback(async (id: string) => {
         const confirmed = await confirm(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {
@@ -90,9 +93,9 @@ export function TranscriptEditor(): React.JSX.Element {
         });
 
         if (confirmed) {
-            deleteSegment(id);
+            deleteTranscriptSegment(id);
         }
-    }, [deleteSegment, t, confirm]);
+    }, [t, confirm]);
 
     const handleMergeWithNext = useCallback(async (id: string) => {
         const confirmed = await confirm(t('editor.merge_confirm_message', { defaultValue: 'Merge this segment with the next one?' }), {
@@ -104,10 +107,10 @@ export function TranscriptEditor(): React.JSX.Element {
             const currentSegments = segmentsRef.current;
             const index = currentSegments.findIndex((s) => s.id === id);
             if (index !== -1 && index < currentSegments.length - 1) {
-                mergeSegments(id, currentSegments[index + 1].id);
+                mergeTranscriptSegments(id, currentSegments[index + 1].id);
             }
         }
-    }, [confirm, mergeSegments, t]);
+    }, [confirm, t]);
 
     // Stable context for Virtuoso items (callbacks only)
     const contextValue = useMemo<TranscriptContext>(() => ({

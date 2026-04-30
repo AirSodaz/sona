@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptWorkbench } from '../TranscriptWorkbench';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 
 const mockUpdateItemMeta = vi.fn();

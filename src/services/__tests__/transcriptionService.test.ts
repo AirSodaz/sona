@@ -53,6 +53,14 @@ vi.mock('../../stores/configStore', () => ({
         getState: vi.fn(() => ({
             config: mocks.config,
         })),
+        setState: vi.fn((updater: any) => {
+            const nextState = typeof updater === 'function'
+                ? updater({ config: mocks.config })
+                : updater;
+            if (nextState?.config) {
+                mocks.config = nextState.config;
+            }
+        }),
         subscribe: vi.fn(() => () => undefined),
     },
 }));
@@ -79,7 +87,7 @@ async function loadTranscriptionService() {
 }
 
 async function syncTranscriptConfig() {
-    const { useTranscriptStore } = await import('../../stores/transcriptStore');
+    const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     useTranscriptStore.setState((state: any) => ({
         config: {
             ...state.config,

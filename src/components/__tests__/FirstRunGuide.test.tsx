@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FirstRunGuide } from '../FirstRunGuide';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import {

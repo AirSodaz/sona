@@ -3,10 +3,19 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { remove, writeFile } from '@tauri-apps/plugin-fs';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import {
+    clearTranscriptSegments,
+    finalizeLastTranscriptSegment,
+    setTranscriptSegments,
+    syncSavedRecordingMeta as syncTranscriptSavedRecordingMeta,
+} from '../stores/transcriptCoordinator';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { historyService } from '../services/historyService';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
@@ -18,7 +27,6 @@ import { createAudioRecorderCapture, getSupportedMimeType } from './audioRecorde
 import {
     createRecordingPersistence,
     getRecordedAudioExtension,
-    syncSavedRecordingMeta,
 } from './audioRecorder/persistence';
 import { createRecordSessionController } from './audioRecorder/session';
 import { createRecordTimingController } from './audioRecorder/timing';
@@ -44,14 +52,12 @@ interface UseAudioRecorderProps {
 
 export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderProps) {
     const config = useConfigStore((state) => state.config);
-    const isRecording = useTranscriptStore((state) => state.isRecording);
-    const isPaused = useTranscriptStore((state) => state.isPaused);
-    const setIsRecording = useTranscriptStore((state) => state.setIsRecording);
-    const setIsPaused = useTranscriptStore((state) => state.setIsPaused);
-    const finalizeLastSegment = useTranscriptStore((state) => state.finalizeLastSegment);
-    const clearSegments = useTranscriptStore((state) => state.clearSegments);
-    const setAudioUrl = useTranscriptStore((state) => state.setAudioUrl);
-    const setAudioFile = useTranscriptStore((state) => state.setAudioFile);
+    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+    const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
+    const setIsRecording = useTranscriptRuntimeStore((state) => state.setIsRecording);
+    const setIsPaused = useTranscriptRuntimeStore((state) => state.setIsPaused);
+    const setAudioUrl = useTranscriptPlaybackStore((state) => state.setAudioUrl);
+    const setAudioFile = useTranscriptPlaybackStore((state) => state.setAudioFile);
     const showError = useDialogStore((state) => state.showError);
 
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -122,7 +128,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             peakLevelRef,
         },
         logger,
-        clearSegments,
+        clearSegments: clearTranscriptSegments,
         resetLiveTimingState: timing.resetLiveTimingState,
         clearFinalizedDurationSeconds: timing.clearFinalizedDurationSeconds,
         beginRecordedDurationWindow: timing.beginRecordedDurationWindow,
@@ -134,7 +140,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         getIsRecording: () => isRecordingRef.current,
         softStopRecordRuntime: () => transcriptionService.softStop(),
     }), [
-        clearSegments,
         inputSource,
         setIsPaused,
         setIsRecording,
@@ -153,7 +158,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             saveRecording: (...args) => historyService.saveRecording(...args),
             saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
         },
-        getTranscriptState: () => useTranscriptStore.getState(),
+        getTranscriptState: () => ({
+            config: getEffectiveConfigSnapshot(),
+            segments: useTranscriptSessionStore.getState().segments,
+            setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
+            setSegments: setTranscriptSegments,
+        }),
         getActiveProjectId: () => useProjectStore.getState().activeProjectId,
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
@@ -164,7 +174,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             speakerService.annotateSegmentsForFile(filePath, segments, transcriptConfig)
         ),
         syncSavedRecordingMeta: (title, historyId, icon) => (
-            syncSavedRecordingMeta(useTranscriptStore.getState(), title, historyId, icon)
+            syncTranscriptSavedRecordingMeta(title, historyId, icon)
         ),
         writeFile: (filePath, contents) => writeFile(filePath, contents),
         removeFile: (filePath) => remove(filePath),
@@ -259,7 +269,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const startRecording = useCallback(async () => {
         if (!config.streamingModelPath) {
             const onboardingStore = useOnboardingStore.getState();
-            useTranscriptStore.getState().setMode('live');
+            useTranscriptRuntimeStore.getState().setMode('live');
             onboardingStore.reopen(
                 getResumeOnboardingStep(config, 'live_record', onboardingStore.persistedState),
                 'live_record'
@@ -390,8 +400,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         // Stop recognizer delivery before we persist outputs so no late segment
         // can land after the saved recording has already been finalized.
         await transcriptionService.softStop();
-        finalizeLastSegment();
-        const latestSegments = useTranscriptStore.getState().segments;
+        finalizeLastTranscriptSegment();
+        const latestSegments = useTranscriptSessionStore.getState().segments;
         if (liveDraft?.item.id) {
             await flushPendingAutoSave(liveDraft.item.id, latestSegments);
         }
@@ -444,7 +454,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
         );
         session.resetRecordSession(sessionId, 'stop_completed');
-    }, [capture, config.muteDuringRecording, finalizeLastSegment, persistence, session, timing]);
+    }, [capture, config.muteDuringRecording, persistence, session, timing]);
 
     const pauseRecording = useCallback(async () => {
         const sessionId = session.getSessionId();
@@ -467,7 +477,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             if (liveDraftRef.current?.item.id) {
                 await flushPendingAutoSave(
                     liveDraftRef.current.item.id,
-                    useTranscriptStore.getState().segments,
+                    useTranscriptSessionStore.getState().segments,
                 );
             }
 

@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
 import { createStore } from 'zustand/vanilla';
-import { useTranscriptStore } from '../../../stores/transcriptStore';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
 
 // Mock i18n

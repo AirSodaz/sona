@@ -1,11 +1,10 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EditorToolbar } from '../EditorToolbar';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import {
+    resetTranscriptStores,
+    useTranscriptStore,
+} from '../../test-utils/transcriptStoreTestUtils';
 import { vi, describe, beforeEach, afterEach, it, expect } from 'vitest';
-
-vi.mock('../../stores/transcriptStore', () => ({
-    useTranscriptStore: vi.fn(),
-}));
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -21,7 +20,6 @@ vi.mock('react-i18next', () => ({
 
 describe('EditorToolbar', () => {
     let execCommandMock: any;
-    let mockState: any;
     const flushMicrotasks = async () => {
         await act(async () => {
             await Promise.resolve();
@@ -30,16 +28,9 @@ describe('EditorToolbar', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        resetTranscriptStores();
         execCommandMock = vi.fn();
         document.execCommand = execCommandMock;
-
-        mockState = {
-            editingSegmentId: null,
-            sourceHistoryId: null,
-            autoSaveStates: {},
-        };
-
-        (useTranscriptStore as any).mockImplementation((selector: any) => selector(mockState));
     });
 
     afterEach(() => {
@@ -52,7 +43,7 @@ describe('EditorToolbar', () => {
     });
 
     it('does not synthesize a saved status for an opened history item without an auto-save record', () => {
-        mockState.sourceHistoryId = 'hist-1';
+        useTranscriptStore.setState({ sourceHistoryId: 'hist-1' });
 
         const { container } = render(<EditorToolbar />);
 
@@ -62,7 +53,7 @@ describe('EditorToolbar', () => {
     });
 
     it('does not show a save pill for unsaved content while still exposing edit controls', () => {
-        mockState.editingSegmentId = 'seg-1';
+        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 
         render(<EditorToolbar />);
 
@@ -71,13 +62,15 @@ describe('EditorToolbar', () => {
     });
 
     it('shows a lightweight saving status while auto-save is running', () => {
-        mockState.sourceHistoryId = 'hist-1';
-        mockState.autoSaveStates = {
-            'hist-1': {
-                status: 'saving',
-                updatedAt: Date.now(),
+        useTranscriptStore.setState({
+            sourceHistoryId: 'hist-1',
+            autoSaveStates: {
+                'hist-1': {
+                    status: 'saving',
+                    updatedAt: Date.now(),
+                },
             },
-        };
+        });
 
         render(<EditorToolbar />);
 
@@ -87,13 +80,15 @@ describe('EditorToolbar', () => {
 
     it('hides the saved status after 1.5 seconds', async () => {
         vi.useFakeTimers();
-        mockState.sourceHistoryId = 'hist-1';
-        mockState.autoSaveStates = {
-            'hist-1': {
-                status: 'saved',
-                updatedAt: Date.now(),
+        useTranscriptStore.setState({
+            sourceHistoryId: 'hist-1',
+            autoSaveStates: {
+                'hist-1': {
+                    status: 'saved',
+                    updatedAt: Date.now(),
+                },
             },
-        };
+        });
 
         render(<EditorToolbar />);
         await flushMicrotasks();
@@ -108,14 +103,16 @@ describe('EditorToolbar', () => {
     });
 
     it('renders editor controls while editing and reflects auto-save errors', () => {
-        mockState.editingSegmentId = 'seg-1';
-        mockState.sourceHistoryId = 'hist-1';
-        mockState.autoSaveStates = {
-            'hist-1': {
-                status: 'error',
-                updatedAt: Date.now(),
+        useTranscriptStore.setState({
+            editingSegmentId: 'seg-1',
+            sourceHistoryId: 'hist-1',
+            autoSaveStates: {
+                'hist-1': {
+                    status: 'error',
+                    updatedAt: Date.now(),
+                },
             },
-        };
+        });
 
         render(<EditorToolbar />);
 
@@ -125,7 +122,7 @@ describe('EditorToolbar', () => {
     });
 
     it('calls execCommand on button click', () => {
-        mockState.editingSegmentId = 'seg-1';
+        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 
         render(<EditorToolbar />);
 
@@ -140,7 +137,7 @@ describe('EditorToolbar', () => {
     });
 
     it('prevents default on mouse down to preserve focus', () => {
-        mockState.editingSegmentId = 'seg-1';
+        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 
         render(<EditorToolbar />);
 

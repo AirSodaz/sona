@@ -21,10 +21,15 @@ import { exportTranscriptToDirectory } from '../services/exportService';
 import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
-import { useTranscriptStore } from './transcriptStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import { useHistoryStore } from './historyStore';
+import {
+  clearActiveTranscriptSession,
+  openTranscriptSession,
+  setTranscriptSegments,
+  syncSavedRecordingMeta,
+} from './transcriptCoordinator';
 import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
 
@@ -357,10 +362,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             scheduleRecoverySnapshotSync(nextQueueItems, true);
 
             if (get().activeItemId === itemId) {
-                const transcriptStore = useTranscriptStore.getState();
-                transcriptStore.setSourceHistoryId(historyItem.id);
-                transcriptStore.setTitle(historyItem.title);
-                transcriptStore.setIcon(historyItem.icon || null);
+                syncSavedRecordingMeta(historyItem.title, historyItem.id, historyItem.icon || null);
                 void useProjectStore.getState().setActiveProjectId(historyItem.projectId);
             }
         };
@@ -493,7 +495,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const item = state.queueItems.find((queueItem) => queueItem.id === id);
         if (item) {
-            useTranscriptStore.getState().openTranscriptSession({
+            openTranscriptSession({
                 segments: item.segments,
                 sourceHistoryId: item.historyId || null,
                 title: item.historyTitle || item.filename,
@@ -501,7 +503,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             });
             void useProjectStore.getState().setActiveProjectId(item.projectId);
         } else if (id === null) {
-            useTranscriptStore.getState().clearActiveTranscriptSession({ clearAudio: true, title: '' });
+            clearActiveTranscriptSession({ clearAudio: true, title: '' });
         }
     },
 
@@ -546,7 +548,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         const state = get();
         if (state.activeItemId === id) {
-            useTranscriptStore.getState().setSegments(segments);
+            setTranscriptSegments(segments);
         }
     },
 
@@ -586,7 +588,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             isQueueProcessing: false,
         });
         scheduleRecoverySnapshotSync([], true);
-        useTranscriptStore.getState().clearActiveTranscriptSession({ clearAudio: true });
+        clearActiveTranscriptSession({ clearAudio: true });
     },
 }));
 

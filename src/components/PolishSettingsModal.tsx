@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
 import { XIcon } from './Icons';
 import { Dropdown } from './Dropdown';
@@ -22,8 +22,8 @@ interface PolishSettingsModalProps {
 export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const globalConfig = useConfigStore((state) => state.config);
-    const config = useTranscriptStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+    const config = useEffectiveConfigStore((state) => state.config);
+    const setConfig = useConfigStore((state) => state.setConfig);
     const activeProjectId = useProjectStore((state) => state.activeProjectId);
     const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
 

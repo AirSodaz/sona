@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
-import { useTranscriptStore } from '../transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 // Mock dependencies
 vi.mock('uuid', () => ({

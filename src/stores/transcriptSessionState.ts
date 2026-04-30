@@ -17,6 +17,16 @@ export interface TranscriptActiveSessionState {
   icon: string | null;
 }
 
+export type TranscriptSessionStateFields = Pick<
+  TranscriptActiveSessionState,
+  'segments' | 'editingSegmentId' | 'aligningSegmentIds' | 'sourceHistoryId' | 'title' | 'icon'
+>;
+
+export type TranscriptPlaybackStateFields = Pick<
+  TranscriptActiveSessionState,
+  'activeSegmentId' | 'activeSegmentIndex' | 'audioFile' | 'audioUrl' | 'currentTime' | 'isPlaying' | 'lastSeekTimestamp' | 'seekRequest'
+>;
+
 export const INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE: TranscriptActiveSessionState = {
   segments: [],
   activeSegmentId: null,
@@ -32,4 +42,24 @@ export const INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE: TranscriptActiveSessionSta
   sourceHistoryId: null,
   title: null,
   icon: null,
+};
+
+export const INITIAL_TRANSCRIPT_SESSION_STATE: TranscriptSessionStateFields = {
+  segments: [],
+  editingSegmentId: null,
+  aligningSegmentIds: new Set<string>(),
+  sourceHistoryId: null,
+  title: null,
+  icon: null,
+};
+
+export const INITIAL_TRANSCRIPT_PLAYBACK_STATE: TranscriptPlaybackStateFields = {
+  activeSegmentId: null,
+  activeSegmentIndex: -1,
+  audioFile: null,
+  audioUrl: null,
+  currentTime: 0,
+  isPlaying: false,
+  lastSeekTimestamp: 0,
+  seekRequest: null,
 };

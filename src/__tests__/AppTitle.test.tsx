@@ -39,12 +39,12 @@ vi.mock('../hooks/useAutoUpdateCheck', () => ({ useAutoUpdateCheck: vi.fn() }));
 vi.mock('../hooks/useTrayHandling', () => ({ useTrayHandling: vi.fn() }));
 vi.mock('../hooks/useTranscriptionServiceSync', () => ({ useTranscriptionServiceSync: vi.fn() }));
 
-const mockUseTranscriptStore = vi.fn();
+const mockUseTranscriptRuntimeStore = vi.fn();
 const mockUseProjectStore = vi.fn();
 const mockUseOnboardingStore = vi.fn();
 
-vi.mock('../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: (state: unknown) => unknown) => mockUseTranscriptStore(selector),
+vi.mock('../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: (selector: (state: unknown) => unknown) => mockUseTranscriptRuntimeStore(selector),
 }));
 
 vi.mock('../stores/projectStore', () => ({
@@ -58,7 +58,6 @@ vi.mock('../stores/onboardingStore', () => ({
 describe('App Title Logic', () => {
   const defaultTranscriptState = {
     mode: 'live',
-    clearSegments: vi.fn(),
     setMode: vi.fn(),
   };
 
@@ -80,7 +79,7 @@ describe('App Title Logic', () => {
     const projectState = { ...defaultProjectState, ...projectOverrides };
     const onboardingState = { ...defaultOnboardingState, ...onboardingOverrides };
 
-    mockUseTranscriptStore.mockImplementation((selector: (state: typeof transcriptState) => unknown) => selector(transcriptState));
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: (state: typeof transcriptState) => unknown) => selector(transcriptState));
     mockUseProjectStore.mockImplementation((selector: (state: typeof projectState) => unknown) => selector(projectState));
     mockUseOnboardingStore.mockImplementation((selector: (state: typeof onboardingState) => unknown) => selector(onboardingState));
   };

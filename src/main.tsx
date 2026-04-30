@@ -2,10 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import './i18n';
-import { useTranscriptStore } from "./stores/transcriptStore";
 import { useBatchQueueStore } from "./stores/batchQueueStore";
 import { useDialogStore } from "./stores/dialogStore";
 import { useOnboardingStore } from "./stores/onboardingStore";
+import { useTranscriptPlaybackStore } from "./stores/transcriptPlaybackStore";
+import { useTranscriptRuntimeStore } from "./stores/transcriptRuntimeStore";
+import { useTranscriptSessionStore } from "./stores/transcriptSessionStore";
+import { useTranscriptSidecarStore } from "./stores/transcriptSidecarStore";
 import { transcriptionService } from "./services/transcriptionService";
 import { modelService } from "./services/modelService";
 import { voiceTypingService } from "./services/voiceTypingService";
@@ -14,7 +17,10 @@ import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
 
 declare global {
   interface Window {
-    useTranscriptStore?: typeof useTranscriptStore;
+    useTranscriptSessionStore?: typeof useTranscriptSessionStore;
+    useTranscriptPlaybackStore?: typeof useTranscriptPlaybackStore;
+    useTranscriptRuntimeStore?: typeof useTranscriptRuntimeStore;
+    useTranscriptSidecarStore?: typeof useTranscriptSidecarStore;
     useBatchQueueStore?: typeof useBatchQueueStore;
     useDialogStore?: typeof useDialogStore;
     useOnboardingStore?: typeof useOnboardingStore;
@@ -26,7 +32,10 @@ declare global {
 
 // Expose stores and services for E2E testing
 if (import.meta.env.DEV) {
-  window.useTranscriptStore = useTranscriptStore;
+  window.useTranscriptSessionStore = useTranscriptSessionStore;
+  window.useTranscriptPlaybackStore = useTranscriptPlaybackStore;
+  window.useTranscriptRuntimeStore = useTranscriptRuntimeStore;
+  window.useTranscriptSidecarStore = useTranscriptSidecarStore;
   window.useBatchQueueStore = useBatchQueueStore;
   window.useDialogStore = useDialogStore;
   window.useOnboardingStore = useOnboardingStore;

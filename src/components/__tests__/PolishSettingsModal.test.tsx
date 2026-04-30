@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PolishSettingsModal } from '../PolishSettingsModal';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { resolveEffectiveConfig } from '../../services/effectiveConfigService';
 
 vi.mock('react-i18next', () => ({

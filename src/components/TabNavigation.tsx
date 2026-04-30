@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect } from 'react';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useTranslation } from 'react-i18next';
 import { AppMode } from '../types/transcript';
 import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 
 import { MicIcon, FolderIcon, BookIcon } from './Icons';
 
@@ -22,8 +22,8 @@ interface TabNavigationProps {
  */
 export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX.Element {
     const { t } = useTranslation();
-    const mode = useTranscriptStore((state) => state.mode);
-    const setMode = useTranscriptStore((state) => state.setMode);
+    const mode = useTranscriptRuntimeStore((state) => state.mode);
+    const setMode = useTranscriptRuntimeStore((state) => state.setMode);
 
     const handleTabChange = useCallback((newMode: AppMode) => {
         setMode(newMode);

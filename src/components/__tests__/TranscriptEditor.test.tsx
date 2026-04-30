@@ -1,7 +1,7 @@
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { SegmentItem } from '../transcript/SegmentItem';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useCaptionConfig } from '../stores/configStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 
 /** Props for the LiveCaptionOverlay component. */
 interface LiveCaptionOverlayProps {
@@ -21,7 +21,7 @@ interface LiveCaptionOverlayProps {
 export function LiveCaptionOverlay({ maxLines = 3 }: LiveCaptionOverlayProps): React.ReactElement | null {
     // Subscribe only to the visible slice; useShallow prevents re-renders
     // when the slice content hasn't changed (shallow comparison).
-    const visibleSegments = useTranscriptStore(
+    const visibleSegments = useTranscriptSessionStore(
         useShallow((state) => state.segments.slice(-maxLines))
     );
     const { captionBackgroundOpacity = 0.6 } = useCaptionConfig();

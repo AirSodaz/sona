@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PolishButton } from '../PolishButton';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useConfigStore } from '../../stores/configStore';
 import { polishService } from '../../services/polishService';
 import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';

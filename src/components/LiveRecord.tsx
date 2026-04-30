@@ -1,7 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
+import {
+    applyTranscriptUpdate,
+    updateTranscriptSegment,
+} from '../stores/transcriptCoordinator';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { polishService } from '../services/polishService';
 import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
 import { RecordingTimer } from './RecordingTimer';
@@ -45,8 +50,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const startButtonRef = useRef<HTMLButtonElement>(null);
 
     // State from store
-    const isRecording = useTranscriptStore((state) => state.isRecording);
-    const isPaused = useTranscriptStore((state) => state.isPaused);
+    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+    const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
     const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
     // Local State
@@ -65,8 +70,8 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }, [focusStartRecordingToken, isRecording]);
 
     // Caption Mode
-    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
-    const setIsCaptionMode = useTranscriptStore((state) => state.setIsCaptionMode);
+    const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+    const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
     const config = useConfigStore((state) => state.config);
 
     // Initialize dedicated caption session hook
@@ -82,17 +87,17 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     // Segment Handler
     const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {
-        const storeState = useTranscriptStore.getState();
+        const runtimeStore = useTranscriptRuntimeStore.getState();
         const latestSegment = update.upsertSegments[update.upsertSegments.length - 1];
         logger.info(
-            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. removes=${update.removeIds.length} upserts=${update.upsertSegments.length} latest_segment=${latestSegment?.id ?? 'none'} latest_final=${latestSegment?.isFinal === true} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${storeState.isRecording}`
+            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. removes=${update.removeIds.length} upserts=${update.upsertSegments.length} latest_segment=${latestSegment?.id ?? 'none'} latest_final=${latestSegment?.isFinal === true} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${runtimeStore.isRecording}`
         );
 
         if (!meta.accepted) {
             return;
         }
 
-        storeState.applyTranscriptUpdate(update, latestSegment?.id ?? null);
+        applyTranscriptUpdate(update, latestSegment?.id ?? null);
 
         // Auto-Polish Logic
         const config = useConfigStore.getState().config;
@@ -100,7 +105,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         const frequency = config.autoPolishFrequency ?? 5;
 
         if (autoPolish && frequency > 0) {
-            const allSegments = storeState.segments;
+            const allSegments = useTranscriptSessionStore.getState().segments;
             const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
 
             if (unpolished.length >= frequency) {
@@ -108,8 +113,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
                 toPolish.forEach(s => polishedIdsRef.current.add(s.id));
 
                 polishService.polishSegments(toPolish, (chunk) => {
-                    const store = useTranscriptStore.getState();
-                    chunk.forEach(p => store.updateSegment(p.id, { text: p.text }));
+                    chunk.forEach((polishedSegment) => {
+                        updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
+                    });
                 }).catch(err => {
                     logger.error('[LiveRecord] Auto-polish failed:', err);
                 });

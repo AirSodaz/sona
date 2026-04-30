@@ -1,5 +1,7 @@
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { setTranscriptSegments } from '../stores/transcriptCoordinator';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import { historyService } from './historyService';
 import { transcriptionService } from './transcriptionService';
@@ -7,8 +9,7 @@ import { logger } from '../utils/logger';
 
 class RetranscribeService {
     async retranscribeCurrentRecord(onProgress?: (progress: number) => void): Promise<void> {
-        const store = useTranscriptStore.getState();
-        const historyId = store.sourceHistoryId;
+        const historyId = useTranscriptSessionStore.getState().sourceHistoryId;
 
         if (!historyId || historyId === 'current') {
             throw new Error('No saved history record found. Please ensure the recording is saved.');
@@ -29,7 +30,7 @@ class RetranscribeService {
             throw new Error('Audio file not found on disk.');
         }
 
-        const config = store.config;
+        const config = getEffectiveConfigSnapshot();
         if (!config.offlineModelPath) {
             throw new Error('Batch import model not configured.');
         }
@@ -48,7 +49,7 @@ class RetranscribeService {
         );
 
         // Update Store
-        store.setSegments(segments);
+        setTranscriptSegments(segments);
 
         // Save to History File
         await useHistoryStore.getState().updateTranscript(historyId, segments);

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
 import { Dropdown } from './Dropdown';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useShallow } from 'zustand/react/shallow';
 import {
   DeviceOption,
@@ -108,7 +108,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const modalRef = useRef<HTMLDivElement>(null);
   const config = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
-  const setMode = useTranscriptStore((state) => state.setMode);
+  const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const {
     isOpen,
     currentStep,

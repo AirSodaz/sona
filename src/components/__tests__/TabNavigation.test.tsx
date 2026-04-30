@@ -15,8 +15,8 @@ vi.mock('react-i18next', async (importOriginal) => {
 
 const mockSetMode = vi.fn();
 
-vi.mock('../stores/transcriptStore', () => ({
-    useTranscriptStore: (selector: any) => selector({
+vi.mock('../stores/transcriptRuntimeStore', () => ({
+    useTranscriptRuntimeStore: (selector: any) => selector({
         mode: 'live',
         setMode: mockSetMode,
     })

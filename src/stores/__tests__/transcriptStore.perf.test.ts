@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useTranscriptStore } from '../transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { TranscriptSegment } from '../../types/transcript';
 import { v4 as uuidv4 } from 'uuid';
 

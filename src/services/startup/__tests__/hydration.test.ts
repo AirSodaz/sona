@@ -50,7 +50,7 @@ const configState = {
   },
 };
 
-const transcriptState = {
+const transcriptRuntimeState = {
   setIsCaptionMode: mockSetCaptionMode,
 };
 
@@ -109,9 +109,9 @@ vi.mock('../../../stores/configStore', async () => {
   };
 });
 
-vi.mock('../../../stores/transcriptStore', () => ({
-  useTranscriptStore: {
-    getState: vi.fn(() => transcriptState),
+vi.mock('../../../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: {
+    getState: vi.fn(() => transcriptRuntimeState),
   },
 }));
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { useHistoryStore } from '../historyStore';
-import { useTranscriptStore } from '../transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useConfigStore } from '../configStore';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';

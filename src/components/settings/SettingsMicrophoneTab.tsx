@@ -5,7 +5,6 @@ import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useAudioConfig, useSetConfig } from '../../stores/configStore';
 import { useAudioVisualizer } from '../../hooks/useAudioVisualizer';
 import { remove } from '@tauri-apps/plugin-fs';
@@ -21,6 +20,7 @@ import {
     stopSystemAudioCapture,
 } from '../../services/tauri/audio';
 import { TauriEvent } from '../../services/tauri/events';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { logger } from '../../utils/logger';
 
@@ -59,8 +59,8 @@ export function SettingsMicrophoneTab({
     const micTargetPeakRef = useRef(0);
     const systemTargetPeakRef = useRef(0);
 
-    const isRecording = useTranscriptStore((state) => state.isRecording);
-    const isCaptionMode = useTranscriptStore((state) => state.isCaptionMode);
+    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+    const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
 
     // We only control the system capture if it's not already running for recording/captioning
     const isActiveSession = isRecording || isCaptionMode;

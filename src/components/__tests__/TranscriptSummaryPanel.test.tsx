@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptSummaryPanel } from '../TranscriptSummaryPanel';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../services/llm/state';
 

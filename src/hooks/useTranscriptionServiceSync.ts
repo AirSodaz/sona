@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { transcriptionService, captionTranscriptionService } from '../services/transcriptionService';
 import { logger } from '../utils/logger';
 
 export function useTranscriptionServiceSync() {
     const config = useConfigStore((state) => state.config);
-    const isRecording = useTranscriptStore((state) => state.isRecording);
+    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
     useEffect(() => {
         // We only want to auto-prepare if we are NOT actively recording,

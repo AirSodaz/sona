@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
-import { useTranscriptStore } from '../transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { transcriptionService } from '../../services/transcriptionService';
 
 // Mock dependencies

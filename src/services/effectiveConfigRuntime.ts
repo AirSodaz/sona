@@ -1,20 +1,12 @@
-import { resolveEffectiveConfig } from './effectiveConfigService';
 import { useConfigStore } from '../stores/configStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
 
-function syncTranscriptConfig() {
-  const projectState = useProjectStore.getState();
-  const activeProject = typeof projectState.getActiveProject === 'function'
-    ? projectState.getActiveProject()
-    : null;
-
-  useTranscriptStore.setState({
-    config: resolveEffectiveConfig(useConfigStore.getState().config, activeProject),
-  });
+function syncEffectiveConfig() {
+  useEffectiveConfigStore.getState().syncConfig();
 }
 
-class TranscriptConfigRuntime {
+class EffectiveConfigRuntime {
   private started = false;
 
   private unsubscribeConfig: (() => void) | null = null;
@@ -23,20 +15,20 @@ class TranscriptConfigRuntime {
 
   init() {
     if (this.started) {
-      syncTranscriptConfig();
+      syncEffectiveConfig();
       return;
     }
 
     this.started = true;
-    syncTranscriptConfig();
+    syncEffectiveConfig();
 
     this.unsubscribeConfig = useConfigStore.subscribe(() => {
-      syncTranscriptConfig();
+      syncEffectiveConfig();
     });
 
     if (typeof useProjectStore.subscribe === 'function') {
       this.unsubscribeProject = useProjectStore.subscribe(() => {
-        syncTranscriptConfig();
+        syncEffectiveConfig();
       });
     }
   }
@@ -50,4 +42,4 @@ class TranscriptConfigRuntime {
   }
 }
 
-export const transcriptConfigRuntime = new TranscriptConfigRuntime();
+export const effectiveConfigRuntime = new EffectiveConfigRuntime();

@@ -11,8 +11,8 @@ import { FirstRunGuide } from './components/FirstRunGuide';
 import { NotificationCenter } from './components/NotificationCenter';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
-import { useTranscriptStore } from './stores/transcriptStore';
 import { useProjectStore } from './stores/projectStore';
+import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 import { AutomationIcon, SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -22,6 +22,7 @@ import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { SettingsTab } from './hooks/useSettingsLogic';
 import { diagnosticsService } from './services/diagnosticsService';
+import { clearTranscriptSegments } from './stores/transcriptCoordinator';
 
 const SettingsModal = lazy(async () => {
   const module = await import('./components/Settings');
@@ -58,9 +59,8 @@ function App(): React.JSX.Element {
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isRecoveryCenterOpen, setIsRecoveryCenterOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
-  const mode = useTranscriptStore((state) => state.mode);
-  const clearSegments = useTranscriptStore((state) => state.clearSegments);
-  const setMode = useTranscriptStore((state) => state.setMode);
+  const mode = useTranscriptRuntimeStore((state) => state.mode);
+  const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
@@ -189,7 +189,7 @@ function App(): React.JSX.Element {
 
             {/* Right Panel - Editor */}
             <div className="panel panel-right">
-              <TranscriptWorkbench onClose={clearSegments} />
+              <TranscriptWorkbench onClose={clearTranscriptSegments} />
             </div>
           </div>
         </div>

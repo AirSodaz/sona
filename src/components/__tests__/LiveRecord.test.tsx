@@ -387,7 +387,7 @@ describe('LiveRecord', () => {
     afterEach(async () => {
         localStorage.clear();
         // Reset store state
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         act(() => {
             useTranscriptStore.setState({
                 isRecording: false,
@@ -421,14 +421,14 @@ describe('LiveRecord', () => {
         });
 
         expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(useTranscriptStore.getState().sourceHistoryId).toBe('draft-1');
         expect(mockCreateLiveRecordingDraft).toHaveBeenCalledWith('wav', null, 'system:mic');
     });
 
     it('pauses native recording by flushing the current final segment and blocks later partials until resume', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         mockPauseStream.mockImplementationOnce(async () => {
             capturedOnSegment?.({
                 id: 'pause-final',
@@ -486,7 +486,7 @@ describe('LiveRecord', () => {
     });
 
     it('keeps transcript segment timestamps monotonic across pause and resume', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         mockPauseStream.mockImplementationOnce(async () => {
             capturedOnSegment?.({
                 id: 'pause-final',
@@ -635,7 +635,7 @@ describe('LiveRecord', () => {
     });
 
     it('syncs the saved history title into the editor after web recording fallback is persisted', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         mockInvoke.mockImplementation(async (cmd: string) => {
             if (cmd === 'start_microphone_capture') {
                 throw new Error('native unavailable');
@@ -685,7 +685,7 @@ describe('LiveRecord', () => {
     });
 
     it('should start caption mode independently without recording', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         const { captionWindowService } = await import('../../services/captionWindowService');
         // We use mockStart which intercepts calls to any TranscriptionService instance (singleton or new)
 
@@ -707,7 +707,7 @@ describe('LiveRecord', () => {
     });
 
     it('should allow recording while caption mode is active', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         render(<LiveRecord />);
 
         // 1. Start Caption
@@ -730,7 +730,7 @@ describe('LiveRecord', () => {
     });
 
     it('should NOT stop recording when caption mode is toggled OFF', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         const { captionWindowService } = await import('../../services/captionWindowService');
 
         render(<LiveRecord />);
@@ -761,7 +761,7 @@ describe('LiveRecord', () => {
     });
 
     it('should toggle recording with Ctrl+Space', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         render(<LiveRecord />);
 
         // Start recording with Ctrl+Space
@@ -784,7 +784,7 @@ describe('LiveRecord', () => {
     });
 
     it('reopens onboarding instead of starting recording when no live model is configured', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         const { useConfigStore } = await import('../../stores/configStore');
         act(() => {
             useConfigStore.setState({
@@ -883,7 +883,7 @@ describe('LiveRecord', () => {
             });
         });
 
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         expect(useTranscriptStore.getState().segments).toHaveLength(1);
 
         // Stop recording

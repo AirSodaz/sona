@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { hasActiveFrontendQuitTasks, runGuardedQuit } from '../quitGuard';
 
 vi.mock('@tauri-apps/api/core', () => ({

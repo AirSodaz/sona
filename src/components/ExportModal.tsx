@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { join } from '@tauri-apps/api/path';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { exportSegments, getFileExtension, ExportFormat, ExportMode } from '../utils/exportFormats';
 import { exportToPath } from '../utils/fileExport';
@@ -25,8 +25,8 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
     const alert = useDialogStore((state) => state.alert);
     const showError = useDialogStore((state) => state.showError);
     
-    const segments = useTranscriptStore((state) => state.segments);
-    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+    const segments = useTranscriptSessionStore((state) => state.segments);
+    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
     const historyItems = useHistoryStore((state) => state.items);
     const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
     

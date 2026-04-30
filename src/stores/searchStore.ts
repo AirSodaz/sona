@@ -45,7 +45,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
         // Note: performSearch needs to be called by the component with segments,
         // or we need a way to access segments here. 
         // For now, we'll rely on the consuming component to trigger search,
-        // or we can subscribe to transcriptStore if we want to couple them.
+        // or we can subscribe to the active transcript session store if we want to couple them.
         // Decoupled is better for testing.
     },
 

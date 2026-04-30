@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useConfigStore } from '../stores/configStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { translationService } from '../services/translationService';
 import { LanguagesIcon, ChevronDownIcon, PlayIcon, ViewIcon, ViewOffIcon, ProcessingIcon, EditIcon, CheckIcon } from './Icons';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/runtime';
@@ -30,19 +33,19 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const segmentsLength = useTranscriptStore((state) => state.segments.length);
+    const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
 
     // LLM state
-    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const llmState = useTranscriptStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false, isRetranscribing: false };
+    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+    const llmState = useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isTranslating: false, translationProgress: 0, isTranslationVisible: false, isRetranscribing: false };
     const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
-    const toggleTranslationVisible = useTranscriptStore((state) => state.setIsTranslationVisible);
+    const updateLlmState = useTranscriptSidecarStore((state) => state.updateLlmState);
 
-    const config = useTranscriptStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+    const config = useEffectiveConfigStore((state) => state.config);
+    const setConfig = useConfigStore((state) => state.setConfig);
     const activeProjectId = useProjectStore((state) => state.activeProjectId);
     const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
-    const segments = useTranscriptStore((state) => state.segments);
+    const segments = useTranscriptSessionStore((state) => state.segments);
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
 
@@ -151,7 +154,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
     };
 
     const handleToggleVisibility = () => {
-        toggleTranslationVisible(!isTranslationVisible);
+        updateLlmState({ isTranslationVisible: !isTranslationVisible });
         setIsOpen(false);
         triggerRef.current?.focus();
     };

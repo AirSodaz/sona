@@ -1,4 +1,3 @@
-import { useTranscriptStore } from '../stores/transcriptStore';
 import {
   DEFAULT_SUMMARY_TEMPLATE_ID,
   HistorySummaryPayload,
@@ -8,6 +7,9 @@ import {
   TranscriptSummaryRecord,
   TranscriptSummaryState,
 } from '../types/transcript';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
 import { historyService } from './historyService';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
@@ -71,13 +73,13 @@ class SummaryService {
       return;
     }
 
-    const existingState = useTranscriptStore.getState().summaryStates[historyId];
+    const existingState = useTranscriptSidecarStore.getState().summaryStates[historyId];
     if (hasStoredSummaryState(existingState)) {
       return;
     }
 
     const payload = await historyService.loadSummary(historyId);
-    const latestState = useTranscriptStore.getState().summaryStates[historyId];
+    const latestState = useTranscriptSidecarStore.getState().summaryStates[historyId];
     // Another async path may have populated or modified the state while the sidecar was
     // loading, so re-check before hydrating to avoid overwriting fresher in-memory data.
     if (hasStoredSummaryState(latestState)) {
@@ -85,7 +87,7 @@ class SummaryService {
     }
 
     if (payload) {
-      useTranscriptStore.getState().hydrateSummaryState(payload, historyId);
+      useTranscriptSidecarStore.getState().hydrateSummaryState(payload, historyId);
     }
   }
 
@@ -94,12 +96,12 @@ class SummaryService {
       return;
     }
 
-    const storedSummaryState = useTranscriptStore.getState().summaryStates[historyId];
+    const storedSummaryState = useTranscriptSidecarStore.getState().summaryStates[historyId];
     if (!storedSummaryState) {
       return;
     }
 
-    const summaryState = useTranscriptStore.getState().getSummaryState(historyId);
+    const summaryState = useTranscriptSidecarStore.getState().getSummaryState(historyId);
     if (!hasPersistableSummaryData(summaryState)) {
       await historyService.deleteSummary(historyId);
       return;
@@ -109,10 +111,12 @@ class SummaryService {
   }
 
   async setActiveTemplate(templateId: SummaryTemplateId, historyId?: string): Promise<void> {
-    const store = useTranscriptStore.getState();
-    const targetHistoryId = historyId || store.sourceHistoryId || 'current';
-    const resolvedTemplateId = coerceSummaryTemplateId(templateId, store.config.summaryCustomTemplates);
-    store.setActiveSummaryTemplate(resolvedTemplateId, targetHistoryId);
+    const sessionStore = useTranscriptSessionStore.getState();
+    const sidecarStore = useTranscriptSidecarStore.getState();
+    const config = getEffectiveConfigSnapshot();
+    const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
+    const resolvedTemplateId = coerceSummaryTemplateId(templateId, config.summaryCustomTemplates);
+    sidecarStore.setActiveSummaryTemplate(resolvedTemplateId, targetHistoryId);
 
     if (targetHistoryId !== 'current') {
       await this.persistSummary(targetHistoryId);
@@ -120,12 +124,14 @@ class SummaryService {
   }
 
   async updateSummaryRecord(content: string, historyId?: string): Promise<void> {
-    const store = useTranscriptStore.getState();
-    const targetHistoryId = historyId || store.sourceHistoryId || 'current';
-    const summaryState = store.getSummaryState(targetHistoryId);
+    const sessionStore = useTranscriptSessionStore.getState();
+    const sidecarStore = useTranscriptSidecarStore.getState();
+    const config = getEffectiveConfigSnapshot();
+    const targetHistoryId = historyId || sessionStore.sourceHistoryId || 'current';
+    const summaryState = sidecarStore.getSummaryState(targetHistoryId);
     const activeTemplateId = coerceSummaryTemplateId(
-      summaryState.activeTemplateId || store.config.summaryTemplateId,
-      store.config.summaryCustomTemplates,
+      summaryState.activeTemplateId || config.summaryTemplateId,
+      config.summaryCustomTemplates,
     );
     const hasMeaningfulContent = content.trim().length > 0;
 
@@ -133,8 +139,8 @@ class SummaryService {
       return;
     }
 
-    const sourceFingerprint = computeSummarySourceFingerprint(store.segments);
-    store.updateSummaryState({
+    const sourceFingerprint = computeSummarySourceFingerprint(sessionStore.segments);
+    sidecarStore.updateSummaryState({
       activeTemplateId,
       record: {
         templateId: activeTemplateId,
@@ -151,33 +157,35 @@ class SummaryService {
   }
 
   async generateSummary(templateId?: SummaryTemplateId): Promise<void> {
-    const store = useTranscriptStore.getState();
+    const sessionStore = useTranscriptSessionStore.getState();
+    const sidecarStore = useTranscriptSidecarStore.getState();
+    const config = getEffectiveConfigSnapshot();
 
-    if (store.config.summaryEnabled === false) {
+    if (config.summaryEnabled === false) {
       throw new Error('Summary is disabled.');
     }
 
-    if (!isSummaryLlmConfigComplete(store.config)) {
+    if (!isSummaryLlmConfigComplete(config)) {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const segments = store.segments;
+    const segments = sessionStore.segments;
     if (!segments || segments.length === 0) {
       return;
     }
 
     const resolvedTemplate = resolveSummaryTemplate(
-      templateId ?? store.getSummaryState().activeTemplateId ?? store.config.summaryTemplateId,
-      store.config.summaryCustomTemplates,
+      templateId ?? sidecarStore.getSummaryState().activeTemplateId ?? config.summaryTemplateId,
+      config.summaryCustomTemplates,
     );
     const activeTemplateId = resolvedTemplate.id;
-    const jobHistoryId = store.sourceHistoryId || 'current';
+    const jobHistoryId = sessionStore.sourceHistoryId || 'current';
     // Streaming summary updates must stay attached to the exact segment snapshot that
     // started the job, even if an unsaved transcript gets persisted mid-generation.
     const sourceFingerprint = computeSummarySourceFingerprint(segments);
     const taskId = createLlmTaskId('summary');
 
-    store.updateSummaryState({
+    sidecarStore.updateSummaryState({
       activeTemplateId,
       isGenerating: true,
       generationProgress: 0,
@@ -202,7 +210,7 @@ class SummaryService {
 
       const resultTemplateId = coerceSummaryTemplateId(
         result.templateId,
-        store.config.summaryCustomTemplates,
+        config.summaryCustomTemplates,
       );
       const record: TranscriptSummaryRecord = {
         templateId: resultTemplateId,
@@ -241,7 +249,7 @@ class SummaryService {
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
   ): SummarizeTranscriptRequest {
-    const config = useTranscriptStore.getState().config;
+    const config = getEffectiveConfigSnapshot();
 
     return {
       taskId,
@@ -263,7 +271,7 @@ class SummaryService {
     state: Partial<TranscriptSummaryState>,
   ): string {
     const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
-    useTranscriptStore.getState().updateSummaryState(state, targetHistoryId);
+    useTranscriptSidecarStore.getState().updateSummaryState(state, targetHistoryId);
     return targetHistoryId;
   }
 
@@ -272,14 +280,14 @@ class SummaryService {
       return jobHistoryId;
     }
 
-    const store = useTranscriptStore.getState();
+    const sessionStore = useTranscriptSessionStore.getState();
     // A "current" job can become history-backed after save. Re-anchor follow-up updates
     // only when the saved transcript still matches the same segment fingerprint.
     if (
-      store.sourceHistoryId &&
-      computeSummarySourceFingerprint(store.segments) === sourceFingerprint
+      sessionStore.sourceHistoryId &&
+      computeSummarySourceFingerprint(sessionStore.segments) === sourceFingerprint
     ) {
-      return store.sourceHistoryId;
+      return sessionStore.sourceHistoryId;
     }
 
     return 'current';

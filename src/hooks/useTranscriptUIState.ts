@@ -1,7 +1,8 @@
 import { useMemo, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
 import { createStore } from 'zustand/vanilla';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { TranscriptUIState } from '../components/transcript/TranscriptUIContext';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { TranscriptSegment } from '../types/transcript';
 
 /**
@@ -17,10 +18,10 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
     // from re-rendering the entire list.
     const uiStore = useMemo(() => createStore<TranscriptUIState>(() => ({
         newSegmentIds: new Set(),
-        activeSegmentId: useTranscriptStore.getState().activeSegmentId,
-        editingSegmentId: useTranscriptStore.getState().editingSegmentId,
-        totalSegments: useTranscriptStore.getState().segments.length,
-        aligningSegmentIds: useTranscriptStore.getState().aligningSegmentIds,
+        activeSegmentId: useTranscriptPlaybackStore.getState().activeSegmentId,
+        editingSegmentId: useTranscriptSessionStore.getState().editingSegmentId,
+        totalSegments: useTranscriptSessionStore.getState().segments.length,
+        aligningSegmentIds: useTranscriptSessionStore.getState().aligningSegmentIds,
     })), []);
 
     useLayoutEffect(() => {
@@ -85,7 +86,7 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
 
     // Sync activeSegmentId, editingSegmentId, and aligningSegmentIds from global store to local store
     useEffect(() => {
-        return useTranscriptStore.subscribe((state, prevState) => {
+        const unsubscribePlayback = useTranscriptPlaybackStore.subscribe((state, prevState) => {
             const updates: Partial<TranscriptUIState> = {};
             let hasUpdates = false;
 
@@ -93,6 +94,16 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
                 updates.activeSegmentId = state.activeSegmentId;
                 hasUpdates = true;
             }
+
+            if (hasUpdates) {
+                uiStore.setState(updates);
+            }
+        });
+
+        const unsubscribeSession = useTranscriptSessionStore.subscribe((state, prevState) => {
+            const updates: Partial<TranscriptUIState> = {};
+            let hasUpdates = false;
+
             if (state.editingSegmentId !== prevState.editingSegmentId) {
                 updates.editingSegmentId = state.editingSegmentId;
                 hasUpdates = true;
@@ -106,6 +117,11 @@ export function useTranscriptUIState(segments: TranscriptSegment[]) {
                 uiStore.setState(updates);
             }
         });
+
+        return () => {
+            unsubscribePlayback();
+            unsubscribeSession();
+        };
     }, [uiStore]);
 
     const handleAnimationEnd = useCallback((id: string) => {

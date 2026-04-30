@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { VirtuosoHandle } from 'react-virtuoso';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 
 /**
  * Automatically scrolls the transcript view to keep the active segment in view.
@@ -11,7 +11,7 @@ export function useAutoScroll(virtuosoRef: React.RefObject<VirtuosoHandle | null
     // We don't need to track last index manually anymore as the store provides it
 
     useEffect(() => {
-        const unsub = useTranscriptStore.subscribe((state, prevState) => {
+        const unsub = useTranscriptPlaybackStore.subscribe((state, prevState) => {
             const { activeSegmentIndex, activeSegmentId, isPlaying } = state;
             const prevActiveId = prevState.activeSegmentId;
             const prevIsPlaying = prevState.isPlaying;

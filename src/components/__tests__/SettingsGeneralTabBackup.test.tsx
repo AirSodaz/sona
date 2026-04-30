@@ -143,8 +143,8 @@ vi.mock('../../stores/dialogStore', () => ({
   }),
 }));
 
-vi.mock('../../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => selector(testContext.transcriptState),
+vi.mock('../../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: (selector: any) => selector(testContext.transcriptState),
 }));
 
 describe('SettingsGeneralTab backup entry', () => {

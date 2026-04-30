@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDialogStore } from '../stores/dialogStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { isSummaryLlmConfigComplete } from '../services/llm/runtime';
 import { isSummaryRecordStale, summaryService } from '../services/summaryService';
 import {
@@ -26,10 +28,10 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const segments = useTranscriptStore((state) => state.segments);
-  const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-  const config = useTranscriptStore((state) => state.config);
-  const summaryState = useTranscriptStore((state) => state.summaryStates[state.sourceHistoryId || 'current']);
+  const segments = useTranscriptSessionStore((state) => state.segments);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const config = useEffectiveConfigStore((state) => state.config);
+  const summaryState = useTranscriptSidecarStore((state) => state.summaryStates[sourceHistoryId || 'current']);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
   const showError = useDialogStore((state) => state.showError);
@@ -70,7 +72,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }
 
     const nextContent = editContentRef.current;
-    const hasStoredRecord = !!useTranscriptStore.getState().getSummaryState(sourceHistoryId || 'current').record;
+    const hasStoredRecord = !!useTranscriptSidecarStore.getState().getSummaryState(sourceHistoryId || 'current').record;
     if (nextContent === lastSavedContentRef.current || (!hasStoredRecord && !nextContent.trim())) {
       return;
     }

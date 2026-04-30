@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { TranscriptEditor } from '../TranscriptEditor';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Mock i18next

@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { useAutoSaveTranscript } from '../useAutoSaveTranscript';
 import { useHistoryStore } from '../../stores/historyStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 vi.mock('../../services/historyService', () => ({
   historyService: {

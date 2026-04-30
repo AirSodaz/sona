@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
@@ -16,7 +19,7 @@ import { generateAiTitle } from '../services/aiRenameService';
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */
   onClose: () => void;
-  /** Optional title to display. If not provided, will use the one from transcriptStore. */
+  /** Optional title to display. If not provided, will use the active transcript session title. */
   title?: string;
   /** Optional default type for the icon if the item has no icon set. */
   defaultIconType?: 'recording' | 'batch';
@@ -54,16 +57,16 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
   // Store state
-  const segments = useTranscriptStore((state) => state.segments);
-  const audioUrl = useTranscriptStore((state) => state.audioUrl);
-  const config = useTranscriptStore((state) => state.config);
-  const storeTitle = useTranscriptStore((state) => state.title);
-  const storeIcon = useTranscriptStore((state) => state.icon);
-  const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-  const isRecording = useTranscriptStore((state) => state.isRecording);
-  const setTitle = useTranscriptStore((state) => state.setTitle);
-  const setIcon = useTranscriptStore((state) => state.setIcon);
-  const mode = useTranscriptStore((state) => state.mode);
+  const segments = useTranscriptSessionStore((state) => state.segments);
+  const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
+  const config = useEffectiveConfigStore((state) => state.config);
+  const storeTitle = useTranscriptSessionStore((state) => state.title);
+  const storeIcon = useTranscriptSessionStore((state) => state.icon);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const setTitle = useTranscriptSessionStore((state) => state.setTitle);
+  const setIcon = useTranscriptSessionStore((state) => state.setIcon);
+  const mode = useTranscriptRuntimeStore((state) => state.mode);
   
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
 

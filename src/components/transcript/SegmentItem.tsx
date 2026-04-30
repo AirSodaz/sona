@@ -9,7 +9,8 @@ import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
 import { useSearchStore } from '../../stores/searchStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -135,8 +136,8 @@ function SegmentItemComponent({
     const isAligning = useStore(uiStore, useCallback((state) => state.aligningSegmentIds.has(segment.id), [segment.id]));
 
     // LLM state (translation visibility)
-    const sourceHistoryId = useTranscriptStore(state => state.sourceHistoryId);
-    const llmState = useTranscriptStore(state => state.llmStates[sourceHistoryId || 'current']);
+    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+    const llmState = useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']);
     const isTranslationVisible = llmState ? llmState.isTranslationVisible : false;
 
     // Subscribe to store for hasNext to avoid passing unstable props

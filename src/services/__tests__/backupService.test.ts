@@ -48,13 +48,14 @@ const testContext = vi.hoisted(() => {
     saveMock: vi.fn(),
     settingsStoreSaveMock: vi.fn().mockResolvedValue(undefined),
     settingsStoreSetMock: vi.fn().mockResolvedValue(undefined),
-    transcriptStoreState: {
-      isRecording: false,
-      sourceHistoryId: null as string | null,
-      clearSegments: vi.fn(),
+    transcriptPlaybackState: {
       setAudioFile: vi.fn(),
-      setAudioUrl: vi.fn(),
-      loadTranscript: vi.fn(),
+    },
+    transcriptRuntimeState: {
+      isRecording: false,
+    },
+    transcriptSessionState: {
+      sourceHistoryId: null as string | null,
     },
     writeTextFileMock: vi.fn().mockResolvedValue(undefined),
   };
@@ -128,6 +129,7 @@ vi.mock('../../stores/batchQueueStore', () => ({
 }));
 
 vi.mock('../../stores/configStore', () => ({
+  DEFAULT_CONFIG: testContext.config,
   useConfigStore: {
     getState: () => ({
       config: testContext.config,
@@ -152,9 +154,21 @@ vi.mock('../../stores/projectStore', () => ({
   },
 }));
 
-vi.mock('../../stores/transcriptStore', () => ({
-  useTranscriptStore: {
-    getState: () => testContext.transcriptStoreState,
+vi.mock('../../stores/transcriptPlaybackStore', () => ({
+  useTranscriptPlaybackStore: {
+    getState: () => testContext.transcriptPlaybackState,
+  },
+}));
+
+vi.mock('../../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: {
+    getState: () => testContext.transcriptRuntimeState,
+  },
+}));
+
+vi.mock('../../stores/transcriptSessionStore', () => ({
+  useTranscriptSessionStore: {
+    getState: () => testContext.transcriptSessionState,
   },
 }));
 
@@ -197,8 +211,8 @@ describe('backupService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     testContext.batchQueueState.queueItems = [];
-    testContext.transcriptStoreState.isRecording = false;
-    testContext.transcriptStoreState.sourceHistoryId = null;
+    testContext.transcriptRuntimeState.isRecording = false;
+    testContext.transcriptSessionState.sourceHistoryId = null;
     testContext.historyStoreState.items = [];
     testContext.historyStoreState.loadItems.mockResolvedValue(undefined);
     testContext.projectState.loadProjects.mockResolvedValue(undefined);
@@ -446,7 +460,7 @@ describe('backupService', () => {
     expect(testContext.projectState.loadProjects).toHaveBeenCalledTimes(1);
     expect(testContext.historyStoreState.loadItems).toHaveBeenCalledTimes(1);
     expect(testContext.automationStoreState.loadAndStart).toHaveBeenCalledTimes(1);
-    expect(testContext.transcriptStoreState.clearSegments).toHaveBeenCalledTimes(0);
+    expect(testContext.transcriptPlaybackState.setAudioFile).toHaveBeenCalledTimes(0);
     expect(testContext.invokeMock).toHaveBeenCalledWith('dispose_prepared_backup_import', {
       importId: 'import-1',
     });

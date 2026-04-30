@@ -2,7 +2,7 @@ import { logger } from "../utils/logger";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { modelService, ModelFileConfig } from './modelService';
 import { applyTextReplacements } from '../utils/textProcessing';
 import { speakerService } from './speakerService';
@@ -108,7 +108,7 @@ export class TranscriptionService {
 
             try {
                 // Apply text replacements from global config
-                const appConfig = useTranscriptStore.getState().config;
+                const appConfig = getEffectiveConfigSnapshot();
                 const processedUpdate = normalizeTranscriptUpdate({
                     removeIds: update.removeIds,
                     upsertSegments: update.upsertSegments.map((segment) => {
@@ -281,7 +281,7 @@ export class TranscriptionService {
 
         this.startingPromise = (async () => {
             try {
-                const appConfig = useTranscriptStore.getState().config;
+                const appConfig = getEffectiveConfigSnapshot();
                 let punctuationPathToUse = '';
                 let vadPathToUse = '';
                 let vadBufferToUse = 5.0;
@@ -375,7 +375,7 @@ export class TranscriptionService {
     private _isConfigMatch(): boolean {
         if (!this.runningConfig) return false;
 
-        const appConfig = useTranscriptStore.getState().config;
+        const appConfig = getEffectiveConfigSnapshot();
         let vadPathToUse = '';
         let punctuationPathToUse = '';
         const streamingModel = findSelectedModelByMode(this.modelPath, 'streaming');
@@ -525,7 +525,7 @@ export class TranscriptionService {
     ): Promise<TranscriptSegment[]> {
         if (!this.modelPath) throw new Error('Model path not configured');
 
-        const appConfig = configOverride || useTranscriptStore.getState().config;
+        const appConfig = configOverride || getEffectiveConfigSnapshot();
         let punctuationPathToUse = '';
         let vadPathToUse = '';
         let vadBufferToUse = 5.0;

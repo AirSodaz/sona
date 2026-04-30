@@ -441,7 +441,7 @@ describe('LiveRecord Native Capture', () => {
 
     afterEach(async () => {
         // Reset store state
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         act(() => {
             useTranscriptStore.setState({
                 isRecording: false,
@@ -459,7 +459,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('should invoke native capture and save recording when stopping', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         render(<LiveRecord />);
 
@@ -535,7 +535,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('accepts record segments that arrive while the session is still starting', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         mockStart.mockImplementationOnce(async (onSegment?: (segment: any) => void) => {
             recordSegmentCallback = typeof onSegment === 'function' ? onSegment : null;
@@ -571,7 +571,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('should save recording if segments exist', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         render(<LiveRecord />);
 
@@ -625,7 +625,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('syncs the saved history title into the editor after native recording is persisted', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         mockCreateLiveRecordingDraft.mockResolvedValueOnce(createDraftHandle('native-history-id', 'wav'));
         mockCompleteLiveRecordingDraft.mockResolvedValueOnce(createCompletedHistoryItem('native-history-id', 'wav', {
             id: 'native-history-id',
@@ -664,7 +664,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('keeps accepting native microphone segments after capture attaches', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         render(<LiveRecord />);
 
@@ -694,7 +694,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('keeps the native microphone session alive when the peak listener cannot attach', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         mockEventListen.mockImplementation((event: string, callback: (event: any) => void) => {
             if (event === 'microphone-audio') {
@@ -741,7 +741,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('rolls back the record session state when microphone startup ultimately fails', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         mockStart.mockImplementationOnce(async (onSegment?: (segment: any) => void) => {
             recordSegmentCallback = typeof onSegment === 'function' ? onSegment : null;
@@ -779,7 +779,7 @@ describe('LiveRecord Native Capture', () => {
     });
 
     it('does not let a stale microphone startup rollback stop a newer record session', async () => {
-        const { useTranscriptStore } = await import('../../stores/transcriptStore');
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
 
         let rejectFirstAttach: ((reason?: unknown) => void) | null = null;
         let microphoneAttachAttempts = 0;

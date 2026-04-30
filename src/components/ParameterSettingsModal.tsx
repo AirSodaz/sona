@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { XIcon } from './Icons';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useConfigStore } from '../stores/configStore';
 
 interface ParameterSettingsModalProps {
@@ -26,7 +25,7 @@ export function ParameterSettingsModal({
 
     // Get config and setters from store
     const config = useConfigStore((state) => state.config);
-    const setConfig = useTranscriptStore((state) => state.setConfig);
+    const setConfig = useConfigStore((state) => state.setConfig);
 
     // Derived values
     const enableTimeline = config.enableTimeline ?? false;

@@ -4,7 +4,7 @@ import { Settings } from '../Settings';
 import { modelService } from '../../services/modelService';
 import { useDialogStore } from '../../stores/dialogStore';
 
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -17,34 +17,6 @@ vi.mock('react-i18next', () => ({
         init: () => undefined,
     },
 }));
-
-vi.mock('../../stores/transcriptStore', async () => {
-    const { create } = await import('zustand');
-    const actual = await vi.importActual('../../stores/transcriptStore');
-
-    // Create a functional store for testing
-    const useTranscriptStore = create((set) => ({
-        config: {
-
-            streamingModelPath: "/path/to/model",
-                offlineModelPath: '/test/offline',
-                enableITN: true,
-                appLanguage: 'auto',
-                language: 'en',
-            punctuationModelPath: '',
-            vadModelPath: '',
-            theme: 'auto',
-            font: 'system',
-            vadBufferSize: 5
-        },
-        setConfig: (config: any) => set((state: any) => ({ config: { ...state.config, ...config } })),
-    }));
-
-    return {
-        ...actual,
-        useTranscriptStore
-    };
-});
 
 vi.mock('../../services/modelService', () => ({
     PRESET_MODELS: [

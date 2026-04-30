@@ -2,7 +2,7 @@ import i18n from '../../i18n';
 import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { AppConfig } from '../../types/config';
 import { migrateProjectPolishDefaults } from '../../types/project';
 import type { OnboardingState } from '../../types/onboarding';
@@ -53,7 +53,7 @@ function applyHydratedConfig(config: AppConfig): void {
   useConfigStore.getState().setConfig(config);
 
   if (config.startOnLaunch) {
-    useTranscriptStore.getState().setIsCaptionMode(true);
+    useTranscriptRuntimeStore.getState().setIsCaptionMode(true);
   }
 
   if (config.appLanguage && config.appLanguage !== 'auto') {

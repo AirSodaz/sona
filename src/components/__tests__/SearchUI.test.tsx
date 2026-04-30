@@ -5,14 +5,14 @@ import { SearchUI } from '../SearchUI';
 
 // Mock stores
 const mockUseSearchStore = vi.fn();
-const mockUseTranscriptStore = vi.fn();
+const mockUseTranscriptSessionStore = vi.fn();
 
 vi.mock('../../stores/searchStore', () => ({
   useSearchStore: () => mockUseSearchStore()
 }));
 
-vi.mock('../../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => mockUseTranscriptStore(selector)
+vi.mock('../../stores/transcriptSessionStore', () => ({
+  useTranscriptSessionStore: (selector: any) => mockUseTranscriptSessionStore(selector)
 }));
 
 // Mock icons
@@ -45,7 +45,7 @@ describe('SearchUI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseSearchStore.mockReturnValue(defaultSearchState);
-    mockUseTranscriptStore.mockImplementation((selector: any) => {
+    mockUseTranscriptSessionStore.mockImplementation((selector: any) => {
       // If selector is a function, call it with mock state
       if (typeof selector === 'function') {
         return selector({ segments: [] });

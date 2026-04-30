@@ -105,8 +105,8 @@ vi.mock('../../stores/dialogStore', () => ({
   }),
 }));
 
-vi.mock('../../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => selector({
+vi.mock('../../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: (selector: any) => selector({
     isRecording: false,
   }),
 }));

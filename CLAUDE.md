@@ -48,7 +48,8 @@ Key product modes:
 - `src/App.tsx` is the main orchestrator for app mode, initialization hooks, dialog rendering, and top-level layout.
 
 ### State model
-- `src/stores/transcriptStore.ts` is the central source of truth for transcript segments, playback/recording state, current mode, config, and LLM task state.
+- Transcript state is split by ownership: `src/stores/transcriptSessionStore.ts` handles transcript content/session identity, `src/stores/transcriptPlaybackStore.ts` handles audio/playback, `src/stores/transcriptRuntimeStore.ts` handles workbench runtime flags, `src/stores/transcriptSidecarStore.ts` handles per-history LLM/summary/auto-save state, and `src/stores/effectiveConfigStore.ts` exposes project-aware effective config reads.
+- `src/stores/transcriptCoordinator.ts` provides cross-store coordination helpers for open/clear/save-sync flows without recreating a god store.
 - `src/stores/batchQueueStore.ts` manages the batch queue, concurrency, progress, auto-polish integration, and handoff into history.
 - `src/stores/historyStore.ts` manages the persisted transcript/audio history index.
 - `src/stores/onboardingStore.ts` tracks first-run setup and onboarding UI state.

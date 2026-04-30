@@ -19,7 +19,13 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import {
+  clearActiveTranscriptSession,
+  openTranscriptSession,
+} from '../stores/transcriptCoordinator';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 
@@ -42,13 +48,11 @@ export function ProjectsView(): React.JSX.Element {
   const deleteHistoryItems = useHistoryStore((state) => state.deleteItems);
   const updateHistoryItemMeta = useHistoryStore((state) => state.updateItemMeta);
 
-  const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-  const segmentsLength = useTranscriptStore((state) => state.segments.length);
-  const isRecording = useTranscriptStore((state) => state.isRecording);
-  const clearActiveTranscriptSession = useTranscriptStore((state) => state.clearActiveTranscriptSession);
-  const openTranscriptSession = useTranscriptStore((state) => state.openTranscriptSession);
-  const setMode = useTranscriptStore((state) => state.setMode);
-  const setTitle = useTranscriptStore((state) => state.setTitle);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
+  const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const setTitle = useTranscriptSessionStore((state) => state.setTitle);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
@@ -78,7 +82,7 @@ export function ProjectsView(): React.JSX.Element {
   const clearOpenedItem = useCallback(() => {
     setSelectedHistoryId(null);
     clearActiveTranscriptSession({ clearAudio: true });
-  }, [clearActiveTranscriptSession]);
+  }, []);
 
   const handleOpenItem = useCallback(async (item: HistoryItemType) => {
     if (isLiveDraftSessionLocked && item.id !== sourceHistoryId) {
@@ -120,7 +124,7 @@ export function ProjectsView(): React.JSX.Element {
         cause: error,
       });
     }
-  }, [deleteHistoryItem, isLiveDraftSessionLocked, openTranscriptSession, refreshHistory, setActiveProjectId, showError, sourceHistoryId]);
+  }, [deleteHistoryItem, isLiveDraftSessionLocked, refreshHistory, setActiveProjectId, showError, sourceHistoryId]);
 
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
@@ -206,12 +210,13 @@ export function ProjectsView(): React.JSX.Element {
     }
 
     if (effectiveSelectedHistoryId === null) {
-      const transcriptState = useTranscriptStore.getState();
-      if (transcriptState.sourceHistoryId || transcriptState.segments.length > 0 || transcriptState.audioUrl) {
-        transcriptState.clearActiveTranscriptSession({ clearAudio: true });
+      const sessionState = useTranscriptSessionStore.getState();
+      const playbackState = useTranscriptPlaybackStore.getState();
+      if (sessionState.sourceHistoryId || sessionState.segments.length > 0 || playbackState.audioUrl) {
+        clearActiveTranscriptSession({ clearAudio: true });
       }
     }
-  }, [clearActiveTranscriptSession, effectiveSelectedHistoryId, selectedHistoryId]);
+  }, [effectiveSelectedHistoryId, selectedHistoryId]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {
@@ -291,7 +296,7 @@ export function ProjectsView(): React.JSX.Element {
 
     if (sourceHistoryId === renameTarget.id) {
       setTitle(newTitle.trim());
-      useTranscriptStore.getState().setIcon(newIcon || null);
+      useTranscriptSessionStore.getState().setIcon(newIcon || null);
     }
 
     setRenameTarget(null);
@@ -387,7 +392,7 @@ export function ProjectsView(): React.JSX.Element {
     await assignHistoryItems(selectionState.selectedIds, targetProjectId);
     await refreshHistory();
 
-    const currentHistoryId = useTranscriptStore.getState().sourceHistoryId;
+    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId;
     if (currentHistoryId && selectionState.selectedIds.includes(currentHistoryId)) {
       await setActiveProjectId(targetProjectId);
     }

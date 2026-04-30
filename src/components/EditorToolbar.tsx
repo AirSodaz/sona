@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import {
     UndoIcon,
     RedoIcon,
@@ -14,10 +15,10 @@ const SAVED_STATUS_VISIBLE_MS = 1500;
 
 export function EditorToolbar(): React.JSX.Element | null {
     const { t } = useTranslation();
-    const editingSegmentId = useTranscriptStore((state) => state.editingSegmentId);
-    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
-    const autoSaveState = useTranscriptStore((state) => (
-        state.sourceHistoryId ? state.autoSaveStates[state.sourceHistoryId] : undefined
+    const editingSegmentId = useTranscriptSessionStore((state) => state.editingSegmentId);
+    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+    const autoSaveState = useTranscriptSidecarStore((state) => (
+        sourceHistoryId ? state.autoSaveStates[sourceHistoryId] : undefined
     ));
 
     const isEditing = Boolean(editingSegmentId);

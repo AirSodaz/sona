@@ -3,9 +3,11 @@ import { HistoryItem } from '../types/history';
 import { historyService } from '../services/historyService';
 import { TranscriptSegment } from '../types/transcript';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
-import { useTranscriptStore } from './transcriptStore';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { clearActiveTranscriptSession } from './transcriptCoordinator';
+import { useTranscriptSessionStore } from './transcriptSessionStore';
+import { useTranscriptSidecarStore } from './transcriptSidecarStore';
 
 interface HistoryState {
     items: HistoryItem[];
@@ -88,12 +90,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecording(id);
-            useTranscriptStore.getState().clearSummaryState(id);
+            useTranscriptSidecarStore.getState().clearSummaryState(id);
             
             // Clear current transcript if it matches the deleted item
-            const transcriptStore = useTranscriptStore.getState();
-            if (transcriptStore.sourceHistoryId === id) {
-                transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
+            const transcriptSession = useTranscriptSessionStore.getState();
+            if (transcriptSession.sourceHistoryId === id) {
+                clearActiveTranscriptSession({ clearAudio: true });
             }
         } catch (error) {
             logger.error('Failed to delete history item:', error);
@@ -110,12 +112,12 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
         try {
             await historyService.deleteRecordings(ids);
-            ids.forEach((id) => useTranscriptStore.getState().clearSummaryState(id));
+            ids.forEach((id) => useTranscriptSidecarStore.getState().clearSummaryState(id));
             
             // Clear current transcript if it matches any of the deleted items
-            const transcriptStore = useTranscriptStore.getState();
-            if (transcriptStore.sourceHistoryId && ids.includes(transcriptStore.sourceHistoryId)) {
-                transcriptStore.clearActiveTranscriptSession({ clearAudio: true });
+            const transcriptSession = useTranscriptSessionStore.getState();
+            if (transcriptSession.sourceHistoryId && ids.includes(transcriptSession.sourceHistoryId)) {
+                clearActiveTranscriptSession({ clearAudio: true });
             }
         } catch (error) {
             logger.error('Failed to delete history items:', error);

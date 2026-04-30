@@ -43,7 +43,7 @@ Sona is a privacy-first, offline transcript editor built with **Tauri v2**, **Re
   - `components/` — UI components. Key component: `TranscriptWorkbench.tsx` (the core editor view).
   - `hooks/` — React hooks for logic and lifecycle.
   - `services/` — Orchestration for transcription, LLM, history, and models.
-  - `stores/` — Zustand store definitions (`transcriptStore`, `historyStore`, `dialogStore`, etc.).
+  - `stores/` — Zustand store definitions (`transcriptSessionStore`, `transcriptPlaybackStore`, `transcriptRuntimeStore`, `transcriptSidecarStore`, `effectiveConfigStore`, `historyStore`, `dialogStore`, etc.).
   - `locales/` — i18n translation files (EN/ZH).
 - `src-tauri/` — Rust backend and Tauri configuration.
 - `scripts/` — Build and setup helper scripts.

@@ -1,5 +1,8 @@
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { updateTranscriptSegment } from '../stores/transcriptCoordinator';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { historyService } from './historyService';
@@ -63,28 +66,29 @@ class PolishService {
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
   ): Promise<PolishedSegment[]> {
-    const store = useTranscriptStore.getState();
-    return this.polishSegmentsWithConfig(store.config, segments, onChunkPolished);
+    return this.polishSegmentsWithConfig(getEffectiveConfigSnapshot(), segments, onChunkPolished);
   }
 
   async polishTranscript() {
-    const store = useTranscriptStore.getState();
-    const segments = store.segments;
+    const sessionStore = useTranscriptSessionStore.getState();
+    const sidecarStore = useTranscriptSidecarStore.getState();
+    const config = getEffectiveConfigSnapshot();
+    const segments = sessionStore.segments;
     await runTranscriptSegmentTaskJob({
       taskType: 'polish',
       segments,
-      sourceHistoryId: store.sourceHistoryId,
+      sourceHistoryId: sessionStore.sourceHistoryId,
       onStart: (jobHistoryId) => {
-        store.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
+        sidecarStore.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
       },
       onProgress: (polishProgress, jobHistoryId) => {
         // Progress tracks the transcript that launched the job, not whichever record the
         // user is viewing by the time a late chunk event arrives.
-        useTranscriptStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
+        useTranscriptSidecarStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
         await this.polishSegmentsWithConfig(
-          store.config,
+          config,
           segments,
           async (items) => {
             await this.applyPolishedSegments(items, jobHistoryId);
@@ -93,7 +97,7 @@ class PolishService {
         );
       },
       onFinally: (jobHistoryId) => {
-        useTranscriptStore.getState().updateLlmState({
+        useTranscriptSidecarStore.getState().updateLlmState({
           isPolishing: false,
           polishProgress: 0,
         }, jobHistoryId);
@@ -130,10 +134,9 @@ class PolishService {
       jobHistoryId,
       items: polishedSegments,
       logLabel: 'PolishService',
-      getCurrentHistoryId: () => useTranscriptStore.getState().sourceHistoryId || 'current',
+      getCurrentHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId || 'current',
       applyToCurrentTranscript: (items) => {
-        const currentStore = useTranscriptStore.getState();
-        this.applyPolishedSegmentsToCurrentTranscript(items, currentStore);
+        this.applyPolishedSegmentsToCurrentTranscript(items);
       },
       loadTranscript: (filename) => historyService.loadTranscript(filename),
       updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
@@ -146,10 +149,9 @@ class PolishService {
 
   private applyPolishedSegmentsToCurrentTranscript(
     polishedSegments: PolishedSegment[],
-    store: ReturnType<typeof useTranscriptStore.getState>,
   ) {
     polishedSegments.forEach(({ id, text }) => {
-      store.updateSegment(id, { text });
+      updateTranscriptSegment(id, { text });
     });
   }
 }

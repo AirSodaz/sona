@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
 
@@ -180,7 +180,7 @@ function ActiveSegmentWrapper({
 }) {
     // Selector to compute active timestamp directly from store state
     // This avoids re-renders when currentTime changes but the active token remains the same
-    const activeUnitStart = useTranscriptStore(useCallback((state) => {
+    const activeUnitStart = useTranscriptPlaybackStore(useCallback((state) => {
         const currentTime = state.currentTime;
         if (!alignedUnits || currentTime < 0) return -1;
 

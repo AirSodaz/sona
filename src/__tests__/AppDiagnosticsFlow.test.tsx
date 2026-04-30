@@ -68,12 +68,12 @@ vi.mock('../services/diagnosticsService', () => ({
   },
 }));
 
-const mockUseTranscriptStore = vi.fn();
+const mockUseTranscriptRuntimeStore = vi.fn();
 const mockUseProjectStore = vi.fn();
 const mockUseOnboardingStore = vi.fn();
 
-vi.mock('../stores/transcriptStore', () => ({
-  useTranscriptStore: (selector: any) => mockUseTranscriptStore(selector),
+vi.mock('../stores/transcriptRuntimeStore', () => ({
+  useTranscriptRuntimeStore: (selector: any) => mockUseTranscriptRuntimeStore(selector),
 }));
 
 vi.mock('../stores/projectStore', () => ({
@@ -86,9 +86,8 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App diagnostics flow', () => {
   it('closes settings when opening diagnostics and reopens settings on the requested tab', async () => {
-    mockUseTranscriptStore.mockImplementation((selector: any) => selector({
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
-      clearSegments: vi.fn(),
       setMode: vi.fn(),
     }));
     mockUseProjectStore.mockImplementation((selector: any) => selector({

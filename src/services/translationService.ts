@@ -1,5 +1,8 @@
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { updateTranscriptSegment } from '../stores/transcriptCoordinator';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { historyService } from './historyService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import type { AppConfig } from '../types/config';
@@ -58,26 +61,27 @@ class TranslationService {
   }
 
   async translateCurrentTranscript() {
-    const store = useTranscriptStore.getState();
-    const config = store.config;
+    const sessionStore = useTranscriptSessionStore.getState();
+    const sidecarStore = useTranscriptSidecarStore.getState();
+    const config = getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'translation');
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const segments = store.segments;
+    const segments = sessionStore.segments;
     await runTranscriptSegmentTaskJob({
       taskType: 'translate',
       segments,
-      sourceHistoryId: store.sourceHistoryId,
+      sourceHistoryId: sessionStore.sourceHistoryId,
       onStart: (jobHistoryId) => {
-        store.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
+        sidecarStore.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
       },
       onProgress: (translationProgress, jobHistoryId) => {
         // Progress belongs to the job's original record even if the user navigates away
         // before the backend finishes, so keep writing against the captured history id.
-        useTranscriptStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
+        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
         await this.translateSegmentsWithConfig(
@@ -90,17 +94,17 @@ class TranslationService {
         );
       },
       onSuccess: (jobHistoryId) => {
-        useTranscriptStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
+        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
       },
       onError: (jobHistoryId) => {
-        useTranscriptStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
+        useTranscriptSidecarStore.getState().updateLlmState({ translationProgress: 0 }, jobHistoryId);
       },
       onFinally: (jobHistoryId) => {
-        const currentStore = useTranscriptStore.getState();
-        currentStore.updateLlmState({ isTranslating: false }, jobHistoryId);
+        const currentSidecarStore = useTranscriptSidecarStore.getState();
+        currentSidecarStore.updateLlmState({ isTranslating: false }, jobHistoryId);
 
-        if (!currentStore.getLlmState(jobHistoryId).isTranslationVisible) {
-          currentStore.updateLlmState({ isTranslationVisible: true }, jobHistoryId);
+        if (!currentSidecarStore.getLlmState(jobHistoryId).isTranslationVisible) {
+          currentSidecarStore.updateLlmState({ isTranslationVisible: true }, jobHistoryId);
         }
       },
     });
@@ -132,10 +136,9 @@ class TranslationService {
       jobHistoryId,
       items: translations,
       logLabel: 'TranslationService',
-      getCurrentHistoryId: () => useTranscriptStore.getState().sourceHistoryId || 'current',
+      getCurrentHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId || 'current',
       applyToCurrentTranscript: (items) => {
-        const currentStore = useTranscriptStore.getState();
-        this.applyTranslationsToCurrentTranscript(items, currentStore);
+        this.applyTranslationsToCurrentTranscript(items);
       },
       loadTranscript: (filename) => historyService.loadTranscript(filename),
       updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
@@ -148,10 +151,9 @@ class TranslationService {
 
   private applyTranslationsToCurrentTranscript(
     translations: TranslatedSegment[],
-    store: ReturnType<typeof useTranscriptStore.getState>,
   ) {
     translations.forEach(({ id, translation }) => {
-      store.updateSegment(id, { translation });
+      updateTranscriptSegment(id, { translation });
     });
   }
 }

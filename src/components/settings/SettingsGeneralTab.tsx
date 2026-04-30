@@ -10,7 +10,7 @@ import type { BackupManifestV1, BackupWebDavConfig, PreparedBackupImport, Remote
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { useTranscriptStore } from '../../stores/transcriptStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { UIConfig } from '../../types/config';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
@@ -124,7 +124,7 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
     const updateConfig = useSetConfig();
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
-    const isRecording = useTranscriptStore((state) => state.isRecording);
+    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
     const hasBlockingQueueItems = useBatchQueueStore((state) => state.queueItems.some((item) => (
         item.status === 'pending' || item.status === 'processing'
     )));

@@ -10,15 +10,6 @@ vi.mock('../../../utils/exportFormats', () => ({
   formatDisplayTime: (time: number) => `Time: ${time}`
 }));
 
-// Mock transcript store to avoid provider errors
-vi.mock('../../../stores/transcriptStore', () => ({
-  useTranscriptStore: () => {
-    // Return mock active token timestamp or other values as needed
-    // Default to -1 (no active token) unless specifically set
-    return -1;
-  }
-}));
-
 describe('SegmentTokens', () => {
   const mockSegment: TranscriptSegment = {
     id: 'seg-1',

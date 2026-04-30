@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { logger } from '../utils/logger';
 import { formatDisplayTime } from '../utils/exportFormats';
 import { PlayFilledIcon, PauseIcon, VolumeIcon, MuteIcon } from './Icons';
@@ -30,13 +30,13 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
     const audioRef = useRef<HTMLAudioElement>(null);
     const lastUpdateTime = useRef(0);
 
-    const audioUrl = useTranscriptStore((state) => state.audioUrl);
+    const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
     // OPTIMIZATION: Do not subscribe to currentTime in the main component.
-    const isPlaying = useTranscriptStore((state) => state.isPlaying);
-    const setCurrentTime = useTranscriptStore((state) => state.setCurrentTime);
-    const setIsPlaying = useTranscriptStore((state) => state.setIsPlaying);
-    const seekRequest = useTranscriptStore((state) => state.seekRequest);
-    const requestSeek = useTranscriptStore((state) => state.requestSeek);
+    const isPlaying = useTranscriptPlaybackStore((state) => state.isPlaying);
+    const setCurrentTime = useTranscriptPlaybackStore((state) => state.setCurrentTime);
+    const setIsPlaying = useTranscriptPlaybackStore((state) => state.setIsPlaying);
+    const seekRequest = useTranscriptPlaybackStore((state) => state.seekRequest);
+    const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
     const [duration, setDuration] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1.0);

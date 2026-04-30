@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTranscriptStore } from '../stores/transcriptStore';
-import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { setTranscriptSegments } from '../stores/transcriptCoordinator';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { polishService } from '../services/polishService';
 import { retranscribeService } from '../services/retranscribeService';
 import { SparklesIcon, ChevronDownIcon, ProcessingIcon, RestoreIcon, RedoIcon, FileTextIcon, SettingsIcon } from './Icons';
@@ -38,20 +40,19 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
     const [undoSegments, setUndoSegments] = useState<TranscriptSegment[] | null>(null);
     const [redoSegments, setRedoSegments] = useState<TranscriptSegment[] | null>(null);
 
-    const segmentsLength = useTranscriptStore((state) => state.segments.length);
+    const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
 
     // LLM state
-    const sourceHistoryId = useTranscriptStore((state) => state.sourceHistoryId);
+    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
     const currentHistoryItem = useHistoryStore((state) => (
         sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
     ));
-    const llmState = useTranscriptStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
+    const llmState = useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) || { isPolishing: false, polishProgress: 0, isRetranscribing: false, retranscribeProgress: 0 };
     const { isPolishing, polishProgress, isRetranscribing, retranscribeProgress } = llmState;
-    const updateLlmState = useTranscriptStore((state) => state.updateLlmState);
+    const updateLlmState = useTranscriptSidecarStore((state) => state.updateLlmState);
 
-    const config = useConfigStore((state) => state.config);
-    const setSegments = useTranscriptStore((state) => state.setSegments);
-    const segments = useTranscriptStore((state) => state.segments);
+    const config = useEffectiveConfigStore((state) => state.config);
+    const segments = useTranscriptSessionStore((state) => state.segments);
     const canRetranscribeCurrentHistory = !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
     // Close dropdown when clicking outside
@@ -201,7 +202,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
             // Save current state for redo
             setRedoSegments(JSON.parse(JSON.stringify(segments)));
 
-            setSegments(undoSegments);
+            setTranscriptSegments(undoSegments);
             setUndoSegments(null);
             setIsOpen(false);
             triggerRef.current?.focus();
@@ -213,7 +214,7 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
             // Save current state (original) back to undo
             setUndoSegments(JSON.parse(JSON.stringify(segments)));
 
-            setSegments(redoSegments);
+            setTranscriptSegments(redoSegments);
             setRedoSegments(null);
             setIsOpen(false);
             triggerRef.current?.focus();
