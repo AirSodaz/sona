@@ -2,10 +2,11 @@ import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { TranscriptSegment } from '../types/transcript';
 import { AuxWindowController } from './auxWindowController';
+import { TauriEvent } from './tauri/events';
 import { logger } from '../utils/logger';
 
 export const CAPTION_WINDOW_LABEL = 'caption';
-export const CAPTION_EVENT_STATE = 'caption:state';
+export const CAPTION_EVENT_STATE = TauriEvent.auxWindow.captionState;
 const CAPTION_INITIAL_HEIGHT = 120;
 
 export interface CaptionWindowStyle {

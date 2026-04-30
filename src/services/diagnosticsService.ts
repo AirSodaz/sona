@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { getResumeOnboardingStep, hasRequiredOnboardingModels } from '../utils/onboarding';
 import {
   getMicrophonePermissionState,
@@ -22,7 +21,8 @@ import type {
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
 import type { SettingsTab } from '../hooks/useSettingsLogic';
-import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../types/runtime';
+import type { RuntimePathStatus } from '../types/runtime';
+import { getRuntimeEnvironmentStatus } from './tauri/app';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -140,7 +140,7 @@ export const diagnosticsService = {
       getMicrophonePermissionState(),
       probeMicrophoneDeviceOptions(t('settings.mic_auto')),
       probeSystemAudioDeviceOptions(t('settings.mic_auto')),
-      invoke<RuntimeEnvironmentStatus>('get_runtime_environment_status'),
+      getRuntimeEnvironmentStatus(),
       getPathStatusMap([streamingModelPath, offlineModelPath, vadModelPath, punctuationModelPath]),
     ]);
 
@@ -427,7 +427,7 @@ export const diagnosticsService = {
 
     const systemAudioCheck: DiagnosticCheck = systemAudioProbe.available
       ? {
-          id: 'system-audio',
+          id: 'system-audio-capture',
           title: t('settings.diagnostics.system_audio_title', { defaultValue: 'System Audio Capture' }),
           status: 'ready',
           description: t('settings.diagnostics.system_audio_ready', {
@@ -435,7 +435,7 @@ export const diagnosticsService = {
           }),
         }
       : {
-          id: 'system-audio',
+          id: 'system-audio-capture',
           title: t('settings.diagnostics.system_audio_title', { defaultValue: 'System Audio Capture' }),
           status: 'warning',
           description: systemAudioProbe.errorMessage || t('settings.diagnostics.system_audio_warning', {

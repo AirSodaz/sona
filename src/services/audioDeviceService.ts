@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../utils/logger';
+import { getMicrophoneDevices, getSystemAudioDevices } from './tauri/audio';
 
 interface AudioDevice {
   name: string;
@@ -89,7 +89,7 @@ export async function requestMicrophonePermission(): Promise<boolean> {
 
 export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
   try {
-    const nativeDevices = await invoke<AudioDevice[]>('get_microphone_devices');
+    const nativeDevices = await getMicrophoneDevices();
     if (nativeDevices && nativeDevices.length > 0) {
       return {
         options: toNativeDeviceOptions(nativeDevices, defaultLabel),
@@ -170,7 +170,7 @@ export async function listSystemAudioDeviceOptions(defaultLabel: string): Promis
 
 export async function probeSystemAudioDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
   try {
-    const devices = await invoke<AudioDevice[]>('get_system_audio_devices');
+    const devices = await getSystemAudioDevices();
     if (!devices || devices.length === 0) {
       return {
         options: [{ label: defaultLabel, value: 'default' }],

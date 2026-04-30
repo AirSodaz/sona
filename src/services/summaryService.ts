@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import {
   DEFAULT_SUMMARY_TEMPLATE_ID,
@@ -19,9 +18,9 @@ import {
   listenToLlmTaskText,
   SummarizeTranscriptRequest,
   SummarySegmentInput,
-  TranscriptSummaryResult,
 } from './llmTaskService';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
+import { summarizeTranscript } from './tauri/llm';
 
 // Once we have local state, prefer it over re-hydrating from disk. This prevents a late
 // sidecar read from clobbering in-memory edits, streaming text, or template switches.
@@ -199,9 +198,7 @@ class SummaryService {
     });
 
     try {
-      const result = await invoke<TranscriptSummaryResult>('summarize_transcript', {
-        request: this.buildRequest(taskId, resolvedTemplate, segments),
-      });
+      const result = await summarizeTranscript(this.buildRequest(taskId, resolvedTemplate, segments));
 
       const resultTemplateId = coerceSummaryTemplateId(
         result.templateId,

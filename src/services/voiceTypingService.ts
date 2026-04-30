@@ -1,9 +1,17 @@
-import { invoke } from '@tauri-apps/api/core';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { useConfigStore } from '../stores/configStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import { logger } from '../utils/logger';
 import { TranscriptionService } from './transcriptionService';
+import {
+    startMicrophoneCapture,
+    stopMicrophoneCapture,
+} from './tauri/audio';
+import {
+    getMousePosition,
+    getTextCursorPosition,
+    injectText,
+} from './tauri/system';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 
@@ -44,12 +52,7 @@ class VoiceTypingService {
         ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
         injectText: async (text) => {
             const shortcutModifiers = this.getCurrentShortcutModifiers();
-            await invoke('inject_text', shortcutModifiers.length > 0 ? {
-                text,
-                shortcutModifiers,
-            } : {
-                text,
-            });
+            await injectText(text, shortcutModifiers);
         },
         onRuntimeError: (error) => {
             useVoiceTypingRuntimeStore.getState().reportRuntimeError('session', error);
@@ -206,7 +209,7 @@ class VoiceTypingService {
         try {
             const config = useConfigStore.getState().config;
             logger.info('[VoiceTypingService] Starting microphone capture for pre-warming...');
-            await invoke('start_microphone_capture', {
+            await startMicrophoneCapture({
                 deviceName: config.microphoneId === 'default' ? null : config.microphoneId,
                 instanceId: 'voice-typing',
             });
@@ -227,7 +230,7 @@ class VoiceTypingService {
 
         try {
             logger.info('[VoiceTypingService] Stopping persistent microphone capture...');
-            await invoke('stop_microphone_capture', { instanceId: 'voice-typing' });
+            await stopMicrophoneCapture('voice-typing');
             this.captureStarted = false;
         } catch (error) {
             logger.error('[VoiceTypingService] Failed to stop microphone capture:', error);
@@ -369,9 +372,7 @@ class VoiceTypingService {
 
     private async tryGetTextCursorOverlayPosition() {
         try {
-            const cursorPosition = await invoke<[number, number] | null>(
-                'get_text_cursor_position'
-            );
+            const cursorPosition = await getTextCursorPosition();
             if (!cursorPosition) {
                 return null;
             }
@@ -397,7 +398,7 @@ class VoiceTypingService {
             return lastPosition;
         }
 
-        const [x, y] = await invoke<[number, number]>('get_mouse_position');
+        const [x, y] = await getMousePosition();
         return [x - 4, y + MOUSE_POSITION_OFFSET - 4];
     }
 

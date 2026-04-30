@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import type { AppConfig } from '../../types/config';
 import type { LlmConfig, TranscriptSegment } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
@@ -14,10 +13,13 @@ import {
   type TranslateSegmentsRequest,
 } from '../llmTaskService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './runtime';
+import {
+  polishTranscriptSegments,
+  translateTranscriptSegments,
+} from '../tauri/llm';
 
 type SegmentTaskFeature = 'translation' | 'polish';
 type SegmentTaskType = Extract<LlmTaskType, 'translate' | 'polish'>;
-type SegmentTaskCommand = 'translate_transcript_segments' | 'polish_transcript_segments';
 type SegmentTaskItem = PolishedSegment | TranslatedSegment;
 type SegmentTaskRequest = TranslateSegmentsRequest | PolishSegmentsRequest;
 
@@ -28,7 +30,6 @@ interface RunConfiguredSegmentTaskOptions<
 > {
   feature: SegmentTaskFeature;
   taskType: SegmentTaskType;
-  command: SegmentTaskCommand;
   config: TConfig;
   segments: TranscriptSegment[];
   taskIdOverride?: string;
@@ -75,7 +76,6 @@ export async function runConfiguredSegmentTask<
 >({
   feature,
   taskType,
-  command,
   config,
   segments,
   taskIdOverride,
@@ -104,14 +104,17 @@ export async function runConfiguredSegmentTask<
     : () => undefined;
 
   try {
-    const items = await invoke<TItem[]>(command, {
-      request: buildRequest({
-        taskId,
-        llmConfig: resolvedLlmConfig,
-        config,
-        segments,
-      }),
+    const request = buildRequest({
+      taskId,
+      llmConfig: resolvedLlmConfig,
+      config,
+      segments,
     });
+    const items = (
+      taskType === 'translate'
+        ? await translateTranscriptSegments(request as TranslateSegmentsRequest)
+        : await polishTranscriptSegments(request as PolishSegmentsRequest)
+    ) as TItem[];
 
     // Buffered providers still need to reuse the same consumer path so callers
     // do not branch on whether streamed chunk events arrived.

@@ -11,10 +11,11 @@ import type {
 } from '../types/dashboard';
 import type { LlmProvider } from '../types/transcript';
 import { logger } from '../utils/logger';
+import { TauriEvent } from './tauri/events';
 
 const ANALYTICS_DIR = 'analytics';
 const LLM_USAGE_FILE = `${ANALYTICS_DIR}/llm-usage.json`;
-const LLM_USAGE_RECORDED_EVENT = 'llm-usage-recorded';
+const LLM_USAGE_RECORDED_EVENT = TauriEvent.llm.usageRecorded;
 const LLM_USAGE_SCHEMA_VERSION = 1;
 const RECENT_DAILY_WINDOW = 30;
 

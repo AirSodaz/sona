@@ -1,8 +1,13 @@
-import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AutomationRule } from '../types/automation';
+import {
+  collectAutomationRuntimeRulePaths as collectAutomationRuntimeRulePathsTauri,
+  replaceAutomationRuntimeRules as replaceAutomationRuntimeRulesTauri,
+  scanAutomationRuntimeRule as scanAutomationRuntimeRuleTauri,
+} from './tauri/automation';
+import { TauriEvent } from './tauri/events';
 
-export const AUTOMATION_RUNTIME_CANDIDATE_EVENT = 'automation-runtime-candidate';
+export const AUTOMATION_RUNTIME_CANDIDATE_EVENT = TauriEvent.automation.runtimeCandidate;
 export const DEFAULT_AUTOMATION_CANDIDATE_DEBOUNCE_MS = 250;
 export const DEFAULT_AUTOMATION_STABLE_WINDOW_MS = 5000;
 
@@ -60,27 +65,23 @@ export function toAutomationRuntimeRuleConfig(
 export async function replaceAutomationRuntimeRules(
   rules: AutomationRuntimeRuleConfig[],
 ): Promise<AutomationRuntimeReplaceResult[]> {
-  return invoke<AutomationRuntimeReplaceResult[]>('replace_automation_runtime_rules', {
-    rules,
-  });
+  return replaceAutomationRuntimeRulesTauri<AutomationRuntimeReplaceResult[]>(rules);
 }
 
 export async function scanAutomationRuntimeRule(
   rule: AutomationRuntimeRuleConfig,
 ): Promise<void> {
-  await invoke('scan_automation_runtime_rule', {
-    rule,
-  });
+  await scanAutomationRuntimeRuleTauri(rule);
 }
 
 export async function collectAutomationRuntimeRulePaths(
   rule: AutomationRuntimeRuleConfig,
   filePaths: string[],
 ): Promise<AutomationRuntimePathCollectionResult[]> {
-  return invoke<AutomationRuntimePathCollectionResult[]>('collect_automation_runtime_rule_paths', {
+  return collectAutomationRuntimeRulePathsTauri<AutomationRuntimePathCollectionResult[]>(
     rule,
     filePaths,
-  });
+  );
 }
 
 export async function listenToAutomationRuntimeCandidates(

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -24,6 +23,7 @@ import type {
 } from '../types/diagnostics';
 import type { SettingsTab } from '../hooks/useSettingsLogic';
 import { normalizeError } from '../utils/errorUtils';
+import { openLogFolder } from '../services/tauri/app';
 import './PanelModal.css';
 import './DiagnosticsModal.css';
 
@@ -194,7 +194,7 @@ export function DiagnosticsModal({
           onRunFirstRunSetup();
           return;
         case 'open_log_folder':
-          await invoke('open_log_folder');
+          await openLogFolder();
           break;
         case 'request_microphone_permission':
           await requestMicrophonePermission();

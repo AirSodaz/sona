@@ -85,6 +85,7 @@ vi.mock('react-i18next', async () => {
 
 describe('BatchImport Integration', () => {
     beforeEach(() => {
+        vi.useRealTimers();
         localStorage.clear();
         // Reset stores
         useTranscriptStore.setState({

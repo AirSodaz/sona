@@ -1,11 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { invoke } from '@tauri-apps/api/core';
 import packageJson from '../../../package.json';
 import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
 import { logger } from '../../utils/logger';
+import { openLogFolder } from '../../services/tauri/app';
 
 /**
  * Redesigned About page with centered card-based layout.
@@ -14,15 +14,6 @@ import { logger } from '../../utils/logger';
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
     const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate } = useAppUpdater();
-
-    React.useEffect(() => {
-        const handleTrigger = () => {
-            checkUpdate(true);
-        };
-
-        window.addEventListener('trigger-update-check', handleTrigger);
-        return () => window.removeEventListener('trigger-update-check', handleTrigger);
-    }, [checkUpdate]);
 
     const handleOpenHomepage = async () => {
         try {
@@ -34,7 +25,7 @@ export function SettingsAboutTab(): React.JSX.Element {
 
     const handleOpenLogFolder = async () => {
         try {
-            await invoke('open_log_folder');
+            await openLogFolder();
         } catch (error) {
             logger.error('Failed to open log folder:', error);
         }

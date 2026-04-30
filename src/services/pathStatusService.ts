@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
 import type { RuntimePathStatus } from '../types/runtime';
 import { logger } from '../utils/logger';
+import { getPathStatuses } from './tauri/app';
 
 function createUnknownStatus(path: string, error?: string | null): RuntimePathStatus {
   return {
@@ -26,9 +26,7 @@ export async function getPathStatusMap(paths: string[]): Promise<Record<string, 
   }
 
   try {
-    const result = await invoke<RuntimePathStatus[]>('get_path_statuses', {
-      paths: uniquePaths,
-    });
+    const result = await getPathStatuses(uniquePaths);
 
     const pathStatusMap = Object.fromEntries(
       uniquePaths.map((path) => [path, createUnknownStatus(path)]),

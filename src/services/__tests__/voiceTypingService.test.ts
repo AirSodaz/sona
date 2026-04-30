@@ -523,7 +523,7 @@ describe('voiceTypingService', () => {
         onSegment?.({ id: 'seg-1', text: '你好世', isFinal: false });
         await flushMicrotasks(8);
         onSegment?.({ id: 'seg-1', text: '你好世界', isFinal: true });
-        await flushMicrotasks(12);
+        await flushMicrotasks(20);
 
         expect(mocks.windowSendState).toHaveBeenNthCalledWith(
             1,

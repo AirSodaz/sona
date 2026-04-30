@@ -3,11 +3,15 @@ import { captionTranscriptionService, TranscriptionService } from '../services/t
 import { captionWindowService } from '../services/captionWindowService';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import {
+    startSystemAudioCapture,
+    stopSystemAudioCapture,
+} from '../services/tauri/audio';
+import { TauriEvent } from '../services/tauri/events';
 
 export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
     const [isInitializing, setIsInitializing] = useState(false);
@@ -44,7 +48,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
         // Stop Native Capture
         if (usingNativeCaptureRef.current) {
             try {
-                const savedWavPath = await invoke<string>('stop_system_audio_capture', { instanceId: 'caption' });
+                const savedWavPath = await stopSystemAudioCapture('caption');
                 if (savedWavPath) {
                     logger.info('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
                     try {
@@ -113,11 +117,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
                 let nativeSuccess = false;
                 try {
                     logger.info('[CaptionSession] Attempting native system audio capture...');
-                    await invoke('start_system_audio_capture', {
+                    await startSystemAudioCapture({
                         deviceName: config.systemAudioDeviceId === 'default' ? null : config.systemAudioDeviceId,
-                        instanceId: 'caption'
+                        instanceId: 'caption',
                     });
-                    const unlisten = await listen<number>('system-audio', () => {
+                    const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
                         // The Rust backend now feeds itself directly.
                     });
                     systemAudioUnlistenRef.current = unlisten;

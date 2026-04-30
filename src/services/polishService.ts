@@ -46,7 +46,6 @@ class PolishService {
     return runConfiguredSegmentTask({
       feature: 'polish',
       taskType: 'polish',
-      command: 'polish_transcript_segments',
       config,
       segments,
       onChunk: onChunkPolished,

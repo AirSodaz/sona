@@ -2,10 +2,15 @@ import i18n from '../i18n';
 import { logger } from "../utils/logger";
 import { join, appLocalDataDir } from '@tauri-apps/api/path';
 import { mkdir, exists, remove } from '@tauri-apps/plugin-fs';
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import presetModelsData from '../shared/preset-models.json';
 import { extractErrorMessage } from '../utils/errorUtils';
+import {
+    cancelDownload,
+    downloadFile,
+    extractTarBz2,
+} from './tauri/app';
+import { TauriEvent } from './tauri/events';
 
 
 /**
@@ -219,7 +224,7 @@ class ModelService {
         if (signal) {
             signal.addEventListener('abort', async () => {
                 try {
-                    await invoke('cancel_download', { id: downloadId });
+                    await cancelDownload(downloadId);
                 } catch (e) {
                     logger.error('Failed to cancel download:', e);
                 }
@@ -227,7 +232,7 @@ class ModelService {
         }
 
         if (onProgress) {
-            unlisten = await listen<unknown>('download-progress', (event) => {
+            unlisten = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
                 const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
 
                 // Filter by ID
@@ -279,10 +284,10 @@ class ModelService {
                     }
 
                     logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
-                    await invoke('download_file', {
+                    await downloadFile({
                         url: downloadUrl,
                         outputPath: outputPath,
-                        id: downloadId
+                        id: downloadId,
                     });
 
                     downloadSuccess = true;
@@ -340,7 +345,7 @@ class ModelService {
 
         let extractUnlisten: (() => void) | undefined;
         if (onProgress) {
-            extractUnlisten = await listen<string>('extract-progress', (event) => {
+            extractUnlisten = await listen<string>(TauriEvent.app.extractProgress, (event) => {
                 const filename = event.payload;
                 // Truncate filename if too long
                 const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
@@ -435,9 +440,9 @@ class ModelService {
         }
 
         try {
-            await invoke('extract_tar_bz2', {
+            await extractTarBz2({
                 archivePath: archivePath,
-                targetDir: targetDir
+                targetDir: targetDir,
             });
         } catch (error) {
             throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });

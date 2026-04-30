@@ -1,15 +1,19 @@
-import { invoke } from '@tauri-apps/api/core';
+import {
+    clearAuxWindowState,
+    getAuxWindowState,
+    setAuxWindowState,
+} from './tauri/system';
 
 export const auxWindowStateService = {
     async set<T>(label: string, payload: T) {
-        await invoke('set_aux_window_state', { label, payload });
+        await setAuxWindowState(label, payload);
     },
 
     async get<T>(label: string) {
-        return await invoke<T | null>('get_aux_window_state', { label });
+        return await getAuxWindowState<T>(label);
     },
 
     async clear(label: string) {
-        await invoke('clear_aux_window_state', { label });
+        await clearAuxWindowState(label);
     },
 };

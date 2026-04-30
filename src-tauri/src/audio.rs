@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 
+const MICROPHONE_PEAK_EVENT: &str = "microphone-audio";
+const SYSTEM_PEAK_EVENT: &str = "system-audio";
+
 pub enum RecorderCommand {
     Start(String), // filepath
     Stop(tokio::sync::oneshot::Sender<String>),
@@ -1155,7 +1158,7 @@ fn process_mic_audio<R: Runtime>(
                         }
                     }
                     let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                    let _ = window.app_handle().emit("microphone-audio", peak_i16);
+                    let _ = window.app_handle().emit(MICROPHONE_PEAK_EVENT, peak_i16);
                 }
             }
             Err(e) => {
@@ -1280,7 +1283,7 @@ fn process_audio<R: Runtime>(
                         }
                     }
                     let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                    let _ = window.app_handle().emit("system-audio", peak_i16);
+                    let _ = window.app_handle().emit(SYSTEM_PEAK_EVENT, peak_i16);
                 }
             }
             Err(e) => {

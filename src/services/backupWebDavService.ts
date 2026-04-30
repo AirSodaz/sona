@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { join, tempDir } from '@tauri-apps/api/path';
 import { mkdir, remove } from '@tauri-apps/plugin-fs';
 import {
@@ -15,6 +14,12 @@ import type {
   RemoteBackupEntry,
   UploadRemoteBackupResult,
 } from '../types/backup';
+import {
+  webdavDownloadBackup,
+  webdavListBackups,
+  webdavTestConnection,
+  webdavUploadBackup,
+} from './tauri/backup';
 
 function normalizeWebDavConfig(config: Partial<BackupWebDavConfig> | null | undefined): BackupWebDavConfig {
   return {
@@ -117,17 +122,13 @@ export async function saveConfig(config: BackupWebDavConfig): Promise<void> {
 
 export async function testConnection(config?: BackupWebDavConfig): Promise<BackupWebDavTestResult> {
   const resolvedConfig = await resolveWebDavConfig(config);
-  return invoke<BackupWebDavTestResult>('webdav_test_connection', {
-    config: resolvedConfig,
-  });
+  return webdavTestConnection(resolvedConfig);
 }
 
 export async function listBackups(config?: BackupWebDavConfig): Promise<RemoteBackupEntry[]> {
   ensureCloudTransferOperationsIdle();
   const resolvedConfig = await resolveWebDavConfig(config);
-  const entries = await invoke<RemoteBackupEntry[]>('webdav_list_backups', {
-    config: resolvedConfig,
-  });
+  const entries = await webdavListBackups(resolvedConfig);
   return normalizeRemoteEntries(entries);
 }
 
@@ -143,10 +144,7 @@ export async function uploadBackup(config?: BackupWebDavConfig): Promise<UploadR
       throw new Error('Backup export was cancelled before the archive was created.');
     }
 
-    await invoke('webdav_upload_backup', {
-      config: resolvedConfig,
-      localArchivePath: archivePath,
-    });
+    await webdavUploadBackup(resolvedConfig, archivePath);
 
     return {
       fileName: result.archivePath.split(/[/\\]/).pop() || buildDefaultBackupFileName(),
@@ -167,11 +165,7 @@ export async function prepareImportFromRemote(
   const archivePath = await join(tempDownloadDir, entry.fileName);
 
   try {
-    await invoke('webdav_download_backup', {
-      config: resolvedConfig,
-      href: entry.href,
-      outputPath: archivePath,
-    });
+    await webdavDownloadBackup(resolvedConfig, entry.href, archivePath);
 
     return await prepareImportBackup({ archivePath }) as PreparedBackupImport;
   } finally {

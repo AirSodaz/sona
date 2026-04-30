@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import {
@@ -6,6 +5,10 @@ import {
   type SpeakerProcessingConfig,
   type SpeakerProfileSample,
 } from '../types/speaker';
+import {
+  annotateSpeakerSegmentsFromFile,
+  importSpeakerProfileSample,
+} from './tauri/speaker';
 
 type SpeakerConfigInput = Pick<
   AppConfig,
@@ -48,11 +51,7 @@ class SpeakerService {
       return segments;
     }
 
-    return invoke<TranscriptSegment[]>('annotate_speaker_segments_from_file', {
-      filePath,
-      segments,
-      speakerProcessing,
-    });
+    return annotateSpeakerSegmentsFromFile(filePath, segments, speakerProcessing);
   }
 
   async importProfileSample(
@@ -60,11 +59,7 @@ class SpeakerService {
     sourcePath: string,
     sourceName?: string,
   ): Promise<SpeakerProfileSample> {
-    return invoke<SpeakerProfileSample>('import_speaker_profile_sample', {
-      profileId,
-      sourcePath,
-      sourceName: sourceName || null,
-    });
+    return importSpeakerProfileSample(profileId, sourcePath, sourceName);
   }
 }
 

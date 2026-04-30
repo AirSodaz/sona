@@ -1,10 +1,28 @@
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { v4 as uuidv4 } from 'uuid';
 import { HistoryItem } from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
+import {
+    historyCompleteLiveDraft,
+    historyCreateLiveDraft,
+    historyDeleteItems,
+    historyDeleteSummary,
+    historyListItems,
+    historyLoadSummary,
+    historyLoadTranscript,
+    historyOpenFolder,
+    historyReassignProject,
+    historyResolveAudioPath,
+    historySaveImportedFile,
+    historySaveRecording,
+    historySaveSummary,
+    historyUpdateItemMeta,
+    historyUpdateProjectAssignments,
+    historyUpdateTranscript,
+} from './tauri/history';
 
 export interface LiveRecordingDraftHandle {
     item: HistoryItem;
@@ -42,7 +60,7 @@ function buildDraftAudioFileName(id: string, audioExtension: string): string {
 export const historyService = {
     async getAll(): Promise<HistoryItem[]> {
         try {
-            const items = await invoke<Partial<HistoryItem>[]>('history_list_items');
+            const items = await historyListItems();
             return Array.isArray(items) ? items.map((item) => normalizeHistoryItem(item)) : [];
         } catch (error) {
             logger.error('[History] Failed to load history:', error);
@@ -73,9 +91,7 @@ export const historyService = {
             draftSource: 'live_record',
         };
 
-        const result = await invoke<LiveRecordingDraftHandle>('history_create_live_draft', {
-            item,
-        });
+        const result = await historyCreateLiveDraft(item);
 
         return {
             item: normalizeHistoryItem(result?.item),
@@ -90,13 +106,13 @@ export const historyService = {
     ): Promise<HistoryItem> {
         const normalizedSegments = normalizeTranscriptSegments(segments);
         const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
-        const item = await invoke<Partial<HistoryItem>>('history_complete_live_draft', {
+        const item = await historyCompleteLiveDraft(
             historyId,
-            segments: normalizedSegments,
+            normalizedSegments,
             previewText,
             searchContent,
             duration,
-        });
+        );
 
         return normalizeHistoryItem(item);
     },
@@ -125,7 +141,7 @@ export const historyService = {
             const normalizedSegments = normalizeTranscriptSegments(segments);
             const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
-            const item = await invoke<Partial<HistoryItem>>('history_save_recording', {
+            const item = await historySaveRecording({
                 item: {
                     id,
                     timestamp,
@@ -170,7 +186,7 @@ export const historyService = {
             const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
             const audioBytes = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
 
-            const item = await invoke<Partial<HistoryItem>>('history_save_recording', {
+            const item = await historySaveRecording({
                 item: {
                     id,
                     timestamp,
@@ -217,7 +233,7 @@ export const historyService = {
             const normalizedSegments = normalizeTranscriptSegments(segments);
             const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
-            const item = await invoke<Partial<HistoryItem>>('history_save_imported_file', {
+            const item = await historySaveImportedFile({
                 item: {
                     id,
                     timestamp,
@@ -244,7 +260,7 @@ export const historyService = {
 
     async deleteRecording(id: string): Promise<void> {
         try {
-            await invoke('history_delete_items', { ids: [id] });
+            await historyDeleteItems([id]);
         } catch (error) {
             logger.error('Failed to delete recording:', error);
         }
@@ -252,7 +268,7 @@ export const historyService = {
 
     async deleteRecordings(ids: string[]): Promise<void> {
         try {
-            await invoke('history_delete_items', { ids });
+            await historyDeleteItems(ids);
         } catch (error) {
             logger.error('Failed to delete recordings:', error);
             throw error;
@@ -261,7 +277,7 @@ export const historyService = {
 
     async loadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
         try {
-            const raw = await invoke<unknown>('history_load_transcript', { filename });
+            const raw = await historyLoadTranscript(filename);
             if (!Array.isArray(raw)) {
                 return raw === null ? null : normalizeTranscriptSegments([]);
             }
@@ -277,12 +293,7 @@ export const historyService = {
         try {
             const normalizedSegments = normalizeTranscriptSegments(segments);
             const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
-            await invoke('history_update_transcript', {
-                historyId,
-                segments: normalizedSegments,
-                previewText,
-                searchContent,
-            });
+            await historyUpdateTranscript(historyId, normalizedSegments, previewText, searchContent);
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
             throw error;
@@ -290,7 +301,7 @@ export const historyService = {
     },
 
     async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {
-        await invoke('history_update_item_meta', { historyId: id, updates });
+        await historyUpdateItemMeta(id, updates);
     },
 
     async updateProjectAssignments(ids: string[], projectId: string | null): Promise<void> {
@@ -298,19 +309,19 @@ export const historyService = {
             return;
         }
 
-        await invoke('history_update_project_assignments', { ids, projectId });
+        await historyUpdateProjectAssignments(ids, projectId);
     },
 
     async updateProjectAssignmentsByCurrentProject(
         currentProjectId: string,
         nextProjectId: string | null,
     ): Promise<void> {
-        await invoke('history_reassign_project', { currentProjectId, nextProjectId });
+        await historyReassignProject(currentProjectId, nextProjectId);
     },
 
     async loadSummary(historyId: string): Promise<HistorySummaryPayload | null> {
         try {
-            return await invoke<HistorySummaryPayload | null>('history_load_summary', { historyId });
+            return await historyLoadSummary(historyId);
         } catch (error) {
             logger.error('[History] Failed to load summary sidecar:', error);
             return null;
@@ -319,7 +330,7 @@ export const historyService = {
 
     async saveSummary(historyId: string, summaryPayload: HistorySummaryPayload): Promise<void> {
         try {
-            await invoke('history_save_summary', { historyId, summaryPayload });
+            await historySaveSummary(historyId, summaryPayload);
         } catch (error) {
             logger.error('[History] Failed to save summary sidecar:', error);
             throw error;
@@ -328,7 +339,7 @@ export const historyService = {
 
     async deleteSummary(historyId: string): Promise<void> {
         try {
-            await invoke('history_delete_summary', { historyId });
+            await historyDeleteSummary(historyId);
         } catch (error) {
             logger.error('[History] Failed to delete summary sidecar:', error);
         }
@@ -336,7 +347,7 @@ export const historyService = {
 
     async getAudioAbsolutePath(filename: string): Promise<string | null> {
         try {
-            return await invoke<string | null>('history_resolve_audio_path', { filename });
+            return await historyResolveAudioPath(filename);
         } catch (error) {
             logger.error('Failed to get audio absolute path:', error);
             return null;
@@ -355,7 +366,7 @@ export const historyService = {
 
     async openHistoryFolder(): Promise<void> {
         try {
-            await invoke('history_open_folder');
+            await historyOpenFolder();
         } catch (error) {
             logger.error('[History] Failed to open history folder:', error);
         }

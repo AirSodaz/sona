@@ -1,19 +1,18 @@
 import { useEffect } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { forceExitWithGuard } from '../services/quitGuard';
 import { SettingsTab } from './useSettingsLogic';
 import { logger } from '../utils/logger';
+import { useAppUpdaterStore } from '../stores/appUpdaterStore';
+import { updateTrayMenu } from '../services/tauri/app';
+import { TauriEvent } from '../services/tauri/events';
 
 /**
  * Hook to handle system tray events.
  *
- * Listens for:
- * - 'open-settings': Opens settings modal on default tab.
- * - 'check-updates': Opens settings modal on update tab and triggers check.
- * - 'request-quit': Checks for active tasks and confirms before quitting.
+ * Routes tray actions into the existing settings, caption, updater, and quit flows.
  */
 export function useTrayHandling(
     setIsSettingsOpen: (open: boolean) => void,
@@ -26,7 +25,7 @@ export function useTrayHandling(
     useEffect(() => {
         const updateTray = async () => {
             try {
-                await invoke('update_tray_menu', {
+                await updateTrayMenu({
                     showText: t('tray.show'),
                     settingsText: t('tray.settings'),
                     updatesText: t('tray.check_updates'),
@@ -47,7 +46,7 @@ export function useTrayHandling(
 
         const setupListeners = async () => {
             try {
-                const unlistenOpenSettings = await listen('open-settings', () => {
+                const unlistenOpenSettings = await listen(TauriEvent.tray.openSettings, () => {
                     if (!isMounted) return;
                     setSettingsInitialTab('general');
                     setIsSettingsOpen(true);
@@ -55,7 +54,7 @@ export function useTrayHandling(
                 if (isMounted) unlistenFunctions.push(unlistenOpenSettings);
                 else unlistenOpenSettings();
 
-                const unlistenToggleCaption = await listen('toggle-caption', () => {
+                const unlistenToggleCaption = await listen(TauriEvent.tray.toggleCaption, () => {
                     if (!isMounted) return;
                     const currentMode = useTranscriptStore.getState().isCaptionMode;
                     useTranscriptStore.getState().setIsCaptionMode(!currentMode);
@@ -63,19 +62,16 @@ export function useTrayHandling(
                 if (isMounted) unlistenFunctions.push(unlistenToggleCaption);
                 else unlistenToggleCaption();
 
-                const unlistenCheckUpdates = await listen('check-updates', () => {
+                const unlistenCheckUpdates = await listen(TauriEvent.tray.checkUpdates, () => {
                     if (!isMounted) return;
                     setSettingsInitialTab('about');
                     setIsSettingsOpen(true);
-                    // Emit a custom window event that SettingsAboutTab can listen to
-                    setTimeout(() => {
-                        window.dispatchEvent(new CustomEvent('trigger-update-check'));
-                    }, 500);
+                    void useAppUpdaterStore.getState().checkUpdate(true);
                 });
                 if (isMounted) unlistenFunctions.push(unlistenCheckUpdates);
                 else unlistenCheckUpdates();
 
-                const unlistenRequestQuit = await listen('request-quit', async () => {
+                const unlistenRequestQuit = await listen(TauriEvent.tray.requestQuit, async () => {
                     if (!isMounted) return;
                     try {
                         await forceExitWithGuard();

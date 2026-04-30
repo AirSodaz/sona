@@ -1,8 +1,9 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { AuxWindowController } from './auxWindowController';
+import { TauriEvent } from './tauri/events';
 
 export const VOICE_TYPING_WINDOW_LABEL = 'voice-typing';
-export const VOICE_TYPING_EVENT_TEXT = 'voice-typing:text';
+export const VOICE_TYPING_EVENT_TEXT = TauriEvent.auxWindow.voiceTypingText;
 export const VOICE_TYPING_WINDOW_WIDTH = 400;
 export const VOICE_TYPING_WINDOW_INITIAL_HEIGHT = 80;
 const VOICE_TYPING_WINDOW_SIZE = {

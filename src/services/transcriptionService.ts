@@ -1,5 +1,4 @@
 import { logger } from "../utils/logger";
-import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
@@ -10,6 +9,15 @@ import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import { normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import { buildRecognizerOutputEvent } from './tauri/events';
+import {
+    feedAudioChunk,
+    flushRecognizer,
+    initRecognizer,
+    processBatchFile,
+    startRecognizer,
+    stopRecognizer,
+} from './tauri/recognizer';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -79,7 +87,7 @@ export class TranscriptionService {
     private static async ensureGlobalBusFor(instanceId: string) {
         if (this.globalListeners.has(instanceId)) return;
 
-        const eventName = `recognizer-output-${instanceId}`;
+        const eventName = buildRecognizerOutputEvent(instanceId);
         const unlisten = await listen<TranscriptUpdate>(eventName, (event) => {
             const update = normalizeTranscriptUpdate(event.payload);
             const instance = this.instanceCallbacks.get(instanceId);
@@ -316,7 +324,7 @@ export class TranscriptionService {
                     enableTimeline: this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
                 };
 
-                await invoke('init_recognizer', {
+                await initRecognizer({
                     instanceId: this.instanceId,
                     modelPath: configToUse.modelPath,
                     numThreads: 4,
@@ -354,7 +362,7 @@ export class TranscriptionService {
             return;
         }
         try {
-            await invoke('start_recognizer', { instanceId: this.instanceId });
+            await startRecognizer(this.instanceId);
             this.isRunning = true;
         } catch (error) {
             logger.error(`[TranscriptionService:${this.instanceId}] Failed to start stream:`, error);
@@ -412,7 +420,7 @@ export class TranscriptionService {
     async stop(): Promise<void> {
         if (!this.isRunning) return;
         try {
-            await invoke('stop_recognizer', { instanceId: this.instanceId });
+            await stopRecognizer(this.instanceId);
         } finally {
             this.isRunning = false;
         }
@@ -421,7 +429,7 @@ export class TranscriptionService {
     async softStop(): Promise<void> {
         if (this.isRunning) {
             try {
-                await invoke('flush_recognizer', { instanceId: this.instanceId });
+                await flushRecognizer(this.instanceId);
             } catch (error) {
                 logger.error('Flush failed:', error);
             }
@@ -466,7 +474,7 @@ export class TranscriptionService {
         if (!this.isRunning) return;
         try {
             const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
-            await invoke('feed_audio_chunk', { instanceId: this.instanceId, samples: bytes });
+            await feedAudioChunk(this.instanceId, bytes);
         } catch (error) {
             logger.error('Feed audio failed:', error);
         }
@@ -538,7 +546,7 @@ export class TranscriptionService {
             .filter(text => text.trim() !== '') || [];
         const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : null;
 
-        const segments = await invoke<TranscriptSegment[]>('process_batch_file', {
+        const segments = await processBatchFile({
             filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
             language: language || this.language || 'auto', punctuationModel: punctuationPathToUse || null,
             vadModel: vadPathToUse || null, vadBuffer: vadBufferToUse, modelType: offlineModel?.type || 'sensevoice',

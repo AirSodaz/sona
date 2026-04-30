@@ -88,7 +88,7 @@ describe('SettingsAboutTab', () => {
     render(<SettingsAboutTab />);
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent('trigger-update-check'));
+      screen.getByRole('button', { name: 'settings.about_check_updates' }).click();
       await Promise.resolve();
     });
 

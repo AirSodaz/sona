@@ -4,7 +4,6 @@ import { Volume2, SlidersHorizontal } from 'lucide-react';
 import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useAudioConfig, useSetConfig } from '../../stores/configStore';
@@ -14,6 +13,14 @@ import {
     listMicrophoneDeviceOptions,
     listSystemAudioDeviceOptions,
 } from '../../services/audioDeviceService';
+import {
+    setMicrophoneBoost,
+    startMicrophoneCapture,
+    startSystemAudioCapture,
+    stopMicrophoneCapture,
+    stopSystemAudioCapture,
+} from '../../services/tauri/audio';
+import { TauriEvent } from '../../services/tauri/events';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { logger } from '../../utils/logger';
 
@@ -71,11 +78,15 @@ export function SettingsMicrophoneTab({
         isPaused: false
     });
 
+    type PreviewCaptureKind = 'microphone' | 'system';
+
     const stopPreviewCapture = useCallback(async (
-        command: 'stop_microphone_capture' | 'stop_system_audio_capture',
+        kind: PreviewCaptureKind,
         instanceId: 'test_mic' | 'test_system'
     ) => {
-        const path = await invoke<string>(command, { instanceId });
+        const path = kind === 'microphone'
+            ? await stopMicrophoneCapture(instanceId)
+            : await stopSystemAudioCapture(instanceId);
         if (path) {
             await remove(path).catch(logger.error);
         }
@@ -163,7 +174,7 @@ export function SettingsMicrophoneTab({
 
     // Sync Microphone Boost to Rust backend
     useEffect(() => {
-        invoke('set_microphone_boost', { boost: microphoneBoost }).catch(logger.error);
+        setMicrophoneBoost(microphoneBoost).catch(logger.error);
     }, [microphoneBoost]);
 
     const startMicrophonePreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
@@ -178,21 +189,21 @@ export function SettingsMicrophoneTab({
             let captureStarted = false;
 
             if (!isActiveSession) {
-                await invoke('start_microphone_capture', {
+                await startMicrophoneCapture({
                     deviceName: deviceId === 'default' ? null : deviceId,
-                    instanceId: 'test_mic'
+                    instanceId: 'test_mic',
                 });
                 captureStarted = true;
             }
 
             if (!isCurrentRequest()) {
                 if (captureStarted) {
-                    await stopPreviewCapture('stop_microphone_capture', 'test_mic');
+                    await stopPreviewCapture('microphone', 'test_mic');
                 }
                 return;
             }
 
-            const unlisten = await listen<number>('microphone-audio', (event) => {
+            const unlisten = await listen<number>(TauriEvent.audio.microphonePeak, (event) => {
                 if (!isCurrentRequest()) return;
                 micTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
             });
@@ -200,7 +211,7 @@ export function SettingsMicrophoneTab({
             if (!isCurrentRequest()) {
                 unlisten();
                 if (captureStarted) {
-                    await stopPreviewCapture('stop_microphone_capture', 'test_mic');
+                    await stopPreviewCapture('microphone', 'test_mic');
                 }
                 return;
             }
@@ -227,21 +238,21 @@ export function SettingsMicrophoneTab({
             let captureStarted = false;
 
             if (!isActiveSession) {
-                await invoke('start_system_audio_capture', {
+                await startSystemAudioCapture({
                     deviceName: deviceId === 'default' ? null : deviceId,
-                    instanceId: 'test_system'
+                    instanceId: 'test_system',
                 });
                 captureStarted = true;
             }
 
             if (!isCurrentRequest()) {
                 if (captureStarted) {
-                    await stopPreviewCapture('stop_system_audio_capture', 'test_system');
+                    await stopPreviewCapture('system', 'test_system');
                 }
                 return;
             }
 
-            const unlisten = await listen<number>('system-audio', (event) => {
+            const unlisten = await listen<number>(TauriEvent.audio.systemPeak, (event) => {
                 if (!isCurrentRequest()) return;
                 systemTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
             });
@@ -249,7 +260,7 @@ export function SettingsMicrophoneTab({
             if (!isCurrentRequest()) {
                 unlisten();
                 if (captureStarted) {
-                    await stopPreviewCapture('stop_system_audio_capture', 'test_system');
+                    await stopPreviewCapture('system', 'test_system');
                 }
                 return;
             }
@@ -270,7 +281,7 @@ export function SettingsMicrophoneTab({
             nativeUnlistenRef.current = null;
         }
         if (usingNativeMicRef.current && startedMicCaptureRef.current) {
-            void stopPreviewCapture('stop_microphone_capture', 'test_mic').catch(logger.error);
+            void stopPreviewCapture('microphone', 'test_mic').catch(logger.error);
         }
         usingNativeMicRef.current = false;
         startedMicCaptureRef.current = false;
@@ -286,7 +297,7 @@ export function SettingsMicrophoneTab({
         }
 
         if (startedSystemCaptureRef.current) {
-            void stopPreviewCapture('stop_system_audio_capture', 'test_system').catch(logger.error);
+            void stopPreviewCapture('system', 'test_system').catch(logger.error);
         }
         startedSystemCaptureRef.current = false;
     }, [clearQueuedSystemPreviewFrame, stopPreviewCapture, stopSystemWaveAnimation]);

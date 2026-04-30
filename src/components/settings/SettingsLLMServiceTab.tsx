@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
 import { Check, Loader2, X, ChevronDown, ChevronRight, Settings2, Sparkles, Globe, AlignLeft } from 'lucide-react';
 import { RobotIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
@@ -31,6 +30,10 @@ import {
 } from '../../services/llm/providers';
 import { SettingsTabContainer, SettingsPageHeader, SettingsSection } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
+import {
+  generateLlmText,
+  listLlmModels,
+} from '../../services/tauri/llm';
 
 function getCurrentLlmSettings(config: LlmAssistantConfig) {
   return config.llmSettings ?? ensureLlmState(config).llmSettings;
@@ -158,9 +161,7 @@ function FeatureCard({
     }
     setIsLoadingCandidates(true);
     try {
-      const result = await invoke<string[]>('list_llm_models', {
-        request: { provider, baseUrl: setting.apiHost, apiKey: setting.apiKey },
-      });
+      const result = await listLlmModels({ provider, baseUrl: setting.apiHost, apiKey: setting.apiKey });
       setModelCandidates(Array.isArray(result) ? result : []);
     } catch {
       setModelCandidates([]);
@@ -417,13 +418,11 @@ function ProviderAccordionItem({ provider, config, isOpen, onToggle, applyProvid
       
       const testProviderConfig = { ...providerConfig, model: testModel };
 
-      await invoke<string>('generate_llm_text', {
-        request: {
-          config: testProviderConfig,
-          input: 'Hello, this is a connection test.',
-          source: 'connection_test',
-        } satisfies LlmGenerateCommandRequest,
-      });
+      await generateLlmText({
+        config: testProviderConfig,
+        input: 'Hello, this is a connection test.',
+        source: 'connection_test',
+      } satisfies LlmGenerateCommandRequest);
       setTestStatus('success');
       setTestMessage(testModel);
       // Reset back to idle after 3 seconds

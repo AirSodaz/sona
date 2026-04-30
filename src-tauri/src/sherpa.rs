@@ -9,6 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+const BATCH_PROGRESS_EVENT: &str = "batch-progress";
+
+fn recognizer_output_event(instance_id: &str) -> String {
+    format!("recognizer-output-{instance_id}")
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelFileConfig {
@@ -1599,7 +1605,7 @@ fn emit_transcript_update<R: tauri::Runtime>(
     stage: &str,
     first_segment_emitted: Option<&Arc<AtomicBool>>,
 ) {
-    let event_name = format!("recognizer-output-{}", instance_id);
+    let event_name = recognizer_output_event(instance_id);
     for segment in &update.upsert_segments {
         log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
     }
@@ -2698,7 +2704,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     let progress_file_path = request.file_path.clone();
 
     transcribe_batch_with_progress(&request, |progress| {
-        let _ = app.emit("batch-progress", &(progress_file_path.as_str(), progress));
+        let _ = app.emit(BATCH_PROGRESS_EVENT, &(progress_file_path.as_str(), progress));
     })
     .await
 }

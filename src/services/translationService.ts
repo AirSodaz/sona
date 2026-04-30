@@ -44,7 +44,6 @@ class TranslationService {
     return runConfiguredSegmentTask({
       feature: 'translation',
       taskType: 'translate',
-      command: 'translate_transcript_segments',
       config,
       segments,
       onChunk: onChunkTranslated,

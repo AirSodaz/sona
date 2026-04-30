@@ -1,10 +1,11 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { v4 as uuidv4 } from 'uuid';
 import { LlmConfig, ResolvedSummaryTemplate, SummaryTemplateId } from '../types/transcript';
+import { TauriEvent } from './tauri/events';
 
-export const LLM_TASK_PROGRESS_EVENT = 'llm-task-progress';
-export const LLM_TASK_CHUNK_EVENT = 'llm-task-chunk';
-export const LLM_TASK_TEXT_EVENT = 'llm-task-text';
+export const LLM_TASK_PROGRESS_EVENT = TauriEvent.llm.taskProgress;
+export const LLM_TASK_CHUNK_EVENT = TauriEvent.llm.taskChunk;
+export const LLM_TASK_TEXT_EVENT = TauriEvent.llm.taskText;
 
 export type LlmTaskType = 'polish' | 'translate' | 'summary';
 

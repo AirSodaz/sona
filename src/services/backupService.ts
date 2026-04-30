@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { BaseDirectory, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import packageJson from '../../package.json';
@@ -28,6 +27,12 @@ import { normalizeProjectRecord } from '../types/project';
 import type { ProjectRecord } from '../types/project';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import {
+  applyPreparedHistoryImport,
+  disposePreparedBackupImport,
+  exportBackupArchive,
+  prepareBackupImport,
+} from './tauri/backup';
 
 const APP_LOCAL_ANALYTICS_DIR = 'analytics';
 const APP_LOCAL_ANALYTICS_USAGE_FILE = `${APP_LOCAL_ANALYTICS_DIR}/llm-usage.json`;
@@ -322,16 +327,14 @@ export async function exportBackup(options?: {
     loadAnalyticsContentForBackup(),
   ]);
 
-  const manifest = await invoke<BackupManifestV1>('export_backup_archive', {
-    request: {
-      archivePath,
-      appVersion: packageJson.version,
-      config,
-      projects,
-      automationRules,
-      automationProcessedEntries,
-      analyticsContent,
-    },
+  const manifest = await exportBackupArchive<BackupManifestV1>({
+    archivePath,
+    appVersion: packageJson.version,
+    config,
+    projects,
+    automationRules,
+    automationProcessedEntries,
+    analyticsContent,
   });
 
   return {
@@ -350,14 +353,12 @@ export async function prepareImportBackup(options?: {
     return null;
   }
 
-  const prepared = await invoke<PreparedBackupImportPayload>('prepare_backup_import', {
-    archivePath,
-  });
+  const prepared = await prepareBackupImport<PreparedBackupImportPayload>(archivePath);
   return normalizePreparedImport(prepared);
 }
 
 export async function disposePreparedImport(prepared: PreparedBackupImport): Promise<void> {
-  await invoke('dispose_prepared_backup_import', { importId: prepared.importId });
+  await disposePreparedBackupImport(prepared.importId);
 }
 
 export async function applyImportBackup(prepared: PreparedBackupImport): Promise<void> {
@@ -378,7 +379,7 @@ export async function applyImportBackup(prepared: PreparedBackupImport): Promise
     await saveAutomationRules(prepared.automationRules);
     await saveAutomationProcessedEntries(prepared.automationProcessedEntries);
     await writeAnalyticsImport(prepared.analyticsContent);
-    await invoke('apply_prepared_history_import', { importId: prepared.importId });
+    await applyPreparedHistoryImport(prepared.importId);
 
     await useProjectStore.getState().loadProjects();
     await useHistoryStore.getState().loadItems();

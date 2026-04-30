@@ -19,6 +19,13 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, Notify};
 
+const EXTRACT_PROGRESS_EVENT: &str = "extract-progress";
+const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress";
+const TRAY_OPEN_SETTINGS_EVENT: &str = "open-settings";
+const TRAY_TOGGLE_CAPTION_EVENT: &str = "toggle-caption";
+const TRAY_CHECK_UPDATES_EVENT: &str = "check-updates";
+const TRAY_REQUEST_QUIT_EVENT: &str = "request-quit";
+
 /// State managed by Tauri to track active downloads and allow cancellation.
 struct DownloadState {
     /// Maps download IDs to notification triggers for cancellation.
@@ -386,7 +393,7 @@ async fn extract_tar_bz2<R: tauri::Runtime>(
             if last_emit.elapsed().as_millis() > 100 {
                 let path = entry.path().map_err(|e| e.to_string())?;
                 let path_str = path.to_string_lossy().to_string();
-                let _ = app.emit("extract-progress", &path_str);
+                let _ = app.emit(EXTRACT_PROGRESS_EVENT, &path_str);
                 last_emit = Instant::now();
             }
 
@@ -572,7 +579,7 @@ async fn download_file<R: tauri::Runtime>(
                 if total_size > 0
                     && (downloaded == total_size || last_emit.elapsed().as_millis() >= 100)
                 {
-                    let _ = app.emit("download-progress", (downloaded, total_size, &id));
+                    let _ = app.emit(DOWNLOAD_PROGRESS_EVENT, (downloaded, total_size, &id));
                     last_emit = std::time::Instant::now();
                 }
             }
@@ -739,7 +746,7 @@ pub fn run() {
                         }
                         "toggle_caption" => {
                             if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.emit("toggle-caption", ());
+                                let _ = window.emit(TRAY_TOGGLE_CAPTION_EVENT, ());
                             }
                         }
                         "settings" => {
@@ -747,7 +754,7 @@ pub fn run() {
                                 let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.emit("open-settings", ());
+                                let _ = window.emit(TRAY_OPEN_SETTINGS_EVENT, ());
                             }
                         }
                         "check_updates" => {
@@ -755,7 +762,7 @@ pub fn run() {
                                 let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.emit("check-updates", ());
+                                let _ = window.emit(TRAY_CHECK_UPDATES_EVENT, ());
                             }
                         }
                         "quit" => {
@@ -763,7 +770,7 @@ pub fn run() {
                                 let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.emit("request-quit", ());
+                                let _ = window.emit(TRAY_REQUEST_QUIT_EVENT, ());
                             }
                         }
                         _ => {}
@@ -809,7 +816,7 @@ pub fn run() {
                     }
                     MainWindowCloseAction::RequestQuit => {
                         api.prevent_close();
-                        let _ = window.emit("request-quit", ());
+                        let _ = window.emit(TRAY_REQUEST_QUIT_EVENT, ());
                     }
                 }
             }

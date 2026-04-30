@@ -1,9 +1,12 @@
-import { invoke } from '@tauri-apps/api/core';
 import i18n from '../i18n';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
+import {
+  forceExit,
+  hasActiveDownloads,
+} from './tauri/app';
 
 type TranscriptQuitTaskSnapshot = Pick<
   ReturnType<typeof useTranscriptStore.getState>,
@@ -50,15 +53,6 @@ export function hasActiveFrontendQuitTasks(
   );
 }
 
-async function hasActiveDownloads(): Promise<boolean> {
-  try {
-    return await invoke<boolean>('has_active_downloads');
-  } catch (error) {
-    logger.error('Failed to check downloads before quit:', error);
-    return false;
-  }
-}
-
 export async function shouldWarnBeforeQuit(
   transcriptState: TranscriptQuitTaskSnapshot = useTranscriptStore.getState(),
   batchQueueState: BatchQueueQuitTaskSnapshot = useBatchQueueStore.getState(),
@@ -67,7 +61,12 @@ export async function shouldWarnBeforeQuit(
     return true;
   }
 
-  return hasActiveDownloads();
+  try {
+    return await hasActiveDownloads();
+  } catch (error) {
+    logger.error('Failed to check downloads before quit:', error);
+    return false;
+  }
 }
 
 export async function runGuardedQuit(onExit: () => Promise<void>): Promise<boolean> {
@@ -95,6 +94,6 @@ export async function runGuardedQuit(onExit: () => Promise<void>): Promise<boole
 
 export async function forceExitWithGuard(): Promise<boolean> {
   return runGuardedQuit(async () => {
-    await invoke('force_exit');
+    await forceExit();
   });
 }

@@ -1,6 +1,16 @@
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { transcriptionService } from '../../services/transcriptionService';
+import {
+    setMicrophoneBoost as setMicrophoneBoostTauri,
+    setMicrophoneCapturePaused,
+    setSystemAudioCapturePaused,
+    setSystemAudioMute as setSystemAudioMuteTauri,
+    startMicrophoneCapture,
+    startSystemAudioCapture,
+    stopMicrophoneCapture,
+    stopSystemAudioCapture,
+} from '../../services/tauri/audio';
+import { TauriEvent } from '../../services/tauri/events';
 import type { TranscriptUpdate } from '../../types/transcript';
 import { shouldFeedWebAudioForPhase } from './timing';
 import type {
@@ -60,15 +70,31 @@ export function createAudioRecorderCapture({
     setIsRecording,
     setIsPaused,
 }: CreateAudioRecorderCaptureArgs) {
-    function getActiveStopCommand(): 'stop_system_audio_capture' | 'stop_microphone_capture' {
-        return refs.activeInputSourceRef.current === 'desktop'
-            ? 'stop_system_audio_capture'
-            : 'stop_microphone_capture';
+    type NativePeakEventName =
+        | typeof TauriEvent.audio.systemPeak
+        | typeof TauriEvent.audio.microphonePeak;
+
+    function isDesktopCaptureActive(): boolean {
+        return refs.activeInputSourceRef.current === 'desktop';
+    }
+
+    async function stopActiveNativeCapture(instanceId: string): Promise<string> {
+        return isDesktopCaptureActive()
+            ? stopSystemAudioCapture(instanceId)
+            : stopMicrophoneCapture(instanceId);
+    }
+
+    async function setActiveNativeCapturePaused(instanceId: string, paused: boolean): Promise<void> {
+        await (
+            isDesktopCaptureActive()
+                ? setSystemAudioCapturePaused({ instanceId, paused })
+                : setMicrophoneCapturePaused({ instanceId, paused })
+        );
     }
 
     async function setSystemAudioMute(mute: boolean, errorMessage: string): Promise<void> {
         try {
-            await invoke('set_system_audio_mute', { mute });
+            await setSystemAudioMuteTauri(mute);
         } catch (error) {
             logger.error(errorMessage, error);
         }
@@ -89,12 +115,16 @@ export function createAudioRecorderCapture({
                 refs.nativeAudioUnlistenRef.current();
                 refs.nativeAudioUnlistenRef.current = null;
             }
-            const stopCmd = getActiveStopCommand();
             try {
-                await invoke(stopCmd, { instanceId: 'record' });
-                logger.info(`[useAudioRecorder] Rolled back native capture. session=${sessionId} command=${stopCmd}`);
+                await stopActiveNativeCapture('record');
+                logger.info(
+                    `[useAudioRecorder] Rolled back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
+                );
             } catch (error) {
-                logger.warn(`[useAudioRecorder] Failed to roll back native capture. session=${sessionId} command=${stopCmd}`, error);
+                logger.warn(
+                    `[useAudioRecorder] Failed to roll back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`,
+                    error,
+                );
             }
             refs.usingNativeCaptureRef.current = false;
         }
@@ -119,7 +149,7 @@ export function createAudioRecorderCapture({
     }
 
     async function attachNativePeakListener(
-        eventName: 'system-audio' | 'microphone-audio',
+        eventName: NativePeakEventName,
         sessionId: string,
     ): Promise<boolean> {
         try {
@@ -230,14 +260,14 @@ export function createAudioRecorderCapture({
             // a race condition where audio feeds Sherpa before it is ready.
             await initializeNativeSession(sessionId);
 
-            await invoke('start_system_audio_capture', {
+            await startSystemAudioCapture({
                 deviceName,
                 instanceId: 'record',
                 outputPath,
             });
             refs.usingNativeCaptureRef.current = true;
 
-            const peakListenerAttached = await attachNativePeakListener('system-audio', sessionId);
+            const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.systemPeak, sessionId);
             logger.info(
                 `[useAudioRecorder] Record session capture attached. session=${sessionId} source=desktop transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
             );
@@ -262,7 +292,7 @@ export function createAudioRecorderCapture({
         try {
             logger.info(`[useAudioRecorder] Attempting native microphone capture. session=${sessionId}`);
 
-            await invoke('set_microphone_boost', { boost: options.boost }).catch((error) => {
+            await setMicrophoneBoostTauri(options.boost).catch((error) => {
                 logger.warn(`[useAudioRecorder] Failed to set initial microphone boost. session=${sessionId}:`, error);
             });
 
@@ -270,14 +300,14 @@ export function createAudioRecorderCapture({
             // a race condition where audio feeds Sherpa before it is ready.
             await initializeNativeSession(sessionId);
 
-            await invoke('start_microphone_capture', {
+            await startMicrophoneCapture({
                 deviceName: options.deviceName,
                 instanceId: 'record',
                 outputPath: options.outputPath,
             });
             refs.usingNativeCaptureRef.current = true;
 
-            const peakListenerAttached = await attachNativePeakListener('microphone-audio', sessionId);
+            const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.microphonePeak, sessionId);
             logger.info(
                 `[useAudioRecorder] Record session capture attached. session=${sessionId} source=microphone transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
             );
@@ -407,7 +437,7 @@ export function createAudioRecorderCapture({
                 refs.nativeAudioUnlistenRef.current = null;
             }
             try {
-                savedWavPath = await invoke<string>(getActiveStopCommand(), { instanceId: 'record' });
+                savedWavPath = await stopActiveNativeCapture('record');
                 logger.info('[useAudioRecorder] Saved raw audio to:', savedWavPath);
             } catch (error) {
                 logger.error(`[useAudioRecorder] Failed to stop native capture. session=${sessionId}:`, error);
@@ -428,14 +458,9 @@ export function createAudioRecorderCapture({
 
     async function pauseCapture(sessionId: string): Promise<void> {
         if (refs.usingNativeCaptureRef.current) {
-            await invoke(
-                refs.activeInputSourceRef.current === 'desktop'
-                    ? 'set_system_audio_capture_paused'
-                    : 'set_microphone_capture_paused',
-                { instanceId: 'record', paused: true },
-            );
+            await setActiveNativeCapturePaused('record', true);
             logger.info(
-                `[useAudioRecorder] Paused native capture instance. session=${sessionId} command=${refs.activeInputSourceRef.current === 'desktop' ? 'set_system_audio_capture_paused' : 'set_microphone_capture_paused'}`
+                `[useAudioRecorder] Paused native capture instance. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
             );
             return;
         }
@@ -450,14 +475,9 @@ export function createAudioRecorderCapture({
 
     async function resumeCapture(sessionId: string): Promise<void> {
         if (refs.usingNativeCaptureRef.current) {
-            await invoke(
-                refs.activeInputSourceRef.current === 'desktop'
-                    ? 'set_system_audio_capture_paused'
-                    : 'set_microphone_capture_paused',
-                { instanceId: 'record', paused: false },
-            );
+            await setActiveNativeCapturePaused('record', false);
             logger.info(
-                `[useAudioRecorder] Resumed native capture instance. session=${sessionId} command=${refs.activeInputSourceRef.current === 'desktop' ? 'set_system_audio_capture_paused' : 'set_microphone_capture_paused'}`
+                `[useAudioRecorder] Resumed native capture instance. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
             );
             return;
         }

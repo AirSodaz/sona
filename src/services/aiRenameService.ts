@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/runtime';
@@ -6,6 +5,7 @@ import { normalizeError } from '../utils/errorUtils';
 import i18n from '../i18n';
 import { TranscriptSegment } from '../types/transcript';
 import type { LlmGenerateCommandRequest } from '../types/dashboard';
+import { generateLlmText } from './tauri/llm';
 
 /**
  * Constructs a prompt for the AI to generate a title based on a transcript snippet.
@@ -49,13 +49,11 @@ export async function generateAiTitle(segments: TranscriptSegment[]): Promise<st
     const prompt = buildPrompt(textSnippet);
 
     try {
-        const title = await invoke<string>('generate_llm_text', {
-            request: {
-                config: llmConfig,
-                input: prompt,
-                source: 'title_generation',
-            } satisfies LlmGenerateCommandRequest,
-        });
+        const title = await generateLlmText({
+            config: llmConfig,
+            input: prompt,
+            source: 'title_generation',
+        } satisfies LlmGenerateCommandRequest);
         // Basic cleanup: remove surrounding quotes and extra whitespace
         return title.trim().replace(/^["']|["']$/g, '');
     } catch (error) {
