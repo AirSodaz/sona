@@ -9,7 +9,7 @@ describe('computeSegmentsFingerprint', () => {
             { id: '2', text: 'World', start: 1, end: 2, isFinal: true }
         ];
         const fingerprint = computeSegmentsFingerprint(segments);
-        expect(fingerprint).toBe('1:Hello:0:1:true:::::|2:World:1:2:true:::::');
+        expect(fingerprint).toBe('1:Hello:0:1:true::::::|2:World:1:2:true::::::');
     });
 
     it('returns a different fingerprint when translation changes', () => {
@@ -69,6 +69,41 @@ describe('computeSegmentsFingerprint', () => {
 
         expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
     });
+
+    it('returns a different fingerprint when speaker attribution changes', () => {
+        const segments1: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+            }
+        ];
+        const segments2: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+                speakerAttribution: {
+                    groupId: 'anonymous-1',
+                    anonymousLabel: 'Speaker 1',
+                    state: 'suggested',
+                    source: 'auto',
+                    confidence: 'medium',
+                    candidates: [
+                        { profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 },
+                    ],
+                },
+            }
+        ];
+
+        expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
+    });
 });
 
 describe('computeSummarySourceFingerprint', () => {
@@ -110,5 +145,40 @@ describe('computeSummarySourceFingerprint', () => {
         ];
 
         expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
+    });
+
+    it('ignores speaker attribution-only changes when visible speaker labels stay the same', () => {
+        const segments1: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+            }
+        ];
+        const segments2: TranscriptSegment[] = [
+            {
+                id: '1',
+                text: 'Hello',
+                start: 0,
+                end: 1,
+                isFinal: true,
+                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+                speakerAttribution: {
+                    groupId: 'anonymous-1',
+                    anonymousLabel: 'Speaker 1',
+                    state: 'suggested',
+                    source: 'auto',
+                    confidence: 'medium',
+                    candidates: [
+                        { profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 },
+                    ],
+                },
+            }
+        ];
+
+        expect(computeSummarySourceFingerprint(segments1)).toBe(computeSummarySourceFingerprint(segments2));
     });
 });

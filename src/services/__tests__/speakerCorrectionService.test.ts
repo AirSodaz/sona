@@ -111,6 +111,14 @@ describe('speakerCorrectionService', () => {
           text: 'Hello',
           isFinal: true,
           speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'anonymous',
+            source: 'auto',
+            confidence: 'low',
+            candidates: [],
+          },
         },
         {
           id: 'seg-2',
@@ -119,6 +127,14 @@ describe('speakerCorrectionService', () => {
           text: 'world',
           isFinal: true,
           speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'anonymous',
+            source: 'auto',
+            confidence: 'low',
+            candidates: [],
+          },
         },
         {
           id: 'seg-3',
@@ -127,6 +143,14 @@ describe('speakerCorrectionService', () => {
           text: 'Other',
           isFinal: true,
           speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
+          speakerAttribution: {
+            groupId: 'anonymous-2',
+            anonymousLabel: 'Speaker 2',
+            state: 'anonymous',
+            source: 'auto',
+            confidence: 'low',
+            candidates: [],
+          },
         },
       ],
     }));
@@ -137,10 +161,24 @@ describe('speakerCorrectionService', () => {
       expect.objectContaining({
         id: 'seg-1',
         speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'identified',
+          source: 'manual',
+          confidence: 'high',
+        }),
       }),
       expect.objectContaining({
         id: 'seg-2',
         speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'identified',
+          source: 'manual',
+          confidence: 'high',
+        }),
       }),
       expect.objectContaining({
         id: 'seg-3',
@@ -164,10 +202,118 @@ describe('speakerCorrectionService', () => {
         id: 'seg-1',
         text: 'Hello world',
         speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+        }),
       }),
       expect.objectContaining({
         id: 'seg-3',
         speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
+      }),
+    ]);
+  });
+
+  it('targets speaker corrections by group id instead of the visible speaker id', async () => {
+    useTranscriptSessionStore.setState((state) => ({
+      ...state,
+      sourceHistoryId: 'history-2',
+      segments: [
+        {
+          id: 'seg-a',
+          start: 0,
+          end: 1,
+          text: 'First Alice',
+          isFinal: true,
+          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'identified',
+            source: 'manual',
+            confidence: 'high',
+            candidates: [],
+          },
+        },
+        {
+          id: 'seg-b',
+          start: 1,
+          end: 2,
+          text: 'Second Alice',
+          isFinal: true,
+          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+          speakerAttribution: {
+            groupId: 'anonymous-2',
+            anonymousLabel: 'Speaker 2',
+            state: 'identified',
+            source: 'manual',
+            confidence: 'high',
+            candidates: [],
+          },
+        },
+      ],
+    }));
+
+    await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-3');
+
+    expect(useTranscriptSessionStore.getState().segments).toEqual([
+      expect.objectContaining({
+        id: 'seg-a',
+        speaker: { id: 'speaker-3', label: 'Carol', kind: 'identified' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'seg-b',
+        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-2',
+          anonymousLabel: 'Speaker 2',
+        }),
+      }),
+    ]);
+  });
+
+  it('can reset a corrected group back to its anonymous label', async () => {
+    useTranscriptSessionStore.setState((state) => ({
+      ...state,
+      sourceHistoryId: 'history-3',
+      segments: [
+        {
+          id: 'seg-a',
+          start: 0,
+          end: 1,
+          text: 'Hello',
+          isFinal: true,
+          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'identified',
+            source: 'manual',
+            confidence: 'high',
+            candidates: [
+              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
+            ],
+          },
+        },
+      ],
+    }));
+
+    await speakerCorrectionService.resetGroupToAnonymous('anonymous-1');
+
+    expect(useTranscriptSessionStore.getState().segments).toEqual([
+      expect.objectContaining({
+        id: 'seg-a',
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'anonymous',
+          source: 'manual',
+          confidence: 'low',
+        }),
       }),
     ]);
   });

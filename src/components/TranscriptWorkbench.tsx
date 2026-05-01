@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { History as VersionHistoryIcon } from 'lucide-react';
+import { History as VersionHistoryIcon, Users as SpeakerReviewIcon } from 'lucide-react';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
@@ -10,6 +10,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { TranscriptEditor } from './TranscriptEditor';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
+import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
 import { RenameModal } from './RenameModal';
 import { PolishButton } from './PolishButton';
 import { TranslateButton } from './TranslateButton';
@@ -57,6 +58,7 @@ function renderHeaderIcon(icon: string | null, defaultType: string): React.React
 export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconType }: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isSpeakerReviewOpen, setIsSpeakerReviewOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
@@ -150,6 +152,18 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
                 <SummaryIcon />
               </button>
             )}
+            {hasSegments && (
+              <button
+                className="btn btn-icon btn-sm"
+                type="button"
+                onClick={() => setIsSpeakerReviewOpen(true)}
+                aria-label={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
+                data-tooltip={t('editor.speaker_review_title', { defaultValue: 'Speaker Review' })}
+                data-tooltip-pos="bottom"
+              >
+                <SpeakerReviewIcon size={16} />
+              </button>
+            )}
             {showVersionButton && (
               <button
                 className="btn btn-icon btn-sm"
@@ -196,6 +210,11 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
       <TranscriptSummaryPanel 
         isOpen={isSummaryOpen} 
         onClose={() => setIsSummaryOpen(false)} 
+      />
+
+      <TranscriptSpeakerReviewPanel
+        isOpen={isSpeakerReviewOpen}
+        onClose={() => setIsSpeakerReviewOpen(false)}
       />
 
       <TranscriptVersionPanel

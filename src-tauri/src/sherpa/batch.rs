@@ -183,6 +183,7 @@ where
                         durations,
                         translation: None,
                         speaker: None,
+                        speaker_attribution: None,
                     });
                 }
             }
@@ -247,6 +248,7 @@ where
                         durations,
                         translation: None,
                         speaker: None,
+                        speaker_attribution: None,
                     });
                 }
             }
@@ -289,6 +291,7 @@ where
                 durations,
                 translation: None,
                 speaker: None,
+                speaker_attribution: None,
             });
         }
     }

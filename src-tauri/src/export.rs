@@ -181,6 +181,7 @@ mod tests {
                     kind: "identified".to_string(),
                     score: Some(0.88),
                 }),
+                speaker_attribution: None,
             },
             TranscriptSegment {
                 id: "2".to_string(),
@@ -194,6 +195,7 @@ mod tests {
                 durations: None,
                 translation: None,
                 speaker: None,
+                speaker_attribution: None,
             },
         ]
     }

@@ -139,6 +139,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                 durations,
                 translation: None,
                 speaker: None,
+                speaker_attribution: None,
             };
             let update = build_transcript_update(segment, normalization_options);
             emit_transcript_update(
@@ -437,6 +438,7 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                         durations,
                         translation: None,
                         speaker: None,
+                        speaker_attribution: None,
                     };
                     let update = build_transcript_update(segment, instance.normalization_options);
                     emit_transcript_update(
@@ -768,6 +770,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         durations,
                         translation: None,
                         speaker: None,
+                        speaker_attribution: None,
                     };
                     let update = build_transcript_update(segment, instance.normalization_options);
                     emit_transcript_update(
@@ -819,6 +822,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             durations,
                             translation: None,
                             speaker: None,
+                            speaker_attribution: None,
                         };
                         let update =
                             build_transcript_update(segment, instance.normalization_options);

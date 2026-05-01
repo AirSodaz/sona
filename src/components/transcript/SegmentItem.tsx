@@ -183,6 +183,9 @@ function SegmentItemComponent({
         [activeProject, speakerProfiles],
     );
     const hasSecondarySpeakerProfiles = speakerProfileSections.secondaryProfiles.length > 0;
+    const speakerGroupId = segment.speakerAttribution?.groupId || segment.speaker?.id || '';
+    const speakerCandidates = segment.speakerAttribution?.candidates || [];
+    const canResetSpeakerGroup = Boolean(segment.speakerAttribution && segment.speakerAttribution.state !== 'anonymous');
 
     useEffect(() => {
         if (isEditing && inputRef.current) {
@@ -280,13 +283,36 @@ function SegmentItemComponent({
     }
 
     async function handleSpeakerProfileSelect(profileId: string): Promise<void> {
-        if (!segment.speaker?.id) {
+        if (!speakerGroupId) {
             return;
         }
 
         try {
             setIsApplyingSpeakerProfile(true);
-            await speakerCorrectionService.assignProfileToSpeakerGroup(segment.speaker.id, profileId);
+            await speakerCorrectionService.assignProfileToSpeakerGroup(speakerGroupId, profileId);
+            closeSpeakerMenu();
+        } catch (error) {
+            await showError({
+                code: 'speaker_correction.apply_failed',
+                messageKey: 'editor.speaker_correction_failed',
+                messageParams: {
+                    defaultValue: 'Failed to update speaker labels for this transcript.',
+                },
+                cause: error,
+            });
+        } finally {
+            setIsApplyingSpeakerProfile(false);
+        }
+    }
+
+    async function handleResetSpeakerGroup(): Promise<void> {
+        if (!speakerGroupId) {
+            return;
+        }
+
+        try {
+            setIsApplyingSpeakerProfile(true);
+            await speakerCorrectionService.resetGroupToAnonymous(speakerGroupId);
             closeSpeakerMenu();
         } catch (error) {
             await showError({
@@ -366,6 +392,23 @@ function SegmentItemComponent({
                                     </div>
                                 ) : (
                                     <>
+                                        {speakerCandidates.length > 0 && (
+                                            <div className="speaker-correction-list">
+                                                {speakerCandidates.map((candidate) => (
+                                                    <button
+                                                        key={`${segment.id}-${candidate.profileId}`}
+                                                        type="button"
+                                                        className="speaker-correction-option"
+                                                        role="menuitem"
+                                                        disabled={isApplyingSpeakerProfile}
+                                                        onClick={() => void handleSpeakerProfileSelect(candidate.profileId)}
+                                                    >
+                                                        {candidate.profileName}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         <div className="speaker-correction-list">
                                             {speakerProfileSections.primaryProfiles.map((profile) => (
                                                 <button
@@ -380,6 +423,20 @@ function SegmentItemComponent({
                                                 </button>
                                             ))}
                                         </div>
+
+                                        {canResetSpeakerGroup && (
+                                            <div className="speaker-correction-secondary">
+                                                <button
+                                                    type="button"
+                                                    className="speaker-correction-expand"
+                                                    onClick={() => void handleResetSpeakerGroup()}
+                                                >
+                                                    {t('editor.speaker_review_reset', {
+                                                        defaultValue: 'Restore anonymous label',
+                                                    })}
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {hasSecondarySpeakerProfiles && (
                                             <div className="speaker-correction-secondary">

@@ -5,6 +5,7 @@ import type {
   TranscriptTimingUnit,
   TranscriptUpdate,
 } from '../types/transcript';
+import { normalizeSpeakerAttribution } from '../types/speaker';
 
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
 const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
@@ -295,6 +296,7 @@ export function normalizeTranscriptSegment(segment: TranscriptSegment): Transcri
   return {
     ...normalizedBase,
     timing: coerceTiming(normalizedBase),
+    speakerAttribution: normalizeSpeakerAttribution(segment.speakerAttribution),
   };
 }
 

@@ -62,4 +62,37 @@ describe('transcriptDiff', () => {
       [segment('1', 0, 'one')],
     ).map((row) => row.status)).toEqual(['unchanged', 'removed']);
   });
+
+  it('treats speaker attribution changes as modified rows', () => {
+    const rows = buildTranscriptDiffRows(
+      [{
+        ...segment('1', 0, 'hello'),
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'anonymous',
+          source: 'auto',
+          confidence: 'low',
+          candidates: [],
+        },
+      }],
+      [{
+        ...segment('1', 0, 'hello'),
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'suggested',
+          source: 'auto',
+          confidence: 'medium',
+          candidates: [{ profileId: 'alice', profileName: 'Alice', score: 0.76, rank: 1 }],
+        },
+      }],
+    );
+
+    expect(rows).toEqual([
+      expect.objectContaining({ status: 'modified', snapshotIndex: 0, currentIndex: 0 }),
+    ]);
+  });
 });

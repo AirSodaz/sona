@@ -96,6 +96,7 @@ export const useTranscriptSessionStore = create<TranscriptSessionState>((set, ge
       text: `${first.text} ${second.text}`.trim(),
       isFinal: first.isFinal && second.isFinal,
       speaker: first.speaker,
+      speakerAttribution: first.speakerAttribution,
     };
 
     set((currentState) => ({

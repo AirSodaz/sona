@@ -39,6 +39,10 @@ vi.mock('../TranscriptSummaryPanel', () => ({
   TranscriptSummaryPanel: () => null,
 }));
 
+vi.mock('../TranscriptSpeakerReviewPanel', () => ({
+  TranscriptSpeakerReviewPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptSpeakerReviewPanel</div> : null),
+}));
+
 vi.mock('../TranscriptVersionPanel', () => ({
   TranscriptVersionPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptVersionPanel</div> : null),
 }));
@@ -132,6 +136,16 @@ describe('TranscriptWorkbench', () => {
     });
 
     expect(screen.getByText('TranscriptVersionPanel')).toBeDefined();
+  });
+
+  it('opens the speaker review panel from the detail header', async () => {
+    render(<TranscriptWorkbench onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'editor.speaker_review_title' }));
+    });
+
+    expect(screen.getByText('TranscriptSpeakerReviewPanel')).toBeDefined();
   });
 
   it('disables rename and close while recording is active', async () => {

@@ -470,9 +470,31 @@ export function findSegmentForTime(segments: TranscriptSegment[], time: number):
     return findSegmentAndIndexForTime(segments, time).segment;
 }
 
+function fingerprintSpeakerAttribution(segment: TranscriptSegment): string {
+    const attribution = segment.speakerAttribution;
+    if (!attribution) {
+        return '';
+    }
+
+    const candidates = attribution.candidates
+        .map((candidate) => (
+            `${candidate.profileId}:${candidate.profileName}:${candidate.score}:${candidate.rank}`
+        ))
+        .join(',');
+
+    return [
+        attribution.groupId,
+        attribution.anonymousLabel,
+        attribution.state,
+        attribution.source,
+        attribution.confidence,
+        candidates,
+    ].join(':');
+}
+
 export function computeSegmentsFingerprint(segments: TranscriptSegment[]): string {
     return segments.map(s =>
-        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}:${s.speaker?.score || ''}`
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.translation || ''}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}:${s.speaker?.score || ''}:${fingerprintSpeakerAttribution(s)}`
     ).join('|');
 }
 

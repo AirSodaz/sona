@@ -1,10 +1,30 @@
 export type SpeakerKind = 'anonymous' | 'identified';
+export type SpeakerAttributionState = 'identified' | 'suggested' | 'anonymous';
+export type SpeakerAttributionSource = 'auto' | 'manual';
+export type SpeakerAttributionConfidence = 'high' | 'medium' | 'low';
+export type SpeakerProfileReadinessState = 'not_ready' | 'limited' | 'ready';
 
 export interface SpeakerTag {
   id: string;
   label: string;
   kind: SpeakerKind;
   score?: number;
+}
+
+export interface SpeakerCandidate {
+  profileId: string;
+  profileName: string;
+  score: number;
+  rank: number;
+}
+
+export interface SpeakerAttribution {
+  groupId: string;
+  anonymousLabel: string;
+  state: SpeakerAttributionState;
+  source: SpeakerAttributionSource;
+  confidence: SpeakerAttributionConfidence;
+  candidates: SpeakerCandidate[];
 }
 
 export interface SpeakerProfileSample {
@@ -21,6 +41,13 @@ export interface SpeakerProfile {
   samples: SpeakerProfileSample[];
 }
 
+export interface SpeakerProfileReadiness {
+  state: SpeakerProfileReadinessState;
+  usableSampleCount: number;
+  usableDurationSeconds: number;
+  reasonKey: string;
+}
+
 export interface SpeakerProcessingConfig {
   speakerSegmentationModelPath?: string;
   speakerEmbeddingModelPath?: string;
@@ -29,6 +56,10 @@ export interface SpeakerProcessingConfig {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export function normalizeSpeakerTag(input: unknown): SpeakerTag | undefined {
@@ -51,6 +82,68 @@ export function normalizeSpeakerTag(input: unknown): SpeakerTag | undefined {
     label: source.label.trim(),
     kind,
     score,
+  };
+}
+
+export function normalizeSpeakerCandidate(input: unknown): SpeakerCandidate | null {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  const source = input as Partial<SpeakerCandidate>;
+  if (!isNonEmptyString(source.profileId) || !isNonEmptyString(source.profileName)) {
+    return null;
+  }
+
+  const score = toFiniteNumber(source.score);
+  const rank = toFiniteNumber(source.rank);
+  if (score === null || rank === null) {
+    return null;
+  }
+
+  return {
+    profileId: source.profileId.trim(),
+    profileName: source.profileName.trim(),
+    score,
+    rank: Math.max(1, Math.floor(rank)),
+  };
+}
+
+export function normalizeSpeakerAttribution(input: unknown): SpeakerAttribution | undefined {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+
+  const source = input as Partial<SpeakerAttribution>;
+  if (!isNonEmptyString(source.groupId) || !isNonEmptyString(source.anonymousLabel)) {
+    return undefined;
+  }
+
+  const state: SpeakerAttributionState = source.state === 'identified'
+    ? 'identified'
+    : source.state === 'suggested'
+      ? 'suggested'
+      : 'anonymous';
+  const sourceValue: SpeakerAttributionSource = source.source === 'manual' ? 'manual' : 'auto';
+  const confidence: SpeakerAttributionConfidence = source.confidence === 'high'
+    ? 'high'
+    : source.confidence === 'medium'
+      ? 'medium'
+      : 'low';
+  const candidates = Array.isArray(source.candidates)
+    ? source.candidates
+        .map((candidate) => normalizeSpeakerCandidate(candidate))
+        .filter((candidate): candidate is SpeakerCandidate => !!candidate)
+        .slice(0, 3)
+    : [];
+
+  return {
+    groupId: source.groupId.trim(),
+    anonymousLabel: source.anonymousLabel.trim(),
+    state,
+    source: sourceValue,
+    confidence,
+    candidates,
   };
 }
 
@@ -106,6 +199,37 @@ export function normalizeSpeakerProfiles(input: unknown): SpeakerProfile[] {
   return input
     .map((profile) => normalizeSpeakerProfile(profile))
     .filter((profile): profile is SpeakerProfile => !!profile);
+}
+
+export function deriveSpeakerProfileReadiness(profile: SpeakerProfile): SpeakerProfileReadiness {
+  const usableSamples = profile.samples.filter((sample) => sample.durationSeconds >= 4);
+  const usableDurationSeconds = usableSamples
+    .reduce((sum, sample) => sum + sample.durationSeconds, 0);
+
+  if (usableSamples.length >= 2 && usableDurationSeconds >= 20) {
+    return {
+      state: 'ready',
+      usableSampleCount: usableSamples.length,
+      usableDurationSeconds,
+      reasonKey: 'settings.speaker_profile_readiness_ready',
+    };
+  }
+
+  if (usableSamples.length >= 1 && usableDurationSeconds >= 8) {
+    return {
+      state: 'limited',
+      usableSampleCount: usableSamples.length,
+      usableDurationSeconds,
+      reasonKey: 'settings.speaker_profile_readiness_limited',
+    };
+  }
+
+  return {
+    state: 'not_ready',
+    usableSampleCount: usableSamples.length,
+    usableDurationSeconds,
+    reasonKey: 'settings.speaker_profile_readiness_not_ready',
+  };
 }
 
 export function areSpeakerTagsEqual(

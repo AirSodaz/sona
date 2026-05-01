@@ -9,6 +9,7 @@ import { useDialogStore } from '../../stores/dialogStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { type ProjectDefaults } from '../../types/project';
 import {
+  deriveSpeakerProfileReadiness,
   normalizeSpeakerProfiles,
   type SpeakerProfile,
   type SpeakerProfileSample,
@@ -233,14 +234,28 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
             {t('settings.no_speaker_profiles', { defaultValue: 'No speaker profiles yet.' })}
           </div>
         ) : (
-          profiles.map((profile, index) => (
-            <div
-              key={profile.id}
-              style={{
-                borderBottom: index === profiles.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
-                background: profile.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
-              }}
-            >
+          profiles.map((profile, index) => {
+            const readiness = deriveSpeakerProfileReadiness(profile);
+            const readinessCopy = readiness.state === 'ready'
+              ? t('settings.speaker_profile_readiness_ready', {
+                  defaultValue: 'Ready for automatic matching',
+                })
+              : readiness.state === 'limited'
+                ? t('settings.speaker_profile_readiness_limited', {
+                    defaultValue: 'Can appear as a suggestion, but needs more usable samples before automatic matching.',
+                  })
+                : t('settings.speaker_profile_readiness_not_ready', {
+                    defaultValue: 'Needs more usable samples before it can participate in speaker recognition.',
+                  });
+
+            return (
+              <div
+                key={profile.id}
+                style={{
+                  borderBottom: index === profiles.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
+                  background: profile.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
+                }}
+              >
               <div
                 style={{
                   display: 'flex',
@@ -270,6 +285,9 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                       defaultValue: `${profile.samples.length} samples`,
                     })}
                   </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                    {readinessCopy}
+                  </span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }} onClick={(event) => event.stopPropagation()}>
@@ -296,60 +314,68 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                   flexDirection: 'column',
                   gap: '12px',
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                      {t('settings.speaker_profile_samples_hint', {
-                        defaultValue: 'Import one or more local reference clips. They will be normalized to 16k mono WAV and stored under app-managed data.',
-                      })}
-                    </p>
-                    <button
-                      className="btn btn-secondary-soft"
-                      onClick={() => void handleImportSamples(profile)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <Upload size={16} />
-                      {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
-                    </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                    {t('settings.speaker_profile_samples_hint', {
+                      defaultValue: 'Import one or more local reference clips. They will be normalized to 16k mono WAV and stored under app-managed data.',
+                    })}
+                  </p>
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                    {t('settings.speaker_profile_readiness_meta', {
+                      usable: readiness.usableSampleCount,
+                      duration: formatSampleDuration(readiness.usableDurationSeconds),
+                      defaultValue: `${readiness.usableSampleCount} usable samples · ${formatSampleDuration(readiness.usableDurationSeconds)}`,
+                    })}
                   </div>
+                  <button
+                    className="btn btn-secondary-soft"
+                    onClick={() => void handleImportSamples(profile)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Upload size={16} />
+                    {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
+                  </button>
+                </div>
 
-                  {profile.samples.length === 0 ? (
-                    <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                      {t('settings.no_speaker_samples', { defaultValue: 'No reference samples imported yet.' })}
-                    </div>
-                  ) : (
-                    profile.samples.map((sample) => (
-                      <div
-                        key={sample.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          padding: '10px 12px',
-                          background: 'var(--color-bg-secondary)',
-                          borderRadius: 'var(--radius-md)',
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 500 }}>{sample.sourceName}</div>
-                          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-                            {formatSampleDuration(sample.durationSeconds)}
-                          </div>
+                {profile.samples.length === 0 ? (
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                    {t('settings.no_speaker_samples', { defaultValue: 'No reference samples imported yet.' })}
+                  </div>
+                ) : (
+                  profile.samples.map((sample) => (
+                    <div
+                      key={sample.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '10px 12px',
+                        background: 'var(--color-bg-secondary)',
+                        borderRadius: 'var(--radius-md)',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500 }}>{sample.sourceName}</div>
+                        <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                          {formatSampleDuration(sample.durationSeconds)}
                         </div>
-
-                        <button
-                          className="btn btn-icon btn-danger-soft"
-                          onClick={() => void handleDeleteSample(profile.id, sample.id)}
-                          aria-label={t('common.delete')}
-                        >
-                          <Trash2 size={14} />
-                        </button>
                       </div>
-                    ))
-                  )}
+
+                      <button
+                        className="btn btn-icon btn-danger-soft"
+                        onClick={() => void handleDeleteSample(profile.id, sample.id)}
+                        aria-label={t('common.delete')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
                 </div>
               )}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
     </SettingsSection>

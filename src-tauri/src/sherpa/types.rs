@@ -92,4 +92,6 @@ pub struct TranscriptSegment {
     pub translation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<crate::speaker::SpeakerTag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_attribution: Option<crate::speaker::SpeakerAttribution>,
 }

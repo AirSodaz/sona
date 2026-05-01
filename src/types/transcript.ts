@@ -3,7 +3,7 @@
  * This is the "source of truth" for all transcription data.
  */
 import type { SummaryTemplateId as TranscriptSummaryTemplateId } from './llm';
-import type { SpeakerTag } from './speaker';
+import type { SpeakerAttribution, SpeakerTag } from './speaker';
 
 export type TranscriptTimingLevel = 'token' | 'segment';
 export type TranscriptTimingSource = 'model' | 'derived';
@@ -49,6 +49,8 @@ export interface TranscriptSegment {
   translation?: string;
   /** Optional speaker metadata kept separate from transcript text. */
   speaker?: SpeakerTag;
+  /** Optional speaker attribution metadata used for correction and review flows. */
+  speakerAttribution?: SpeakerAttribution;
 }
 
 export interface TranscriptUpdate {

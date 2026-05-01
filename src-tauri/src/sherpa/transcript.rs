@@ -474,6 +474,7 @@ where
                 durations: current_durations,
                 translation: segment.translation.clone(),
                 speaker: segment.speaker.clone(),
+                speaker_attribution: segment.speaker_attribution.clone(),
             };
 
             if !child.text.is_empty() {
@@ -545,6 +546,7 @@ where
             durations: current_durations,
             translation: segment.translation.clone(),
             speaker: segment.speaker.clone(),
+            speaker_attribution: segment.speaker_attribution.clone(),
         };
 
         if !child.text.is_empty() {
@@ -885,6 +887,7 @@ mod tests {
             durations: None,
             translation: None,
             speaker: None,
+            speaker_attribution: None,
         }
     }
 

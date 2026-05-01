@@ -17,6 +17,7 @@ function segmentSignature(segment: TranscriptSegment | undefined): string {
     end: segment.end,
     isFinal: segment.isFinal,
     speaker: segment.speaker || null,
+    speakerAttribution: segment.speakerAttribution || null,
     start: segment.start,
     text: segment.text || '',
     timing: segment.timing || null,

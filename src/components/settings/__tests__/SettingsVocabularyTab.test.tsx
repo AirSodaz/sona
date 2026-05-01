@@ -319,4 +319,45 @@ describe('SettingsVocabularyTab', () => {
       expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([]);
     });
   });
+
+  it('shows readiness guidance for speaker profiles based on usable samples', () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        speakerProfiles: [
+          {
+            id: 'speaker-ready',
+            name: 'Alice',
+            enabled: true,
+            samples: [
+              { id: 'sample-1', filePath: '/alice-1.wav', sourceName: 'Alice 1', durationSeconds: 10 },
+              { id: 'sample-2', filePath: '/alice-2.wav', sourceName: 'Alice 2', durationSeconds: 11 },
+            ],
+          },
+          {
+            id: 'speaker-limited',
+            name: 'Bob',
+            enabled: true,
+            samples: [
+              { id: 'sample-3', filePath: '/bob-1.wav', sourceName: 'Bob 1', durationSeconds: 8.5 },
+            ],
+          },
+          {
+            id: 'speaker-not-ready',
+            name: 'Carol',
+            enabled: true,
+            samples: [
+              { id: 'sample-4', filePath: '/carol-1.wav', sourceName: 'Carol 1', durationSeconds: 3.5 },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(<SettingsVocabularyTab />);
+
+    expect(screen.getByText('Ready for automatic matching')).toBeDefined();
+    expect(screen.getByText('Can appear as a suggestion, but needs more usable samples before automatic matching.')).toBeDefined();
+    expect(screen.getByText('Needs more usable samples before it can participate in speaker recognition.')).toBeDefined();
+  });
 });
