@@ -231,6 +231,18 @@ describe('SettingsDashboardTab', () => {
     vi.clearAllMocks();
   });
 
+  it('does not load dashboard data while mounted inactive for tab prewarm', async () => {
+    vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshot());
+
+    render(<SettingsDashboardTab isActive={false} />);
+
+    await Promise.resolve();
+
+    expect(dashboardService.getFastSnapshot).not.toHaveBeenCalled();
+    expect(dashboardService.getDeepSnapshot).not.toHaveBeenCalled();
+  });
+
   it('shows a loading state before fast data resolves', () => {
     const fast = deferred<DashboardSnapshot>();
     vi.mocked(dashboardService.getFastSnapshot).mockReturnValue(fast.promise);

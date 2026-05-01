@@ -110,6 +110,11 @@
   padding: 0 var(--spacing-xl) var(--spacing-lg);
 }
 
+.settings-pane-host,
+.settings-pane-frame {
+  min-width: 0;
+}
+
 .settings-tab-loading {
   min-height: 220px;
   align-items: center;

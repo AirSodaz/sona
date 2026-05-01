@@ -8,6 +8,7 @@ import { useDialogStore } from '../../../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import type { BackupManifestV1, BackupWebDavConfig, PreparedBackupImport, RemoteBackupEntry } from '../../../types/backup';
 import { extractErrorMessage } from '../../../utils/errorUtils';
+import { getSettingsPerfErrorDetail, markSettingsPerf } from '../../../utils/settingsPerf';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
 
 type BackupBusyAction =
@@ -24,6 +25,11 @@ const EMPTY_WEBDAV_CONFIG: BackupWebDavConfig = {
     username: '',
     password: '',
 };
+
+interface BackupSettingsSectionProps {
+    isVisible?: boolean;
+    isPrewarming?: boolean;
+}
 
 function isHttpUrl(value: string): boolean {
     return value.trim().toLowerCase().startsWith('http://');
@@ -100,7 +106,10 @@ function buildImportDetails(t: (key: string, options?: Record<string, unknown>) 
     ].join('\n');
 }
 
-export function BackupSettingsSection(): React.JSX.Element {
+export function BackupSettingsSection({
+    isVisible = true,
+    isPrewarming = false,
+}: BackupSettingsSectionProps): React.JSX.Element {
     const { t } = useTranslation();
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
@@ -163,11 +172,21 @@ export function BackupSettingsSection(): React.JSX.Element {
     ), [showError]);
 
     React.useEffect(() => {
+        if (!isVisible && !isPrewarming) {
+            return;
+        }
+
+        const markerPrefix = isPrewarming ? 'settings.prewarm.backup' : 'settings.backup';
+        markSettingsPerf(`${markerPrefix}.commit`);
+    }, [isPrewarming, isVisible]);
+
+    React.useEffect(() => {
         if (!hasRequestedWebDavConfig || webDavConfigReady) {
             return;
         }
 
         let cancelled = false;
+        markSettingsPerf('settings.webdav.loadConfig.start');
 
         void backupWebDavService.loadConfig()
             .then((loadedConfig) => {
@@ -177,6 +196,7 @@ export function BackupSettingsSection(): React.JSX.Element {
 
                 setWebDavConfig(loadedConfig);
                 setWebDavConfigReady(true);
+                markSettingsPerf('settings.webdav.loadConfig.end');
             })
             .catch((error) => {
                 if (cancelled) {
@@ -185,6 +205,7 @@ export function BackupSettingsSection(): React.JSX.Element {
 
                 setWebDavConfigReady(true);
                 setWebDavConfigError(extractErrorMessage(error));
+                markSettingsPerf('settings.webdav.loadConfig.fail', getSettingsPerfErrorDetail(error));
             });
 
         return () => {
@@ -193,6 +214,11 @@ export function BackupSettingsSection(): React.JSX.Element {
     }, [hasRequestedWebDavConfig, webDavConfigReady]);
 
     const handleToggleWebDav = React.useCallback(() => {
+        const willOpen = !isWebDavOpen;
+        if (willOpen && !hasRequestedWebDavConfig) {
+            markSettingsPerf('settings.webdav.open');
+        }
+
         setWebDavAccordionState((current) => {
             const isOpen = !current.isOpen;
 
@@ -201,7 +227,7 @@ export function BackupSettingsSection(): React.JSX.Element {
                 hasRequestedConfig: current.hasRequestedConfig || isOpen,
             };
         });
-    }, []);
+    }, [hasRequestedWebDavConfig, isWebDavOpen]);
 
     const persistWebDavConfig = React.useCallback((nextConfig: BackupWebDavConfig) => {
         setWebDavConfig(nextConfig);

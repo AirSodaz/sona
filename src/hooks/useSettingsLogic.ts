@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 
@@ -33,18 +33,28 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setConfig = useConfigStore((state) => state.setConfig);
     const { i18n } = useTranslation();
 
-    const [activeTab, setActiveTab] = useState<SettingsTab>(() => normalizeInitialSettingsTab(initialTab));
+    const [tabState, setTabState] = useState(() => ({
+        isOpen: _isOpen,
+        initialTab,
+        activeTab: _isOpen ? normalizeInitialSettingsTab(initialTab) : 'general',
+    }));
 
-    useEffect(() => {
-        queueMicrotask(() => {
-            if (_isOpen) {
-                setActiveTab(normalizeInitialSettingsTab(initialTab));
-                return;
-            }
-
-            setActiveTab('general');
+    let activeTab = tabState.activeTab;
+    if (tabState.isOpen !== _isOpen || tabState.initialTab !== initialTab) {
+        activeTab = _isOpen ? normalizeInitialSettingsTab(initialTab) : 'general';
+        setTabState({
+            isOpen: _isOpen,
+            initialTab,
+            activeTab,
         });
-    }, [initialTab, _isOpen]);
+    }
+
+    const setActiveTab = useCallback((nextTab: SettingsTab) => {
+        setTabState((current) => ({
+            ...current,
+            activeTab: nextTab,
+        }));
+    }, []);
 
     // Sync language change
     useEffect(() => {

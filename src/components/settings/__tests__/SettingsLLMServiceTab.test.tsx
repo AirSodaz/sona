@@ -73,6 +73,29 @@ describe('SettingsLLMServiceTab', () => {
     });
   });
 
+  it('does not list provider models while inactive for tab prewarm', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab isActive={false} />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+  });
+
+  it('uses the llm_service tabpanel id expected by the settings tab button', async () => {
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = render(
+        <SettingsLLMServiceTab />,
+      ));
+    });
+
+    expect(container.querySelector('#settings-panel-llm_service')).not.toBeNull();
+    expect(container.querySelector('#settings-panel-llm')).toBeNull();
+  });
+
   it('renders feature cards in polish-translation-summary order and keeps the credentials section', async () => {
     let container!: HTMLElement;
     await act(async () => {

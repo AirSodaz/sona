@@ -18,7 +18,11 @@ import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import { getCurrentLlmSettings, getCurrentLlmState } from './llm/helpers';
 import './SettingsLLMServiceTab.css';
 
-export function SettingsLLMServiceTab(): React.JSX.Element {
+interface SettingsLLMServiceTabProps {
+  isActive?: boolean;
+}
+
+export function SettingsLLMServiceTab({ isActive = true }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
@@ -60,7 +64,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
   const effectiveExpandedProvider = expandedProvider ?? fallbackExpandedProvider;
 
   return (
-    <SettingsTabContainer id="settings-panel-llm" ariaLabelledby="settings-tab-llm">
+    <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
       <SettingsPageHeader
           icon={<RobotIcon width={28} height={28} />}
           title={t('settings.llm.title')}
@@ -81,6 +85,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           config={config}
           applyLlmSettings={applyLlmSettings}
           t={t}
+          isActive={isActive}
         />
         <FeatureCard
           key={`translation:${translationModel?.provider ?? 'open_ai'}:${translationModel?.model ?? ''}`}
@@ -91,6 +96,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           config={config}
           applyLlmSettings={applyLlmSettings}
           t={t}
+          isActive={isActive}
         />
         <FeatureCard
           key={`summary:${summaryModel?.provider ?? 'open_ai'}:${summaryModel?.model ?? ''}`}
@@ -101,6 +107,7 @@ export function SettingsLLMServiceTab(): React.JSX.Element {
           config={config}
           applyLlmSettings={applyLlmSettings}
           t={t}
+          isActive={isActive}
           featureEnabled={summaryEnabled}
           headerAction={(
             <div className="feature-card-toggle">

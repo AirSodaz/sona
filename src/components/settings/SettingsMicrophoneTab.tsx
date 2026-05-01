@@ -65,6 +65,7 @@ export function SettingsMicrophoneTab({
     // We only control the system capture if it's not already running for recording/captioning
     const isActiveSession = isRecording || isCaptionMode;
     const arePreviewDependenciesReady = areMicrophoneDevicesLoaded && areSystemDevicesLoaded;
+    const shouldRunActiveEffects = isOpen && isActiveTab;
 
     const { startVisualizer: startMicWaveAnimation, stopVisualizer: stopMicWaveAnimation } = useAudioVisualizer({
         canvasRef,
@@ -112,6 +113,10 @@ export function SettingsMicrophoneTab({
 
     // Enumerate devices
     useEffect(() => {
+        if (!shouldRunActiveEffects) {
+            return;
+        }
+
         let isMounted = true;
         queueMicrotask(() => {
             if (isMounted) {
@@ -139,10 +144,14 @@ export function SettingsMicrophoneTab({
         return () => {
             isMounted = false;
         };
-    }, [t]);
+    }, [shouldRunActiveEffects, t]);
 
     // Enumerate system audio devices
     useEffect(() => {
+        if (!shouldRunActiveEffects) {
+            return;
+        }
+
         let isMounted = true;
         queueMicrotask(() => {
             if (isMounted) {
@@ -170,12 +179,16 @@ export function SettingsMicrophoneTab({
         return () => {
             isMounted = false;
         };
-    }, [t]);
+    }, [shouldRunActiveEffects, t]);
 
     // Sync Microphone Boost to Rust backend
     useEffect(() => {
+        if (!shouldRunActiveEffects) {
+            return;
+        }
+
         setMicrophoneBoost(microphoneBoost).catch(logger.error);
-    }, [microphoneBoost]);
+    }, [microphoneBoost, shouldRunActiveEffects]);
 
     const startMicrophonePreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
         if (!isCurrentRequest()) {
@@ -326,7 +339,7 @@ export function SettingsMicrophoneTab({
             await startSystemPreview(systemAudioDeviceId, isCurrentSystemRequest);
         }
 
-        if (isOpen && isActiveTab && arePreviewDependenciesReady) {
+        if (shouldRunActiveEffects && arePreviewDependenciesReady) {
             void startPreviews();
         }
 
@@ -341,8 +354,8 @@ export function SettingsMicrophoneTab({
         arePreviewDependenciesReady,
         isActiveSession,
         isActiveTab,
-        isOpen,
         microphoneId,
+        shouldRunActiveEffects,
         startMicrophonePreview,
         startSystemPreview,
         stopMicrophonePreview,

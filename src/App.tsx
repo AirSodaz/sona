@@ -24,6 +24,7 @@ import { SettingsTab } from './hooks/useSettingsLogic';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { diagnosticsService } from './services/diagnosticsService';
 import { clearTranscriptSegments } from './stores/transcriptCoordinator';
+import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
 
@@ -67,6 +68,7 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
 
 function App(): React.JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [shouldPrewarmSettings, setShouldPrewarmSettings] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isRecoveryCenterOpen, setIsRecoveryCenterOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
@@ -98,7 +100,17 @@ function App(): React.JSX.Element {
   }, []);
 
   const preloadAllSettings = useCallback(() => {
-    void loadSettingsModule().then(() => preloadAllSettingsTabs());
+    markSettingsPerf('settings.preload.all.start');
+    void loadSettingsModule()
+      .then(() => preloadAllSettingsTabs())
+      .then(() => {
+        markSettingsPerf('settings.preload.all.end');
+        markSettingsPerf('settings.prewarm.hidden.request');
+        setShouldPrewarmSettings(true);
+      })
+      .catch((error) => {
+        markSettingsPerf('settings.preload.all.fail', getSettingsPerfErrorDetail(error));
+      });
   }, []);
 
   const setPreloadedSettingsInitialTab = useCallback((tab: SettingsTab) => {
@@ -116,12 +128,14 @@ function App(): React.JSX.Element {
   }, [isLoaded, preloadAllSettings]);
 
   const openDefaultSettings = () => {
+    markSettingsPerf('settings.open.default.click', { tab: 'general', source: 'header' });
     preloadSettings('general');
     setSettingsInitialTab('general');
     setIsSettingsOpen(true);
   };
 
   const openSettingsTab = (tab: SettingsTab) => {
+    markSettingsPerf('settings.open.tab.click', { tab });
     preloadSettings(tab);
     setIsDiagnosticsOpen(false);
     setSettingsInitialTab(tab);
@@ -238,12 +252,13 @@ function App(): React.JSX.Element {
       {/* {isCaptionMode && isRecording && <LiveCaptionOverlay />} */}
 
       {/* Settings Modal */}
-      {isSettingsOpen ? (
+      {isSettingsOpen || shouldPrewarmSettings ? (
         <Suspense fallback={null}>
           <SettingsModal
             isOpen={isSettingsOpen}
+            prewarm={shouldPrewarmSettings && !isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
-            initialTab={settingsInitialTab}
+            initialTab={isSettingsOpen ? settingsInitialTab : 'general'}
             onOpenDiagnostics={openDiagnostics}
           />
         </Suspense>

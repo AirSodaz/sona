@@ -21,6 +21,16 @@ export type ModelManagerContextType = ReturnType<typeof useModelManager>;
 
 export const ModelManagerContext = createContext<ModelManagerContextType | null>(null);
 
+function scheduleAfterFrame(callback: () => void): () => void {
+    if (typeof requestAnimationFrame === 'function') {
+        const frameId = requestAnimationFrame(() => callback());
+        return () => cancelAnimationFrame(frameId);
+    }
+
+    const timeoutId = window.setTimeout(callback, 0);
+    return () => window.clearTimeout(timeoutId);
+}
+
 export function useModelManagerContext() {
     const context = useContext(ModelManagerContext);
     if (!context) {
@@ -65,11 +75,13 @@ export function useModelManager(isOpen: boolean) {
     }, []);
 
     useEffect(() => {
-        if (isOpen) {
-            queueMicrotask(() => {
-                void checkInstalledModels();
-            });
+        if (!isOpen) {
+            return;
         }
+
+        return scheduleAfterFrame(() => {
+            void checkInstalledModels();
+        });
     }, [checkInstalledModels, isOpen]);
 
     const setModelPath = useCallback((model: ModelInfo, path: string) => {

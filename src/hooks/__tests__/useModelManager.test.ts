@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useModelManager } from '../useModelManager';
 import { modelService } from '../../services/modelService';
@@ -21,7 +21,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../services/modelService', () => ({
-    PRESET_MODELS: [],
+    PRESET_MODELS: [
+        { id: 'preset-a', name: 'Preset A', type: 'sensevoice' },
+    ],
     modelService: {
         isModelInstalled: vi.fn(),
         getModelPath: vi.fn(),
@@ -57,6 +59,32 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         });
 
         vi.mocked(modelService.getModelPath).mockImplementation(async (id: string) => `/models/${id}`);
+    });
+
+    it('does not check installed models while inactive for settings tab prewarm', async () => {
+        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+
+        renderHook(() => useModelManager(false));
+
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    });
+
+    it('checks installed models when the model pane becomes active', async () => {
+        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+
+        const { rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+            initialProps: { isOpen: false },
+        });
+
+        rerender({ isOpen: true });
+
+        await waitFor(() => {
+            expect(modelService.isModelInstalled).toHaveBeenCalledWith('preset-a');
+        });
     });
 
     it('restores SenseVoice Int8 and Silero VAD when both are installed', async () => {

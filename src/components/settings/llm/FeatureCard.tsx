@@ -26,6 +26,7 @@ interface FeatureCardProps {
   config: LlmAssistantConfig;
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string) => string;
+  isActive?: boolean;
   featureEnabled?: boolean;
   headerAction?: React.ReactNode;
 }
@@ -38,6 +39,7 @@ export function FeatureCard({
   config,
   applyLlmSettings,
   t,
+  isActive = true,
   featureEnabled = true,
   headerAction,
 }: FeatureCardProps) {
@@ -104,10 +106,14 @@ export function FeatureCard({
   }, [currentLlmState.providers]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     queueMicrotask(() => {
       void fetchModelCandidates(localProvider);
     });
-  }, [fetchModelCandidates, localProvider, providerApiHost, providerApiKey]);
+  }, [fetchModelCandidates, isActive, localProvider, providerApiHost, providerApiKey]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();

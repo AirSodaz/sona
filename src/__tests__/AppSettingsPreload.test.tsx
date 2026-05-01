@@ -5,6 +5,7 @@ import App from '../App';
 const settingsModuleLoaded = vi.hoisted(() => vi.fn());
 const preloadSettingsTabMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const preloadAllSettingsTabsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const markSettingsPerfMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -44,16 +45,25 @@ vi.mock('../components/settings/settingsLoaders', () => ({
   preloadAllSettingsTabs: preloadAllSettingsTabsMock,
 }));
 
+vi.mock('../utils/settingsPerf', () => ({
+  getSettingsPerfErrorDetail: (error: unknown) => ({
+    message: error instanceof Error ? error.message : String(error),
+  }),
+  markSettingsPerf: markSettingsPerfMock,
+}));
+
 vi.mock('../components/Settings', () => {
   settingsModuleLoaded();
 
   return {
-    Settings: ({ isOpen, initialTab, onClose }: any) => (
+    Settings: ({ isOpen, prewarm, initialTab, onClose }: any) => (
       isOpen ? (
         <div>
           <div>Settings Tab: {initialTab}</div>
           <button type="button" onClick={onClose}>Close Settings</button>
         </div>
+      ) : prewarm ? (
+        <div data-testid="settings-prewarm">Settings Prewarm: {initialTab}</div>
       ) : null
     ),
   };
@@ -93,6 +103,7 @@ describe('App settings preload', () => {
     settingsModuleLoaded.mockClear();
     preloadSettingsTabMock.mockClear();
     preloadAllSettingsTabsMock.mockClear();
+    markSettingsPerfMock.mockClear();
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       setMode: vi.fn(),
@@ -122,6 +133,14 @@ describe('App settings preload', () => {
     await waitFor(() => {
       expect(preloadAllSettingsTabsMock).toHaveBeenCalledTimes(1);
     });
+    expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.preload.all.start');
+    await waitFor(() => {
+      expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.preload.all.end');
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-prewarm').textContent).toBe('Settings Prewarm: general');
+    });
+    expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.prewarm.hidden.request');
 
     fireEvent.pointerEnter(settingsButton);
     await waitFor(() => {
@@ -138,19 +157,29 @@ describe('App settings preload', () => {
 
     fireEvent.click(settingsButton);
 
+    expect(markSettingsPerfMock).toHaveBeenCalledWith(
+      'settings.open.default.click',
+      { tab: 'general', source: 'header' },
+    );
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();
+    expect(screen.queryByTestId('settings-prewarm')).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'common.loading' })).toBeNull();
 
     fireEvent.click(screen.getByText('Open Automation Settings'));
     await waitFor(() => {
       expect(preloadSettingsTabMock).toHaveBeenCalledWith('automation');
     });
+    expect(markSettingsPerfMock).toHaveBeenCalledWith(
+      'settings.open.tab.click',
+      { tab: 'automation' },
+    );
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close Settings'));
     await waitFor(() => {
       expect(screen.queryByText('Settings Tab: automation')).toBeNull();
     });
+    expect(screen.getByTestId('settings-prewarm').textContent).toBe('Settings Prewarm: general');
 
     fireEvent.click(settingsButton);
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();

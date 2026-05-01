@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
@@ -10,6 +10,16 @@ import { ModelIcon, RestoreIcon } from '../Icons';
 import { logger } from '../../utils/logger';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
+
+function scheduleAfterFrame(callback: () => void): () => void {
+    if (typeof requestAnimationFrame === 'function') {
+        const frameId = requestAnimationFrame(() => callback());
+        return () => cancelAnimationFrame(frameId);
+    }
+
+    const timeoutId = window.setTimeout(callback, 0);
+    return () => window.clearTimeout(timeoutId);
+}
 
 interface ModelSectionProps {
     title: string;
@@ -82,7 +92,11 @@ function ModelSection({
     );
 }
 
-export function SettingsModelsTab(): React.JSX.Element {
+interface SettingsModelsTabProps {
+    isActive?: boolean;
+}
+
+export function SettingsModelsTab({ isActive = true }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const modelConfig = useModelConfig();
     const transcriptionConfig = useTranscriptionConfig();
@@ -106,9 +120,16 @@ export function SettingsModelsTab(): React.JSX.Element {
 
     // Memoize the mapping between paths and model IDs in state to trigger re-renders
     const [pathMap, setPathMap] = useState<Map<string, string>>(new Map());
+    const hasInitializedPathMapRef = useRef(false);
 
     // Initialize mapping of paths to model IDs efficiently
     useEffect(() => {
+        if (!isActive || hasInitializedPathMapRef.current) {
+            return;
+        }
+
+        let cancelled = false;
+
         const initPathMap = async () => {
             const map = new Map<string, string>();
 
@@ -131,11 +152,21 @@ export function SettingsModelsTab(): React.JSX.Element {
                 })
             );
 
-            setPathMap(map);
+            if (!cancelled) {
+                setPathMap(map);
+                hasInitializedPathMapRef.current = true;
+            }
         };
 
-        initPathMap();
-    }, []); // Only run once on mount
+        const cancelScheduledInit = scheduleAfterFrame(() => {
+            void initPathMap();
+        });
+
+        return () => {
+            cancelled = true;
+            cancelScheduledInit();
+        };
+    }, [isActive]); // Run when the kept-mounted tab first becomes active
     const selectedStreamingModelId = useMemo(
         () => (streamingModelPath && pathMap.size > 0 ? pathMap.get(streamingModelPath) || '' : ''),
         [pathMap, streamingModelPath],

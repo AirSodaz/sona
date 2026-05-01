@@ -2,9 +2,51 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Settings } from '../Settings';
 import { modelService } from '../../services/modelService';
+import { dashboardService } from '../../services/dashboardService';
 import { useDialogStore } from '../../stores/dialogStore';
+import type { DashboardSnapshot } from '../../types/dashboard';
 
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+
+const mockListMicrophoneDeviceOptions = vi.fn();
+const mockListSystemAudioDeviceOptions = vi.fn();
+const mockListLlmModels = vi.fn();
+
+function createEmptyDashboardSnapshot(): DashboardSnapshot {
+    return {
+        content: {
+            overview: {
+                itemCount: 0,
+                projectCount: 0,
+                totalDurationSeconds: 0,
+                transcriptCharacterCount: undefined,
+                recordingCount: 0,
+                batchCount: 0,
+                inboxCount: 0,
+                projectAssignedCount: 0,
+                recentDailyItems: [],
+                isDeepLoaded: false,
+            },
+            speakers: null,
+        },
+        llmUsage: {
+            startedAt: '2026-04-01T00:00:00.000Z',
+            lastUpdatedAt: '2026-04-28T00:00:00.000Z',
+            totals: {
+                callCount: 0,
+                callsWithUsage: 0,
+                callsWithoutUsage: 0,
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+            },
+            byProvider: [],
+            byCategory: [],
+            recentDaily: [],
+        },
+        generatedAt: '2026-04-28T00:00:00.000Z',
+    };
+}
 
 // Mock dependencies
 vi.mock('react-i18next', () => ({
@@ -39,6 +81,22 @@ vi.mock('../../services/modelService', () => ({
     }
 }));
 
+vi.mock('../../services/dashboardService', () => ({
+    dashboardService: {
+        getFastSnapshot: vi.fn(),
+        getDeepSnapshot: vi.fn(),
+    },
+}));
+
+vi.mock('../../services/audioDeviceService', () => ({
+    listMicrophoneDeviceOptions: (...args: unknown[]) => mockListMicrophoneDeviceOptions(...args),
+    listSystemAudioDeviceOptions: (...args: unknown[]) => mockListSystemAudioDeviceOptions(...args),
+}));
+
+vi.mock('../../services/tauri/llm', () => ({
+    listLlmModels: (...args: unknown[]) => mockListLlmModels(...args),
+}));
+
 vi.mock('@tauri-apps/plugin-dialog', () => ({
     open: vi.fn(),
     ask: vi.fn(),
@@ -50,6 +108,11 @@ describe('Settings', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
+        vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
+        mockListMicrophoneDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
+        mockListSystemAudioDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
+        mockListLlmModels.mockResolvedValue(['gpt-4o']);
         // Reset store state
         useTranscriptStore.setState({
             config: {
@@ -79,6 +142,42 @@ describe('Settings', () => {
         expect(screen.getAllByText('settings.general').length).toBeGreaterThanOrEqual(1);
         expect(await screen.findByText('settings.general_title')).toBeDefined();
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    });
+
+    it('prewarms the hidden general pane without exposing a dialog or checking models', async () => {
+        const { container } = render(<Settings isOpen={false} prewarm onClose={onClose} initialTab="models" />);
+
+        const prewarmRoot = container.querySelector('[data-settings-prewarm="true"]') as HTMLElement | null;
+        expect(prewarmRoot).not.toBeNull();
+        expect(prewarmRoot?.hidden).toBe(true);
+        expect(container.querySelector('.settings-overlay')).toBeNull();
+        expect(screen.queryByRole('dialog')).toBeNull();
+
+        await waitFor(() => {
+            expect(container.textContent).toContain('settings.general_title');
+        });
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    });
+
+    it('prewarms hidden tab panes without running active-only settings services', async () => {
+        const { container } = render(<Settings isOpen={false} prewarm onClose={onClose} initialTab="models" />);
+
+        await waitFor(() => {
+            expect(container.querySelector('[data-settings-tab-pane="about"]')).not.toBeNull();
+        });
+
+        expect(container.querySelector('[data-settings-tab-pane="dashboard"]')).not.toBeNull();
+        expect(container.querySelector('[data-settings-tab-pane="microphone"]')).not.toBeNull();
+        expect(container.querySelector('[data-settings-tab-pane="models"]')).not.toBeNull();
+        expect(container.querySelector('[data-settings-tab-pane="llm_service"]')).not.toBeNull();
+
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+        expect(modelService.getModelPath).not.toHaveBeenCalled();
+        expect(dashboardService.getFastSnapshot).not.toHaveBeenCalled();
+        expect(dashboardService.getDeepSnapshot).not.toHaveBeenCalled();
+        expect(mockListMicrophoneDeviceOptions).not.toHaveBeenCalled();
+        expect(mockListSystemAudioDeviceOptions).not.toHaveBeenCalled();
+        expect(mockListLlmModels).not.toHaveBeenCalled();
     });
 
     it('checks installed models only after the model settings tab is opened', async () => {

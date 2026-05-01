@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
@@ -25,15 +25,24 @@ export {
   normalizeTrendPoints,
 } from './dashboard/trendGeometry';
 
-export function SettingsDashboardTab(): React.JSX.Element {
+interface SettingsDashboardTabProps {
+  isActive?: boolean;
+}
+
+export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isFastLoading, setIsFastLoading] = useState(true);
   const [isDeepLoading, setIsDeepLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const loadedTokenRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!isActive || loadedTokenRef.current === reloadToken) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadDashboard(): Promise<void> {
@@ -76,6 +85,10 @@ export function SettingsDashboardTab(): React.JSX.Element {
           setError(normalizeError(loadError).message);
           setIsFastLoading(false);
         }
+      } finally {
+        if (!cancelled) {
+          loadedTokenRef.current = reloadToken;
+        }
       }
     }
 
@@ -84,7 +97,7 @@ export function SettingsDashboardTab(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [isActive, reloadToken]);
 
   if (isFastLoading && !snapshot) {
     return (

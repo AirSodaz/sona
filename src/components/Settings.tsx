@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, Type } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
@@ -8,6 +8,7 @@ import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
 import { SettingsTabInput, type SettingsTab } from '../hooks/useSettingsLogic';
+import { markSettingsPerf } from '../utils/settingsPerf';
 import {
     SETTINGS_TABS,
     loadSettingsAboutTab,
@@ -39,6 +40,7 @@ import {
 /** Props for the Settings modal. */
 interface SettingsProps {
     isOpen: boolean;
+    prewarm?: boolean;
     onClose: () => void;
     initialTab?: SettingsTabInput;
     onOpenDiagnostics?: () => void;
@@ -59,17 +61,25 @@ const SettingsAboutTab = lazy(loadSettingsAboutTab);
 function renderSettingsPane(
     activeTab: SettingsTab,
     isOpen: boolean,
+    isActive: boolean,
+    isPrewarming = false,
     onOpenDiagnostics?: () => void,
 ): React.JSX.Element | null {
     switch (activeTab) {
         case 'general':
-            return <SettingsGeneralTab onOpenDiagnostics={onOpenDiagnostics} />;
+            return (
+                <SettingsGeneralTab
+                    isVisible={isOpen}
+                    isPrewarming={isPrewarming}
+                    onOpenDiagnostics={onOpenDiagnostics}
+                />
+            );
         case 'dashboard':
-            return <SettingsDashboardTab />;
+            return <SettingsDashboardTab isActive={isActive} />;
         case 'microphone':
             return (
                 <SettingsMicrophoneTab
-                    isActiveTab={activeTab === 'microphone'}
+                    isActiveTab={isActive}
                     isOpen={isOpen}
                 />
             );
@@ -78,13 +88,13 @@ function renderSettingsPane(
         case 'voice_typing':
             return <SettingsVoiceTypingTab />;
         case 'models':
-            return <SettingsModelsPane isOpen={isOpen} />;
+            return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
         case 'vocabulary':
             return <SettingsVocabularyTab />;
         case 'automation':
             return <SettingsAutomationTab />;
         case 'llm_service':
-            return <SettingsLLMServiceTab />;
+            return <SettingsLLMServiceTab isActive={isActive} />;
         case 'shortcuts':
             return <SettingsShortcutsTab />;
         case 'about':
@@ -94,6 +104,85 @@ function renderSettingsPane(
     }
 }
 
+function addMountedSettingsTab(current: SettingsTab[], tab: SettingsTab): SettingsTab[] {
+    if (current.includes(tab)) {
+        return current;
+    }
+
+    const next = new Set(current);
+    next.add(tab);
+    return SETTINGS_TABS.filter((candidate) => next.has(candidate));
+}
+
+function requestSettingsFrame(callback: FrameRequestCallback): number {
+    if (typeof requestAnimationFrame === 'function') {
+        return requestAnimationFrame(callback);
+    }
+
+    return window.setTimeout(() => callback(performance.now()), 16);
+}
+
+function cancelSettingsFrame(frameId: number): void {
+    if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(frameId);
+        return;
+    }
+
+    window.clearTimeout(frameId);
+}
+
+function SettingsPaneFrame({
+    tab,
+    isVisible,
+    children,
+}: {
+    tab: SettingsTab;
+    isVisible: boolean;
+    children: React.ReactNode;
+}): React.JSX.Element {
+    useEffect(() => {
+        if (!isVisible) return;
+
+        markSettingsPerf(`settings.tab.${tab}.commit`, { tab });
+        const frameId = requestSettingsFrame(() => {
+            markSettingsPerf(`settings.tab.${tab}.raf`, { tab });
+        });
+
+        return () => cancelSettingsFrame(frameId);
+    }, [isVisible, tab]);
+
+    return (
+        <div
+            className="settings-pane-frame"
+            data-settings-tab-pane={tab}
+            hidden={!isVisible}
+            aria-hidden={isVisible ? undefined : true}
+        >
+            {children}
+        </div>
+    );
+}
+
+const SettingsPaneContent = React.memo(function SettingsPaneContent({
+    tab,
+    isOpen,
+    isActive,
+    isPrewarming,
+    onOpenDiagnostics,
+}: {
+    tab: SettingsTab;
+    isOpen: boolean;
+    isActive: boolean;
+    isPrewarming: boolean;
+    onOpenDiagnostics?: () => void;
+}): React.JSX.Element {
+    return (
+        <Suspense fallback={null}>
+            {renderSettingsPane(tab, isOpen, isActive, isPrewarming, onOpenDiagnostics)}
+        </Suspense>
+    );
+});
+
 /**
  * Modal dialog for application settings.
  *
@@ -102,29 +191,106 @@ function renderSettingsPane(
  * @param props Component props.
  * @return The settings modal or null if not closed.
  */
-export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: SettingsProps): React.JSX.Element | null {
+export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenDiagnostics }: SettingsProps): React.JSX.Element | null {
     const { t } = useTranslation();
     const modalRef = useRef<HTMLDivElement>(null);
+    const isPrewarming = prewarm && !isOpen;
+    const shouldRender = isOpen || isPrewarming;
+    const effectiveInitialTab = isPrewarming ? 'general' : initialTab;
 
     const {
         activeTab,
         setActiveTab,
-    } = useSettingsLogic(isOpen, onClose, initialTab);
+    } = useSettingsLogic(isOpen, onClose, effectiveInitialTab);
+    const renderedTab = isPrewarming ? 'general' : activeTab;
+    const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
 
     const navigateToTab = useCallback((nextTab: typeof SETTINGS_TABS[number]) => {
+        markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
         setActiveTab(nextTab);
         requestAnimationFrame(() => {
             const btn = document.getElementById(`settings-tab-${nextTab}`);
             btn?.focus();
         });
-    }, [setActiveTab]);
+    }, [renderedTab, setActiveTab]);
     const navigationContextValue = useMemo(() => ({
-        activeTab,
+        activeTab: renderedTab,
         navigateToTab,
-    }), [activeTab, navigateToTab]);
+    }), [renderedTab, navigateToTab]);
 
     // Focus management
     useFocusTrap(isOpen, onClose, modalRef);
+
+    useEffect(() => {
+        if (!shouldRender) return;
+
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (!cancelled) {
+                setMountedTabs((current) => addMountedSettingsTab(current, renderedTab));
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [renderedTab, shouldRender]);
+
+    useEffect(() => {
+        if (!isPrewarming) return;
+
+        let cancelled = false;
+        let frameId: number | null = null;
+        let nextIndex = 0;
+        const tabsToPrewarm = SETTINGS_TABS.filter((tab) => tab !== 'general');
+
+        markSettingsPerf('settings.prewarm.tabs.start');
+
+        const mountNextTab = () => {
+            if (cancelled) {
+                return;
+            }
+
+            const tab = tabsToPrewarm[nextIndex];
+            nextIndex += 1;
+
+            if (tab) {
+                setMountedTabs((current) => addMountedSettingsTab(current, tab));
+            }
+
+            if (nextIndex < tabsToPrewarm.length) {
+                frameId = requestSettingsFrame(mountNextTab);
+                return;
+            }
+
+            frameId = requestSettingsFrame(() => {
+                if (!cancelled) {
+                    markSettingsPerf('settings.prewarm.tabs.end');
+                }
+            });
+        };
+
+        frameId = requestSettingsFrame(mountNextTab);
+
+        return () => {
+            cancelled = true;
+            if (frameId !== null) {
+                cancelSettingsFrame(frameId);
+            }
+        };
+    }, [isPrewarming]);
+
+    useEffect(() => {
+        if (!shouldRender) return;
+
+        const markerPrefix = isPrewarming ? 'settings.prewarm.shell' : 'settings.shell';
+        markSettingsPerf(`${markerPrefix}.commit`);
+        const frameId = requestAnimationFrame(() => {
+            markSettingsPerf(`${markerPrefix}.raf`);
+        });
+
+        return () => cancelAnimationFrame(frameId);
+    }, [isPrewarming, shouldRender]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -137,7 +303,7 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
                 }
 
                 e.preventDefault();
-                const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
+                const currentIndex = SETTINGS_TABS.indexOf(renderedTab as typeof SETTINGS_TABS[number]);
                 const nextIndex = e.shiftKey
                     ? (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length
                     : (currentIndex + 1) % SETTINGS_TABS.length;
@@ -149,10 +315,10 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
 
         window.addEventListener('keydown', handleGlobalKeyDown);
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [isOpen, activeTab, navigateToTab]);
+    }, [isOpen, renderedTab, navigateToTab]);
 
     const handleTabKeyDown = (e: React.KeyboardEvent) => {
-        const currentIndex = SETTINGS_TABS.indexOf(activeTab as typeof SETTINGS_TABS[number]);
+        const currentIndex = SETTINGS_TABS.indexOf(renderedTab as typeof SETTINGS_TABS[number]);
 
         let nextIndex = -1;
         switch (e.key) {
@@ -182,18 +348,17 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
         }
     };
 
-    if (!isOpen) return null;
+    if (!shouldRender) return null;
 
-    return (
-        <div className="settings-overlay" onClick={onClose}>
+    const settingsModal = (
             <div
                 ref={modalRef}
                 className="settings-modal"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="settings-title"
-                tabIndex={-1}
+                onClick={isOpen ? (e) => e.stopPropagation() : undefined}
+                role={isOpen ? 'dialog' : undefined}
+                aria-modal={isOpen ? 'true' : undefined}
+                aria-labelledby={isOpen ? 'settings-title' : undefined}
+                tabIndex={isOpen ? -1 : undefined}
                 style={{ outline: 'none' }}
             >
                 {/* Sidebar */}
@@ -212,89 +377,89 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
                             id="general"
                             label={t('settings.general')}
                             Icon={GeneralIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'general' ? 0 : -1}
+                            tabIndex={renderedTab === 'general' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="dashboard"
                             label={t('settings.dashboard.title', { defaultValue: 'Dashboard' })}
                             Icon={() => <BarChart3 size={18} />}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'dashboard' ? 0 : -1}
+                            tabIndex={renderedTab === 'dashboard' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="microphone"
                             label={t('settings.input_device', { defaultValue: 'Input Device' })}
                             Icon={MicIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'microphone' ? 0 : -1}
+                            tabIndex={renderedTab === 'microphone' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="subtitle"
                             label={t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' })}
                             Icon={SubtitleIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'subtitle' ? 0 : -1}
+                            tabIndex={renderedTab === 'subtitle' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="voice_typing"
                             label={t('settings.voice_typing')}
                             Icon={() => <Type size={18} />}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'voice_typing' ? 0 : -1}
+                            tabIndex={renderedTab === 'voice_typing' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="models"
                             label={t('settings.model_hub')}
                             Icon={ModelIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'models' ? 0 : -1}
+                            tabIndex={renderedTab === 'models' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="vocabulary"
                             label={t('settings.vocabulary')}
                             Icon={BookIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'vocabulary' ? 0 : -1}
+                            tabIndex={renderedTab === 'vocabulary' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="automation"
                             label={t('settings.automation', { defaultValue: 'Automation' })}
                             Icon={AutomationIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'automation' ? 0 : -1}
+                            tabIndex={renderedTab === 'automation' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="llm_service"
                             label={t('settings.llm.title')}
                             Icon={RobotIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'llm_service' ? 0 : -1}
+                            tabIndex={renderedTab === 'llm_service' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="shortcuts"
                             label={t('shortcuts.title')}
                             Icon={KeyboardIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'shortcuts' ? 0 : -1}
+                            tabIndex={renderedTab === 'shortcuts' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="about"
                             label={t('settings.about')}
                             Icon={InfoIcon}
-                            activeTab={activeTab}
+                            activeTab={renderedTab}
                             setActiveTab={navigateToTab}
-                            tabIndex={activeTab === 'about' ? 0 : -1}
+                            tabIndex={renderedTab === 'about' ? 0 : -1}
                         />
                     </div>
                 </div>
@@ -317,14 +482,50 @@ export function Settings({ isOpen, onClose, initialTab, onOpenDiagnostics }: Set
                     {/* Scrollable Content Area */}
                     <div className="settings-content-scroll full-height">
                         <SettingsNavigationProvider value={navigationContextValue}>
-                            <Suspense fallback={null}>
-                                {renderSettingsPane(activeTab, isOpen, onOpenDiagnostics)}
-                            </Suspense>
+                            <div className="settings-pane-host">
+                                {mountedTabs.map((tab) => {
+                                    const isPaneVisible = isOpen && tab === renderedTab;
+                                    const isPanePrewarming = isPrewarming && tab === 'general';
+
+                                    return (
+                                        <SettingsPaneFrame
+                                            key={tab}
+                                            tab={tab}
+                                            isVisible={isPaneVisible}
+                                        >
+                                            <SettingsPaneContent
+                                                tab={tab}
+                                                isOpen={isOpen}
+                                                isActive={isPaneVisible}
+                                                isPrewarming={isPanePrewarming}
+                                                onOpenDiagnostics={onOpenDiagnostics}
+                                            />
+                                        </SettingsPaneFrame>
+                                    );
+                                })}
+                            </div>
                         </SettingsNavigationProvider>
                     </div>
 
                 </div>
             </div>
+    );
+
+    if (isPrewarming) {
+        return (
+            <div
+                data-settings-prewarm="true"
+                hidden
+                aria-hidden="true"
+            >
+                {settingsModal}
+            </div>
+        );
+    }
+
+    return (
+        <div className="settings-overlay" onClick={onClose}>
+            {settingsModal}
         </div>
     );
 }

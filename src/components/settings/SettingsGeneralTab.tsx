@@ -6,10 +6,13 @@ import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import type { UIConfig } from '../../types/config';
+import { markSettingsPerf } from '../../utils/settingsPerf';
 import { loadBackupSettingsSection } from './settingsGeneralDeferredLoaders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
+    isVisible?: boolean;
+    isPrewarming?: boolean;
     onOpenDiagnostics?: () => void;
 }
 
@@ -25,10 +28,28 @@ function getFontFamily(fontValue: string): string {
     }
 }
 
-export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProps): React.JSX.Element {
+export function SettingsGeneralTab({
+    isVisible = true,
+    isPrewarming = false,
+    onOpenDiagnostics,
+}: SettingsGeneralTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const config = useUIConfig();
     const updateConfig = useSetConfig();
+
+    React.useEffect(() => {
+        if (!isVisible && !isPrewarming) {
+            return;
+        }
+
+        const markerPrefix = isPrewarming ? 'settings.prewarm.general' : 'settings.general';
+        markSettingsPerf(`${markerPrefix}.commit`);
+        const frameId = requestAnimationFrame(() => {
+            markSettingsPerf(`${markerPrefix}.raf`);
+        });
+
+        return () => cancelAnimationFrame(frameId);
+    }, [isPrewarming, isVisible]);
 
     const appLanguage = config.appLanguage || 'auto';
     const theme = config.theme || 'auto';
@@ -170,7 +191,10 @@ export function SettingsGeneralTab({ onOpenDiagnostics }: SettingsGeneralTabProp
             </SettingsSection>
 
             <React.Suspense fallback={null}>
-                <BackupSettingsSection />
+                <BackupSettingsSection
+                    isVisible={isVisible}
+                    isPrewarming={isPrewarming}
+                />
             </React.Suspense>
 
             <SettingsSection
