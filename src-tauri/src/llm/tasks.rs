@@ -1,3 +1,11 @@
+use super::*;
+use futures_util::{future::BoxFuture, stream, StreamExt};
+use log::{info, warn};
+use reqwest::{header::RETRY_AFTER, Client, StatusCode};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value;
+use std::{future::Future, time::Duration};
+
 fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
     chunk_size
         .filter(|value| *value > 0)
@@ -5,18 +13,18 @@ fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PlannedSegmentChunk {
-    start: usize,
-    end: usize,
-    prompt: String,
+pub(crate) struct PlannedSegmentChunk {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) prompt: String,
 }
 
-struct SegmentTaskContext<'a> {
-    task_id: &'a str,
-    task_type: LlmTaskType,
-    segments: &'a [LlmSegmentInput],
-    chunk_size: Option<usize>,
-    prompt_char_budget: usize,
+pub(crate) struct SegmentTaskContext<'a> {
+    pub(crate) task_id: &'a str,
+    pub(crate) task_type: LlmTaskType,
+    pub(crate) segments: &'a [LlmSegmentInput],
+    pub(crate) chunk_size: Option<usize>,
+    pub(crate) prompt_char_budget: usize,
 }
 
 impl<'a> SegmentTaskContext<'a> {
@@ -63,7 +71,7 @@ impl<'a> SegmentTaskContext<'a> {
     }
 }
 
-struct BufferedSegmentTaskConfig<
+pub(crate) struct BufferedSegmentTaskConfig<
     BuildPrompt,
     ParseChunk,
     GenerateFn,
@@ -71,15 +79,15 @@ struct BufferedSegmentTaskConfig<
     EmitChunkFn,
     EmitProgressFn,
 > {
-    build_prompt: BuildPrompt,
-    parse_chunk: ParseChunk,
-    generate_text: GenerateFn,
-    on_success: OnSuccessFn,
-    emit_chunk: EmitChunkFn,
-    emit_progress: EmitProgressFn,
+    pub(crate) build_prompt: BuildPrompt,
+    pub(crate) parse_chunk: ParseChunk,
+    pub(crate) generate_text: GenerateFn,
+    pub(crate) on_success: OnSuccessFn,
+    pub(crate) emit_chunk: EmitChunkFn,
+    pub(crate) emit_progress: EmitProgressFn,
 }
 
-struct StreamingSegmentTaskConfig<
+pub(crate) struct StreamingSegmentTaskConfig<
     BuildPrompt,
     ParseChunk,
     BuildRequest,
@@ -88,17 +96,17 @@ struct StreamingSegmentTaskConfig<
     EmitChunkFn,
     EmitProgressFn,
 > {
-    build_prompt: BuildPrompt,
-    parse_chunk: ParseChunk,
-    build_request: BuildRequest,
-    get_output_id: GetId,
-    on_success: OnSuccessFn,
-    emit_chunk: EmitChunkFn,
-    emit_progress: EmitProgressFn,
+    pub(crate) build_prompt: BuildPrompt,
+    pub(crate) parse_chunk: ParseChunk,
+    pub(crate) build_request: BuildRequest,
+    pub(crate) get_output_id: GetId,
+    pub(crate) on_success: OnSuccessFn,
+    pub(crate) emit_chunk: EmitChunkFn,
+    pub(crate) emit_progress: EmitProgressFn,
 }
 
 #[derive(Debug, Clone)]
-enum GoogleTranslateFreeAttemptError {
+pub(crate) enum GoogleTranslateFreeAttemptError {
     HttpStatus {
         status: StatusCode,
         retry_after: Option<Duration>,
@@ -106,11 +114,11 @@ enum GoogleTranslateFreeAttemptError {
     Message(String),
 }
 
-fn prompt_char_count(prompt: &str) -> usize {
+pub(crate) fn prompt_char_count(prompt: &str) -> usize {
     prompt.chars().count()
 }
 
-fn plan_segment_task_chunks<BuildPrompt>(
+pub(crate) fn plan_segment_task_chunks<BuildPrompt>(
     task_id: &str,
     task_type: LlmTaskType,
     segments: &[LlmSegmentInput],
@@ -237,7 +245,7 @@ fn format_attempt_label(attempts: usize) -> &'static str {
     }
 }
 
-fn parse_google_translate_free_retry_after(
+pub(crate) fn parse_google_translate_free_retry_after(
     headers: &reqwest::header::HeaderMap,
 ) -> Option<Duration> {
     headers
@@ -320,7 +328,7 @@ fn extract_google_translate_free_translation(
     let mut translated = String::new();
 
     if let Some(outer_arr) = body.as_array() {
-        if let Some(inner_arr) = outer_arr.get(0).and_then(|value| value.as_array()) {
+        if let Some(inner_arr) = outer_arr.first().and_then(|value| value.as_array()) {
             for part in inner_arr {
                 if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
                     translated.push_str(text);
@@ -338,7 +346,7 @@ fn extract_google_translate_free_translation(
     Ok(translated)
 }
 
-async fn fetch_google_translate_free_translation(
+pub(crate) async fn fetch_google_translate_free_translation(
     client: &Client,
     base_url: &str,
     target_language: &str,
@@ -370,7 +378,12 @@ async fn fetch_google_translate_free_translation(
     extract_google_translate_free_translation(&body)
 }
 
-async fn execute_google_translate_free_request<FetchFn, FetchFuture, SleepFn, SleepFuture>(
+pub(crate) async fn execute_google_translate_free_request<
+    FetchFn,
+    FetchFuture,
+    SleepFn,
+    SleepFuture,
+>(
     index: usize,
     text: String,
     target_language: String,
@@ -415,7 +428,7 @@ where
     }
 }
 
-async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(
+pub(crate) async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(
     texts: Vec<String>,
     max_concurrency: usize,
     mut run_request: RunFn,
@@ -442,7 +455,7 @@ where
         .collect())
 }
 
-fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
+pub(crate) fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
     if config.model.trim().is_empty() {
         return Err("Model name cannot be empty".to_string());
     }
@@ -450,7 +463,7 @@ fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {
+pub(crate) fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {
     if task_id.trim().is_empty() {
         return Err("Task ID cannot be empty".to_string());
     }
@@ -458,7 +471,7 @@ fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String
     validate_llm_config(config)
 }
 
-fn clean_json_response(response_text: &str) -> String {
+pub(crate) fn clean_json_response(response_text: &str) -> String {
     let mut cleaned = response_text.trim().to_string();
 
     if cleaned.starts_with("```json") {
@@ -482,7 +495,11 @@ fn task_label(task_type: LlmTaskType) -> &'static str {
     }
 }
 
-fn chunk_error(task_type: LlmTaskType, chunk_number: usize, error: impl Into<String>) -> String {
+pub(crate) fn chunk_error(
+    task_type: LlmTaskType,
+    chunk_number: usize,
+    error: impl Into<String>,
+) -> String {
     format!(
         "{} chunk {} failed: {}",
         task_label(task_type),
@@ -532,7 +549,7 @@ where
     Ok(())
 }
 
-fn parse_polish_chunk(
+pub(crate) fn parse_polish_chunk(
     response_text: &str,
     expected: &[LlmSegmentInput],
     chunk_number: usize,
@@ -552,7 +569,7 @@ fn parse_polish_chunk(
     Ok(parsed)
 }
 
-fn parse_translate_chunk(
+pub(crate) fn parse_translate_chunk(
     response_text: &str,
     expected: &[LlmSegmentInput],
     chunk_number: usize,
@@ -572,7 +589,7 @@ fn parse_translate_chunk(
     Ok(parsed)
 }
 
-fn build_polish_prompt(
+pub(crate) fn build_polish_prompt(
     segments: &[LlmSegmentInput],
     context: Option<&str>,
     keywords: Option<&str>,
@@ -633,7 +650,10 @@ fn language_name(code: &str) -> String {
     }
 }
 
-fn build_translate_prompt(segments: &[LlmSegmentInput], target_language: &str) -> String {
+pub(crate) fn build_translate_prompt(
+    segments: &[LlmSegmentInput],
+    target_language: &str,
+) -> String {
     let json_str = serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string());
 
     format!(
@@ -679,7 +699,7 @@ fn format_summary_segments_for_prompt(segments: &[SummarySegmentInput]) -> Strin
         .join("\n")
 }
 
-fn build_summary_chunk_prompt(
+pub(crate) fn build_summary_chunk_prompt(
     template: &SummaryTemplateConfig,
     segments: &[SummarySegmentInput],
     chunk_number: usize,
@@ -705,7 +725,7 @@ Transcript chunk:\n\
     )
 }
 
-fn build_summary_finalize_prompt(
+pub(crate) fn build_summary_finalize_prompt(
     template: &SummaryTemplateConfig,
     partial_summaries: &[String],
 ) -> String {
@@ -764,7 +784,7 @@ fn estimate_summary_segment_chars(segment: &SummarySegmentInput) -> usize {
     segment.text.chars().count() + 24
 }
 
-fn split_summary_segments(
+pub(crate) fn split_summary_segments(
     segments: &[SummarySegmentInput],
     chunk_char_budget: usize,
 ) -> Vec<Vec<SummarySegmentInput>> {
@@ -799,7 +819,7 @@ fn split_summary_segments(
     chunks
 }
 
-fn validate_summary_provider(provider: LlmProvider) -> Result<(), String> {
+pub(crate) fn validate_summary_provider(provider: LlmProvider) -> Result<(), String> {
     if provider == LlmProvider::GoogleTranslate || provider == LlmProvider::GoogleTranslateFree {
         return Err("Google Translate does not support transcript summaries".to_string());
     }
@@ -811,7 +831,7 @@ fn summary_task_error(stage: impl AsRef<str>, error: impl Into<String>) -> Strin
     format!("summary {} failed: {}", stage.as_ref(), error.into())
 }
 
-async fn run_summary_task<GenerateFn, GenerateStreamFn, EmitProgressFn>(
+pub(crate) async fn run_summary_task<GenerateFn, GenerateStreamFn, EmitProgressFn>(
     task_id: &str,
     template: &SummaryTemplateConfig,
     segments: &[SummarySegmentInput],
@@ -894,7 +914,7 @@ where
     })
 }
 
-async fn run_segment_task<
+pub(crate) async fn run_segment_task<
     Output,
     BuildPrompt,
     ParseChunk,
@@ -959,7 +979,7 @@ where
     Ok(results)
 }
 
-async fn run_streaming_segment_task<
+pub(crate) async fn run_streaming_segment_task<
     Output,
     BuildPrompt,
     ParseChunk,
@@ -1013,60 +1033,63 @@ where
         let chunk = &context.segments[planned_chunk.start..planned_chunk.end];
         let mut line_buffer = StreamingLineBuffer::default();
         let mut streamed_items = Vec::new();
-        let mut emit_streamed_line = |line: &str| -> Result<(), String> {
-            let Some(normalized) = normalize_incremental_json_line(line) else {
-                return Ok(());
+        let response_text = {
+            let mut emit_streamed_line = |line: &str| -> Result<(), String> {
+                let Some(normalized) = normalize_incremental_json_line(line) else {
+                    return Ok(());
+                };
+
+                let parsed = serde_json::from_str::<Output>(&normalized).map_err(|error| {
+                    chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        format!("invalid JSON response: {error}"),
+                    )
+                })?;
+                let expected_segment = chunk.get(streamed_items.len()).ok_or_else(|| {
+                    chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        "received more objects than expected",
+                    )
+                })?;
+                let actual_id = get_output_id(&parsed);
+                if actual_id != expected_segment.id {
+                    return Err(chunk_error(
+                        context.task_type,
+                        chunk_number,
+                        format!(
+                            "segment {} expected id '{}' but received '{}'",
+                            streamed_items.len() + 1,
+                            expected_segment.id,
+                            actual_id
+                        ),
+                    ));
+                }
+
+                streamed_items.push(parsed.clone());
+                emit_chunk(context.chunk_payload(chunk_number, total_chunks, vec![parsed]))?;
+                Ok(())
             };
 
-            let parsed = serde_json::from_str::<Output>(&normalized).map_err(|error| {
-                chunk_error(
-                    context.task_type,
-                    chunk_number,
-                    format!("invalid JSON response: {error}"),
-                )
-            })?;
-            let expected_segment = chunk.get(streamed_items.len()).ok_or_else(|| {
-                chunk_error(
-                    context.task_type,
-                    chunk_number,
-                    "received more objects than expected",
-                )
-            })?;
-            let actual_id = get_output_id(&parsed);
-            if actual_id != expected_segment.id {
-                return Err(chunk_error(
-                    context.task_type,
-                    chunk_number,
-                    format!(
-                        "segment {} expected id '{}' but received '{}'",
-                        streamed_items.len() + 1,
-                        expected_segment.id,
-                        actual_id
-                    ),
-                ));
+            let response = generate_with_optional_streaming(
+                build_request(planned_chunk.prompt),
+                &mut |_, delta| {
+                    for line in line_buffer.process(delta) {
+                        emit_streamed_line(&line)?;
+                    }
+                    Ok(())
+                },
+            )
+            .await
+            .map_err(|error| chunk_error(context.task_type, chunk_number, error))?;
+            on_success(&response);
+            let response_text = response.text;
+            for line in line_buffer.flush() {
+                emit_streamed_line(&line)?;
             }
-
-            streamed_items.push(parsed.clone());
-            emit_chunk(context.chunk_payload(chunk_number, total_chunks, vec![parsed]))?;
-            Ok(())
+            response_text
         };
-        let response = generate_with_optional_streaming(
-            build_request(planned_chunk.prompt),
-            &mut |_, delta| {
-                for line in line_buffer.process(delta) {
-                    emit_streamed_line(&line)?;
-                }
-                Ok(())
-            },
-        )
-        .await
-        .map_err(|error| chunk_error(context.task_type, chunk_number, error))?;
-        on_success(&response);
-        let response_text = response.text;
-        for line in line_buffer.flush() {
-            emit_streamed_line(&line)?;
-        }
-        drop(emit_streamed_line);
 
         let parsed = if streamed_items.is_empty() {
             let parsed = parse_chunk(&response_text, chunk, chunk_number)?;
