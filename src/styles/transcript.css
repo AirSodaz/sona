@@ -300,6 +300,113 @@
   position: relative;
 }
 
+.speaker-badge-shell {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.speaker-badge-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.speaker-badge-button:hover,
+.speaker-badge-button[aria-expanded="true"] {
+  border-color: var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.speaker-badge-button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+.speaker-correction-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 120px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+.speaker-correction-menu-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.speaker-correction-menu-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.speaker-correction-menu-hint,
+.speaker-correction-empty {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.speaker-correction-list,
+.speaker-correction-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.speaker-correction-option,
+.speaker-correction-expand {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.speaker-correction-option:hover,
+.speaker-correction-expand:hover {
+  border-color: var(--color-accent-primary);
+  background: var(--color-bg-secondary);
+}
+
+.speaker-correction-option.secondary {
+  color: var(--color-text-secondary);
+}
+
+.speaker-correction-option:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .segment-aligning-indicator {
   display: inline-block;
   width: 6px;
