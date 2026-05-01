@@ -40,6 +40,8 @@ export function ExportButton({ className = '' }: ExportButtonProps): React.JSX.E
                     onClick={() => setIsModalOpen(true)}
                     disabled={segments.length === 0}
                     aria-label={t('export.button')}
+                    data-tooltip={t('export.button')}
+                    data-tooltip-pos="bottom"
                 >
                     <DownloadIcon />
                 </button>
