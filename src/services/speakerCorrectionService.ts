@@ -31,6 +31,23 @@ function buildAnonymousAttribution(
   };
 }
 
+function buildReviewedAttribution(
+  groupId: string,
+  anonymousLabel: string,
+  speaker: SpeakerTag | undefined,
+  previous: SpeakerAttribution | undefined,
+): SpeakerAttribution {
+  const isIdentified = speaker?.kind === 'identified';
+  return {
+    groupId,
+    anonymousLabel,
+    state: isIdentified ? 'identified' : 'anonymous',
+    source: 'manual',
+    confidence: isIdentified ? 'high' : 'low',
+    candidates: previous?.candidates || [],
+  };
+}
+
 function buildOrderedEnabledSpeakerProfileIds(
   profiles: SpeakerProfile[],
   existingIds: string[],
@@ -112,6 +129,29 @@ export function resetSpeakerGroupToAnonymous(
   });
 }
 
+export function confirmSpeakerGroupReview(
+  segments: TranscriptSegment[],
+  groupId: string,
+): TranscriptSegment[] {
+  return segments.map((segment) => {
+    if (resolveSegmentGroupId(segment) !== groupId) {
+      return segment;
+    }
+
+    const anonymousLabel = segment.speakerAttribution?.anonymousLabel
+      || (segment.speaker?.kind === 'anonymous' ? segment.speaker.label : 'Speaker');
+    return {
+      ...segment,
+      speakerAttribution: buildReviewedAttribution(
+        groupId,
+        anonymousLabel,
+        segment.speaker,
+        segment.speakerAttribution,
+      ),
+    };
+  });
+}
+
 class SpeakerCorrectionService {
   async assignProfileToSpeakerGroup(
     sourceGroupId: string,
@@ -163,6 +203,17 @@ class SpeakerCorrectionService {
 
     const sessionStore = useTranscriptSessionStore.getState();
     const nextSegments = resetSpeakerGroupToAnonymous(sessionStore.segments, groupId);
+    sessionStore.setSegments(nextSegments);
+    return nextSegments;
+  }
+
+  async confirmSpeakerGroupReview(groupId: string): Promise<TranscriptSegment[]> {
+    if (!groupId.trim()) {
+      throw new Error('Speaker correction requires a source speaker id.');
+    }
+
+    const sessionStore = useTranscriptSessionStore.getState();
+    const nextSegments = confirmSpeakerGroupReview(sessionStore.segments, groupId);
     sessionStore.setSegments(nextSegments);
     return nextSegments;
   }

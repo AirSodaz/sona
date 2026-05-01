@@ -27,6 +27,7 @@ import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
 import {
   buildSpeakerCorrectionProfileSections,
+  confirmSpeakerGroupReview,
   speakerCorrectionService,
 } from '../speakerCorrectionService';
 
@@ -316,5 +317,107 @@ describe('speakerCorrectionService', () => {
         }),
       }),
     ]);
+  });
+
+  it('confirms the current speaker label as reviewed without changing the visible label', async () => {
+    useTranscriptSessionStore.setState((state) => ({
+      ...state,
+      sourceHistoryId: 'history-4',
+      segments: [
+        {
+          id: 'seg-a',
+          start: 0,
+          end: 1,
+          text: 'Needs review',
+          isFinal: true,
+          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'suggested',
+            source: 'auto',
+            confidence: 'medium',
+            candidates: [
+              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
+            ],
+          },
+        },
+        {
+          id: 'seg-b',
+          start: 1,
+          end: 2,
+          text: 'Same group',
+          isFinal: true,
+          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+          speakerAttribution: {
+            groupId: 'anonymous-1',
+            anonymousLabel: 'Speaker 1',
+            state: 'suggested',
+            source: 'auto',
+            confidence: 'medium',
+            candidates: [
+              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
+            ],
+          },
+        },
+      ],
+    }));
+
+    await speakerCorrectionService.confirmSpeakerGroupReview('anonymous-1');
+
+    expect(useTranscriptSessionStore.getState().segments).toEqual([
+      expect.objectContaining({
+        id: 'seg-a',
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: expect.objectContaining({
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'anonymous',
+          source: 'manual',
+          confidence: 'low',
+          candidates: [
+            { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
+          ],
+        }),
+      }),
+      expect.objectContaining({
+        id: 'seg-b',
+        speakerAttribution: expect.objectContaining({
+          state: 'anonymous',
+          source: 'manual',
+        }),
+      }),
+    ]);
+  });
+
+  it('keeps confirm review as a pure group-id rewrite helper', () => {
+    const nextSegments = confirmSpeakerGroupReview([
+      {
+        id: 'seg-a',
+        start: 0,
+        end: 1,
+        text: 'Alice speaking',
+        isFinal: true,
+        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'identified',
+          source: 'auto',
+          confidence: 'high',
+          candidates: [],
+        },
+      },
+    ], 'anonymous-1');
+
+    expect(nextSegments[0]).toEqual(expect.objectContaining({
+      speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
+      speakerAttribution: expect.objectContaining({
+        groupId: 'anonymous-1',
+        state: 'identified',
+        source: 'manual',
+        confidence: 'high',
+      }),
+    }));
   });
 });

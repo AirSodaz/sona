@@ -1,0 +1,210 @@
+.transcript-speaker-review-overlay {
+  z-index: 2060;
+}
+
+.transcript-speaker-review-modal {
+  width: min(1040px, calc(100vw - 48px));
+}
+
+.transcript-speaker-review-content {
+  gap: 16px;
+}
+
+.transcript-speaker-review-meta-row {
+  flex-wrap: wrap;
+}
+
+.transcript-speaker-review-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transcript-speaker-review-filter {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 7px 11px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.transcript-speaker-review-filter:hover,
+.transcript-speaker-review-filter.active {
+  border-color: color-mix(in srgb, var(--color-text-primary) 48%, var(--color-border));
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+.transcript-speaker-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.transcript-speaker-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
+}
+
+.transcript-speaker-review-card.is-pending {
+  border-left-color: #d97706;
+}
+
+.transcript-speaker-review-card.is-auto {
+  border-left-color: #2563eb;
+}
+
+.transcript-speaker-review-card.is-reviewed {
+  border-left-color: #16a34a;
+}
+
+.transcript-speaker-review-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.transcript-speaker-review-title-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.transcript-speaker-review-speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.transcript-speaker-review-status,
+.transcript-speaker-review-tags span,
+.transcript-speaker-review-candidate {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.transcript-speaker-review-status {
+  background: color-mix(in srgb, var(--color-accent-primary) 10%, var(--color-bg-secondary));
+  color: var(--color-text-primary);
+}
+
+.transcript-speaker-review-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.transcript-speaker-review-preview,
+.transcript-speaker-review-candidates,
+.transcript-speaker-review-profile-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transcript-speaker-review-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transcript-speaker-review-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transcript-speaker-review-preview-row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.transcript-speaker-review-time {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.transcript-speaker-review-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+}
+
+.transcript-speaker-review-candidate-list,
+.transcript-speaker-review-actions,
+.transcript-speaker-review-profile-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transcript-speaker-review-muted {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.transcript-speaker-review-expand {
+  align-self: flex-start;
+}
+
+.transcript-speaker-review-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 140px;
+  padding: 20px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .transcript-speaker-review-modal {
+    width: calc(100vw - 24px);
+  }
+
+  .transcript-speaker-review-card-head {
+    flex-direction: column;
+  }
+
+  .transcript-speaker-review-preview-row {
+    grid-template-columns: 1fr;
+  }
+}
