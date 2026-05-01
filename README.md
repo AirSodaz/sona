@@ -10,11 +10,12 @@
 - **🎙️ Real-time Transcription**: Record and transcribe audio in real-time with low latency.
 - **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
 - **🗂️ Workspace Organization**: Use `Workspace`, `Projects`, and `Inbox` to organize saved recordings and imports.
-- **📝 Interactive Editor**: A rich text editor synchronized with audio playback for easy corrections.
-- **✨ LLM Assistant**: Polish and translate transcripts using OpenAI, Anthropic, Gemini, or Ollama.
+- **📝 Interactive Editor**: A rich text editor synchronized with audio playback for corrections, speaker labels, and version snapshots.
+- **👥 Speaker Profiles & Review**: Build local speaker profiles, correct speaker badges segment by segment, and review suggested or anonymous speaker groups before export.
+- **✨ LLM Assistant**: Polish, translate, and summarize transcripts using OpenAI, Anthropic, Gemini, or Ollama.
 - **🗣️ Live Caption & Voice Typing**: Reuse the same offline live transcription stack for floating captions or dictation into other applications.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
-- **🛟 Recovery, Backup & Diagnostics**: Resume interrupted work, export lightweight backups, and inspect model/runtime health from the app.
+- **🛟 Recovery, Backup & Diagnostics**: Resume interrupted work, export lightweight backups of config, workspace, and text history, and inspect model/runtime health from the app.
 - **🔔 Notifications & Automation**: Use the header notification center for updates, recovery, and automation results, and configure watched-folder automation rules in Settings.
 - **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
 
@@ -26,7 +27,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, speaker review, version snapshots, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
 
 ### CLI
 

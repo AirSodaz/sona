@@ -13,12 +13,14 @@ Sona is a good fit if you want to:
 - capture meetings, lectures, interviews, or notes with `Live Record`
 - transcribe existing audio or video files with `Batch Import`
 - organize saved recordings and imports with `Workspace`, `Projects`, and `Inbox`
-- review timestamps and edit transcripts segment by segment
+- review timestamps, speaker labels, and edit transcripts segment by segment
+- use `Speaker Profiles` and `Speaker Review` to confirm suggested or anonymous speaker groups
 - optionally use `LLM Polish` or `Translate` after configuring your own provider
+- restore selected edits from `Version Snapshots` when a bulk rewrite needs rollback
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly need speaker cleanup or version rollback, jump to `Transcript Editing And Playback`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
 
 ## 2. Install And Launch
 
@@ -142,7 +144,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 
 ## 6. Transcript Editing And Playback
 
-After Sona creates transcript segments, the editor becomes the main place to review and refine them.
+After Sona creates transcript segments, the editor becomes the main place to review text, speaker attribution, playback timing, and saved revisions.
 
 ### Preconditions
 
@@ -159,17 +161,25 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 7. Use the delete action to remove a segment after confirmation.
 8. Press `Ctrl + F` to search inside the transcript.
 9. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
+10. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
+11. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
+12. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft workspace item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
 
 ### Result
 
 - The transcript stays editable at the segment level.
 - Playback and transcript navigation remain aligned through timestamps.
+- Speaker corrections apply to every segment in the same speaker group.
+- Restoring from a version snapshot saves the current transcript first, so rollback remains reversible.
 
 ### Notes
 
 - The editor toolbar only appears while a segment is actively being edited.
 - The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and line breaks.
 - Search can jump between matching segments without leaving the editor.
+- `Speaker Review` appears with the transcript tools when there are transcript segments. If the transcript has no speaker metadata yet, the review list can be empty.
+- `Speaker Profiles` are created in `Settings > Vocabulary`; project settings can choose which profiles are active for that project. Profiles help with candidates and automatic matching, but you can still confirm, reassign, or reset labels manually.
+- `Version Snapshots` only appears for saved workspace items that are not drafts or the temporary `current` transcript. Snapshots are saved before bulk rewrites such as `LLM Polish`, `Translate`, `Re-transcribe`, and before a restore operation.
 
 ## 7. LLM Polish, Translation, And Summary
 
@@ -219,6 +229,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - `LLM Polish` updates transcript text in place.
 - `Translate` stores translation text per segment and can display it under the original text.
 - `AI Summary` keeps one current summary record beside the transcript without changing the original text.
+- For saved non-draft transcripts, bulk rewrites create `Version Snapshots` that can be reviewed later from the editor.
 
 ### Notes
 
@@ -231,6 +242,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
 - `Re-transcribe` is only available when the current transcript came from a saved workspace item.
 - Summary output is editable in the editor. You can revise it directly, let Sona auto-save it, and use the panel's copy button when you need it elsewhere.
+- If a polish, translation, or re-transcription pass changes more than you wanted, use `Version Snapshots` from the transcript header to restore selected changed rows or revert the whole transcript.
 
 ## 8. Export Transcript
 
@@ -260,6 +272,7 @@ Export is available when the transcript contains at least one segment.
 
 - `Translation` and `Bilingual` modes are only available when at least one segment contains translation text.
 - `Original` mode is always available.
+- If speaker labels matter for your exported text or review process, run `Speaker Review` before exporting so suggested and anonymous groups are checked first.
 
 ## 9. Workspace, Projects, And Inbox
 
@@ -290,7 +303,7 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 3. Choose a project icon if you want one. Icons are edited here, not in the `New Project` modal.
 4. Pick the project defaults that should apply whenever you work inside that project:
    `Default Summary Template`, `Default Translation Language`, `Default Polish Scenario`, optional `Default Polish Context`, and `Export Filename Prefix`.
-5. Turn `Text Replacement` and `Hotword` sets on or off for this project when you want project-specific recognition or cleanup behavior.
+5. Turn `Text Replacement`, `Hotword`, `Polish Keyword`, and `Speaker Profile` sets on or off for this project when you want project-specific recognition, cleanup, polish, or speaker matching behavior.
 6. Click `Save` to keep the changes, or `Delete Project` if you want to remove the project and move its items back to `Inbox`.
 
 ### Result
@@ -306,6 +319,7 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 - The active live recording session can already appear here as a `Draft` item while capture is still running. When you stop recording, that same item becomes the finished saved entry.
 - Project icons support system icons, recommended emoji, and custom emoji.
 - Saved recordings and imports also support title and icon changes through their own rename flow, but that is separate from `Project Settings`.
+- If you assign a global speaker profile from inside a project transcript, Sona can add that profile to the current project's enabled speaker profiles so future work in the same project can use it as a candidate.
 - If you switch away from a project while its settings drawer has unsaved changes, Sona asks whether to discard those edits first.
 
 ## 10. Export And Settings
@@ -332,7 +346,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Model Settings`
   `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, speaker, and VAD models
 - `Settings > Vocabulary`
-  `Text Replacement`, `Hotwords`, polish keyword sets, polish context presets, and summary templates
+  `Text Replacement`, `Hotwords`, polish keyword sets, polish context presets, summary templates, and `Speaker Profiles`
 - `Settings > Automation`
   watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
 - `Settings > LLM Service`
@@ -354,6 +368,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 - In `Settings > General`, use `Diagnostics` to inspect the local transcription chain, runtime readiness, and packaging environment.
 - In the same page, use `Backup & Restore` to export or import a light archive of config, workspace, light history transcripts and summaries, automation state, and dashboard LLM usage.
+- Light backup archives restore text history and summaries, but they do not include original audio files; restored entries may reopen without playback.
 - `WebDAV Cloud Sync` lives inside `Backup & Restore`. It stores credentials locally on this device and helps you upload or restore backup archives manually.
 
 ### Notification Center
@@ -366,6 +381,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 - In `Settings > Vocabulary`, `Hotwords` are entered one per line. Weighted entries such as `Term :2.0` are supported, and hotwords are currently most relevant for Transducer and Qwen3 ASR models.
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
+- In `Settings > Vocabulary`, `Speaker Profiles` store local reference samples for known speakers. A profile can be `Ready`, `Limited`, or `Not ready` depending on usable sample count and duration; these states guide matching confidence, not whether you can manually assign the profile.
 
 ## 11. FAQ And Troubleshooting
 
@@ -401,6 +417,23 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 ### Export only shows `Original`
 
 - `Translation` and `Bilingual` only appear when the transcript already contains translation text.
+
+### `Speaker Review` is empty or has no candidates
+
+- `Speaker Review` groups existing speaker metadata. If the transcript was created without speaker attribution, there may be nothing to review.
+- Candidate suggestions depend on `Speaker Profiles` in `Settings > Vocabulary`, imported reference samples, and the profiles enabled for the current project.
+- You can still click a visible speaker badge in the editor and assign a profile manually when speaker labels are present.
+
+### I cannot find `Version Snapshots`
+
+- `Version Snapshots` only appears for saved workspace items that already contain transcript segments.
+- It is hidden for the temporary `current` transcript and for live recording drafts that are still in progress.
+- Snapshots are created before bulk rewrite operations such as `LLM Polish`, `Translate`, `Re-transcribe`, and before restoring from another snapshot.
+
+### A restored backup opens text but no audio playback
+
+- Backup archives are intentionally lightweight. They include config, workspace data, light history transcripts and summaries, automation state, and dashboard LLM usage.
+- Original audio files are not included, so restored entries may reopen for reading and editing but lack playback until the source audio is available through another path.
 
 ### Why do new items appear in `Inbox` first
 
