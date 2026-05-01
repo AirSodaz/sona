@@ -1,4 +1,4 @@
-use serde_json::{Map, Value};
+use serde_json::{to_value, Map, Value};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -519,6 +519,8 @@ impl HistoryRepository {
 
         let mut transcript_files = Vec::with_capacity(items.len());
         let mut summary_files = Vec::new();
+        let mut snapshot_files = Vec::new();
+        let history_dir = self.history_dir();
 
         for item in &items {
             let transcript_path = self.transcript_path(&item.transcript_path)?;
@@ -542,12 +544,48 @@ impl HistoryRepository {
                 )?;
                 summary_files.push((item.id.clone(), summary));
             }
+
+            let snapshots = self.list_transcript_snapshots(&item.id)?;
+            if !snapshots.is_empty() {
+                let snapshot_index_path = self.transcript_snapshot_index_path(&item.id)?;
+                let snapshot_index_relative = snapshot_index_path
+                    .strip_prefix(&history_dir)
+                    .map_err(|error| error.to_string())?
+                    .to_string_lossy()
+                    .into_owned();
+                snapshot_files.push((
+                    snapshot_index_relative,
+                    to_value(&snapshots).map_err(|error| error.to_string())?,
+                ));
+            }
+
+            for snapshot in snapshots {
+                let record = self
+                    .load_transcript_snapshot(&item.id, &snapshot.id)?
+                    .ok_or_else(|| {
+                        format!(
+                            "Transcript snapshot \"{}\" for history item \"{}\" is missing.",
+                            snapshot.id, item.id
+                        )
+                    })?;
+                let snapshot_path = self.transcript_snapshot_path(&item.id, &snapshot.id)?;
+                let snapshot_relative = snapshot_path
+                    .strip_prefix(&history_dir)
+                    .map_err(|error| error.to_string())?
+                    .to_string_lossy()
+                    .into_owned();
+                snapshot_files.push((
+                    snapshot_relative,
+                    to_value(&record).map_err(|error| error.to_string())?,
+                ));
+            }
         }
 
         Ok(HistoryBackupSnapshot {
             items,
             transcript_files,
             summary_files,
+            snapshot_files,
         })
     }
 }

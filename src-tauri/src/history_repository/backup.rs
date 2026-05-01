@@ -16,7 +16,8 @@ use super::{
     HistoryItemStatus, PreparedBackupImport, ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME,
     AUTOMATION_DIR_NAME, AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME,
     BACKUP_HISTORY_MODE, BACKUP_SCHEMA_VERSION, CONFIG_DIR_NAME, CONFIG_FILE_NAME,
-    HISTORY_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME, SUMMARY_FILE_SUFFIX,
+    HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
+    SUMMARY_FILE_SUFFIX,
 };
 
 pub(super) fn build_backup_manifest(
@@ -147,6 +148,9 @@ pub(super) fn export_backup_archive_inner(
                 &summary,
             )?;
         }
+        for (relative_path, snapshot) in history.snapshot_files {
+            write_json_pretty_atomic(&history_dir.join(relative_path), &snapshot)?;
+        }
 
         create_tar_bz2_archive(&staging_dir, Path::new(&request.archive_path))?;
         Ok(())
@@ -193,6 +197,7 @@ pub(super) fn prepare_backup_import_inner(
             .iter()
             .map(normalize_history_item_value)
             .collect::<Vec<_>>();
+        let extraction_repository = HistoryRepository::new(extraction_dir.clone());
 
         let mut transcript_count = 0usize;
         let mut summary_count = 0usize;
@@ -226,6 +231,33 @@ pub(super) fn prepare_backup_import_inner(
                     &format!("Summary for history item {}", item.id),
                 )?;
                 summary_count += 1;
+            }
+
+            let snapshot_dir = extraction_dir
+                .join(HISTORY_DIR_NAME)
+                .join(HISTORY_VERSIONS_DIR_NAME)
+                .join(ensure_safe_file_name(
+                    &item.id,
+                    &format!("Transcript snapshot history id for {}", item.id),
+                )?);
+            if snapshot_dir.exists() {
+                let snapshots = extraction_repository.list_transcript_snapshots(&item.id)?;
+                for snapshot in snapshots {
+                    let Some(record) =
+                        extraction_repository.load_transcript_snapshot(&item.id, &snapshot.id)?
+                    else {
+                        return Err(format!(
+                            "Transcript snapshot \"{}\" for history item \"{}\" is missing.",
+                            snapshot.id, item.id
+                        ));
+                    };
+                    if record.metadata.id != snapshot.id {
+                        return Err(format!(
+                            "Transcript snapshot \"{}\" for history item \"{}\" has mismatched metadata.",
+                            snapshot.id, item.id
+                        ));
+                    }
+                }
             }
         }
 
@@ -362,11 +394,12 @@ mod tests {
     use crate::history_repository::test_support::{
         create_valid_backup_archive, sample_history_item,
     };
-    use crate::history_repository::types::HistoryItemStatus;
+    use crate::history_repository::types::{HistoryItemStatus, TranscriptSnapshotReason};
     use crate::history_repository::{
         ANALYTICS_DIR_NAME, ANALYTICS_USAGE_FILE_NAME, AUTOMATION_DIR_NAME,
         AUTOMATION_PROCESSED_FILE_NAME, AUTOMATION_RULES_FILE_NAME, CONFIG_DIR_NAME,
-        CONFIG_FILE_NAME, HISTORY_DIR_NAME, PROJECTS_DIR_NAME, PROJECTS_INDEX_FILE_NAME,
+        CONFIG_FILE_NAME, HISTORY_DIR_NAME, HISTORY_VERSIONS_DIR_NAME, PROJECTS_DIR_NAME,
+        PROJECTS_INDEX_FILE_NAME,
     };
     use serde_json::{json, Value};
     use std::fs;
@@ -395,6 +428,20 @@ mod tests {
             &json!({ "activeTemplateId": "general" }),
         )
         .unwrap();
+        let keep_snapshot = repository
+            .create_transcript_snapshot(
+                &keep_item.id,
+                TranscriptSnapshotReason::Polish,
+                json!([{ "id": "seg-1", "text": "keep before" }]),
+            )
+            .unwrap();
+        let draft_snapshot = repository
+            .create_transcript_snapshot(
+                "draft",
+                TranscriptSnapshotReason::Translate,
+                json!([{ "id": "seg-1", "text": "draft before" }]),
+            )
+            .unwrap();
 
         let archive_dir = tempdir().unwrap();
         let archive_path = archive_dir.path().join("backup.tar.bz2");
@@ -433,6 +480,23 @@ mod tests {
                 .unwrap(),
             "keep"
         );
+        let exported_versions_dir = extract_dir
+            .path()
+            .join(HISTORY_DIR_NAME)
+            .join(HISTORY_VERSIONS_DIR_NAME);
+        let keep_index = exported_versions_dir
+            .join("keep")
+            .join(PROJECTS_INDEX_FILE_NAME);
+        assert!(keep_index.exists());
+        assert!(exported_versions_dir
+            .join("keep")
+            .join(format!("{}.json", keep_snapshot.id))
+            .exists());
+        assert!(!exported_versions_dir.join("draft").exists());
+        assert!(!exported_versions_dir
+            .join("draft")
+            .join(format!("{}.json", draft_snapshot.id))
+            .exists());
     }
 
     #[test]
@@ -516,6 +580,105 @@ mod tests {
     }
 
     #[test]
+    fn prepare_backup_import_rejects_missing_snapshot_record_before_mutation() {
+        let archive_dir = tempdir().unwrap();
+        let archive_path = archive_dir.path().join("invalid-snapshot-backup.tar.bz2");
+        let staging_dir = tempdir().unwrap();
+        let history_dir = staging_dir.path().join(HISTORY_DIR_NAME);
+        let versions_dir = history_dir
+            .join(HISTORY_VERSIONS_DIR_NAME)
+            .join("history-1");
+        fs::create_dir_all(&history_dir).unwrap();
+        fs::create_dir_all(staging_dir.path().join(CONFIG_DIR_NAME)).unwrap();
+        fs::create_dir_all(staging_dir.path().join(PROJECTS_DIR_NAME)).unwrap();
+        fs::create_dir_all(staging_dir.path().join(AUTOMATION_DIR_NAME)).unwrap();
+        fs::create_dir_all(staging_dir.path().join(ANALYTICS_DIR_NAME)).unwrap();
+        fs::create_dir_all(&versions_dir).unwrap();
+        write_json_pretty_atomic(
+            &staging_dir.path().join("manifest.json"),
+            &build_backup_manifest("0.6.4".to_string(), 0, 1, 1, 0, 0, 0),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &staging_dir
+                .path()
+                .join(CONFIG_DIR_NAME)
+                .join(CONFIG_FILE_NAME),
+            &json!({}),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &staging_dir
+                .path()
+                .join(PROJECTS_DIR_NAME)
+                .join(PROJECTS_INDEX_FILE_NAME),
+            &Vec::<Value>::new(),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &history_dir.join(PROJECTS_INDEX_FILE_NAME),
+            &vec![json!({
+                "id": "history-1",
+                "audioPath": "history-1.webm",
+                "transcriptPath": "history-1.json",
+                "title": "Snapshot Broken",
+                "projectId": null,
+                "status": "complete"
+            })],
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &history_dir.join("history-1.json"),
+            &json!([{ "id": "seg-1", "text": "hello" }]),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &versions_dir.join(PROJECTS_INDEX_FILE_NAME),
+            &vec![json!({
+                "id": "snapshot-1",
+                "historyId": "history-1",
+                "reason": "polish",
+                "createdAt": 1,
+                "segmentCount": 1
+            })],
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &staging_dir
+                .path()
+                .join(AUTOMATION_DIR_NAME)
+                .join(AUTOMATION_RULES_FILE_NAME),
+            &Vec::<Value>::new(),
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &staging_dir
+                .path()
+                .join(AUTOMATION_DIR_NAME)
+                .join(AUTOMATION_PROCESSED_FILE_NAME),
+            &Vec::<Value>::new(),
+        )
+        .unwrap();
+        fs::write(
+            staging_dir
+                .path()
+                .join(ANALYTICS_DIR_NAME)
+                .join(ANALYTICS_USAGE_FILE_NAME),
+            r#"{"schemaVersion":1}"#,
+        )
+        .unwrap();
+        create_tar_bz2_archive(staging_dir.path(), &archive_path).unwrap();
+
+        let err = prepare_backup_import_inner(&archive_path).unwrap_err();
+        assert!(
+            err.contains("Transcript snapshot \"snapshot-1\"")
+                || err.contains("snapshot-1.json")
+                || err.contains("No such file")
+                || err.contains("找不到指定的文件")
+        );
+    }
+
+    #[test]
     fn apply_prepared_history_import_replaces_history_and_dispose_cleans_snapshot() {
         let app_data_dir = tempdir().unwrap();
         let history_dir = app_data_dir.path().join(HISTORY_DIR_NAME);
@@ -554,5 +717,83 @@ mod tests {
         let removed = state.remove(&prepared.import_id).unwrap().unwrap();
         remove_path_if_exists(&removed.extraction_dir).unwrap();
         assert!(!removed.extraction_dir.exists());
+    }
+
+    #[test]
+    fn export_and_import_round_trip_restores_transcript_snapshots() {
+        let source_dir = tempdir().unwrap();
+        let source_repository = HistoryRepository::new(source_dir.path().to_path_buf());
+        source_repository.ensure_ready().unwrap();
+
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        source_repository.write_index(&vec![item.clone()]).unwrap();
+        write_json_pretty_atomic(
+            &source_repository
+                .transcript_path(&item.transcript_path)
+                .unwrap(),
+            &json!([{ "id": "seg-1", "text": "current" }]),
+        )
+        .unwrap();
+        let first = source_repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Polish,
+                json!([{ "id": "seg-1", "text": "before" }]),
+            )
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let second = source_repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Translate,
+                json!([{ "id": "seg-1", "text": "after" }]),
+            )
+            .unwrap();
+
+        let archive_dir = tempdir().unwrap();
+        let archive_path = archive_dir.path().join("snapshot-round-trip.tar.bz2");
+        export_backup_archive_inner(
+            source_dir.path(),
+            ExportBackupArchiveRequest {
+                archive_path: archive_path.to_string_lossy().into_owned(),
+                app_version: "0.6.4".to_string(),
+                config: json!({ "theme": "auto" }),
+                projects: vec![],
+                automation_rules: vec![],
+                automation_processed_entries: vec![],
+                analytics_content: r#"{"schemaVersion":1}"#.to_string(),
+            },
+        )
+        .unwrap();
+
+        let restore_dir = tempdir().unwrap();
+        let (prepared, snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
+        apply_prepared_history_import_inner(
+            restore_dir.path(),
+            &prepared.import_id,
+            &snapshot.extraction_dir,
+        )
+        .unwrap();
+
+        let restored_repository = HistoryRepository::new(restore_dir.path().to_path_buf());
+        let snapshots = restored_repository
+            .list_transcript_snapshots(&item.id)
+            .unwrap();
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(snapshots[0].id, second.id);
+        assert_eq!(snapshots[1].id, first.id);
+
+        let restored_first = restored_repository
+            .load_transcript_snapshot(&item.id, &first.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            restored_first.metadata.reason,
+            TranscriptSnapshotReason::Polish
+        );
+        assert_eq!(
+            restored_first.segments,
+            json!([{ "id": "seg-1", "text": "before" }])
+        );
     }
 }

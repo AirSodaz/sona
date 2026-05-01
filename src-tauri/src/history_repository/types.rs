@@ -143,4 +143,5 @@ pub(super) struct HistoryBackupSnapshot {
     pub(super) items: Vec<HistoryItemRecord>,
     pub(super) transcript_files: Vec<(String, Value)>,
     pub(super) summary_files: Vec<(String, Value)>,
+    pub(super) snapshot_files: Vec<(String, Value)>,
 }
