@@ -58,6 +58,12 @@
   background: var(--color-bg-primary);
 }
 
+.transcript-speaker-review-card.is-active {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 32%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--color-accent-primary) 5%, var(--color-bg-primary));
+}
+
 .transcript-speaker-review-card.is-pending {
   border-left-color: #d97706;
 }

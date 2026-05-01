@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
@@ -106,11 +106,36 @@ function getConfidenceKey(group: SpeakerReviewGroup): string {
   }
 }
 
+function resolveNextActiveGroupId(groupId: string, groups: SpeakerReviewGroup[]): string | null {
+  if (groups.length === 0) {
+    return null;
+  }
+
+  const currentIndex = groups.findIndex((group) => group.groupId === groupId);
+  if (currentIndex < 0) {
+    return groups[0]?.groupId || null;
+  }
+
+  return groups[currentIndex + 1]?.groupId
+    || groups[currentIndex - 1]?.groupId
+    || null;
+}
+
+function isShortcutIgnoredTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"]'));
+}
+
 export function TranscriptSpeakerReviewPanel({
   isOpen,
   onClose,
 }: TranscriptSpeakerReviewPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const modalRef = useRef<HTMLDivElement>(null);
+  const busyGroupIdRef = useRef<string | null>(null);
   const showError = useDialogStore((state) => state.showError);
   const segments = useTranscriptSessionStore((state) => state.segments);
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
@@ -133,19 +158,33 @@ export function TranscriptSpeakerReviewPanel({
     () => filterSpeakerReviewGroups(groups, activeFilter),
     [activeFilter, groups],
   );
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(
+    () => visibleGroups[0]?.groupId || null,
+  );
+  const effectiveActiveGroupId = (
+    activeGroupId && visibleGroups.some((group) => group.groupId === activeGroupId)
+      ? activeGroupId
+      : visibleGroups[0]?.groupId || null
+  );
+  const activeGroup = useMemo(
+    () => visibleGroups.find((group) => group.groupId === effectiveActiveGroupId) || null,
+    [effectiveActiveGroupId, visibleGroups],
+  );
 
-  if (!isOpen) {
-    return null;
-  }
-
-  const runGroupAction = async (
+  const runGroupAction = useCallback(async (
     groupId: string,
     action: () => Promise<unknown>,
     errorCode: string,
   ) => {
+    if (busyGroupIdRef.current) {
+      return;
+    }
+
     try {
+      busyGroupIdRef.current = groupId;
       setBusyGroupId(groupId);
       await action();
+      setActiveGroupId(resolveNextActiveGroupId(groupId, visibleGroups));
     } catch (error) {
       await showError({
         code: errorCode,
@@ -153,33 +192,137 @@ export function TranscriptSpeakerReviewPanel({
         cause: error,
       });
     } finally {
+      busyGroupIdRef.current = null;
       setBusyGroupId(null);
     }
-  };
+  }, [showError, visibleGroups]);
 
-  const handleConfirmGroup = async (groupId: string) => {
+  const handleConfirmGroup = useCallback(async (groupId: string) => {
     await runGroupAction(
       groupId,
       () => speakerCorrectionService.confirmSpeakerGroupReview(groupId),
       'speaker_review.confirm_failed',
     );
-  };
+  }, [runGroupAction]);
 
-  const handleAssignProfile = async (groupId: string, profileId: string) => {
+  const handleAssignProfile = useCallback(async (groupId: string, profileId: string) => {
     await runGroupAction(
       groupId,
       () => speakerCorrectionService.assignProfileToSpeakerGroup(groupId, profileId),
       'speaker_review.apply_failed',
     );
-  };
+  }, [runGroupAction]);
 
-  const handleResetGroup = async (groupId: string) => {
+  const handleResetGroup = useCallback(async (groupId: string) => {
     await runGroupAction(
       groupId,
       () => speakerCorrectionService.resetGroupToAnonymous(groupId),
       'speaker_review.reset_failed',
     );
-  };
+  }, [runGroupAction]);
+
+  const handleJumpToGroup = useCallback((group: SpeakerReviewGroup) => {
+    requestSeek(group.firstStart);
+    onClose();
+  }, [onClose, requestSeek]);
+
+  const moveActiveGroup = useCallback((direction: 1 | -1) => {
+    setActiveGroupId((current) => {
+      if (visibleGroups.length === 0) {
+        return null;
+      }
+
+      const currentIndex = current
+        ? visibleGroups.findIndex((group) => group.groupId === current)
+        : -1;
+      if (currentIndex < 0) {
+        return direction > 0
+          ? visibleGroups[0].groupId
+          : visibleGroups[visibleGroups.length - 1].groupId;
+      }
+
+      const nextIndex = Math.min(
+        visibleGroups.length - 1,
+        Math.max(0, currentIndex + direction),
+      );
+      return visibleGroups[nextIndex].groupId;
+    });
+  }, [visibleGroups]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof Node
+        && modalRef.current
+        && !modalRef.current.contains(event.target)
+      ) {
+        return;
+      }
+
+      if (event.defaultPrevented || isShortcutIgnoredTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveActiveGroup(1);
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveActiveGroup(-1);
+        return;
+      }
+
+      if (!activeGroup || busyGroupIdRef.current) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void handleConfirmGroup(activeGroup.groupId);
+        return;
+      }
+
+      if (key === 'a' && activeGroup.candidates[0]) {
+        event.preventDefault();
+        void handleAssignProfile(activeGroup.groupId, activeGroup.candidates[0].profileId);
+        return;
+      }
+
+      if (key === 'r' && activeGroup.state !== 'anonymous') {
+        event.preventDefault();
+        void handleResetGroup(activeGroup.groupId);
+        return;
+      }
+
+      if (key === 'j') {
+        event.preventDefault();
+        handleJumpToGroup(activeGroup);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    activeGroup,
+    handleAssignProfile,
+    handleConfirmGroup,
+    handleJumpToGroup,
+    handleResetGroup,
+    isOpen,
+    moveActiveGroup,
+  ]);
+
+  if (!isOpen) {
+    return null;
+  }
 
   const toggleExpanded = (groupId: string) => {
     setExpandedGroupIds((current) => {
@@ -196,6 +339,7 @@ export function TranscriptSpeakerReviewPanel({
   return (
     <div className="settings-overlay panel-modal-overlay transcript-speaker-review-overlay" onClick={onClose}>
       <div
+        ref={modalRef}
         className="panel-modal-shell transcript-speaker-review-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
@@ -251,6 +395,7 @@ export function TranscriptSpeakerReviewPanel({
               </div>
             ) : visibleGroups.map((group) => {
               const isBusy = busyGroupId === group.groupId;
+              const isActive = effectiveActiveGroupId === group.groupId;
               const showAllProfiles = expandedGroupIds.has(group.groupId);
               const topCandidate = group.candidates[0];
               const canReset = group.state !== 'anonymous';
@@ -258,8 +403,10 @@ export function TranscriptSpeakerReviewPanel({
               return (
                 <article
                   key={group.groupId}
-                  className={`transcript-speaker-review-card is-${group.reviewStatus}`}
+                  className={`transcript-speaker-review-card is-${group.reviewStatus} ${isActive ? 'is-active' : ''}`}
                   data-testid={`speaker-review-group-${group.groupId}`}
+                  aria-current={isActive ? 'true' : undefined}
+                  onClick={() => setActiveGroupId(group.groupId)}
                 >
                   <div className="transcript-speaker-review-card-head">
                     <div className="transcript-speaker-review-title-block">
@@ -279,10 +426,7 @@ export function TranscriptSpeakerReviewPanel({
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        requestSeek(group.firstStart);
-                        onClose();
-                      }}
+                      onClick={() => handleJumpToGroup(group)}
                     >
                       <MapPin size={14} />
                       {t('editor.speaker_review_jump')}

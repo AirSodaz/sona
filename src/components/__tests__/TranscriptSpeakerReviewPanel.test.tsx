@@ -6,6 +6,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { speakerCorrectionService } from '../../services/speakerCorrectionService';
 
 const translations: Record<string, string | ((options: Record<string, unknown>) => string)> = {
   'common.close': 'Close',
@@ -59,8 +60,13 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
+function expectGroupActive(group: HTMLElement, isActive = true): void {
+  expect(group.classList.contains('is-active')).toBe(isActive);
+}
+
 describe('TranscriptSpeakerReviewPanel', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     resetTranscriptStores();
     useConfigStore.getState().setConfig({
       speakerProfiles: [
@@ -194,6 +200,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
     expect(screen.queryByTestId('speaker-review-group-anonymous-4')).toBeNull();
 
     const suggestedGroup = screen.getByTestId('speaker-review-group-anonymous-1');
+    expectGroupActive(suggestedGroup);
     expect(within(suggestedGroup).getByText('Medium confidence')).toBeDefined();
     expect(within(suggestedGroup).getByText('0:12')).toBeDefined();
     expect(within(suggestedGroup).getByText('Hello there')).toBeDefined();
@@ -245,6 +252,131 @@ describe('TranscriptSpeakerReviewPanel', () => {
         state: 'anonymous',
         source: 'manual',
       }));
+  });
+
+  it('moves the active group through the pending queue with arrow shortcuts', async () => {
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    const firstGroup = screen.getByTestId('speaker-review-group-anonymous-1');
+    const secondGroup = screen.getByTestId('speaker-review-group-anonymous-2');
+
+    expectGroupActive(firstGroup);
+    expectGroupActive(secondGroup, false);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+    });
+
+    expectGroupActive(firstGroup, false);
+    expectGroupActive(secondGroup);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'ArrowUp' });
+    });
+
+    expectGroupActive(firstGroup);
+    expectGroupActive(secondGroup, false);
+  });
+
+  it('confirms the active group with Enter and advances to the next pending group', async () => {
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Enter' });
+    });
+
+    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
+      .toEqual(expect.objectContaining({
+        state: 'anonymous',
+        source: 'manual',
+      }));
+  });
+
+  it('applies the active top candidate with A and advances to the next pending group', async () => {
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'a' });
+    });
+
+    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
+      .toEqual(expect.objectContaining({
+        id: 'alice',
+        label: 'Alice',
+        kind: 'identified',
+      }));
+    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1b')?.speaker)
+      .toEqual(expect.objectContaining({
+        id: 'alice',
+        label: 'Alice',
+        kind: 'identified',
+      }));
+  });
+
+  it('restores the active group with R and advances to the next pending group', async () => {
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'r' });
+    });
+
+    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
+      .toEqual(expect.objectContaining({
+        id: 'anonymous-1',
+        label: 'Speaker 1',
+        kind: 'anonymous',
+      }));
+  });
+
+  it('jumps from the active group with J and closes the panel', async () => {
+    const onClose = vi.fn();
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={onClose} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'j' });
+    });
+
+    expect(useTranscriptPlaybackStore.getState().seekRequest?.time).toBe(12);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores queue shortcuts from form controls', async () => {
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Needs review (2)' }), { key: 'Enter' });
+    });
+
+    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'), false);
+  });
+
+  it('does not submit duplicate shortcut actions while a group is busy', async () => {
+    let resolveAction: (() => void) | undefined;
+    const confirmSpy = vi
+      .spyOn(speakerCorrectionService, 'confirmSpeakerGroupReview')
+      .mockImplementation(() => new Promise((resolve) => {
+        resolveAction = () => resolve(useTranscriptSessionStore.getState().segments);
+      }));
+
+    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Enter' });
+      fireEvent.keyDown(window, { key: 'Enter' });
+    });
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveAction?.();
+    });
   });
 
   it('jumps to the first segment and closes the panel', async () => {
