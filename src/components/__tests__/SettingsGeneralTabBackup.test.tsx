@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsGeneralTab } from '../settings/SettingsGeneralTab';
 import packageJson from '../../../package.json';
+import type { PreparedBackupImport } from '../../types/backup';
 
 const testContext = vi.hoisted(() => ({
   alertMock: vi.fn().mockResolvedValue(undefined),
@@ -149,6 +150,40 @@ vi.mock('../../stores/transcriptRuntimeStore', () => ({
   useTranscriptRuntimeStore: (selector: any) => selector(testContext.transcriptState),
 }));
 
+function buildPreparedImport(importId: string): PreparedBackupImport {
+  return {
+    importId,
+    archivePath: 'C:\\backups\\sona-backup.tar.bz2',
+    manifest: {
+      schemaVersion: 1,
+      createdAt: '2026-04-29T00:00:00.000Z',
+      appVersion: packageJson.version,
+      historyMode: 'light',
+      scopes: {
+        config: true,
+        workspace: true,
+        history: true,
+        automation: true,
+        analytics: true,
+      },
+      counts: {
+        projects: 2,
+        historyItems: 5,
+        transcriptFiles: 5,
+        summaryFiles: 3,
+        automationRules: 1,
+        automationProcessedEntries: 7,
+        analyticsFiles: 1,
+      },
+    },
+    config: {} as PreparedBackupImport['config'],
+    projects: [],
+    automationRules: [],
+    automationProcessedEntries: [],
+    analyticsContent: '{}',
+  };
+}
+
 describe('SettingsGeneralTab backup entry', () => {
   const openWebDavAccordion = async () => {
     const accordionToggle = await screen.findByRole('button', { name: /WebDAV Cloud Sync/i });
@@ -277,37 +312,7 @@ describe('SettingsGeneralTab backup entry', () => {
   });
 
   it('shows destructive import summary copy and disposes the prepared archive when the user cancels', async () => {
-    const prepared = {
-      importId: 'import-local',
-      archivePath: 'C:\\backups\\sona-backup.tar.bz2',
-      manifest: {
-        schemaVersion: 1,
-        createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: packageJson.version,
-        historyMode: 'light',
-        scopes: {
-          config: true,
-          workspace: true,
-          history: true,
-          automation: true,
-          analytics: true,
-        },
-        counts: {
-          projects: 2,
-          historyItems: 5,
-          transcriptFiles: 5,
-          summaryFiles: 3,
-          automationRules: 1,
-          automationProcessedEntries: 7,
-          analyticsFiles: 1,
-        },
-      },
-      config: {} as any,
-      projects: [],
-      automationRules: [],
-      automationProcessedEntries: [],
-      analyticsContent: '{}',
-    };
+    const prepared = buildPreparedImport('import-local');
     testContext.prepareImportBackupMock.mockResolvedValue(prepared);
     testContext.confirmMock.mockResolvedValue(false);
 
@@ -332,6 +337,31 @@ describe('SettingsGeneralTab backup entry', () => {
     expect(testContext.applyImportBackupMock).not.toHaveBeenCalled();
   });
 
+  it('applies a local backup and shows the success alert when confirmed', async () => {
+    const prepared = buildPreparedImport('import-local-success');
+    testContext.prepareImportBackupMock.mockResolvedValue(prepared);
+    testContext.confirmMock.mockResolvedValue(true);
+
+    render(<SettingsGeneralTab />);
+    const importButton = await screen.findByRole('button', { name: 'Import Backup' });
+
+    await act(async () => {
+      fireEvent.click(importButton);
+    });
+
+    await waitFor(() => {
+      expect(testContext.applyImportBackupMock).toHaveBeenCalledWith(prepared);
+    });
+    expect(testContext.alertMock).toHaveBeenCalledWith(
+      'Backup archive imported successfully.',
+      expect.objectContaining({
+        variant: 'success',
+      }),
+    );
+    expect(testContext.disposePreparedImportMock).not.toHaveBeenCalled();
+    expect(testContext.showErrorMock).not.toHaveBeenCalled();
+  });
+
   it('restores a remote snapshot through the existing destructive confirm flow and disposes it when cancelled', async () => {
     const remoteEntry = {
       href: 'https://dav.example.com/backups/sona-backup-2026-04-29_00-00-00.tar.bz2',
@@ -339,37 +369,7 @@ describe('SettingsGeneralTab backup entry', () => {
       size: 2048,
       modifiedAt: '2026-04-29T00:00:00.000Z',
     };
-    const prepared = {
-      importId: 'import-remote',
-      archivePath: 'C:\\backups\\sona-backup.tar.bz2',
-      manifest: {
-        schemaVersion: 1,
-        createdAt: '2026-04-29T00:00:00.000Z',
-        appVersion: packageJson.version,
-        historyMode: 'light',
-        scopes: {
-          config: true,
-          workspace: true,
-          history: true,
-          automation: true,
-          analytics: true,
-        },
-        counts: {
-          projects: 2,
-          historyItems: 5,
-          transcriptFiles: 5,
-          summaryFiles: 3,
-          automationRules: 1,
-          automationProcessedEntries: 7,
-          analyticsFiles: 1,
-        },
-      },
-      config: {} as any,
-      projects: [],
-      automationRules: [],
-      automationProcessedEntries: [],
-      analyticsContent: '{}',
-    };
+    const prepared = buildPreparedImport('import-remote');
     testContext.listBackupsMock.mockResolvedValue([remoteEntry]);
     testContext.prepareImportFromRemoteMock.mockResolvedValue(prepared);
     testContext.confirmMock.mockResolvedValue(false);
@@ -403,5 +403,50 @@ describe('SettingsGeneralTab backup entry', () => {
     expect(testContext.confirmMock.mock.calls[0]?.[1]?.details).toContain('restored items may reopen without playback');
     expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
     expect(testContext.applyImportBackupMock).not.toHaveBeenCalled();
+  });
+
+  it('disposes a prepared remote snapshot and shows the standardized restore error when apply fails', async () => {
+    const remoteEntry = {
+      href: 'https://dav.example.com/backups/sona-backup-2026-04-29_00-00-00.tar.bz2',
+      fileName: 'sona-backup-2026-04-29_00-00-00.tar.bz2',
+      size: 2048,
+      modifiedAt: '2026-04-29T00:00:00.000Z',
+    };
+    const prepared = buildPreparedImport('import-remote-failure');
+    const failure = new Error('apply failed');
+    testContext.listBackupsMock.mockResolvedValue([remoteEntry]);
+    testContext.prepareImportFromRemoteMock.mockResolvedValue(prepared);
+    testContext.confirmMock.mockResolvedValue(true);
+    testContext.applyImportBackupMock.mockRejectedValueOnce(failure);
+
+    render(<SettingsGeneralTab />);
+
+    await openWebDavAccordion();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Cloud Backups' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(remoteEntry.fileName)).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    });
+
+    await waitFor(() => {
+      expect(testContext.disposePreparedImportMock).toHaveBeenCalledWith(prepared);
+    });
+    expect(testContext.showErrorMock).toHaveBeenCalledWith({
+      code: 'backup.webdav_restore_failed',
+      messageKey: 'errors.backup.webdav_restore_failed',
+      cause: failure,
+      titleKey: 'settings.backup.error_title',
+    });
+    expect(testContext.alertMock).not.toHaveBeenCalledWith(
+      'Backup archive imported successfully.',
+      expect.anything(),
+    );
   });
 });
