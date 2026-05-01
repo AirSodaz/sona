@@ -227,6 +227,7 @@ describe('ModelService', () => {
 
         it('adds localized speaker settings labels to both locale files', () => {
             expect(enLocale.settings).toMatchObject({
+                audio_files: 'Audio Files',
                 speaker_segmentation_model_label: 'Speaker Segmentation Model',
                 speaker_segmentation_model_hint: 'Used to split offline recordings into anonymous speaker turns.',
                 select_speaker_segmentation_model: 'Select speaker segmentation model...',
@@ -235,9 +236,26 @@ describe('ModelService', () => {
                 select_speaker_embedding_model: 'Select speaker embedding model...',
                 speaker_segmentation_models: 'Speaker Segmentation Models',
                 speaker_embedding_models: 'Speaker Embedding Models',
+                speaker_profiles_title: 'Speaker Profiles',
+                speaker_profiles_description: 'Build a global library of known speakers from local reference audio files. Projects can then choose which profiles are active.',
+                speaker_profile_name_label: 'Profile Name',
+                speaker_profile_name_placeholder: 'e.g. Alice',
+                add_speaker_profile: 'Add Profile',
+                no_speaker_profiles: 'No speaker profiles yet.',
+                speaker_profile_readiness_ready: 'Ready for automatic matching',
+                speaker_profile_readiness_limited: 'Can appear as a suggestion, but needs more usable samples before automatic matching.',
+                speaker_profile_readiness_not_ready: 'Needs more usable samples before it can participate in speaker recognition.',
+                speaker_samples_count: '{{count}} samples',
+                delete_speaker_profile: 'Delete {{name}}',
+                speaker_profile_samples_hint: 'Import one or more local reference clips. They will be normalized to 16k mono WAV and stored under app-managed data.',
+                speaker_profile_readiness_meta: '{{usable}} usable samples · {{duration}}',
+                import_speaker_samples: 'Import Samples',
+                no_speaker_samples: 'No reference samples imported yet.',
+                speaker_profile_import_failed: 'Failed to import one or more speaker reference samples.',
             });
 
             expect(zhLocale.settings).toMatchObject({
+                audio_files: '音频文件',
                 speaker_segmentation_model_label: '说话人分离模型',
                 speaker_segmentation_model_hint: '用于将离线录音拆分为匿名说话人片段。',
                 select_speaker_segmentation_model: '选择说话人分离模型...',
@@ -246,6 +264,22 @@ describe('ModelService', () => {
                 select_speaker_embedding_model: '选择说话人特征模型...',
                 speaker_segmentation_models: '说话人分离模型',
                 speaker_embedding_models: '说话人特征模型',
+                speaker_profiles_title: '说话人档案',
+                speaker_profiles_description: '从本地参考音频建立已知说话人档案库，项目可以选择启用哪些档案。',
+                speaker_profile_name_label: '档案名称',
+                speaker_profile_name_placeholder: '例如：Alice',
+                add_speaker_profile: '添加档案',
+                no_speaker_profiles: '还没有说话人档案。',
+                speaker_profile_readiness_ready: '可用于自动匹配',
+                speaker_profile_readiness_limited: '可以作为候选建议，但还需要更多可用样本才能自动匹配。',
+                speaker_profile_readiness_not_ready: '需要更多可用样本后才能参与说话人识别。',
+                speaker_samples_count: '{{count}} 个样本',
+                delete_speaker_profile: '删除 {{name}}',
+                speaker_profile_samples_hint: '导入一个或多个本地参考片段。它们会被规范化为 16k 单声道 WAV，并存放在应用管理的数据目录中。',
+                speaker_profile_readiness_meta: '{{usable}} 个可用样本 · {{duration}}',
+                import_speaker_samples: '导入样本',
+                no_speaker_samples: '还没有导入参考样本。',
+                speaker_profile_import_failed: '导入一个或多个说话人参考样本失败。',
             });
         });
     });

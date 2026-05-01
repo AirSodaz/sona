@@ -299,8 +299,14 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                   <button
                     className="btn btn-icon btn-danger-soft"
                     onClick={() => void handleDeleteProfile(profile)}
-                    title={t('settings.delete_speaker_profile', { defaultValue: `Delete ${profile.name}` })}
-                    aria-label={t('settings.delete_speaker_profile', { defaultValue: `Delete ${profile.name}` })}
+                    title={t('settings.delete_speaker_profile', {
+                      name: profile.name,
+                      defaultValue: 'Delete {{name}}',
+                    })}
+                    aria-label={t('settings.delete_speaker_profile', {
+                      name: profile.name,
+                      defaultValue: 'Delete {{name}}',
+                    })}
                   >
                     <Trash2 size={18} />
                   </button>
