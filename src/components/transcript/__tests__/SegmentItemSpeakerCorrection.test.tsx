@@ -39,7 +39,7 @@ vi.mock('../../Icons', () => ({
 }));
 
 vi.mock('../SegmentTimestamp', () => ({
-  SegmentTimestamp: ({ start }: { start: number }) => <span>{start}</span>,
+  SegmentTimestamp: ({ start }: { start: number }) => <span className="segment-timestamp">{start}</span>,
 }));
 
 import { projectService } from '../../../services/projectService';
@@ -176,6 +176,26 @@ describe('SegmentItem speaker correction', () => {
     fireEvent.click(screen.getByTestId('speaker-correction-expand-seg-1'));
 
     expect(screen.getByRole('menuitem', { name: 'Bob' })).toBeDefined();
+  });
+
+  it('keeps the timestamp in the text row when a speaker badge is shown', () => {
+    const { container } = renderComponent();
+
+    const speakerRow = container.querySelector('.segment-speaker-row');
+    const mainRow = container.querySelector('.transcript-segment-main');
+    const timestamp = container.querySelector('.segment-timestamp');
+    const content = container.querySelector('.segment-content');
+    const speakerBadge = screen.getByTestId('speaker-badge-seg-1');
+
+    expect(speakerRow).not.toBeNull();
+    expect(mainRow).not.toBeNull();
+    expect(timestamp).not.toBeNull();
+    expect(content).not.toBeNull();
+    expect(speakerRow?.contains(speakerBadge)).toBe(true);
+    expect(speakerRow?.contains(timestamp)).toBe(false);
+    expect(mainRow?.contains(timestamp)).toBe(true);
+    expect(mainRow?.contains(content)).toBe(true);
+    expect(content?.contains(speakerBadge)).toBe(false);
   });
 
   it('updates the full speaker group and project defaults when a global profile is chosen', async () => {

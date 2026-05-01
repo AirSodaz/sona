@@ -238,17 +238,22 @@
 }
 
 .transcript-segment {
-  display: grid;
-  grid-template-columns: 60px 1fr auto;
-  /* Gutter | Content | Actions */
-  gap: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
   padding: var(--spacing-xs) var(--spacing-md);
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast);
   cursor: text;
-  align-items: baseline;
   max-width: 900px;
   margin: 0 auto;
+}
+
+.transcript-segment-main {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  /* Gutter | Content | Actions */
+  gap: var(--spacing-md);
+  align-items: baseline;
 }
 
 .transcript-segment:hover {
@@ -300,6 +305,12 @@
   position: relative;
 }
 
+.segment-speaker-row {
+  margin-left: calc(60px + var(--spacing-md));
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
 .speaker-badge-shell {
   position: relative;
   display: inline-flex;
@@ -311,7 +322,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
   padding: 2px 10px;
   border: 1px solid transparent;
   border-radius: 999px;

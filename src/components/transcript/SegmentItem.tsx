@@ -342,79 +342,121 @@ function SegmentItemComponent({
         isNew ? 'segment-new' : '',
     ].filter(Boolean).join(' ');
 
-    return (
-        <div className={classNames} onAnimationEnd={handleAnimationEnd}>
-            <SegmentTimestamp start={segment.start} onSeek={onSeek} />
+    const speakerBadge = showSpeakerLabel && segment.speaker ? (
+        <div className="speaker-badge-shell" ref={speakerMenuRef}>
+            <button
+                type="button"
+                className="speaker-badge-button"
+                data-testid={`speaker-badge-${segment.id}`}
+                aria-expanded={isSpeakerMenuOpen}
+                aria-haspopup="menu"
+                aria-label={t('editor.change_speaker_label', {
+                    speaker: segment.speaker.label,
+                    defaultValue: `Change speaker ${segment.speaker.label}`,
+                })}
+                onClick={handleSpeakerBadgeClick}
+            >
+                {segment.speaker.label}
+            </button>
 
-            <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
-                {showSpeakerLabel && segment.speaker && (
-                    <div className="speaker-badge-shell" ref={speakerMenuRef}>
-                        <button
-                            type="button"
-                            className="speaker-badge-button"
-                            data-testid={`speaker-badge-${segment.id}`}
-                            aria-expanded={isSpeakerMenuOpen}
-                            aria-haspopup="menu"
-                            aria-label={t('editor.change_speaker_label', {
-                                speaker: segment.speaker.label,
-                                defaultValue: `Change speaker ${segment.speaker.label}`,
+            {isSpeakerMenuOpen && (
+                <div
+                    className="speaker-correction-menu"
+                    data-testid={`speaker-correction-menu-${segment.id}`}
+                    role="menu"
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <div className="speaker-correction-menu-header">
+                        <div className="speaker-correction-menu-title">
+                            {t('editor.speaker_correction_title', {
+                                defaultValue: 'Assign speaker profile',
                             })}
-                            onClick={handleSpeakerBadgeClick}
-                        >
-                            {segment.speaker.label}
-                        </button>
+                        </div>
+                        <div className="speaker-correction-menu-hint">
+                            {t('editor.speaker_correction_hint', {
+                                defaultValue: 'Applies to every matching speaker segment in this transcript.',
+                            })}
+                        </div>
+                    </div>
 
-                        {isSpeakerMenuOpen && (
-                            <div
-                                className="speaker-correction-menu"
-                                data-testid={`speaker-correction-menu-${segment.id}`}
-                                role="menu"
-                                onClick={(event) => event.stopPropagation()}
-                            >
-                                <div className="speaker-correction-menu-header">
-                                    <div className="speaker-correction-menu-title">
-                                        {t('editor.speaker_correction_title', {
-                                            defaultValue: 'Assign speaker profile',
-                                        })}
-                                    </div>
-                                    <div className="speaker-correction-menu-hint">
-                                        {t('editor.speaker_correction_hint', {
-                                            defaultValue: 'Applies to every matching speaker segment in this transcript.',
-                                        })}
-                                    </div>
+                    {speakerProfileSections.primaryProfiles.length === 0 && !hasSecondarySpeakerProfiles ? (
+                        <div className="speaker-correction-empty">
+                            {t('editor.speaker_correction_empty', {
+                                defaultValue: 'No speaker profiles yet. Add them in Settings > Vocabulary.',
+                            })}
+                        </div>
+                    ) : (
+                        <>
+                            {speakerCandidates.length > 0 && (
+                                <div className="speaker-correction-list">
+                                    {speakerCandidates.map((candidate) => (
+                                        <button
+                                            key={`${segment.id}-${candidate.profileId}`}
+                                            type="button"
+                                            className="speaker-correction-option"
+                                            role="menuitem"
+                                            disabled={isApplyingSpeakerProfile}
+                                            onClick={() => void handleSpeakerProfileSelect(candidate.profileId)}
+                                        >
+                                            {candidate.profileName}
+                                        </button>
+                                    ))}
                                 </div>
+                            )}
 
-                                {speakerProfileSections.primaryProfiles.length === 0 && !hasSecondarySpeakerProfiles ? (
-                                    <div className="speaker-correction-empty">
-                                        {t('editor.speaker_correction_empty', {
-                                            defaultValue: 'No speaker profiles yet. Add them in Settings > Vocabulary.',
+                            <div className="speaker-correction-list">
+                                {speakerProfileSections.primaryProfiles.map((profile) => (
+                                    <button
+                                        key={profile.id}
+                                        type="button"
+                                        className="speaker-correction-option"
+                                        role="menuitem"
+                                        disabled={isApplyingSpeakerProfile}
+                                        onClick={() => void handleSpeakerProfileSelect(profile.id)}
+                                    >
+                                        {profile.name}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {canResetSpeakerGroup && (
+                                <div className="speaker-correction-secondary">
+                                    <button
+                                        type="button"
+                                        className="speaker-correction-expand"
+                                        onClick={() => void handleResetSpeakerGroup()}
+                                    >
+                                        {t('editor.speaker_review_reset', {
+                                            defaultValue: 'Restore anonymous label',
                                         })}
-                                    </div>
-                                ) : (
-                                    <>
-                                        {speakerCandidates.length > 0 && (
-                                            <div className="speaker-correction-list">
-                                                {speakerCandidates.map((candidate) => (
-                                                    <button
-                                                        key={`${segment.id}-${candidate.profileId}`}
-                                                        type="button"
-                                                        className="speaker-correction-option"
-                                                        role="menuitem"
-                                                        disabled={isApplyingSpeakerProfile}
-                                                        onClick={() => void handleSpeakerProfileSelect(candidate.profileId)}
-                                                    >
-                                                        {candidate.profileName}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
+                                    </button>
+                                </div>
+                            )}
 
+                            {hasSecondarySpeakerProfiles && (
+                                <div className="speaker-correction-secondary">
+                                    <button
+                                        type="button"
+                                        className="speaker-correction-expand"
+                                        data-testid={`speaker-correction-expand-${segment.id}`}
+                                        onClick={() => setShowAllSpeakerProfiles((current) => !current)}
+                                    >
+                                        {showAllSpeakerProfiles
+                                            ? t('editor.speaker_correction_hide_more', {
+                                                defaultValue: 'Hide more profiles',
+                                            })
+                                            : t('editor.speaker_correction_show_more', {
+                                                defaultValue: 'Show all speaker profiles',
+                                            })}
+                                    </button>
+
+                                    {showAllSpeakerProfiles && (
                                         <div className="speaker-correction-list">
-                                            {speakerProfileSections.primaryProfiles.map((profile) => (
+                                            {speakerProfileSections.secondaryProfiles.map((profile) => (
                                                 <button
                                                     key={profile.id}
                                                     type="button"
-                                                    className="speaker-correction-option"
+                                                    className="speaker-correction-option secondary"
                                                     role="menuitem"
                                                     disabled={isApplyingSpeakerProfile}
                                                     onClick={() => void handleSpeakerProfileSelect(profile.id)}
@@ -423,132 +465,99 @@ function SegmentItemComponent({
                                                 </button>
                                             ))}
                                         </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    ) : null;
 
-                                        {canResetSpeakerGroup && (
-                                            <div className="speaker-correction-secondary">
-                                                <button
-                                                    type="button"
-                                                    className="speaker-correction-expand"
-                                                    onClick={() => void handleResetSpeakerGroup()}
-                                                >
-                                                    {t('editor.speaker_review_reset', {
-                                                        defaultValue: 'Restore anonymous label',
-                                                    })}
-                                                </button>
-                                            </div>
-                                        )}
+    return (
+        <div className={classNames} onAnimationEnd={handleAnimationEnd}>
+            {speakerBadge && (
+                <div className="segment-speaker-row">
+                    {speakerBadge}
+                </div>
+            )}
 
-                                        {hasSecondarySpeakerProfiles && (
-                                            <div className="speaker-correction-secondary">
-                                                <button
-                                                    type="button"
-                                                    className="speaker-correction-expand"
-                                                    data-testid={`speaker-correction-expand-${segment.id}`}
-                                                    onClick={() => setShowAllSpeakerProfiles((current) => !current)}
-                                                >
-                                                    {showAllSpeakerProfiles
-                                                        ? t('editor.speaker_correction_hide_more', {
-                                                            defaultValue: 'Hide more profiles',
-                                                        })
-                                                        : t('editor.speaker_correction_show_more', {
-                                                            defaultValue: 'Show all speaker profiles',
-                                                        })}
-                                                </button>
+            <div className="transcript-segment-main">
+                <SegmentTimestamp start={segment.start} onSeek={onSeek} />
 
-                                                {showAllSpeakerProfiles && (
-                                                    <div className="speaker-correction-list">
-                                                        {speakerProfileSections.secondaryProfiles.map((profile) => (
-                                                            <button
-                                                                key={profile.id}
-                                                                type="button"
-                                                                className="speaker-correction-option secondary"
-                                                                role="menuitem"
-                                                                disabled={isApplyingSpeakerProfile}
-                                                                onClick={() => void handleSpeakerProfileSelect(profile.id)}
-                                                            >
-                                                                {profile.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-                {isEditing ? (
-                    <ContentEditable
-                        ref={inputRef}
-                        className="segment-input"
-                        html={editText}
-                        onChange={handleChange}
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleBlur}
-                    />
-                ) : (
-                    <SegmentTokens
-                        segment={segment}
-                        isActive={isActive}
-                        onSeek={onSeek}
-                        matches={matches}
-                        activeMatch={activeMatch}
-                        onMatchClick={setActiveMatch}
-                    />
-                )}
-                {isAligning && (
-                    <span
-                        className="segment-aligning-indicator"
-                        data-tooltip={t('editor.aligning')}
-                        aria-label={t('editor.aligning')}
-                    />
-                )}
-                {isTranslationVisible && typeof segment.translation === 'string' && segment.translation && !isEditing && (
-                    <div className="segment-translation" style={{ marginTop: '4px', color: 'var(--color-text-secondary)', fontSize: '0.9em' }}>
-                        {segment.translation}
-                    </div>
-                )}
-            </div>
+                <div className="segment-content" onClick={handleTextClick} onDoubleClick={handleTextDoubleClick}>
+                    {isEditing ? (
+                        <ContentEditable
+                            ref={inputRef}
+                            className="segment-input"
+                            html={editText}
+                            onChange={handleChange}
+                            onKeyDown={handleKeyDown}
+                            onBlur={handleBlur}
+                        />
+                    ) : (
+                        <SegmentTokens
+                            segment={segment}
+                            isActive={isActive}
+                            onSeek={onSeek}
+                            matches={matches}
+                            activeMatch={activeMatch}
+                            onMatchClick={setActiveMatch}
+                        />
+                    )}
+                    {isAligning && (
+                        <span
+                            className="segment-aligning-indicator"
+                            data-tooltip={t('editor.aligning')}
+                            aria-label={t('editor.aligning')}
+                        />
+                    )}
+                    {isTranslationVisible && typeof segment.translation === 'string' && segment.translation && !isEditing && (
+                        <div className="segment-translation" style={{ marginTop: '4px', color: 'var(--color-text-secondary)', fontSize: '0.9em' }}>
+                            {segment.translation}
+                        </div>
+                    )}
+                </div>
 
-            <div className="segment-actions">
-                <button
-                    className="btn btn-icon"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(segment.id);
-                    }}
-                    data-tooltip={t('editor.edit_tooltip')}
-                    aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
-                >
-                    <EditIcon />
-                </button>
-                {hasNext && (
+                <div className="segment-actions">
                     <button
                         className="btn btn-icon"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onMergeWithNext(segment.id);
+                            onEdit(segment.id);
                         }}
-                        disabled={!canMergeWithNext}
-                        data-tooltip={t('editor.merge_tooltip')}
-                        aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
+                        data-tooltip={t('editor.edit_tooltip')}
+                        aria-label={t('editor.edit_label', { time: formatDisplayTime(segment.start) })}
                     >
-                        <MergeIcon />
+                        <EditIcon />
                     </button>
-                )}
-                <button
-                    className="btn btn-icon"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(segment.id);
-                    }}
-                    data-tooltip={t('editor.delete_tooltip')}
-                    aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
-                >
-                    <TrashIcon />
-                </button>
+                    {hasNext && (
+                        <button
+                            className="btn btn-icon"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMergeWithNext(segment.id);
+                            }}
+                            disabled={!canMergeWithNext}
+                            data-tooltip={t('editor.merge_tooltip')}
+                            aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
+                        >
+                            <MergeIcon />
+                        </button>
+                    )}
+                    <button
+                        className="btn btn-icon"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(segment.id);
+                        }}
+                        data-tooltip={t('editor.delete_tooltip')}
+                        aria-label={t('editor.delete_label', { time: formatDisplayTime(segment.start) })}
+                    >
+                        <TrashIcon />
+                    </button>
+                </div>
             </div>
         </div>
     );
