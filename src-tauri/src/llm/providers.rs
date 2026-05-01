@@ -1,137 +1,35 @@
+use super::*;
+use async_trait::async_trait;
+use log::warn;
+use reqwest::Client;
+use rig::client::{CompletionClient, Nothing};
+use rig::completion::CompletionModel;
+use rig::providers::{anthropic, gemini, ollama, openai};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
+
 #[derive(Serialize)]
-struct GoogleTranslateRequest {
-    q: Vec<String>,
-    target: String,
-    format: String,
+pub(crate) struct GoogleTranslateRequest {
+    pub(crate) q: Vec<String>,
+    pub(crate) target: String,
+    pub(crate) format: String,
 }
 
 #[derive(Deserialize)]
-struct GoogleTranslateTranslation {
+pub(crate) struct GoogleTranslateTranslation {
     #[serde(rename = "translatedText")]
-    translated_text: String,
+    pub(crate) translated_text: String,
 }
 
 #[derive(Deserialize)]
-struct GoogleTranslateData {
-    translations: Vec<GoogleTranslateTranslation>,
+pub(crate) struct GoogleTranslateData {
+    pub(crate) translations: Vec<GoogleTranslateTranslation>,
 }
 
 #[derive(Deserialize)]
-struct GoogleTranslateResponse {
-    data: GoogleTranslateData,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmTaskType {
-    Polish,
-    Translate,
-    Summary,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmUsageCategory {
-    Summary,
-    Translation,
-    Polish,
-    TitleGeneration,
-    ConnectionTest,
-    Generic,
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum LlmGenerateSource {
-    TitleGeneration,
-    ConnectionTest,
-    Generic,
-}
-
-impl From<LlmGenerateSource> for LlmUsageCategory {
-    fn from(value: LlmGenerateSource) -> Self {
-        match value {
-            LlmGenerateSource::TitleGeneration => LlmUsageCategory::TitleGeneration,
-            LlmGenerateSource::ConnectionTest => LlmUsageCategory::ConnectionTest,
-            LlmGenerateSource::Generic => LlmUsageCategory::Generic,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SummaryTemplateConfig {
-    pub id: String,
-    pub name: String,
-    pub instructions: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmConfig {
-    pub provider: LlmProvider,
-    pub base_url: String,
-    pub api_key: String,
-    pub model: String,
-    pub api_path: Option<String>,
-    pub api_version: Option<String>,
-    pub temperature: Option<f32>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmGenerateRequest {
-    pub config: LlmConfig,
-    pub input: String,
-    pub source: Option<LlmGenerateSource>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum MessageRole {
-    #[serde(rename = "system")]
-    System,
-    #[serde(rename = "user")]
-    User,
-    #[serde(rename = "assistant")]
-    Assistant,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StandardMessage {
-    pub role: MessageRole,
-    pub content: String,
-}
-
-#[derive(Debug)]
-pub struct StandardLlmRequest {
-    pub messages: Vec<StandardMessage>,
-    pub temperature: f32,
-    #[allow(dead_code)]
-    pub max_tokens: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenUsage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StandardLlmResponse {
-    pub text: String,
-    pub usage: Option<TokenUsage>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmUsageEventPayload {
-    pub occurred_at: String,
-    pub provider: LlmProvider,
-    pub model: String,
-    pub category: LlmUsageCategory,
-    pub usage: Option<TokenUsage>,
+pub(crate) struct GoogleTranslateResponse {
+    pub(crate) data: GoogleTranslateData,
 }
 
 #[async_trait]
@@ -162,7 +60,9 @@ impl LlmAdapter for OpenAiAdapter {
 
         // For now, we use the first message's content as input to match current behavior
         // or join all user messages.
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .filter(|m| matches!(m.role, MessageRole::User))
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
@@ -199,7 +99,9 @@ impl LlmAdapter for AnthropicAdapter {
             .build()
             .map_err(|error| error.to_string())?;
 
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .filter(|m| matches!(m.role, MessageRole::User))
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
@@ -236,7 +138,9 @@ impl LlmAdapter for OllamaAdapter {
             .build()
             .map_err(|error| error.to_string())?;
 
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .filter(|m| matches!(m.role, MessageRole::User))
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
@@ -273,7 +177,9 @@ impl LlmAdapter for GeminiAdapter {
             .build()
             .map_err(|error| error.to_string())?;
 
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .filter(|m| matches!(m.role, MessageRole::User))
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
@@ -304,7 +210,9 @@ impl LlmAdapter for GoogleTranslateAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
@@ -326,18 +234,24 @@ impl LlmAdapter for GoogleTranslateAdapter {
                     );
                     let client = fetch_client.clone();
                     async move {
-                        let response = client.get(&url).send().await.map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
+                        let response =
+                            client.get(&url).send().await.map_err(|e| {
+                                GoogleTranslateFreeAttemptError::Message(e.to_string())
+                            })?;
                         let status = response.status();
                         if !status.is_success() {
                             return Err(GoogleTranslateFreeAttemptError::HttpStatus {
                                 status,
-                                retry_after: None
+                                retry_after: None,
                             });
                         }
-                        let body: Value = response.json().await.map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
+                        let body: Value = response
+                            .json()
+                            .await
+                            .map_err(|e| GoogleTranslateFreeAttemptError::Message(e.to_string()))?;
                         let mut result = String::new();
                         if let Some(outer_arr) = body.as_array() {
-                            if let Some(inner_arr) = outer_arr.get(0).and_then(|v| v.as_array()) {
+                            if let Some(inner_arr) = outer_arr.first().and_then(|v| v.as_array()) {
                                 for part in inner_arr {
                                     if let Some(text) = part.get(0).and_then(|v| v.as_str()) {
                                         result.push_str(text);
@@ -346,13 +260,16 @@ impl LlmAdapter for GoogleTranslateAdapter {
                             }
                         }
                         if result.is_empty() {
-                            return Err(GoogleTranslateFreeAttemptError::Message("No translation returned".to_string()));
+                            return Err(GoogleTranslateFreeAttemptError::Message(
+                                "No translation returned".to_string(),
+                            ));
                         }
                         Ok(result)
                     }
                 },
                 tokio::time::sleep,
-            ).await?;
+            )
+            .await?;
 
             return Ok(StandardLlmResponse { text, usage: None });
         }
@@ -372,10 +289,7 @@ impl LlmAdapter for GoogleTranslateAdapter {
         let response = post_json_request(&url, vec![], json!(payload)).await?;
         let text = extract_text_from_json_response(&response)?;
 
-        Ok(StandardLlmResponse {
-            text,
-            usage: None,
-        })
+        Ok(StandardLlmResponse { text, usage: None })
     }
 }
 pub struct GenericHttpAdapter;
@@ -388,7 +302,9 @@ impl LlmAdapter for GenericHttpAdapter {
         req: &StandardLlmRequest,
         config: &LlmConfig,
     ) -> Result<StandardLlmResponse, String> {
-        let input = req.messages.iter()
+        let input = req
+            .messages
+            .iter()
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
@@ -402,7 +318,8 @@ impl LlmAdapter for GenericHttpAdapter {
                     &input,
                     Some(req.temperature),
                     config.api_path.as_deref(),
-                ).await?
+                )
+                .await?
             }
             LlmProvider::AzureOpenAi => {
                 generate_with_azure_openai(
@@ -412,7 +329,8 @@ impl LlmAdapter for GenericHttpAdapter {
                     &input,
                     Some(req.temperature),
                     config.api_version.as_deref(),
-                ).await?
+                )
+                .await?
             }
             LlmProvider::Perplexity => {
                 generate_with_perplexity(
@@ -420,7 +338,8 @@ impl LlmAdapter for GenericHttpAdapter {
                     &config.model,
                     &input,
                     Some(req.temperature),
-                ).await?
+                )
+                .await?
             }
             _ => {
                 generate_with_openai_custom_path(
@@ -430,7 +349,8 @@ impl LlmAdapter for GenericHttpAdapter {
                     &input,
                     Some(req.temperature),
                     config.api_path.as_deref(),
-                ).await?
+                )
+                .await?
             }
         };
 
@@ -438,10 +358,10 @@ impl LlmAdapter for GenericHttpAdapter {
     }
 }
 
-pub struct AdapterFactory;
+pub(crate) struct AdapterFactory;
 
 impl AdapterFactory {
-    pub fn create(provider: LlmProvider) -> Box<dyn LlmAdapter> {
+    pub(crate) fn create(provider: LlmProvider) -> Box<dyn LlmAdapter> {
         match provider {
             LlmProvider::OpenAi
             | LlmProvider::DeepSeek
@@ -468,111 +388,6 @@ impl AdapterFactory {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmModelsRequest {
-    pub provider: LlmProvider,
-    pub base_url: String,
-    pub api_key: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmSegmentInput {
-    pub id: String,
-    pub text: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct PolishSegmentsRequest {
-    pub task_id: String,
-    pub config: LlmConfig,
-    pub segments: Vec<LlmSegmentInput>,
-    pub chunk_size: Option<usize>,
-    pub context: Option<String>,
-    pub keywords: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TranslateSegmentsRequest {
-    pub task_id: String,
-    pub config: LlmConfig,
-    pub segments: Vec<LlmSegmentInput>,
-    pub chunk_size: Option<usize>,
-    pub target_language: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SummarySegmentInput {
-    pub id: String,
-    pub text: String,
-    pub start: f32,
-    pub end: f32,
-    pub is_final: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct SummarizeTranscriptRequest {
-    pub task_id: String,
-    pub config: LlmConfig,
-    pub template: SummaryTemplateConfig,
-    pub segments: Vec<SummarySegmentInput>,
-    pub chunk_char_budget: Option<usize>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PolishedSegment {
-    pub id: String,
-    pub text: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranslatedSegment {
-    pub id: String,
-    pub translation: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptSummaryResult {
-    pub template_id: String,
-    pub content: String,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskProgressPayload {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub completed_chunks: usize,
-    pub total_chunks: usize,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskChunkPayload<T> {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub chunk_index: usize,
-    pub total_chunks: usize,
-    pub items: Vec<T>,
-}
-
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct LlmTaskTextPayload {
-    pub task_id: String,
-    pub task_type: LlmTaskType,
-    pub text: String,
-    pub delta: String,
-}
-
 #[derive(Deserialize)]
 struct OpenAiModel {
     id: String,
@@ -594,10 +409,10 @@ struct OllamaTagsResponse {
 }
 
 #[derive(Deserialize)]
-struct GeminiModel {
-    name: String,
+pub(crate) struct GeminiModel {
+    pub(crate) name: String,
     #[serde(rename = "supportedGenerationMethods")]
-    supported_generation_methods: Option<Vec<String>>,
+    pub(crate) supported_generation_methods: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -605,7 +420,7 @@ struct GeminiModelsResponse {
     models: Option<Vec<GeminiModel>>,
 }
 
-fn clean_gemini_base_url(base_url: &str) -> &str {
+pub(crate) fn clean_gemini_base_url(base_url: &str) -> &str {
     let base = base_url.trim_end_matches('/');
     let suffixes = [
         "/v1beta/models",
@@ -626,13 +441,13 @@ fn clean_gemini_base_url(base_url: &str) -> &str {
     base
 }
 
-fn format_gemini_models_url(base_url: &str, api_key: &str) -> String {
+pub(crate) fn format_gemini_models_url(base_url: &str, api_key: &str) -> String {
     let cleaned_base = clean_gemini_base_url(base_url);
 
     format!("{}/v1beta/models?key={}", cleaned_base, api_key)
 }
 
-fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
+pub(crate) fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
     model
         .supported_generation_methods
         .as_ref()
@@ -640,7 +455,7 @@ fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
         .unwrap_or(true)
 }
 
-fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
+pub(crate) fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
     let base = base_url.trim_end_matches('/');
 
     if is_ollama {
@@ -654,7 +469,7 @@ fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
     }
 }
 
-async fn get_gemini_models(
+pub(crate) async fn get_gemini_models(
     client: &Client,
     api_key: &str,
     base_url: &str,
@@ -682,7 +497,7 @@ async fn get_gemini_models(
         .collect())
 }
 
-async fn get_openai_models(
+pub(crate) async fn get_openai_models(
     client: &Client,
     api_key: &str,
     base_url: &str,
@@ -713,7 +528,7 @@ async fn get_openai_models(
     Err("Failed to fetch models from any known endpoint".to_string())
 }
 
-fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
+pub(crate) fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
     !matches!(
         provider,
         LlmProvider::Anthropic
@@ -725,7 +540,7 @@ fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
     )
 }
 
-fn extract_text_response(
+pub(crate) fn extract_text_response(
     choice: &rig::OneOrMany<rig::completion::AssistantContent>,
 ) -> Result<String, String> {
     let parts = choice
@@ -743,136 +558,7 @@ fn extract_text_response(
     Ok(parts.join("\n"))
 }
 
-/// Keeps the progressively built response text and emits both the full text and
-/// the latest delta, because downstream listeners render partial output while
-/// also needing the complete accumulated value for replacement-style updates.
-struct StreamTextAccumulator<'a, EmitFn>
-where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
-{
-    text: String,
-    emitted_any: bool,
-    emit_delta: &'a mut EmitFn,
-}
-
-impl<'a, EmitFn> StreamTextAccumulator<'a, EmitFn>
-where
-    EmitFn: FnMut(&str, &str) -> Result<(), String>,
-{
-    fn new(emit_delta: &'a mut EmitFn) -> Self {
-        Self {
-            text: String::new(),
-            emitted_any: false,
-            emit_delta,
-        }
-    }
-
-    fn push(&mut self, delta: &str) -> Result<(), String> {
-        if delta.is_empty() {
-            return Ok(());
-        }
-
-        self.text.push_str(delta);
-        self.emitted_any = true;
-        (self.emit_delta)(&self.text, delta)
-    }
-
-    fn text(&self) -> String {
-        self.text.clone()
-    }
-}
-
-/// Reassembles transport chunks into complete lines before higher-level
-/// streaming parsers inspect them. HTTP/SSE providers can split a single line
-/// across arbitrary network chunks, so chunk boundaries are not message
-/// boundaries.
-#[derive(Default)]
-struct StreamingLineBuffer {
-    buffer: String,
-}
-
-impl StreamingLineBuffer {
-    fn process(&mut self, chunk: &str) -> Vec<String> {
-        if chunk.find('\n').is_none() {
-            // Keep buffering until we see a line terminator. Partial lines are
-            // not safe to parse yet.
-            self.buffer.push_str(chunk);
-            return Vec::new();
-        }
-
-        self.buffer.push_str(chunk);
-        let mut lines = self
-            .buffer
-            .split('\n')
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>();
-        self.buffer = lines.pop().unwrap_or_default();
-        lines
-    }
-
-    fn flush(&mut self) -> Vec<String> {
-        if self.buffer.trim().is_empty() {
-            self.buffer.clear();
-            return Vec::new();
-        }
-
-        let line = self.buffer.clone();
-        self.buffer.clear();
-        vec![line]
-    }
-}
-
-/// Collects SSE `data:` lines and emits one logical event per blank-line
-/// separator. This keeps us aligned with SSE framing instead of assuming each
-/// incoming chunk is already a complete event.
-#[derive(Default)]
-struct SseEventBuffer {
-    line_buffer: StreamingLineBuffer,
-    data_lines: Vec<String>,
-}
-
-impl SseEventBuffer {
-    fn process(&mut self, chunk: &str) -> Vec<String> {
-        let mut events = Vec::new();
-        for line in self.line_buffer.process(chunk) {
-            self.process_line(&line, &mut events);
-        }
-        events
-    }
-
-    fn flush(&mut self) -> Vec<String> {
-        let mut events = Vec::new();
-        for line in self.line_buffer.flush() {
-            self.process_line(&line, &mut events);
-        }
-
-        if !self.data_lines.is_empty() {
-            events.push(self.data_lines.join("\n"));
-            self.data_lines.clear();
-        }
-
-        events
-    }
-
-    fn process_line(&mut self, raw_line: &str, events: &mut Vec<String>) {
-        let line = raw_line.trim_end_matches('\r');
-        if line.is_empty() {
-            if !self.data_lines.is_empty() {
-                events.push(self.data_lines.join("\n"));
-                self.data_lines.clear();
-            }
-            return;
-        }
-
-        if let Some(rest) = line.strip_prefix("data:") {
-            self.data_lines.push(rest.trim_start().to_string());
-        }
-        // Ignore other SSE fields such as `event:` or `id:` because current
-        // provider integrations only consume the payload carried in `data:`.
-    }
-}
-
-fn join_url(base_url: &str, path: &str) -> String {
+pub(crate) fn join_url(base_url: &str, path: &str) -> String {
     let base = base_url.trim_end_matches('/');
     let path = path.trim_start_matches('/');
 
@@ -888,37 +574,33 @@ fn join_url(base_url: &str, path: &str) -> String {
 
 fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
     match value {
-        Value::String(text) => {
-            if !text.is_empty() {
-                parts.push(text.clone());
-            }
-        }
+        Value::String(text) if !text.is_empty() => parts.push(text.clone()),
+        Value::String(_) => {}
         Value::Array(items) => {
             for item in items {
                 extract_text_parts(item, parts);
             }
         }
         Value::Object(map) => {
-            if let Some(text) = map.get("output_text").and_then(Value::as_str) {
-                if !text.is_empty() {
-                    parts.push(text.to_string());
-                }
+            if let Some(text) = map
+                .get("output_text")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+            {
+                parts.push(text.to_string());
             }
 
-            if let Some(text) = map.get("text").and_then(Value::as_str) {
-                if !text.is_empty() {
-                    parts.push(text.to_string());
-                    return;
-                }
-            }
-
-            if let Some(content) = map.get("content") {
-                extract_text_parts(content, parts);
+            if let Some(text) = map
+                .get("text")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+            {
+                parts.push(text.to_string());
                 return;
             }
 
-            if let Some(message) = map.get("message") {
-                extract_text_parts(message, parts);
+            if let Some(content) = map.get("content").or_else(|| map.get("message")) {
+                extract_text_parts(content, parts);
                 return;
             }
 
@@ -930,7 +612,7 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
     }
 }
 
-fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
+pub(crate) fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
     let mut parts = Vec::new();
 
     if let Some(output_text) = response.get("output_text").and_then(Value::as_str) {
@@ -967,7 +649,11 @@ fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
     Ok(text)
 }
 
-fn normalize_token_usage(prompt_tokens: u64, completion_tokens: u64, total_tokens: u64) -> Option<TokenUsage> {
+fn normalize_token_usage(
+    prompt_tokens: u64,
+    completion_tokens: u64,
+    total_tokens: u64,
+) -> Option<TokenUsage> {
     let normalized_total = if total_tokens > 0 {
         total_tokens
     } else {
@@ -985,13 +671,15 @@ fn normalize_token_usage(prompt_tokens: u64, completion_tokens: u64, total_token
     })
 }
 
-fn token_usage_from_rig_usage(usage: Option<rig::completion::Usage>) -> Option<TokenUsage> {
+pub(crate) fn token_usage_from_rig_usage(
+    usage: Option<rig::completion::Usage>,
+) -> Option<TokenUsage> {
     usage.and_then(|usage| {
         normalize_token_usage(usage.input_tokens, usage.output_tokens, usage.total_tokens)
     })
 }
 
-fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
+pub(crate) fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
     let usage = response.get("usage")?;
 
     let prompt_tokens = usage
@@ -1012,7 +700,7 @@ fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
     normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)
 }
 
-fn emit_llm_usage_event(
+pub(crate) fn emit_llm_usage_event(
     app: &AppHandle,
     config: &LlmConfig,
     category: LlmUsageCategory,
@@ -1034,7 +722,7 @@ fn emit_llm_usage_event(
     }
 }
 
-fn build_standard_input(req: &StandardLlmRequest) -> String {
+pub(crate) fn build_standard_input(req: &StandardLlmRequest) -> String {
     req.messages
         .iter()
         .filter(|message| matches!(message.role, MessageRole::User))

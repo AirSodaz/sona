@@ -1,4 +1,144 @@
-fn normalize_incremental_json_line(line: &str) -> Option<String> {
+use super::*;
+use futures_util::StreamExt;
+use log::warn;
+use reqwest::{header::CONTENT_TYPE, Client};
+use rig::client::{CompletionClient, Nothing};
+use rig::completion::{CompletionModel, GetTokenUsage};
+use rig::providers::{anthropic, gemini, ollama};
+use rig::streaming::StreamedAssistantContent;
+use serde::de::DeserializeOwned;
+use serde_json::{json, Value};
+
+/// Keeps the progressively built response text and emits both the full text and
+/// the latest delta, because downstream listeners render partial output while
+/// also needing the complete accumulated value for replacement-style updates.
+pub(crate) struct StreamTextAccumulator<'a, EmitFn>
+where
+    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+{
+    text: String,
+    emitted_any: bool,
+    emit_delta: &'a mut EmitFn,
+}
+
+impl<'a, EmitFn> StreamTextAccumulator<'a, EmitFn>
+where
+    EmitFn: FnMut(&str, &str) -> Result<(), String>,
+{
+    pub(crate) fn new(emit_delta: &'a mut EmitFn) -> Self {
+        Self {
+            text: String::new(),
+            emitted_any: false,
+            emit_delta,
+        }
+    }
+
+    pub(crate) fn push(&mut self, delta: &str) -> Result<(), String> {
+        if delta.is_empty() {
+            return Ok(());
+        }
+
+        self.text.push_str(delta);
+        self.emitted_any = true;
+        (self.emit_delta)(&self.text, delta)
+    }
+
+    pub(crate) fn text(&self) -> String {
+        self.text.clone()
+    }
+}
+
+/// Reassembles transport chunks into complete lines before higher-level
+/// streaming parsers inspect them. HTTP/SSE providers can split a single line
+/// across arbitrary network chunks, so chunk boundaries are not message
+/// boundaries.
+#[derive(Default)]
+pub(crate) struct StreamingLineBuffer {
+    buffer: String,
+}
+
+impl StreamingLineBuffer {
+    pub(crate) fn process(&mut self, chunk: &str) -> Vec<String> {
+        if chunk.find('\n').is_none() {
+            // Keep buffering until we see a line terminator. Partial lines are
+            // not safe to parse yet.
+            self.buffer.push_str(chunk);
+            return Vec::new();
+        }
+
+        self.buffer.push_str(chunk);
+        let mut lines = self
+            .buffer
+            .split('\n')
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        self.buffer = lines.pop().unwrap_or_default();
+        lines
+    }
+
+    pub(crate) fn flush(&mut self) -> Vec<String> {
+        if self.buffer.trim().is_empty() {
+            self.buffer.clear();
+            return Vec::new();
+        }
+
+        let line = self.buffer.clone();
+        self.buffer.clear();
+        vec![line]
+    }
+}
+
+/// Collects SSE `data:` lines and emits one logical event per blank-line
+/// separator. This keeps us aligned with SSE framing instead of assuming each
+/// incoming chunk is already a complete event.
+#[derive(Default)]
+struct SseEventBuffer {
+    line_buffer: StreamingLineBuffer,
+    data_lines: Vec<String>,
+}
+
+impl SseEventBuffer {
+    fn process(&mut self, chunk: &str) -> Vec<String> {
+        let mut events = Vec::new();
+        for line in self.line_buffer.process(chunk) {
+            self.process_line(&line, &mut events);
+        }
+        events
+    }
+
+    fn flush(&mut self) -> Vec<String> {
+        let mut events = Vec::new();
+        for line in self.line_buffer.flush() {
+            self.process_line(&line, &mut events);
+        }
+
+        if !self.data_lines.is_empty() {
+            events.push(self.data_lines.join("\n"));
+            self.data_lines.clear();
+        }
+
+        events
+    }
+
+    fn process_line(&mut self, raw_line: &str, events: &mut Vec<String>) {
+        let line = raw_line.trim_end_matches('\r');
+        if line.is_empty() {
+            if !self.data_lines.is_empty() {
+                events.push(self.data_lines.join("\n"));
+                self.data_lines.clear();
+            }
+            return;
+        }
+
+        if let Some(rest) = line.strip_prefix("data:") {
+            self.data_lines.push(rest.trim_start().to_string());
+        }
+        // Ignore other SSE fields such as `event:` or `id:` because current
+        // provider integrations only consume the payload carried in `data:`.
+    }
+}
+
+pub(crate) fn normalize_incremental_json_line(line: &str) -> Option<String> {
     let trimmed = line.trim();
     if trimmed.is_empty() || trimmed == "```" || trimmed == "```json" {
         return None;
@@ -12,7 +152,7 @@ fn normalize_incremental_json_line(line: &str) -> Option<String> {
     None
 }
 
-fn parse_json_array_or_ndjson<T: DeserializeOwned>(
+pub(crate) fn parse_json_array_or_ndjson<T: DeserializeOwned>(
     response_text: &str,
     task_type: LlmTaskType,
     chunk_number: usize,
@@ -298,8 +438,7 @@ where
 
             let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
             if let Some(event_type) = event.get("type").and_then(Value::as_str) {
-                if event_type.contains("output_text.delta")
-                    || event_type.contains("refusal.delta")
+                if event_type.contains("output_text.delta") || event_type.contains("refusal.delta")
                 {
                     if let Some(delta) = event.get("delta").and_then(Value::as_str) {
                         accumulator.push(delta)?;
@@ -334,7 +473,7 @@ where
     })
 }
 
-async fn try_stream_text<EmitFn>(
+pub(crate) async fn try_stream_text<EmitFn>(
     request: &LlmGenerateRequest,
     accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
 ) -> Result<Option<StandardLlmResponse>, String>
@@ -409,7 +548,7 @@ where
     Ok(response)
 }
 
-async fn generate_with_optional_streaming<EmitFn>(
+pub(crate) async fn generate_with_optional_streaming<EmitFn>(
     request: LlmGenerateRequest,
     emit_delta: &mut EmitFn,
 ) -> Result<StandardLlmResponse, String>
@@ -435,7 +574,7 @@ where
     }
 }
 
-async fn post_json_request(
+pub(crate) async fn post_json_request(
     url: &str,
     headers: Vec<(&str, String)>,
     body: Value,
@@ -465,7 +604,7 @@ async fn post_json_request(
     serde_json::from_str(&text).map_err(|error| error.to_string())
 }
 
-async fn generate_with_openai_chat_api(
+pub(crate) async fn generate_with_openai_chat_api(
     url: &str,
     api_key: &str,
     model: &str,
@@ -497,7 +636,7 @@ async fn generate_with_openai_chat_api(
     })
 }
 
-async fn generate_with_openai_responses_api(
+pub(crate) async fn generate_with_openai_responses_api(
     base_url: &str,
     api_key: &str,
     model: &str,
@@ -525,7 +664,7 @@ async fn generate_with_openai_responses_api(
     })
 }
 
-async fn generate_with_azure_openai(
+pub(crate) async fn generate_with_azure_openai(
     base_url: &str,
     api_key: &str,
     deployment: &str,
@@ -561,7 +700,7 @@ async fn generate_with_azure_openai(
     })
 }
 
-async fn generate_with_openai_custom_path(
+pub(crate) async fn generate_with_openai_custom_path(
     base_url: &str,
     api_key: &str,
     model: &str,
@@ -573,7 +712,7 @@ async fn generate_with_openai_custom_path(
     generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
 }
 
-async fn generate_with_perplexity(
+pub(crate) async fn generate_with_perplexity(
     api_key: &str,
     model: &str,
     input: &str,
@@ -590,7 +729,9 @@ async fn generate_with_perplexity(
     .await
 }
 
-async fn generate_with_rig(request: LlmGenerateRequest) -> Result<StandardLlmResponse, String> {
+pub(crate) async fn generate_with_rig(
+    request: LlmGenerateRequest,
+) -> Result<StandardLlmResponse, String> {
     let adapter = AdapterFactory::create(request.config.provider);
     let std_req = StandardLlmRequest {
         messages: vec![StandardMessage {
@@ -602,9 +743,7 @@ async fn generate_with_rig(request: LlmGenerateRequest) -> Result<StandardLlmRes
     };
 
     let client = Client::new();
-    let response = adapter
-        .generate(&client, &std_req, &request.config)
-        .await?;
+    let response = adapter.generate(&client, &std_req, &request.config).await?;
 
     Ok(response)
 }
