@@ -1,11 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  buildTrendGeometry,
-  normalizeTrendPoints,
   SettingsDashboardTab,
 } from '../SettingsDashboardTab';
-import type { DashboardSnapshot } from '../../../types/dashboard';
+import type { DashboardLlmUsageStats, DashboardSnapshot } from '../../../types/dashboard';
 import { dashboardService } from '../../../services/dashboardService';
 
 vi.mock('react-i18next', () => ({
@@ -64,6 +62,60 @@ function createUsage(callCount = 4, recentValues: number[] = []) {
     byProvider: [],
     byCategory: [],
     recentDaily: createUsageTrend(recentValues),
+  };
+}
+
+function createUsageWithBreakdowns(recentValues: number[] = []): DashboardLlmUsageStats {
+  return {
+    ...createUsage(6, recentValues),
+    byProvider: [
+      {
+        key: 'open_ai',
+        stats: {
+          callCount: 4,
+          callsWithUsage: 4,
+          callsWithoutUsage: 0,
+          promptTokens: 900,
+          completionTokens: 300,
+          totalTokens: 1200,
+        },
+      },
+      {
+        key: 'ollama',
+        stats: {
+          callCount: 2,
+          callsWithUsage: 2,
+          callsWithoutUsage: 0,
+          promptTokens: 300,
+          completionTokens: 100,
+          totalTokens: 400,
+        },
+      },
+    ],
+    byCategory: [
+      {
+        key: 'summary',
+        stats: {
+          callCount: 3,
+          callsWithUsage: 3,
+          callsWithoutUsage: 0,
+          promptTokens: 500,
+          completionTokens: 200,
+          totalTokens: 700,
+        },
+      },
+      {
+        key: 'translation',
+        stats: {
+          callCount: 3,
+          callsWithUsage: 3,
+          callsWithoutUsage: 0,
+          promptTokens: 700,
+          completionTokens: 200,
+          totalTokens: 900,
+        },
+      },
+    ],
   };
 }
 
@@ -144,6 +196,15 @@ function createDeepSnapshotWithTrends(values: number[]): DashboardSnapshot {
       },
     },
     llmUsage: createUsage(snapshot.llmUsage.totals.callCount, values.map((value) => value * 100)),
+  };
+}
+
+function createDeepSnapshotWithRechartsData(values: number[]): DashboardSnapshot {
+  const snapshot = createDeepSnapshotWithTrends(values);
+
+  return {
+    ...snapshot,
+    llmUsage: createUsageWithBreakdowns(values.map((value) => value * 100)),
   };
 }
 
@@ -253,27 +314,6 @@ describe('SettingsDashboardTab', () => {
     expect(screen.getByTestId('dashboard-loading')).toBeDefined();
   });
 
-  it('builds stable geometry for no-activity and flat non-zero trends', () => {
-    const zeros = normalizeTrendPoints(Array.from({ length: 30 }, (_, index) => ({
-      label: `d-${index}`,
-      value: 0,
-    })));
-    const constant = normalizeTrendPoints(Array.from({ length: 30 }, (_, index) => ({
-      label: `d-${index}`,
-      value: 5,
-    })));
-
-    const zeroGeometry = buildTrendGeometry(zeros);
-    const constantGeometry = buildTrendGeometry(constant);
-    const zeroYValues = new Set(zeroGeometry.coordinates.map((point) => point.y));
-    const constantYValues = new Set(constantGeometry.coordinates.map((point) => point.y));
-
-    expect(zeroYValues.size).toBe(1);
-    expect([...zeroYValues][0]).toBe(zeroGeometry.baseline);
-    expect(constantYValues.size).toBe(1);
-    expect([...constantYValues][0]).toBeLessThan(constantGeometry.baseline);
-  });
-
   it('renders fast data first and keeps speaker stats in partial loading while deep scan runs', async () => {
     const deep = deferred<DashboardSnapshot>();
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
@@ -290,7 +330,7 @@ describe('SettingsDashboardTab', () => {
     expect(screen.getByText('settings.dashboard.llm_usage')).toBeDefined();
   });
 
-  it('renders plain line-chart anchors without trend summary copy', async () => {
+  it('renders Recharts trend surfaces and KPI sparklines without trend summary copy', async () => {
     const trendValues = [
       ...Array.from({ length: 16 }, () => 0),
       ...Array.from({ length: 7 }, () => 1),
@@ -298,7 +338,7 @@ describe('SettingsDashboardTab', () => {
     ];
 
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
-    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithTrends(trendValues));
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithRechartsData(trendValues));
 
     render(<SettingsDashboardTab />);
 
@@ -308,11 +348,13 @@ describe('SettingsDashboardTab', () => {
 
     expect(screen.getAllByTestId('dashboard-trend-anchor-start')).toHaveLength(3);
     expect(screen.getAllByTestId('dashboard-trend-anchor-end')).toHaveLength(3);
+    expect(screen.getAllByTestId('dashboard-recharts-trend')).toHaveLength(3);
+    expect(screen.getAllByTestId('dashboard-kpi-sparkline')).toHaveLength(4);
     expect(screen.queryByText('settings.dashboard.trend_recent_7_days')).toBeNull();
     expect(screen.queryByText('settings.dashboard.trend_change_up')).toBeNull();
   });
 
-  it('does not render visible point markers for the token trend chart', async () => {
+  it('renders the token trend as a Recharts surface with accessible chart labeling', async () => {
     const trendValues = [
       ...Array.from({ length: 20 }, () => 0),
       ...Array.from({ length: 10 }, () => 50),
@@ -337,7 +379,8 @@ describe('SettingsDashboardTab', () => {
 
     const tokenTrendCard = tokenTrendTitle.closest('.settings-dashboard-chart-card');
     expect(tokenTrendCard).not.toBeNull();
-    expect(tokenTrendCard?.querySelectorAll('circle').length).toBe(0);
+    expect(tokenTrendCard?.querySelector('[data-testid="dashboard-recharts-trend"]')).not.toBeNull();
+    expect(tokenTrendCard?.querySelector('[aria-label="settings.dashboard.recent_token_trend"]')).not.toBeNull();
   });
 
   it('renders plain line charts for all-zero recent trend values', async () => {
@@ -353,6 +396,7 @@ describe('SettingsDashboardTab', () => {
     });
 
     expect(screen.getAllByTestId('dashboard-trend-anchor-start')).toHaveLength(3);
+    expect(screen.getAllByTestId('dashboard-recharts-trend')).toHaveLength(3);
     expect(screen.queryByText('settings.dashboard.trend_no_activity')).toBeNull();
   });
 
@@ -368,6 +412,29 @@ describe('SettingsDashboardTab', () => {
 
     expect(screen.queryByTestId('dashboard-speaker-loading')).toBeNull();
     expect(screen.getByText('settings.dashboard.top_identified_speakers')).toBeDefined();
+    expect(screen.getAllByTestId('dashboard-recharts-coverage')).toHaveLength(2);
+    expect(screen.getByTestId('dashboard-recharts-speaker-split')).toBeDefined();
+    expect(screen.getByTestId('dashboard-recharts-ranking')).toBeDefined();
+  });
+
+  it('renders Recharts provider and category breakdown charts for tracked LLM usage', async () => {
+    const trendValues = [
+      ...Array.from({ length: 20 }, () => 0),
+      ...Array.from({ length: 10 }, () => 10),
+    ];
+
+    vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithRechartsData(trendValues));
+
+    render(<SettingsDashboardTab />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeDefined();
+    });
+
+    expect(screen.getAllByTestId('dashboard-recharts-breakdown')).toHaveLength(2);
+    expect(screen.getByText('open_ai')).toBeDefined();
+    expect(screen.getByText('summary')).toBeDefined();
   });
 
   it('keeps top identified speakers in an empty state when only anonymous speakers exist', async () => {

@@ -7,6 +7,14 @@ import {
   type DashboardTranslation,
 } from './formatters';
 import { joinClassNames } from './classNames';
+import {
+  CoverageBarChart,
+  DashboardSparkline,
+  MiniValueBarChart,
+  StackedDurationBarChart,
+  type DashboardChartPoint,
+  type DashboardChartTone,
+} from './charts';
 import type {
   DashboardLlmUsageBreakdown,
   DashboardSpeakerLeader,
@@ -51,6 +59,8 @@ export function KpiCard({
   variant = 'support',
   tone = 'default',
   compact = false,
+  sparkline,
+  sparklineLabel,
 }: {
   label: string;
   value: string;
@@ -60,7 +70,11 @@ export function KpiCard({
   variant?: 'feature' | 'support';
   tone?: 'default' | 'accent' | 'info' | 'warm';
   compact?: boolean;
+  sparkline?: DashboardChartPoint[];
+  sparklineLabel?: string;
 }): React.JSX.Element {
+  const chartTone: DashboardChartTone = tone === 'info' || tone === 'warm' ? tone : 'accent';
+
   return (
     <div
       className={joinClassNames(
@@ -76,6 +90,13 @@ export function KpiCard({
         <div className="settings-dashboard-kpi-label">{label}</div>
       </div>
       <div className="settings-dashboard-kpi-value">{value}</div>
+      {sparkline && sparkline.length > 0 && (
+        <DashboardSparkline
+          label={sparklineLabel || label}
+          points={sparkline}
+          tone={chartTone}
+        />
+      )}
       {detail && <div className="settings-dashboard-kpi-detail">{detail}</div>}
     </div>
   );
@@ -101,12 +122,11 @@ function CoverageMeter({
       <div className="settings-dashboard-note">
         {unitFormatter(numerator)} / {unitFormatter(denominator)}
       </div>
-      <div className="settings-dashboard-progress-track" aria-hidden="true">
-        <div
-          className="settings-dashboard-progress-fill"
-          style={{ width: `${Math.max(coverage * 100, coverage > 0 ? 4 : 0)}%` }}
-        />
-      </div>
+      <CoverageBarChart
+        label={label}
+        value={coverage}
+        valueFormatter={formatPercent}
+      />
     </div>
   );
 }
@@ -120,10 +140,6 @@ function IdentifiedAnonymousDistribution({
   anonymousDuration: number;
   t: DashboardTranslation;
 }): React.JSX.Element {
-  const total = identifiedDuration + anonymousDuration;
-  const identifiedRatio = calculateCoverage(identifiedDuration, total);
-  const anonymousRatio = calculateCoverage(anonymousDuration, total);
-
   return (
     <div className="settings-dashboard-distribution-panel">
       <div className="settings-dashboard-chart-header">
@@ -136,9 +152,15 @@ function IdentifiedAnonymousDistribution({
           })}
         </div>
       </div>
-      <div className="settings-dashboard-stacked-bar" aria-hidden="true">
-        <div className="identified" style={{ width: `${Math.max(identifiedRatio * 100, identifiedDuration > 0 ? 4 : 0)}%` }} />
-        <div className="anonymous" style={{ width: `${Math.max(anonymousRatio * 100, anonymousDuration > 0 ? 4 : 0)}%` }} />
+      <div className="settings-dashboard-split-chart">
+        <StackedDurationBarChart
+          label={t('settings.dashboard.identified_vs_anonymous', { defaultValue: 'Identified vs Anonymous' })}
+          identifiedLabel={t('settings.dashboard.identified_duration', { defaultValue: 'Identified duration' })}
+          anonymousLabel={t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}
+          identifiedDuration={identifiedDuration}
+          anonymousDuration={anonymousDuration}
+          valueFormatter={(value) => formatDuration(value, t)}
+        />
       </div>
       <div className="settings-dashboard-bar-list compact">
         <div className="settings-dashboard-bar-item">
@@ -249,9 +271,8 @@ function RankedSpeakers({
   const maxDuration = speakers.reduce((max, speaker) => Math.max(max, speaker.durationSeconds), 0);
 
   return (
-    <div className="settings-dashboard-bar-list">
+    <div className="settings-dashboard-bar-list" data-testid="dashboard-recharts-ranking">
       {speakers.slice(0, 5).map((speaker) => {
-        const width = maxDuration > 0 ? `${Math.max((speaker.durationSeconds / maxDuration) * 100, 10)}%` : '10%';
         return (
           <div key={speaker.speakerId} className="settings-dashboard-bar-item">
             <div className="settings-dashboard-bar-label-row">
@@ -267,9 +288,12 @@ function RankedSpeakers({
               </div>
               <div className="settings-dashboard-bar-value">{formatDuration(speaker.durationSeconds, t)}</div>
             </div>
-            <div className="settings-dashboard-progress-track" aria-hidden="true">
-              <div className="settings-dashboard-progress-fill alt" style={{ width }} />
-            </div>
+            <MiniValueBarChart
+              label={speaker.label}
+              value={speaker.durationSeconds}
+              maxValue={maxDuration}
+              valueFormatter={(value) => formatDuration(value, t)}
+            />
           </div>
         );
       })}
@@ -338,10 +362,9 @@ export function UsageBreakdown<TValue extends string>({
   return (
     <div className="settings-dashboard-chart-card">
       <div className="settings-dashboard-subtitle">{title}</div>
-      <div className="settings-dashboard-bar-list">
+      <div className="settings-dashboard-bar-list" data-testid="dashboard-recharts-breakdown">
         {breakdown.slice(0, 6).map((item) => {
           const value = Math.max(item.stats.totalTokens, item.stats.callCount);
-          const width = maxValue > 0 ? `${Math.max((value / maxValue) * 100, 8)}%` : '8%';
           return (
             <div key={item.key} className="settings-dashboard-bar-item">
               <div className="settings-dashboard-bar-label-row">
@@ -356,9 +379,12 @@ export function UsageBreakdown<TValue extends string>({
                   </div>
                 </div>
               </div>
-              <div className="settings-dashboard-progress-track" aria-hidden="true">
-                <div className="settings-dashboard-progress-fill alt" style={{ width }} />
-              </div>
+              <MiniValueBarChart
+                label={item.key}
+                value={value}
+                maxValue={maxValue}
+                valueFormatter={formatNumber}
+              />
             </div>
           );
         })}

@@ -145,6 +145,8 @@
   --dashboard-accent: var(--color-primary);
   --dashboard-accent-soft: color-mix(in srgb, var(--color-primary) 14%, var(--color-bg-secondary));
   --dashboard-accent-strong: color-mix(in srgb, var(--color-primary) 72%, white);
+  --dashboard-chart-grid: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  --dashboard-chart-track: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--dashboard-accent) 12%, transparent), transparent 52%),
     linear-gradient(
@@ -166,13 +168,20 @@
 }
 
 .settings-dashboard-kpi-card.feature {
-  min-height: 170px;
+  min-height: 188px;
   padding: 18px 20px 20px;
 }
 
 .settings-dashboard-kpi-card.compact {
   min-height: 0;
   padding: 15px 16px;
+}
+
+.settings-dashboard-kpi-card.accent,
+.settings-dashboard-chart-card.accent {
+  --dashboard-accent: #0f9f8b;
+  --dashboard-accent-soft: color-mix(in srgb, #0f9f8b 13%, var(--color-bg-secondary));
+  --dashboard-accent-strong: #45d5bf;
 }
 
 .settings-dashboard-kpi-card.info,
@@ -243,6 +252,14 @@
   margin-top: auto;
 }
 
+.settings-dashboard-kpi-sparkline {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  margin-top: -2px;
+  color: var(--dashboard-accent);
+}
+
 .settings-dashboard-chart-card {
   display: flex;
   flex-direction: column;
@@ -259,10 +276,6 @@
   gap: 14px;
 }
 
-.settings-dashboard-trend-card.info .settings-dashboard-trend-line {
-  stroke: #2d7ff9;
-}
-
 .settings-dashboard-trend-surface {
   padding: 14px 14px 12px;
   border-radius: var(--radius-lg);
@@ -270,24 +283,60 @@
   background: color-mix(in srgb, var(--color-bg-secondary) 68%, var(--color-bg-primary));
 }
 
-.settings-dashboard-trend-svg {
-  display: block;
+.settings-dashboard-recharts-surface {
   width: 100%;
-  height: 88px;
-  overflow: visible;
+  min-width: 0;
 }
 
-.settings-dashboard-trend-axis {
-  stroke: color-mix(in srgb, var(--color-text-muted) 20%, transparent);
-  stroke-width: 1;
+.settings-dashboard-recharts-surface.trend {
+  height: 108px;
 }
 
-.settings-dashboard-trend-line {
-  fill: none;
-  stroke: var(--dashboard-accent);
-  stroke-width: 2.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.settings-dashboard-recharts-surface.mini-bar {
+  height: 26px;
+}
+
+.settings-dashboard-recharts-surface.split-bar {
+  height: 34px;
+}
+
+.settings-dashboard-chart-tooltip {
+  min-width: 126px;
+  padding: 8px 9px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  background: color-mix(in srgb, var(--color-bg-primary) 96%, transparent);
+  color: var(--color-text-secondary);
+  box-shadow: 0 16px 36px -26px color-mix(in srgb, black 42%, transparent);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.settings-dashboard-chart-tooltip-label {
+  margin-bottom: 5px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.settings-dashboard-chart-tooltip-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.settings-dashboard-chart-tooltip-row strong {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.settings-dashboard-chart-tooltip-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 .settings-dashboard-trend-anchors {
@@ -355,6 +404,10 @@
 
 .settings-dashboard-stacked-bar {
   display: flex;
+}
+
+.settings-dashboard-split-chart {
+  width: 100%;
 }
 
 .settings-dashboard-stacked-bar .identified {

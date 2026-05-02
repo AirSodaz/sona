@@ -14,6 +14,7 @@ import type {
 } from '../../../types/dashboard';
 import {
   calculateCoverage,
+  formatDateLabel,
   formatDuration,
   formatNumber,
   type DashboardTranslation,
@@ -39,6 +40,15 @@ export function ContentOverviewSection({
   error: string | null;
   t: DashboardTranslation;
 }): React.JSX.Element {
+  const itemSparkline = overview.recentDailyItems.map((point) => ({
+    label: formatDateLabel(point.date),
+    value: point.itemCount,
+  }));
+  const durationSparkline = overview.recentDailyItems.map((point) => ({
+    label: formatDateLabel(point.date),
+    value: point.durationSeconds,
+  }));
+
   return (
     <div className="settings-dashboard-subsection">
       <div className="settings-dashboard-subsection-header">
@@ -75,6 +85,8 @@ export function ContentOverviewSection({
           badge={<FileText size={16} />}
           variant="feature"
           tone="accent"
+          sparkline={itemSparkline}
+          sparklineLabel={t('settings.dashboard.recent_item_trend', { defaultValue: 'Recent 30 Day Item Trend' })}
           detail={(
             <div className="settings-dashboard-pill-row">
               <StatPill>
@@ -98,6 +110,8 @@ export function ContentOverviewSection({
           badge={<Clock3 size={16} />}
           variant="feature"
           tone="warm"
+          sparkline={durationSparkline}
+          sparklineLabel={t('settings.dashboard.recent_duration_trend', { defaultValue: 'Recent 30 Day Duration Trend' })}
         />
       </div>
 
@@ -229,6 +243,15 @@ export function LlmUsagePanel({
   llmUsage: DashboardLlmUsageStats;
   t: DashboardTranslation;
 }): React.JSX.Element {
+  const callSparkline = llmUsage.recentDaily.map((point) => ({
+    label: formatDateLabel(point.date),
+    value: point.callCount,
+  }));
+  const tokenSparkline = llmUsage.recentDaily.map((point) => ({
+    label: formatDateLabel(point.date),
+    value: point.totalTokens,
+  }));
+
   return (
     <div className="settings-dashboard-panel">
       <div className="settings-dashboard-feature-grid">
@@ -238,6 +261,8 @@ export function LlmUsagePanel({
           badge={<Bot size={16} />}
           variant="feature"
           tone="info"
+          sparkline={callSparkline}
+          sparklineLabel={t('settings.dashboard.llm_call_count', { defaultValue: 'Successful Calls' })}
         />
         <KpiCard
           label={t('settings.dashboard.total_tokens', { defaultValue: 'Total Tokens' })}
@@ -245,6 +270,8 @@ export function LlmUsagePanel({
           badge={<BarChart3 size={16} />}
           variant="feature"
           tone="accent"
+          sparkline={tokenSparkline}
+          sparklineLabel={t('settings.dashboard.recent_token_trend', { defaultValue: 'Recent 30 Day Token Trend' })}
         />
       </div>
 

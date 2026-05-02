@@ -1,5 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -19,11 +17,6 @@ import {
   SpeakerInsightsSection,
 } from './dashboard/sections';
 import './SettingsDashboardTab.css';
-
-export {
-  buildTrendGeometry,
-  normalizeTrendPoints,
-} from './dashboard/trendGeometry';
 
 interface SettingsDashboardTabProps {
   isActive?: boolean;

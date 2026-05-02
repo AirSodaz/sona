@@ -1,11 +1,7 @@
 import React from 'react';
-import { formatDateLabel } from './formatters';
+import { formatDateLabel, formatDuration, formatNumber } from './formatters';
 import { joinClassNames } from './classNames';
-import {
-  buildTrendGeometry,
-  normalizeTrendPoints,
-  type TrendCardPoint,
-} from './trendGeometry';
+import { DashboardTrendChart, type DashboardChartPoint } from './charts';
 import type {
   DashboardContentTrendPoint,
   DashboardLlmUsageTrendPoint,
@@ -15,48 +11,27 @@ export function TrendCard({
   title,
   description,
   points,
+  valueFormatter,
   tone = 'accent',
 }: {
   title: string;
   description: string;
-  points: TrendCardPoint[];
+  points: DashboardChartPoint[];
+  valueFormatter?: (value: number) => string;
   tone?: 'accent' | 'info';
 }): React.JSX.Element {
-  const normalizedPoints = normalizeTrendPoints(points);
-  const {
-    linePath,
-    baseline,
-  } = buildTrendGeometry(normalizedPoints);
-  const startPoint = normalizedPoints[0];
-  const endPoint = normalizedPoints[normalizedPoints.length - 1];
-
   return (
     <div className={joinClassNames('settings-dashboard-chart-card', 'settings-dashboard-trend-card', tone)}>
       <div className="settings-dashboard-chart-header">
         <div className="settings-dashboard-subtitle">{title}</div>
         <div className="settings-dashboard-note">{description}</div>
       </div>
-      <div className="settings-dashboard-trend-surface">
-        <svg
-          className="settings-dashboard-trend-svg"
-          viewBox="0 0 100 72"
-          role="img"
-          aria-label={title}
-          preserveAspectRatio="none"
-        >
-          <title>{title}</title>
-          <line x1="0" y1={baseline} x2="100" y2={baseline} className="settings-dashboard-trend-axis" />
-          <path d={linePath} className="settings-dashboard-trend-line" />
-        </svg>
-        <div className="settings-dashboard-trend-anchors">
-          <div className="settings-dashboard-trend-anchor" data-testid="dashboard-trend-anchor-start">
-            <div className="settings-dashboard-trend-anchor-label">{startPoint?.label || '\u00A0'}</div>
-          </div>
-          <div className="settings-dashboard-trend-anchor end" data-testid="dashboard-trend-anchor-end">
-            <div className="settings-dashboard-trend-anchor-label">{endPoint?.label || '\u00A0'}</div>
-          </div>
-        </div>
-      </div>
+      <DashboardTrendChart
+        label={title}
+        points={points}
+        tone={tone}
+        valueFormatter={valueFormatter}
+      />
     </div>
   );
 }
@@ -79,6 +54,7 @@ export function ContentTrends({
           label: formatDateLabel(point.date),
           value: point.itemCount,
         }))}
+        valueFormatter={formatNumber}
       />
       <TrendCard
         title={t('settings.dashboard.recent_duration_trend', { defaultValue: 'Recent 30 Day Duration Trend' })}
@@ -89,6 +65,7 @@ export function ContentTrends({
           label: formatDateLabel(point.date),
           value: point.durationSeconds,
         }))}
+        valueFormatter={(value) => formatDuration(value, t)}
       />
     </div>
   );
@@ -111,6 +88,7 @@ export function TokenTrend({
         label: formatDateLabel(point.date),
         value: point.totalTokens,
       }))}
+      valueFormatter={formatNumber}
       tone="info"
     />
   );
