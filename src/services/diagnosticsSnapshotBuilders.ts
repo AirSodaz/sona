@@ -7,7 +7,12 @@ import type {
   DiagnosticOverviewCard,
   DiagnosticStatus,
 } from '../types/diagnostics';
-import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../types/runtime';
+import type {
+  AsrInferenceMetric,
+  AsrRuntimeMetricsSnapshot,
+  RuntimeEnvironmentStatus,
+  RuntimePathStatus,
+} from '../types/runtime';
 import type {
   DeviceProbeResult,
   MicrophonePermissionState,
@@ -52,6 +57,7 @@ export interface DiagnosticsSnapshotBuildContext {
   systemAudioProbe: DeviceProbeResult;
   voiceTypingReadiness: VoiceTypingReadinessSnapshot;
   runtimeEnvironment: RuntimeEnvironmentStatus;
+  asrRuntimeMetrics: AsrRuntimeMetricsSnapshot;
   onboardingReady: boolean;
   punctuationRequired: boolean;
 }
@@ -75,10 +81,17 @@ export interface RuntimeDiagnosticChecks {
   logDirCheck: DiagnosticCheck;
 }
 
+export interface AsrPerformanceDiagnosticChecks {
+  modelMemoryCheck: DiagnosticCheck;
+  liveLatencyCheck: DiagnosticCheck;
+  batchLatencyCheck: DiagnosticCheck;
+}
+
 export interface DiagnosticsBuiltChecks {
   model: ModelDiagnosticChecks;
   input: InputDiagnosticChecks;
   runtime: RuntimeDiagnosticChecks;
+  asr: AsrPerformanceDiagnosticChecks;
 }
 
 interface PathPolicyCheckArgs {
@@ -618,6 +631,137 @@ export function buildRuntimeChecks(context: DiagnosticsSnapshotBuildContext): Ru
     voiceTypingCheck,
     ffmpegCheck,
     logDirCheck,
+  };
+}
+
+function formatMetricMs(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? `${Math.round(value)} ms`
+    : 'unknown';
+}
+
+function formatMetricMb(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? `${value.toFixed(1)} MB`
+    : 'unknown';
+}
+
+function formatSignedMetricMb(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 'unknown';
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)} MB`;
+}
+
+function formatRtf(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toFixed(2)
+    : 'unknown';
+}
+
+function describeInferenceMetric(metric: AsrInferenceMetric): string {
+  const parts = [
+    `stage ${metric.stage}`,
+    `decode ${formatMetricMs(metric.decodeMs)}`,
+  ];
+
+  if (metric.audioExtractMs !== null) {
+    parts.push(`extract ${formatMetricMs(metric.audioExtractMs)}`);
+  }
+
+  if (metric.emitLatencyMs !== null) {
+    parts.push(`latency ${formatMetricMs(metric.emitLatencyMs)}`);
+  }
+
+  if (metric.totalMs !== null) {
+    parts.push(`total ${formatMetricMs(metric.totalMs)}`);
+  }
+
+  parts.push(`RTF ${formatRtf(metric.rtf)}`);
+  parts.push(`RSS ${formatMetricMb(metric.processRssMb)}`);
+
+  if (metric.segmentCount !== null) {
+    parts.push(`segments ${metric.segmentCount}`);
+  }
+
+  return parts.join(' · ');
+}
+
+export function buildAsrPerformanceChecks(context: DiagnosticsSnapshotBuildContext): AsrPerformanceDiagnosticChecks {
+  const { asrRuntimeMetrics, t } = context;
+  const modelLoad = asrRuntimeMetrics.modelLoad;
+  const liveInference = asrRuntimeMetrics.liveInference;
+  const batchInference = asrRuntimeMetrics.batchInference;
+
+  const modelMemoryCheck: DiagnosticCheck = modelLoad
+    ? {
+        id: 'asr-model-memory',
+        title: t('settings.diagnostics.asr_model_memory_title', { defaultValue: 'Model memory' }),
+        status: 'ready',
+        description: t('settings.diagnostics.asr_model_memory_ready', {
+          defaultValue: `Last model load: ${modelLoad.modelType} (${modelLoad.recognizerKind}).`,
+        }),
+        meta: [
+          `${modelLoad.modelType} ${modelLoad.recognizerKind}`,
+          `RSS ${formatMetricMb(modelLoad.processRssMb ?? modelLoad.rssAfterMb)}`,
+          `delta ${formatSignedMetricMb(modelLoad.rssDeltaMb)}`,
+          `load ${formatMetricMs(modelLoad.loadMs)}`,
+          modelLoad.reusedFromPool ? 'reused recognizer' : 'new recognizer',
+          modelLoad.instanceId,
+        ].join(' · '),
+      }
+    : {
+        id: 'asr-model-memory',
+        title: t('settings.diagnostics.asr_model_memory_title', { defaultValue: 'Model memory' }),
+        status: 'info',
+        description: t('settings.diagnostics.asr_model_memory_empty', {
+          defaultValue: 'No ASR runtime metrics have been captured yet.',
+        }),
+      };
+
+  const liveLatencyCheck: DiagnosticCheck = liveInference
+    ? {
+        id: 'asr-live-latency',
+        title: t('settings.diagnostics.asr_live_latency_title', { defaultValue: 'Live transcription latency' }),
+        status: 'ready',
+        description: t('settings.diagnostics.asr_live_latency_ready', {
+          defaultValue: `Last live inference from ${liveInference.instanceId || 'unknown instance'}.`,
+        }),
+        meta: describeInferenceMetric(liveInference),
+      }
+    : {
+        id: 'asr-live-latency',
+        title: t('settings.diagnostics.asr_live_latency_title', { defaultValue: 'Live transcription latency' }),
+        status: 'info',
+        description: t('settings.diagnostics.asr_live_latency_empty', {
+          defaultValue: 'No live transcription latency has been captured yet.',
+        }),
+      };
+
+  const batchLatencyCheck: DiagnosticCheck = batchInference
+    ? {
+        id: 'asr-batch-latency',
+        title: t('settings.diagnostics.asr_batch_latency_title', { defaultValue: 'Batch transcription latency' }),
+        status: 'ready',
+        description: t('settings.diagnostics.asr_batch_latency_ready', {
+          defaultValue: 'Last batch transcription run completed.',
+        }),
+        meta: describeInferenceMetric(batchInference),
+      }
+    : {
+        id: 'asr-batch-latency',
+        title: t('settings.diagnostics.asr_batch_latency_title', { defaultValue: 'Batch transcription latency' }),
+        status: 'info',
+        description: t('settings.diagnostics.asr_batch_latency_empty', {
+          defaultValue: 'No batch transcription latency has been captured yet.',
+        }),
+      };
+
+  return {
+    modelMemoryCheck,
+    liveLatencyCheck,
+    batchLatencyCheck,
   };
 }
 

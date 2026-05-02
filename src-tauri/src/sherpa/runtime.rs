@@ -1,3 +1,8 @@
+use super::metrics::{
+    calculate_rss_delta_mb, calculate_rtf, capture_process_memory_mb, current_time_millis,
+    duration_to_ms, log_inference_metric, log_model_load_metric, samples_to_ms,
+    set_live_inference_metric, AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric,
+};
 use super::model_config::{
     build_model_config, load_punctuation, load_vad, ModelFileConfig, Punctuation, Recognizer,
     RecognizerInner, SafeStream, SafeVad,
@@ -17,7 +22,44 @@ use sherpa_onnx::OfflineRecognizer;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{AppHandle, State};
+
+const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
+
+fn record_live_metric(metrics_store: &AsrMetricsStore, metric: AsrInferenceMetric) {
+    set_live_inference_metric(metrics_store, metric.clone());
+    log_inference_metric(&metric);
+}
+
+fn build_live_metric(
+    instance_id: &str,
+    stage: &str,
+    is_final: bool,
+    buffered_samples: usize,
+    decode_ms: f64,
+    emit_latency_ms: Option<f64>,
+    total_ms: Option<f64>,
+) -> AsrInferenceMetric {
+    let audio_duration_ms = samples_to_ms(buffered_samples, 16000.0);
+
+    AsrInferenceMetric {
+        occurred_at_ms: current_time_millis(),
+        source: "live".to_string(),
+        instance_id: Some(instance_id.to_string()),
+        stage: stage.to_string(),
+        is_final,
+        audio_duration_ms,
+        buffered_samples,
+        audio_extract_ms: None,
+        decode_ms,
+        emit_latency_ms,
+        total_ms,
+        rtf: calculate_rtf(decode_ms, audio_duration_ms),
+        segment_count: None,
+        process_rss_mb: capture_process_memory_mb(),
+    }
+}
 
 fn run_offline_inference<R: tauri::Runtime>(
     speech_buffer: &[Vec<f32>],
@@ -31,6 +73,8 @@ fn run_offline_inference<R: tauri::Runtime>(
     stage: &'static str,
     first_segment_emitted: Option<Arc<AtomicBool>>,
     normalization_options: TranscriptNormalizationOptions,
+    metrics_store: Option<AsrMetricsStore>,
+    triggered_at: Instant,
 ) {
     if speech_buffer.is_empty() {
         if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -49,6 +93,7 @@ fn run_offline_inference<R: tauri::Runtime>(
         full_audio.extend_from_slice(chunk);
     }
     let stream = r.create_stream();
+    let decode_started = Instant::now();
     debug!(
         "[Offline] FFI: Calling accept_waveform (Offline) with {} samples",
         full_audio.len()
@@ -58,6 +103,24 @@ fn run_offline_inference<R: tauri::Runtime>(
     debug!("[Offline] FFI: Calling decode");
     r.decode(&stream);
     debug!("[Offline] FFI: Decode finished");
+    let decode_ms = duration_to_ms(decode_started.elapsed());
+
+    let record_metric = |emit_latency_ms: Option<f64>| {
+        if let Some(metrics_store) = metrics_store.as_ref() {
+            record_live_metric(
+                metrics_store,
+                build_live_metric(
+                    instance_id,
+                    stage,
+                    is_final,
+                    full_audio.len(),
+                    decode_ms,
+                    emit_latency_ms,
+                    None,
+                ),
+            );
+        }
+    };
 
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
@@ -83,6 +146,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                         preview_text_for_log(raw_text)
                     );
                 }
+                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
                 return;
             }
 
@@ -103,6 +167,7 @@ fn run_offline_inference<R: tauri::Runtime>(
                         preview_text_for_log(&cleaned_text)
                     );
                 }
+                record_metric(Some(duration_to_ms(triggered_at.elapsed())));
                 return;
             }
 
@@ -149,17 +214,20 @@ fn run_offline_inference<R: tauri::Runtime>(
                 stage,
                 first_segment_emitted.as_ref(),
             );
+            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
         } else if let Some(label) = diagnostics_instance_label(instance_id) {
             info!(
                 "[Sherpa] {label} offline inference produced empty text after formatting. stage={} segment_id={} final={}",
                 stage, segment_id, is_final
             );
+            record_metric(Some(duration_to_ms(triggered_at.elapsed())));
         }
     } else if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
             "[Sherpa] {label} offline inference produced no recognizer result. stage={} segment_id={} final={}",
             stage, segment_id, is_final
         );
+        record_metric(Some(duration_to_ms(triggered_at.elapsed())));
     }
 }
 
@@ -195,12 +263,17 @@ pub async fn init_recognizer_impl(
         hotwords: hotwords.clone(),
     };
 
+    let load_started = Instant::now();
+    let rss_before_mb = capture_process_memory_mb();
+    let mut reused_from_pool = false;
+
     let recognizer = {
         let mut pool = state.recognizer_pool.lock().await;
         if let Some(r) = pool.get(&config_key) {
             // Heavy recognizers are reused across logical instances when their
             // model path and runtime knobs match exactly.
             info!("[init_recognizer] Reusing existing recognizer from pool");
+            reused_from_pool = true;
             r.clone()
         } else {
             info!("[init_recognizer] Creating new recognizer and adding to pool");
@@ -217,6 +290,26 @@ pub async fn init_recognizer_impl(
             r
         }
     };
+    let load_ms = duration_to_ms(load_started.elapsed());
+    let rss_after_mb = capture_process_memory_mb();
+    let model_load_metric = AsrModelLoadMetric {
+        occurred_at_ms: current_time_millis(),
+        instance_id: instance_id.clone(),
+        model_path: model_path.clone(),
+        model_type: model_type.clone(),
+        recognizer_kind: recognizer.kind_label().to_string(),
+        num_threads,
+        reused_from_pool,
+        load_ms,
+        rss_before_mb,
+        rss_after_mb,
+        rss_delta_mb: calculate_rss_delta_mb(rss_before_mb, rss_after_mb, reused_from_pool),
+        process_rss_mb: rss_after_mb,
+    };
+    state
+        .record_model_load_metric(model_load_metric.clone())
+        .await;
+    log_model_load_metric(&model_load_metric);
 
     let punctuation = load_punctuation(punctuation_model);
     let vad = load_vad(vad_model.clone());
@@ -350,6 +443,8 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                     .is_some()
                     .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                 let normalization_options = instance.normalization_options;
+                let metrics_store = state.metrics.clone();
+                let triggered_at = Instant::now();
 
                 if let Some(label) = diagnostics_instance_label(&instance_id) {
                     info!(
@@ -374,6 +469,8 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                             "flush_offline",
                             first_segment_emitted,
                             normalization_options,
+                            Some(metrics_store),
+                            triggered_at,
                         );
                     }
                 })
@@ -397,10 +494,15 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
     if let (Some(recognizer), Some(st)) = (instance.recognizer.as_deref(), instance.stream.as_ref())
     {
         if let RecognizerInner::Online(r) = &recognizer.inner {
+            let inference_started = Instant::now();
+            let metrics_store = state.metrics.clone();
             let current_time = instance.total_samples as f64 / 16000.0;
+            let buffered_samples =
+                ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
             // Online models need a short tail of silence to finalize the last
             // partial hypothesis before we reset the stream.
+            let decode_started = Instant::now();
             let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
             debug!("FFI: Calling accept_waveform (Online, tail_padding)");
             st.0.accept_waveform(16000, &tail_padding);
@@ -408,6 +510,7 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
             while r.0.is_ready(&st.0) {
                 r.0.decode(&st.0);
             }
+            let decode_ms = duration_to_ms(decode_started.elapsed());
 
             if let Some(result) = r.0.get_result(&st.0) {
                 if !result.text.trim().is_empty() {
@@ -450,6 +553,19 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                     );
                 }
             }
+
+            record_live_metric(
+                &metrics_store,
+                build_live_metric(
+                    &instance_id,
+                    "flush_online",
+                    true,
+                    buffered_samples,
+                    decode_ms,
+                    Some(duration_to_ms(inference_started.elapsed())),
+                    None,
+                ),
+            );
 
             instance.current_segment_id = None;
             r.0.reset(&st.0);
@@ -602,6 +718,16 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                     let normalization_options = instance.normalization_options;
+                    let should_record_partial_metric = instance.last_partial_metric_sample == 0
+                        || instance
+                            .total_samples
+                            .saturating_sub(instance.last_partial_metric_sample)
+                            >= PARTIAL_METRIC_INTERVAL_SAMPLES;
+                    let metrics_store = should_record_partial_metric.then(|| {
+                        instance.last_partial_metric_sample = instance.total_samples;
+                        state.metrics.clone()
+                    });
+                    let triggered_at = Instant::now();
 
                     if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
@@ -627,6 +753,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                                 "partial",
                                 first_segment_emitted,
                                 normalization_options,
+                                metrics_store,
+                                triggered_at,
                             );
                         }
                     });
@@ -664,6 +792,8 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                     let normalization_options = instance.normalization_options;
+                    let metrics_store = state.metrics.clone();
+                    let triggered_at = Instant::now();
 
                     if let Some(label) = diagnostics_instance_label(instance_id) {
                         println!(
@@ -689,11 +819,14 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                                 "final",
                                 first_segment_emitted,
                                 normalization_options,
+                                Some(metrics_store),
+                                triggered_at,
                             );
                         }
                     });
 
                     instance.offline_state.speech_buffer.clear();
+                    instance.last_partial_metric_sample = 0;
                     instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
                 }
 
@@ -728,19 +861,24 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
             Ok(())
         }
         RecognizerInner::Online(r) => {
+            let inference_started = Instant::now();
+            let metrics_store = state.metrics.clone();
             let st = instance
                 .stream
                 .as_ref()
                 .ok_or("Stream not initialized for online model")?;
 
+            let decode_started = Instant::now();
             st.0.accept_waveform(16000, samples);
             instance.total_samples += samples.len();
 
             while r.0.is_ready(&st.0) {
                 r.0.decode(&st.0);
             }
+            let decode_ms = duration_to_ms(decode_started.elapsed());
 
             let current_time = instance.total_samples as f64 / 16000.0;
+            let endpoint_detected = r.0.is_endpoint(&st.0);
 
             if let Some(result) = r.0.get_result(&st.0) {
                 let has_text = !result.text.trim().is_empty();
@@ -780,10 +918,37 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         "online_partial",
                         Some(&instance.record_diagnostics.first_segment_emitted),
                     );
+
+                    let should_record_partial_metric = !endpoint_detected
+                        && (instance.last_partial_metric_sample == 0
+                            || instance
+                                .total_samples
+                                .saturating_sub(instance.last_partial_metric_sample)
+                                >= PARTIAL_METRIC_INTERVAL_SAMPLES);
+
+                    if should_record_partial_metric {
+                        let buffered_samples = ((current_time - instance.segment_start_time)
+                            .max(0.0)
+                            * 16000.0) as usize;
+                        record_live_metric(
+                            &metrics_store,
+                            build_live_metric(
+                                instance_id,
+                                "online_partial",
+                                false,
+                                buffered_samples,
+                                decode_ms,
+                                Some(duration_to_ms(inference_started.elapsed())),
+                                None,
+                            ),
+                        );
+                        instance.last_partial_metric_sample = instance.total_samples;
+                    }
                 }
             }
 
-            if r.0.is_endpoint(&st.0) {
+            if endpoint_detected {
+                let endpoint_decode_started = Instant::now();
                 let tail_padding = vec![0.0; (16000.0 * 0.8) as usize];
                 debug!("FFI: Calling accept_waveform (Online, tail_padding)");
                 st.0.accept_waveform(16000, &tail_padding);
@@ -791,6 +956,9 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                 while r.0.is_ready(&st.0) {
                     r.0.decode(&st.0);
                 }
+                let final_decode_ms = decode_ms + duration_to_ms(endpoint_decode_started.elapsed());
+                let final_buffered_samples =
+                    ((current_time - instance.segment_start_time).max(0.0) * 16000.0) as usize;
 
                 if let Some(result) = r.0.get_result(&st.0) {
                     if !result.text.trim().is_empty() {
@@ -836,7 +1004,21 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                     }
                 }
 
+                record_live_metric(
+                    &metrics_store,
+                    build_live_metric(
+                        instance_id,
+                        "online_final",
+                        true,
+                        final_buffered_samples,
+                        final_decode_ms,
+                        Some(duration_to_ms(inference_started.elapsed())),
+                        None,
+                    ),
+                );
+
                 instance.current_segment_id = None;
+                instance.last_partial_metric_sample = 0;
                 r.0.reset(&st.0);
                 instance.segment_start_time = current_time;
             }

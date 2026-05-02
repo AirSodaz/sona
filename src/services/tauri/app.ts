@@ -1,4 +1,8 @@
-import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../../types/runtime';
+import type {
+  AsrRuntimeMetricsSnapshot,
+  RuntimeEnvironmentStatus,
+  RuntimePathStatus,
+} from '../../types/runtime';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
@@ -27,6 +31,10 @@ export async function openLogFolder(): Promise<void> {
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {
   return invokeTauri(TauriCommand.app.getRuntimeEnvironmentStatus);
+}
+
+export async function getAsrRuntimeMetrics(): Promise<AsrRuntimeMetricsSnapshot> {
+  return invokeTauri(TauriCommand.app.getAsrRuntimeMetrics);
 }
 
 export async function getPathStatuses(paths: string[]): Promise<RuntimePathStatus[]> {

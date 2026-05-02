@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
-import { openLogFolder, setMinimizeToTray } from '../app';
+import { getAsrRuntimeMetrics, openLogFolder, setMinimizeToTray } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
   historyCreateTranscriptSnapshot,
@@ -57,6 +57,20 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.setMinimizeToTray, {
       enabled: false,
     });
+  });
+
+  it('app wrappers expose ASR runtime metrics', async () => {
+    const metrics = {
+      modelLoad: null,
+      liveInference: null,
+      batchInference: null,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(metrics);
+
+    const result = await getAsrRuntimeMetrics();
+
+    expect(result).toEqual(metrics);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getAsrRuntimeMetrics);
   });
 
   it('audio wrappers adapt capture arguments and return values', async () => {

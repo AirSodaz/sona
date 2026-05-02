@@ -6,7 +6,11 @@ import type {
 } from '../../types/backup';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type { HistoryItem } from '../../types/history';
-import type { RuntimeEnvironmentStatus, RuntimePathStatus } from '../../types/runtime';
+import type {
+  AsrRuntimeMetricsSnapshot,
+  RuntimeEnvironmentStatus,
+  RuntimePathStatus,
+} from '../../types/runtime';
 import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
@@ -101,6 +105,10 @@ export type TauriCommandContractMap = {
   [TauriCommand.app.getRuntimeEnvironmentStatus]: {
     args: undefined;
     result: RuntimeEnvironmentStatus;
+  };
+  [TauriCommand.app.getAsrRuntimeMetrics]: {
+    args: undefined;
+    result: AsrRuntimeMetricsSnapshot;
   };
   [TauriCommand.app.getPathStatuses]: {
     args: { paths: string[] };

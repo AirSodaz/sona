@@ -1,3 +1,8 @@
+use super::metrics::{
+    new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
+    set_model_load_metric, snapshot_metrics, AsrInferenceMetric, AsrMetricsStore,
+    AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
+};
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
 use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
 use log::info;
@@ -54,6 +59,7 @@ pub struct SherpaInstance {
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub current_segment_id: Option<String>,
+    pub last_partial_metric_sample: usize,
     pub is_running: bool,
     pub record_diagnostics: RecordDiagnosticsState,
     pub normalization_options: TranscriptNormalizationOptions,
@@ -72,6 +78,7 @@ impl Default for SherpaInstance {
             vad_model: None,
             vad_buffer: 5.0,
             current_segment_id: None,
+            last_partial_metric_sample: 0,
             is_running: false,
             record_diagnostics: RecordDiagnosticsState::default(),
             normalization_options: TranscriptNormalizationOptions::default(),
@@ -99,6 +106,7 @@ pub(crate) fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     instance.segment_start_time = 0.0;
     instance.offline_state = OfflineState::default();
     instance.current_segment_id = None;
+    instance.last_partial_metric_sample = 0;
     instance.record_diagnostics = RecordDiagnosticsState::default();
 }
 
@@ -165,6 +173,7 @@ pub struct SherpaState {
     // while recognizers are pooled separately by configuration.
     pub instances: Mutex<HashMap<String, SherpaInstance>>,
     pub recognizer_pool: Mutex<HashMap<ModelConfigKey, Arc<Recognizer>>>,
+    pub(crate) metrics: AsrMetricsStore,
 }
 
 impl Default for SherpaState {
@@ -178,13 +187,31 @@ impl SherpaState {
         Self {
             instances: Mutex::new(HashMap::new()),
             recognizer_pool: Mutex::new(HashMap::new()),
+            metrics: new_metrics_store(),
         }
+    }
+
+    pub async fn record_model_load_metric(&self, metric: AsrModelLoadMetric) {
+        set_model_load_metric(&self.metrics, metric);
+    }
+
+    pub async fn record_live_inference_metric(&self, metric: AsrInferenceMetric) {
+        set_live_inference_metric(&self.metrics, metric);
+    }
+
+    pub async fn record_batch_inference_metric(&self, metric: AsrInferenceMetric) {
+        set_batch_inference_metric(&self.metrics, metric);
+    }
+
+    pub async fn metrics_snapshot(&self) -> AsrRuntimeMetricsSnapshot {
+        snapshot_metrics(&self.metrics)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sherpa::{AsrInferenceMetric, AsrModelLoadMetric};
     use std::sync::atomic::Ordering;
 
     #[test]
@@ -193,6 +220,7 @@ mod tests {
         instance.total_samples = 42;
         instance.segment_start_time = 3.5;
         instance.current_segment_id = Some("segment-1".to_string());
+        instance.last_partial_metric_sample = 12;
         instance
             .offline_state
             .speech_buffer
@@ -212,6 +240,7 @@ mod tests {
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.segment_start_time, 0.0);
         assert!(instance.current_segment_id.is_none());
+        assert_eq!(instance.last_partial_metric_sample, 0);
         assert!(instance.offline_state.speech_buffer.is_empty());
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
@@ -229,6 +258,7 @@ mod tests {
         instance.total_samples = 128;
         instance.segment_start_time = 1.25;
         instance.current_segment_id = Some("segment-2".to_string());
+        instance.last_partial_metric_sample = 64;
         instance.offline_state.speech_buffer.push(vec![0.4, 0.5]);
         instance.offline_state.is_speaking = true;
         instance.record_diagnostics.first_sample_logged = true;
@@ -244,6 +274,7 @@ mod tests {
         assert_eq!(instance.total_samples, 0);
         assert_eq!(instance.segment_start_time, 0.0);
         assert!(instance.current_segment_id.is_none());
+        assert_eq!(instance.last_partial_metric_sample, 0);
         assert!(instance.offline_state.speech_buffer.is_empty());
         assert!(!instance.offline_state.is_speaking);
         assert!(!instance.record_diagnostics.first_sample_logged);
@@ -251,5 +282,113 @@ mod tests {
             .record_diagnostics
             .first_segment_emitted
             .load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn sherpa_state_metrics_keep_only_latest_runtime_snapshots() {
+        let state = SherpaState::new();
+
+        state
+            .record_model_load_metric(AsrModelLoadMetric {
+                occurred_at_ms: 1,
+                instance_id: "record".to_string(),
+                model_path: "C:/models/old".to_string(),
+                model_type: "sensevoice".to_string(),
+                recognizer_kind: "offline".to_string(),
+                num_threads: 4,
+                reused_from_pool: false,
+                load_ms: 12.0,
+                rss_before_mb: Some(100.0),
+                rss_after_mb: Some(140.0),
+                rss_delta_mb: Some(40.0),
+                process_rss_mb: Some(140.0),
+            })
+            .await;
+
+        state
+            .record_model_load_metric(AsrModelLoadMetric {
+                occurred_at_ms: 2,
+                instance_id: "caption".to_string(),
+                model_path: "C:/models/reused".to_string(),
+                model_type: "sensevoice".to_string(),
+                recognizer_kind: "offline".to_string(),
+                num_threads: 4,
+                reused_from_pool: true,
+                load_ms: 1.5,
+                rss_before_mb: Some(140.0),
+                rss_after_mb: Some(140.5),
+                rss_delta_mb: None,
+                process_rss_mb: Some(140.5),
+            })
+            .await;
+
+        state
+            .record_live_inference_metric(AsrInferenceMetric {
+                occurred_at_ms: 3,
+                source: "live".to_string(),
+                instance_id: Some("record".to_string()),
+                stage: "final".to_string(),
+                is_final: true,
+                audio_duration_ms: 1000.0,
+                buffered_samples: 16000,
+                audio_extract_ms: None,
+                decode_ms: 40.0,
+                emit_latency_ms: Some(55.0),
+                total_ms: None,
+                rtf: Some(0.04),
+                segment_count: None,
+                process_rss_mb: Some(141.0),
+            })
+            .await;
+
+        state
+            .record_batch_inference_metric(AsrInferenceMetric {
+                occurred_at_ms: 4,
+                source: "batch".to_string(),
+                instance_id: None,
+                stage: "batch_complete".to_string(),
+                is_final: true,
+                audio_duration_ms: 2000.0,
+                buffered_samples: 32000,
+                audio_extract_ms: Some(25.0),
+                decode_ms: 100.0,
+                emit_latency_ms: None,
+                total_ms: Some(180.0),
+                rtf: Some(0.05),
+                segment_count: Some(2),
+                process_rss_mb: Some(142.0),
+            })
+            .await;
+
+        let snapshot = state.metrics_snapshot().await;
+
+        assert_eq!(
+            snapshot
+                .model_load
+                .as_ref()
+                .map(|metric| metric.model_path.as_str()),
+            Some("C:/models/reused")
+        );
+        assert_eq!(
+            snapshot
+                .model_load
+                .as_ref()
+                .and_then(|metric| metric.rss_delta_mb),
+            None
+        );
+        assert_eq!(
+            snapshot
+                .live_inference
+                .as_ref()
+                .map(|metric| metric.stage.as_str()),
+            Some("final")
+        );
+        assert_eq!(
+            snapshot
+                .batch_inference
+                .as_ref()
+                .and_then(|metric| metric.segment_count),
+            Some(2)
+        );
     }
 }

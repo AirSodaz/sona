@@ -11,6 +11,7 @@ export const TauriCommand = {
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
     getRuntimeEnvironmentStatus: 'get_runtime_environment_status',
+    getAsrRuntimeMetrics: 'get_asr_runtime_metrics',
     getPathStatuses: 'get_path_statuses',
     hasActiveDownloads: 'has_active_downloads',
     forceExit: 'force_exit',

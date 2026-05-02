@@ -1,17 +1,26 @@
+use super::metrics::{
+    calculate_rss_delta_mb, calculate_rtf, capture_process_memory_mb, current_time_millis,
+    duration_to_ms, log_inference_metric, log_model_load_metric, samples_to_ms,
+    set_batch_inference_metric, set_model_load_metric, AsrInferenceMetric, AsrMetricsStore,
+    AsrModelLoadMetric,
+};
 use super::model_config::ModelFileConfig;
 use super::model_config::{
     build_model_config, load_punctuation, Punctuation, Recognizer, RecognizerInner,
     SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
 };
+use super::state::SherpaState;
 use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
 use super::types::{BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptSegment};
 use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
 pub async fn process_batch_file_impl<R: tauri::Runtime>(
     app: AppHandle<R>,
+    state: &SherpaState,
     file_path: String,
     save_to_path: Option<String>,
     model_path: String,
@@ -45,12 +54,16 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     };
     let progress_file_path = request.file_path.clone();
 
-    transcribe_batch_with_progress(&request, |progress| {
-        let _ = app.emit(
-            BATCH_PROGRESS_EVENT,
-            &(progress_file_path.as_str(), progress),
-        );
-    })
+    transcribe_batch_with_progress_and_metrics(
+        &request,
+        |progress| {
+            let _ = app.emit(
+                BATCH_PROGRESS_EVENT,
+                &(progress_file_path.as_str(), progress),
+            );
+        },
+        Some(state.metrics.clone()),
+    )
     .await
 }
 
@@ -61,12 +74,28 @@ pub async fn transcribe_batch_with_progress<F>(
 where
     F: FnMut(f32),
 {
+    transcribe_batch_with_progress_and_metrics(request, &mut on_progress, None).await
+}
+
+pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
+    request: &BatchTranscriptionRequest,
+    mut on_progress: F,
+    metrics_store: Option<AsrMetricsStore>,
+) -> Result<Vec<TranscriptSegment>, String>
+where
+    F: FnMut(f32),
+{
+    let total_started = Instant::now();
+    let audio_extract_started = Instant::now();
     let samples = crate::pipeline::extract_and_resample_audio(&request.file_path, 16000).await?;
+    let audio_extract_ms = duration_to_ms(audio_extract_started.elapsed());
 
     if let Some(path) = request.save_to_path.as_ref() {
         crate::pipeline::save_wav_file(&samples, 16000, path).map_err(|e| e.to_string())?;
     }
 
+    let model_load_started = Instant::now();
+    let rss_before_mb = capture_process_memory_mb();
     let config_type = build_model_config(
         Path::new(&request.model_path),
         &request.model_type,
@@ -76,8 +105,31 @@ where
         request.hotwords.clone(),
     )?;
     let recognizer = Recognizer::new(config_type, request.num_threads)?;
+    let model_load_ms = duration_to_ms(model_load_started.elapsed());
+    let rss_after_mb = capture_process_memory_mb();
+
+    if let Some(metrics_store) = metrics_store.as_ref() {
+        let metric = AsrModelLoadMetric {
+            occurred_at_ms: current_time_millis(),
+            instance_id: "batch".to_string(),
+            model_path: request.model_path.clone(),
+            model_type: request.model_type.clone(),
+            recognizer_kind: recognizer.kind_label().to_string(),
+            num_threads: request.num_threads,
+            reused_from_pool: false,
+            load_ms: model_load_ms,
+            rss_before_mb,
+            rss_after_mb,
+            rss_delta_mb: calculate_rss_delta_mb(rss_before_mb, rss_after_mb, false),
+            process_rss_mb: rss_after_mb,
+        };
+        set_model_load_metric(metrics_store, metric.clone());
+        log_model_load_metric(&metric);
+    }
+
     let punctuation = load_punctuation(request.punctuation_model.clone());
 
+    let decode_started = Instant::now();
     let segments = match &recognizer.inner {
         RecognizerInner::Offline(r) => {
             process_batch_offline(
@@ -94,6 +146,7 @@ where
             process_batch_online(r, &samples, punctuation.as_ref(), &mut on_progress).await?
         }
     };
+    let decode_ms = duration_to_ms(decode_started.elapsed());
 
     let annotated_segments = crate::speaker::annotate_segments_with_speakers(
         &samples,
@@ -101,10 +154,32 @@ where
         request.speaker_processing.as_ref(),
     )?;
 
-    Ok(apply_timeline_normalization(
-        annotated_segments,
-        request.normalization_options,
-    ))
+    let normalized_segments =
+        apply_timeline_normalization(annotated_segments, request.normalization_options);
+
+    if let Some(metrics_store) = metrics_store.as_ref() {
+        let audio_duration_ms = samples_to_ms(samples.len(), 16000.0);
+        let metric = AsrInferenceMetric {
+            occurred_at_ms: current_time_millis(),
+            source: "batch".to_string(),
+            instance_id: None,
+            stage: "batch_complete".to_string(),
+            is_final: true,
+            audio_duration_ms,
+            buffered_samples: samples.len(),
+            audio_extract_ms: Some(audio_extract_ms),
+            decode_ms,
+            emit_latency_ms: None,
+            total_ms: Some(duration_to_ms(total_started.elapsed())),
+            rtf: calculate_rtf(decode_ms, audio_duration_ms),
+            segment_count: Some(normalized_segments.len()),
+            process_rss_mb: capture_process_memory_mb(),
+        };
+        set_batch_inference_metric(metrics_store, metric.clone());
+        log_inference_metric(&metric);
+    }
+
+    Ok(normalized_segments)
 }
 
 async fn process_batch_offline<F>(

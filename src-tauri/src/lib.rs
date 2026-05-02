@@ -294,6 +294,7 @@ pub fn run() {
             sherpa::flush_recognizer,
             sherpa::feed_audio_chunk,
             sherpa::process_batch_file,
+            sherpa::get_asr_runtime_metrics,
             speaker::annotate_speaker_segments_from_file,
             speaker::import_speaker_profile_sample
         ])

@@ -247,6 +247,13 @@ fn get_base_offline_config(num_threads: i32, tokens: Option<&Path>) -> OfflineRe
 }
 
 impl Recognizer {
+    pub fn kind_label(&self) -> &'static str {
+        match &self.inner {
+            RecognizerInner::Online(_) => "online",
+            RecognizerInner::Offline(_) => "offline",
+        }
+    }
+
     pub fn new(model_type: ModelType, num_threads: i32) -> Result<Self, String> {
         info!(
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",

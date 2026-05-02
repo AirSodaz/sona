@@ -15,8 +15,9 @@ import type {
   DiagnosticSection,
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
-import { getRuntimeEnvironmentStatus } from './tauri/app';
+import { getAsrRuntimeMetrics, getRuntimeEnvironmentStatus } from './tauri/app';
 import {
+  buildAsrPerformanceChecks,
   buildInputChecks,
   buildModelChecks,
   buildOverviewCards,
@@ -35,11 +36,12 @@ export const diagnosticsService = {
     const vadModelPath = (config.vadModelPath || '').trim();
     const punctuationModelPath = (config.punctuationModelPath || '').trim();
 
-    const [permissionState, microphoneProbe, systemAudioProbe, runtimeEnvironment, pathStatusMap] = await Promise.all([
+    const [permissionState, microphoneProbe, systemAudioProbe, runtimeEnvironment, asrRuntimeMetrics, pathStatusMap] = await Promise.all([
       getMicrophonePermissionState(),
       probeMicrophoneDeviceOptions(t('settings.mic_auto')),
       probeSystemAudioDeviceOptions(t('settings.mic_auto')),
       getRuntimeEnvironmentStatus(),
+      getAsrRuntimeMetrics(),
       getPathStatusMap([streamingModelPath, offlineModelPath, vadModelPath, punctuationModelPath]),
     ]);
 
@@ -91,6 +93,7 @@ export const diagnosticsService = {
       systemAudioProbe,
       voiceTypingReadiness,
       runtimeEnvironment,
+      asrRuntimeMetrics,
       onboardingReady: hasRequiredOnboardingModels(config),
       punctuationRequired: [liveModelRules, offlineModelRules].some((rules) => rules?.requiresPunctuation ?? false),
     };
@@ -99,6 +102,7 @@ export const diagnosticsService = {
       model: buildModelChecks(context),
       input: buildInputChecks(context),
       runtime: buildRuntimeChecks(context),
+      asr: buildAsrPerformanceChecks(context),
     };
 
     const sections: DiagnosticSection[] = [
@@ -137,6 +141,18 @@ export const diagnosticsService = {
           checks.runtime.voiceTypingCheck,
           checks.runtime.ffmpegCheck,
           checks.runtime.logDirCheck,
+        ],
+      },
+      {
+        id: 'asr-performance',
+        title: t('settings.diagnostics.asr_performance_section', { defaultValue: 'ASR Performance' }),
+        description: t('settings.diagnostics.asr_performance_section_description', {
+          defaultValue: 'Review recent local ASR model memory and transcription latency samples.',
+        }),
+        checks: [
+          checks.asr.modelMemoryCheck,
+          checks.asr.liveLatencyCheck,
+          checks.asr.batchLatencyCheck,
         ],
       },
     ];

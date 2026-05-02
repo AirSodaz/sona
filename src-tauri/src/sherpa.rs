@@ -2,6 +2,7 @@ use log::trace;
 use tauri::{AppHandle, State};
 
 mod batch;
+mod metrics;
 mod model_config;
 mod runtime;
 mod state;
@@ -15,6 +16,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 }
 
 pub use batch::transcribe_batch_with_progress;
+pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
 pub use runtime::feed_audio_samples;
 pub use state::SherpaState;
@@ -103,6 +105,7 @@ pub async fn feed_audio_chunk<R: tauri::Runtime>(
 #[tauri::command]
 pub async fn process_batch_file<R: tauri::Runtime>(
     app: AppHandle<R>,
+    state: State<'_, SherpaState>,
     file_path: String,
     save_to_path: Option<String>,
     model_path: String,
@@ -120,6 +123,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
 ) -> Result<Vec<TranscriptSegment>, String> {
     batch::process_batch_file_impl(
         app,
+        state.inner(),
         file_path,
         save_to_path,
         model_path,
@@ -136,4 +140,11 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         normalization_options,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn get_asr_runtime_metrics(
+    state: State<'_, SherpaState>,
+) -> Result<AsrRuntimeMetricsSnapshot, String> {
+    Ok(state.metrics_snapshot().await)
 }

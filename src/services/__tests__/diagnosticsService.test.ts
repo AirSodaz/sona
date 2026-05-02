@@ -34,6 +34,11 @@ let runtimeEnvironment = {
   ffmpegExists: true,
   logDirPath: 'C:\\app\\logs',
 };
+let asrRuntimeMetrics: any = {
+  modelLoad: null,
+  liveInference: null,
+  batchInference: null,
+};
 
 function t(key: string, options?: Record<string, unknown>) {
   return (options?.defaultValue as string | undefined) ?? key;
@@ -55,6 +60,10 @@ function setPathStatuses({
   mocks.invoke.mockImplementation(async (command: string, payload?: { paths?: string[] }) => {
     if (command === 'get_runtime_environment_status') {
       return runtimeEnvironment;
+    }
+
+    if (command === 'get_asr_runtime_metrics') {
+      return asrRuntimeMetrics;
     }
 
     if (command === 'get_path_statuses') {
@@ -107,6 +116,11 @@ describe('diagnosticsService', () => {
       ffmpegPath: 'C:\\app\\ffmpeg.exe',
       ffmpegExists: true,
       logDirPath: 'C:\\app\\logs',
+    };
+    asrRuntimeMetrics = {
+      modelLoad: null,
+      liveInference: null,
+      batchInference: null,
     };
     setPathStatuses({});
   });
@@ -428,5 +442,108 @@ describe('diagnosticsService', () => {
         kind: 'open_log_folder',
       }),
     );
+  });
+
+  it('adds ASR performance diagnostics when runtime metrics are available', async () => {
+    asrRuntimeMetrics = {
+      modelLoad: {
+        occurredAtMs: 1760000000000,
+        instanceId: 'record',
+        modelPath: 'C:\\models\\sensevoice',
+        modelType: 'sensevoice',
+        recognizerKind: 'offline',
+        numThreads: 4,
+        reusedFromPool: false,
+        loadMs: 123.4,
+        rssBeforeMb: 416.25,
+        rssAfterMb: 512.5,
+        rssDeltaMb: 96.25,
+        processRssMb: 512.5,
+      },
+      liveInference: {
+        occurredAtMs: 1760000001000,
+        source: 'live',
+        instanceId: 'record',
+        stage: 'final',
+        isFinal: true,
+        audioDurationMs: 1600,
+        bufferedSamples: 25600,
+        audioExtractMs: null,
+        decodeMs: 42.2,
+        emitLatencyMs: 60.1,
+        totalMs: null,
+        rtf: 0.026,
+        segmentCount: null,
+        processRssMb: 520.1,
+      },
+      batchInference: {
+        occurredAtMs: 1760000002000,
+        source: 'batch',
+        instanceId: null,
+        stage: 'batch_complete',
+        isFinal: true,
+        audioDurationMs: 120000,
+        bufferedSamples: 1920000,
+        audioExtractMs: 320.4,
+        decodeMs: 1800.2,
+        emitLatencyMs: null,
+        totalMs: 2500.6,
+        rtf: 0.015,
+        segmentCount: 8,
+        processRssMb: 640.75,
+      },
+    };
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const asrSection = snapshot.sections.find((section) => section.id === 'asr-performance');
+    const modelMemoryCheck = asrSection?.checks.find((check) => check.id === 'asr-model-memory');
+    const liveLatencyCheck = asrSection?.checks.find((check) => check.id === 'asr-live-latency');
+    const batchLatencyCheck = asrSection?.checks.find((check) => check.id === 'asr-batch-latency');
+
+    expect(asrSection?.title).toBe('ASR Performance');
+    expect(modelMemoryCheck).toEqual(expect.objectContaining({
+      status: 'ready',
+      title: 'Model memory',
+      description: expect.stringContaining('sensevoice'),
+      meta: expect.stringContaining('RSS 512.5 MB'),
+    }));
+    expect(modelMemoryCheck?.meta).toContain('delta +96.3 MB');
+    expect(liveLatencyCheck).toEqual(expect.objectContaining({
+      status: 'ready',
+      title: 'Live transcription latency',
+      meta: expect.stringContaining('decode 42 ms'),
+    }));
+    expect(liveLatencyCheck?.meta).toContain('latency 60 ms');
+    expect(liveLatencyCheck?.meta).toContain('RTF 0.03');
+    expect(batchLatencyCheck).toEqual(expect.objectContaining({
+      status: 'ready',
+      title: 'Batch transcription latency',
+      meta: expect.stringContaining('total 2501 ms'),
+    }));
+    expect(batchLatencyCheck?.meta).toContain('extract 320 ms');
+    expect(batchLatencyCheck?.meta).toContain('segments 8');
+  });
+
+  it('keeps ASR performance diagnostics informational when no metrics have been captured', async () => {
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const asrSection = snapshot.sections.find((section) => section.id === 'asr-performance');
+
+    expect(asrSection?.checks).toEqual([
+      expect.objectContaining({
+        id: 'asr-model-memory',
+        status: 'info',
+        description: 'No ASR runtime metrics have been captured yet.',
+      }),
+      expect.objectContaining({
+        id: 'asr-live-latency',
+        status: 'info',
+        description: 'No live transcription latency has been captured yet.',
+      }),
+      expect.objectContaining({
+        id: 'asr-batch-latency',
+        status: 'info',
+        description: 'No batch transcription latency has been captured yet.',
+      }),
+    ]);
   });
 });
