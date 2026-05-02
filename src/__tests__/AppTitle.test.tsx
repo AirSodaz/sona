@@ -115,13 +115,13 @@ describe('App Title Logic', () => {
     expect(screen.queryByText('ProjectContextBar')).toBeNull();
   });
 
-  it('renders the projects workbench and keeps the editor shell in the DOM (hidden) in projects mode', () => {
+  it('renders the projects workbench and keeps the workspace shell hidden in projects mode', () => {
     setupStore({ mode: 'projects' });
 
     const { container } = render(<App />);
 
     expect(screen.getByText('ProjectsView')).not.toBeNull();
-    expect(screen.getByText('TranscriptWorkbench')).not.toBeNull();
+    expect(screen.queryByText('TranscriptWorkbench')).toBeNull();
 
     const workspaceShell = container.querySelector('.workspace-mode-shell');
     expect((workspaceShell as HTMLElement).style.display).toBe('none');

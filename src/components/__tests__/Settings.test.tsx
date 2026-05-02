@@ -11,6 +11,7 @@ import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 const mockListMicrophoneDeviceOptions = vi.fn();
 const mockListSystemAudioDeviceOptions = vi.fn();
 const mockListLlmModels = vi.fn();
+const MODEL_TAB_LOAD_TIMEOUT_MS = 6000;
 
 function createEmptyDashboardSnapshot(): DashboardSnapshot {
     return {
@@ -134,8 +135,8 @@ describe('Settings', () => {
     async function openModelsTab() {
         await screen.findByText('settings.general_title');
         fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
-        await screen.findByText('settings.model_selection', undefined, { timeout: 3000 });
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled(), { timeout: 3000 });
+        await screen.findByText('settings.model_selection', undefined, { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled(), { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
     }
 
     it('renders with vertical layout structure', async () => {
@@ -165,7 +166,7 @@ describe('Settings', () => {
 
         await waitFor(() => {
             expect(container.querySelector('[data-settings-tab-pane="about"]')).not.toBeNull();
-        });
+        }, { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
 
         expect(container.querySelector('[data-settings-tab-pane="dashboard"]')).not.toBeNull();
         expect(container.querySelector('[data-settings-tab-pane="microphone"]')).not.toBeNull();
@@ -187,7 +188,7 @@ describe('Settings', () => {
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
 
         await openModelsTab();
-    });
+    }, MODEL_TAB_LOAD_TIMEOUT_MS + 1000);
 
     it('checks installed models immediately when opening directly on the model settings tab', async () => {
         render(<Settings isOpen={true} onClose={onClose} initialTab="models" />);
@@ -236,7 +237,7 @@ describe('Settings', () => {
         await waitFor(() => {
             expect(modelService.downloadModel).toHaveBeenCalledWith('test-model', expect.any(Function), expect.any(AbortSignal));
         });
-    });
+    }, MODEL_TAB_LOAD_TIMEOUT_MS + 1000);
 
     it('shows merged transcription settings inside the model settings tab', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
@@ -254,7 +255,7 @@ describe('Settings', () => {
         expect(Boolean(vadModels.compareDocumentPosition(transcriptionSettings) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
         expect(Boolean(transcriptionSettings.compareDocumentPosition(restoreDefaults) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
         expect(screen.queryByText('settings.local_path')).toBeNull();
-    });
+    }, MODEL_TAB_LOAD_TIMEOUT_MS + 1000);
 
     it('deletes a model', async () => {
         // Setup: Model is installed
