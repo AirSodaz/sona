@@ -37,19 +37,13 @@ export default defineConfig(async () => ({
   },
   optimizeDeps: {
     entries: ["index.html", "src/main.tsx"],
-    exclude: ["@tauri-apps/api", "@tauri-apps/plugin-shell"]
+    exclude: ["@tauri-apps/api"]
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks(id) {
           const normalizedId = id.replace(/\\/g, "/");
-
-          if (normalizedId.includes("/node_modules/react-markdown/")
-            || normalizedId.includes("/node_modules/remark-gfm/")
-            || normalizedId.includes("/node_modules/remark-breaks/")) {
-            return "markdown-vendor";
-          }
 
           if (normalizedId.includes("/node_modules/@tauri-apps/")) {
             return "tauri-vendor";

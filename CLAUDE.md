@@ -16,29 +16,29 @@ Key product modes:
 ## Common commands
 
 ### Frontend and desktop app
-- `npm run dev` — start the Vite dev server on port 1420
-- `npm run tauri dev` — run the full desktop app in Tauri dev mode
-- `npm run build` — TypeScript check + production frontend build
-- `npm run tauri build` — build the production desktop bundle
-- `npm run preview` — preview the production frontend build
+- `pnpm run dev` — start the Vite dev server on port 1420
+- `pnpm run tauri dev` — run the full desktop app in Tauri dev mode
+- `pnpm run build` — TypeScript check + production frontend build
+- `pnpm run tauri build` — build the production desktop bundle
+- `pnpm run preview` — preview the production frontend build
 
 ### Tests
-- `npm test` — run the Vitest suite
-- `npx vitest src/path/to/file.test.tsx` — run one Vitest file
-- `npx vitest -t "test name"` — run Vitest tests matching a name
-- `npx playwright test` — run Playwright end-to-end tests
-- `npx playwright test tests/e2e/example.spec.ts` — run one Playwright file
-- `npx playwright test -g "test title"` — run one Playwright test by title
+- `pnpm test` — run the Vitest suite
+- `pnpm exec vitest src/path/to/file.test.tsx` — run one Vitest file
+- `pnpm exec vitest -t "test name"` — run Vitest tests matching a name
+- `pnpm exec playwright test` — run Playwright end-to-end tests
+- `pnpm exec playwright test tests/e2e/example.spec.ts` — run one Playwright file
+- `pnpm exec playwright test -g "test title"` — run one Playwright test by title
 - `cargo test --manifest-path src-tauri/Cargo.toml` — run Rust tests
 - `cargo test --manifest-path src-tauri/Cargo.toml test_name` — run a specific Rust test
 
 ### CLI and packaging helpers
 - `cargo run --manifest-path src-tauri/Cargo.toml -- transcribe ./sample.mp4 --config ./sona-cli.toml --output ./sample.srt` — run the offline CLI from source
-- `npm run verify:cli-bundle` — verify the packaged app bundle artifacts
+- `pnpm run verify:cli-bundle` — verify the packaged app bundle artifacts
 
 ### Notes
-- There is currently no verified `lint` script in the root `package.json`.
-- `npm run build` triggers `scripts/setup-ffmpeg.js` via `prebuild`.
+- The root `package.json` pins pnpm via `packageManager`; run `corepack enable` before installing dependencies on a fresh machine.
+- `pnpm run build` triggers `scripts/setup-ffmpeg.js` via `prebuild`.
 - Tauri build/dev flows go through `scripts/tauri.js`.
 
 ## High-level architecture

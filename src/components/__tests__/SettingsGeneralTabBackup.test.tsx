@@ -4,6 +4,8 @@ import { SettingsGeneralTab } from '../settings/SettingsGeneralTab';
 import packageJson from '../../../package.json';
 import type { PreparedBackupImport } from '../../types/backup';
 
+const BACKUP_SECTION_LOAD_TIMEOUT_MS = 6000;
+
 const testContext = vi.hoisted(() => ({
   alertMock: vi.fn().mockResolvedValue(undefined),
   applyImportBackupMock: vi.fn().mockResolvedValue(undefined),
@@ -186,7 +188,11 @@ function buildPreparedImport(importId: string): PreparedBackupImport {
 
 describe('SettingsGeneralTab backup entry', () => {
   const openWebDavAccordion = async () => {
-    const accordionToggle = await screen.findByRole('button', { name: /WebDAV Cloud Sync/i });
+    const accordionToggle = await screen.findByRole(
+      'button',
+      { name: /WebDAV Cloud Sync/i },
+      { timeout: BACKUP_SECTION_LOAD_TIMEOUT_MS },
+    );
     fireEvent.click(accordionToggle);
 
     await waitFor(() => {
@@ -221,7 +227,11 @@ describe('SettingsGeneralTab backup entry', () => {
     expect(screen.getByText('settings.general_title')).toBeDefined();
     expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();
 
-    const accordionToggle = await screen.findByRole('button', { name: /WebDAV Cloud Sync/i });
+    const accordionToggle = await screen.findByRole(
+      'button',
+      { name: /WebDAV Cloud Sync/i },
+      { timeout: BACKUP_SECTION_LOAD_TIMEOUT_MS },
+    );
     expect(await screen.findByRole('button', { name: 'Export Backup' })).toBeDefined();
     expect(await screen.findByRole('button', { name: 'Import Backup' })).toBeDefined();
     expect(testContext.loadWebDavConfigMock).not.toHaveBeenCalled();

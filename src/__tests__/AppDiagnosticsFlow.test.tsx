@@ -40,6 +40,11 @@ vi.mock('../components/Settings', () => ({
   ),
 }));
 
+vi.mock('../components/settings/settingsLoaders', () => ({
+  preloadAllSettingsTabs: vi.fn().mockResolvedValue(undefined),
+  preloadSettingsTab: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../components/DiagnosticsModal', () => ({
   DiagnosticsModal: ({ isOpen, onOpenSettingsTab }: any) => (
     isOpen ? (

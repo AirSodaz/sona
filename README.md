@@ -60,7 +60,7 @@ For the full CLI guide and a minimal TOML example, read [docs/cli.md](docs/cli.m
 
 *   **Node.js**: v20 or later (for frontend build).
 *   **Rust**: Stable release (required for the Tauri backend).
-*   **Package Manager**: `npm` (recommended).
+*   **Package Manager**: `pnpm` via Corepack (recommended).
 
 ##### Linux Requirements
 If you are running on Linux (Ubuntu/Debian), ensure you have the necessary system dependencies:
@@ -88,19 +88,19 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     ```
 
 2.  **Install dependencies**
-    *(Note: This also triggers the existing `scripts/setup-ffmpeg.js` prebuild/setup step for local development.)*
     ```bash
-    npm install
+    corepack enable
+    pnpm install
     ```
 
 3.  **Run the application**
     ```bash
-    npm run tauri dev
+    pnpm run tauri dev
     ```
 
 4.  **Run frontend tests**
     ```bash
-    npm test
+    pnpm test
     ```
 
 ## 📦 Model Management
@@ -126,7 +126,7 @@ Sona allows you to choose the AI model that best fits your needs, both for offli
 To build the application for production:
 
 ```bash
-npm run tauri build
+pnpm run tauri build
 ```
 
 The executable will be generated in `src-tauri/target/release/bundle`.

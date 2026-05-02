@@ -27,31 +27,32 @@ Agent-assisted branches can also use a `codex/...` prefix, for example `codex/fe
 Install dependencies:
 
 ```bash
-npm install
+corepack enable
+pnpm install
 ```
 
 Start the app in development:
 
 ```bash
-npm run tauri dev
+pnpm run tauri dev
 ```
 
 Run frontend tests:
 
 ```bash
-npm test
+pnpm test
 ```
 
 Build the app:
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 Verify the packaged CLI bundle when you touch packaging or CLI behavior:
 
 ```bash
-npm run verify:cli-bundle
+pnpm run verify:cli-bundle
 ```
 
 ## Commit message format
@@ -112,7 +113,7 @@ If the staged file list is wider than the change you intend to ship, stop and fi
 
 Before opening a PR:
 
-- `npm run build` should pass.
+- `pnpm run build` should pass.
 - Run focused tests that match the changed area.
 - Update repo docs for user-visible workflow or settings changes.
 - Include screenshots or video for UI changes when they help reviewers.
@@ -139,4 +140,4 @@ The staged safety check currently does two things:
 - blocks unresolved merge conflict markers in staged text/config files
 - blocks invalid staged JSON files
 
-`npm run lint` is still a manual quality task for now. The current lint baseline is not clean enough to make full ESLint a hard commit gate yet.
+`pnpm run lint` is still a manual quality task for now. The current lint baseline is not clean enough to make full ESLint a hard commit gate yet.

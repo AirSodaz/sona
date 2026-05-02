@@ -21,6 +21,10 @@ vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImpor
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => null }));
+vi.mock('../components/settings/settingsLoaders', () => ({
+  preloadAllSettingsTabs: vi.fn().mockResolvedValue(undefined),
+  preloadSettingsTab: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => null }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));

@@ -26,13 +26,13 @@ Sona is a privacy-first, offline transcript editor built with **Tauri v2**, **Re
 ## Building and Running
 
 ### Development
-- `npm run tauri dev` — Start the full desktop application in development mode.
-- `npm run dev` — Run the Vite development server only (port 1420).
+- `pnpm run tauri dev` — Start the full desktop application in development mode.
+- `pnpm run dev` — Run the Vite development server only (port 1420).
 
 ### Testing
-- `npm test` — Run the Vitest unit/component test suite.
-- `npx vitest src/path/to/file.test.tsx` — Run a specific Vitest file.
-- `npx playwright test` — Run Playwright end-to-end tests.
+- `pnpm test` — Run the Vitest unit/component test suite.
+- `pnpm exec vitest src/path/to/file.test.tsx` — Run a specific Vitest file.
+- `pnpm exec playwright test` — Run Playwright end-to-end tests.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — Run Rust backend tests.
 
 ---

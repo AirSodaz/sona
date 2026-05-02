@@ -1,2 +1,2 @@
 git diff --check --cached
-npx --no -- lint-staged
+pnpm exec lint-staged

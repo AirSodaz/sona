@@ -8,7 +8,7 @@
 
 ## Validation
 
-- [ ] `npm run build`
+- [ ] `pnpm run build`
 - [ ] Focused tests for the changed area
 
 ## Docs updated
