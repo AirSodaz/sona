@@ -36,7 +36,12 @@ vi.mock('../../services/modelService', () => ({
 
 describe('useModelManager restoreDefaultModelSettings', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        vi.mocked(modelService.isModelInstalled).mockReset();
+        vi.mocked(modelService.getModelPath).mockReset();
+        vi.mocked(modelService.downloadModel).mockReset();
+        vi.mocked(modelService.checkHardware).mockReset();
+        vi.mocked(modelService.deleteModel).mockReset();
+        vi.mocked(modelService.getModelRules).mockReset();
 
         setTestConfig({
             streamingModelPath: '/current/live',
@@ -81,6 +86,22 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         });
 
         rerender({ isOpen: true });
+
+        await waitFor(() => {
+            expect(modelService.isModelInstalled).toHaveBeenCalledWith('preset-a');
+        });
+    });
+
+    it('defers installed model checks until after the active frame', async () => {
+        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+
+        const { rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+            initialProps: { isOpen: false },
+        });
+
+        rerender({ isOpen: true });
+
+        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
 
         await waitFor(() => {
             expect(modelService.isModelInstalled).toHaveBeenCalledWith('preset-a');

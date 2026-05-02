@@ -204,6 +204,10 @@ export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenD
     } = useSettingsLogic(isOpen, onClose, effectiveInitialTab);
     const renderedTab = isPrewarming ? 'general' : activeTab;
     const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
+    const renderedMountedTabs = useMemo(
+        () => (shouldRender ? addMountedSettingsTab(mountedTabs, renderedTab) : mountedTabs),
+        [mountedTabs, renderedTab, shouldRender],
+    );
 
     const navigateToTab = useCallback((nextTab: typeof SETTINGS_TABS[number]) => {
         markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
@@ -483,9 +487,12 @@ export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenD
                     <div className="settings-content-scroll full-height">
                         <SettingsNavigationProvider value={navigationContextValue}>
                             <div className="settings-pane-host">
-                                {mountedTabs.map((tab) => {
+                                {renderedMountedTabs.map((tab) => {
                                     const isPaneVisible = isOpen && tab === renderedTab;
                                     const isPanePrewarming = isPrewarming && tab === 'general';
+                                    const paneDiagnosticsHandler = tab === 'general' && (isPaneVisible || isPanePrewarming)
+                                        ? onOpenDiagnostics
+                                        : undefined;
 
                                     return (
                                         <SettingsPaneFrame
@@ -495,10 +502,10 @@ export function Settings({ isOpen, prewarm = false, onClose, initialTab, onOpenD
                                         >
                                             <SettingsPaneContent
                                                 tab={tab}
-                                                isOpen={isOpen}
+                                                isOpen={isPaneVisible}
                                                 isActive={isPaneVisible}
                                                 isPrewarming={isPanePrewarming}
-                                                onOpenDiagnostics={onOpenDiagnostics}
+                                                onOpenDiagnostics={paneDiagnosticsHandler}
                                             />
                                         </SettingsPaneFrame>
                                     );

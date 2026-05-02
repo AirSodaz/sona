@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useSettingsLogic } from '../useSettingsLogic';
+import { useSettingsLogic, type SettingsTabInput } from '../useSettingsLogic';
 import { buildLlmConfigPatch, createLlmSettings, updateProviderSetting } from '../../services/llm/state';
 
 const mockSetConfig = vi.fn();
@@ -78,5 +78,22 @@ describe('useSettingsLogic', () => {
         const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'context'));
 
         expect(result.current.activeTab).toBe('vocabulary');
+    });
+
+    it('derives the opened initial tab before the sync effect commits state', () => {
+        const initialProps: { isOpen: boolean; initialTab?: SettingsTabInput } = {
+            isOpen: false,
+            initialTab: undefined,
+        };
+        const { result, rerender } = renderHook(
+            ({ isOpen, initialTab }: { isOpen: boolean; initialTab?: SettingsTabInput }) => {
+                return useSettingsLogic(isOpen, vi.fn(), initialTab);
+            },
+            { initialProps },
+        );
+
+        rerender({ isOpen: true, initialTab: 'models' });
+
+        expect(result.current.activeTab).toBe('models');
     });
 });

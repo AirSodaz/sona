@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Settings } from '../Settings';
 import type { SettingsTab } from '../../hooks/useSettingsLogic';
 
@@ -16,6 +16,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const setActiveTabMock = vi.fn();
+const modelPanePropsMock = vi.hoisted(() => vi.fn());
 let mockActiveTab: SettingsTab = 'general';
 
 vi.mock('../../hooks/useSettingsLogic', () => ({
@@ -64,6 +65,12 @@ vi.mock('../settings/SettingsDashboardTab', () => ({
 vi.mock('../settings/SettingsModelsTab', () => ({
     SettingsModelsTab: () => <div>Models Tab</div>
 }));
+vi.mock('../settings/SettingsModelsPane', () => ({
+    SettingsModelsPane: (props: any) => {
+        modelPanePropsMock(props);
+        return <div>Models Tab</div>;
+    },
+}));
 vi.mock('../settings/SettingsVoiceTypingTab', () => ({
     SettingsVoiceTypingTab: () => <div>Voice Typing Tab</div>
 }));
@@ -91,6 +98,7 @@ describe('Settings Focus Trap & Navigation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockActiveTab = 'general';
+        modelPanePropsMock.mockClear();
     });
 
     it('traps focus inside the modal', async () => {
@@ -197,7 +205,7 @@ describe('Settings Focus Trap & Navigation', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
 
         expect(await screen.findByText('Voice Typing Tab')).toBeDefined();
-        expect(screen.queryByText('General Tab Input')).toBeNull();
+        expect(screen.getByText('General Tab Input').closest('[hidden]')).not.toBeNull();
     });
 
     it('navigates tabs with ctrl+tab without the removed local tab', () => {
@@ -211,5 +219,24 @@ describe('Settings Focus Trap & Navigation', () => {
 
         fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
         expect(setActiveTabMock).toHaveBeenCalledWith('about');
+    });
+
+    it('keeps prewarmed inactive panes closed when the settings dialog opens', async () => {
+        const onClose = vi.fn();
+        const { rerender } = render(<Settings isOpen={false} prewarm onClose={onClose} />);
+
+        await waitFor(() => {
+            expect(modelPanePropsMock).toHaveBeenCalled();
+        });
+
+        modelPanePropsMock.mockClear();
+        rerender(<Settings isOpen={true} onClose={onClose} />);
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeDefined();
+        });
+
+        const inactivePropsAfterOpen = modelPanePropsMock.mock.calls.map(([props]) => props);
+        expect(inactivePropsAfterOpen.every((props) => props.isOpen === false && props.isActive === false)).toBe(true);
     });
 });

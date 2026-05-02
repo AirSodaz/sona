@@ -16,6 +16,12 @@ export type SettingsTab =
     | 'automation';
 export type SettingsTabInput = SettingsTab | 'context';
 
+interface SettingsTabState {
+    isOpen: boolean;
+    initialTab?: SettingsTabInput;
+    activeTab: SettingsTab;
+}
+
 function normalizeInitialSettingsTab(initialTab?: SettingsTabInput): SettingsTab {
     if (!initialTab) {
         return 'general';
@@ -33,28 +39,51 @@ export function useSettingsLogic(_isOpen: boolean, _onClose: () => void, initial
     const setConfig = useConfigStore((state) => state.setConfig);
     const { i18n } = useTranslation();
 
-    const [tabState, setTabState] = useState(() => ({
+    const [tabState, setTabState] = useState<SettingsTabState>({
         isOpen: _isOpen,
         initialTab,
         activeTab: _isOpen ? normalizeInitialSettingsTab(initialTab) : 'general',
-    }));
+    });
 
-    let activeTab = tabState.activeTab;
-    if (tabState.isOpen !== _isOpen || tabState.initialTab !== initialTab) {
-        activeTab = _isOpen ? normalizeInitialSettingsTab(initialTab) : 'general';
+    const derivedActiveTab = _isOpen ? normalizeInitialSettingsTab(initialTab) : 'general';
+    const isTabStateSynced = tabState.isOpen === _isOpen && tabState.initialTab === initialTab;
+    const activeTab = isTabStateSynced ? tabState.activeTab : derivedActiveTab;
+
+    useEffect(() => {
+        let cancelled = false;
+        queueMicrotask(() => {
+            if (cancelled) {
+                return;
+            }
+
+            setTabState((current) => {
+                if (
+                    current.isOpen === _isOpen
+                    && current.initialTab === initialTab
+                ) {
+                    return current;
+                }
+
+                return {
+                    isOpen: _isOpen,
+                    initialTab,
+                    activeTab: derivedActiveTab,
+                };
+            });
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [_isOpen, derivedActiveTab, initialTab]);
+
+    const setActiveTab = useCallback((nextTab: SettingsTab) => {
         setTabState({
             isOpen: _isOpen,
             initialTab,
-            activeTab,
-        });
-    }
-
-    const setActiveTab = useCallback((nextTab: SettingsTab) => {
-        setTabState((current) => ({
-            ...current,
             activeTab: nextTab,
-        }));
-    }, []);
+        });
+    }, [_isOpen, initialTab]);
 
     // Sync language change
     useEffect(() => {

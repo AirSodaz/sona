@@ -22,7 +22,7 @@ interface SettingsLLMServiceTabProps {
   isActive?: boolean;
 }
 
-export function SettingsLLMServiceTab({ isActive = true }: SettingsLLMServiceTabProps): React.JSX.Element {
+export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({ isActive = true }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
@@ -152,4 +152,4 @@ export function SettingsLLMServiceTab({ isActive = true }: SettingsLLMServiceTab
       </SettingsSection>
     </SettingsTabContainer>
   );
-}
+});

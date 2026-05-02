@@ -23,7 +23,7 @@ interface ModelCardActionsProps {
     onCancelDownload: () => void;
 }
 
-function ModelCardActions({
+const ModelCardActions = React.memo(function ModelCardActions({
     model,
     isInstalled,
     isDownloading,
@@ -65,9 +65,9 @@ function ModelCardActions({
             {isDownloading ? <XIcon /> : <DownloadIcon />}
         </button>
     );
-}
+});
 
-export function ModelCard({
+export const ModelCard = React.memo(function ModelCard({
     models,
     installedModels,
     downloads,
@@ -187,4 +187,4 @@ export function ModelCard({
             )}
         </div>
     );
-}
+});

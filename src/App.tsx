@@ -127,38 +127,38 @@ function App(): React.JSX.Element {
     preloadAllSettings();
   }, [isLoaded, preloadAllSettings]);
 
-  const openDefaultSettings = () => {
+  const openDefaultSettings = useCallback(() => {
     markSettingsPerf('settings.open.default.click', { tab: 'general', source: 'header' });
     preloadSettings('general');
     setSettingsInitialTab('general');
     setIsSettingsOpen(true);
-  };
+  }, [preloadSettings]);
 
-  const openSettingsTab = (tab: SettingsTab) => {
+  const openSettingsTab = useCallback((tab: SettingsTab) => {
     markSettingsPerf('settings.open.tab.click', { tab });
     preloadSettings(tab);
     setIsDiagnosticsOpen(false);
     setSettingsInitialTab(tab);
     setIsSettingsOpen(true);
-  };
+  }, [preloadSettings]);
 
-  const openDiagnostics = () => {
+  const openDiagnostics = useCallback(() => {
     setIsSettingsOpen(false);
     setIsDiagnosticsOpen(true);
-  };
+  }, []);
 
-  const openRecoveryCenter = () => {
+  const openRecoveryCenter = useCallback(() => {
     setIsRecoveryCenterOpen(true);
-  };
+  }, []);
 
-  const openAutomationSettings = () => {
+  const openAutomationSettings = useCallback(() => {
     openSettingsTab('automation');
-  };
+  }, [openSettingsTab]);
 
-  const runFirstRunSetupFromDiagnostics = () => {
+  const runFirstRunSetupFromDiagnostics = useCallback(() => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
-  };
+  }, [reopenOnboarding]);
 
   if (!isLoaded) {
     return <></>; // Wait for config and onboarding state to load
@@ -211,7 +211,7 @@ function App(): React.JSX.Element {
       {/* Main Content */}
       <main id="main-content" className="app-main">
         <div className="projects-mode-shell" style={{ display: isProjectsMode ? undefined : 'none' }}>
-          <ProjectsView />
+          <ProjectsView isActive={isProjectsMode} />
         </div>
         <div className="workspace-mode-shell" style={{ display: !isProjectsMode ? undefined : 'none' }}>
           <div className="panel-container">
@@ -242,7 +242,7 @@ function App(): React.JSX.Element {
 
             {/* Right Panel - Editor */}
             <div className="panel panel-right">
-              <TranscriptWorkbench onClose={clearTranscriptSegments} />
+              {!isProjectsMode && <TranscriptWorkbench onClose={clearTranscriptSegments} />}
             </div>
           </div>
         </div>

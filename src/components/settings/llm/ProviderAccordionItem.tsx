@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
@@ -21,7 +21,7 @@ interface ProviderAccordionItemProps {
   t: (key: string) => string;
 }
 
-export function ProviderAccordionItem({
+export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   provider,
   config,
   isOpen,
@@ -195,4 +195,4 @@ export function ProviderAccordionItem({
       )}
     </div>
   );
-}
+});

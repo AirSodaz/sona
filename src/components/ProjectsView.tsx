@@ -29,7 +29,11 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 
-export function ProjectsView(): React.JSX.Element {
+interface ProjectsViewProps {
+  isActive?: boolean;
+}
+
+export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.Element {
   const { t } = useTranslation();
   const projects = useProjectStore((state) => state.projects);
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
@@ -155,8 +159,12 @@ export function ProjectsView(): React.JSX.Element {
   const syncVisibleItems = selectionState.syncVisibleItems;
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
     syncVisibleItems(browseState.filteredAndSortedItems);
-  }, [browseState.filteredAndSortedItems, syncVisibleItems]);
+  }, [browseState.filteredAndSortedItems, isActive, syncVisibleItems]);
 
   const scopedSourceHistoryId = useMemo(
     () => (
@@ -426,6 +434,17 @@ export function ProjectsView(): React.JSX.Element {
     selectionState.clearSelection();
   };
 
+  if (!isActive) {
+    return (
+      <div
+        className="projects-workbench"
+        data-projects-inactive="true"
+        hidden
+        aria-hidden="true"
+      />
+    );
+  }
+
   return (
     <div className={`projects-workbench ${selectedItem ? 'with-detail' : ''}`}>
       <ProjectsRail
@@ -509,29 +528,28 @@ export function ProjectsView(): React.JSX.Element {
             />
           )}
 
-          <div className="projects-main-scroll" onScroll={browseState.handleScroll}>
-            <ProjectsResults
-              activeSearchResultId={browseState.activeSearchResultId}
-              browseProject={browseState.browseProject}
-              filteredAndSortedItems={browseState.filteredAndSortedItems}
-              handleOpenItem={handleOpenItem}
-              isHistoryInteractionLocked={isLiveDraftSessionLocked}
-              isAllItemsScope={browseState.isAllItemsScope}
-              isHistoryLoading={isHistoryLoading}
-              isSelectionMode={selectionState.isSelectionMode}
-              onDeleteHistoryItem={handleDeleteHistoryItem}
-              onRenameHistoryItem={handleRenameHistoryItem}
-              onToggleSelection={selectionState.toggleSelection}
-              resetBrowseState={browseState.resetBrowseState}
-              scopedItems={browseState.scopedItems}
-              searchMatchByItemId={browseState.searchMatchByItemId}
-              searchQuery={browseState.searchQuery}
-              selectedHistoryId={effectiveSelectedHistoryId}
-              selectedIds={selectionState.selectedIds}
-              t={t}
-              viewMode={viewMode}
-            />
-          </div>
+          <ProjectsResults
+            activeSearchResultId={browseState.activeSearchResultId}
+            browseProject={browseState.browseProject}
+            filteredAndSortedItems={browseState.filteredAndSortedItems}
+            handleOpenItem={handleOpenItem}
+            isHistoryInteractionLocked={isLiveDraftSessionLocked}
+            isAllItemsScope={browseState.isAllItemsScope}
+            isHistoryLoading={isHistoryLoading}
+            isSelectionMode={selectionState.isSelectionMode}
+            onDeleteHistoryItem={handleDeleteHistoryItem}
+            onRenameHistoryItem={handleRenameHistoryItem}
+            onScroll={browseState.handleScroll}
+            onToggleSelection={selectionState.toggleSelection}
+            resetBrowseState={browseState.resetBrowseState}
+            scopedItems={browseState.scopedItems}
+            searchMatchByItemId={browseState.searchMatchByItemId}
+            searchQuery={browseState.searchQuery}
+            selectedHistoryId={effectiveSelectedHistoryId}
+            selectedIds={selectionState.selectedIds}
+            t={t}
+            viewMode={viewMode}
+          />
         </section>
       )}
 

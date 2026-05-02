@@ -31,7 +31,7 @@ interface FeatureCardProps {
   headerAction?: React.ReactNode;
 }
 
-export function FeatureCard({
+export const FeatureCard = React.memo(function FeatureCard({
   stepNumber,
   featureId,
   title,
@@ -318,4 +318,4 @@ export function FeatureCard({
       </div>
     </div>
   );
-}
+});

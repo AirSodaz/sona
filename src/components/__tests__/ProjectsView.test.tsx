@@ -8,6 +8,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
+const virtuosoScrollToIndexMock = vi.hoisted(() => vi.fn());
+const virtuosoGridScrollToIndexMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -94,6 +96,54 @@ vi.mock('../history/HistoryItem', () => ({
   ),
 }));
 
+vi.mock('react-virtuoso', async () => {
+  const React = await import('react');
+  const renderLimit = 20;
+  const Virtuoso = React.forwardRef(({
+    className,
+    components,
+    context,
+    data = [],
+    itemContent,
+    onScroll,
+  }: any, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      scrollToIndex: virtuosoScrollToIndexMock,
+      scrollTo: vi.fn(),
+      scrollBy: vi.fn(),
+      getState: vi.fn(),
+    }));
+
+    const Header = components?.Header;
+    return (
+      <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-list">
+        {Header && <Header context={context} />}
+        {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item, context))}
+      </div>
+    );
+  });
+  const VirtuosoGrid = React.forwardRef(({
+    className,
+    data = [],
+    itemContent,
+    onScroll,
+  }: any, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      scrollToIndex: virtuosoGridScrollToIndexMock,
+      scrollTo: vi.fn(),
+      scrollBy: vi.fn(),
+    }));
+
+    return (
+      <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-grid">
+        {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+      </div>
+    );
+  });
+
+  return { Virtuoso, VirtuosoGrid };
+});
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: any) => {
@@ -149,6 +199,20 @@ describe('ProjectsView', () => {
       fireEvent.click(element);
     });
   };
+
+  const createHistoryItems = (count: number, projectId: string | null = null) => (
+    Array.from({ length: count }, (_, index) => ({
+      id: `hist-${index}`,
+      title: `History ${index}`,
+      timestamp: Date.now() - index,
+      duration: 12 + index,
+      audioPath: `audio-${index}.wav`,
+      transcriptPath: `hist-${index}.json`,
+      previewText: `Preview ${index}`,
+      type: 'recording',
+      projectId,
+    }))
+  );
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -233,6 +297,62 @@ describe('ProjectsView', () => {
     expect(getButtonByContent('All Items')).toBeDefined();
     expect(getButtonByContent('Inbox')).toBeDefined();
     expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
+  });
+
+  it('does not render hidden workspace detail or result DOM while inactive', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: createHistoryItems(30, 'project-1'),
+    } as any);
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-0',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hidden detail', isFinal: true }],
+      audioUrl: 'asset:///audio.wav',
+    });
+
+    render(<ProjectsView isActive={false} />);
+    await waitForInitialHistoryLoad();
+
+    expect(document.querySelector('.projects-workbench[data-projects-inactive="true"]')).not.toBeNull();
+    expect(screen.queryByText('TranscriptEditor')).toBeNull();
+    expect(screen.queryByTestId('history-item-hist-0')).toBeNull();
+  });
+
+  it('windows large workspace result sets instead of rendering every history item', async () => {
+    useHistoryStore.setState({
+      items: createHistoryItems(150, null),
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    expect(screen.getByTestId('history-item-hist-0')).toBeDefined();
+    expect(screen.queryByTestId('history-item-hist-149')).toBeNull();
+    expect(screen.getAllByTestId(/history-item-/)).toHaveLength(20);
+  });
+
+  it('scrolls the virtualized workspace list to keyboard search results outside the mounted window', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: createHistoryItems(60, 'project-1').map((item) => ({
+        ...item,
+        searchContent: 'Roadmap search hit',
+      })),
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
+    fireEvent.change(input, { target: { value: 'roadmap' } });
+    for (let index = 0; index < 25; index += 1) {
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+    }
+
+    expect(virtuosoScrollToIndexMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      align: 'center',
+      index: 24,
+    }));
   });
 
   it('renders scope icons in the rail and main header consistently', async () => {

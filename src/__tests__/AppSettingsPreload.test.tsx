@@ -6,6 +6,7 @@ const settingsModuleLoaded = vi.hoisted(() => vi.fn());
 const preloadSettingsTabMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const preloadAllSettingsTabsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const markSettingsPerfMock = vi.hoisted(() => vi.fn());
+const projectsViewRenderMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -21,7 +22,12 @@ vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNav
 vi.mock('../components/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
-vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/ProjectsView', () => ({
+  ProjectsView: (props: any) => {
+    projectsViewRenderMock(props);
+    return <div data-testid="projects-view">ProjectsView: {String(props.isActive)}</div>;
+  },
+}));
 vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => null }));
 vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () => null }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
@@ -104,6 +110,7 @@ describe('App settings preload', () => {
     preloadSettingsTabMock.mockClear();
     preloadAllSettingsTabsMock.mockClear();
     markSettingsPerfMock.mockClear();
+    projectsViewRenderMock.mockClear();
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       setMode: vi.fn(),
@@ -183,5 +190,35 @@ describe('App settings preload', () => {
 
     fireEvent.click(settingsButton);
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();
+  });
+
+  it('passes the active mode flag into the kept-mounted projects view', () => {
+    render(<App />);
+
+    expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: false');
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: false }));
+
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
+      mode: 'projects',
+      setMode: vi.fn(),
+    }));
+
+    render(<App />);
+
+    const renderedProjectViews = screen.getAllByTestId('projects-view');
+    expect(renderedProjectViews[renderedProjectViews.length - 1]?.textContent).toBe('ProjectsView: true');
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: true }));
+  });
+
+  it('does not keep the workspace editor mounted while projects mode is active', () => {
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
+      mode: 'projects',
+      setMode: vi.fn(),
+    }));
+
+    render(<App />);
+
+    expect(screen.queryByText('TranscriptWorkbench')).toBeNull();
+    expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
   });
 });

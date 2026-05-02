@@ -134,7 +134,8 @@ describe('Settings', () => {
     async function openModelsTab() {
         await screen.findByText('settings.general_title');
         fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+        await screen.findByText('settings.model_selection', undefined, { timeout: 3000 });
+        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled(), { timeout: 3000 });
     }
 
     it('renders with vertical layout structure', async () => {

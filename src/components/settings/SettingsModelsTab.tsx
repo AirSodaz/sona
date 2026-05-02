@@ -33,7 +33,7 @@ interface ModelSectionProps {
     onCancelDownload: (modelId: string) => void;
 }
 
-function ModelSection({
+const ModelSection = React.memo(function ModelSection({
     title,
     description,
     icon,
@@ -90,13 +90,13 @@ function ModelSection({
             })}
         </SettingsSection>
     );
-}
+});
 
 interface SettingsModelsTabProps {
     isActive?: boolean;
 }
 
-export function SettingsModelsTab({ isActive = true }: SettingsModelsTabProps): React.JSX.Element {
+export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive = true }: SettingsModelsTabProps): React.JSX.Element {
     const { t } = useTranslation();
     const modelConfig = useModelConfig();
     const transcriptionConfig = useTranscriptionConfig();
@@ -501,4 +501,4 @@ export function SettingsModelsTab({ isActive = true }: SettingsModelsTabProps): 
             </div>
         </SettingsTabContainer>
     );
-}
+});

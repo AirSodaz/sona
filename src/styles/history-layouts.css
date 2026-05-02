@@ -411,6 +411,10 @@
   align-items: start;
 }
 
+.projects-layout-grid > .projects-grid-virtual-item {
+  min-width: 0;
+}
+
 .history-item--grid {
   flex-direction: column;
   height: 220px;
