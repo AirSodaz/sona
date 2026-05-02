@@ -56,7 +56,7 @@ vi.mock('../../hooks/useLlmConfig', () => ({
 
 // Mock sub-components to avoid rendering complexity
 vi.mock('../settings/SettingsGeneralTab', () => ({
-    SettingsGeneralTab: () => <button>General Tab Input</button>
+    SettingsGeneralTab: () => null // Mute to prevent unexpected query behavior in these tab tests
 }));
 vi.mock('../settings/SettingsDashboardTab', () => ({
     SettingsDashboardTab: () => <div>Dashboard Tab</div>

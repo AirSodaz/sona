@@ -312,16 +312,16 @@ function buildVoiceTypingCheck(context: DiagnosticsSnapshotBuildContext): Diagno
         id: 'voice-typing',
         title: t('settings.diagnostics.voice_typing_title', { defaultValue: 'Voice Typing Runtime' }),
         status: 'missing',
-        description: voiceTypingReadiness.lastErrorMessage || t(
-          voiceTypingReadiness.state === 'needs_shortcut'
-            ? 'settings.voice_typing_status_summary_missing_shortcut'
-            : voiceTypingReadiness.state === 'needs_vad'
-              ? 'settings.voice_typing_status_summary_missing_vad'
-              : 'settings.voice_typing_status_summary_missing_model',
-          {
-            defaultValue: 'Voice Typing still needs setup before it can run.',
-          },
-        ),
+        description: voiceTypingReadiness.lastErrorMessage || (() => {
+          switch (voiceTypingReadiness.state) {
+            case 'needs_shortcut':
+              return t('settings.voice_typing_status_summary_missing_shortcut', { defaultValue: 'Voice Typing still needs setup before it can run.' });
+            case 'needs_vad':
+              return t('settings.voice_typing_status_summary_missing_vad', { defaultValue: 'Voice Typing still needs setup before it can run.' });
+            default:
+              return t('settings.voice_typing_status_summary_missing_model', { defaultValue: 'Voice Typing still needs setup before it can run.' });
+          }
+        })(),
         action: buildOpenVoiceTypingAction(t),
       };
     case 'failed':
@@ -426,41 +426,44 @@ export function buildModelChecks(context: DiagnosticsSnapshotBuildContext): Mode
     readyMeta: context.selectedModels.offline?.name ?? context.config.offlineModelPath,
   });
 
-  const vadCheck: DiagnosticCheck = !context.selectedModels.live
-    ? {
-        id: 'vad',
-        title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
-        status: 'info',
-        description: t('settings.diagnostics.vad_unknown', {
-          defaultValue: 'Pick a Live Record Model first to evaluate whether a VAD model is required.',
-        }),
-        action: buildOpenModelSettingsAction(t),
-      }
-    : !context.modelRules.live?.requiresVad
-      ? {
-          id: 'vad',
-          title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
-          status: 'ready',
-          description: t('settings.diagnostics.vad_not_required', {
-            defaultValue: 'The selected Live Record Model does not require a separate VAD model.',
-          }),
-        }
-      : buildModelPathPolicyCheck({
-          context,
-          id: 'vad',
-          title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
-          selectedPath: context.trimmedPaths.vadModelPath,
-          pathStatus: context.pathStatuses.vad,
-          missingSelectionStatus: 'missing',
-          missingSelectionDescription: t('settings.diagnostics.vad_missing', {
-            defaultValue: 'The selected Live Record Model still needs a VAD model.',
-          }),
-          readyDescription: t('settings.diagnostics.vad_ready', {
-            defaultValue: 'The required VAD model is configured and reachable.',
-          }),
-          missingPathMeta: context.config.vadModelPath,
-          unknownPathMeta: context.trimmedPaths.vadModelPath,
-        });
+  let vadCheck: DiagnosticCheck;
+  if (!context.selectedModels.live) {
+    vadCheck = {
+      id: 'vad',
+      title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
+      status: 'info',
+      description: t('settings.diagnostics.vad_unknown', {
+        defaultValue: 'Pick a Live Record Model first to evaluate whether a VAD model is required.',
+      }),
+      action: buildOpenModelSettingsAction(t),
+    };
+  } else if (!context.modelRules.live?.requiresVad) {
+    vadCheck = {
+      id: 'vad',
+      title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
+      status: 'ready',
+      description: t('settings.diagnostics.vad_not_required', {
+        defaultValue: 'The selected Live Record Model does not require a separate VAD model.',
+      }),
+    };
+  } else {
+    vadCheck = buildModelPathPolicyCheck({
+      context,
+      id: 'vad',
+      title: t('settings.diagnostics.vad_title', { defaultValue: 'VAD Dependency' }),
+      selectedPath: context.trimmedPaths.vadModelPath,
+      pathStatus: context.pathStatuses.vad,
+      missingSelectionStatus: 'missing',
+      missingSelectionDescription: t('settings.diagnostics.vad_missing', {
+        defaultValue: 'The selected Live Record Model still needs a VAD model.',
+      }),
+      readyDescription: t('settings.diagnostics.vad_ready', {
+        defaultValue: 'The required VAD model is configured and reachable.',
+      }),
+      missingPathMeta: context.config.vadModelPath,
+      unknownPathMeta: context.trimmedPaths.vadModelPath,
+    });
+  }
 
   const punctuationCheck: DiagnosticCheck = !context.punctuationRequired
     ? {
@@ -508,38 +511,41 @@ export function buildInputChecks(context: DiagnosticsSnapshotBuildContext): Inpu
     ...mapPermissionStatus(permissionState, t),
   };
 
-  const microphoneCheck: DiagnosticCheck = !microphoneProbe.available
-    ? {
-        id: 'microphone-device',
-        title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
-        status: 'failed',
-        description: microphoneProbe.errorMessage || t('settings.diagnostics.microphone_unavailable', {
-          defaultValue: 'No microphone devices are currently available.',
-        }),
-        action: inputDeviceAction,
-      }
-    : config.microphoneId === 'default' || microphoneProbe.options.some((option) => option.value === config.microphoneId)
-      ? {
-          id: 'microphone-device',
-          title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
-          status: 'ready',
-          description: t('settings.diagnostics.microphone_ready', {
-            defaultValue: 'The current input-device selection is still available.',
-          }),
-          meta: config.microphoneId === 'default'
-            ? t('settings.mic_auto')
-            : config.microphoneId,
-        }
-      : {
-          id: 'microphone-device',
-          title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
-          status: 'failed',
-          description: t('settings.diagnostics.microphone_missing_selection', {
-            defaultValue: 'The saved microphone selection is no longer available.',
-          }),
-          meta: config.microphoneId,
-          action: inputDeviceAction,
-        };
+  let microphoneCheck: DiagnosticCheck;
+  if (!microphoneProbe.available) {
+    microphoneCheck = {
+      id: 'microphone-device',
+      title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
+      status: 'failed',
+      description: microphoneProbe.errorMessage || t('settings.diagnostics.microphone_unavailable', {
+        defaultValue: 'No microphone devices are currently available.',
+      }),
+      action: inputDeviceAction,
+    };
+  } else if (config.microphoneId === 'default' || microphoneProbe.options.some((option) => option.value === config.microphoneId)) {
+    microphoneCheck = {
+      id: 'microphone-device',
+      title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
+      status: 'ready',
+      description: t('settings.diagnostics.microphone_ready', {
+        defaultValue: 'The current input-device selection is still available.',
+      }),
+      meta: config.microphoneId === 'default'
+        ? t('settings.mic_auto')
+        : config.microphoneId,
+    };
+  } else {
+    microphoneCheck = {
+      id: 'microphone-device',
+      title: t('settings.diagnostics.microphone_title', { defaultValue: 'Input Device' }),
+      status: 'failed',
+      description: t('settings.diagnostics.microphone_missing_selection', {
+        defaultValue: 'The saved microphone selection is no longer available.',
+      }),
+      meta: config.microphoneId,
+      action: inputDeviceAction,
+    };
+  }
 
   const systemAudioCheck: DiagnosticCheck = systemAudioProbe.available
     ? {

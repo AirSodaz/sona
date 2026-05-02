@@ -172,6 +172,58 @@ function VoiceTypingStatusCard(): React.JSX.Element {
     );
 }
 
+function getVadBadgeTone(requiresVad: boolean, vadConfigured: boolean): BadgeTone {
+    if (!requiresVad) return 'off';
+    if (vadConfigured) return 'ready';
+    return 'missing';
+}
+
+function getVadBadgeLabel(t: (key: string, options?: Record<string, unknown>) => string, requiresVad: boolean, vadConfigured: boolean): string {
+    if (!requiresVad) {
+        return t('settings.voice_typing_dependency_vad_not_needed_badge', { defaultValue: 'Not needed' });
+    }
+    if (vadConfigured) {
+        return t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+    }
+    return t('settings.voice_typing_status_missing_vad', { defaultValue: 'Missing VAD' });
+}
+
+function getInputBadgeTone(inputDeviceState: string): BadgeTone {
+    if (inputDeviceState === 'failed') return 'missing';
+    if (inputDeviceState === 'off') return 'off';
+    return 'ready';
+}
+
+function getInputBadgeLabel(t: (key: string, options?: Record<string, unknown>) => string, inputDeviceState: string): string {
+    if (inputDeviceState === 'failed') {
+        return t('settings.voice_typing_status_failed', { defaultValue: 'Failed' });
+    }
+    if (inputDeviceState === 'off') {
+        return t('settings.voice_typing_status_off', { defaultValue: 'Off' });
+    }
+    return t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+}
+
+function getRuntimeBadgeTone(runtimeState: string): BadgeTone {
+    if (runtimeState === 'failed') return 'missing';
+    if (runtimeState === 'ready') return 'ready';
+    if (runtimeState === 'off') return 'off';
+    return 'pending';
+}
+
+function getRuntimeBadgeLabel(t: (key: string, options?: Record<string, unknown>) => string, runtimeState: string): string {
+    if (runtimeState === 'failed') {
+        return t('settings.voice_typing_status_failed', { defaultValue: 'Failed' });
+    }
+    if (runtimeState === 'ready') {
+        return t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+    }
+    if (runtimeState === 'off') {
+        return t('settings.voice_typing_status_off', { defaultValue: 'Off' });
+    }
+    return t('settings.voice_typing_status_preparing', { defaultValue: 'Preparing' });
+}
+
 function VoiceTypingDependenciesSection(): React.JSX.Element {
     const { t } = useTranslation();
     const readiness = useVoiceTypingReadiness();
@@ -277,18 +329,8 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
             >
                 <div className="settings-status-actions">
                     <StatusBadge
-                        tone={!readiness.requiresVad ? 'off' : readiness.vadConfigured ? 'ready' : 'missing'}
-                        label={
-                            !readiness.requiresVad
-                                ? t('settings.voice_typing_dependency_vad_not_needed_badge', {
-                                    defaultValue: 'Not needed',
-                                })
-                                : readiness.vadConfigured
-                                    ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                                    : t('settings.voice_typing_status_missing_vad', {
-                                        defaultValue: 'Missing VAD',
-                                    })
-                        }
+                        tone={getVadBadgeTone(readiness.requiresVad, readiness.vadConfigured)}
+                        label={getVadBadgeLabel(t, readiness.requiresVad, readiness.vadConfigured)}
                     />
                     {readiness.requiresVad && !readiness.vadConfigured ? modelCta : null}
                 </div>
@@ -306,20 +348,8 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
             >
                 <div className="settings-status-actions">
                     <StatusBadge
-                        tone={
-                            readiness.inputDeviceState === 'failed'
-                                ? 'missing'
-                                : readiness.inputDeviceState === 'off'
-                                    ? 'off'
-                                    : 'ready'
-                        }
-                        label={
-                            readiness.inputDeviceState === 'failed'
-                                ? t('settings.voice_typing_status_failed', { defaultValue: 'Failed' })
-                                : readiness.inputDeviceState === 'off'
-                                    ? t('settings.voice_typing_status_off', { defaultValue: 'Off' })
-                                    : t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                        }
+                        tone={getInputBadgeTone(readiness.inputDeviceState)}
+                        label={getInputBadgeLabel(t, readiness.inputDeviceState)}
                     />
                     {readiness.inputDeviceState === 'failed' ? inputCta : null}
                 </div>
@@ -352,26 +382,8 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
                 }
             >
                 <StatusBadge
-                    tone={
-                        readiness.runtimeState === 'failed'
-                            ? 'missing'
-                            : readiness.runtimeState === 'ready'
-                                ? 'ready'
-                                : readiness.runtimeState === 'off'
-                                    ? 'off'
-                                    : 'pending'
-                    }
-                    label={
-                        readiness.runtimeState === 'failed'
-                            ? t('settings.voice_typing_status_failed', { defaultValue: 'Failed' })
-                            : readiness.runtimeState === 'ready'
-                                ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                                : readiness.runtimeState === 'off'
-                                    ? t('settings.voice_typing_status_off', { defaultValue: 'Off' })
-                                    : t('settings.voice_typing_status_preparing', {
-                                        defaultValue: 'Preparing',
-                                    })
-                    }
+                    tone={getRuntimeBadgeTone(readiness.runtimeState)}
+                    label={getRuntimeBadgeLabel(t, readiness.runtimeState)}
                 />
             </SettingsItem>
         </SettingsSection>

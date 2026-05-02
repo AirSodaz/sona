@@ -47,11 +47,15 @@ export function FeatureCard({
   const modelEntry = getFeatureModelEntry(config, featureId);
   const selectedProvider = modelEntry?.provider || 'open_ai';
   const selectedModel = modelEntry?.model || '';
-  const temperature = featureId === 'polish'
-    ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
-    : featureId === 'translation'
-      ? (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE)
-      : (currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE);
+
+  let temperature: number;
+  if (featureId === 'polish') {
+    temperature = currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE;
+  } else if (featureId === 'translation') {
+    temperature = currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE;
+  } else {
+    temperature = currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE;
+  }
 
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
@@ -193,15 +197,23 @@ export function FeatureCard({
   const isComplete = isFeatureLlmConfigComplete(config, featureId);
   const featureTitleId = `feature-title-${featureId}`;
   const temperatureLabelId = `feature-temperature-label-${featureId}`;
-  const statusBadge = !featureEnabled ? (
-    <span className="status-badge off"><X size={12}/> {t('settings.llm.status_off')}</span>
-  ) : isComplete ? (
-    <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
-  ) : (
-    <span className="status-badge missing">
-      <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
-    </span>
-  );
+
+  let statusBadge: React.ReactNode;
+  if (!featureEnabled) {
+    statusBadge = (
+      <span className="status-badge off"><X size={12}/> {t('settings.llm.status_off')}</span>
+    );
+  } else if (isComplete) {
+    statusBadge = (
+      <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
+    );
+  } else {
+    statusBadge = (
+      <span className="status-badge missing">
+        <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
+      </span>
+    );
+  }
 
   return (
     <div

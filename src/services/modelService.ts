@@ -112,21 +112,27 @@ function parseDownloadProgressPayload(payload: unknown): { downloaded: number; t
 
     if (typeof payload === 'object' && payload !== null) {
         const value = payload as DownloadProgressPayloadObject;
-        const downloaded = typeof value[0] === 'number'
-            ? value[0]
-            : typeof value.downloaded === 'number'
-                ? value.downloaded
-                : 0;
-        const total = typeof value[1] === 'number'
-            ? value[1]
-            : typeof value.total === 'number'
-                ? value.total
-                : 0;
-        const id = typeof value[2] === 'string'
-            ? value[2]
-            : typeof value.id === 'string'
-                ? value.id
-                : '';
+
+        let downloaded = 0;
+        if (typeof value[0] === 'number') {
+            downloaded = value[0];
+        } else if (typeof value.downloaded === 'number') {
+            downloaded = value.downloaded;
+        }
+
+        let total = 0;
+        if (typeof value[1] === 'number') {
+            total = value[1];
+        } else if (typeof value.total === 'number') {
+            total = value.total;
+        }
+
+        let id = '';
+        if (typeof value[2] === 'string') {
+            id = value[2];
+        } else if (typeof value.id === 'string') {
+            id = value.id;
+        }
 
         return { downloaded, total, id };
     }
