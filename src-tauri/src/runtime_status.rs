@@ -2,12 +2,12 @@ use serde::Serialize;
 use std::io::ErrorKind;
 use tauri::Manager;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RuntimeEnvironmentStatus {
-    ffmpeg_path: String,
-    ffmpeg_exists: bool,
-    log_dir_path: String,
+    pub(crate) ffmpeg_path: String,
+    pub(crate) ffmpeg_exists: bool,
+    pub(crate) log_dir_path: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -22,9 +22,9 @@ pub(crate) enum RuntimePathKind {
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RuntimePathStatus {
-    path: String,
-    kind: RuntimePathKind,
-    error: Option<String>,
+    pub(crate) path: String,
+    pub(crate) kind: RuntimePathKind,
+    pub(crate) error: Option<String>,
 }
 
 pub(crate) fn resolve_runtime_path_status(path: &str) -> RuntimePathStatus {
@@ -77,9 +77,8 @@ pub(crate) async fn open_log_folder<R: tauri::Runtime>(
     Ok(())
 }
 
-#[tauri::command]
-pub(crate) async fn get_runtime_environment_status<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+pub(crate) fn resolve_runtime_environment_status<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let ffmpeg_path = crate::pipeline::resolve_ffmpeg_sidecar_path()?;
     let log_dir = app
@@ -92,6 +91,13 @@ pub(crate) async fn get_runtime_environment_status<R: tauri::Runtime>(
         ffmpeg_exists: ffmpeg_path.exists(),
         log_dir_path: log_dir.to_string_lossy().into_owned(),
     })
+}
+
+#[tauri::command]
+pub(crate) async fn get_runtime_environment_status<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<RuntimeEnvironmentStatus, String> {
+    resolve_runtime_environment_status(&app)
 }
 
 #[tauri::command]

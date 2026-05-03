@@ -1,4 +1,4 @@
-import { getResumeOnboardingStep, hasRequiredOnboardingModels } from '../utils/onboarding';
+import { getResumeOnboardingStep } from '../utils/onboarding';
 import {
   getMicrophonePermissionState,
   probeMicrophoneDeviceOptions,
@@ -7,23 +7,13 @@ import {
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
-import { findSelectedModelByMode } from '../utils/modelSelection';
-import { modelService } from './modelService';
-import { getPathStatusMap } from './pathStatusService';
 import { resolveVoiceTypingReadinessSnapshot } from '../hooks/useVoiceTypingReadiness';
 import type {
-  DiagnosticSection,
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
-import { getAsrRuntimeMetrics, getRuntimeEnvironmentStatus } from './tauri/app';
+import { getDiagnosticsCoreSnapshot } from './tauri/app';
 import {
-  buildAsrPerformanceChecks,
-  buildInputChecks,
-  buildModelChecks,
-  buildOverviewCards,
-  buildRuntimeChecks,
-  type DiagnosticsBuiltChecks,
-  type DiagnosticsSnapshotBuildContext,
+  hydrateDiagnosticsCoreSnapshot,
   type Translate,
 } from './diagnosticsSnapshotBuilders';
 
@@ -31,28 +21,11 @@ export const diagnosticsService = {
   async collectSnapshot(t: Translate): Promise<DiagnosticsSnapshot> {
     const config = useConfigStore.getState().config;
     const voiceTypingRuntime = useVoiceTypingRuntimeStore.getState();
-    const streamingModelPath = config.streamingModelPath.trim();
-    const offlineModelPath = config.offlineModelPath.trim();
-    const vadModelPath = (config.vadModelPath || '').trim();
-    const punctuationModelPath = (config.punctuationModelPath || '').trim();
-
-    const [permissionState, microphoneProbe, systemAudioProbe, runtimeEnvironment, asrRuntimeMetrics, pathStatusMap] = await Promise.all([
+    const [permissionState, microphoneProbe, systemAudioProbe] = await Promise.all([
       getMicrophonePermissionState(),
       probeMicrophoneDeviceOptions(t('settings.mic_auto')),
       probeSystemAudioDeviceOptions(t('settings.mic_auto')),
-      getRuntimeEnvironmentStatus(),
-      getAsrRuntimeMetrics(),
-      getPathStatusMap([streamingModelPath, offlineModelPath, vadModelPath, punctuationModelPath]),
     ]);
-
-    const liveModel = findSelectedModelByMode(config.streamingModelPath, 'streaming');
-    const offlineModel = findSelectedModelByMode(config.offlineModelPath, 'offline');
-    const liveModelRules = liveModel ? modelService.getModelRules(liveModel.id) : null;
-    const offlineModelRules = offlineModel ? modelService.getModelRules(offlineModel.id) : null;
-    const liveModelPathStatus = pathStatusMap[streamingModelPath];
-    const offlineModelPathStatus = pathStatusMap[offlineModelPath];
-    const vadPathStatus = pathStatusMap[vadModelPath];
-    const punctuationPathStatus = pathStatusMap[punctuationModelPath];
 
     const voiceTypingReadiness = resolveVoiceTypingReadinessSnapshot(
       {
@@ -65,106 +38,21 @@ export const diagnosticsService = {
       voiceTypingRuntime,
     );
 
-    const context: DiagnosticsSnapshotBuildContext = {
-      t,
-      config,
-      trimmedPaths: {
-        streamingModelPath,
-        offlineModelPath,
-        vadModelPath,
-        punctuationModelPath,
-      },
-      selectedModels: {
-        live: liveModel,
-        offline: offlineModel,
-      },
-      modelRules: {
-        live: liveModelRules,
-        offline: offlineModelRules,
-      },
-      pathStatuses: {
-        liveModel: liveModelPathStatus,
-        offlineModel: offlineModelPathStatus,
-        vad: vadPathStatus,
-        punctuation: punctuationPathStatus,
+    const coreSnapshot = await getDiagnosticsCoreSnapshot({
+      config: {
+        streamingModelPath: config.streamingModelPath,
+        offlineModelPath: config.offlineModelPath,
+        vadModelPath: config.vadModelPath ?? '',
+        punctuationModelPath: config.punctuationModelPath ?? '',
+        microphoneId: config.microphoneId ?? 'default',
       },
       permissionState,
       microphoneProbe,
       systemAudioProbe,
       voiceTypingReadiness,
-      runtimeEnvironment,
-      asrRuntimeMetrics,
-      onboardingReady: hasRequiredOnboardingModels(config),
-      punctuationRequired: [liveModelRules, offlineModelRules].some((rules) => rules?.requiresPunctuation ?? false),
-    };
+    });
 
-    const checks: DiagnosticsBuiltChecks = {
-      model: buildModelChecks(context),
-      input: buildInputChecks(context),
-      runtime: buildRuntimeChecks(context),
-      asr: buildAsrPerformanceChecks(context),
-    };
-
-    const sections: DiagnosticSection[] = [
-      {
-        id: 'models',
-        title: t('settings.diagnostics.models_section', { defaultValue: 'Models' }),
-        description: t('settings.diagnostics.models_section_description', {
-          defaultValue: 'Check that local transcription models and required dependencies are present.',
-        }),
-        checks: [
-          checks.model.liveModelCheck,
-          checks.model.offlineModelCheck,
-          checks.model.vadCheck,
-          checks.model.punctuationCheck,
-        ],
-      },
-      {
-        id: 'input-capture',
-        title: t('settings.diagnostics.input_section', { defaultValue: 'Input & Capture' }),
-        description: t('settings.diagnostics.input_section_description', {
-          defaultValue: 'Check permissions and the availability of input or capture devices.',
-        }),
-        checks: [
-          checks.input.permissionCheck,
-          checks.input.microphoneCheck,
-          checks.input.systemAudioCheck,
-        ],
-      },
-      {
-        id: 'runtime-environment',
-        title: t('settings.diagnostics.runtime_section', { defaultValue: 'Runtime & Environment' }),
-        description: t('settings.diagnostics.runtime_section_description', {
-          defaultValue: 'Check background runtime readiness and packaged environment dependencies.',
-        }),
-        checks: [
-          checks.runtime.voiceTypingCheck,
-          checks.runtime.ffmpegCheck,
-          checks.runtime.logDirCheck,
-        ],
-      },
-      {
-        id: 'asr-performance',
-        title: t('settings.diagnostics.asr_performance_section', { defaultValue: 'ASR Performance' }),
-        description: t('settings.diagnostics.asr_performance_section_description', {
-          defaultValue: 'Review recent local ASR model memory and transcription latency samples.',
-        }),
-        checks: [
-          checks.asr.modelMemoryCheck,
-          checks.asr.liveLatencyCheck,
-          checks.asr.batchLatencyCheck,
-        ],
-      },
-    ];
-
-    const overview = buildOverviewCards(context, checks);
-
-    return {
-      scannedAt: new Date().toISOString(),
-      overview,
-      sections,
-      runtimeEnvironment,
-    };
+    return hydrateDiagnosticsCoreSnapshot(t, coreSnapshot);
   },
 
   getResumeOnboardingStep() {

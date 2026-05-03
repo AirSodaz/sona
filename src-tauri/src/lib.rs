@@ -6,6 +6,7 @@ mod automation_runtime;
 mod aux_window_state;
 pub mod cli;
 mod dashboard;
+mod diagnostics_core;
 mod downloads;
 pub mod export;
 mod hardware;
@@ -17,6 +18,8 @@ mod project_repository;
 mod runtime_status;
 pub mod sherpa;
 pub mod speaker;
+mod speaker_correction;
+mod speaker_review;
 pub mod system;
 mod text_alignment;
 mod tray;
@@ -273,6 +276,7 @@ pub fn run() {
             webdav::webdav_download_backup,
             downloads::cancel_download,
             preset_models::get_model_catalog_snapshot,
+            diagnostics_core::get_diagnostics_core_snapshot,
             hardware::check_gpu_availability,
             force_exit,
             downloads::has_active_downloads,
@@ -318,7 +322,11 @@ pub fn run() {
             sherpa::get_asr_runtime_metrics,
             export::export_transcript_file,
             speaker::annotate_speaker_segments_from_file,
-            speaker::import_speaker_profile_sample
+            speaker::import_speaker_profile_sample,
+            speaker_review::build_speaker_review_snapshot,
+            speaker_correction::apply_speaker_profile_to_group,
+            speaker_correction::reset_speaker_group_to_anonymous,
+            speaker_correction::confirm_speaker_group_review
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

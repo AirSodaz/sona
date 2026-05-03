@@ -1,210 +1,108 @@
-import { describe, expect, it } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  buildSpeakerReviewCounts,
-  buildSpeakerReviewGroups,
-  filterSpeakerReviewGroups,
+  buildSpeakerReviewSnapshot,
+  type SpeakerReviewSnapshot,
 } from '../speakerReviewService';
 import type { TranscriptSegment } from '../../types/transcript';
 
-function createSegment(
-  id: string,
-  speakerId: string,
-  label: string,
-  state: 'identified' | 'suggested' | 'anonymous',
-  source: 'auto' | 'manual',
-  confidence: 'high' | 'medium' | 'low',
-  start: number,
-  text = label,
-): TranscriptSegment {
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+const mockedInvoke = vi.mocked(invoke);
+
+function createSegment(id: string): TranscriptSegment {
   return {
     id,
-    text,
-    start,
-    end: start + 4,
+    text: 'Hello',
+    start: 1,
+    end: 3,
     isFinal: true,
-    speaker: {
-      id: state === 'identified' ? `profile-${speakerId}` : speakerId,
-      label,
-      kind: state === 'identified' ? 'identified' : 'anonymous',
-    },
-    speakerAttribution: {
-      groupId: speakerId,
-      anonymousLabel: label.startsWith('Speaker') ? label : `Speaker ${speakerId}`,
-      state,
-      source,
-      confidence,
-      candidates: state === 'suggested'
-        ? [{ profileId: 'alice', profileName: 'Alice', score: 0.82, rank: 1 }]
-        : [],
-    },
+    speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
   };
 }
 
-describe('buildSpeakerReviewGroups', () => {
-  it('sorts suggested groups before anonymous and identified groups', () => {
-    const segments: TranscriptSegment[] = [
+function createSnapshot(): SpeakerReviewSnapshot {
+  return {
+    groups: [
       {
-        id: 'seg-identified',
-        text: 'Identified',
-        start: 30,
-        end: 40,
-        isFinal: true,
-        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
-        speakerAttribution: {
-          groupId: 'anonymous-3',
-          anonymousLabel: 'Speaker 3',
-          state: 'identified',
-          source: 'auto',
-          confidence: 'high',
-          candidates: [],
-        },
-      },
-      {
-        id: 'seg-anonymous',
-        text: 'Anonymous',
-        start: 10,
-        end: 20,
-        isFinal: true,
-        speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
-        speakerAttribution: {
-          groupId: 'anonymous-2',
-          anonymousLabel: 'Speaker 2',
-          state: 'anonymous',
-          source: 'auto',
-          confidence: 'low',
-          candidates: [],
-        },
-      },
-      {
-        id: 'seg-suggested',
-        text: 'Suggested',
-        start: 20,
-        end: 25,
-        isFinal: true,
-        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-        speakerAttribution: {
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'suggested',
-          source: 'auto',
-          confidence: 'medium',
-          candidates: [
-            { profileId: 'speaker-1', profileName: 'Alice', score: 0.79, rank: 1 },
-          ],
-        },
-      },
-    ];
-
-    const groups = buildSpeakerReviewGroups(segments);
-
-    expect(groups.map((group) => group.groupId)).toEqual([
-      'anonymous-1',
-      'anonymous-2',
-      'anonymous-3',
-    ]);
-  });
-
-  it('aggregates duration, segment counts, and jump targets per group', () => {
-    const groups = buildSpeakerReviewGroups([
-      {
-        id: 'seg-1',
-        text: 'Hello',
-        start: 5,
-        end: 8,
-        isFinal: true,
-        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-        speakerAttribution: {
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'suggested',
-          source: 'auto',
-          confidence: 'medium',
-          candidates: [
-            { profileId: 'speaker-1', profileName: 'Alice', score: 0.79, rank: 1 },
-          ],
-        },
-      },
-      {
-        id: 'seg-2',
-        text: 'World',
-        start: 8,
-        end: 10,
-        isFinal: true,
-        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-        speakerAttribution: {
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'suggested',
-          source: 'auto',
-          confidence: 'medium',
-          candidates: [
-            { profileId: 'speaker-1', profileName: 'Alice', score: 0.79, rank: 1 },
-          ],
-        },
-      },
-    ]);
-
-    expect(groups).toEqual([
-      expect.objectContaining({
         groupId: 'anonymous-1',
         displayLabel: 'Speaker 1',
-        segmentCount: 2,
-        durationSeconds: 5,
+        anonymousLabel: 'Speaker 1',
+        state: 'anonymous',
+        source: 'auto',
+        confidence: 'low',
+        reviewStatus: 'pending',
+        riskReason: 'anonymous',
+        priority: 1,
+        candidates: [],
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        segmentCount: 1,
+        durationSeconds: 2,
         firstSegmentId: 'seg-1',
-        firstStart: 5,
-      }),
-    ]);
-  });
-
-  it('classifies pending, reviewed, and stable automatic groups for the review queue', () => {
-    const groups = buildSpeakerReviewGroups([
-      createSegment('seg-suggested', 'anonymous-1', 'Speaker 1', 'suggested', 'auto', 'medium', 20),
-      createSegment('seg-anonymous', 'anonymous-2', 'Speaker 2', 'anonymous', 'auto', 'low', 10),
-      createSegment('seg-auto-identified', 'anonymous-3', 'Alice', 'identified', 'auto', 'high', 30),
-      createSegment('seg-manual', 'anonymous-4', 'Bob', 'identified', 'manual', 'high', 40),
-    ]);
-
-    expect(groups.map((group) => [group.groupId, group.reviewStatus, group.riskReason])).toEqual([
-      ['anonymous-1', 'pending', 'suggested'],
-      ['anonymous-2', 'pending', 'anonymous'],
-      ['anonymous-3', 'auto', 'auto_identified'],
-      ['anonymous-4', 'reviewed', 'reviewed'],
-    ]);
-
-    expect(buildSpeakerReviewCounts(groups)).toEqual({
-      total: 4,
-      pending: 2,
-      suggested: 1,
+        firstStart: 1,
+        previewSegments: [
+          { id: 'seg-1', start: 1, end: 3, text: 'Hello' },
+        ],
+      },
+    ],
+    counts: {
+      total: 1,
+      pending: 1,
+      suggested: 0,
       anonymous: 1,
-      identified: 2,
-      reviewed: 1,
-    });
+      identified: 0,
+      reviewed: 0,
+    },
+    visibleGroups: [
+      {
+        groupId: 'anonymous-1',
+        displayLabel: 'Speaker 1',
+        anonymousLabel: 'Speaker 1',
+        state: 'anonymous',
+        source: 'auto',
+        confidence: 'low',
+        reviewStatus: 'pending',
+        riskReason: 'anonymous',
+        priority: 1,
+        candidates: [],
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        segmentCount: 1,
+        durationSeconds: 2,
+        firstSegmentId: 'seg-1',
+        firstStart: 1,
+        previewSegments: [
+          { id: 'seg-1', start: 1, end: 3, text: 'Hello' },
+        ],
+      },
+    ],
+    filterOptions: [
+      { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
+      { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
+      { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
+      { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
+      { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
+      { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
+    ],
+  };
+}
 
-    expect(filterSpeakerReviewGroups(groups, 'pending').map((group) => group.groupId)).toEqual([
-      'anonymous-1',
-      'anonymous-2',
-    ]);
-    expect(filterSpeakerReviewGroups(groups, 'reviewed').map((group) => group.groupId)).toEqual([
-      'anonymous-4',
-    ]);
-    expect(filterSpeakerReviewGroups(groups, 'identified').map((group) => group.groupId)).toEqual([
-      'anonymous-3',
-      'anonymous-4',
-    ]);
+describe('buildSpeakerReviewSnapshot', () => {
+  beforeEach(() => {
+    mockedInvoke.mockReset();
   });
 
-  it('keeps the first three ordered segment previews for each speaker group', () => {
-    const groups = buildSpeakerReviewGroups([
-      createSegment('seg-3', 'anonymous-1', 'Speaker 1', 'anonymous', 'auto', 'low', 12, 'Third line'),
-      createSegment('seg-1', 'anonymous-1', 'Speaker 1', 'anonymous', 'auto', 'low', 2, 'First line'),
-      createSegment('seg-4', 'anonymous-1', 'Speaker 1', 'anonymous', 'auto', 'low', 20, 'Fourth line'),
-      createSegment('seg-2', 'anonymous-1', 'Speaker 1', 'anonymous', 'auto', 'low', 8, 'Second line'),
-    ]);
+  it('delegates snapshot construction to the Rust command with the active filter', async () => {
+    const segments = [createSegment('seg-1')];
+    const snapshot = createSnapshot();
+    mockedInvoke.mockResolvedValue(snapshot);
 
-    expect(groups[0].previewSegments).toEqual([
-      { id: 'seg-1', start: 2, end: 6, text: 'First line' },
-      { id: 'seg-2', start: 8, end: 12, text: 'Second line' },
-      { id: 'seg-3', start: 12, end: 16, text: 'Third line' },
-    ]);
+    await expect(buildSpeakerReviewSnapshot(segments, 'pending')).resolves.toEqual(snapshot);
+
+    expect(mockedInvoke).toHaveBeenCalledWith('build_speaker_review_snapshot', {
+      segments,
+      activeFilter: 'pending',
+    });
   });
 });

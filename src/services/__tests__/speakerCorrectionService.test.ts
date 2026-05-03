@@ -19,22 +19,33 @@ vi.mock('../historyService', () => ({
   },
 }));
 
+vi.mock('../tauri/invoke', () => ({
+  invokeTauri: vi.fn(),
+}));
+
 import { projectService } from '../projectService';
+import { invokeTauri } from '../tauri/invoke';
 import { useConfigStore } from '../../stores/configStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import type { TranscriptSegment } from '../../types/transcript';
 import {
   buildSpeakerCorrectionProfileSections,
-  confirmSpeakerGroupReview,
   speakerCorrectionService,
 } from '../speakerCorrectionService';
+
+function currentSegments(): TranscriptSegment[] {
+  return useTranscriptSessionStore.getState().segments;
+}
 
 describe('speakerCorrectionService', () => {
   beforeEach(() => {
     resetTranscriptStores();
     vi.clearAllMocks();
+
+    vi.mocked(invokeTauri).mockResolvedValue({ segments: [] } as never);
 
     useConfigStore.setState((state) => ({
       ...state,
@@ -100,93 +111,76 @@ describe('speakerCorrectionService', () => {
     ]);
   });
 
-  it('rewrites the entire speaker group, syncs project defaults, and preserves merge compatibility', async () => {
+  it('delegates profile assignment to Rust, writes returned segments, and syncs project defaults', async () => {
+    const initialSegments: TranscriptSegment[] = [
+      {
+        id: 'seg-1',
+        start: 0,
+        end: 1,
+        text: 'Hello',
+        isFinal: true,
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'anonymous',
+          source: 'auto',
+          confidence: 'low',
+          candidates: [],
+        },
+      },
+    ];
+    const rewrittenSegments: TranscriptSegment[] = [
+      {
+        ...initialSegments[0],
+        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'identified',
+          source: 'manual',
+          confidence: 'high',
+          candidates: [],
+        },
+      },
+    ];
+
     useTranscriptSessionStore.setState((state) => ({
       ...state,
       sourceHistoryId: 'history-1',
-      segments: [
-        {
-          id: 'seg-1',
-          start: 0,
-          end: 1,
-          text: 'Hello',
-          isFinal: true,
-          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'anonymous',
-            source: 'auto',
-            confidence: 'low',
-            candidates: [],
-          },
-        },
-        {
-          id: 'seg-2',
-          start: 1,
-          end: 2,
-          text: 'world',
-          isFinal: true,
-          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'anonymous',
-            source: 'auto',
-            confidence: 'low',
-            candidates: [],
-          },
-        },
-        {
-          id: 'seg-3',
-          start: 2,
-          end: 3,
-          text: 'Other',
-          isFinal: true,
-          speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
-          speakerAttribution: {
-            groupId: 'anonymous-2',
-            anonymousLabel: 'Speaker 2',
-            state: 'anonymous',
-            source: 'auto',
-            confidence: 'low',
-            candidates: [],
-          },
-        },
-      ],
+      segments: initialSegments,
     }));
+    vi.mocked(invokeTauri).mockResolvedValueOnce({
+      segments: rewrittenSegments,
+      enabledSpeakerProfileIds: ['speaker-1', 'speaker-2'],
+    } as never);
 
-    await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-2');
+    const result = await speakerCorrectionService.assignProfileToSpeakerGroup(
+      'anonymous-1',
+      'speaker-2',
+    );
 
-    expect(useTranscriptSessionStore.getState().segments).toEqual([
+    expect(invokeTauri).toHaveBeenCalledWith('apply_speaker_profile_to_group', {
+      request: {
+        segments: initialSegments,
+        groupId: 'anonymous-1',
+        targetProfileId: 'speaker-2',
+        speakerProfiles: [
+          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
+          { id: 'speaker-2', name: 'Bob', enabled: false, samples: [] },
+          { id: 'speaker-3', name: 'Carol', enabled: false, samples: [] },
+        ],
+        enabledSpeakerProfileIds: ['speaker-1'],
+      },
+    });
+    expect(result).toBe(rewrittenSegments);
+    expect(currentSegments()).toEqual([
       expect.objectContaining({
         id: 'seg-1',
         speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'identified',
-          source: 'manual',
-          confidence: 'high',
-        }),
-      }),
-      expect.objectContaining({
-        id: 'seg-2',
-        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'identified',
-          source: 'manual',
-          confidence: 'high',
-        }),
-      }),
-      expect.objectContaining({
-        id: 'seg-3',
-        speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
+        speakerAttribution: rewrittenSegments[0].speakerAttribution,
       }),
     ]);
-
     expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([
       'speaker-1',
       'speaker-2',
@@ -195,229 +189,114 @@ describe('speakerCorrectionService', () => {
       useEffectiveConfigStore.getState().config.speakerProfiles?.find((profile) => profile.id === 'speaker-2')
         ?.enabled,
     ).toBe(true);
+  });
 
-    useTranscriptSessionStore.getState().mergeSegments('seg-1', 'seg-2');
-
-    expect(useTranscriptSessionStore.getState().segments).toEqual([
-      expect.objectContaining({
+  it('does not update project defaults when Rust omits enabled speaker ids', async () => {
+    const rewrittenSegments: TranscriptSegment[] = [
+      {
         id: 'seg-1',
-        text: 'Hello world',
-        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-        }),
-      }),
-      expect.objectContaining({
-        id: 'seg-3',
-        speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
-      }),
+        start: 0,
+        end: 1,
+        text: 'Hello',
+        isFinal: true,
+      },
+    ];
+
+    vi.mocked(invokeTauri).mockResolvedValueOnce({ segments: rewrittenSegments } as never);
+
+    await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-1');
+
+    expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([
+      'speaker-1',
     ]);
   });
 
-  it('targets speaker corrections by group id instead of the visible speaker id', async () => {
-    useTranscriptSessionStore.setState((state) => ({
-      ...state,
-      sourceHistoryId: 'history-2',
-      segments: [
-        {
-          id: 'seg-a',
-          start: 0,
-          end: 1,
-          text: 'First Alice',
-          isFinal: true,
-          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'identified',
-            source: 'manual',
-            confidence: 'high',
-            candidates: [],
-          },
-        },
-        {
-          id: 'seg-b',
-          start: 1,
-          end: 2,
-          text: 'Second Alice',
-          isFinal: true,
-          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-          speakerAttribution: {
-            groupId: 'anonymous-2',
-            anonymousLabel: 'Speaker 2',
-            state: 'identified',
-            source: 'manual',
-            confidence: 'high',
-            candidates: [],
-          },
-        },
-      ],
-    }));
-
-    await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-3');
-
-    expect(useTranscriptSessionStore.getState().segments).toEqual([
-      expect.objectContaining({
-        id: 'seg-a',
-        speaker: { id: 'speaker-3', label: 'Carol', kind: 'identified' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-        }),
-      }),
-      expect.objectContaining({
-        id: 'seg-b',
-        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-2',
-          anonymousLabel: 'Speaker 2',
-        }),
-      }),
-    ]);
-  });
-
-  it('can reset a corrected group back to its anonymous label', async () => {
-    useTranscriptSessionStore.setState((state) => ({
-      ...state,
-      sourceHistoryId: 'history-3',
-      segments: [
-        {
-          id: 'seg-a',
-          start: 0,
-          end: 1,
-          text: 'Hello',
-          isFinal: true,
-          speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'identified',
-            source: 'manual',
-            confidence: 'high',
-            candidates: [
-              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
-            ],
-          },
-        },
-      ],
-    }));
-
-    await speakerCorrectionService.resetGroupToAnonymous('anonymous-1');
-
-    expect(useTranscriptSessionStore.getState().segments).toEqual([
-      expect.objectContaining({
-        id: 'seg-a',
-        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'anonymous',
-          source: 'manual',
-          confidence: 'low',
-        }),
-      }),
-    ]);
-  });
-
-  it('confirms the current speaker label as reviewed without changing the visible label', async () => {
-    useTranscriptSessionStore.setState((state) => ({
-      ...state,
-      sourceHistoryId: 'history-4',
-      segments: [
-        {
-          id: 'seg-a',
-          start: 0,
-          end: 1,
-          text: 'Needs review',
-          isFinal: true,
-          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'suggested',
-            source: 'auto',
-            confidence: 'medium',
-            candidates: [
-              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
-            ],
-          },
-        },
-        {
-          id: 'seg-b',
-          start: 1,
-          end: 2,
-          text: 'Same group',
-          isFinal: true,
-          speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-          speakerAttribution: {
-            groupId: 'anonymous-1',
-            anonymousLabel: 'Speaker 1',
-            state: 'suggested',
-            source: 'auto',
-            confidence: 'medium',
-            candidates: [
-              { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
-            ],
-          },
-        },
-      ],
-    }));
-
-    await speakerCorrectionService.confirmSpeakerGroupReview('anonymous-1');
-
-    expect(useTranscriptSessionStore.getState().segments).toEqual([
-      expect.objectContaining({
-        id: 'seg-a',
-        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-        speakerAttribution: expect.objectContaining({
-          groupId: 'anonymous-1',
-          anonymousLabel: 'Speaker 1',
-          state: 'anonymous',
-          source: 'manual',
-          confidence: 'low',
-          candidates: [
-            { profileId: 'speaker-2', profileName: 'Bob', score: 0.88, rank: 1 },
-          ],
-        }),
-      }),
-      expect.objectContaining({
-        id: 'seg-b',
-        speakerAttribution: expect.objectContaining({
-          state: 'anonymous',
-          source: 'manual',
-        }),
-      }),
-    ]);
-  });
-
-  it('keeps confirm review as a pure group-id rewrite helper', () => {
-    const nextSegments = confirmSpeakerGroupReview([
+  it('delegates reset group to anonymous to Rust and writes returned segments', async () => {
+    const initialSegments: TranscriptSegment[] = [
       {
         id: 'seg-a',
         start: 0,
         end: 1,
-        text: 'Alice speaking',
+        text: 'Hello',
+        isFinal: true,
+        speaker: { id: 'speaker-2', label: 'Bob', kind: 'identified' },
+      },
+    ];
+    const rewrittenSegments: TranscriptSegment[] = [
+      {
+        ...initialSegments[0],
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+      },
+    ];
+
+    useTranscriptSessionStore.setState((state) => ({
+      ...state,
+      segments: initialSegments,
+    }));
+    vi.mocked(invokeTauri).mockResolvedValueOnce({ segments: rewrittenSegments } as never);
+
+    const result = await speakerCorrectionService.resetGroupToAnonymous('anonymous-1');
+
+    expect(invokeTauri).toHaveBeenCalledWith('reset_speaker_group_to_anonymous', {
+      request: {
+        segments: initialSegments,
+        groupId: 'anonymous-1',
+      },
+    });
+    expect(result).toBe(rewrittenSegments);
+    expect(currentSegments()).toEqual([
+      expect.objectContaining({
+        id: 'seg-a',
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+      }),
+    ]);
+  });
+
+  it('delegates confirm review to Rust and writes returned segments', async () => {
+    const initialSegments: TranscriptSegment[] = [
+      {
+        id: 'seg-a',
+        start: 0,
+        end: 1,
+        text: 'Needs review',
         isFinal: true,
         speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
+      },
+    ];
+    const rewrittenSegments: TranscriptSegment[] = [
+      {
+        ...initialSegments[0],
         speakerAttribution: {
           groupId: 'anonymous-1',
           anonymousLabel: 'Speaker 1',
           state: 'identified',
-          source: 'auto',
+          source: 'manual',
           confidence: 'high',
           candidates: [],
         },
       },
-    ], 'anonymous-1');
+    ];
 
-    expect(nextSegments[0]).toEqual(expect.objectContaining({
-      speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
-      speakerAttribution: expect.objectContaining({
-        groupId: 'anonymous-1',
-        state: 'identified',
-        source: 'manual',
-        confidence: 'high',
-      }),
+    useTranscriptSessionStore.setState((state) => ({
+      ...state,
+      segments: initialSegments,
     }));
+    vi.mocked(invokeTauri).mockResolvedValueOnce({ segments: rewrittenSegments } as never);
+
+    const result = await speakerCorrectionService.confirmSpeakerGroupReview('anonymous-1');
+
+    expect(invokeTauri).toHaveBeenCalledWith('confirm_speaker_group_review', {
+      request: {
+        segments: initialSegments,
+        groupId: 'anonymous-1',
+      },
+    });
+    expect(result).toBe(rewrittenSegments);
+    expect(currentSegments()).toEqual([
+      expect.objectContaining({
+        id: 'seg-a',
+        speakerAttribution: rewrittenSegments[0].speakerAttribution,
+      }),
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TranscriptSpeakerReviewPanel } from '../TranscriptSpeakerReviewPanel';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
@@ -7,6 +7,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { speakerCorrectionService } from '../../services/speakerCorrectionService';
+import type { SpeakerProfile } from '../../types/speaker';
+import type { TranscriptSegment } from '../../types/transcript';
 
 const translations: Record<string, string | ((options: Record<string, unknown>) => string)> = {
   'common.close': 'Close',
@@ -46,6 +48,10 @@ const translations: Record<string, string | ((options: Record<string, unknown>) 
   'editor.speaker_correction_failed': 'Failed to update speaker labels for this transcript.',
 };
 
+const tauriMocks = vi.hoisted(() => ({
+  invokeTauri: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => (
@@ -60,13 +66,276 @@ vi.mock('react-i18next', () => ({
   },
 }));
 
+vi.mock('../../services/tauri/invoke', () => ({
+  invokeTauri: tauriMocks.invokeTauri,
+}));
+
 function expectGroupActive(group: HTMLElement, isActive = true): void {
   expect(group.classList.contains('is-active')).toBe(isActive);
+}
+
+function resolveSegmentGroupId(segment: TranscriptSegment): string {
+  return segment.speakerAttribution?.groupId || segment.speaker?.id || '';
+}
+
+function resolveReviewStatus(
+  state: string,
+  source: string,
+  confidence: string,
+): 'pending' | 'auto' | 'reviewed' {
+  if (source === 'manual') {
+    return 'reviewed';
+  }
+  if (state === 'suggested' || state === 'anonymous' || confidence !== 'high') {
+    return 'pending';
+  }
+  return 'auto';
+}
+
+function resolveRiskReason(
+  state: string,
+  source: string,
+  confidence: string,
+): 'suggested' | 'anonymous' | 'low_confidence' | 'medium_confidence' | 'auto_identified' | 'reviewed' {
+  if (source === 'manual') {
+    return 'reviewed';
+  }
+  if (state === 'suggested') {
+    return 'suggested';
+  }
+  if (state === 'anonymous') {
+    return 'anonymous';
+  }
+  if (confidence === 'low') {
+    return 'low_confidence';
+  }
+  if (confidence === 'medium') {
+    return 'medium_confidence';
+  }
+  return 'auto_identified';
+}
+
+function riskPriority(reason: ReturnType<typeof resolveRiskReason>): number {
+  return [
+    'suggested',
+    'anonymous',
+    'low_confidence',
+    'medium_confidence',
+    'auto_identified',
+    'reviewed',
+  ].indexOf(reason);
+}
+
+function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string) {
+  const groupsById = new Map<string, any>();
+
+  segments.forEach((segment) => {
+    const attribution = segment.speakerAttribution;
+    if (!attribution) {
+      return;
+    }
+
+    const existing = groupsById.get(attribution.groupId);
+    if (existing) {
+      existing.segmentCount += 1;
+      existing.durationSeconds += Math.max(0, segment.end - segment.start);
+      existing.firstStart = Math.min(existing.firstStart, segment.start);
+      existing.previewSegments.push({
+        id: segment.id,
+        start: segment.start,
+        end: segment.end,
+        text: segment.text,
+      });
+      if (attribution.source === 'manual') {
+        existing.source = 'manual';
+      }
+      return;
+    }
+
+    const reviewStatus = resolveReviewStatus(
+      attribution.state,
+      attribution.source,
+      attribution.confidence,
+    );
+    const riskReason = resolveRiskReason(
+      attribution.state,
+      attribution.source,
+      attribution.confidence,
+    );
+
+    groupsById.set(attribution.groupId, {
+      groupId: attribution.groupId,
+      displayLabel: segment.speaker?.label || attribution.anonymousLabel,
+      anonymousLabel: attribution.anonymousLabel,
+      state: attribution.state,
+      source: attribution.source,
+      confidence: attribution.confidence,
+      reviewStatus,
+      riskReason,
+      priority: riskPriority(riskReason),
+      candidates: attribution.candidates,
+      speaker: segment.speaker,
+      segmentCount: 1,
+      durationSeconds: Math.max(0, segment.end - segment.start),
+      firstSegmentId: segment.id,
+      firstStart: segment.start,
+      previewSegments: [{
+        id: segment.id,
+        start: segment.start,
+        end: segment.end,
+        text: segment.text,
+      }],
+    });
+  });
+
+  const groups = [...groupsById.values()]
+    .map((group) => {
+      const reviewStatus = resolveReviewStatus(group.state, group.source, group.confidence);
+      const riskReason = resolveRiskReason(group.state, group.source, group.confidence);
+      return {
+        ...group,
+        reviewStatus,
+        riskReason,
+        priority: riskPriority(riskReason),
+        previewSegments: [...group.previewSegments]
+          .sort((left, right) => left.start - right.start)
+          .slice(0, 3),
+      };
+    })
+    .sort((left, right) => left.priority - right.priority || left.firstStart - right.firstStart);
+
+  const counts = groups.reduce((accumulator, group) => ({
+    total: accumulator.total + 1,
+    pending: accumulator.pending + (group.reviewStatus === 'pending' ? 1 : 0),
+    suggested: accumulator.suggested + (group.state === 'suggested' ? 1 : 0),
+    anonymous: accumulator.anonymous + (group.state === 'anonymous' ? 1 : 0),
+    identified: accumulator.identified + (group.state === 'identified' ? 1 : 0),
+    reviewed: accumulator.reviewed + (group.reviewStatus === 'reviewed' ? 1 : 0),
+  }), {
+    total: 0,
+    pending: 0,
+    suggested: 0,
+    anonymous: 0,
+    identified: 0,
+    reviewed: 0,
+  });
+
+  const visibleGroups = groups.filter((group) => {
+    switch (activeFilter) {
+      case 'pending':
+        return group.reviewStatus === 'pending';
+      case 'suggested':
+        return group.state === 'suggested';
+      case 'anonymous':
+        return group.state === 'anonymous';
+      case 'identified':
+        return group.state === 'identified';
+      case 'reviewed':
+        return group.reviewStatus === 'reviewed';
+      case 'all':
+      default:
+        return true;
+    }
+  });
+
+  return {
+    groups,
+    counts,
+    visibleGroups,
+    filterOptions: [
+      { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
+      { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
+      { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
+      { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
+      { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
+      { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
+    ],
+  };
+}
+
+function assignProfileToGroup(
+  segments: TranscriptSegment[],
+  groupId: string,
+  targetProfileId: string,
+  speakerProfiles: SpeakerProfile[],
+): TranscriptSegment[] {
+  const targetProfile = speakerProfiles.find((profile) => profile.id === targetProfileId);
+  if (!targetProfile) {
+    return segments;
+  }
+
+  return segments.map((segment) => {
+    if (resolveSegmentGroupId(segment) !== groupId) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      speaker: { id: targetProfile.id, label: targetProfile.name, kind: 'identified' },
+      speakerAttribution: {
+        groupId,
+        anonymousLabel: segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker',
+        state: 'identified',
+        source: 'manual',
+        confidence: 'high',
+        candidates: segment.speakerAttribution?.candidates || [],
+      },
+    } as TranscriptSegment;
+  });
+}
+
+function resetGroupToAnonymous(segments: TranscriptSegment[], groupId: string): TranscriptSegment[] {
+  return segments.map((segment) => {
+    if (resolveSegmentGroupId(segment) !== groupId) {
+      return segment;
+    }
+
+    const anonymousLabel = segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker';
+    return {
+      ...segment,
+      speaker: { id: groupId, label: anonymousLabel, kind: 'anonymous' },
+      speakerAttribution: {
+        groupId,
+        anonymousLabel,
+        state: 'anonymous',
+        source: 'manual',
+        confidence: 'low',
+        candidates: segment.speakerAttribution?.candidates || [],
+      },
+    } as TranscriptSegment;
+  });
+}
+
+function confirmGroupReview(segments: TranscriptSegment[], groupId: string): TranscriptSegment[] {
+  return segments.map((segment) => {
+    if (resolveSegmentGroupId(segment) !== groupId) {
+      return segment;
+    }
+
+    const isIdentified = segment.speaker?.kind === 'identified';
+    return {
+      ...segment,
+      speakerAttribution: {
+        groupId,
+        anonymousLabel: segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker',
+        state: isIdentified ? 'identified' : 'anonymous',
+        source: 'manual',
+        confidence: isIdentified ? 'high' : 'low',
+        candidates: segment.speakerAttribution?.candidates || [],
+      },
+    } as TranscriptSegment;
+  });
+}
+
+async function renderReviewPanel(onClose = () => undefined): Promise<void> {
+  render(<TranscriptSpeakerReviewPanel isOpen onClose={onClose} />);
+  await screen.findByRole('button', { name: 'Needs review (2)' });
 }
 
 describe('TranscriptSpeakerReviewPanel', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    tauriMocks.invokeTauri.mockReset();
     resetTranscriptStores();
     useConfigStore.getState().setConfig({
       speakerProfiles: [
@@ -177,10 +446,42 @@ describe('TranscriptSpeakerReviewPanel', () => {
         },
       },
     ]);
+
+    tauriMocks.invokeTauri.mockImplementation(async (command: string, args?: any) => {
+      if (command === 'build_speaker_review_snapshot') {
+        return buildReviewSnapshot(args.segments, args.activeFilter);
+      }
+
+      if (command === 'apply_speaker_profile_to_group') {
+        return {
+          segments: assignProfileToGroup(
+            args.request.segments,
+            args.request.groupId,
+            args.request.targetProfileId,
+            args.request.speakerProfiles,
+          ),
+          enabledSpeakerProfileIds: args.request.enabledSpeakerProfileIds,
+        };
+      }
+
+      if (command === 'reset_speaker_group_to_anonymous') {
+        return {
+          segments: resetGroupToAnonymous(args.request.segments, args.request.groupId),
+        };
+      }
+
+      if (command === 'confirm_speaker_group_review') {
+        return {
+          segments: confirmGroupReview(args.request.segments, args.request.groupId),
+        };
+      }
+
+      throw new Error(`Unexpected command: ${command}`);
+    });
   });
 
-  it('opens on the pending queue with counts, previews, candidates, and profile actions', () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+  it('opens on the pending queue with counts, previews, candidates, and profile actions', async () => {
+    await renderReviewPanel();
 
     expect(screen.getByRole('dialog', { name: 'Speaker Review' })).toBeDefined();
     expect(screen.getByText('Needs review 2')).toBeDefined();
@@ -216,27 +517,31 @@ describe('TranscriptSpeakerReviewPanel', () => {
   });
 
   it('switches between queue filters', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Reviewed (1)' }));
     });
 
-    expect(screen.getByTestId('speaker-review-group-anonymous-4')).toBeDefined();
-    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByTestId('speaker-review-group-anonymous-4')).toBeDefined();
+      expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'All (4)' }));
     });
 
-    expect(screen.getByTestId('speaker-review-group-anonymous-1')).toBeDefined();
-    expect(screen.getByTestId('speaker-review-group-anonymous-2')).toBeDefined();
-    expect(screen.getByTestId('speaker-review-group-anonymous-3')).toBeDefined();
-    expect(screen.getByTestId('speaker-review-group-anonymous-4')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByTestId('speaker-review-group-anonymous-1')).toBeDefined();
+      expect(screen.getByTestId('speaker-review-group-anonymous-2')).toBeDefined();
+      expect(screen.getByTestId('speaker-review-group-anonymous-3')).toBeDefined();
+      expect(screen.getByTestId('speaker-review-group-anonymous-4')).toBeDefined();
+    });
   });
 
   it('marks a group reviewed and removes it from the default pending queue', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.click(
@@ -245,17 +550,19 @@ describe('TranscriptSpeakerReviewPanel', () => {
       );
     });
 
-    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
-    expect(screen.getByTestId('speaker-review-group-anonymous-2')).toBeDefined();
-    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
-      .toEqual(expect.objectContaining({
-        state: 'anonymous',
-        source: 'manual',
-      }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+      expect(screen.getByTestId('speaker-review-group-anonymous-2')).toBeDefined();
+      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
+        .toEqual(expect.objectContaining({
+          state: 'anonymous',
+          source: 'manual',
+        }));
+    });
   });
 
   it('moves the active group through the pending queue with arrow shortcuts', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     const firstGroup = screen.getByTestId('speaker-review-group-anonymous-1');
     const secondGroup = screen.getByTestId('speaker-review-group-anonymous-2');
@@ -279,64 +586,73 @@ describe('TranscriptSpeakerReviewPanel', () => {
   });
 
   it('confirms the active group with Enter and advances to the next pending group', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Enter' });
     });
 
-    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
-    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
-      .toEqual(expect.objectContaining({
-        state: 'anonymous',
-        source: 'manual',
-      }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
+        .toEqual(expect.objectContaining({
+          state: 'anonymous',
+          source: 'manual',
+        }));
+    });
   });
 
   it('applies the active top candidate with A and advances to the next pending group', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'a' });
     });
 
-    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
-    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
-      .toEqual(expect.objectContaining({
-        id: 'alice',
-        label: 'Alice',
-        kind: 'identified',
-      }));
-    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1b')?.speaker)
-      .toEqual(expect.objectContaining({
-        id: 'alice',
-        label: 'Alice',
-        kind: 'identified',
-      }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
+        .toEqual(expect.objectContaining({
+          id: 'alice',
+          label: 'Alice',
+          kind: 'identified',
+        }));
+      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1b')?.speaker)
+        .toEqual(expect.objectContaining({
+          id: 'alice',
+          label: 'Alice',
+          kind: 'identified',
+        }));
+    });
   });
 
   it('restores the active group with R and advances to the next pending group', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'r' });
     });
 
-    expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
-    expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-    expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
-      .toEqual(expect.objectContaining({
-        id: 'anonymous-1',
-        label: 'Speaker 1',
-        kind: 'anonymous',
-      }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
+      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
+        .toEqual(expect.objectContaining({
+          id: 'anonymous-1',
+          label: 'Speaker 1',
+          kind: 'anonymous',
+        }));
+    });
   });
 
   it('jumps from the active group with J and closes the panel', async () => {
     const onClose = vi.fn();
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={onClose} />);
+    await renderReviewPanel(onClose);
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'j' });
@@ -347,7 +663,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
   });
 
   it('ignores queue shortcuts from form controls', async () => {
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.keyDown(screen.getByRole('button', { name: 'Needs review (2)' }), { key: 'Enter' });
@@ -365,7 +681,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
         resolveAction = () => resolve(useTranscriptSessionStore.getState().segments);
       }));
 
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={() => undefined} />);
+    await renderReviewPanel();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Enter' });
@@ -381,7 +697,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
   it('jumps to the first segment and closes the panel', async () => {
     const onClose = vi.fn();
-    render(<TranscriptSpeakerReviewPanel isOpen onClose={onClose} />);
+    await renderReviewPanel(onClose);
 
     await act(async () => {
       fireEvent.click(

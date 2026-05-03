@@ -11,6 +11,7 @@ export const TauriCommand = {
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
     getModelCatalogSnapshot: 'get_model_catalog_snapshot',
+    getDiagnosticsCoreSnapshot: 'get_diagnostics_core_snapshot',
     getRuntimeEnvironmentStatus: 'get_runtime_environment_status',
     getAsrRuntimeMetrics: 'get_asr_runtime_metrics',
     getPathStatuses: 'get_path_statuses',
@@ -115,6 +116,10 @@ export const TauriCommand = {
   speaker: {
     annotateSegmentsFromFile: 'annotate_speaker_segments_from_file',
     importProfileSample: 'import_speaker_profile_sample',
+    buildReviewSnapshot: 'build_speaker_review_snapshot',
+    applyProfileToGroup: 'apply_speaker_profile_to_group',
+    resetGroupToAnonymous: 'reset_speaker_group_to_anonymous',
+    confirmGroupReview: 'confirm_speaker_group_review',
   },
   system: {
     setAuxWindowState: 'set_aux_window_state',

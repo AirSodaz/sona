@@ -5,6 +5,10 @@ import type {
 } from '../../types/runtime';
 import type { AppLogLevel } from '../../types/config';
 import type { ModelCatalogSnapshot } from '../modelService';
+import type {
+  DiagnosticsCoreInput,
+  DiagnosticsCoreSnapshot,
+} from '../diagnosticsSnapshotBuilders';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
@@ -33,6 +37,12 @@ export async function openLogFolder(): Promise<void> {
 
 export async function getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
   return invokeTauri(TauriCommand.app.getModelCatalogSnapshot);
+}
+
+export async function getDiagnosticsCoreSnapshot(
+  input: DiagnosticsCoreInput,
+): Promise<DiagnosticsCoreSnapshot> {
+  return invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, { input });
 }
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {

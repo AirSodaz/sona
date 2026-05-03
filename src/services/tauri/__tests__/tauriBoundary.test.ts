@@ -5,6 +5,7 @@ import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
 import {
   getAsrRuntimeMetrics,
+  getDiagnosticsCoreSnapshot,
   getModelCatalogSnapshot,
   openLogFolder,
   setLogLevel,
@@ -46,7 +47,13 @@ import {
   projectSetActiveId,
   projectUpdate,
 } from '../project';
-import { annotateSpeakerSegmentsFromFile } from '../speaker';
+import {
+  annotateSpeakerSegmentsFromFile,
+  applySpeakerProfileToGroup,
+  buildSpeakerReviewSnapshot,
+  confirmSpeakerGroupReview,
+  resetSpeakerGroupToAnonymous,
+} from '../speaker';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -120,6 +127,60 @@ describe('tauri boundary wrappers', () => {
 
     expect(result).toEqual(snapshot);
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
+  });
+
+  it('app wrappers expose the diagnostics core snapshot', async () => {
+    const coreSnapshot = {
+      scannedAt: '2026-05-03T00:00:00.000Z',
+      overview: [],
+      sections: [],
+      runtimeEnvironment: {
+        ffmpegPath: 'C:/app/ffmpeg.exe',
+        ffmpegExists: true,
+        logDirPath: 'C:/app/logs',
+      },
+    };
+    const input = {
+      config: {
+        streamingModelPath: 'C:/models/live',
+        offlineModelPath: 'C:/models/offline',
+        vadModelPath: '',
+        punctuationModelPath: '',
+        microphoneId: 'default',
+      },
+      permissionState: 'prompt',
+      microphoneProbe: {
+        options: [],
+        available: false,
+        source: 'fallback',
+      },
+      systemAudioProbe: {
+        options: [],
+        available: false,
+        source: 'fallback',
+      },
+      voiceTypingReadiness: {
+        state: 'off',
+        shortcutConfigured: false,
+        liveModelConfigured: false,
+        requiresVad: false,
+        vadConfigured: true,
+        shortcutRegistration: 'idle',
+        warmup: 'idle',
+        inputDeviceState: 'off',
+        runtimeState: 'off',
+        lastErrorSource: null,
+        lastErrorMessage: null,
+      },
+    } satisfies Parameters<typeof getDiagnosticsCoreSnapshot>[0];
+    vi.mocked(invoke).mockResolvedValueOnce(coreSnapshot);
+
+    const result = await getDiagnosticsCoreSnapshot(input);
+
+    expect(result).toEqual(coreSnapshot);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getDiagnosticsCoreSnapshot, {
+      input,
+    });
   });
 
   it('audio wrappers adapt capture arguments and return values', async () => {
@@ -415,11 +476,52 @@ describe('tauri boundary wrappers', () => {
 
   it('speaker wrappers centralize speaker processing commands', async () => {
     await annotateSpeakerSegmentsFromFile('C:/audio.wav', [], {} as any);
+    await buildSpeakerReviewSnapshot([], 'pending');
+    await applySpeakerProfileToGroup({
+      segments: [],
+      groupId: 'anonymous-1',
+      targetProfileId: 'speaker-1',
+      speakerProfiles: [],
+      enabledSpeakerProfileIds: [],
+    });
+    await resetSpeakerGroupToAnonymous({
+      segments: [],
+      groupId: 'anonymous-1',
+    });
+    await confirmSpeakerGroupReview({
+      segments: [],
+      groupId: 'anonymous-1',
+    });
 
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.speaker.annotateSegmentsFromFile, {
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.speaker.annotateSegmentsFromFile, {
       filePath: 'C:/audio.wav',
       segments: [],
       speakerProcessing: {} as any,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.speaker.buildReviewSnapshot, {
+      segments: [],
+      activeFilter: 'pending',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.speaker.applyProfileToGroup, {
+      request: {
+        segments: [],
+        groupId: 'anonymous-1',
+        targetProfileId: 'speaker-1',
+        speakerProfiles: [],
+        enabledSpeakerProfileIds: [],
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.speaker.resetGroupToAnonymous, {
+      request: {
+        segments: [],
+        groupId: 'anonymous-1',
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.speaker.confirmGroupReview, {
+      request: {
+        segments: [],
+        groupId: 'anonymous-1',
+      },
     });
   });
 

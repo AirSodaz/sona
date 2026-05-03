@@ -35,6 +35,19 @@ import type {
 } from '../llmTaskService';
 import type { ModelFileConfig } from '../../types/model';
 import type { ModelCatalogSnapshot } from '../modelService';
+import type {
+  DiagnosticsCoreInput,
+  DiagnosticsCoreSnapshot,
+} from '../diagnosticsSnapshotBuilders';
+import type {
+  ApplySpeakerProfileToGroupRequest,
+  SpeakerCorrectionResponse,
+  SpeakerGroupRequest,
+} from '../speakerCorrectionService';
+import type {
+  SpeakerReviewFilter,
+  SpeakerReviewSnapshot,
+} from '../speakerReviewService';
 import { TauriCommand, type TauriCommandName } from './commands';
 
 type AudioDevice = {
@@ -201,6 +214,10 @@ export type TauriCommandContractMap = {
   [TauriCommand.app.getModelCatalogSnapshot]: {
     args: undefined;
     result: ModelCatalogSnapshot;
+  };
+  [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
+    args: { input: DiagnosticsCoreInput };
+    result: DiagnosticsCoreSnapshot;
   };
   [TauriCommand.app.getRuntimeEnvironmentStatus]: {
     args: undefined;
@@ -611,6 +628,25 @@ export type TauriCommandContractMap = {
       sourceName?: string | null;
     };
     result: SpeakerProfileSample;
+  };
+  [TauriCommand.speaker.buildReviewSnapshot]: {
+    args: {
+      segments: TranscriptSegment[];
+      activeFilter: SpeakerReviewFilter;
+    };
+    result: SpeakerReviewSnapshot;
+  };
+  [TauriCommand.speaker.applyProfileToGroup]: {
+    args: { request: ApplySpeakerProfileToGroupRequest };
+    result: SpeakerCorrectionResponse;
+  };
+  [TauriCommand.speaker.resetGroupToAnonymous]: {
+    args: { request: SpeakerGroupRequest };
+    result: SpeakerCorrectionResponse;
+  };
+  [TauriCommand.speaker.confirmGroupReview]: {
+    args: { request: SpeakerGroupRequest };
+    result: SpeakerCorrectionResponse;
   };
   [TauriCommand.system.setAuxWindowState]: {
     args: {

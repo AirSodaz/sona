@@ -22,11 +22,12 @@ import {
   speakerCorrectionService,
 } from '../services/speakerCorrectionService';
 import {
-  buildSpeakerReviewCounts,
-  buildSpeakerReviewGroups,
-  filterSpeakerReviewGroups,
+  buildSpeakerReviewSnapshot,
+  type SpeakerReviewCounts,
   type SpeakerReviewFilter,
+  type SpeakerReviewFilterOption,
   type SpeakerReviewGroup,
+  type SpeakerReviewSnapshot,
 } from '../services/speakerReviewService';
 import './PanelModal.css';
 import './TranscriptSpeakerReviewPanel.css';
@@ -36,20 +37,23 @@ interface TranscriptSpeakerReviewPanelProps {
   onClose: () => void;
 }
 
-interface SpeakerReviewFilterOption {
-  id: SpeakerReviewFilter;
-  labelKey: string;
-  countKey: keyof ReturnType<typeof buildSpeakerReviewCounts>;
-}
+const EMPTY_SPEAKER_REVIEW_COUNTS: SpeakerReviewCounts = {
+  total: 0,
+  pending: 0,
+  suggested: 0,
+  anonymous: 0,
+  identified: 0,
+  reviewed: 0,
+};
 
-const FILTER_OPTIONS: SpeakerReviewFilterOption[] = [
-  { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
-  { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
-  { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
-  { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
-  { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
-  { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
-];
+function createEmptySpeakerReviewSnapshot(): SpeakerReviewSnapshot {
+  return {
+    groups: [],
+    counts: EMPTY_SPEAKER_REVIEW_COUNTS,
+    visibleGroups: [],
+    filterOptions: [],
+  };
+}
 
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) {
@@ -136,6 +140,7 @@ export function TranscriptSpeakerReviewPanel({
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const busyGroupIdRef = useRef<string | null>(null);
+  const snapshotRequestIdRef = useRef(0);
   const showError = useDialogStore((state) => state.showError);
   const segments = useTranscriptSessionStore((state) => state.segments);
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
@@ -145,22 +150,19 @@ export function TranscriptSpeakerReviewPanel({
       ? state.projects.find((project) => project.id === state.activeProjectId) || null
       : null
   ));
-  const groups = useMemo(() => buildSpeakerReviewGroups(segments), [segments]);
-  const counts = useMemo(() => buildSpeakerReviewCounts(groups), [groups]);
   const profileSections = useMemo(
     () => buildSpeakerCorrectionProfileSections(speakerProfiles, activeProject),
     [activeProject, speakerProfiles],
   );
   const [activeFilter, setActiveFilter] = useState<SpeakerReviewFilter>('pending');
+  const [snapshot, setSnapshot] = useState<SpeakerReviewSnapshot>(() => createEmptySpeakerReviewSnapshot());
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [busyGroupId, setBusyGroupId] = useState<string | null>(null);
-  const visibleGroups = useMemo(
-    () => filterSpeakerReviewGroups(groups, activeFilter),
-    [activeFilter, groups],
-  );
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(
-    () => visibleGroups[0]?.groupId || null,
-  );
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const counts = snapshot.counts;
+  const visibleGroups = snapshot.visibleGroups;
+  const filterOptions: SpeakerReviewFilterOption[] = snapshot.filterOptions;
   const effectiveActiveGroupId = (
     activeGroupId && visibleGroups.some((group) => group.groupId === activeGroupId)
       ? activeGroupId
@@ -170,6 +172,58 @@ export function TranscriptSpeakerReviewPanel({
     () => visibleGroups.find((group) => group.groupId === effectiveActiveGroupId) || null,
     [effectiveActiveGroupId, visibleGroups],
   );
+
+  useEffect(() => {
+    if (!isOpen) {
+      snapshotRequestIdRef.current += 1;
+      return undefined;
+    }
+
+    const requestId = snapshotRequestIdRef.current + 1;
+    snapshotRequestIdRef.current = requestId;
+    let cancelled = false;
+
+    void Promise.resolve()
+      .then(() => {
+        if (!cancelled && snapshotRequestIdRef.current === requestId) {
+          setIsSnapshotLoading(true);
+        }
+        return buildSpeakerReviewSnapshot(segments, activeFilter);
+      })
+      .then((nextSnapshot) => {
+        if (cancelled || snapshotRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setSnapshot(nextSnapshot);
+        setActiveGroupId((current) => (
+          current && nextSnapshot.visibleGroups.some((group) => group.groupId === current)
+            ? current
+            : nextSnapshot.visibleGroups[0]?.groupId || null
+        ));
+      })
+      .catch(async (error) => {
+        if (cancelled || snapshotRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setSnapshot(createEmptySpeakerReviewSnapshot());
+        await showError({
+          code: 'speaker_review.snapshot_failed',
+          messageKey: 'editor.speaker_correction_failed',
+          cause: error,
+        });
+      })
+      .finally(() => {
+        if (!cancelled && snapshotRequestIdRef.current === requestId) {
+          setIsSnapshotLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFilter, isOpen, segments, showError]);
 
   const runGroupAction = useCallback(async (
     groupId: string,
@@ -375,7 +429,7 @@ export function TranscriptSpeakerReviewPanel({
 
         <div className="panel-modal-content transcript-speaker-review-content">
           <div className="transcript-speaker-review-filters" aria-label={t('editor.speaker_review_title')}>
-            {FILTER_OPTIONS.map((option) => (
+            {filterOptions.map((option) => (
               <button
                 key={option.id}
                 type="button"
@@ -388,7 +442,12 @@ export function TranscriptSpeakerReviewPanel({
           </div>
 
           <div className="transcript-speaker-review-list">
-            {visibleGroups.length === 0 ? (
+            {isSnapshotLoading && visibleGroups.length === 0 ? (
+              <div className="transcript-speaker-review-empty">
+                <Loader2 size={18} className="queue-icon-spin" />
+                {t('common.loading', { defaultValue: 'Loading...' })}
+              </div>
+            ) : visibleGroups.length === 0 ? (
               <div className="transcript-speaker-review-empty">
                 <CheckCircle2 size={18} />
                 {t('editor.speaker_review_empty')}
