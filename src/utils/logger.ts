@@ -2,6 +2,9 @@
  * A helper to safely serialize arguments, particularly JavaScript Error objects
  * which become {} when simply passed to JSON.stringify.
  */
+import type { AppLogLevel } from '../types/config';
+import { normalizeLogLevel, shouldWriteLogLevel } from './logLevel';
+
 const browserConsole = globalThis.console;
 
 function serializeArgs(args: unknown[]): string {
@@ -25,10 +28,20 @@ function serializeArgs(args: unknown[]): string {
   }
 }
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = AppLogLevel;
 type PluginLogModule = typeof import('@tauri-apps/plugin-log');
 
 let pluginLogModulePromise: Promise<PluginLogModule | null> | null = null;
+let currentLogLevel: AppLogLevel = 'info';
+
+export function setLoggerLevel(level: unknown): AppLogLevel {
+  currentLogLevel = normalizeLogLevel(level);
+  return currentLogLevel;
+}
+
+export function getLoggerLevel(): AppLogLevel {
+  return currentLogLevel;
+}
 
 async function getPluginLogModule(): Promise<PluginLogModule | null> {
   if (!pluginLogModulePromise) {
@@ -41,6 +54,10 @@ async function getPluginLogModule(): Promise<PluginLogModule | null> {
 }
 
 async function writeLog(level: LogLevel, message: string, ...args: unknown[]) {
+  if (!shouldWriteLogLevel(level, currentLogLevel)) {
+    return;
+  }
+
   const formatted = message + serializeArgs(args);
   const plugin = await getPluginLogModule();
 
@@ -58,19 +75,28 @@ async function writeLog(level: LogLevel, message: string, ...args: unknown[]) {
  * in a structured format as configured by the Rust backend.
  */
 export const logger = {
+  trace: async (message: string, ...args: unknown[]) => {
+    if (!shouldWriteLogLevel('trace', currentLogLevel)) return;
+    browserConsole.debug(message, ...args);
+    await writeLog('trace', message, ...args);
+  },
   debug: async (message: string, ...args: unknown[]) => {
+    if (!shouldWriteLogLevel('debug', currentLogLevel)) return;
     browserConsole.debug(message, ...args);
     await writeLog('debug', message, ...args);
   },
   info: async (message: string, ...args: unknown[]) => {
+    if (!shouldWriteLogLevel('info', currentLogLevel)) return;
     browserConsole.info(message, ...args);
     await writeLog('info', message, ...args);
   },
   warn: async (message: string, ...args: unknown[]) => {
+    if (!shouldWriteLogLevel('warn', currentLogLevel)) return;
     browserConsole.warn(message, ...args);
     await writeLog('warn', message, ...args);
   },
   error: async (message: string, ...args: unknown[]) => {
+    if (!shouldWriteLogLevel('error', currentLogLevel)) return;
     browserConsole.error(message, ...args);
     await writeLog('error', message, ...args);
   }

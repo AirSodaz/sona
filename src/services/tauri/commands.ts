@@ -17,6 +17,7 @@ export const TauriCommand = {
     forceExit: 'force_exit',
     updateTrayMenu: 'update_tray_menu',
     setMinimizeToTray: 'set_minimize_to_tray',
+    setLogLevel: 'set_log_level',
   },
   audio: {
     setSystemAudioMute: 'set_system_audio_mute',

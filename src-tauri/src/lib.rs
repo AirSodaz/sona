@@ -140,16 +140,14 @@ async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
 /// and registers invoke handlers.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let log_level = if cfg!(debug_assertions) {
-        tauri_plugin_log::log::LevelFilter::Debug
-    } else {
-        tauri_plugin_log::log::LevelFilter::Info
-    };
+    let app_settings = app_settings::AppSettings::new();
+    let log_level_filter = app_settings.log_level_filter();
 
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(log_level)
+                .level(tauri_plugin_log::log::LevelFilter::Trace)
+                .filter(move |metadata| log_level_filter.should_log(metadata))
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .max_file_size(10 * 1024 * 1024) // 10MB
                 .clear_targets()
@@ -208,7 +206,7 @@ pub fn run() {
             }
         }))
         .manage(downloads::DownloadState::new())
-        .manage(app_settings::AppSettings::new())
+        .manage(app_settings)
         .manage(aux_window_state::AuxWindowStateStore::default())
         .manage(automation_runtime::AutomationRuntimeState::default())
         .manage(history_repository::HistoryRepositoryState::default())
@@ -261,6 +259,7 @@ pub fn run() {
             downloads::has_active_downloads,
             tray::update_tray_menu,
             app_settings::set_minimize_to_tray,
+            app_settings::set_log_level,
             aux_window_state::set_aux_window_state,
             aux_window_state::get_aux_window_state,
             aux_window_state::clear_aux_window_state,

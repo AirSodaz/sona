@@ -5,8 +5,9 @@ import { GeneralIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
 import { useUIConfig, useSetConfig } from '../../stores/configStore';
-import type { UIConfig } from '../../types/config';
+import type { AppLogLevel, UIConfig } from '../../types/config';
 import { markSettingsPerf } from '../../utils/settingsPerf';
+import { APP_LOG_LEVELS, normalizeLogLevel } from '../../utils/logLevel';
 import { loadBackupSettingsSection } from './settingsGeneralDeferredLoaders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
@@ -56,6 +57,7 @@ export function SettingsGeneralTab({
     const font = config.font || 'system';
     const minimizeToTrayOnExit = config.minimizeToTrayOnExit ?? true;
     const autoCheckUpdates = config.autoCheckUpdates ?? true;
+    const logLevel = normalizeLogLevel(config.logLevel);
 
     return (
         <SettingsTabContainer id="settings-panel-general" ariaLabelledby="settings-tab-general">
@@ -170,6 +172,24 @@ export function SettingsGeneralTab({
             </SettingsSection>
 
             <SettingsSection>
+                <SettingsItem
+                    title={t('settings.log_level')}
+                    hint={t('settings.log_level_hint')}
+                >
+                    <div style={{ width: '180px' }}>
+                        <Dropdown
+                            id="settings-log-level"
+                            aria-label={t('settings.log_level')}
+                            value={logLevel}
+                            onChange={(value) => updateConfig({ logLevel: value as AppLogLevel })}
+                            options={APP_LOG_LEVELS.map((level) => ({
+                                value: level,
+                                label: t(`settings.log_level_${level}`),
+                            }))}
+                        />
+                    </div>
+                </SettingsItem>
+
                 <SettingsItem
                     title={t('settings.minimize_to_tray')}
                     hint={t('settings.minimize_to_tray_hint')}

@@ -13,6 +13,9 @@ import type { SpeakerProfile } from './speaker';
 // UI preferences
 // ---------------------------------------------------------------------------
 
+/** Supported minimum log levels, from most verbose to least verbose. */
+export type AppLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+
 /** Application-level UI preferences. */
 export interface UIConfig {
   /** Application UI language preference. */
@@ -25,6 +28,8 @@ export interface UIConfig {
   minimizeToTrayOnExit?: boolean;
   /** Whether to automatically check for updates on startup. */
   autoCheckUpdates?: boolean;
+  /** Minimum log level for frontend and native application logs. Default: 'info'. */
+  logLevel?: AppLogLevel;
   /** Workspace view mode. Default: 'list' */
   projectsViewMode?: 'list' | 'grid' | 'table';
 }

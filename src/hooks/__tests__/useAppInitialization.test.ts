@@ -30,6 +30,10 @@ vi.mock('../useTraySyncEffect', () => ({
   useTraySyncEffect: vi.fn(),
 }));
 
+vi.mock('../useLogLevelSyncEffect', () => ({
+  useLogLevelSyncEffect: vi.fn(),
+}));
+
 vi.mock('../../utils/logger', () => ({
   logger: {
     error: (...args: unknown[]) => mockLoggerError(...args),

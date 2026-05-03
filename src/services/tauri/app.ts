@@ -3,6 +3,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
+import type { AppLogLevel } from '../../types/config';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
@@ -55,4 +56,8 @@ export async function updateTrayMenu(request: UpdateTrayMenuRequest): Promise<vo
 
 export async function setMinimizeToTray(enabled: boolean): Promise<void> {
   await invokeTauri(TauriCommand.app.setMinimizeToTray, { enabled });
+}
+
+export async function setLogLevel(level: AppLogLevel): Promise<void> {
+  await invokeTauri(TauriCommand.app.setLogLevel, { level });
 }

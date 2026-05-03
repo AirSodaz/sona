@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
-import { getAsrRuntimeMetrics, openLogFolder, setMinimizeToTray } from '../app';
+import { getAsrRuntimeMetrics, openLogFolder, setLogLevel, setMinimizeToTray } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
   historyCreateTranscriptSnapshot,
@@ -52,10 +52,14 @@ describe('tauri boundary wrappers', () => {
   it('app wrappers call the centralized command names', async () => {
     await openLogFolder();
     await setMinimizeToTray(false);
+    await setLogLevel('debug');
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.app.openLogFolder);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.setMinimizeToTray, {
       enabled: false,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.app.setLogLevel, {
+      level: 'debug',
     });
   });
 

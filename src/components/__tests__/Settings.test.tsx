@@ -146,6 +146,13 @@ describe('Settings', () => {
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
     });
 
+    it('shows the default info log level in general settings', async () => {
+        render(<Settings isOpen={true} onClose={onClose} />);
+
+        expect(await screen.findByText('settings.log_level')).toBeDefined();
+        expect(screen.getByText('settings.log_level_info')).toBeDefined();
+    });
+
     it('prewarms the hidden general pane without exposing a dialog or checking models', async () => {
         const { container } = render(<Settings isOpen={false} prewarm onClose={onClose} initialTab="models" />);
 

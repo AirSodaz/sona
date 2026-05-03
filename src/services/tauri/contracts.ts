@@ -11,6 +11,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
+import type { AppLogLevel } from '../../types/config';
 import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
@@ -128,6 +129,10 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.app.setMinimizeToTray]: {
     args: { enabled: boolean };
+    result: void;
+  };
+  [TauriCommand.app.setLogLevel]: {
+    args: { level: AppLogLevel };
     result: void;
   };
   [TauriCommand.audio.setSystemAudioMute]: {

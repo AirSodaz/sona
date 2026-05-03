@@ -147,6 +147,38 @@ describe('configMigrationService', () => {
     expect(result.migrated).toBe(true);
   });
 
+  it('fills missing logLevel with info', async () => {
+    const savedConfig = createSavedConfig({
+      logLevel: undefined,
+    });
+
+    const result = await migrateConfig(savedConfig);
+
+    expect(result.config.logLevel).toBe('info');
+    expect(result.migrated).toBe(true);
+  });
+
+  it('normalizes invalid logLevel values to info', async () => {
+    const savedConfig = createSavedConfig({
+      logLevel: 'verbose',
+    } as unknown as Partial<AppConfig>);
+
+    const result = await migrateConfig(savedConfig);
+
+    expect(result.config.logLevel).toBe('info');
+    expect(result.migrated).toBe(true);
+  });
+
+  it('preserves a valid saved logLevel', async () => {
+    const savedConfig = createSavedConfig({
+      logLevel: 'trace',
+    });
+
+    const result = await migrateConfig(savedConfig);
+
+    expect(result.config.logLevel).toBe('trace');
+  });
+
   it('accepts a legacy config object as pure input without relying on storage side effects', async () => {
     const legacyConfig = {
       modelPath: '/legacy/model.onnx',

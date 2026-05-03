@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   font: 'system',
   minimizeToTrayOnExit: true,
   autoCheckUpdates: true,
+  logLevel: 'info',
 
   // Shortcuts
   liveRecordShortcut: 'Ctrl + Space',
@@ -112,7 +113,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // equality so components re-render only when their domain changes.
 
 const UI_KEYS: (keyof UIConfig)[] = [
-  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'projectsViewMode'
+  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'logLevel', 'projectsViewMode'
 ];
 
 const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [

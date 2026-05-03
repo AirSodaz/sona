@@ -4,6 +4,7 @@ import { useThemeEffect } from './useThemeEffect';
 import { useFontEffect } from './useFontEffect';
 import { useConfigPersistence } from './useConfigPersistence';
 import { useTraySyncEffect } from './useTraySyncEffect';
+import { useLogLevelSyncEffect } from './useLogLevelSyncEffect';
 import { hydrateAppStartupState } from '../services/startup/hydration';
 import { startAppRuntimeServices } from '../services/startup/runtime';
 import { effectiveConfigRuntime } from '../services/effectiveConfigRuntime';
@@ -23,6 +24,7 @@ export function useAppInitialization() {
     useFontEffect();
     useConfigPersistence(isLoaded);
     useTraySyncEffect(isLoaded);
+    useLogLevelSyncEffect(isLoaded);
 
     // Initialize config and onboarding state
     useEffect(() => {

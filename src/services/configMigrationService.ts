@@ -20,6 +20,7 @@ import {
   normalizeSummaryCustomTemplates,
 } from '../utils/summaryTemplates';
 import { normalizeSpeakerProfiles } from '../types/speaker';
+import { normalizeLogLevel } from '../utils/logLevel';
 
 export interface MigrationResult {
   config: AppConfig;
@@ -38,6 +39,7 @@ type ConfigMigrationInput =
   LlmMigrationSource
   & LegacyConfigFields
   & {
+    logLevel?: unknown;
     textReplacements?: LegacyTextReplacementRule[];
   };
 
@@ -82,6 +84,10 @@ function shouldUpgradeConfig(config: ConfigMigrationInput, isConfigMigrated: boo
   }
 
   if (!Array.isArray(config?.speakerProfiles)) {
+    return true;
+  }
+
+  if (normalizeLogLevel(config?.logLevel) !== config?.logLevel) {
     return true;
   }
 
@@ -161,6 +167,7 @@ export async function migrateConfig(
       polishPresetId: normalizedPolishPresetId,
       polishCustomPresets: normalizedPolishCustomPresets,
       polishKeywordSets: normalizedPolishKeywordSets,
+      logLevel: normalizeLogLevel(existingConfig.logLevel),
       speakerSegmentationModelPath: existingConfig.speakerSegmentationModelPath || '',
       speakerEmbeddingModelPath: existingConfig.speakerEmbeddingModelPath || '',
       speakerProfiles: normalizeSpeakerProfiles(existingConfig.speakerProfiles),
@@ -188,6 +195,7 @@ export async function migrateConfig(
         JSON.stringify(normalizedConfig.speakerProfiles)
       || typeof existingConfig.speakerSegmentationModelPath !== 'string'
       || typeof existingConfig.speakerEmbeddingModelPath !== 'string';
+    const logLevelChanged = existingConfig.logLevel !== normalizedConfig.logLevel;
 
     if (
       !llmChanged
@@ -196,6 +204,7 @@ export async function migrateConfig(
       && !summaryTemplatesChanged
       && !polishKeywordSetsChanged
       && !speakerProfilesChanged
+      && !logLevelChanged
     ) {
       return { config: normalizedConfig, migrated: false };
     }
@@ -262,6 +271,7 @@ export async function migrateConfig(
     autoPolish: parsed.autoPolish ?? false,
     autoPolishFrequency: parsed.autoPolishFrequency || 5,
     autoCheckUpdates: parsed.autoCheckUpdates ?? true,
+    logLevel: normalizeLogLevel(parsed.logLevel),
     textReplacementSets: parsed.textReplacementSets || [],
     hotwordSets: parsed.hotwordSets || [],
     speakerProfiles: normalizeSpeakerProfiles(parsed.speakerProfiles),
