@@ -62,6 +62,12 @@ vi.mock('../settings/SettingsGeneralTab', () => ({
 vi.mock('../settings/SettingsDashboardTab', () => ({
     SettingsDashboardTab: () => <div>Dashboard Tab</div>
 }));
+vi.mock('../settings/SettingsMicrophoneTab', () => ({
+    SettingsMicrophoneTab: () => <div>Microphone Tab</div>
+}));
+vi.mock('../settings/SettingsSubtitleTab', () => ({
+    SettingsSubtitleTab: () => <div>Subtitle Tab</div>
+}));
 vi.mock('../settings/SettingsModelsTab', () => ({
     SettingsModelsTab: () => <div>Models Tab</div>
 }));
@@ -74,6 +80,21 @@ vi.mock('../settings/SettingsModelsPane', () => ({
 vi.mock('../settings/SettingsVoiceTypingTab', () => ({
     SettingsVoiceTypingTab: () => <div>Voice Typing Tab</div>
 }));
+vi.mock('../settings/SettingsVocabularyTab', () => ({
+    SettingsVocabularyTab: () => <div>Vocabulary Tab</div>
+}));
+vi.mock('../settings/SettingsAutomationTab', () => ({
+    SettingsAutomationTab: () => <div>Automation Tab</div>
+}));
+vi.mock('../settings/SettingsLLMServiceTab', () => ({
+    SettingsLLMServiceTab: () => <div>LLM Service Tab</div>
+}));
+vi.mock('../settings/SettingsShortcutsTab', () => ({
+    SettingsShortcutsTab: () => <div>Shortcuts Tab</div>
+}));
+vi.mock('../settings/SettingsAboutTab', () => ({
+    SettingsAboutTab: () => <div>About Tab</div>
+}));
 vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
     MicIcon: () => <span>Icon</span>,
@@ -84,6 +105,7 @@ vi.mock('../Icons', () => ({
     InfoIcon: () => <span>Icon</span>,
     RobotIcon: () => <span>Icon</span>,
     BookIcon: () => <span>Icon</span>,
+    ChevronDownIcon: () => <span>Icon</span>,
     XIcon: () => <span>X</span>
 }));
 
