@@ -78,6 +78,7 @@ vi.mock('../Icons', () => ({
     GeneralIcon: () => <span>Icon</span>,
     MicIcon: () => <span>Icon</span>,
     SubtitleIcon: () => <span>Icon</span>,
+    ChevronDownIcon: () => <span>Icon</span>,
     ModelIcon: () => <span>Icon</span>,
     AutomationIcon: () => <span>Icon</span>,
     KeyboardIcon: () => <span>Icon</span>,
