@@ -74,6 +74,7 @@ const ASCII_SHIFT_STATE_CTRL: u8 = 0b0000_0010;
 #[cfg(target_os = "windows")]
 const ASCII_SHIFT_STATE_ALT: u8 = 0b0000_0100;
 
+#[cfg(any(test, target_os = "windows"))]
 fn shortcut_modifier_label(modifier: ShortcutModifier) -> &'static str {
     match modifier {
         ShortcutModifier::Control => "control",
@@ -83,6 +84,7 @@ fn shortcut_modifier_label(modifier: ShortcutModifier) -> &'static str {
     }
 }
 
+#[cfg(any(test, target_os = "windows"))]
 fn format_shortcut_modifiers(shortcut_modifiers: &[ShortcutModifier]) -> String {
     if shortcut_modifiers.is_empty() {
         return "none".to_string();
@@ -224,10 +226,10 @@ pub fn inject_text(
     text: String,
     shortcut_modifiers: Option<Vec<ShortcutModifier>>,
 ) -> Result<(), String> {
-    let shortcut_modifiers = shortcut_modifiers.unwrap_or_default();
-
     #[cfg(target_os = "windows")]
     {
+        let shortcut_modifiers = shortcut_modifiers.unwrap_or_default();
+
         // Wait for the voice-typing shortcut modifiers to clear before we send
         // the dictated text, otherwise the shortcut keys themselves can affect
         // the injected output.
@@ -275,6 +277,7 @@ pub fn inject_text(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = shortcut_modifiers;
         inject_text_with_enigo(&text)
     }
 }
