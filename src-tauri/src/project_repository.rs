@@ -246,6 +246,11 @@ impl ProjectRepository {
     }
 }
 
+pub(crate) fn normalize_project_record_for_import(input: &Value) -> Result<Value, String> {
+    let project = normalize_project_value(input, &ProjectListOptions::default());
+    serde_json::to_value(project).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub async fn project_list<R: Runtime>(
     app: AppHandle<R>,

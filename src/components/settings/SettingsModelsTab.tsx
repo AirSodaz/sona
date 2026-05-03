@@ -1,14 +1,17 @@
 import React, { useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { modelService } from '../../services/modelService';
-import type { ModelCatalogGroup, ModelCatalogSectionType, ModelInfo } from '../../services/modelService';
+import type {
+    ModelCatalogGroup,
+    ModelCatalogSectionType,
+    ModelInfo,
+    ModelSelectionOption,
+} from '../../services/modelService';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 import { Mic, Type, Activity, Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon } from '../Icons';
-import { logger } from '../../utils/logger';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 
@@ -58,6 +61,46 @@ interface SettingsModelsTabProps {
     isActive?: boolean;
 }
 
+function normalizeModelPath(path: string): string {
+    return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function resolveSelectedOptionId(
+    modelCatalog: ReturnType<typeof useModelManagerContext>['modelCatalog'],
+    modelPath: string,
+    options: ModelSelectionOption[],
+): string {
+    if (!modelPath.trim()) {
+        return '';
+    }
+
+    const optionIds = new Set(options.map((option) => option.id));
+    const normalizedPath = normalizeModelPath(modelPath);
+    const exactId = modelCatalog.modelIdByNormalizedPath[normalizedPath];
+    if (exactId && optionIds.has(exactId)) {
+        return exactId;
+    }
+
+    const matchedToken = modelCatalog.pathMatchTokens.find((token) => (
+        optionIds.has(token.id)
+        && token.token.length > 0
+        && normalizedPath.includes(token.token)
+    ));
+    return matchedToken?.id ?? '';
+}
+
+function toDropdownOptions(
+    options: ModelSelectionOption[],
+    selectedId: string,
+): Array<{ value: string; label: string }> {
+    return options
+        .filter((option) => option.isInstalled || option.id === selectedId)
+        .map((option) => ({
+            value: option.id,
+            label: option.label,
+        }));
+}
+
 export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive: _isActive = true }: SettingsModelsTabProps): React.JSX.Element {
     void _isActive;
 
@@ -83,20 +126,11 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
 
-    const modelById = useMemo(
-        () => new Map(modelCatalog.models.map((model) => [model.id, model])),
-        [modelCatalog.models],
-    );
-    const modelIdByInstallPath = useMemo(
-        () => new Map(modelCatalog.models
-            .filter((model) => model.installPath)
-            .map((model) => [model.installPath, model.id])),
-        [modelCatalog.models],
-    );
     const sectionGroupsByType = useMemo(
         () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
         [modelCatalog.sections],
     );
+    const selectionOptions = modelCatalog.selectionOptions;
 
     const getSectionGroups = useCallback(
         (type: ModelCatalogSectionType) => sectionGroupsByType.get(type) ?? [],
@@ -104,53 +138,43 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     );
 
     const selectedStreamingModelId = useMemo(
-        () => (streamingModelPath ? modelIdByInstallPath.get(streamingModelPath) || '' : ''),
-        [modelIdByInstallPath, streamingModelPath],
+        () => resolveSelectedOptionId(modelCatalog, streamingModelPath || '', selectionOptions.streaming),
+        [modelCatalog, selectionOptions.streaming, streamingModelPath],
     );
     const selectedOfflineModelId = useMemo(
-        () => (offlineModelPath ? modelIdByInstallPath.get(offlineModelPath) || '' : ''),
-        [modelIdByInstallPath, offlineModelPath],
+        () => resolveSelectedOptionId(modelCatalog, offlineModelPath || '', selectionOptions.offline),
+        [modelCatalog, offlineModelPath, selectionOptions.offline],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
-        () => (speakerSegmentationModelPath ? modelIdByInstallPath.get(speakerSegmentationModelPath) || '' : ''),
-        [modelIdByInstallPath, speakerSegmentationModelPath],
+        () => resolveSelectedOptionId(modelCatalog, speakerSegmentationModelPath, selectionOptions.speakerSegmentation),
+        [modelCatalog, selectionOptions.speakerSegmentation, speakerSegmentationModelPath],
     );
     const selectedSpeakerEmbeddingModelId = useMemo(
-        () => (speakerEmbeddingModelPath ? modelIdByInstallPath.get(speakerEmbeddingModelPath) || '' : ''),
-        [modelIdByInstallPath, speakerEmbeddingModelPath],
+        () => resolveSelectedOptionId(modelCatalog, speakerEmbeddingModelPath, selectionOptions.speakerEmbedding),
+        [modelCatalog, selectionOptions.speakerEmbedding, speakerEmbeddingModelPath],
     );
 
-    const applyModelRules = async (modelId: string) => {
-        try {
-            const rules = modelService.getModelRules(modelId);
-
-            if (rules.requiresVad) {
-                const vadModelId = 'silero-vad';
-                // Only sync and save if path is missing in config
-                if (!modelConfig.vadModelPath) {
-                    const vadModel = modelById.get(vadModelId);
-                    if (vadModel?.isInstalled) {
-                        updateConfig({ vadModelPath: vadModel.installPath });
-                    } else {
-                        document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
-                    }
-                }
+    const applyDependencyRequests = (modelId: string) => {
+        const dependencyUpdates: Partial<typeof modelConfig> = {};
+        const dependencies = modelCatalog.dependencyRequestsByModelId[modelId] ?? [];
+        for (const dependency of dependencies) {
+            const currentPath = dependency.configKey === 'vadModelPath'
+                ? modelConfig.vadModelPath
+                : modelConfig.punctuationModelPath;
+            if (currentPath) {
+                continue;
             }
-
-            if (rules.requiresPunctuation) {
-                const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
-                // Only sync and save if path is missing in config
-                if (!modelConfig.punctuationModelPath) {
-                    const punctuationModel = modelById.get(punctModelId);
-                    if (punctuationModel?.isInstalled) {
-                        updateConfig({ punctuationModelPath: punctuationModel.installPath });
-                    } else {
-                        document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
-                    }
-                }
+            if (dependency.isInstalled) {
+                dependencyUpdates[dependency.configKey] = dependency.installPath;
+            } else {
+                document.dispatchEvent(new CustomEvent('download-background-model', {
+                    detail: { modelId: dependency.modelId },
+                }));
             }
-        } catch (e) {
-            logger.error('Failed to apply model rules', e);
+        }
+
+        if (Object.keys(dependencyUpdates).length > 0) {
+            updateConfig(dependencyUpdates);
         }
     };
 
@@ -171,13 +195,14 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             return;
         }
 
-        try {
-            const path = modelById.get(modelId)?.installPath || await modelService.getModelPath(modelId);
-            updateConfig({ [configKey]: path });
-            await applyModelRules(modelId);
-        } catch (e) {
-            logger.error(`Failed to get ${type} model path`, e);
+        const path = modelCatalog.modelPathById[modelId]
+            || modelCatalog.models.find((model) => model.id === modelId)?.installPath
+            || '';
+        if (!path) {
+            return;
         }
+        updateConfig({ [configKey]: path });
+        applyDependencyRequests(modelId);
     };
 
     const sectionProps = {
@@ -188,60 +213,34 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         onCancelDownload: handleCancelDownload
     };
 
-    const getModelLabel = useCallback((model: ModelInfo) => {
-        let label = model.name;
-        if (model.versionLabel) {
-            label += ` (${model.versionLabel})`;
-        }
-        return label;
-    }, []);
-
     const speakerDisabledOption = useMemo(() => ({
         value: '',
         label: t('settings.value_off', { defaultValue: 'Off' }),
     }), [t]);
 
     const streamingOptions = useMemo(() => {
-        return modelCatalog.models
-            .filter(m => m.modes?.includes('streaming'))
-            .filter(m => installedModels.has(m.id) || m.id === selectedStreamingModelId)
-            .map(model => ({
-                value: model.id,
-                label: getModelLabel(model)
-            }));
-    }, [getModelLabel, installedModels, modelCatalog.models, selectedStreamingModelId]);
+        return toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId);
+    }, [selectedStreamingModelId, selectionOptions.streaming]);
 
     const offlineOptions = useMemo(() => {
-        return modelCatalog.models
-            .filter(m => m.modes?.includes('offline'))
-            .filter(m => installedModels.has(m.id) || m.id === selectedOfflineModelId)
-            .map(model => ({
-                value: model.id,
-                label: getModelLabel(model)
-            }));
-    }, [getModelLabel, installedModels, modelCatalog.models, selectedOfflineModelId]);
+        return toDropdownOptions(selectionOptions.offline, selectedOfflineModelId);
+    }, [selectedOfflineModelId, selectionOptions.offline]);
 
     const speakerSegmentationOptions = useMemo(() => {
-        const installedOptions = modelCatalog.models
-            .filter(m => m.type === 'speaker-segmentation')
-            .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerSegmentationModelId)
-            .map(model => ({
-                value: model.id,
-                label: getModelLabel(model)
-            }));
+        const installedOptions = toDropdownOptions(
+            selectionOptions.speakerSegmentation,
+            selectedSpeakerSegmentationModelId,
+        );
         return [speakerDisabledOption, ...installedOptions];
-    }, [getModelLabel, installedModels, modelCatalog.models, selectedSpeakerSegmentationModelId, speakerDisabledOption]);
+    }, [selectedSpeakerSegmentationModelId, selectionOptions.speakerSegmentation, speakerDisabledOption]);
 
     const speakerEmbeddingOptions = useMemo(() => {
-        const installedOptions = modelCatalog.models
-            .filter(m => m.type === 'speaker-embedding')
-            .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerEmbeddingModelId)
-            .map(model => ({
-                value: model.id,
-                label: getModelLabel(model)
-            }));
+        const installedOptions = toDropdownOptions(
+            selectionOptions.speakerEmbedding,
+            selectedSpeakerEmbeddingModelId,
+        );
         return [speakerDisabledOption, ...installedOptions];
-    }, [getModelLabel, installedModels, modelCatalog.models, selectedSpeakerEmbeddingModelId, speakerDisabledOption]);
+    }, [selectedSpeakerEmbeddingModelId, selectionOptions.speakerEmbedding, speakerDisabledOption]);
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">

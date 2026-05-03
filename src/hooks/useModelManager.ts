@@ -13,12 +13,6 @@ import type {
 } from '../services/modelService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { doesModelPathMatch } from '../utils/modelSelection';
-
-const DEFAULT_SENSEVOICE_INT8_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
-const DEFAULT_SENSEVOICE_FP32_MODEL_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
-const DEFAULT_SILERO_VAD_MODEL_ID = 'silero-vad';
-
 type DownloadState = {
     progress: number;
     status: string;
@@ -29,6 +23,24 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
     modelsDir: '',
     models: [],
     sections: [],
+    selectionOptions: {
+        streaming: [],
+        offline: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+    },
+    modelPathById: {},
+    modelIdByNormalizedPath: {},
+    pathMatchTokens: [],
+    dependencyRequestsByModelId: {},
+    restoreDefaults: {
+        punctuationModelPath: '',
+        speakerSegmentationModelPath: '',
+        speakerEmbeddingModelPath: '',
+        enableITN: true,
+        vadBufferSize: 5,
+        maxConcurrent: 2,
+    },
 };
 
 export type ModelManagerContextType = ReturnType<typeof useModelManager>;
@@ -43,6 +55,34 @@ function scheduleAfterFrame(callback: () => void): () => void {
 
     const timeoutId = window.setTimeout(callback, 0);
     return () => window.clearTimeout(timeoutId);
+}
+
+function normalizeModelPath(path: string): string {
+    return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function resolveModelIdFromSnapshot(
+    snapshot: ModelCatalogSnapshot,
+    modelPath: string,
+    allowedModelIds: string[],
+): string {
+    if (!modelPath.trim()) {
+        return '';
+    }
+
+    const allowedIds = new Set(allowedModelIds);
+    const normalizedPath = normalizeModelPath(modelPath);
+    const exactId = snapshot.modelIdByNormalizedPath[normalizedPath];
+    if (exactId && allowedIds.has(exactId)) {
+        return exactId;
+    }
+
+    const tokenMatch = snapshot.pathMatchTokens.find((token) => (
+        allowedIds.has(token.id)
+        && token.token.length > 0
+        && normalizedPath.includes(token.token)
+    ));
+    return tokenMatch?.id ?? '';
 }
 
 export function useModelManagerContext() {
@@ -241,12 +281,22 @@ export function useModelManager(isOpen: boolean) {
         }
 
         if (model.modes && model.modes.length > 0) {
-            const rules = modelService.getModelRules(model.id);
-            if (rules.requiresVad) {
-                document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'silero-vad' } }));
+            const dependencyUpdates: Partial<typeof config> = {};
+            const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
+            for (const dependency of dependencies) {
+                if (config[dependency.configKey]) {
+                    continue;
+                }
+                if (dependency.isInstalled) {
+                    dependencyUpdates[dependency.configKey] = dependency.installPath;
+                } else {
+                    document.dispatchEvent(new CustomEvent('download-background-model', {
+                        detail: { modelId: dependency.modelId },
+                    }));
+                }
             }
-            if (rules.requiresPunctuation) {
-                document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8' } }));
+            if (Object.keys(dependencyUpdates).length > 0) {
+                updateConfig(dependencyUpdates);
             }
         }
 
@@ -322,24 +372,48 @@ export function useModelManager(isOpen: boolean) {
         if (model.modes && model.modes.length > 0) {
             let isSelected = false;
             if (model.modes.includes('streaming')) {
-                isSelected = isSelected || doesModelPathMatch(config.streamingModelPath || '', model);
+                isSelected = isSelected || resolveModelIdFromSnapshot(
+                    modelCatalog,
+                    config.streamingModelPath || '',
+                    modelCatalog.selectionOptions.streaming.map((option) => option.id),
+                ) === model.id;
             }
             if (model.modes.includes('offline')) {
-                isSelected = isSelected || doesModelPathMatch(config.offlineModelPath || '', model);
+                isSelected = isSelected || resolveModelIdFromSnapshot(
+                    modelCatalog,
+                    config.offlineModelPath || '',
+                    modelCatalog.selectionOptions.offline.map((option) => option.id),
+                ) === model.id;
             }
             return isSelected;
         }
         if (model.type === 'punctuation') {
-            return doesModelPathMatch(config.punctuationModelPath || '', model);
+            return resolveModelIdFromSnapshot(
+                modelCatalog,
+                config.punctuationModelPath || '',
+                modelCatalog.models.filter((item) => item.type === 'punctuation').map((item) => item.id),
+            ) === model.id;
         }
         if (model.type === 'vad') {
-            return doesModelPathMatch(config.vadModelPath || '', model);
+            return resolveModelIdFromSnapshot(
+                modelCatalog,
+                config.vadModelPath || '',
+                modelCatalog.models.filter((item) => item.type === 'vad').map((item) => item.id),
+            ) === model.id;
         }
         if (model.type === 'speaker-segmentation') {
-            return doesModelPathMatch(config.speakerSegmentationModelPath || '', model);
+            return resolveModelIdFromSnapshot(
+                modelCatalog,
+                config.speakerSegmentationModelPath || '',
+                modelCatalog.selectionOptions.speakerSegmentation.map((option) => option.id),
+            ) === model.id;
         }
         if (model.type === 'speaker-embedding') {
-            return doesModelPathMatch(config.speakerEmbeddingModelPath || '', model);
+            return resolveModelIdFromSnapshot(
+                modelCatalog,
+                config.speakerEmbeddingModelPath || '',
+                modelCatalog.selectionOptions.speakerEmbedding.map((option) => option.id),
+            ) === model.id;
         }
         return false;
     }
@@ -353,33 +427,25 @@ export function useModelManager(isOpen: boolean) {
 
         try {
             const snapshot = await refreshModelCatalogSnapshot();
-            const snapshotById = new Map(snapshot.models.map((model) => [model.id, model]));
-            const senseVoiceInt8 = snapshotById.get(DEFAULT_SENSEVOICE_INT8_MODEL_ID);
-            const senseVoiceFp32 = snapshotById.get(DEFAULT_SENSEVOICE_FP32_MODEL_ID);
-            const sileroVad = snapshotById.get(DEFAULT_SILERO_VAD_MODEL_ID);
+            const defaults = snapshot.restoreDefaults;
 
             const updates: Partial<typeof config> = {
-                punctuationModelPath: '',
-                vadBufferSize: 5,
-                maxConcurrent: 2,
-                enableITN: true,
-                speakerSegmentationModelPath: '',
-                speakerEmbeddingModelPath: '',
+                punctuationModelPath: defaults.punctuationModelPath ?? '',
+                vadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
+                maxConcurrent: Number.isFinite(defaults.maxConcurrent) ? defaults.maxConcurrent : 2,
+                enableITN: defaults.enableITN,
+                speakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
+                speakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
             };
 
-            const fallbackModel = senseVoiceInt8?.isInstalled
-                ? senseVoiceInt8
-                : senseVoiceFp32?.isInstalled
-                    ? senseVoiceFp32
-                    : null;
-
-            if (fallbackModel) {
-                updates.streamingModelPath = fallbackModel.installPath;
-                updates.offlineModelPath = fallbackModel.installPath;
+            if (defaults.streamingModelPath !== undefined) {
+                updates.streamingModelPath = defaults.streamingModelPath;
             }
-
-            if (sileroVad?.isInstalled) {
-                updates.vadModelPath = sileroVad.installPath;
+            if (defaults.offlineModelPath !== undefined) {
+                updates.offlineModelPath = defaults.offlineModelPath;
+            }
+            if (defaults.vadModelPath !== undefined) {
+                updates.vadModelPath = defaults.vadModelPath;
             }
 
             updateConfig(updates);

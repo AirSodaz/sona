@@ -68,6 +68,59 @@ describe('ModelService', () => {
                         ],
                     },
                 ],
+                selectionOptions: {
+                    streaming: [
+                        {
+                            id: 'catalog-model',
+                            label: 'Catalog Model',
+                            installPath: '/app/data/models/catalog-model',
+                            isInstalled: true,
+                        },
+                    ],
+                    offline: [
+                        {
+                            id: 'catalog-model',
+                            label: 'Catalog Model',
+                            installPath: '/app/data/models/catalog-model',
+                            isInstalled: true,
+                        },
+                    ],
+                    speakerSegmentation: [],
+                    speakerEmbedding: [],
+                },
+                modelPathById: {
+                    'catalog-model': '/app/data/models/catalog-model',
+                },
+                modelIdByNormalizedPath: {
+                    '/app/data/models/catalog-model': 'catalog-model',
+                },
+                pathMatchTokens: [
+                    {
+                        id: 'catalog-model',
+                        token: 'catalog-model',
+                    },
+                ],
+                dependencyRequestsByModelId: {
+                    'catalog-model': [
+                        {
+                            modelId: 'silero-vad',
+                            configKey: 'vadModelPath',
+                            installPath: '/app/data/models/silero_vad.onnx',
+                            isInstalled: true,
+                        },
+                    ],
+                },
+                restoreDefaults: {
+                    streamingModelPath: '/app/data/models/catalog-model',
+                    offlineModelPath: '/app/data/models/catalog-model',
+                    vadModelPath: '/app/data/models/silero_vad.onnx',
+                    punctuationModelPath: '',
+                    speakerSegmentationModelPath: '',
+                    speakerEmbeddingModelPath: '',
+                    enableITN: true,
+                    vadBufferSize: 5,
+                    maxConcurrent: 2,
+                },
             };
             vi.mocked(invoke).mockResolvedValueOnce(backendSnapshot);
 
@@ -81,6 +134,88 @@ describe('ModelService', () => {
                 isInstalled: true,
             });
             expect(snapshot.sections[0].groups[0].models[0].id).toBe('catalog-model');
+            expect(snapshot.selectionOptions.streaming[0]).toMatchObject({
+                id: 'catalog-model',
+                label: 'Catalog Model',
+                isInstalled: true,
+            });
+            expect(snapshot.dependencyRequestsByModelId['catalog-model'][0]).toMatchObject({
+                modelId: 'silero-vad',
+                configKey: 'vadModelPath',
+                installPath: '/app/data/models/silero_vad.onnx',
+            });
+            expect(snapshot.restoreDefaults.streamingModelPath).toBe('/app/data/models/catalog-model');
+        });
+
+        it('resolves paths and rules from the latest Rust catalog snapshot', async () => {
+            const backendSnapshot = {
+                modelsDir: '/snapshot/models',
+                models: [
+                    {
+                        id: 'snapshot-only-model',
+                        name: 'Snapshot Only',
+                        description: 'settings.descriptions.snapshot_only',
+                        url: 'https://example.com/snapshot-only.tar.bz2',
+                        type: 'sensevoice',
+                        modes: ['streaming'],
+                        language: 'zh,en',
+                        size: '1 MB',
+                        isArchive: true,
+                        engine: 'sherpa-onnx',
+                        rules: {
+                            requiresVad: false,
+                            requiresPunctuation: true,
+                        },
+                        installPath: '/snapshot/models/snapshot-only-model',
+                        downloadPath: '/snapshot/models/snapshot-only-model.tar.bz2',
+                        isInstalled: true,
+                    },
+                ],
+                sections: [],
+                selectionOptions: {
+                    streaming: [
+                        {
+                            id: 'snapshot-only-model',
+                            label: 'Snapshot Only',
+                            installPath: '/snapshot/models/snapshot-only-model',
+                            isInstalled: true,
+                        },
+                    ],
+                    offline: [],
+                    speakerSegmentation: [],
+                    speakerEmbedding: [],
+                },
+                modelPathById: {
+                    'snapshot-only-model': '/snapshot/models/snapshot-only-model',
+                },
+                modelIdByNormalizedPath: {
+                    '/snapshot/models/snapshot-only-model': 'snapshot-only-model',
+                },
+                pathMatchTokens: [
+                    {
+                        id: 'snapshot-only-model',
+                        token: 'snapshot-only-model',
+                    },
+                ],
+                dependencyRequestsByModelId: {},
+                restoreDefaults: {
+                    punctuationModelPath: '',
+                    speakerSegmentationModelPath: '',
+                    speakerEmbeddingModelPath: '',
+                    enableITN: true,
+                    vadBufferSize: 5,
+                    maxConcurrent: 2,
+                },
+            };
+            vi.mocked(invoke).mockResolvedValueOnce(backendSnapshot);
+
+            await expect(modelService.getModelPath('snapshot-only-model'))
+                .resolves.toBe('/snapshot/models/snapshot-only-model');
+            expect(modelService.getModelRules('snapshot-only-model')).toEqual({
+                requiresVad: false,
+                requiresPunctuation: true,
+            });
+            expect(invoke).toHaveBeenCalledWith('get_model_catalog_snapshot');
         });
     });
 

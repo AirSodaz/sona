@@ -96,6 +96,53 @@ function buildModelCatalog(installedModels: Set<string>) {
             ],
         },
         ],
+        selectionOptions: {
+            streaming: [],
+            offline: [],
+            speakerSegmentation: [
+                {
+                    id: speakerSegmentationModel.id,
+                    label: speakerSegmentationModel.name,
+                    installPath: speakerSegmentationModel.installPath,
+                    isInstalled: speakerSegmentationModel.isInstalled,
+                },
+            ],
+            speakerEmbedding: [
+                {
+                    id: speakerEmbeddingModel.id,
+                    label: speakerEmbeddingModel.name,
+                    installPath: speakerEmbeddingModel.installPath,
+                    isInstalled: speakerEmbeddingModel.isInstalled,
+                },
+            ],
+        },
+        modelPathById: {
+            [speakerSegmentationModel.id]: speakerSegmentationModel.installPath,
+            [speakerEmbeddingModel.id]: speakerEmbeddingModel.installPath,
+        },
+        modelIdByNormalizedPath: {
+            [speakerSegmentationModel.installPath.toLowerCase()]: speakerSegmentationModel.id,
+            [speakerEmbeddingModel.installPath.toLowerCase()]: speakerEmbeddingModel.id,
+        },
+        pathMatchTokens: [
+            {
+                id: speakerSegmentationModel.id,
+                token: speakerSegmentationModel.id.toLowerCase(),
+            },
+            {
+                id: speakerEmbeddingModel.id,
+                token: speakerEmbeddingModel.id.toLowerCase(),
+            },
+        ],
+        dependencyRequestsByModelId: {},
+        restoreDefaults: {
+            punctuationModelPath: '',
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            enableITN: true,
+            vadBufferSize: 5,
+            maxConcurrent: 2,
+        },
     };
 }
 

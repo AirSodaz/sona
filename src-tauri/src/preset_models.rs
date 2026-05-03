@@ -5,6 +5,12 @@ use std::sync::OnceLock;
 use tauri::Manager;
 
 const PRESET_MODELS_JSON: &str = include_str!("../../src/shared/preset-models.json");
+const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =
+    "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17";
+const DEFAULT_SENSEVOICE_FP32_MODEL_ID: &str = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
+const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-vad";
+const DEFAULT_PUNCTUATION_MODEL_ID: &str =
+    "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8";
 
 /// Default model rules used when a preset omits explicit requirements.
 pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
@@ -76,6 +82,12 @@ pub struct ModelCatalogSnapshot {
     pub models_dir: String,
     pub models: Vec<ModelCatalogModel>,
     pub sections: Vec<ModelCatalogSection>,
+    pub selection_options: ModelCatalogSelectionOptions,
+    pub model_path_by_id: HashMap<String, String>,
+    pub model_id_by_normalized_path: HashMap<String, String>,
+    pub path_match_tokens: Vec<ModelCatalogPathMatchToken>,
+    pub dependency_requests_by_model_id: HashMap<String, Vec<ModelDependencyRequest>>,
+    pub restore_defaults: ModelCatalogRestoreDefaults,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -140,6 +152,82 @@ const MODEL_CATALOG_SECTION_TYPES: [ModelCatalogSectionType; 5] = [
     ModelCatalogSectionType::SpeakerEmbedding,
 ];
 
+#[derive(Debug, Clone, serde::Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogSelectionOptions {
+    pub streaming: Vec<ModelSelectionOption>,
+    pub offline: Vec<ModelSelectionOption>,
+    pub speaker_segmentation: Vec<ModelSelectionOption>,
+    pub speaker_embedding: Vec<ModelSelectionOption>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSelectionOption {
+    pub id: String,
+    pub label: String,
+    pub install_path: String,
+    pub is_installed: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogPathMatchToken {
+    pub id: String,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelDependencyConfigKey {
+    VadModelPath,
+    PunctuationModelPath,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDependencyRequest {
+    pub model_id: String,
+    pub config_key: ModelDependencyConfigKey,
+    pub install_path: String,
+    pub is_installed: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogRestoreDefaults {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub streaming_model_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offline_model_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vad_model_path: Option<String>,
+    pub punctuation_model_path: Option<String>,
+    pub speaker_segmentation_model_path: Option<String>,
+    pub speaker_embedding_model_path: Option<String>,
+    pub enable_itn: bool,
+    pub vad_buffer_size: f64,
+    pub max_concurrent: u32,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSelectionPaths {
+    pub streaming_model_path: String,
+    pub offline_model_path: String,
+    pub speaker_segmentation_model_path: String,
+    pub speaker_embedding_model_path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogSelectedIds {
+    pub streaming: Option<String>,
+    pub offline: Option<String>,
+    pub speaker_segmentation: Option<String>,
+    pub speaker_embedding: Option<String>,
+}
+
 /// Returns a settings-page-ready catalog snapshot for the app-local models dir.
 #[tauri::command]
 pub fn get_model_catalog_snapshot<R: tauri::Runtime>(
@@ -168,11 +256,51 @@ pub fn build_model_catalog_snapshot(models_dir: &Path) -> ModelCatalogSnapshot {
         .map(|model| ModelCatalogModel::from_preset(model, models_dir))
         .collect::<Vec<_>>();
     let sections = build_catalog_sections(&models);
+    let selection_options = build_selection_options(&models);
+    let model_path_by_id = build_model_path_by_id(&models);
+    let model_id_by_normalized_path = build_model_id_by_normalized_path(&models);
+    let path_match_tokens = build_path_match_tokens(&models);
+    let dependency_requests_by_model_id = build_dependency_requests_by_model_id(&models);
+    let restore_defaults = build_restore_defaults(&models);
 
     ModelCatalogSnapshot {
         models_dir: path_to_catalog_string(models_dir),
         models,
         sections,
+        selection_options,
+        model_path_by_id,
+        model_id_by_normalized_path,
+        path_match_tokens,
+        dependency_requests_by_model_id,
+        restore_defaults,
+    }
+}
+
+pub fn resolve_model_catalog_selected_ids(
+    snapshot: &ModelCatalogSnapshot,
+    paths: &ModelSelectionPaths,
+) -> ModelCatalogSelectedIds {
+    ModelCatalogSelectedIds {
+        streaming: resolve_selected_model_id(
+            snapshot,
+            &paths.streaming_model_path,
+            &snapshot.selection_options.streaming,
+        ),
+        offline: resolve_selected_model_id(
+            snapshot,
+            &paths.offline_model_path,
+            &snapshot.selection_options.offline,
+        ),
+        speaker_segmentation: resolve_selected_model_id(
+            snapshot,
+            &paths.speaker_segmentation_model_path,
+            &snapshot.selection_options.speaker_segmentation,
+        ),
+        speaker_embedding: resolve_selected_model_id(
+            snapshot,
+            &paths.speaker_embedding_model_path,
+            &snapshot.selection_options.speaker_embedding,
+        ),
     }
 }
 
@@ -187,10 +315,7 @@ fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSecti
                 .iter()
                 .filter(|model| model_section_type(model) == *section_type)
             {
-                let key = model
-                    .group_id
-                    .clone()
-                    .unwrap_or_else(|| model.id.clone());
+                let key = model.group_id.clone().unwrap_or_else(|| model.id.clone());
 
                 if let Some(index) = group_indexes.get(&key).copied() {
                     groups[index].models.push(model.clone());
@@ -223,6 +348,180 @@ fn model_section_type(model: &ModelCatalogModel) -> ModelCatalogSectionType {
 
 fn path_to_catalog_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectionOptions {
+    ModelCatalogSelectionOptions {
+        streaming: models
+            .iter()
+            .filter(|model| model.supports_mode("streaming"))
+            .map(ModelSelectionOption::from_catalog_model)
+            .collect(),
+        offline: models
+            .iter()
+            .filter(|model| model.supports_mode("offline"))
+            .map(ModelSelectionOption::from_catalog_model)
+            .collect(),
+        speaker_segmentation: models
+            .iter()
+            .filter(|model| model.model_type == "speaker-segmentation")
+            .map(ModelSelectionOption::from_catalog_model)
+            .collect(),
+        speaker_embedding: models
+            .iter()
+            .filter(|model| model.model_type == "speaker-embedding")
+            .map(ModelSelectionOption::from_catalog_model)
+            .collect(),
+    }
+}
+
+fn build_model_path_by_id(models: &[ModelCatalogModel]) -> HashMap<String, String> {
+    models
+        .iter()
+        .map(|model| (model.id.clone(), model.install_path.clone()))
+        .collect()
+}
+
+fn build_model_id_by_normalized_path(models: &[ModelCatalogModel]) -> HashMap<String, String> {
+    models
+        .iter()
+        .map(|model| {
+            (
+                normalize_catalog_path(&model.install_path),
+                model.id.clone(),
+            )
+        })
+        .collect()
+}
+
+fn build_path_match_tokens(models: &[ModelCatalogModel]) -> Vec<ModelCatalogPathMatchToken> {
+    models
+        .iter()
+        .map(|model| ModelCatalogPathMatchToken {
+            id: model.id.clone(),
+            token: normalize_catalog_path(model.filename.as_deref().unwrap_or(&model.id)),
+        })
+        .collect()
+}
+
+fn build_dependency_requests_by_model_id(
+    models: &[ModelCatalogModel],
+) -> HashMap<String, Vec<ModelDependencyRequest>> {
+    let models_by_id = models
+        .iter()
+        .map(|model| (model.id.as_str(), model))
+        .collect::<HashMap<_, _>>();
+    let mut requests_by_model_id = HashMap::new();
+
+    for model in models.iter().filter(|model| model.has_recognition_mode()) {
+        let mut requests = Vec::new();
+        if model.rules.requires_vad {
+            if let Some(request) = build_dependency_request(
+                &models_by_id,
+                DEFAULT_SILERO_VAD_MODEL_ID,
+                ModelDependencyConfigKey::VadModelPath,
+            ) {
+                requests.push(request);
+            }
+        }
+        if model.rules.requires_punctuation {
+            if let Some(request) = build_dependency_request(
+                &models_by_id,
+                DEFAULT_PUNCTUATION_MODEL_ID,
+                ModelDependencyConfigKey::PunctuationModelPath,
+            ) {
+                requests.push(request);
+            }
+        }
+
+        if !requests.is_empty() {
+            requests_by_model_id.insert(model.id.clone(), requests);
+        }
+    }
+
+    requests_by_model_id
+}
+
+fn build_dependency_request(
+    models_by_id: &HashMap<&str, &ModelCatalogModel>,
+    model_id: &str,
+    config_key: ModelDependencyConfigKey,
+) -> Option<ModelDependencyRequest> {
+    let model = models_by_id.get(model_id)?;
+    Some(ModelDependencyRequest {
+        model_id: model.id.clone(),
+        config_key,
+        install_path: model.install_path.clone(),
+        is_installed: model.is_installed,
+    })
+}
+
+fn build_restore_defaults(models: &[ModelCatalogModel]) -> ModelCatalogRestoreDefaults {
+    let models_by_id = models
+        .iter()
+        .map(|model| (model.id.as_str(), model))
+        .collect::<HashMap<_, _>>();
+
+    let fallback_asr_path = models_by_id
+        .get(DEFAULT_SENSEVOICE_INT8_MODEL_ID)
+        .filter(|model| model.is_installed)
+        .or_else(|| {
+            models_by_id
+                .get(DEFAULT_SENSEVOICE_FP32_MODEL_ID)
+                .filter(|model| model.is_installed)
+        })
+        .map(|model| model.install_path.clone());
+    let vad_model_path = models_by_id
+        .get(DEFAULT_SILERO_VAD_MODEL_ID)
+        .filter(|model| model.is_installed)
+        .map(|model| model.install_path.clone());
+
+    ModelCatalogRestoreDefaults {
+        streaming_model_path: fallback_asr_path.clone(),
+        offline_model_path: fallback_asr_path,
+        vad_model_path,
+        punctuation_model_path: Some(String::new()),
+        speaker_segmentation_model_path: Some(String::new()),
+        speaker_embedding_model_path: Some(String::new()),
+        enable_itn: true,
+        vad_buffer_size: 5.0,
+        max_concurrent: 2,
+    }
+}
+
+fn resolve_selected_model_id(
+    snapshot: &ModelCatalogSnapshot,
+    model_path: &str,
+    options: &[ModelSelectionOption],
+) -> Option<String> {
+    if model_path.trim().is_empty() {
+        return None;
+    }
+
+    let normalized_path = normalize_catalog_path(model_path);
+    if let Some(model_id) = snapshot.model_id_by_normalized_path.get(&normalized_path) {
+        if options.iter().any(|option| option.id == *model_id) {
+            return Some(model_id.clone());
+        }
+    }
+
+    for option in options {
+        if let Some(token) = snapshot
+            .path_match_tokens
+            .iter()
+            .find(|token| token.id == option.id)
+        {
+            if !token.token.is_empty() && normalized_path.contains(&token.token) {
+                return Some(option.id.clone());
+            }
+        }
+    }
+
+    None
+}
+
+fn normalize_catalog_path(path: &str) -> String {
+    path.replace('\\', "/").to_lowercase()
 }
 
 impl PresetModel {
@@ -317,12 +616,18 @@ mod tests {
     fn builds_settings_ready_catalog_snapshot() {
         let dir = tempfile::tempdir().unwrap();
         let models_dir = dir.path().join("models");
-        fs::create_dir_all(models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")).unwrap();
+        fs::create_dir_all(
+            models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+        )
+        .unwrap();
         fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
 
         let snapshot = build_model_catalog_snapshot(&models_dir);
 
-        assert_eq!(snapshot.models_dir, models_dir.to_string_lossy().to_string());
+        assert_eq!(
+            snapshot.models_dir,
+            models_dir.to_string_lossy().to_string()
+        );
 
         let silero = snapshot
             .models
@@ -352,6 +657,180 @@ mod tests {
                 "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
                 "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
             ]
+        );
+    }
+
+    #[test]
+    fn builds_selection_ready_snapshot_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(
+            models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+        )
+        .unwrap();
+
+        let snapshot = build_model_catalog_snapshot(&models_dir);
+
+        let int8_path = models_dir
+            .join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(
+            snapshot
+                .model_path_by_id
+                .get("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+            Some(&int8_path)
+        );
+
+        let streaming_option = snapshot
+            .selection_options
+            .streaming
+            .iter()
+            .find(|option| option.id == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .unwrap();
+        assert_eq!(streaming_option.label, "SenseVoice (Int8)");
+        assert_eq!(streaming_option.install_path, int8_path);
+        assert!(streaming_option.is_installed);
+
+        assert!(snapshot
+            .selection_options
+            .offline
+            .iter()
+            .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"));
+        assert!(!snapshot
+            .selection_options
+            .streaming
+            .iter()
+            .any(|option| option.id == "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"));
+        assert!(snapshot
+            .selection_options
+            .speaker_segmentation
+            .iter()
+            .any(|option| {
+                option.id == "sherpa-onnx-pyannote-segmentation-3-0" && !option.is_installed
+            }));
+    }
+
+    #[test]
+    fn resolves_selected_ids_from_snapshot_path_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(
+            models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+        )
+        .unwrap();
+        fs::write(
+            models_dir.join("3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"),
+            "",
+        )
+        .unwrap();
+
+        let snapshot = build_model_catalog_snapshot(&models_dir);
+        let int8_path = snapshot
+            .model_path_by_id
+            .get("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .unwrap()
+            .clone();
+
+        let selected = resolve_model_catalog_selected_ids(
+            &snapshot,
+            &ModelSelectionPaths {
+                streaming_model_path: int8_path,
+                offline_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
+                    .to_string(),
+                speaker_segmentation_model_path: String::new(),
+                speaker_embedding_model_path:
+                    "D:/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+                        .to_string(),
+            },
+        );
+
+        assert_eq!(
+            selected.streaming,
+            Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string())
+        );
+        assert_eq!(
+            selected.offline,
+            Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string())
+        );
+        assert_eq!(selected.speaker_segmentation, None);
+        assert_eq!(
+            selected.speaker_embedding,
+            Some("3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string())
+        );
+    }
+
+    #[test]
+    fn builds_dependency_and_restore_default_decisions() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        fs::create_dir_all(
+            models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+        )
+        .unwrap();
+        fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+
+        let snapshot = build_model_catalog_snapshot(&models_dir);
+
+        let int8_path = snapshot
+            .model_path_by_id
+            .get("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .unwrap()
+            .clone();
+        let silero_path = snapshot.model_path_by_id.get("silero-vad").unwrap().clone();
+
+        assert_eq!(
+            snapshot.restore_defaults.streaming_model_path,
+            Some(int8_path.clone())
+        );
+        assert_eq!(
+            snapshot.restore_defaults.offline_model_path,
+            Some(int8_path)
+        );
+        assert_eq!(
+            snapshot.restore_defaults.vad_model_path,
+            Some(silero_path.clone())
+        );
+        assert_eq!(
+            snapshot.restore_defaults.punctuation_model_path,
+            Some(String::new())
+        );
+        assert_eq!(
+            snapshot.restore_defaults.speaker_segmentation_model_path,
+            Some(String::new())
+        );
+        assert_eq!(
+            snapshot.restore_defaults.speaker_embedding_model_path,
+            Some(String::new())
+        );
+        assert!(snapshot.restore_defaults.enable_itn);
+        assert_eq!(snapshot.restore_defaults.vad_buffer_size, 5.0);
+        assert_eq!(snapshot.restore_defaults.max_concurrent, 2);
+
+        let sense_voice_dependencies = snapshot
+            .dependency_requests_by_model_id
+            .get("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+            .unwrap();
+        assert_eq!(
+            sense_voice_dependencies,
+            &vec![ModelDependencyRequest {
+                model_id: "silero-vad".to_string(),
+                config_key: ModelDependencyConfigKey::VadModelPath,
+                install_path: silero_path,
+                is_installed: true,
+            }]
+        );
+
+        let paraformer_dependencies = snapshot
+            .dependency_requests_by_model_id
+            .get("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en")
+            .unwrap();
+        assert_eq!(
+            paraformer_dependencies
+                .iter()
+                .map(|request| request.config_key)
+                .collect::<Vec<_>>(),
+            vec![ModelDependencyConfigKey::PunctuationModelPath]
         );
     }
 }
@@ -384,5 +863,37 @@ impl ModelCatalogModel {
             download_path: path_to_catalog_string(&download_path),
             is_installed: install_path.exists(),
         }
+    }
+
+    fn supports_mode(&self, mode: &str) -> bool {
+        self.modes
+            .as_ref()
+            .map(|modes| modes.iter().any(|item| item == mode))
+            .unwrap_or(false)
+    }
+
+    fn has_recognition_mode(&self) -> bool {
+        self.modes
+            .as_ref()
+            .map(|modes| !modes.is_empty())
+            .unwrap_or(false)
+    }
+}
+
+impl ModelSelectionOption {
+    fn from_catalog_model(model: &ModelCatalogModel) -> Self {
+        Self {
+            id: model.id.clone(),
+            label: model_selection_label(model),
+            install_path: model.install_path.clone(),
+            is_installed: model.is_installed,
+        }
+    }
+}
+
+fn model_selection_label(model: &ModelCatalogModel) -> String {
+    match &model.version_label {
+        Some(version_label) => format!("{} ({})", model.name, version_label),
+        None => model.name.clone(),
     }
 }

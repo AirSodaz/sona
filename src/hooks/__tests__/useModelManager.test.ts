@@ -38,6 +38,44 @@ const modelCatalogSnapshot = {
             ],
         },
     ],
+    selectionOptions: {
+        streaming: [
+            {
+                id: 'preset-a',
+                label: 'Preset A',
+                installPath: '/models/preset-a',
+                isInstalled: true,
+            },
+        ],
+        offline: [
+            {
+                id: 'preset-a',
+                label: 'Preset A',
+                installPath: '/models/preset-a',
+                isInstalled: true,
+            },
+        ],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+    },
+    modelPathById: {
+        'preset-a': '/models/preset-a',
+    },
+    modelIdByNormalizedPath: {
+        '/models/preset-a': 'preset-a',
+    },
+    pathMatchTokens: [
+        { id: 'preset-a', token: 'preset-a' },
+    ],
+    dependencyRequestsByModelId: {},
+    restoreDefaults: {
+        punctuationModelPath: '',
+        speakerSegmentationModelPath: '',
+        speakerEmbeddingModelPath: '',
+        enableITN: true,
+        vadBufferSize: 5,
+        maxConcurrent: 2,
+    },
 } as any;
 
 function buildInstalledCatalogSnapshot(installedIds: string[]): any {
@@ -62,6 +100,45 @@ function buildInstalledCatalogSnapshot(installedIds: string[]): any {
                 groups: models.map((model) => ({ key: model.id, models: [model] })),
             },
         ],
+        selectionOptions: {
+            streaming: models.map((model) => ({
+                id: model.id,
+                label: model.name,
+                installPath: model.installPath,
+                isInstalled: model.isInstalled,
+            })),
+            offline: models.map((model) => ({
+                id: model.id,
+                label: model.name,
+                installPath: model.installPath,
+                isInstalled: model.isInstalled,
+            })),
+            speakerSegmentation: [],
+            speakerEmbedding: [],
+        },
+        modelPathById: Object.fromEntries(models.map((model) => [model.id, model.installPath])),
+        modelIdByNormalizedPath: Object.fromEntries(models.map((model) => [model.installPath.toLowerCase(), model.id])),
+        pathMatchTokens: models.map((model) => ({ id: model.id, token: model.id.toLowerCase() })),
+        dependencyRequestsByModelId: {},
+        restoreDefaults: {
+            streamingModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
+                ? `/models/${SENSEVOICE_INT8_ID}`
+                : installedIds.includes(SENSEVOICE_FP32_ID)
+                    ? `/models/${SENSEVOICE_FP32_ID}`
+                    : undefined,
+            offlineModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
+                ? `/models/${SENSEVOICE_INT8_ID}`
+                : installedIds.includes(SENSEVOICE_FP32_ID)
+                    ? `/models/${SENSEVOICE_FP32_ID}`
+                    : undefined,
+            vadModelPath: installedIds.includes(SILERO_VAD_ID) ? `/models/${SILERO_VAD_ID}` : undefined,
+            punctuationModelPath: '',
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            enableITN: true,
+            vadBufferSize: 5,
+            maxConcurrent: 2,
+        },
     };
 }
 

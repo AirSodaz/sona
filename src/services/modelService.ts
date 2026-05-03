@@ -107,10 +107,56 @@ export interface ModelCatalogSection {
     groups: ModelCatalogGroup[];
 }
 
+export interface ModelSelectionOption {
+    id: string;
+    label: string;
+    installPath: string;
+    isInstalled: boolean;
+}
+
+export interface ModelCatalogSelectionOptions {
+    streaming: ModelSelectionOption[];
+    offline: ModelSelectionOption[];
+    speakerSegmentation: ModelSelectionOption[];
+    speakerEmbedding: ModelSelectionOption[];
+}
+
+export type ModelDependencyConfigKey = 'vadModelPath' | 'punctuationModelPath';
+
+export interface ModelDependencyRequest {
+    modelId: string;
+    configKey: ModelDependencyConfigKey;
+    installPath: string;
+    isInstalled: boolean;
+}
+
+export interface ModelCatalogPathMatchToken {
+    id: string;
+    token: string;
+}
+
+export interface ModelCatalogRestoreDefaults {
+    streamingModelPath?: string;
+    offlineModelPath?: string;
+    vadModelPath?: string;
+    punctuationModelPath?: string;
+    speakerSegmentationModelPath?: string;
+    speakerEmbeddingModelPath?: string;
+    enableITN: boolean;
+    vadBufferSize: number;
+    maxConcurrent: number;
+}
+
 export interface ModelCatalogSnapshot {
     modelsDir: string;
     models: ModelCatalogModel[];
     sections: ModelCatalogSection[];
+    selectionOptions: ModelCatalogSelectionOptions;
+    modelPathById: Record<string, string>;
+    modelIdByNormalizedPath: Record<string, string>;
+    pathMatchTokens: ModelCatalogPathMatchToken[];
+    dependencyRequestsByModelId: Record<string, ModelDependencyRequest[]>;
+    restoreDefaults: ModelCatalogRestoreDefaults;
 }
 
 export const DEFAULT_MODEL_RULES: ModelRules = {
@@ -150,7 +196,36 @@ function normalizeCatalogSnapshot(snapshot: ModelCatalogSnapshot): ModelCatalogS
         ...snapshot,
         models,
         sections,
+        selectionOptions: snapshot.selectionOptions ?? {
+            streaming: [],
+            offline: [],
+            speakerSegmentation: [],
+            speakerEmbedding: [],
+        },
+        modelPathById: snapshot.modelPathById ?? Object.fromEntries(
+            models.map(model => [model.id, model.installPath]),
+        ),
+        modelIdByNormalizedPath: snapshot.modelIdByNormalizedPath ?? Object.fromEntries(
+            models.map(model => [normalizeModelPath(model.installPath), model.id]),
+        ),
+        pathMatchTokens: snapshot.pathMatchTokens ?? models.map(model => ({
+            id: model.id,
+            token: normalizeModelPath(model.filename || model.id),
+        })),
+        dependencyRequestsByModelId: snapshot.dependencyRequestsByModelId ?? {},
+        restoreDefaults: snapshot.restoreDefaults ?? {
+            punctuationModelPath: '',
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            enableITN: true,
+            vadBufferSize: 5,
+            maxConcurrent: 2,
+        },
     };
+}
+
+function normalizeModelPath(path: string): string {
+    return path.replace(/\\/g, '/').toLowerCase();
 }
 
 interface DownloadProgressPayloadObject {
@@ -209,6 +284,8 @@ export type ProgressCallback = (percentage: number, status: string, isFinished?:
  * Service for managing AI models (downloading, verifying, path resolution).
  */
 class ModelService {
+    private latestCatalogSnapshot: ModelCatalogSnapshot | null = null;
+
     /**
      * Gets the local directory where models are stored.
      *
@@ -233,7 +310,9 @@ class ModelService {
      */
     async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
         const snapshot = await getModelCatalogSnapshotFromRust();
-        return normalizeCatalogSnapshot(snapshot);
+        const normalized = normalizeCatalogSnapshot(snapshot);
+        this.latestCatalogSnapshot = normalized;
+        return normalized;
     }
 
     /**
@@ -451,7 +530,24 @@ class ModelService {
      * @return A promise resolving to the model's path.
      */
     async getModelPath(modelId: string): Promise<string> {
+        const cachedPath = this.latestCatalogSnapshot?.modelPathById[modelId];
+        if (cachedPath) {
+            return cachedPath;
+        }
+
         const model = PRESET_MODELS_MAP.get(modelId);
+        if (!model) {
+            try {
+                const snapshot = await this.getModelCatalogSnapshot();
+                const snapshotPath = snapshot.modelPathById[modelId];
+                if (snapshotPath) {
+                    return snapshotPath;
+                }
+            } catch (error) {
+                logger.warn('[ModelService] Failed to resolve model path from Rust catalog snapshot:', error);
+            }
+        }
+
         const modelsDir = await this.getModelsDir();
         if (model && model.filename) {
             return await join(modelsDir, model.filename);
@@ -520,6 +616,11 @@ class ModelService {
      * @returns The ModelRules for the model.
      */
     getModelRules(modelId: string): ModelRules {
+        const snapshotModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
+        if (snapshotModel?.rules) {
+            return snapshotModel.rules;
+        }
+
         const model = PRESET_MODELS_MAP.get(modelId);
         if (model && model.rules) {
             return model.rules;

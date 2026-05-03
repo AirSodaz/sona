@@ -1,8 +1,10 @@
 use chrono::{SecondsFormat, Utc};
-use serde_json::Value;
+use serde_json::{Map, Number, Value};
 use std::fs;
 use std::path::Path;
 use uuid::Uuid;
+
+use crate::project_repository::normalize_project_record_for_import;
 
 use super::fs_utils::{
     copy_directory_recursive, create_tar_bz2_archive, create_temp_directory,
@@ -77,6 +79,259 @@ fn validate_backup_manifest(value: &Value) -> Result<BackupManifest, String> {
         return Err("Backup manifest is missing one or more required scopes.".to_string());
     }
     Ok(manifest)
+}
+
+fn normalize_backup_projects(value: Value) -> Result<Vec<Value>, String> {
+    let projects = value
+        .as_array()
+        .ok_or_else(|| "Backup projects must be an array.".to_string())?;
+
+    projects
+        .iter()
+        .map(normalize_project_record_for_import)
+        .collect()
+}
+
+fn normalize_automation_rules(value: Value) -> Result<Vec<Value>, String> {
+    let rules = value
+        .as_array()
+        .ok_or_else(|| "Backup automation rules must be an array.".to_string())?;
+
+    rules.iter().map(normalize_automation_rule).collect()
+}
+
+fn normalize_automation_rule(input: &Value) -> Result<Value, String> {
+    let source = input
+        .as_object()
+        .ok_or_else(|| "Automation rule must be an object.".to_string())?;
+
+    let stage_config = normalize_automation_stage_config(source.get("stageConfig"))?;
+    let export_config = normalize_automation_export_config(source.get("exportConfig"))?;
+
+    let mut normalized = Map::new();
+    normalized.insert(
+        "id".to_string(),
+        Value::String(string_field(source, "id").unwrap_or_default()),
+    );
+    normalized.insert(
+        "name".to_string(),
+        Value::String(string_field(source, "name").unwrap_or_default()),
+    );
+    normalized.insert(
+        "projectId".to_string(),
+        Value::String(string_field(source, "projectId").unwrap_or_default()),
+    );
+    normalized.insert(
+        "presetId".to_string(),
+        Value::String(
+            string_field(source, "presetId")
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "custom".to_string()),
+        ),
+    );
+    normalized.insert(
+        "watchDirectory".to_string(),
+        Value::String(string_field(source, "watchDirectory").unwrap_or_default()),
+    );
+    normalized.insert(
+        "recursive".to_string(),
+        Value::Bool(js_truthy(source.get("recursive"))),
+    );
+    normalized.insert(
+        "enabled".to_string(),
+        Value::Bool(js_truthy(source.get("enabled"))),
+    );
+    normalized.insert("stageConfig".to_string(), stage_config);
+    normalized.insert("exportConfig".to_string(), export_config);
+    normalized.insert(
+        "createdAt".to_string(),
+        Value::Number(number_field_or_zero(source, "createdAt")),
+    );
+    normalized.insert(
+        "updatedAt".to_string(),
+        Value::Number(number_field_or_zero(source, "updatedAt")),
+    );
+
+    Ok(Value::Object(normalized))
+}
+
+fn normalize_automation_stage_config(value: Option<&Value>) -> Result<Value, String> {
+    let source = object_or_empty(value, "Automation stage config")?;
+    let mut normalized = Map::new();
+    normalized.insert(
+        "autoPolish".to_string(),
+        Value::Bool(bool_field(source, "autoPolish")),
+    );
+    normalized.insert(
+        "polishPresetId".to_string(),
+        Value::String(
+            string_field_optional(source, "polishPresetId")
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "general".to_string()),
+        ),
+    );
+    normalized.insert(
+        "autoTranslate".to_string(),
+        Value::Bool(bool_field(source, "autoTranslate")),
+    );
+    normalized.insert(
+        "translationLanguage".to_string(),
+        Value::String(
+            string_field_optional(source, "translationLanguage")
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "en".to_string()),
+        ),
+    );
+    normalized.insert(
+        "exportEnabled".to_string(),
+        Value::Bool(bool_field(source, "exportEnabled")),
+    );
+
+    Ok(Value::Object(normalized))
+}
+
+fn normalize_automation_export_config(value: Option<&Value>) -> Result<Value, String> {
+    let source = object_or_empty(value, "Automation export config")?;
+    let mut normalized = Map::new();
+    normalized.insert(
+        "directory".to_string(),
+        Value::String(string_field_optional(source, "directory").unwrap_or_default()),
+    );
+    normalized.insert(
+        "format".to_string(),
+        Value::String(
+            string_field_optional(source, "format")
+                .filter(|value| matches!(value.as_str(), "srt" | "json" | "txt" | "vtt"))
+                .unwrap_or_else(|| "txt".to_string()),
+        ),
+    );
+    normalized.insert(
+        "mode".to_string(),
+        Value::String(
+            string_field_optional(source, "mode")
+                .filter(|value| matches!(value.as_str(), "original" | "translation" | "bilingual"))
+                .unwrap_or_else(|| "original".to_string()),
+        ),
+    );
+    normalized.insert(
+        "prefix".to_string(),
+        Value::String(string_field_optional(source, "prefix").unwrap_or_default()),
+    );
+
+    Ok(Value::Object(normalized))
+}
+
+fn normalize_automation_processed_entries(value: Value) -> Result<Vec<Value>, String> {
+    let entries = value
+        .as_array()
+        .ok_or_else(|| "Backup automation processed entries must be an array.".to_string())?;
+
+    entries
+        .iter()
+        .map(normalize_automation_processed_entry)
+        .collect()
+}
+
+fn normalize_automation_processed_entry(input: &Value) -> Result<Value, String> {
+    let source = input
+        .as_object()
+        .ok_or_else(|| "Automation processed entry must be an object.".to_string())?;
+
+    let mut normalized = Map::new();
+    normalized.insert(
+        "ruleId".to_string(),
+        Value::String(string_field(source, "ruleId").unwrap_or_default()),
+    );
+    normalized.insert(
+        "filePath".to_string(),
+        Value::String(string_field(source, "filePath").unwrap_or_default()),
+    );
+    normalized.insert(
+        "sourceFingerprint".to_string(),
+        Value::String(string_field(source, "sourceFingerprint").unwrap_or_default()),
+    );
+    normalized.insert(
+        "size".to_string(),
+        Value::Number(number_field_or_zero(source, "size")),
+    );
+    normalized.insert(
+        "mtimeMs".to_string(),
+        Value::Number(number_field_or_zero(source, "mtimeMs")),
+    );
+    normalized.insert(
+        "status".to_string(),
+        Value::String(match source.get("status").and_then(Value::as_str) {
+            Some("error") => "error".to_string(),
+            Some("discarded") => "discarded".to_string(),
+            _ => "complete".to_string(),
+        }),
+    );
+    normalized.insert(
+        "processedAt".to_string(),
+        Value::Number(number_field_or_zero(source, "processedAt")),
+    );
+
+    insert_optional_string(&mut normalized, source, "historyId");
+    insert_optional_string(&mut normalized, source, "exportPath");
+    insert_optional_string(&mut normalized, source, "errorMessage");
+
+    Ok(Value::Object(normalized))
+}
+
+fn object_or_empty<'a>(
+    value: Option<&'a Value>,
+    label: &str,
+) -> Result<Option<&'a Map<String, Value>>, String> {
+    match value {
+        Some(Value::Object(source)) => Ok(Some(source)),
+        Some(Value::Null) | None => Ok(None),
+        _ => Err(format!("{label} must be an object.")),
+    }
+}
+
+fn string_field(source: &Map<String, Value>, key: &str) -> Option<String> {
+    source
+        .get(key)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn string_field_optional(source: Option<&Map<String, Value>>, key: &str) -> Option<String> {
+    source
+        .and_then(|object| object.get(key))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn bool_field(source: Option<&Map<String, Value>>, key: &str) -> bool {
+    source
+        .and_then(|object| object.get(key))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn number_field_or_zero(source: &Map<String, Value>, key: &str) -> Number {
+    source
+        .get(key)
+        .and_then(Value::as_number)
+        .cloned()
+        .unwrap_or_else(|| 0.into())
+}
+
+fn insert_optional_string(target: &mut Map<String, Value>, source: &Map<String, Value>, key: &str) {
+    if let Some(value) = string_field(source, key) {
+        target.insert(key.to_string(), Value::String(value));
+    }
+}
+
+fn js_truthy(value: Option<&Value>) -> bool {
+    match value {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::Number(value)) => value.as_f64().is_some_and(|number| number != 0.0),
+        Some(Value::String(value)) => !value.is_empty(),
+        Some(Value::Array(_)) | Some(Value::Object(_)) => true,
+        Some(Value::Null) | None => false,
+    }
 }
 
 pub(super) fn export_backup_archive_inner(
@@ -177,14 +432,11 @@ pub(super) fn prepare_backup_import_inner(
             read_json_value(&extraction_dir.join(CONFIG_DIR_NAME).join(CONFIG_FILE_NAME))?,
             "Backup config",
         )?;
-        let projects = read_json_value(
+        let projects = normalize_backup_projects(read_json_value(
             &extraction_dir
                 .join(PROJECTS_DIR_NAME)
                 .join(PROJECTS_INDEX_FILE_NAME),
-        )?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| "Backup projects must be an array.".to_string())?;
+        )?)?;
 
         let history_items_value = read_json_value(
             &extraction_dir
@@ -261,22 +513,17 @@ pub(super) fn prepare_backup_import_inner(
             }
         }
 
-        let automation_rules = read_json_value(
+        let automation_rules = normalize_automation_rules(read_json_value(
             &extraction_dir
                 .join(AUTOMATION_DIR_NAME)
                 .join(AUTOMATION_RULES_FILE_NAME),
-        )?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| "Backup automation rules must be an array.".to_string())?;
-        let automation_processed_entries = read_json_value(
-            &extraction_dir
-                .join(AUTOMATION_DIR_NAME)
-                .join(AUTOMATION_PROCESSED_FILE_NAME),
-        )?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| "Backup automation processed entries must be an array.".to_string())?;
+        )?)?;
+        let automation_processed_entries =
+            normalize_automation_processed_entries(read_json_value(
+                &extraction_dir
+                    .join(AUTOMATION_DIR_NAME)
+                    .join(AUTOMATION_PROCESSED_FILE_NAME),
+            )?)?;
 
         let analytics_content = fs::read_to_string(
             extraction_dir
@@ -676,6 +923,97 @@ mod tests {
                 || err.contains("No such file")
                 || err.contains("找不到指定的文件")
         );
+    }
+
+    #[test]
+    fn prepare_backup_import_normalizes_sparse_projects_and_automation_payloads() {
+        let archive_dir = tempdir().unwrap();
+        let archive_path = archive_dir.path().join("sparse-backup.tar.bz2");
+        create_valid_backup_archive(&archive_path);
+
+        let (prepared, _snapshot) = prepare_backup_import_inner(&archive_path).unwrap();
+
+        assert_eq!(prepared.projects.len(), 1);
+        assert_eq!(prepared.projects[0]["id"], "project-1");
+        assert_eq!(prepared.projects[0]["name"], "Workspace");
+        assert_eq!(prepared.projects[0]["description"], "");
+        assert_eq!(prepared.projects[0]["icon"], "");
+        assert_eq!(
+            prepared.projects[0]["defaults"]["summaryTemplateId"],
+            "general"
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["translationLanguage"],
+            "zh"
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["polishPresetId"],
+            "general"
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["enabledTextReplacementSetIds"],
+            json!([])
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["enabledHotwordSetIds"],
+            json!([])
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["enabledPolishKeywordSetIds"],
+            json!([])
+        );
+        assert_eq!(
+            prepared.projects[0]["defaults"]["enabledSpeakerProfileIds"],
+            json!([])
+        );
+
+        assert_eq!(prepared.automation_rules.len(), 1);
+        assert_eq!(prepared.automation_rules[0]["id"], "rule-1");
+        assert_eq!(prepared.automation_rules[0]["name"], "");
+        assert_eq!(prepared.automation_rules[0]["projectId"], "");
+        assert_eq!(prepared.automation_rules[0]["presetId"], "custom");
+        assert_eq!(prepared.automation_rules[0]["watchDirectory"], "");
+        assert_eq!(prepared.automation_rules[0]["recursive"], false);
+        assert_eq!(prepared.automation_rules[0]["enabled"], false);
+        assert_eq!(
+            prepared.automation_rules[0]["stageConfig"],
+            json!({
+                "autoPolish": false,
+                "polishPresetId": "general",
+                "autoTranslate": false,
+                "translationLanguage": "en",
+                "exportEnabled": false
+            })
+        );
+        assert_eq!(
+            prepared.automation_rules[0]["exportConfig"],
+            json!({
+                "directory": "",
+                "format": "txt",
+                "mode": "original",
+                "prefix": ""
+            })
+        );
+        assert_eq!(prepared.automation_rules[0]["createdAt"], 0);
+        assert_eq!(prepared.automation_rules[0]["updatedAt"], 0);
+
+        assert_eq!(prepared.automation_processed_entries.len(), 1);
+        assert_eq!(prepared.automation_processed_entries[0]["ruleId"], "rule-1");
+        assert_eq!(
+            prepared.automation_processed_entries[0]["filePath"],
+            "C:\\watch\\file.wav"
+        );
+        assert_eq!(
+            prepared.automation_processed_entries[0]["sourceFingerprint"],
+            ""
+        );
+        assert_eq!(prepared.automation_processed_entries[0]["size"], 0);
+        assert_eq!(prepared.automation_processed_entries[0]["mtimeMs"], 0);
+        assert_eq!(
+            prepared.automation_processed_entries[0]["status"],
+            "complete"
+        );
+        assert_eq!(prepared.automation_processed_entries[0]["processedAt"], 0);
     }
 
     #[test]

@@ -359,6 +359,28 @@ describe('backupService', () => {
     }));
   });
 
+  it('prepareImportBackup trusts the Rust-normalized payload without repairing sparse fields', async () => {
+    const rustPayload = {
+      importId: 'import-sparse',
+      archivePath: '/imports/sparse.tar.bz2',
+      manifest: makeManifest(),
+      config: { theme: 'dark' },
+      projects: [{ id: 'project-sparse' }],
+      automationRules: [{ id: 'rule-sparse' }],
+      automationProcessedEntries: [{ ruleId: 'rule-sparse' }],
+      analyticsContent: '{"schemaVersion":1}',
+    } as unknown as PreparedBackupImport;
+
+    testContext.invokeMock.mockResolvedValue(rustPayload);
+
+    const prepared = await prepareImportBackup({ archivePath: '/imports/sparse.tar.bz2' });
+
+    expect(prepared).toBe(rustPayload);
+    expect(prepared?.projects).toEqual([{ id: 'project-sparse' }]);
+    expect(prepared?.automationRules).toEqual([{ id: 'rule-sparse' }]);
+    expect(prepared?.automationProcessedEntries).toEqual([{ ruleId: 'rule-sparse' }]);
+  });
+
   it('applies a prepared backup through the history-import handle and disposes it afterward', async () => {
     const prepared: PreparedBackupImport = {
       importId: 'import-1',

@@ -14,7 +14,6 @@ import { clearActiveTranscriptSession, openTranscriptSession } from '../stores/t
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import type { AutomationProcessedEntry, AutomationRule } from '../types/automation';
 import {
   BACKUP_HISTORY_MODE,
   BACKUP_SCHEMA_VERSION,
@@ -24,7 +23,6 @@ import {
   type PreparedBackupImport,
 } from '../types/backup';
 import type { AppConfig } from '../types/config';
-import { normalizeProjectRecord } from '../types/project';
 import type { ProjectRecord } from '../types/project';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
@@ -43,17 +41,6 @@ class BackupOperationBlockedError extends Error {
     super(message);
     this.name = 'BackupOperationBlockedError';
   }
-}
-
-interface PreparedBackupImportPayload {
-  importId: string;
-  archivePath: string;
-  manifest: BackupManifestV1;
-  config: unknown;
-  projects: unknown[];
-  automationRules: unknown[];
-  automationProcessedEntries: unknown[];
-  analyticsContent: string;
 }
 
 function padNumber(value: number): string {
@@ -113,49 +100,6 @@ function ensureRecord(value: unknown, label: string): Record<string, unknown> {
   }
 
   return value as Record<string, unknown>;
-}
-
-function ensureArray(value: unknown, label: string): unknown[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${label} must be an array.`);
-  }
-
-  return value;
-}
-
-function normalizeAutomationRule(input: unknown): AutomationRule {
-  const source = ensureRecord(input, 'Automation rule');
-
-  return {
-    id: typeof source.id === 'string' ? source.id : '',
-    name: typeof source.name === 'string' ? source.name : '',
-    projectId: typeof source.projectId === 'string' ? source.projectId : '',
-    presetId: source.presetId as AutomationRule['presetId'],
-    watchDirectory: typeof source.watchDirectory === 'string' ? source.watchDirectory : '',
-    recursive: Boolean(source.recursive),
-    enabled: Boolean(source.enabled),
-    stageConfig: ensureRecord(source.stageConfig ?? {}, 'Automation stage config') as unknown as AutomationRule['stageConfig'],
-    exportConfig: ensureRecord(source.exportConfig ?? {}, 'Automation export config') as unknown as AutomationRule['exportConfig'],
-    createdAt: typeof source.createdAt === 'number' && Number.isFinite(source.createdAt) ? source.createdAt : 0,
-    updatedAt: typeof source.updatedAt === 'number' && Number.isFinite(source.updatedAt) ? source.updatedAt : 0,
-  };
-}
-
-function normalizeAutomationProcessedEntry(input: unknown): AutomationProcessedEntry {
-  const source = ensureRecord(input, 'Automation processed entry');
-
-  return {
-    ruleId: typeof source.ruleId === 'string' ? source.ruleId : '',
-    filePath: typeof source.filePath === 'string' ? source.filePath : '',
-    sourceFingerprint: typeof source.sourceFingerprint === 'string' ? source.sourceFingerprint : '',
-    size: typeof source.size === 'number' && Number.isFinite(source.size) ? source.size : 0,
-    mtimeMs: typeof source.mtimeMs === 'number' && Number.isFinite(source.mtimeMs) ? source.mtimeMs : 0,
-    status: source.status === 'error' || source.status === 'discarded' ? source.status : 'complete',
-    processedAt: typeof source.processedAt === 'number' && Number.isFinite(source.processedAt) ? source.processedAt : 0,
-    historyId: typeof source.historyId === 'string' ? source.historyId : undefined,
-    exportPath: typeof source.exportPath === 'string' ? source.exportPath : undefined,
-    errorMessage: typeof source.errorMessage === 'string' ? source.errorMessage : undefined,
-  };
 }
 
 function validateManifest(raw: unknown): BackupManifestV1 {
@@ -244,28 +188,6 @@ async function writeAnalyticsImport(analyticsContent: string): Promise<void> {
   await llmUsageReplaceRaw(analyticsContent);
 }
 
-function normalizePreparedImport(raw: PreparedBackupImportPayload): PreparedBackupImport {
-  const analyticsJson = JSON.parse(raw.analyticsContent) as unknown;
-  ensureRecord(analyticsJson, 'Backup analytics');
-
-  return {
-    importId: typeof raw.importId === 'string' ? raw.importId : '',
-    archivePath: typeof raw.archivePath === 'string' ? raw.archivePath : '',
-    manifest: validateManifest(raw.manifest),
-    config: ensureRecord(raw.config, 'Backup config') as unknown as AppConfig,
-    projects: ensureArray(raw.projects, 'Backup projects').map((item) => (
-      normalizeProjectRecord(item as Partial<ProjectRecord>)
-    )),
-    automationRules: ensureArray(raw.automationRules, 'Backup automation rules').map((item) => (
-      normalizeAutomationRule(item)
-    )),
-    automationProcessedEntries: ensureArray(raw.automationProcessedEntries, 'Backup automation processed entries').map((item) => (
-      normalizeAutomationProcessedEntry(item)
-    )),
-    analyticsContent: raw.analyticsContent,
-  };
-}
-
 async function syncOpenTranscriptAfterImport(): Promise<void> {
   const transcriptSession = useTranscriptSessionStore.getState();
   const currentHistoryId = transcriptSession.sourceHistoryId;
@@ -342,8 +264,7 @@ export async function prepareImportBackup(options?: {
     return null;
   }
 
-  const prepared = await prepareBackupImport<PreparedBackupImportPayload>(archivePath);
-  return normalizePreparedImport(prepared);
+  return prepareBackupImport<PreparedBackupImport>(archivePath);
 }
 
 export async function disposePreparedImport(prepared: PreparedBackupImport): Promise<void> {

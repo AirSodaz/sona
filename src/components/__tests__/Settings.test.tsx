@@ -77,10 +77,77 @@ vi.mock('../../services/modelService', () => ({
         checkHardware: vi.fn().mockResolvedValue({ compatible: true }),
         downloadModel: vi.fn(),
         getModelPath: vi.fn().mockImplementation((id) => Promise.resolve(`/path/to/${id}`)),
+        getModelCatalogSnapshot: vi.fn(),
         deleteModel: vi.fn(),
         getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false })
     }
 }));
+
+const TEST_MODEL_CATALOG_MODELS = [
+    { id: 'test-model', name: 'Test Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test', engine: 'sherpa-onnx', filename: 'test-model', modes: ['streaming', 'offline'] },
+    { id: 'test-model-2', name: 'Second Model', language: 'en', type: 'sensevoice', size: '100MB', description: 'Test 2', engine: 'sherpa-onnx', filename: 'test-model-2', modes: ['streaming', 'offline'] },
+    { id: 'test-punct', name: 'Test Punctuation', language: 'en', type: 'punctuation', size: '50MB', description: 'Test Punct', engine: 'sherpa-onnx', filename: 'test-punct' },
+];
+
+function createModelCatalogSnapshot(installedIds: string[] = []) {
+    const models = TEST_MODEL_CATALOG_MODELS.map((model) => ({
+        ...model,
+        url: `https://example.com/${model.id}.tar.bz2`,
+        isArchive: true,
+        rules: { requiresVad: model.type === 'sensevoice', requiresPunctuation: false },
+        installPath: `/path/to/${model.id}`,
+        downloadPath: `/path/to/${model.id}.tar.bz2`,
+        isInstalled: installedIds.includes(model.id),
+    }));
+    const asrModels = models.filter((model) => model.type === 'sensevoice');
+    const punctuationModels = models.filter((model) => model.type === 'punctuation');
+
+    return {
+        modelsDir: '/path/to',
+        models,
+        sections: [
+            {
+                type: 'asr',
+                groups: asrModels.map((model) => ({ key: model.id, models: [model] })),
+            },
+            {
+                type: 'punctuation',
+                groups: punctuationModels.map((model) => ({ key: model.id, models: [model] })),
+            },
+            { type: 'vad', groups: [] },
+            { type: 'speaker-segmentation', groups: [] },
+            { type: 'speaker-embedding', groups: [] },
+        ],
+        selectionOptions: {
+            streaming: asrModels.map((model) => ({
+                id: model.id,
+                label: model.name,
+                installPath: model.installPath,
+                isInstalled: model.isInstalled,
+            })),
+            offline: asrModels.map((model) => ({
+                id: model.id,
+                label: model.name,
+                installPath: model.installPath,
+                isInstalled: model.isInstalled,
+            })),
+            speakerSegmentation: [],
+            speakerEmbedding: [],
+        },
+        modelPathById: Object.fromEntries(models.map((model) => [model.id, model.installPath])),
+        modelIdByNormalizedPath: Object.fromEntries(models.map((model) => [model.installPath.toLowerCase(), model.id])),
+        pathMatchTokens: models.map((model) => ({ id: model.id, token: model.id.toLowerCase() })),
+        dependencyRequestsByModelId: {},
+        restoreDefaults: {
+            punctuationModelPath: '',
+            speakerSegmentationModelPath: '',
+            speakerEmbeddingModelPath: '',
+            enableITN: true,
+            vadBufferSize: 5,
+            maxConcurrent: 2,
+        },
+    };
+}
 
 vi.mock('../../services/dashboardService', () => ({
     dashboardService: {
@@ -114,6 +181,7 @@ describe('Settings', () => {
         mockListMicrophoneDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
         mockListSystemAudioDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
         mockListLlmModels.mockResolvedValue(['gpt-4o']);
+        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(createModelCatalogSnapshot() as any);
         // Reset store state
         useTranscriptStore.setState({
             config: {
@@ -136,14 +204,14 @@ describe('Settings', () => {
         await screen.findByText('settings.general_title');
         fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
         await screen.findByText('settings.model_selection', undefined, { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled(), { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
+        await waitFor(() => expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled(), { timeout: MODEL_TAB_LOAD_TIMEOUT_MS });
     }
 
     it('renders with vertical layout structure', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
         expect(screen.getAllByText('settings.general').length).toBeGreaterThanOrEqual(1);
         expect(await screen.findByText('settings.general_title')).toBeDefined();
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
     });
 
     it('shows the default info log level in general settings', async () => {
@@ -165,7 +233,7 @@ describe('Settings', () => {
         await waitFor(() => {
             expect(container.textContent).toContain('settings.general_title');
         });
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
     });
 
     it('prewarms hidden tab panes without running active-only settings services', async () => {
@@ -180,7 +248,7 @@ describe('Settings', () => {
         expect(container.querySelector('[data-settings-tab-pane="models"]')).not.toBeNull();
         expect(container.querySelector('[data-settings-tab-pane="llm_service"]')).not.toBeNull();
 
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
         expect(modelService.getModelPath).not.toHaveBeenCalled();
         expect(dashboardService.getFastSnapshot).not.toHaveBeenCalled();
         expect(dashboardService.getDeepSnapshot).not.toHaveBeenCalled();
@@ -192,7 +260,7 @@ describe('Settings', () => {
     it('checks installed models only after the model settings tab is opened', async () => {
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
 
         await openModelsTab();
     }, MODEL_TAB_LOAD_TIMEOUT_MS + 1000);
@@ -200,7 +268,7 @@ describe('Settings', () => {
     it('checks installed models immediately when opening directly on the model settings tab', async () => {
         render(<Settings isOpen={true} onClose={onClose} initialTab="models" />);
 
-        await waitFor(() => expect(modelService.isModelInstalled).toHaveBeenCalled());
+        await waitFor(() => expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled());
     });
 
     it('downloads a model successfully', async () => {
@@ -266,12 +334,12 @@ describe('Settings', () => {
 
     it('deletes a model', async () => {
         // Setup: Model is installed
-        vi.mocked(modelService.isModelInstalled).mockResolvedValue(true);
+        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(createModelCatalogSnapshot(['test-model']) as any);
         vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValue(true);
 
         render(<Settings isOpen={true} onClose={onClose} />);
         await openModelsTab();
-        const initialCalls = vi.mocked(modelService.isModelInstalled).mock.calls.length;
+        const initialCalls = vi.mocked(modelService.getModelCatalogSnapshot).mock.calls.length;
 
         // Find delete button
         const deleteBtn = await screen.findByLabelText('common.delete Test Model');
@@ -287,13 +355,13 @@ describe('Settings', () => {
 
         // Verify list refreshes
         await waitFor(() => {
-            expect(vi.mocked(modelService.isModelInstalled).mock.calls.length).toBeGreaterThan(initialCalls);
+            expect(vi.mocked(modelService.getModelCatalogSnapshot).mock.calls.length).toBeGreaterThan(initialCalls);
         });
     });
 
     it('loads a model path when selected from dropdown', async () => {
         // Setup: Model is installed
-        vi.mocked(modelService.isModelInstalled).mockImplementation((id) => Promise.resolve(id === 'test-model'));
+        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(createModelCatalogSnapshot(['test-model']) as any);
 
         render(<Settings isOpen={true} onClose={onClose} />);
         await openModelsTab();
