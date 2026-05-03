@@ -9,6 +9,7 @@ import {
     cancelDownload,
     downloadFile,
     extractTarBz2,
+    getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
 } from './tauri/app';
 import { TauriEvent } from './tauri/events';
 import type { ModelFileConfig } from '../types/model';
@@ -78,6 +79,40 @@ export interface ModelInfo {
     versionLabel?: string;
 }
 
+export type ModelCatalogSectionType =
+    | 'asr'
+    | 'punctuation'
+    | 'vad'
+    | 'speaker-segmentation'
+    | 'speaker-embedding';
+
+export interface ModelCatalogModel extends ModelInfo {
+    /** Resolved app-local install path for this preset. */
+    installPath: string;
+    /** Resolved app-local download target path for this preset. */
+    downloadPath: string;
+    /** Whether the install path currently exists. */
+    isInstalled: boolean;
+    /** Resolved model rules, including defaults for presets that omit rules. */
+    rules: ModelRules;
+}
+
+export interface ModelCatalogGroup {
+    key: string;
+    models: ModelCatalogModel[];
+}
+
+export interface ModelCatalogSection {
+    type: ModelCatalogSectionType;
+    groups: ModelCatalogGroup[];
+}
+
+export interface ModelCatalogSnapshot {
+    modelsDir: string;
+    models: ModelCatalogModel[];
+    sections: ModelCatalogSection[];
+}
+
 export const DEFAULT_MODEL_RULES: ModelRules = {
     requiresVad: true,
     requiresPunctuation: false
@@ -90,6 +125,33 @@ export const PRESET_MODELS: ModelInfo[] = presetModelsData as ModelInfo[];
 export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
     PRESET_MODELS.map(model => [model.id, model])
 );
+
+function normalizeCatalogModel(model: ModelCatalogModel): ModelCatalogModel {
+    return {
+        ...model,
+        isArchive: model.isArchive ?? true,
+        rules: model.rules ?? DEFAULT_MODEL_RULES,
+        engine: model.engine ?? 'sherpa-onnx',
+    };
+}
+
+function normalizeCatalogSnapshot(snapshot: ModelCatalogSnapshot): ModelCatalogSnapshot {
+    const models = snapshot.models.map(normalizeCatalogModel);
+    const normalizedById = new Map(models.map(model => [model.id, model]));
+    const sections = snapshot.sections.map(section => ({
+        ...section,
+        groups: section.groups.map(group => ({
+            ...group,
+            models: group.models.map(model => normalizedById.get(model.id) ?? normalizeCatalogModel(model)),
+        })),
+    }));
+
+    return {
+        ...snapshot,
+        models,
+        sections,
+    };
+}
 
 interface DownloadProgressPayloadObject {
     0?: number;
@@ -162,6 +224,16 @@ class ModelService {
         }
         logger.info('[ModelService] Models directory:', modelsDir);
         return modelsDir;
+    }
+
+    /**
+     * Gets a settings-ready model catalog snapshot with app-local install status.
+     *
+     * @return A promise resolving to grouped model metadata and install paths.
+     */
+    async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
+        const snapshot = await getModelCatalogSnapshotFromRust();
+        return normalizeCatalogSnapshot(snapshot);
     }
 
     /**

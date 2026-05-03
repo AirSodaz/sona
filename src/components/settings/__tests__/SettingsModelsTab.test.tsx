@@ -27,43 +27,84 @@ vi.mock('../ModelCard', () => ({
 }));
 
 vi.mock('../../../services/modelService', () => ({
-    PRESET_MODELS: [
-        {
-            id: 'sherpa-onnx-pyannote-segmentation-3-0',
-            name: 'Pyannote 3.0',
-            description: 'settings.descriptions.speaker_segmentation',
-            url: 'https://example.com/seg.tar.bz2',
-            type: 'speaker-segmentation',
-            language: 'multi',
-            size: '6.64 MB',
-            engine: 'sherpa-onnx',
-            rules: { requiresVad: false, requiresPunctuation: false },
-        },
-        {
-            id: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-            name: '3DSpeaker CAMPPlus',
-            description: 'settings.descriptions.speaker_embedding',
-            url: 'https://example.com/embed.onnx',
-            type: 'speaker-embedding',
-            language: 'zh,en',
-            size: '27 MB',
-            isArchive: false,
-            filename: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-            engine: 'sherpa-onnx',
-            rules: { requiresVad: false, requiresPunctuation: false },
-        },
-    ],
+    PRESET_MODELS: [],
     modelService: {
         getModelPath: vi.fn(async (id: string) => `/models/${id}`),
         getModelRules: vi.fn(() => ({ requiresVad: false, requiresPunctuation: false })),
     },
 }));
 
+const speakerSegmentationModelBase = {
+    id: 'sherpa-onnx-pyannote-segmentation-3-0',
+    name: 'Pyannote 3.0',
+    description: 'settings.descriptions.speaker_segmentation',
+    url: 'https://example.com/seg.tar.bz2',
+    type: 'speaker-segmentation',
+    language: 'multi',
+    size: '6.64 MB',
+    engine: 'sherpa-onnx',
+    rules: { requiresVad: false, requiresPunctuation: false },
+    installPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
+    downloadPath: '/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+};
+const speakerEmbeddingModelBase = {
+    id: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+    name: '3DSpeaker CAMPPlus',
+    description: 'settings.descriptions.speaker_embedding',
+    url: 'https://example.com/embed.onnx',
+    type: 'speaker-embedding',
+    language: 'zh,en',
+    size: '27 MB',
+    isArchive: false,
+    filename: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+    engine: 'sherpa-onnx',
+    rules: { requiresVad: false, requiresPunctuation: false },
+    installPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+    downloadPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+};
+
+function buildModelCatalog(installedModels: Set<string>) {
+    const speakerSegmentationModel = {
+        ...speakerSegmentationModelBase,
+        isInstalled: installedModels.has(speakerSegmentationModelBase.id),
+    };
+    const speakerEmbeddingModel = {
+        ...speakerEmbeddingModelBase,
+        isInstalled: installedModels.has(speakerEmbeddingModelBase.id),
+    };
+
+    return {
+        modelsDir: '/models',
+        models: [speakerSegmentationModel, speakerEmbeddingModel],
+        sections: [
+        {
+            type: 'speaker-segmentation',
+            groups: [
+                {
+                    key: 'sherpa-onnx-pyannote-segmentation-3-0',
+                    models: [speakerSegmentationModel],
+                },
+            ],
+        },
+        {
+            type: 'speaker-embedding',
+            groups: [
+                {
+                    key: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+                    models: [speakerEmbeddingModel],
+                },
+            ],
+        },
+        ],
+    };
+}
+
 function renderTab(installedModels: Set<string>) {
     const managerValue = {
         deletingId: null,
         downloads: {},
         installedModels,
+        modelCatalog: buildModelCatalog(installedModels),
         handleDelete: vi.fn(),
         handleDownload: vi.fn(),
         handleCancelDownload: vi.fn(),
@@ -95,6 +136,8 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Off');
             expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
         });
+        expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
+        expect(screen.getByTestId('model-card-3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx').textContent).toContain('3DSpeaker CAMPPlus');
 
         fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
         expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Off']);

@@ -201,6 +201,20 @@ describe('batchQueueStore History Integration', () => {
     });
 
     it('updates in-memory history metadata immediately when a saved batch item is rewritten later', async () => {
+        vi.mocked(historyService.updateTranscript).mockResolvedValueOnce({
+            id: 'history-1',
+            timestamp: 1,
+            duration: 1,
+            audioPath: 'history-1.wav',
+            transcriptPath: 'history-1.json',
+            title: 'Batch post-process.wav',
+            previewText: 'Hello polished...',
+            searchContent: 'Hello polished',
+            type: 'batch',
+            projectId: null,
+            status: 'complete',
+        });
+
         useHistoryStore.setState({
             items: [
                 {

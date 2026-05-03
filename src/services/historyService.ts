@@ -7,7 +7,6 @@ import {
     TranscriptSnapshotReason,
     TranscriptSnapshotRecord,
 } from '../types/transcriptSnapshot';
-import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import {
@@ -112,13 +111,9 @@ export const historyService = {
         segments: TranscriptSegment[],
         duration: number,
     ): Promise<HistoryItem> {
-        const normalizedSegments = normalizeTranscriptSegments(segments);
-        const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
         const item = await historyCompleteLiveDraft(
             historyId,
-            normalizedSegments,
-            previewText,
-            searchContent,
+            segments,
             duration,
         );
 
@@ -146,8 +141,6 @@ export const historyService = {
             const id = uuidv4();
             const timestamp = Date.now();
             const filename = absoluteWavPath.split(/[/\\]/).pop() || `${id}.wav`;
-            const normalizedSegments = normalizeTranscriptSegments(segments);
-            const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
             const item = await historySaveRecording({
                 item: {
@@ -157,13 +150,13 @@ export const historyService = {
                     audioPath: filename,
                     transcriptPath: `${id}.json`,
                     title: buildRecordingTitle(timestamp),
-                    previewText,
+                    previewText: '',
                     type: 'recording',
-                    searchContent,
+                    searchContent: '',
                     projectId,
                     status: 'complete',
                 },
-                segments: normalizedSegments,
+                segments,
                 nativeAudioPath: absoluteWavPath,
             });
 
@@ -190,8 +183,6 @@ export const historyService = {
         try {
             const id = uuidv4();
             const timestamp = Date.now();
-            const normalizedSegments = normalizeTranscriptSegments(segments);
-            const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
             const audioBytes = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
 
             const item = await historySaveRecording({
@@ -202,13 +193,13 @@ export const historyService = {
                     audioPath: `${id}.webm`,
                     transcriptPath: `${id}.json`,
                     title: buildRecordingTitle(timestamp),
-                    previewText,
+                    previewText: '',
                     type: 'recording',
-                    searchContent,
+                    searchContent: '',
                     projectId,
                     status: 'complete',
                 },
-                segments: normalizedSegments,
+                segments,
                 audioBytes,
             });
 
@@ -238,8 +229,6 @@ export const historyService = {
             const timestamp = Date.now();
             const filename = filePath.split(/[/\\]/).pop() || 'Imported File';
             const targetExt = convertedFilePath ? 'wav' : (filename.split('.').pop() || 'wav');
-            const normalizedSegments = normalizeTranscriptSegments(segments);
-            const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
 
             const item = await historySaveImportedFile({
                 item: {
@@ -249,13 +238,13 @@ export const historyService = {
                     audioPath: `${id}.${targetExt}`,
                     transcriptPath: `${id}.json`,
                     title: `Batch ${filename}`,
-                    previewText,
+                    previewText: '',
                     type: 'batch',
-                    searchContent,
+                    searchContent: '',
                     projectId,
                     status: 'complete',
                 },
-                segments: normalizedSegments,
+                segments,
                 sourcePath: convertedFilePath || filePath,
             });
 
@@ -297,11 +286,10 @@ export const historyService = {
         }
     },
 
-    async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<void> {
+    async updateTranscript(historyId: string, segments: TranscriptSegment[]): Promise<HistoryItem> {
         try {
-            const normalizedSegments = normalizeTranscriptSegments(segments);
-            const { previewText, searchContent } = buildHistoryTranscriptMetadata(normalizedSegments);
-            await historyUpdateTranscript(historyId, normalizedSegments, previewText, searchContent);
+            const item = await historyUpdateTranscript(historyId, segments);
+            return normalizeHistoryItem(item);
         } catch (error) {
             logger.error('[History] Failed to update transcript:', error);
             throw error;

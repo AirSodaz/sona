@@ -24,7 +24,19 @@ describe('transcriptAutoSaveRuntime', () => {
     resetTranscriptStores();
     vi.clearAllMocks();
     vi.useFakeTimers();
-    vi.mocked(historyService.updateTranscript).mockResolvedValue(undefined);
+    vi.mocked(historyService.updateTranscript).mockResolvedValue({
+      id: 'history-1',
+      timestamp: 1,
+      duration: 1,
+      audioPath: 'history-1.wav',
+      transcriptPath: 'history-1.json',
+      title: 'History 1',
+      previewText: 'Hello...',
+      type: 'recording',
+      searchContent: 'Hello',
+      projectId: null,
+      status: 'complete',
+    });
   });
 
   afterEach(() => {

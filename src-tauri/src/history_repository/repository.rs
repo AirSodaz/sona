@@ -1,4 +1,4 @@
-use serde_json::{to_value, Map, Value};
+use serde_json::{from_value, to_value, Map, Value};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -20,6 +20,50 @@ use super::{
     HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
     TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
 };
+use crate::sherpa::{ensure_transcript_segment_timing, TranscriptSegment};
+
+#[derive(Debug)]
+struct NormalizedHistoryTranscript {
+    segments: Value,
+    preview_text: String,
+    search_content: String,
+}
+
+fn normalize_history_transcript_segments(
+    segments: Value,
+) -> Result<NormalizedHistoryTranscript, String> {
+    let segments = ensure_json_array_value(segments, "History transcript segments")?;
+    let mut parsed_segments: Vec<TranscriptSegment> = from_value(segments).map_err(|error| {
+        format!("History transcript segments must match transcript schema: {error}")
+    })?;
+
+    for segment in &mut parsed_segments {
+        ensure_transcript_segment_timing(segment);
+    }
+
+    let search_content = parsed_segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let preview_text =
+        preview_text_from_search_content(&search_content, !parsed_segments.is_empty());
+    let segments = to_value(&parsed_segments).map_err(|error| error.to_string())?;
+
+    Ok(NormalizedHistoryTranscript {
+        segments,
+        preview_text,
+        search_content,
+    })
+}
+
+fn preview_text_from_search_content(search_content: &str, has_segments: bool) -> String {
+    let mut preview_text = search_content.chars().take(100).collect::<String>();
+    if has_segments {
+        preview_text.push_str("...");
+    }
+    preview_text
+}
 
 fn current_time_millis() -> Result<u64, String> {
     SystemTime::now()
@@ -169,19 +213,20 @@ impl HistoryRepository {
         &self,
         history_id: &str,
         segments: Value,
-        preview_text: String,
-        search_content: String,
         duration: f64,
     ) -> Result<HistoryItemRecord, String> {
-        let segments = ensure_json_array_value(segments, "History transcript segments")?;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
         let mut items = self.list_items()?;
         let item = items
             .iter_mut()
             .find(|entry| entry.id == history_id)
             .ok_or_else(|| format!("History item not found: {history_id}"))?;
-        write_json_pretty_atomic(&self.transcript_path(&item.transcript_path)?, &segments)?;
-        item.preview_text = preview_text;
-        item.search_content = search_content;
+        write_json_pretty_atomic(
+            &self.transcript_path(&item.transcript_path)?,
+            &normalized_transcript.segments,
+        )?;
+        item.preview_text = normalized_transcript.preview_text;
+        item.search_content = normalized_transcript.search_content;
         item.duration = duration.max(0.0);
         item.status = HistoryItemStatus::Complete;
         item.draft_source = None;
@@ -198,10 +243,12 @@ impl HistoryRepository {
         native_audio_path: Option<String>,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let segments = ensure_json_array_value(segments, "History transcript segments")?;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
         let mut item = normalize_history_item_value(&item_value);
         item.status = HistoryItemStatus::Complete;
         item.draft_source = None;
+        item.preview_text = normalized_transcript.preview_text;
+        item.search_content = normalized_transcript.search_content;
 
         match (audio_bytes, native_audio_path) {
             (Some(bytes), _) => {
@@ -219,7 +266,10 @@ impl HistoryRepository {
             }
         }
 
-        write_json_pretty_atomic(&self.transcript_path(&item.transcript_path)?, &segments)?;
+        write_json_pretty_atomic(
+            &self.transcript_path(&item.transcript_path)?,
+            &normalized_transcript.segments,
+        )?;
         self.insert_item_at_front(item)
     }
 
@@ -230,10 +280,12 @@ impl HistoryRepository {
         source_path: String,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let segments = ensure_json_array_value(segments, "History transcript segments")?;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
         let mut item = normalize_history_item_value(&item_value);
         item.status = HistoryItemStatus::Complete;
         item.draft_source = None;
+        item.preview_text = normalized_transcript.preview_text;
+        item.search_content = normalized_transcript.search_content;
 
         let source = PathBuf::from(source_path);
         if !source.is_file() {
@@ -248,7 +300,10 @@ impl HistoryRepository {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         fs::copy(&source, &target_path).map_err(|error| error.to_string())?;
-        write_json_pretty_atomic(&self.transcript_path(&item.transcript_path)?, &segments)?;
+        write_json_pretty_atomic(
+            &self.transcript_path(&item.transcript_path)?,
+            &normalized_transcript.segments,
+        )?;
         self.insert_item_at_front(item)
     }
 
@@ -404,20 +459,22 @@ impl HistoryRepository {
         &self,
         history_id: &str,
         segments: Value,
-        preview_text: String,
-        search_content: String,
-    ) -> Result<(), String> {
-        let segments = ensure_json_array_value(segments, "History transcript segments")?;
+    ) -> Result<HistoryItemRecord, String> {
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
         let mut items = self.list_items()?;
         let item = items
             .iter_mut()
             .find(|entry| entry.id == history_id)
             .ok_or_else(|| format!("History item not found: {history_id}"))?;
-        write_json_pretty_atomic(&self.transcript_path(&item.transcript_path)?, &segments)?;
-        item.preview_text = preview_text;
-        item.search_content = search_content;
+        write_json_pretty_atomic(
+            &self.transcript_path(&item.transcript_path)?,
+            &normalized_transcript.segments,
+        )?;
+        item.preview_text = normalized_transcript.preview_text;
+        item.search_content = normalized_transcript.search_content;
+        let updated = item.clone();
         self.write_index(&items)?;
-        Ok(())
+        Ok(updated)
     }
 
     pub(super) fn update_item_meta(&self, history_id: &str, updates: Value) -> Result<(), String> {
@@ -738,6 +795,16 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
 
+    fn segment_value(id: &str, text: &str, start: f64, end: f64) -> Value {
+        json!({
+            "id": id,
+            "text": text,
+            "start": start,
+            "end": end,
+            "isFinal": true
+        })
+    }
+
     #[test]
     fn history_delete_items_removes_files_and_updates_index() {
         let root = tempdir().unwrap();
@@ -811,17 +878,151 @@ mod tests {
         let completed = repository
             .complete_live_draft(
                 "draft-1",
-                json!([{ "id": "seg-1", "text": "hello" }]),
-                "hello".to_string(),
-                "hello".to_string(),
+                json!([segment_value("seg-1", "hello", 0.0, 3.0)]),
                 3.0,
             )
             .unwrap();
 
         assert_eq!(completed.status, HistoryItemStatus::Complete);
-        assert_eq!(completed.preview_text, "hello");
+        assert_eq!(completed.preview_text, "hello...");
         let transcript = repository.load_transcript("draft-1.json").unwrap().unwrap();
         assert_eq!(transcript.as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn update_transcript_derives_metadata_from_normalized_segments() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let mut item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        item.preview_text = "stale preview".to_string();
+        item.search_content = "stale search".to_string();
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        let updated = repository
+            .update_transcript(
+                &item.id,
+                json!([
+                    segment_value("seg-1", "Alpha", 0.0, 1.0),
+                    segment_value("seg-2", "Beta", 1.0, 2.0)
+                ]),
+            )
+            .unwrap();
+
+        assert_eq!(updated.preview_text, "Alpha Beta...");
+        assert_eq!(updated.search_content, "Alpha Beta");
+
+        let items = repository.list_items().unwrap();
+        assert_eq!(items[0].preview_text, "Alpha Beta...");
+        assert_eq!(items[0].search_content, "Alpha Beta");
+    }
+
+    #[test]
+    fn save_recording_and_import_paths_derive_metadata_from_segments() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let recording = repository
+            .save_recording(
+                json!({
+                    "id": "recording-1",
+                    "timestamp": 1,
+                    "duration": 2,
+                    "audioPath": "recording-1.wav",
+                    "transcriptPath": "recording-1.json",
+                    "title": "Recording",
+                    "previewText": "caller recording preview",
+                    "type": "recording",
+                    "searchContent": "caller recording search",
+                    "projectId": null,
+                    "status": "complete",
+                    "draftSource": null
+                }),
+                json!([segment_value("seg-1", "Recorded text", 0.0, 1.0)]),
+                Some(vec![0, 1, 2]),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(recording.preview_text, "Recorded text...");
+        assert_eq!(recording.search_content, "Recorded text");
+
+        let source_path = root.path().join("import-source.wav");
+        fs::write(&source_path, [3, 4, 5]).unwrap();
+
+        let imported = repository
+            .save_imported_file(
+                json!({
+                    "id": "imported-1",
+                    "timestamp": 1,
+                    "duration": 2,
+                    "audioPath": "imported-1.wav",
+                    "transcriptPath": "imported-1.json",
+                    "title": "Imported",
+                    "previewText": "caller imported preview",
+                    "type": "batch",
+                    "searchContent": "caller imported search",
+                    "projectId": null,
+                    "status": "complete",
+                    "draftSource": null
+                }),
+                json!([segment_value("seg-1", "Imported text", 0.0, 1.0)]),
+                source_path.to_string_lossy().into_owned(),
+            )
+            .unwrap();
+
+        assert_eq!(imported.preview_text, "Imported text...");
+        assert_eq!(imported.search_content, "Imported text");
+    }
+
+    #[test]
+    fn legacy_segment_timing_is_normalized_before_persisting() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let saved = repository
+            .save_recording(
+                json!({
+                    "id": "legacy-1",
+                    "timestamp": 1,
+                    "duration": 2,
+                    "audioPath": "legacy-1.wav",
+                    "transcriptPath": "legacy-1.json",
+                    "title": "Legacy",
+                    "previewText": "",
+                    "type": "recording",
+                    "searchContent": "",
+                    "projectId": null,
+                    "status": "complete",
+                    "draftSource": null
+                }),
+                json!([{
+                    "id": "seg-1",
+                    "text": "\u{4f60}\u{597d}",
+                    "start": 0.0,
+                    "end": 1.0,
+                    "isFinal": true,
+                    "tokens": ["\u{4f60}", "\u{597d}"],
+                    "timestamps": [0.0, 0.5],
+                    "durations": [0.5, 0.5]
+                }]),
+                Some(vec![0, 1, 2]),
+                None,
+            )
+            .unwrap();
+
+        let transcript = repository
+            .load_transcript(&saved.transcript_path)
+            .unwrap()
+            .unwrap();
+        let segment = &transcript.as_array().unwrap()[0];
+        assert_eq!(segment["timing"]["level"], "token");
+        assert_eq!(segment["timing"]["source"], "model");
+        assert_eq!(segment["timing"]["units"][0]["text"], "\u{4f60}");
+        assert_eq!(segment["timing"]["units"][0]["start"], 0.0);
+        assert_eq!(segment["timing"]["units"][1]["text"], "\u{597d}");
+        assert_eq!(segment["timing"]["units"][1]["end"], 1.0);
     }
 
     #[test]

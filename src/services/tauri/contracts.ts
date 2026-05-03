@@ -34,6 +34,7 @@ import type {
   TranslateSegmentsRequest,
 } from '../llmTaskService';
 import type { ModelFileConfig } from '../../types/model';
+import type { ModelCatalogSnapshot } from '../modelService';
 import { TauriCommand, type TauriCommandName } from './commands';
 
 type AudioDevice = {
@@ -197,6 +198,10 @@ export type TauriCommandContractMap = {
     args: undefined;
     result: void;
   };
+  [TauriCommand.app.getModelCatalogSnapshot]: {
+    args: undefined;
+    result: ModelCatalogSnapshot;
+  };
   [TauriCommand.app.getRuntimeEnvironmentStatus]: {
     args: undefined;
     result: RuntimeEnvironmentStatus;
@@ -281,8 +286,6 @@ export type TauriCommandContractMap = {
     args: {
       historyId: string;
       segments: TranscriptSegment[];
-      previewText: string;
-      searchContent: string;
       duration: number;
     };
     result: Partial<HistoryItem>;
@@ -316,10 +319,8 @@ export type TauriCommandContractMap = {
     args: {
       historyId: string;
       segments: TranscriptSegment[];
-      previewText: string;
-      searchContent: string;
     };
-    result: void;
+    result: Partial<HistoryItem>;
   };
   [TauriCommand.history.createTranscriptSnapshot]: {
     args: {

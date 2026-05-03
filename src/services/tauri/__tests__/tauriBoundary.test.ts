@@ -3,7 +3,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
-import { getAsrRuntimeMetrics, openLogFolder, setLogLevel, setMinimizeToTray } from '../app';
+import {
+  getAsrRuntimeMetrics,
+  getModelCatalogSnapshot,
+  openLogFolder,
+  setLogLevel,
+  setMinimizeToTray,
+} from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
   historyCreateTranscriptSnapshot,
@@ -102,6 +108,20 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getAsrRuntimeMetrics);
   });
 
+  it('app wrappers expose the model catalog snapshot', async () => {
+    const snapshot = {
+      modelsDir: 'C:/models',
+      models: [],
+      sections: [],
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(snapshot);
+
+    const result = await getModelCatalogSnapshot();
+
+    expect(result).toEqual(snapshot);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
+  });
+
   it('audio wrappers adapt capture arguments and return values', async () => {
     vi.mocked(invoke)
       .mockResolvedValueOnce(undefined)
@@ -126,13 +146,14 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('history wrappers forward transcript persistence payloads', async () => {
-    await historyUpdateTranscript('history-1', [], 'preview', 'search');
+    vi.mocked(invoke).mockResolvedValueOnce({ id: 'history-1' });
 
+    const result = await historyUpdateTranscript('history-1', []);
+
+    expect(result).toEqual({ id: 'history-1' });
     expect(invoke).toHaveBeenCalledWith(TauriCommand.history.updateTranscript, {
       historyId: 'history-1',
       segments: [],
-      previewText: 'preview',
-      searchContent: 'search',
     });
   });
 

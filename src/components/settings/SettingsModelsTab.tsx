@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PRESET_MODELS, modelService, ModelInfo } from '../../services/modelService';
+import { modelService } from '../../services/modelService';
+import type { ModelCatalogGroup, ModelCatalogSectionType, ModelInfo } from '../../services/modelService';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
@@ -11,21 +12,11 @@ import { logger } from '../../utils/logger';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 
-function scheduleAfterFrame(callback: () => void): () => void {
-    if (typeof requestAnimationFrame === 'function') {
-        const frameId = requestAnimationFrame(() => callback());
-        return () => cancelAnimationFrame(frameId);
-    }
-
-    const timeoutId = window.setTimeout(callback, 0);
-    return () => window.clearTimeout(timeoutId);
-}
-
 interface ModelSectionProps {
     title: string;
     description?: string;
     icon?: React.ReactNode;
-    type: 'asr' | 'punctuation' | 'vad' | 'speaker-segmentation' | 'speaker-embedding';
+    groups: ModelCatalogGroup[];
     installedModels: Set<string>;
     downloads: Record<string, { progress: number; status: string }>;
     onDelete: (model: ModelInfo) => void;
@@ -37,49 +28,20 @@ const ModelSection = React.memo(function ModelSection({
     title,
     description,
     icon,
-    type,
+    groups,
     installedModels,
     downloads,
     onDelete,
     onDownload,
     onCancelDownload
 }: ModelSectionProps): React.JSX.Element {
-    const groupedModels = useMemo(() => {
-        const models = PRESET_MODELS.filter(m => {
-            if (type === 'asr') {
-                const blacklist = ['vad', 'punctuation', 'itn', 'speaker-segmentation', 'speaker-embedding'];
-                return !blacklist.includes(m.type);
-            }
-            return m.type === type;
-        });
-
-        const grouped: ModelInfo[][] = [];
-        const groupMap = new Map<string, ModelInfo[]>();
-
-        models.forEach(model => {
-            if (model.groupId) {
-                if (!groupMap.has(model.groupId)) {
-                    const group: ModelInfo[] = [];
-                    groupMap.set(model.groupId, group);
-                    grouped.push(group);
-                }
-                groupMap.get(model.groupId)!.push(model);
-            } else {
-                grouped.push([model]);
-            }
-        });
-
-        return grouped;
-    }, [type]);
-
     return (
         <SettingsSection title={title} description={description} icon={icon}>
-            {groupedModels.map(group => {
-                const key = group[0].groupId || group[0].id;
+            {groups.map(group => {
                 return (
                     <ModelCard
-                        key={key}
-                        models={group}
+                        key={group.key}
+                        models={group.models}
                         installedModels={installedModels}
                         downloads={downloads}
                         onDelete={onDelete}
@@ -96,13 +58,16 @@ interface SettingsModelsTabProps {
     isActive?: boolean;
 }
 
-export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive = true }: SettingsModelsTabProps): React.JSX.Element {
+export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActive: _isActive = true }: SettingsModelsTabProps): React.JSX.Element {
+    void _isActive;
+
     const { t } = useTranslation();
     const modelConfig = useModelConfig();
     const transcriptionConfig = useTranscriptionConfig();
     const updateConfig = useSetConfig();
     const {
         installedModels,
+        modelCatalog,
         downloads,
         handleDelete,
         handleDownload,
@@ -118,78 +83,41 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
 
-    // Memoize the mapping between paths and model IDs in state to trigger re-renders
-    const [pathMap, setPathMap] = useState<Map<string, string>>(new Map());
-    const hasInitializedPathMapRef = useRef(false);
+    const modelById = useMemo(
+        () => new Map(modelCatalog.models.map((model) => [model.id, model])),
+        [modelCatalog.models],
+    );
+    const modelIdByInstallPath = useMemo(
+        () => new Map(modelCatalog.models
+            .filter((model) => model.installPath)
+            .map((model) => [model.installPath, model.id])),
+        [modelCatalog.models],
+    );
+    const sectionGroupsByType = useMemo(
+        () => new Map(modelCatalog.sections.map((section) => [section.type, section.groups])),
+        [modelCatalog.sections],
+    );
 
-    // Initialize mapping of paths to model IDs efficiently
-    useEffect(() => {
-        if (!isActive || hasInitializedPathMapRef.current) {
-            return;
-        }
+    const getSectionGroups = useCallback(
+        (type: ModelCatalogSectionType) => sectionGroupsByType.get(type) ?? [],
+        [sectionGroupsByType],
+    );
 
-        let cancelled = false;
-
-        const initPathMap = async () => {
-            const map = new Map<string, string>();
-
-            // Resolve all model paths concurrently to avoid sequential IPC/FS delays
-            await Promise.all(
-                PRESET_MODELS.map(async (model) => {
-                    if (
-                        model.modes?.includes('streaming')
-                        || model.modes?.includes('offline')
-                        || model.type === 'speaker-segmentation'
-                        || model.type === 'speaker-embedding'
-                    ) {
-                        try {
-                            const path = await modelService.getModelPath(model.id);
-                            map.set(path, model.id);
-                        } catch (e) {
-                            logger.error(`Failed to resolve path for model ${model.id}`, e);
-                        }
-                    }
-                })
-            );
-
-            if (!cancelled) {
-                setPathMap(map);
-                hasInitializedPathMapRef.current = true;
-            }
-        };
-
-        const cancelScheduledInit = scheduleAfterFrame(() => {
-            void initPathMap();
-        });
-
-        return () => {
-            cancelled = true;
-            cancelScheduledInit();
-        };
-    }, [isActive]); // Run when the kept-mounted tab first becomes active
     const selectedStreamingModelId = useMemo(
-        () => (streamingModelPath && pathMap.size > 0 ? pathMap.get(streamingModelPath) || '' : ''),
-        [pathMap, streamingModelPath],
+        () => (streamingModelPath ? modelIdByInstallPath.get(streamingModelPath) || '' : ''),
+        [modelIdByInstallPath, streamingModelPath],
     );
     const selectedOfflineModelId = useMemo(
-        () => (offlineModelPath && pathMap.size > 0 ? pathMap.get(offlineModelPath) || '' : ''),
-        [offlineModelPath, pathMap],
+        () => (offlineModelPath ? modelIdByInstallPath.get(offlineModelPath) || '' : ''),
+        [modelIdByInstallPath, offlineModelPath],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
-        () => (
-            speakerSegmentationModelPath && pathMap.size > 0
-                ? pathMap.get(speakerSegmentationModelPath) || ''
-                : ''
-        ),
-        [pathMap, speakerSegmentationModelPath],
+        () => (speakerSegmentationModelPath ? modelIdByInstallPath.get(speakerSegmentationModelPath) || '' : ''),
+        [modelIdByInstallPath, speakerSegmentationModelPath],
     );
     const selectedSpeakerEmbeddingModelId = useMemo(
-        () => (
-            speakerEmbeddingModelPath && pathMap.size > 0
-                ? pathMap.get(speakerEmbeddingModelPath) || ''
-                : ''
-        ),
-        [pathMap, speakerEmbeddingModelPath],
+        () => (speakerEmbeddingModelPath ? modelIdByInstallPath.get(speakerEmbeddingModelPath) || '' : ''),
+        [modelIdByInstallPath, speakerEmbeddingModelPath],
     );
 
     const applyModelRules = async (modelId: string) => {
@@ -200,9 +128,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 const vadModelId = 'silero-vad';
                 // Only sync and save if path is missing in config
                 if (!modelConfig.vadModelPath) {
-                    if (installedModels.has(vadModelId)) {
-                        const vadPath = await modelService.getModelPath(vadModelId);
-                        updateConfig({ vadModelPath: vadPath });
+                    const vadModel = modelById.get(vadModelId);
+                    if (vadModel?.isInstalled) {
+                        updateConfig({ vadModelPath: vadModel.installPath });
                     } else {
                         document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: vadModelId } }));
                     }
@@ -213,9 +141,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 const punctModelId = 'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8';
                 // Only sync and save if path is missing in config
                 if (!modelConfig.punctuationModelPath) {
-                    if (installedModels.has(punctModelId)) {
-                        const punctPath = await modelService.getModelPath(punctModelId);
-                        updateConfig({ punctuationModelPath: punctPath });
+                    const punctuationModel = modelById.get(punctModelId);
+                    if (punctuationModel?.isInstalled) {
+                        updateConfig({ punctuationModelPath: punctuationModel.installPath });
                     } else {
                         document.dispatchEvent(new CustomEvent('download-background-model', { detail: { modelId: punctModelId } }));
                     }
@@ -244,7 +172,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         }
 
         try {
-            const path = await modelService.getModelPath(modelId);
+            const path = modelById.get(modelId)?.installPath || await modelService.getModelPath(modelId);
             updateConfig({ [configKey]: path });
             await applyModelRules(modelId);
         } catch (e) {
@@ -274,27 +202,27 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     }), [t]);
 
     const streamingOptions = useMemo(() => {
-        return PRESET_MODELS
+        return modelCatalog.models
             .filter(m => m.modes?.includes('streaming'))
             .filter(m => installedModels.has(m.id) || m.id === selectedStreamingModelId)
             .map(model => ({
                 value: model.id,
                 label: getModelLabel(model)
             }));
-    }, [getModelLabel, installedModels, selectedStreamingModelId]);
+    }, [getModelLabel, installedModels, modelCatalog.models, selectedStreamingModelId]);
 
     const offlineOptions = useMemo(() => {
-        return PRESET_MODELS
+        return modelCatalog.models
             .filter(m => m.modes?.includes('offline'))
             .filter(m => installedModels.has(m.id) || m.id === selectedOfflineModelId)
             .map(model => ({
                 value: model.id,
                 label: getModelLabel(model)
             }));
-    }, [getModelLabel, installedModels, selectedOfflineModelId]);
+    }, [getModelLabel, installedModels, modelCatalog.models, selectedOfflineModelId]);
 
     const speakerSegmentationOptions = useMemo(() => {
-        const installedOptions = PRESET_MODELS
+        const installedOptions = modelCatalog.models
             .filter(m => m.type === 'speaker-segmentation')
             .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerSegmentationModelId)
             .map(model => ({
@@ -302,10 +230,10 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 label: getModelLabel(model)
             }));
         return [speakerDisabledOption, ...installedOptions];
-    }, [getModelLabel, installedModels, selectedSpeakerSegmentationModelId, speakerDisabledOption]);
+    }, [getModelLabel, installedModels, modelCatalog.models, selectedSpeakerSegmentationModelId, speakerDisabledOption]);
 
     const speakerEmbeddingOptions = useMemo(() => {
-        const installedOptions = PRESET_MODELS
+        const installedOptions = modelCatalog.models
             .filter(m => m.type === 'speaker-embedding')
             .filter(m => installedModels.has(m.id) || m.id === selectedSpeakerEmbeddingModelId)
             .map(model => ({
@@ -313,7 +241,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 label: getModelLabel(model)
             }));
         return [speakerDisabledOption, ...installedOptions];
-    }, [getModelLabel, installedModels, selectedSpeakerEmbeddingModelId, speakerDisabledOption]);
+    }, [getModelLabel, installedModels, modelCatalog.models, selectedSpeakerEmbeddingModelId, speakerDisabledOption]);
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
@@ -396,35 +324,35 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
             <ModelSection 
                 title={t('settings.recognition_models')} 
-                type="asr" 
+                groups={getSectionGroups('asr')}
                 icon={<Mic size={20} />}
                 {...sectionProps} 
             />
 
             <ModelSection
                 title={t('settings.punctuation_models')}
-                type="punctuation"
+                groups={getSectionGroups('punctuation')}
                 icon={<Type size={20} />}
                 {...sectionProps} 
             />
             
             <ModelSection
                 title={t('settings.vad_models')}
-                type="vad"
+                groups={getSectionGroups('vad')}
                 icon={<Activity size={20} />}
                 {...sectionProps} 
             />
 
             <ModelSection
                 title={t('settings.speaker_segmentation_models', { defaultValue: 'Speaker Segmentation Models' })}
-                type="speaker-segmentation"
+                groups={getSectionGroups('speaker-segmentation')}
                 icon={<Mic size={20} />}
                 {...sectionProps}
             />
 
             <ModelSection
                 title={t('settings.speaker_embedding_models', { defaultValue: 'Speaker Embedding Models' })}
-                type="speaker-embedding"
+                groups={getSectionGroups('speaker-embedding')}
                 icon={<Mic size={20} />}
                 {...sectionProps}
             />

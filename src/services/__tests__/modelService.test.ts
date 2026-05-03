@@ -30,6 +30,60 @@ describe('ModelService', () => {
         vi.clearAllMocks();
     });
 
+    describe('getModelCatalogSnapshot', () => {
+        it('loads settings-ready catalog data from the Rust snapshot command', async () => {
+            const catalogModel = {
+                id: 'catalog-model',
+                name: 'Catalog Model',
+                description: 'settings.descriptions.catalog_model',
+                url: 'https://example.com/catalog-model.tar.bz2',
+                type: 'sensevoice',
+                modes: ['streaming', 'offline'],
+                language: 'zh,en',
+                size: '1 MB',
+                isRecommended: true,
+                isArchive: true,
+                engine: 'sherpa-onnx',
+                rules: {
+                    requiresVad: true,
+                    requiresPunctuation: false,
+                },
+                groupId: 'catalog',
+                versionLabel: 'Int8',
+                installPath: '/app/data/models/catalog-model',
+                downloadPath: '/app/data/models/catalog-model.tar.bz2',
+                isInstalled: true,
+            };
+            const backendSnapshot = {
+                modelsDir: '/app/data/models',
+                models: [catalogModel],
+                sections: [
+                    {
+                        type: 'asr',
+                        groups: [
+                            {
+                                key: 'catalog',
+                                models: [catalogModel],
+                            },
+                        ],
+                    },
+                ],
+            };
+            vi.mocked(invoke).mockResolvedValueOnce(backendSnapshot);
+
+            const snapshot = await modelService.getModelCatalogSnapshot();
+
+            expect(invoke).toHaveBeenCalledWith('get_model_catalog_snapshot');
+            expect(snapshot.modelsDir).toBe('/app/data/models');
+            expect(snapshot.models[0]).toMatchObject({
+                id: 'catalog-model',
+                installPath: '/app/data/models/catalog-model',
+                isInstalled: true,
+            });
+            expect(snapshot.sections[0].groups[0].models[0].id).toBe('catalog-model');
+        });
+    });
+
     describe('checkHardware', () => {
         it('returns true for models', async () => {
             const modelId = PRESET_MODELS[0].id;

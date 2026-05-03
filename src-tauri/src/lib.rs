@@ -272,6 +272,7 @@ pub fn run() {
             webdav::webdav_upload_backup,
             webdav::webdav_download_backup,
             downloads::cancel_download,
+            preset_models::get_model_catalog_snapshot,
             hardware::check_gpu_availability,
             force_exit,
             downloads::has_active_downloads,

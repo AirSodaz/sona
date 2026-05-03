@@ -10,6 +10,7 @@ export const TauriCommand = {
     downloadFile: 'download_file',
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
+    getModelCatalogSnapshot: 'get_model_catalog_snapshot',
     getRuntimeEnvironmentStatus: 'get_runtime_environment_status',
     getAsrRuntimeMetrics: 'get_asr_runtime_metrics',
     getPathStatuses: 'get_path_statuses',

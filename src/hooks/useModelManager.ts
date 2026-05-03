@@ -2,7 +2,15 @@ import { useState, useEffect, createContext, useContext, useCallback } from 'rea
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { PRESET_MODELS, modelService, ModelInfo, ProgressCallback } from '../services/modelService';
+import {
+    modelService,
+} from '../services/modelService';
+import type {
+    ModelCatalogModel,
+    ModelCatalogSnapshot,
+    ModelInfo,
+    ProgressCallback,
+} from '../services/modelService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { doesModelPathMatch } from '../utils/modelSelection';
@@ -15,6 +23,12 @@ type DownloadState = {
     progress: number;
     status: string;
     controller: AbortController;
+};
+
+const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
+    modelsDir: '',
+    models: [],
+    sections: [],
 };
 
 export type ModelManagerContextType = ReturnType<typeof useModelManager>;
@@ -52,27 +66,39 @@ export function useModelManager(isOpen: boolean) {
 
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
+    const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(EMPTY_MODEL_CATALOG_SNAPSHOT);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const updateConfig = useCallback((updates: Partial<typeof config>) => {
         setConfig(updates);
     }, [setConfig]);
 
-    const checkInstalledModels = useCallback(async () => {
-        const installed = new Set<string>();
-        const results = await Promise.all(
-            PRESET_MODELS.map(async (model) => {
-                const isInstalled = await modelService.isModelInstalled(model.id);
-                return { id: model.id, isInstalled };
-            })
-        );
-        for (const result of results) {
-            if (result.isInstalled) {
-                installed.add(result.id);
-            }
-        }
-        setInstalledModels(installed);
+    const applyModelCatalogSnapshot = useCallback((snapshot: ModelCatalogSnapshot) => {
+        setModelCatalog(snapshot);
+        setInstalledModels(new Set(
+            snapshot.models
+                .filter((model) => model.isInstalled)
+                .map((model) => model.id)
+        ));
     }, []);
+
+    const refreshModelCatalogSnapshot = useCallback(async () => {
+        const snapshot = await modelService.getModelCatalogSnapshot();
+        applyModelCatalogSnapshot(snapshot);
+        return snapshot;
+    }, [applyModelCatalogSnapshot]);
+
+    const getCatalogModel = useCallback((modelId: string): ModelCatalogModel | undefined => {
+        return modelCatalog.models.find((model) => model.id === modelId);
+    }, [modelCatalog.models]);
+
+    const getModelInstallPath = useCallback(async (model: ModelInfo): Promise<string> => {
+        const catalogModel = getCatalogModel(model.id);
+        if (catalogModel?.installPath) {
+            return catalogModel.installPath;
+        }
+        return await modelService.getModelPath(model.id);
+    }, [getCatalogModel]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -80,9 +106,9 @@ export function useModelManager(isOpen: boolean) {
         }
 
         return scheduleAfterFrame(() => {
-            void checkInstalledModels();
+            void refreshModelCatalogSnapshot();
         });
-    }, [checkInstalledModels, isOpen]);
+    }, [isOpen, refreshModelCatalogSnapshot]);
 
     const setModelPath = useCallback((model: ModelInfo, path: string) => {
         const updates: Partial<typeof config> = {};
@@ -124,11 +150,11 @@ export function useModelManager(isOpen: boolean) {
             const customEvent = event as CustomEvent;
             if (customEvent.detail && customEvent.detail.modelId) {
                 const modelId = customEvent.detail.modelId;
-                const model = PRESET_MODELS.find(m => m.id === modelId);
+                const model = getCatalogModel(modelId);
                 if (model && !downloads[modelId]) {
                     try {
                         const path = await modelService.downloadModel(modelId, undefined);
-                        await checkInstalledModels();
+                        await refreshModelCatalogSnapshot();
                         setModelPath(model, path);
                     } catch (e) {
                         logger.error(`Background download failed for ${modelId}:`, e);
@@ -141,7 +167,7 @@ export function useModelManager(isOpen: boolean) {
         return () => {
             document.removeEventListener('download-background-model', handleBackgroundDownload);
         };
-    }, [checkInstalledModels, downloads, setModelPath]);
+    }, [downloads, getCatalogModel, refreshModelCatalogSnapshot, setModelPath]);
 
     async function executeDownload(
         modelId: string,
@@ -167,7 +193,7 @@ export function useModelManager(isOpen: boolean) {
                 });
             }, controller.signal);
 
-            await checkInstalledModels();
+            await refreshModelCatalogSnapshot();
             await onSuccess(downloadedPath);
 
         } catch (error) {
@@ -235,7 +261,7 @@ export function useModelManager(isOpen: boolean) {
 
     async function handleLoad(model: ModelInfo) {
         try {
-            const path = await modelService.getModelPath(model.id);
+            const path = await getModelInstallPath(model);
             setModelPath(model, path);
         } catch (error) {
             await showError({
@@ -259,9 +285,9 @@ export function useModelManager(isOpen: boolean) {
 
         setDeletingId(model.id);
         try {
+            const deletedPath = await getModelInstallPath(model);
             await modelService.deleteModel(model.id);
-            await checkInstalledModels();
-            const deletedPath = await modelService.getModelPath(model.id);
+            await refreshModelCatalogSnapshot();
             if (config.streamingModelPath === deletedPath) {
                 updateConfig({ streamingModelPath: '' });
             }
@@ -326,11 +352,11 @@ export function useModelManager(isOpen: boolean) {
         if (!confirmed) return;
 
         try {
-            const [hasSenseVoiceInt8, hasSenseVoiceFp32, hasSileroVad] = await Promise.all([
-                modelService.isModelInstalled(DEFAULT_SENSEVOICE_INT8_MODEL_ID),
-                modelService.isModelInstalled(DEFAULT_SENSEVOICE_FP32_MODEL_ID),
-                modelService.isModelInstalled(DEFAULT_SILERO_VAD_MODEL_ID),
-            ]);
+            const snapshot = await refreshModelCatalogSnapshot();
+            const snapshotById = new Map(snapshot.models.map((model) => [model.id, model]));
+            const senseVoiceInt8 = snapshotById.get(DEFAULT_SENSEVOICE_INT8_MODEL_ID);
+            const senseVoiceFp32 = snapshotById.get(DEFAULT_SENSEVOICE_FP32_MODEL_ID);
+            const sileroVad = snapshotById.get(DEFAULT_SILERO_VAD_MODEL_ID);
 
             const updates: Partial<typeof config> = {
                 punctuationModelPath: '',
@@ -341,20 +367,19 @@ export function useModelManager(isOpen: boolean) {
                 speakerEmbeddingModelPath: '',
             };
 
-            const fallbackModelId = hasSenseVoiceInt8
-                ? DEFAULT_SENSEVOICE_INT8_MODEL_ID
-                : hasSenseVoiceFp32
-                    ? DEFAULT_SENSEVOICE_FP32_MODEL_ID
+            const fallbackModel = senseVoiceInt8?.isInstalled
+                ? senseVoiceInt8
+                : senseVoiceFp32?.isInstalled
+                    ? senseVoiceFp32
                     : null;
 
-            if (fallbackModelId) {
-                const modelPath = await modelService.getModelPath(fallbackModelId);
-                updates.streamingModelPath = modelPath;
-                updates.offlineModelPath = modelPath;
+            if (fallbackModel) {
+                updates.streamingModelPath = fallbackModel.installPath;
+                updates.offlineModelPath = fallbackModel.installPath;
             }
 
-            if (hasSileroVad) {
-                updates.vadModelPath = await modelService.getModelPath(DEFAULT_SILERO_VAD_MODEL_ID);
+            if (sileroVad?.isInstalled) {
+                updates.vadModelPath = sileroVad.installPath;
             }
 
             updateConfig(updates);
@@ -367,6 +392,7 @@ export function useModelManager(isOpen: boolean) {
         deletingId,
         downloads,
         installedModels,
+        modelCatalog,
 
         handleDownload,
         handleCancelDownload,

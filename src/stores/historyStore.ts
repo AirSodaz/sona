@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { HistoryItem } from '../types/history';
 import { historyService } from '../services/historyService';
 import { TranscriptSegment } from '../types/transcript';
-import { buildHistoryTranscriptMetadata } from '../utils/historyTranscriptMetadata';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { clearActiveTranscriptSession } from './transcriptCoordinator';
@@ -131,12 +130,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     updateTranscript: async (id, segments) => {
         try {
-            await historyService.updateTranscript(id, segments);
-            const transcriptMetadata = buildHistoryTranscriptMetadata(segments);
+            const updatedItem = await historyService.updateTranscript(id, segments);
 
             set((state) => ({
                 items: state.items.map((item) => (
-                    item.id === id ? { ...item, ...transcriptMetadata } : item
+                    item.id === id ? { ...item, ...updatedItem } : item
                 )),
             }));
         } catch (error) {

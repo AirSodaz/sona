@@ -63,15 +63,11 @@ export async function historyCreateLiveDraft<TItem extends HistoryItem>(
 export async function historyCompleteLiveDraft(
   historyId: string,
   segments: TranscriptSegment[],
-  previewText: string,
-  searchContent: string,
   duration: number,
 ): Promise<Partial<HistoryItem>> {
   return invokeTauri(TauriCommand.history.completeLiveDraft, {
     historyId,
     segments,
-    previewText,
-    searchContent,
     duration,
   });
 }
@@ -99,14 +95,10 @@ export async function historyLoadTranscript(filename: string): Promise<unknown> 
 export async function historyUpdateTranscript(
   historyId: string,
   segments: TranscriptSegment[],
-  previewText: string,
-  searchContent: string,
-): Promise<void> {
-  await invokeTauri(TauriCommand.history.updateTranscript, {
+): Promise<Partial<HistoryItem>> {
+  return invokeTauri(TauriCommand.history.updateTranscript, {
     historyId,
     segments,
-    previewText,
-    searchContent,
   });
 }
 

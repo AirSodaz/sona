@@ -91,18 +91,10 @@ pub async fn history_complete_live_draft<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     history_id: String,
     segments: Value,
-    preview_text: String,
-    search_content: String,
     duration: f64,
 ) -> Result<HistoryItemRecord, String> {
     run_history_task(app, state, move |repository| {
-        repository.complete_live_draft(
-            &history_id,
-            segments,
-            preview_text,
-            search_content,
-            duration,
-        )
+        repository.complete_live_draft(&history_id, segments, duration)
     })
     .await
 }
@@ -163,11 +155,9 @@ pub async fn history_update_transcript<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     history_id: String,
     segments: Value,
-    preview_text: String,
-    search_content: String,
-) -> Result<(), String> {
+) -> Result<HistoryItemRecord, String> {
     run_history_task(app, state, move |repository| {
-        repository.update_transcript(&history_id, segments, preview_text, search_content)
+        repository.update_transcript(&history_id, segments)
     })
     .await
 }

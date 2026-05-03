@@ -4,6 +4,7 @@ import type {
   RuntimePathStatus,
 } from '../../types/runtime';
 import type { AppLogLevel } from '../../types/config';
+import type { ModelCatalogSnapshot } from '../modelService';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
@@ -28,6 +29,10 @@ export async function cancelDownload(id: string): Promise<void> {
 
 export async function openLogFolder(): Promise<void> {
   await invokeTauri(TauriCommand.app.openLogFolder);
+}
+
+export async function getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
+  return invokeTauri(TauriCommand.app.getModelCatalogSnapshot);
 }
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {
