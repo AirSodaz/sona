@@ -1,15 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import React from 'react';
-import type { HistoryItem as HistoryItemType } from '../../types/history';
 import type { ProjectDefaults, ProjectRecord } from '../../types/project';
 import { renderIcon } from '../IconPicker';
 import { FolderIcon, InboxIcon, SummaryIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
 import type {
   ProjectBrowseScope,
-  ProjectDateFilter,
-  ProjectSortOrder,
   TranslationFn,
 } from './types';
 
@@ -42,46 +39,6 @@ export function formatSummaryDuration(
     minutes: totalMinutes,
     defaultValue: `${totalMinutes}m`,
   });
-}
-
-export function matchesDateFilter(item: HistoryItemType, dateFilter: ProjectDateFilter): boolean {
-  if (dateFilter === 'all') {
-    return true;
-  }
-
-  const itemDate = new Date(item.timestamp);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  if (dateFilter === 'today') {
-    return itemDate >= today;
-  }
-
-  if (dateFilter === 'week') {
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return itemDate >= weekAgo;
-  }
-
-  const monthAgo = new Date(today);
-  monthAgo.setMonth(monthAgo.getMonth() - 1);
-  return itemDate >= monthAgo;
-}
-
-export function compareProjectItems(a: HistoryItemType, b: HistoryItemType, sortOrder: ProjectSortOrder): number {
-  switch (sortOrder) {
-    case 'oldest':
-      return a.timestamp - b.timestamp;
-    case 'duration_desc':
-      return b.duration - a.duration || b.timestamp - a.timestamp;
-    case 'duration_asc':
-      return a.duration - b.duration || b.timestamp - a.timestamp;
-    case 'title_asc':
-      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) || b.timestamp - a.timestamp;
-    case 'newest':
-    default:
-      return b.timestamp - a.timestamp;
-  }
 }
 
 export function buildComparableProjectSettingsSnapshot(input: {

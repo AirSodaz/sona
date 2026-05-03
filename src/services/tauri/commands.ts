@@ -50,7 +50,14 @@ export const TauriCommand = {
     saveSummary: 'history_save_summary',
     deleteSummary: 'history_delete_summary',
     resolveAudioPath: 'history_resolve_audio_path',
+    queryWorkspace: 'history_query_workspace',
     openFolder: 'history_open_folder',
+  },
+  dashboard: {
+    getSnapshot: 'get_dashboard_snapshot',
+  },
+  export: {
+    transcriptFile: 'export_transcript_file',
   },
   llm: {
     generateText: 'generate_llm_text',

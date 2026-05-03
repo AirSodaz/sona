@@ -9,12 +9,15 @@ import {
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
   historyLoadTranscriptSnapshot,
+  historyQueryWorkspace,
   historyUpdateTranscript,
 } from '../history';
 import { generateLlmText } from '../llm';
 import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import { applyPreparedHistoryImport } from '../backup';
+import { getDashboardSnapshot } from '../dashboard';
+import { exportTranscriptFile } from '../export';
 import { annotateSpeakerSegmentsFromFile } from '../speaker';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
 
@@ -132,6 +135,48 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.loadTranscriptSnapshot, {
       historyId: 'history-1',
       snapshotId: 'snapshot-1',
+    });
+  });
+
+  it('history workspace query wrapper forwards flat query args', async () => {
+    await historyQueryWorkspace({
+      scope: { kind: 'project', projectId: 'project-1' },
+      query: 'roadmap',
+      filterType: 'recording',
+      dateFilter: 'week',
+      sortOrder: 'title_asc',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.history.queryWorkspace, {
+      scope: { kind: 'project', projectId: 'project-1' },
+      query: 'roadmap',
+      filterType: 'recording',
+      dateFilter: 'week',
+      sortOrder: 'title_asc',
+    });
+  });
+
+  it('dashboard snapshot wrapper wraps request args under request', async () => {
+    await getDashboardSnapshot({ deep: true });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.dashboard.getSnapshot, {
+      request: { deep: true },
+    });
+  });
+
+  it('export transcript wrapper forwards flat export args', async () => {
+    await exportTranscriptFile({
+      segments: [],
+      format: 'srt',
+      mode: 'bilingual',
+      outputPath: 'C:/exports/transcript.srt',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.export.transcriptFile, {
+      segments: [],
+      format: 'srt',
+      mode: 'bilingual',
+      outputPath: 'C:/exports/transcript.srt',
     });
   });
 

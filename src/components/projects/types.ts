@@ -1,6 +1,9 @@
-import type { HistoryItem as HistoryItemType } from '../../types/history';
+import type {
+  HistoryWorkspaceQueryRequest,
+  HistoryWorkspaceQueryResult,
+  HistoryWorkspaceQueryScope,
+} from '../../services/tauri/history';
 import { ALL_ITEMS_SCOPE, INBOX_SCOPE } from './constants';
-import { matchWorkspaceItem } from '../../utils/workspaceSearch';
 
 export type ProjectFilterType = 'all' | 'recording' | 'batch';
 export type ProjectDateFilter = 'all' | 'today' | 'week' | 'month';
@@ -9,11 +12,6 @@ export type ProjectBrowseScope = typeof ALL_ITEMS_SCOPE | typeof INBOX_SCOPE | s
 
 export type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
 
-export interface FilteredProjectItemEntry {
-  item: HistoryItemType;
-  searchMatch: ReturnType<typeof matchWorkspaceItem>;
-}
-
 export interface ProjectSummary {
   totalItems: number;
   totalDuration: number;
@@ -21,6 +19,10 @@ export interface ProjectSummary {
   recordingCount: number;
   batchCount: number;
 }
+
+export type WorkspaceQueryScope = HistoryWorkspaceQueryScope;
+export type WorkspaceQueryRequest = HistoryWorkspaceQueryRequest;
+export type WorkspaceQueryResult = HistoryWorkspaceQueryResult;
 
 export interface ProjectSummaryChip {
   key: string;

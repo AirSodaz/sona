@@ -1,8 +1,9 @@
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { TranscriptSegment } from '../types/transcript';
-import { exportSegments, getFileExtension, ExportFormat, ExportMode } from './exportFormats';
+import type { TranscriptSegment } from '../types/transcript';
+import { getFileExtension } from './exportFormats';
+import type { ExportFormat, ExportMode } from './exportFormats';
 import { logger } from './logger';
+import { exportTranscriptFile } from '../services/tauri/export';
 
 interface ExportOptions {
     /** The transcript segments to export. */
@@ -16,25 +17,8 @@ interface ExportOptions {
 }
 
 /**
- * Writes the content to the specified file path directly.
- *
- * @param content The content to write.
- * @param filePath The destination file path.
- * @throws {Error} If writing the file fails.
- */
-export async function exportToPath(content: string, filePath: string): Promise<void> {
-    try {
-        await writeTextFile(filePath, content);
-    } catch (error) {
-        logger.error('Failed to write file to path:', filePath, error);
-        throw error;
-    }
-}
-
-/**
  * Opens a save dialog and exports the transcript segments to the selected file.
-...
-
+ *
  * @param options The export options containing segments, format, mode, and optional filename.
  * @return A promise that resolves to true if the file was saved, false if cancelled.
  * @throws {Error} If writing the file fails.
@@ -43,7 +27,6 @@ export async function saveTranscript(options: ExportOptions): Promise<boolean> {
     const { segments, format, mode = 'original', defaultFileName = 'transcript' } = options;
 
     try {
-        const content = exportSegments(segments, format, mode);
         const extension = getFileExtension(format);
 
         // Open save dialog
@@ -66,8 +49,12 @@ export async function saveTranscript(options: ExportOptions): Promise<boolean> {
             return false;
         }
 
-        // Write the file
-        await writeTextFile(filePath, content);
+        await exportTranscriptFile({
+            segments,
+            format,
+            mode,
+            outputPath: filePath,
+        });
 
         return true;
     } catch (error) {

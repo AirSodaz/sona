@@ -9,7 +9,9 @@ use super::fs_utils::remove_path_if_exists;
 use super::repository::HistoryRepository;
 use super::state::{HistoryRepositoryState, PreparedBackupImportState};
 use super::{
-    BackupManifest, ExportBackupArchiveRequest, HistoryItemRecord, LiveRecordingDraftResult,
+    BackupManifest, ExportBackupArchiveRequest, HistoryItemRecord, HistoryWorkspaceDateFilter,
+    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
     PreparedBackupImport, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
     TranscriptSnapshotRecord, HISTORY_DIR_NAME,
 };
@@ -46,6 +48,29 @@ pub async fn history_list_items<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
     run_history_task(app, state, |repository| repository.list_items()).await
+}
+
+#[tauri::command]
+pub async fn history_query_workspace<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, HistoryRepositoryState>,
+    scope: HistoryWorkspaceScope,
+    query: String,
+    filter_type: HistoryWorkspaceFilterType,
+    date_filter: HistoryWorkspaceDateFilter,
+    sort_order: HistoryWorkspaceSortOrder,
+) -> Result<HistoryWorkspaceQueryResult, String> {
+    let request = HistoryWorkspaceQueryRequest {
+        scope,
+        query,
+        filter_type,
+        date_filter,
+        sort_order,
+    };
+    run_history_task(app, state, move |repository| {
+        repository.query_workspace(request)
+    })
+    .await
 }
 
 #[tauri::command]

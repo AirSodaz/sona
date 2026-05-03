@@ -5,6 +5,7 @@ import type {
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
 } from '../../types/transcriptSnapshot';
+import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
@@ -16,6 +17,37 @@ type HistorySaveImportedFileRequest = TauriCommandArgs<typeof TauriCommand.histo
 export interface HistoryDraftHandle<TItem = Partial<HistoryItem>>
   extends Omit<HistoryDraftTransportHandle, 'item'> {
   item: TItem;
+}
+
+export type HistoryWorkspaceQueryScope =
+  | { kind: 'all' }
+  | { kind: 'inbox' }
+  | { kind: 'project'; projectId: string };
+
+export interface HistoryWorkspaceQueryRequest {
+  scope: HistoryWorkspaceQueryScope;
+  query: string;
+  filterType: 'all' | 'recording' | 'batch';
+  dateFilter: 'all' | 'today' | 'week' | 'month';
+  sortOrder: 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
+}
+
+export interface HistoryWorkspaceQueryResult {
+  filteredItems: HistoryItem[];
+  scopedItems: HistoryItem[];
+  scopedItemIds: string[];
+  searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
+  summary: {
+    totalItems: number;
+    totalDuration: number;
+    latestTimestamp: number | null;
+    recordingCount: number;
+    batchCount: number;
+  };
+  itemCounts: {
+    inbox: number;
+    byProjectId: Record<string, number>;
+  };
 }
 
 export async function historyListItems(): Promise<Partial<HistoryItem>[]> {
@@ -146,6 +178,12 @@ export async function historyDeleteSummary(historyId: string): Promise<void> {
 
 export async function historyResolveAudioPath(filename: string): Promise<string | null> {
   return invokeTauri(TauriCommand.history.resolveAudioPath, { filename });
+}
+
+export async function historyQueryWorkspace(
+  request: HistoryWorkspaceQueryRequest,
+): Promise<HistoryWorkspaceQueryResult> {
+  return invokeTauri(TauriCommand.history.queryWorkspace, request);
 }
 
 export async function historyOpenFolder(): Promise<void> {

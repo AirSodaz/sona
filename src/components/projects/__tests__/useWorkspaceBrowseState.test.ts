@@ -5,7 +5,12 @@ import { useDialogStore } from '../../../stores/dialogStore';
 import { useErrorDialogStore } from '../../../stores/errorDialogStore';
 import type { HistoryItem } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
+import { historyQueryWorkspace } from '../../../services/tauri/history';
 import { useWorkspaceBrowseState } from '../hooks/useWorkspaceBrowseState';
+
+vi.mock('../../../services/tauri/history', () => ({
+  historyQueryWorkspace: vi.fn(),
+}));
 
 const projectAlpha: ProjectRecord = {
   id: 'project-1',
@@ -51,6 +56,25 @@ describe('useWorkspaceBrowseState', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(historyQueryWorkspace).mockResolvedValue({
+      filteredItems: historyItems,
+      scopedItems: historyItems,
+      scopedItemIds: historyItems.map((item) => item.id),
+      searchMatchByItemId: {},
+      summary: {
+        totalItems: historyItems.length,
+        totalDuration: historyItems.reduce((total, item) => total + item.duration, 0),
+        latestTimestamp: historyItems[0]?.timestamp ?? null,
+        recordingCount: historyItems.length,
+        batchCount: 0,
+      },
+      itemCounts: {
+        inbox: 0,
+        byProjectId: {
+          'project-1': historyItems.length,
+        },
+      },
+    });
     useDialogStore.setState({
       ...useDialogStore.getState(),
       isOpen: false,
@@ -123,6 +147,93 @@ describe('useWorkspaceBrowseState', () => {
 
     await waitFor(() => {
       expect(result.current.activeSearchResultId).toBeNull();
+    });
+  });
+
+  it('ignores stale workspace query results from older async requests', async () => {
+    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const onOpenItem = vi.fn();
+    let resolveFirst: ((value: Awaited<ReturnType<typeof historyQueryWorkspace>>) => void) | null = null;
+
+    const firstItem: HistoryItem = {
+      ...historyItems[0],
+      id: 'hist-first',
+      title: 'First stale result',
+    };
+    const secondItem: HistoryItem = {
+      ...historyItems[0],
+      id: 'hist-second',
+      title: 'Second current result',
+    };
+
+    vi.mocked(historyQueryWorkspace)
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockResolvedValueOnce({
+        filteredItems: [secondItem],
+        scopedItems: [secondItem],
+        scopedItemIds: [secondItem.id],
+        searchMatchByItemId: {},
+        summary: {
+          totalItems: 1,
+          totalDuration: secondItem.duration,
+          latestTimestamp: secondItem.timestamp,
+          recordingCount: 1,
+          batchCount: 0,
+        },
+        itemCounts: {
+          inbox: 0,
+          byProjectId: {
+            'project-1': 1,
+          },
+        },
+      });
+
+    const { result } = renderHook(() => useWorkspaceBrowseState({
+      activeProjectId: 'project-1',
+      historyItems,
+      projects: [projectAlpha],
+      filterMenuRef,
+      isSelectionMode: false,
+      searchInputRef,
+      t,
+      onOpenItem,
+    }));
+
+    await act(async () => {
+      result.current.setSearchQuery('second');
+    });
+
+    await waitFor(() => {
+      expect(result.current.filteredAndSortedItems.map((item) => item.id)).toEqual(['hist-second']);
+    });
+
+    await act(async () => {
+      resolveFirst?.({
+        filteredItems: [firstItem],
+        scopedItems: [firstItem],
+        scopedItemIds: [firstItem.id],
+        searchMatchByItemId: {},
+        summary: {
+          totalItems: 1,
+          totalDuration: firstItem.duration,
+          latestTimestamp: firstItem.timestamp,
+          recordingCount: 1,
+          batchCount: 0,
+        },
+        itemCounts: {
+          inbox: 0,
+          byProjectId: {
+            'project-1': 1,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.filteredAndSortedItems.map((item) => item.id)).toEqual(['hist-second']);
     });
   });
 });

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
+import { historyQueryWorkspace } from '../../../services/tauri/history';
 import { useDialogStore } from '../../../stores/dialogStore';
 import { useErrorDialogStore } from '../../../stores/errorDialogStore';
-import { getWorkspaceSearchResultDomId, matchWorkspaceItem } from '../../../utils/workspaceSearch';
+import { getWorkspaceSearchResultDomId } from '../../../utils/workspaceSearch';
 import {
   ALL_ITEMS_SCOPE,
   DEFAULT_DATE_FILTER,
@@ -12,20 +13,18 @@ import {
   INBOX_SCOPE,
 } from '../constants';
 import type {
-  FilteredProjectItemEntry,
   ProjectBrowseScope,
   ProjectDateFilter,
   ProjectFilterType,
   ProjectSortOrder,
-  ProjectSummary,
   ProjectSummaryChip,
   TranslationFn,
+  WorkspaceQueryRequest,
+  WorkspaceQueryResult,
 } from '../types';
 import {
-  compareProjectItems,
   formatSummaryDuration,
   formatTimestamp,
-  matchesDateFilter,
   renderScopeIcon,
 } from '../utils';
 
@@ -39,6 +38,24 @@ interface UseWorkspaceBrowseStateParams {
   t: TranslationFn;
   onOpenItem: (item: HistoryItemType) => void | Promise<void>;
 }
+
+const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
+  filteredItems: [],
+  scopedItems: [],
+  scopedItemIds: [],
+  searchMatchByItemId: {},
+  summary: {
+    totalItems: 0,
+    totalDuration: 0,
+    latestTimestamp: null,
+    recordingCount: 0,
+    batchCount: 0,
+  },
+  itemCounts: {
+    inbox: 0,
+    byProjectId: {},
+  },
+};
 
 export function useWorkspaceBrowseState({
   activeProjectId,
@@ -162,55 +179,57 @@ export function useWorkspaceBrowseState({
     };
   }, [filterMenuRef, isFilterMenuOpen, setIsFilterMenuOpen]);
 
+  const [workspaceQueryResult, setWorkspaceQueryResult] = useState<WorkspaceQueryResult>(EMPTY_WORKSPACE_QUERY_RESULT);
+  const workspaceQueryRequestIdRef = useRef(0);
+  const workspaceQueryScope = useMemo<WorkspaceQueryRequest['scope']>(() => {
+    if (isAllItemsScope) {
+      return { kind: 'all' };
+    }
+
+    if (isInboxScope || !browseProjectId) {
+      return { kind: 'inbox' };
+    }
+
+    return { kind: 'project', projectId: browseProjectId };
+  }, [browseProjectId, isAllItemsScope, isInboxScope]);
+
+  useEffect(() => {
+    const requestId = workspaceQueryRequestIdRef.current + 1;
+    workspaceQueryRequestIdRef.current = requestId;
+
+    void historyQueryWorkspace({
+      scope: workspaceQueryScope,
+      query: searchQuery,
+      filterType,
+      dateFilter,
+      sortOrder,
+    })
+      .then((result) => {
+        if (workspaceQueryRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setWorkspaceQueryResult(result);
+      })
+      .catch(() => {
+        if (workspaceQueryRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setWorkspaceQueryResult(EMPTY_WORKSPACE_QUERY_RESULT);
+      });
+  }, [dateFilter, filterType, historyItems, searchQuery, sortOrder, workspaceQueryScope]);
+
   const scopedItems = useMemo(
-    () => historyItems.filter((item) => {
-      if (isAllItemsScope) {
-        return true;
-      }
-
-      if (isInboxScope) {
-        return item.projectId === null;
-      }
-
-      return item.projectId === browseProjectId;
-    }),
-    [browseProjectId, historyItems, isAllItemsScope, isInboxScope],
+    () => workspaceQueryResult.scopedItems,
+    [workspaceQueryResult.scopedItems],
   );
 
-  const filteredItemEntries = useMemo<FilteredProjectItemEntry[]>(() => {
-    const hasQuery = searchQuery.trim().length > 0;
-
-    return scopedItems.flatMap((item) => {
-      const searchMatch = hasQuery ? matchWorkspaceItem(item, searchQuery) : null;
-      if (hasQuery && !searchMatch) {
-        return [];
-      }
-
-      if (filterType !== 'all' && (item.type || 'recording') !== filterType) {
-        return [];
-      }
-
-      if (!matchesDateFilter(item, dateFilter)) {
-        return [];
-      }
-
-      return [{ item, searchMatch }];
-    });
-  }, [dateFilter, filterType, scopedItems, searchQuery]);
-
-  const filteredAndSortedItemEntries = useMemo(
-    () => [...filteredItemEntries].sort((a, b) => compareProjectItems(a.item, b.item, sortOrder)),
-    [filteredItemEntries, sortOrder],
-  );
-
-  const filteredAndSortedItems = useMemo(
-    () => filteredAndSortedItemEntries.map(({ item }) => item),
-    [filteredAndSortedItemEntries],
-  );
+  const filteredAndSortedItems = workspaceQueryResult.filteredItems;
 
   const searchMatchByItemId = useMemo(
-    () => new Map(filteredAndSortedItemEntries.map(({ item, searchMatch }) => [item.id, searchMatch])),
-    [filteredAndSortedItemEntries],
+    () => new Map(Object.entries(workspaceQueryResult.searchMatchByItemId)),
+    [workspaceQueryResult.searchMatchByItemId],
   );
 
   const activeSearchResultId = useMemo(() => {
@@ -223,41 +242,14 @@ export function useWorkspaceBrowseState({
       : null;
   }, [activeSearchResultIdState, filteredAndSortedItems, isSelectionMode]);
 
-  const projectSummary = useMemo<ProjectSummary>(() => {
-    let totalDuration = 0;
-    let recordingCount = 0;
-    let batchCount = 0;
-    let latestTimestamp: number | null = null;
-
-    scopedItems.forEach((item) => {
-      totalDuration += item.duration || 0;
-      latestTimestamp = latestTimestamp === null ? item.timestamp : Math.max(latestTimestamp, item.timestamp);
-
-      if ((item.type || 'recording') === 'batch') {
-        batchCount += 1;
-        return;
-      }
-
-      recordingCount += 1;
-    });
-
-    return {
-      totalItems: scopedItems.length,
-      totalDuration,
-      latestTimestamp,
-      recordingCount,
-      batchCount,
-    };
-  }, [scopedItems]);
-
   const itemCounts = useMemo(() => {
     const counts = new Map<string | null, number>();
-    historyItems.forEach((item) => {
-      const key = item.projectId ?? null;
-      counts.set(key, (counts.get(key) || 0) + 1);
+    counts.set(null, workspaceQueryResult.itemCounts.inbox);
+    Object.entries(workspaceQueryResult.itemCounts.byProjectId).forEach(([projectId, count]) => {
+      counts.set(projectId, count);
     });
     return counts;
-  }, [historyItems]);
+  }, [workspaceQueryResult.itemCounts]);
 
   useEffect(() => {
     if (!activeSearchResultId) {
@@ -477,20 +469,20 @@ export function useWorkspaceBrowseState({
     {
       key: 'items',
       label: t('projects.summary_items', { defaultValue: 'Items' }),
-      value: String(projectSummary.totalItems),
+      value: String(workspaceQueryResult.summary.totalItems),
       testId: 'projects-summary-total-items',
     },
     {
       key: 'duration',
       label: t('projects.summary_duration', { defaultValue: 'Total duration' }),
-      value: formatSummaryDuration(projectSummary.totalDuration, t),
+      value: formatSummaryDuration(workspaceQueryResult.summary.totalDuration, t),
       testId: 'projects-summary-total-duration',
     },
     {
       key: 'latest',
       label: t('projects.summary_latest_activity', { defaultValue: 'Latest activity' }),
-      value: projectSummary.latestTimestamp
-        ? formatTimestamp(projectSummary.latestTimestamp)
+      value: workspaceQueryResult.summary.latestTimestamp
+        ? formatTimestamp(workspaceQueryResult.summary.latestTimestamp)
         : t('projects.summary_no_activity', { defaultValue: 'No activity yet' }),
       testId: 'projects-summary-latest-activity',
     },
@@ -498,9 +490,9 @@ export function useWorkspaceBrowseState({
       key: 'type-split',
       label: t('projects.summary_type_split', { defaultValue: 'Type split' }),
       value: t('projects.summary_type_split_value', {
-        recordings: projectSummary.recordingCount,
-        imports: projectSummary.batchCount,
-        defaultValue: `${projectSummary.recordingCount} recordings / ${projectSummary.batchCount} imports`,
+        recordings: workspaceQueryResult.summary.recordingCount,
+        imports: workspaceQueryResult.summary.batchCount,
+        defaultValue: `${workspaceQueryResult.summary.recordingCount} recordings / ${workspaceQueryResult.summary.batchCount} imports`,
       }),
       testId: 'projects-summary-type-split',
     },

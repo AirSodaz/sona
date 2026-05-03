@@ -12,7 +12,7 @@ import { PlusCircleIcon } from '../Icons';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
 import { isLiveRecordDraftHistoryItem } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
-import { matchWorkspaceItem } from '../../utils/workspaceSearch';
+import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
 import type { TranslationFn } from './types';
 
 interface ProjectsResultsProps {
@@ -30,7 +30,7 @@ interface ProjectsResultsProps {
   onToggleSelection: (id: string) => void;
   resetBrowseState: () => void;
   scopedItems: HistoryItemType[];
-  searchMatchByItemId: Map<string, ReturnType<typeof matchWorkspaceItem>>;
+  searchMatchByItemId: Map<string, WorkspaceItemSearchMatch | null>;
   searchQuery: string;
   selectedHistoryId: string | null;
   selectedIds: string[];

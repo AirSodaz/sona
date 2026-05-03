@@ -6,13 +6,18 @@ mod state;
 #[cfg(test)]
 mod test_support;
 mod types;
+mod workspace_query;
 
 pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
     HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
-    LiveRecordingDraftResult, PreparedBackupImport, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts,
+    HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
+    HistoryWorkspaceScope, HistoryWorkspaceSearchRange, HistoryWorkspaceSearchSnippet,
+    HistoryWorkspaceSortOrder, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+    PreparedBackupImport, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
 
 pub(super) const HISTORY_DIR_NAME: &str = "history";

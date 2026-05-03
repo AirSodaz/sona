@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -45,6 +46,105 @@ pub struct HistoryItemRecord {
     pub project_id: Option<String>,
     pub status: HistoryItemStatus,
     pub draft_source: Option<HistoryDraftSource>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HistoryWorkspaceScope {
+    All,
+    Inbox,
+    Project {
+        #[serde(rename = "projectId")]
+        project_id: String,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HistoryWorkspaceFilterType {
+    All,
+    Recording,
+    Batch,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HistoryWorkspaceDateFilter {
+    All,
+    Today,
+    Week,
+    Month,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HistoryWorkspaceSortOrder {
+    Newest,
+    Oldest,
+    DurationDesc,
+    DurationAsc,
+    TitleAsc,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceQueryRequest {
+    pub scope: HistoryWorkspaceScope,
+    pub query: String,
+    pub filter_type: HistoryWorkspaceFilterType,
+    pub date_filter: HistoryWorkspaceDateFilter,
+    pub sort_order: HistoryWorkspaceSortOrder,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceSearchRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceSearchSnippet {
+    pub text: String,
+    pub highlight_start: usize,
+    pub highlight_end: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceItemSearchMatch {
+    pub matched_field: String,
+    pub title_match: Option<HistoryWorkspaceSearchRange>,
+    pub display_snippet: HistoryWorkspaceSearchSnippet,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceSummary {
+    pub total_items: usize,
+    pub total_duration: f64,
+    pub latest_timestamp: Option<u64>,
+    pub recording_count: usize,
+    pub batch_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceItemCounts {
+    pub inbox: usize,
+    pub by_project_id: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryWorkspaceQueryResult {
+    pub filtered_items: Vec<HistoryItemRecord>,
+    pub scoped_items: Vec<HistoryItemRecord>,
+    pub scoped_item_ids: Vec<String>,
+    pub search_match_by_item_id: BTreeMap<String, Option<HistoryWorkspaceItemSearchMatch>>,
+    pub summary: HistoryWorkspaceSummary,
+    pub item_counts: HistoryWorkspaceItemCounts,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]

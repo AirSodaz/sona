@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
-import { join } from '@tauri-apps/api/path';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useDialogStore } from '../stores/dialogStore';
-import { exportSegments, getFileExtension, ExportFormat, ExportMode } from '../utils/exportFormats';
-import { exportToPath } from '../utils/fileExport';
+import type { ExportFormat, ExportMode } from '../utils/exportFormats';
+import { exportTranscriptToDirectory } from '../services/exportService';
 import { Dropdown } from './Dropdown';
 import { XIcon, FolderIcon } from './Icons';
 import { logger } from '../utils/logger';
@@ -112,11 +111,13 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
 
         setIsExporting(true);
         try {
-            const content = exportSegments(segments, exportFormat, exportMode);
-            const extension = getFileExtension(exportFormat);
-            const fullPath = await join(directory, `${fileName}${extension}`);
-            
-            await exportToPath(content, fullPath);
+            await exportTranscriptToDirectory({
+                segments,
+                directory,
+                baseFileName: fileName,
+                format: exportFormat,
+                mode: exportMode,
+            });
             
             await alert(t('export.success'), { variant: 'success' });
             onClose();

@@ -4,7 +4,7 @@ import type {
   BackupWebDavTestResult,
   RemoteBackupEntry,
 } from '../../types/backup';
-import type { LlmGenerateCommandRequest } from '../../types/dashboard';
+import type { DashboardSnapshot, LlmGenerateCommandRequest } from '../../types/dashboard';
 import type { HistoryItem } from '../../types/history';
 import type {
   AsrRuntimeMetricsSnapshot,
@@ -68,6 +68,66 @@ type SetCapturePausedArgs = {
 type HistoryDraftTransportHandle = {
   item: HistoryItem;
   audioAbsolutePath: string;
+};
+
+type WorkspaceQueryScope =
+  | { kind: 'all' }
+  | { kind: 'inbox' }
+  | { kind: 'project'; projectId: string };
+
+type WorkspaceQueryArgs = {
+  scope: WorkspaceQueryScope;
+  query: string;
+  filterType: 'all' | 'recording' | 'batch';
+  dateFilter: 'all' | 'today' | 'week' | 'month';
+  sortOrder: 'newest' | 'oldest' | 'duration_desc' | 'duration_asc' | 'title_asc';
+};
+
+type WorkspaceSearchRange = {
+  start: number;
+  end: number;
+};
+
+type WorkspaceSearchSnippet = {
+  text: string;
+  highlightStart: number;
+  highlightEnd: number;
+};
+
+type WorkspaceItemSearchMatch = {
+  matchedField: 'title' | 'previewText' | 'searchContent';
+  titleMatch: WorkspaceSearchRange | null;
+  displaySnippet: WorkspaceSearchSnippet;
+};
+
+type WorkspaceQueryResult = {
+  filteredItems: HistoryItem[];
+  scopedItems: HistoryItem[];
+  scopedItemIds: string[];
+  searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
+  summary: {
+    totalItems: number;
+    totalDuration: number;
+    latestTimestamp: number | null;
+    recordingCount: number;
+    batchCount: number;
+  };
+  itemCounts: {
+    inbox: number;
+    byProjectId: Record<string, number>;
+  };
+};
+
+type ExportTranscriptFileArgs = {
+  segments: TranscriptSegment[];
+  format: 'srt' | 'json' | 'txt' | 'vtt';
+  mode: 'original' | 'translation' | 'bilingual';
+  outputPath: string;
+};
+
+type ExportTranscriptFileResult = {
+  outputPath: string;
+  bytesWritten: number;
 };
 
 type ExportBackupArchiveRequest = {
@@ -288,9 +348,21 @@ export type TauriCommandContractMap = {
     args: { filename: string };
     result: string | null;
   };
+  [TauriCommand.history.queryWorkspace]: {
+    args: WorkspaceQueryArgs;
+    result: WorkspaceQueryResult;
+  };
   [TauriCommand.history.openFolder]: {
     args: undefined;
     result: void;
+  };
+  [TauriCommand.dashboard.getSnapshot]: {
+    args: { request: { deep: boolean } };
+    result: DashboardSnapshot;
+  };
+  [TauriCommand.export.transcriptFile]: {
+    args: ExportTranscriptFileArgs;
+    result: ExportTranscriptFileResult;
   };
   [TauriCommand.llm.generateText]: {
     args: { request: LlmGenerateCommandRequest };

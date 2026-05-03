@@ -4,6 +4,7 @@ mod audio;
 mod automation_runtime;
 mod aux_window_state;
 pub mod cli;
+mod dashboard;
 mod downloads;
 pub mod export;
 mod hardware;
@@ -225,7 +226,9 @@ pub fn run() {
             greet,
             archive::extract_tar_bz2,
             archive::create_tar_bz2,
+            dashboard::get_dashboard_snapshot,
             history_repository::commands::history_list_items,
+            history_repository::commands::history_query_workspace,
             history_repository::commands::history_create_live_draft,
             history_repository::commands::history_complete_live_draft,
             history_repository::commands::history_save_recording,
@@ -294,6 +297,7 @@ pub fn run() {
             sherpa::feed_audio_chunk,
             sherpa::process_batch_file,
             sherpa::get_asr_runtime_metrics,
+            export::export_transcript_file,
             speaker::annotate_speaker_segments_from_file,
             speaker::import_speaker_profile_sample
         ])

@@ -13,8 +13,8 @@ use super::fs_utils::{
 use super::types::HistoryBackupSnapshot;
 use super::{
     HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
-    LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use super::{
     HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
@@ -68,6 +68,16 @@ impl HistoryRepository {
             .map(normalize_history_item_value)
             .collect();
         Ok(items)
+    }
+
+    pub(super) fn query_workspace(
+        &self,
+        request: HistoryWorkspaceQueryRequest,
+    ) -> Result<HistoryWorkspaceQueryResult, String> {
+        let items = self.list_items()?;
+        Ok(super::workspace_query::query_workspace_items(
+            items, request,
+        ))
     }
 
     pub(super) fn insert_item_at_front(
@@ -935,5 +945,119 @@ mod tests {
         repository.delete_items(&vec![item.id.clone()]).unwrap();
 
         assert!(!versions_dir.exists());
+    }
+
+    #[test]
+    fn workspace_query_filters_searches_sorts_and_counts() {
+        use crate::history_repository::{
+            HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+            HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+        };
+
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let mut alpha = sample_history_item("alpha", HistoryItemStatus::Complete);
+        alpha.timestamp = 3;
+        alpha.duration = 30.0;
+        alpha.title = "Alpha Plan".to_string();
+        alpha.preview_text = "Roadmap preview".to_string();
+        alpha.search_content = "Roadmap preview".to_string();
+        alpha.project_id = Some("project-1".to_string());
+
+        let mut batch = sample_history_item("batch", HistoryItemStatus::Complete);
+        batch.timestamp = 4;
+        batch.duration = 60.0;
+        batch.title = "Batch Import".to_string();
+        batch.kind = HistoryItemKind::Batch;
+        batch.project_id = Some("project-1".to_string());
+
+        let mut inbox = sample_history_item("inbox", HistoryItemStatus::Complete);
+        inbox.timestamp = 5;
+        inbox.title = "Inbox Note".to_string();
+        inbox.project_id = None;
+
+        repository
+            .write_index(&[inbox.clone(), batch.clone(), alpha.clone()])
+            .unwrap();
+
+        let result = repository
+            .query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::Project {
+                    project_id: "project-1".to_string(),
+                },
+                query: "roadmap".to_string(),
+                filter_type: HistoryWorkspaceFilterType::Recording,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::TitleAsc,
+            })
+            .unwrap();
+
+        assert_eq!(result.scoped_item_ids, vec!["batch", "alpha"]);
+        assert_eq!(result.filtered_items, vec![alpha.clone()]);
+        assert_eq!(result.summary.total_items, 2);
+        assert_eq!(result.summary.total_duration, 90.0);
+        assert_eq!(result.summary.latest_timestamp, Some(4));
+        assert_eq!(result.summary.recording_count, 1);
+        assert_eq!(result.summary.batch_count, 1);
+        assert_eq!(result.item_counts.inbox, 1);
+        assert_eq!(result.item_counts.by_project_id.get("project-1"), Some(&2));
+
+        let search_match = result.search_match_by_item_id.get("alpha").unwrap();
+        assert_eq!(search_match.as_ref().unwrap().matched_field, "previewText");
+        assert!(search_match
+            .as_ref()
+            .unwrap()
+            .display_snippet
+            .text
+            .contains("Roadmap"));
+    }
+
+    #[test]
+    fn workspace_query_uses_nfkc_search_normalization() {
+        use crate::history_repository::{
+            HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+            HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+        };
+
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let mut item = sample_history_item("ligature", HistoryItemStatus::Complete);
+        item.preview_text = "\u{4f1a}\u{8bae} of\u{fb01}ce notes".to_string();
+        item.search_content = item.preview_text.clone();
+        repository.write_index(&[item.clone()]).unwrap();
+
+        let result = repository
+            .query_workspace(HistoryWorkspaceQueryRequest {
+                scope: HistoryWorkspaceScope::All,
+                query: "office".to_string(),
+                filter_type: HistoryWorkspaceFilterType::All,
+                date_filter: HistoryWorkspaceDateFilter::All,
+                sort_order: HistoryWorkspaceSortOrder::Newest,
+            })
+            .unwrap();
+
+        assert_eq!(result.filtered_items, vec![item.clone()]);
+        let search_match = result.search_match_by_item_id.get("ligature").unwrap();
+        assert_eq!(search_match.as_ref().unwrap().matched_field, "previewText");
+        assert_eq!(
+            search_match.as_ref().unwrap().display_snippet.text,
+            "\u{4f1a}\u{8bae} of\u{fb01}ce notes"
+        );
+        assert_eq!(
+            search_match
+                .as_ref()
+                .unwrap()
+                .display_snippet
+                .highlight_start,
+            3
+        );
+        assert_eq!(
+            search_match.as_ref().unwrap().display_snippet.highlight_end,
+            8
+        );
     }
 }
