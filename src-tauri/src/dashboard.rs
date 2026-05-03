@@ -1,3 +1,4 @@
+use crate::llm::llm_usage;
 use chrono::{Duration, Local, SecondsFormat, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,7 +9,6 @@ use tauri::{Manager, Runtime};
 
 const HISTORY_INDEX_PATH: &str = "history/index.json";
 const PROJECT_INDEX_PATH: &str = "projects/index.json";
-const LLM_USAGE_PATH: &str = "analytics/llm-usage.json";
 const RECENT_DAILY_WINDOW: i64 = 30;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -45,45 +45,6 @@ struct SpeakerTag {
 enum SpeakerKind {
     Identified,
     Anonymous,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UsageBucket {
-    call_count: u64,
-    calls_with_usage: u64,
-    calls_without_usage: u64,
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    total_tokens: u64,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UsageBreakdown {
-    key: String,
-    stats: UsageBucket,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UsageTrendPoint {
-    date: String,
-    #[serde(flatten)]
-    stats: UsageBucket,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LlmUsageStats {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    started_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    last_updated_at: Option<String>,
-    totals: UsageBucket,
-    by_provider: Vec<UsageBreakdown>,
-    by_category: Vec<UsageBreakdown>,
-    recent_daily: Vec<UsageTrendPoint>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -147,7 +108,7 @@ struct ContentStats {
 #[serde(rename_all = "camelCase")]
 struct DashboardSnapshot {
     content: ContentStats,
-    llm_usage: LlmUsageStats,
+    llm_usage: llm_usage::LlmUsageDashboardStats,
     generated_at: String,
 }
 
@@ -169,7 +130,7 @@ pub async fn get_dashboard_snapshot<R: Runtime>(
 fn build_dashboard_snapshot(app_dir: &Path, deep: bool) -> Result<Value, String> {
     let history_items = read_history_items(app_dir)?;
     let project_count = read_project_count(app_dir)?;
-    let llm_usage = read_llm_usage_stats(app_dir);
+    let llm_usage = llm_usage::read_dashboard_stats(app_dir);
     let mut overview = create_overview(&history_items, project_count, deep);
     let speakers = if deep {
         let transcript_analytics = aggregate_transcript_analytics(app_dir, &history_items);
@@ -465,98 +426,6 @@ fn normalize_speaker_tag(input: Option<&Value>) -> Option<SpeakerTag> {
     Some(SpeakerTag { id, label, kind })
 }
 
-fn read_llm_usage_stats(app_dir: &Path) -> LlmUsageStats {
-    let value = read_json_value(&app_dir.join(LLM_USAGE_PATH)).unwrap_or(Value::Null);
-    let source = value.as_object();
-    let by_provider = source
-        .and_then(|object| object.get("byProvider"))
-        .and_then(Value::as_object);
-    let by_category = source
-        .and_then(|object| object.get("byCategory"))
-        .and_then(Value::as_object);
-    let daily = source
-        .and_then(|object| object.get("daily"))
-        .and_then(Value::as_object);
-
-    LlmUsageStats {
-        started_at: source
-            .and_then(|object| object.get("startedAt"))
-            .and_then(non_empty_string_ref),
-        last_updated_at: source
-            .and_then(|object| object.get("lastUpdatedAt"))
-            .and_then(non_empty_string_ref),
-        totals: normalize_usage_bucket(source.and_then(|object| object.get("totals"))),
-        by_provider: to_sorted_usage_breakdown(by_provider),
-        by_category: to_sorted_usage_breakdown(by_category),
-        recent_daily: build_recent_usage_trend(daily),
-    }
-}
-
-fn build_recent_usage_trend(
-    daily: Option<&serde_json::Map<String, Value>>,
-) -> Vec<UsageTrendPoint> {
-    let today = Local::now().date_naive();
-    (0..RECENT_DAILY_WINDOW)
-        .rev()
-        .map(|offset| {
-            let key = (today - Duration::days(offset))
-                .format("%Y-%m-%d")
-                .to_string();
-            UsageTrendPoint {
-                stats: normalize_usage_bucket(daily.and_then(|items| items.get(&key))),
-                date: key,
-            }
-        })
-        .collect()
-}
-
-fn to_sorted_usage_breakdown(
-    collection: Option<&serde_json::Map<String, Value>>,
-) -> Vec<UsageBreakdown> {
-    let mut breakdowns: Vec<UsageBreakdown> = collection
-        .into_iter()
-        .flat_map(|items| items.iter())
-        .map(|(key, value)| UsageBreakdown {
-            key: key.clone(),
-            stats: normalize_usage_bucket(Some(value)),
-        })
-        .filter(|breakdown| breakdown.stats.call_count > 0)
-        .collect();
-
-    breakdowns.sort_by(|left, right| {
-        right
-            .stats
-            .total_tokens
-            .cmp(&left.stats.total_tokens)
-            .then_with(|| right.stats.call_count.cmp(&left.stats.call_count))
-            .then_with(|| left.key.cmp(&right.key))
-    });
-    breakdowns
-}
-
-fn normalize_usage_bucket(input: Option<&Value>) -> UsageBucket {
-    let source = input.and_then(Value::as_object);
-    UsageBucket {
-        call_count: normalize_count(source.and_then(|object| object.get("callCount"))),
-        calls_with_usage: normalize_count(source.and_then(|object| object.get("callsWithUsage"))),
-        calls_without_usage: normalize_count(
-            source.and_then(|object| object.get("callsWithoutUsage")),
-        ),
-        prompt_tokens: normalize_count(source.and_then(|object| object.get("promptTokens"))),
-        completion_tokens: normalize_count(
-            source.and_then(|object| object.get("completionTokens")),
-        ),
-        total_tokens: normalize_count(source.and_then(|object| object.get("totalTokens"))),
-    }
-}
-
-fn normalize_count(input: Option<&Value>) -> u64 {
-    match input.and_then(Value::as_f64) {
-        Some(value) if value.is_finite() && value > 0.0 => value.round() as u64,
-        _ => 0,
-    }
-}
-
 fn non_negative_number(input: Option<&Value>) -> f64 {
     match input.and_then(Value::as_f64) {
         Some(value) if value.is_finite() => value.max(0.0),
@@ -679,7 +548,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         fs::create_dir_all(temp_dir.path().join("analytics")).expect("analytics dir");
         fs::write(
-            temp_dir.path().join(LLM_USAGE_PATH),
+            temp_dir.path().join("analytics/llm-usage.json"),
             serde_json::to_string(&json!({
                 "startedAt": "2026-04-01T00:00:00.000Z",
                 "lastUpdatedAt": "2026-04-28T00:00:00.000Z",
@@ -704,7 +573,7 @@ mod tests {
         )
         .expect("write usage");
 
-        let stats = read_llm_usage_stats(temp_dir.path());
+        let stats = llm_usage::read_dashboard_stats(temp_dir.path());
 
         assert_eq!(
             stats.started_at.as_deref(),

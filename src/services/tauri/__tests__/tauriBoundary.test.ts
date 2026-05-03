@@ -15,9 +15,31 @@ import {
 import { generateLlmText } from '../llm';
 import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
+import {
+  automationLoadRepositoryState,
+  automationPersistProcessedEntries,
+  automationPersistRepositoryState,
+  automationPersistRules,
+  automationValidateRuleActivation,
+} from '../automationRepository';
 import { applyPreparedHistoryImport } from '../backup';
 import { getDashboardSnapshot } from '../dashboard';
 import { exportTranscriptFile } from '../export';
+import {
+  llmUsageEnsureStorage,
+  llmUsageReadRaw,
+  llmUsageReplaceRaw,
+} from '../llmUsage';
+import {
+  projectCreate,
+  projectDelete,
+  projectGetActiveId,
+  projectList,
+  projectReorder,
+  projectSaveAll,
+  projectSetActiveId,
+  projectUpdate,
+} from '../project';
 import { annotateSpeakerSegmentsFromFile } from '../speaker';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
 
@@ -238,6 +260,127 @@ describe('tauri boundary wrappers', () => {
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.automation.replaceRuntimeRules, {
       rules: [{ ruleId: 'rule-1' }],
+    });
+  });
+
+  it('project repository wrappers forward repository commands', async () => {
+    const defaults = {
+      summaryTemplateId: 'general',
+      translationLanguage: 'zh',
+      polishPresetId: 'general',
+      exportFileNamePrefix: '',
+      enabledTextReplacementSetIds: [],
+      enabledHotwordSetIds: [],
+      enabledPolishKeywordSetIds: [],
+      enabledSpeakerProfileIds: [],
+    };
+
+    await projectList({
+      fallbackEnabledPolishKeywordSetIds: ['keywords'],
+      fallbackEnabledSpeakerProfileIds: ['speaker'],
+    });
+    await projectSaveAll([]);
+    await projectCreate({ name: 'Research', description: 'Notes', icon: 'folder', defaults });
+    await projectUpdate('project-1', { name: 'Updated' });
+    await projectDelete('project-1');
+    await projectReorder(['project-2', 'project-1']);
+    await projectGetActiveId();
+    await projectSetActiveId('project-2');
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.project.list, {
+      fallbackEnabledPolishKeywordSetIds: ['keywords'],
+      fallbackEnabledSpeakerProfileIds: ['speaker'],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.project.saveAll, {
+      projects: [],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.project.create, {
+      name: 'Research',
+      description: 'Notes',
+      icon: 'folder',
+      defaults,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.project.update, {
+      projectId: 'project-1',
+      updates: { name: 'Updated' },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.project.delete, {
+      projectId: 'project-1',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(6, TauriCommand.project.reorder, {
+      projectIds: ['project-2', 'project-1'],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(7, TauriCommand.project.getActiveId);
+    expect(invoke).toHaveBeenNthCalledWith(8, TauriCommand.project.setActiveId, {
+      projectId: 'project-2',
+    });
+  });
+
+  it('automation repository wrappers forward repository commands', async () => {
+    const rule = {
+      id: 'rule-1',
+      name: 'Inbox',
+      projectId: 'project-1',
+      presetId: 'custom',
+      watchDirectory: 'C:/watch',
+      recursive: true,
+      enabled: true,
+      stageConfig: {
+        autoPolish: false,
+        autoTranslate: false,
+        exportEnabled: true,
+      },
+      exportConfig: {
+        directory: 'C:/exports',
+        format: 'srt',
+        mode: 'original',
+      },
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const processedEntry = {
+      ruleId: 'rule-1',
+      filePath: 'C:/watch/meeting.wav',
+      sourceFingerprint: 'fingerprint',
+      size: 10,
+      mtimeMs: 20,
+      status: 'complete',
+      processedAt: 30,
+    };
+
+    await automationLoadRepositoryState();
+    await automationPersistRules([rule as any]);
+    await automationPersistProcessedEntries([processedEntry as any]);
+    await automationPersistRepositoryState([rule as any], [processedEntry as any]);
+    await automationValidateRuleActivation(rule as any, {} as any, null);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.automationRepository.loadState);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.automationRepository.persistRules, {
+      rules: [rule],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.automationRepository.persistProcessedEntries, {
+      processedEntries: [processedEntry],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.automationRepository.persistState, {
+      rules: [rule],
+      processedEntries: [processedEntry],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.automationRepository.validateActivation, {
+      rule,
+      globalConfig: {},
+      project: null,
+    });
+  });
+
+  it('llm usage wrappers forward analytics repository commands', async () => {
+    await llmUsageEnsureStorage();
+    await llmUsageReadRaw();
+    await llmUsageReplaceRaw('{"schemaVersion":1}');
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llmUsage.ensureStorage);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llmUsage.readRaw);
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.llmUsage.replaceRaw, {
+      content: '{"schemaVersion":1}',
     });
   });
 

@@ -1,4 +1,6 @@
 mod commands;
+#[path = "llm_usage.rs"]
+pub(crate) mod llm_usage;
 mod providers;
 mod streaming;
 mod tasks;

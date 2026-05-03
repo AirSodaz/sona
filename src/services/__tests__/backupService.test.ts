@@ -31,7 +31,8 @@ const testContext = vi.hoisted(() => {
       loadItems: vi.fn().mockResolvedValue(undefined),
     },
     invokeMock: vi.fn(),
-    llmUsageInitMock: vi.fn().mockResolvedValue(undefined),
+    llmUsageReadRawMock: vi.fn(),
+    llmUsageReplaceRawMock: vi.fn().mockResolvedValue(undefined),
     loadAutomationProcessedEntriesMock: vi.fn(),
     loadAutomationRulesMock: vi.fn(),
     migrateConfigMock: vi.fn(),
@@ -95,10 +96,9 @@ vi.mock('../historyService', () => ({
   },
 }));
 
-vi.mock('../llmUsageService', () => ({
-  llmUsageService: {
-    init: testContext.llmUsageInitMock,
-  },
+vi.mock('../tauri/llmUsage', () => ({
+  llmUsageReadRaw: testContext.llmUsageReadRawMock,
+  llmUsageReplaceRaw: testContext.llmUsageReplaceRawMock,
 }));
 
 vi.mock('../projectService', () => ({
@@ -218,6 +218,8 @@ describe('backupService', () => {
     testContext.projectState.loadProjects.mockResolvedValue(undefined);
     testContext.automationStoreState.stopAll.mockResolvedValue(undefined);
     testContext.automationStoreState.loadAndStart.mockResolvedValue(undefined);
+    testContext.llmUsageReadRawMock.mockResolvedValue('{"schemaVersion":1}');
+    testContext.llmUsageReplaceRawMock.mockResolvedValue(undefined);
     testContext.config = {
       appLanguage: 'auto',
       theme: 'auto',
@@ -254,7 +256,6 @@ describe('backupService', () => {
     ]);
     testContext.loadAutomationRulesMock.mockResolvedValue([{ id: 'rule-1', name: 'Automation' }]);
     testContext.loadAutomationProcessedEntriesMock.mockResolvedValue([{ ruleId: 'rule-1', filePath: 'C:\\watch\\meeting.wav' }]);
-    testContext.readTextFileMock.mockResolvedValue('{"schemaVersion":1}');
     testContext.invokeMock.mockResolvedValue(makeManifest());
 
     const result = await exportBackup();
@@ -270,6 +271,11 @@ describe('backupService', () => {
         analyticsContent: '{"schemaVersion":1}',
       }),
     });
+    expect(testContext.llmUsageReadRawMock).toHaveBeenCalledTimes(1);
+    expect(testContext.readTextFileMock).not.toHaveBeenCalledWith(
+      'analytics/llm-usage.json',
+      expect.anything(),
+    );
   });
 
   it('prepareImportBackup now returns a handle plus non-history payloads instead of extracted history files', async () => {
@@ -449,10 +455,11 @@ describe('backupService', () => {
     expect(testContext.projectServiceSaveAllMock).toHaveBeenCalledWith(prepared.projects);
     expect(testContext.saveAutomationRulesMock).toHaveBeenCalledWith(prepared.automationRules);
     expect(testContext.saveAutomationProcessedEntriesMock).toHaveBeenCalledWith(prepared.automationProcessedEntries);
-    expect(testContext.writeTextFileMock).toHaveBeenCalledWith(
+    expect(testContext.llmUsageReplaceRawMock).toHaveBeenCalledWith(prepared.analyticsContent);
+    expect(testContext.writeTextFileMock).not.toHaveBeenCalledWith(
       'analytics/llm-usage.json',
-      prepared.analyticsContent,
-      { baseDir: 3 },
+      expect.anything(),
+      expect.anything(),
     );
     expect(testContext.invokeMock).toHaveBeenCalledWith('apply_prepared_history_import', {
       importId: 'import-1',

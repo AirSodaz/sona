@@ -73,10 +73,29 @@ impl UsageRecorder {
     }
 
     fn record(&self, response: &StandardLlmResponse) {
+        let occurred_at = chrono::Utc::now().to_rfc3339();
+        if let Err(error) = llm_usage::record_usage(
+            &self.app,
+            llm_usage::UsageRecord {
+                occurred_at: occurred_at.clone(),
+                provider: self.config.provider,
+                category: self.category,
+                usage: response.usage.clone(),
+            },
+        ) {
+            log::warn!(
+                "[LLM] failed to persist usage: provider={:?} category={:?} error={}",
+                self.config.provider,
+                self.category,
+                error
+            );
+        }
+
         emit_llm_usage_event(
             &self.app,
             &self.config,
             self.category,
+            occurred_at,
             response.usage.clone(),
         );
     }

@@ -1,10 +1,8 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { BaseDirectory, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import packageJson from '../../package.json';
 import { loadAutomationProcessedEntries, loadAutomationRules, saveAutomationProcessedEntries, saveAutomationRules } from './automationService';
 import { migrateConfig } from './configMigrationService';
 import { historyService } from './historyService';
-import { llmUsageService } from './llmUsageService';
 import { projectService } from './projectService';
 import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { useAutomationStore } from '../stores/automationStore';
@@ -36,9 +34,8 @@ import {
   exportBackupArchive,
   prepareBackupImport,
 } from './tauri/backup';
+import { llmUsageReadRaw, llmUsageReplaceRaw } from './tauri/llmUsage';
 
-const APP_LOCAL_ANALYTICS_DIR = 'analytics';
-const APP_LOCAL_ANALYTICS_USAGE_FILE = `${APP_LOCAL_ANALYTICS_DIR}/llm-usage.json`;
 const ANALYTICS_FALLBACK_CONTENT = '{}';
 
 class BackupOperationBlockedError extends Error {
@@ -205,10 +202,6 @@ function validateManifest(raw: unknown): BackupManifestV1 {
   };
 }
 
-async function ensureAppLocalDataDirectory(path: string): Promise<void> {
-  await mkdir(path, { baseDir: BaseDirectory.AppLocalData, recursive: true });
-}
-
 async function pickExportArchivePath(): Promise<string | null> {
   const selected = await save({
     defaultPath: buildDefaultBackupFileName(),
@@ -240,22 +233,15 @@ async function loadProjectsForBackup(config: AppConfig): Promise<ProjectRecord[]
 }
 
 async function loadAnalyticsContentForBackup(): Promise<string> {
-  await llmUsageService.init();
-
   try {
-    return await readTextFile(APP_LOCAL_ANALYTICS_USAGE_FILE, {
-      baseDir: BaseDirectory.AppLocalData,
-    });
+    return await llmUsageReadRaw();
   } catch {
     return ANALYTICS_FALLBACK_CONTENT;
   }
 }
 
 async function writeAnalyticsImport(analyticsContent: string): Promise<void> {
-  await ensureAppLocalDataDirectory(APP_LOCAL_ANALYTICS_DIR);
-  await writeTextFile(APP_LOCAL_ANALYTICS_USAGE_FILE, analyticsContent, {
-    baseDir: BaseDirectory.AppLocalData,
-  });
+  await llmUsageReplaceRaw(analyticsContent);
 }
 
 function normalizePreparedImport(raw: PreparedBackupImportPayload): PreparedBackupImport {

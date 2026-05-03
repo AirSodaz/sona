@@ -1,8 +1,7 @@
 import {
-  ensureAutomationStorage,
-  loadAutomationProcessedEntries,
-  loadAutomationRules,
+  loadAutomationRepositoryState as loadAutomationRepositoryStateFromService,
   saveAutomationProcessedEntries,
+  saveAutomationRepositoryState,
   saveAutomationRules,
   validateAutomationRuleForActivation,
 } from '../services/automationService';
@@ -14,13 +13,7 @@ export async function loadAutomationRepositoryState(): Promise<{
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
 }> {
-  await ensureAutomationStorage();
-  const [rules, processedEntries] = await Promise.all([
-    loadAutomationRules(),
-    loadAutomationProcessedEntries(),
-  ]);
-
-  return { rules, processedEntries };
+  return loadAutomationRepositoryStateFromService();
 }
 
 export async function persistAutomationRules(nextRules: AutomationRule[]): Promise<void> {
@@ -37,10 +30,7 @@ export async function persistAutomationRepositoryState(
   nextRules: AutomationRule[],
   nextProcessedEntries: AutomationProcessedEntry[],
 ): Promise<void> {
-  await Promise.all([
-    saveAutomationRules(nextRules),
-    saveAutomationProcessedEntries(nextProcessedEntries),
-  ]);
+  await saveAutomationRepositoryState(nextRules, nextProcessedEntries);
 }
 
 export async function validateAutomationRuleActivation(rule: AutomationRule): Promise<void> {

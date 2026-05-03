@@ -59,6 +59,28 @@ export const TauriCommand = {
   export: {
     transcriptFile: 'export_transcript_file',
   },
+  project: {
+    list: 'project_list',
+    saveAll: 'project_save_all',
+    create: 'project_create',
+    update: 'project_update',
+    delete: 'project_delete',
+    reorder: 'project_reorder',
+    getActiveId: 'project_get_active_id',
+    setActiveId: 'project_set_active_id',
+  },
+  automationRepository: {
+    loadState: 'automation_load_repository_state',
+    persistRules: 'automation_persist_rules',
+    persistProcessedEntries: 'automation_persist_processed_entries',
+    persistState: 'automation_persist_repository_state',
+    validateActivation: 'automation_validate_rule_activation',
+  },
+  llmUsage: {
+    ensureStorage: 'llm_usage_ensure_storage',
+    readRaw: 'llm_usage_read_raw',
+    replaceRaw: 'llm_usage_replace_raw',
+  },
   llm: {
     generateText: 'generate_llm_text',
     listModels: 'list_llm_models',

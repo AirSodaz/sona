@@ -3,7 +3,6 @@ import { startAppRuntimeServices } from '../runtime';
 
 const mockLoadRecovery = vi.fn();
 const mockLoadAndStart = vi.fn();
-const mockLlmUsageInit = vi.fn();
 const mockVoiceTypingInit = vi.fn();
 const mockRunHealthCheck = vi.fn();
 const mockLoggerError = vi.fn();
@@ -21,12 +20,6 @@ vi.mock('../../../stores/automationStore', () => ({
     getState: vi.fn(() => ({
       loadAndStart: (...args: unknown[]) => mockLoadAndStart(...args),
     })),
-  },
-}));
-
-vi.mock('../../llmUsageService', () => ({
-  llmUsageService: {
-    init: (...args: unknown[]) => mockLlmUsageInit(...args),
   },
 }));
 
@@ -53,7 +46,6 @@ describe('startAppRuntimeServices', () => {
     vi.clearAllMocks();
     mockLoadRecovery.mockResolvedValue(undefined);
     mockLoadAndStart.mockResolvedValue(undefined);
-    mockLlmUsageInit.mockResolvedValue(undefined);
     mockVoiceTypingInit.mockReturnValue(undefined);
     mockRunHealthCheck.mockResolvedValue(undefined);
   });
@@ -65,7 +57,6 @@ describe('startAppRuntimeServices', () => {
 
     expect(mockLoadRecovery).toHaveBeenCalledTimes(1);
     expect(mockLoadAndStart).toHaveBeenCalledTimes(1);
-    expect(mockLlmUsageInit).toHaveBeenCalledTimes(1);
     expect(mockVoiceTypingInit).toHaveBeenCalledTimes(1);
     expect(mockRunHealthCheck).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith(

@@ -1,6 +1,7 @@
 mod app_settings;
 mod archive;
 mod audio;
+mod automation_repository;
 mod automation_runtime;
 mod aux_window_state;
 pub mod cli;
@@ -12,6 +13,7 @@ mod history_repository;
 mod llm;
 pub mod pipeline;
 pub mod preset_models;
+mod project_repository;
 mod runtime_status;
 pub mod sherpa;
 pub mod speaker;
@@ -227,6 +229,19 @@ pub fn run() {
             archive::extract_tar_bz2,
             archive::create_tar_bz2,
             dashboard::get_dashboard_snapshot,
+            project_repository::project_list,
+            project_repository::project_save_all,
+            project_repository::project_create,
+            project_repository::project_update,
+            project_repository::project_delete,
+            project_repository::project_reorder,
+            project_repository::project_get_active_id,
+            project_repository::project_set_active_id,
+            automation_repository::automation_load_repository_state,
+            automation_repository::automation_persist_rules,
+            automation_repository::automation_persist_processed_entries,
+            automation_repository::automation_persist_repository_state,
+            automation_repository::automation_validate_rule_activation,
             history_repository::commands::history_list_items,
             history_repository::commands::history_query_workspace,
             history_repository::commands::history_create_live_draft,
@@ -287,6 +302,9 @@ pub fn run() {
             audio::set_microphone_capture_paused,
             llm::generate_llm_text,
             llm::list_llm_models,
+            llm::llm_usage::llm_usage_ensure_storage,
+            llm::llm_usage::llm_usage_read_raw,
+            llm::llm_usage::llm_usage_replace_raw,
             llm::polish_transcript_segments,
             llm::summarize_transcript,
             llm::translate_transcript_segments,

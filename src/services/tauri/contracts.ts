@@ -11,7 +11,13 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
-import type { AppLogLevel } from '../../types/config';
+import type { AppConfig, AppLogLevel } from '../../types/config';
+import type {
+  AutomationProcessedEntry,
+  AutomationRule,
+  AutomationRuleValidationResult,
+} from '../../types/automation';
+import type { ProjectDefaults, ProjectRecord } from '../../types/project';
 import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
@@ -128,6 +134,34 @@ type ExportTranscriptFileArgs = {
 type ExportTranscriptFileResult = {
   outputPath: string;
   bytesWritten: number;
+};
+
+type ProjectListArgs = {
+  fallbackEnabledPolishKeywordSetIds?: string[];
+  fallbackEnabledSpeakerProfileIds?: string[];
+};
+
+type ProjectCreateArgs = {
+  name: string;
+  description?: string;
+  icon?: string;
+  defaults: ProjectDefaults;
+};
+
+type ProjectUpdateArgs = {
+  projectId: string;
+  updates: Partial<Pick<ProjectRecord, 'name' | 'description' | 'icon' | 'defaults'>>;
+};
+
+type AutomationRepositoryState = {
+  rules: AutomationRule[];
+  processedEntries: AutomationProcessedEntry[];
+};
+
+type AutomationValidateActivationArgs = {
+  rule: AutomationRule;
+  globalConfig: AppConfig;
+  project: ProjectRecord | null;
 };
 
 type ExportBackupArchiveRequest = {
@@ -363,6 +397,70 @@ export type TauriCommandContractMap = {
   [TauriCommand.export.transcriptFile]: {
     args: ExportTranscriptFileArgs;
     result: ExportTranscriptFileResult;
+  };
+  [TauriCommand.project.list]: {
+    args: ProjectListArgs;
+    result: ProjectRecord[];
+  };
+  [TauriCommand.project.saveAll]: {
+    args: { projects: ProjectRecord[] };
+    result: void;
+  };
+  [TauriCommand.project.create]: {
+    args: ProjectCreateArgs;
+    result: ProjectRecord;
+  };
+  [TauriCommand.project.update]: {
+    args: ProjectUpdateArgs;
+    result: ProjectRecord | null;
+  };
+  [TauriCommand.project.delete]: {
+    args: { projectId: string };
+    result: void;
+  };
+  [TauriCommand.project.reorder]: {
+    args: { projectIds: string[] };
+    result: ProjectRecord[];
+  };
+  [TauriCommand.project.getActiveId]: {
+    args: undefined;
+    result: string | null;
+  };
+  [TauriCommand.project.setActiveId]: {
+    args: { projectId: string | null };
+    result: void;
+  };
+  [TauriCommand.automationRepository.loadState]: {
+    args: undefined;
+    result: AutomationRepositoryState;
+  };
+  [TauriCommand.automationRepository.persistRules]: {
+    args: { rules: AutomationRule[] };
+    result: void;
+  };
+  [TauriCommand.automationRepository.persistProcessedEntries]: {
+    args: { processedEntries: AutomationProcessedEntry[] };
+    result: void;
+  };
+  [TauriCommand.automationRepository.persistState]: {
+    args: AutomationRepositoryState;
+    result: void;
+  };
+  [TauriCommand.automationRepository.validateActivation]: {
+    args: AutomationValidateActivationArgs;
+    result: AutomationRuleValidationResult;
+  };
+  [TauriCommand.llmUsage.ensureStorage]: {
+    args: undefined;
+    result: void;
+  };
+  [TauriCommand.llmUsage.readRaw]: {
+    args: undefined;
+    result: string;
+  };
+  [TauriCommand.llmUsage.replaceRaw]: {
+    args: { content: string };
+    result: void;
   };
   [TauriCommand.llm.generateText]: {
     args: { request: LlmGenerateCommandRequest };

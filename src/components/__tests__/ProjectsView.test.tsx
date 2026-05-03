@@ -51,6 +51,144 @@ vi.mock('../../services/historyService', () => ({
   },
 }));
 
+vi.mock('../../services/tauri/history', () => {
+  const normalizeSearch = (value: string) => value.toLowerCase();
+  const matchesQuery = (item: any, query: string) => {
+    const normalizedQuery = normalizeSearch(query.trim());
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return [item.title, item.previewText, item.searchContent]
+      .filter((value): value is string => typeof value === 'string')
+      .some((value) => normalizeSearch(value).includes(normalizedQuery));
+  };
+  const buildSearchMatch = (item: any, query: string) => {
+    const normalizedQuery = normalizeSearch(query.trim());
+    if (!normalizedQuery) {
+      return null;
+    }
+
+    const candidates = [
+      ['title', item.title],
+      ['previewText', item.previewText],
+      ['searchContent', item.searchContent],
+    ] as const;
+    const match = candidates.find(([, value]) => (
+      typeof value === 'string' && normalizeSearch(value).includes(normalizedQuery)
+    ));
+    if (!match || typeof match[1] !== 'string') {
+      return null;
+    }
+
+    const start = normalizeSearch(match[1]).indexOf(normalizedQuery);
+    const end = start + query.trim().length;
+    return {
+      matchedField: match[0],
+      titleMatch: match[0] === 'title' ? { start, end } : null,
+      displaySnippet: {
+        text: match[1],
+        highlightStart: start,
+        highlightEnd: end,
+      },
+    };
+  };
+  const isWithinDateFilter = (item: any, dateFilter: string) => {
+    if (dateFilter === 'all') {
+      return true;
+    }
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const age = now - Number(item.timestamp || 0);
+    if (dateFilter === 'today') {
+      return age <= dayMs;
+    }
+    if (dateFilter === 'week') {
+      return age <= 7 * dayMs;
+    }
+    if (dateFilter === 'month') {
+      return age <= 30 * dayMs;
+    }
+    return true;
+  };
+  const sortItems = (items: any[], sortOrder: string) => {
+    const nextItems = [...items];
+    nextItems.sort((left, right) => {
+      if (sortOrder === 'oldest') {
+        return Number(left.timestamp || 0) - Number(right.timestamp || 0);
+      }
+      if (sortOrder === 'duration_desc') {
+        return Number(right.duration || 0) - Number(left.duration || 0);
+      }
+      if (sortOrder === 'duration_asc') {
+        return Number(left.duration || 0) - Number(right.duration || 0);
+      }
+      if (sortOrder === 'title_asc') {
+        return String(left.title || '').localeCompare(String(right.title || ''));
+      }
+      return Number(right.timestamp || 0) - Number(left.timestamp || 0);
+    });
+    return nextItems;
+  };
+  const summarize = (items: any[]) => ({
+    totalItems: items.length,
+    totalDuration: items.reduce((total, item) => total + Number(item.duration || 0), 0),
+    latestTimestamp: items.reduce<number | null>((latest, item) => {
+      const timestamp = Number(item.timestamp || 0);
+      return latest === null || timestamp > latest ? timestamp : latest;
+    }, null),
+    recordingCount: items.filter((item) => item.type !== 'batch').length,
+    batchCount: items.filter((item) => item.type === 'batch').length,
+  });
+
+  return {
+    historyQueryWorkspace: vi.fn(async ({ scope, query, filterType, dateFilter, sortOrder }: any) => {
+      const { useHistoryStore } = await import('../../stores/historyStore');
+      const items = useHistoryStore.getState().items;
+      const scopedItems = items.filter((item: any) => {
+        if (scope.kind === 'all') {
+          return true;
+        }
+        if (scope.kind === 'inbox') {
+          return !item.projectId;
+        }
+        return item.projectId === scope.projectId;
+      });
+      const typeFiltered = scopedItems.filter((item: any) => (
+        filterType === 'all' || item.type === filterType
+      ));
+      const dateFiltered = typeFiltered.filter((item: any) => isWithinDateFilter(item, dateFilter));
+      const queryFiltered = dateFiltered.filter((item: any) => matchesQuery(item, query));
+      const filteredItems = sortItems(queryFiltered, sortOrder);
+      const searchMatchByItemId = Object.fromEntries(
+        filteredItems.map((item: any) => [item.id, buildSearchMatch(item, query)]),
+      );
+      const byProjectId: Record<string, number> = {};
+      let inbox = 0;
+      items.forEach((item: any) => {
+        if (item.projectId) {
+          byProjectId[item.projectId] = (byProjectId[item.projectId] || 0) + 1;
+        } else {
+          inbox += 1;
+        }
+      });
+
+      return {
+        filteredItems,
+        scopedItems,
+        scopedItemIds: scopedItems.map((item: any) => item.id),
+        searchMatchByItemId,
+        summary: summarize(scopedItems),
+        itemCounts: {
+          inbox,
+          byProjectId,
+        },
+      };
+    }),
+  };
+});
+
 vi.mock('../TranscriptWorkbench', () => ({
   TranscriptWorkbench: ({ title, onClose }: any) => (
     <div>
@@ -911,30 +1049,38 @@ describe('ProjectsView', () => {
       target: { value: 'roadmap' },
     });
 
-    expect(screen.getByText('Client Call')).toBeDefined();
-    expect(screen.queryByText('Imported Deck')).toBeNull();
-    expect(screen.getByText('Query roadmap')).toBeDefined();
-    expect(screen.getByText(/Snippet Quarterly roadmap follow up/i)).toBeDefined();
-    expect(screen.queryByText('Inbox Item')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText('Client Call')).toBeDefined();
+      expect(screen.queryByText('Imported Deck')).toBeNull();
+      expect(screen.getByText('Query roadmap')).toBeDefined();
+      expect(screen.getByText(/Snippet Quarterly roadmap follow up/i)).toBeDefined();
+      expect(screen.queryByText('Inbox Item')).toBeNull();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 
     openFilterMenu();
     selectDropdownOption('Filter by type', 'Batch imports');
-    expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Client Call')).toBeNull();
-    expect(screen.getByText('Imported Deck')).toBeDefined();
-    expect(screen.getByText('Workshop Import')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText('Client Call')).toBeNull();
+      expect(screen.getByText('Imported Deck')).toBeDefined();
+      expect(screen.getByText('Workshop Import')).toBeDefined();
+    });
 
     openFilterMenu();
     selectDropdownOption('Filter by date', 'Last 7 days');
-    expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2');
-    expect(screen.queryByText('Imported Deck')).toBeNull();
-    expect(screen.getByText('Workshop Import')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2');
+      expect(screen.queryByText('Imported Deck')).toBeNull();
+      expect(screen.getByText('Workshop Import')).toBeDefined();
+    });
 
     selectDropdownOption('Sort items', 'Title A-Z');
-    const orderedItems = screen.getAllByTestId(/history-item-/).map((item) => item.textContent || '');
-    expect(orderedItems[0]).toContain('Workshop Import');
+    await waitFor(() => {
+      const orderedItems = screen.getAllByTestId(/history-item-/).map((item) => item.textContent || '');
+      expect(orderedItems[0]).toContain('Workshop Import');
+    });
   });
 
   it('opens the filter popover and clears active filters without affecting sort controls', async () => {
@@ -975,14 +1121,18 @@ describe('ProjectsView', () => {
     expect(screen.getByText('Refine the current workspace view by type or time.')).toBeDefined();
 
     selectDropdownOption('Filter by type', 'Batch imports');
-    expect(screen.queryByText('Client Call')).toBeNull();
-    expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.queryByText('Client Call')).toBeNull();
+      expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
+    });
 
     openFilterMenu();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
     expect(screen.getByText(/All items/i)).toBeDefined();
-    expect(screen.getByText('Client Call')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Client Call')).toBeDefined();
+    });
     expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
   });
 
@@ -1106,7 +1256,9 @@ describe('ProjectsView', () => {
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
 
-    expect(screen.getByText('No matching items')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('No matching items')).toBeDefined();
+    });
 
     await act(async () => {
       await useHistoryStore.getState().updateTranscript('hist-1', [
@@ -1114,9 +1266,11 @@ describe('ProjectsView', () => {
       ]);
     });
 
-    expect(screen.queryByText('No matching items')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Alpha Plan' })).toBeDefined();
-    expect(screen.getByText('Snippet Fresh roadmap notes...')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.queryByText('No matching items')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Alpha Plan' })).toBeDefined();
+      expect(screen.getByText('Snippet Fresh roadmap notes...')).toBeDefined();
+    });
   });
 
   it('disables active-result keyboard navigation while selection mode is enabled', async () => {
@@ -1224,11 +1378,15 @@ describe('ProjectsView', () => {
       target: { value: 'missing item' },
     });
 
-    expect(screen.getByText('No matching items')).toBeDefined();
-    expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Move Selected' }).hasAttribute('disabled')).toBe(true);
+    await waitFor(() => {
+      expect(screen.getByText('No matching items')).toBeDefined();
+      expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Move Selected' }).hasAttribute('disabled')).toBe(true);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(screen.getByRole('button', { name: 'Project Item' })).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Project Item' })).toBeDefined();
+    });
   });
 });

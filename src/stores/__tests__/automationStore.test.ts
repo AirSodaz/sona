@@ -27,6 +27,7 @@ const testContext = vi.hoisted(() => {
             queueItems: [] as any[],
         },
         ensureAutomationStorageMock: vi.fn().mockResolvedValue(undefined),
+        loadAutomationRepositoryStateMock: vi.fn(),
         loadAutomationProcessedEntriesMock: vi.fn(),
         loadAutomationRulesMock: vi.fn(),
         clearAutomationRecoveryGuardEntryMock: vi.fn(),
@@ -37,6 +38,7 @@ const testContext = vi.hoisted(() => {
         replaceAutomationRuntimeRulesMock: vi.fn(),
         scanAutomationRuntimeRuleMock: vi.fn().mockResolvedValue(undefined),
         saveAutomationProcessedEntriesMock: vi.fn().mockResolvedValue(undefined),
+        saveAutomationRepositoryStateMock: vi.fn().mockResolvedValue(undefined),
         saveAutomationRulesMock: vi.fn().mockResolvedValue(undefined),
         validateAutomationRuleForActivationMock: vi.fn(),
         projectRecord,
@@ -62,7 +64,7 @@ const {
     batchQueueState,
     clearAutomationRecoveryGuardEntryMock,
     collectAutomationRuntimeRulePathsMock,
-    ensureAutomationStorageMock,
+    loadAutomationRepositoryStateMock,
     isAutomationRecoveryBlockedMock,
     listenToAutomationRuntimeCandidatesMock,
     loadAutomationProcessedEntriesMock,
@@ -117,10 +119,12 @@ vi.mock('../../services/automationService', () => ({
         const normalizedDirectory = normalize(directoryPath);
         return normalizedFile === normalizedDirectory || normalizedFile.startsWith(`${normalizedDirectory}\\`);
     }),
+    loadAutomationRepositoryState: testContext.loadAutomationRepositoryStateMock,
     loadAutomationProcessedEntries: testContext.loadAutomationProcessedEntriesMock,
     loadAutomationRules: testContext.loadAutomationRulesMock,
     normalizeAutomationPath: vi.fn((value: string) => value.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()),
     saveAutomationProcessedEntries: testContext.saveAutomationProcessedEntriesMock,
+    saveAutomationRepositoryState: testContext.saveAutomationRepositoryStateMock,
     saveAutomationRules: testContext.saveAutomationRulesMock,
     validateAutomationRuleForActivation: testContext.validateAutomationRuleForActivationMock,
 }));
@@ -199,6 +203,10 @@ describe('automationStore', () => {
 
         loadAutomationProcessedEntriesMock.mockResolvedValue([]);
         loadAutomationRulesMock.mockResolvedValue([]);
+        loadAutomationRepositoryStateMock.mockImplementation(async () => ({
+            rules: await loadAutomationRulesMock(),
+            processedEntries: await loadAutomationProcessedEntriesMock(),
+        }));
         collectAutomationRuntimeRulePathsMock.mockResolvedValue([]);
         isAutomationRecoveryBlockedMock.mockReturnValue(false);
         testContext.runtimeCandidateHandler = null;
@@ -248,7 +256,7 @@ describe('automationStore', () => {
             mtimeMs: 1000,
         });
 
-        expect(ensureAutomationStorageMock).toHaveBeenCalled();
+        expect(loadAutomationRepositoryStateMock).toHaveBeenCalled();
         expect(replaceAutomationRuntimeRulesMock).toHaveBeenCalledWith([
             expect.objectContaining({
                 ruleId: rule.id,

@@ -704,10 +704,11 @@ pub(crate) fn emit_llm_usage_event(
     app: &AppHandle,
     config: &LlmConfig,
     category: LlmUsageCategory,
+    occurred_at: String,
     usage: Option<TokenUsage>,
 ) {
     let payload = LlmUsageEventPayload {
-        occurred_at: chrono::Utc::now().to_rfc3339(),
+        occurred_at,
         provider: config.provider,
         model: config.model.clone(),
         category,
