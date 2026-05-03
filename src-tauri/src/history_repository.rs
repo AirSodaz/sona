@@ -5,19 +5,21 @@ mod repository;
 mod state;
 #[cfg(test)]
 mod test_support;
+mod transcript_diff;
 mod types;
 mod workspace_query;
 
 pub use state::{HistoryRepositoryState, PreparedBackupImportState};
 pub use types::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, ExportBackupArchiveRequest,
-    HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
+    HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
+    HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
     HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts,
     HistoryWorkspaceItemSearchMatch, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
     HistoryWorkspaceScope, HistoryWorkspaceSearchRange, HistoryWorkspaceSearchSnippet,
     HistoryWorkspaceSortOrder, HistoryWorkspaceSummary, LiveRecordingDraftResult,
-    PreparedBackupImport, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord,
+    PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow, TranscriptDiffStatus,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 
 pub(super) const HISTORY_DIR_NAME: &str = "history";

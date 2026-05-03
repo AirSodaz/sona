@@ -11,7 +11,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
-import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { AppConfig, AppLogLevel, TextReplacementRuleSet } from '../../types/config';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
@@ -21,10 +21,13 @@ import type { ProjectDefaults, ProjectRecord } from '../../types/project';
 import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
+  TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
 } from '../../types/transcriptSnapshot';
+import type { BatchQueueItem } from '../../types/batchQueue';
+import type { RecoveredQueueItem, RecoverySnapshot } from '../../types/recovery';
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -88,6 +91,16 @@ type SetCapturePausedArgs = {
 type HistoryDraftTransportHandle = {
   item: HistoryItem;
   audioAbsolutePath: string;
+};
+
+type TranscriptDiffResult = {
+  rows: TranscriptDiffRow[];
+  changedCount: number;
+};
+
+type TranscriptPostprocessOptions = {
+  textReplacementSets?: TextReplacementRuleSet[];
+  dropFinalDotSegments?: boolean;
 };
 
 type WorkspaceQueryScope =
@@ -314,7 +327,11 @@ export type TauriCommandContractMap = {
     result: Partial<HistoryItem>[];
   };
   [TauriCommand.history.createLiveDraft]: {
-    args: { item: HistoryItem };
+    args: {
+      audioExtension: string;
+      projectId: string | null;
+      icon: string | null;
+    };
     result: HistoryDraftTransportHandle;
   };
   [TauriCommand.history.completeLiveDraft]: {
@@ -327,18 +344,22 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.history.saveRecording]: {
     args: {
-      item: Partial<HistoryItem>;
       segments: TranscriptSegment[];
+      duration: number;
+      projectId: string | null;
       nativeAudioPath?: string;
       audioBytes?: number[];
+      audioExtension?: string;
     };
     result: Partial<HistoryItem>;
   };
   [TauriCommand.history.saveImportedFile]: {
     args: {
-      item: Partial<HistoryItem>;
-      segments: TranscriptSegment[];
       sourcePath: string;
+      segments: TranscriptSegment[];
+      duration: number;
+      projectId: string | null;
+      convertedSourcePath?: string;
     };
     result: Partial<HistoryItem>;
   };
@@ -377,6 +398,20 @@ export type TauriCommandContractMap = {
       snapshotId: string;
     };
     result: TranscriptSnapshotRecord | null;
+  };
+  [TauriCommand.history.buildTranscriptDiff]: {
+    args: {
+      snapshotSegments: TranscriptSegment[];
+      currentSegments: TranscriptSegment[];
+    };
+    result: TranscriptDiffResult;
+  };
+  [TauriCommand.history.restoreTranscriptDiffRows]: {
+    args: {
+      rows: TranscriptDiffRow[];
+      selectedRowIds: string[];
+    };
+    result: TranscriptSegment[];
   };
   [TauriCommand.history.updateItemMeta]: {
     args: {
@@ -534,6 +569,7 @@ export type TauriCommandContractMap = {
       normalizationOptions: {
         enableTimeline: boolean;
       };
+      postprocessOptions: TranscriptPostprocessOptions;
     };
     result: void;
   };
@@ -574,8 +610,21 @@ export type TauriCommandContractMap = {
       normalizationOptions: {
         enableTimeline: boolean;
       };
+      postprocessOptions: TranscriptPostprocessOptions;
     };
     result: TranscriptSegment[];
+  };
+  [TauriCommand.recovery.loadSnapshot]: {
+    args: undefined;
+    result: RecoverySnapshot;
+  };
+  [TauriCommand.recovery.saveSnapshot]: {
+    args: { items: RecoveredQueueItem[] };
+    result: RecoverySnapshot;
+  };
+  [TauriCommand.recovery.persistQueueSnapshot]: {
+    args: { queueItems: BatchQueueItem[] };
+    result: void;
   };
   [TauriCommand.automation.replaceRuntimeRules]: {
     args: { rules: unknown[] };

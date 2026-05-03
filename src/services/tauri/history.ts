@@ -1,6 +1,7 @@
 import type { HistoryItem } from '../../types/history';
 import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
+  TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
@@ -54,10 +55,16 @@ export async function historyListItems(): Promise<Partial<HistoryItem>[]> {
   return invokeTauri(TauriCommand.history.listItems);
 }
 
-export async function historyCreateLiveDraft<TItem extends HistoryItem>(
-  item: TItem,
-): Promise<HistoryDraftHandle<TItem>> {
-  return invokeTauri(TauriCommand.history.createLiveDraft, { item }) as Promise<HistoryDraftHandle<TItem>>;
+export async function historyCreateLiveDraft(
+  audioExtension: string,
+  projectId: string | null,
+  icon: string | null,
+): Promise<HistoryDraftHandle> {
+  return invokeTauri(TauriCommand.history.createLiveDraft, {
+    audioExtension,
+    projectId,
+    icon,
+  });
 }
 
 export async function historyCompleteLiveDraft(
@@ -125,6 +132,26 @@ export async function historyLoadTranscriptSnapshot(
   snapshotId: string,
 ): Promise<TranscriptSnapshotRecord | null> {
   return invokeTauri(TauriCommand.history.loadTranscriptSnapshot, { historyId, snapshotId });
+}
+
+export async function historyBuildTranscriptDiff(
+  snapshotSegments: TranscriptSegment[],
+  currentSegments: TranscriptSegment[],
+): Promise<{ rows: TranscriptDiffRow[]; changedCount: number }> {
+  return invokeTauri(TauriCommand.history.buildTranscriptDiff, {
+    snapshotSegments,
+    currentSegments,
+  });
+}
+
+export async function historyRestoreTranscriptDiffRows(
+  rows: TranscriptDiffRow[],
+  selectedRowIds: Iterable<string>,
+): Promise<TranscriptSegment[]> {
+  return invokeTauri(TauriCommand.history.restoreTranscriptDiffRows, {
+    rows,
+    selectedRowIds: Array.from(selectedRowIds),
+  });
 }
 
 export async function historyUpdateItemMeta(

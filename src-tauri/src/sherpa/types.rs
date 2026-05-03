@@ -17,6 +17,7 @@ pub struct BatchTranscriptionRequest {
     pub hotwords: Option<String>,
     pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocess_options: TranscriptPostprocessOptions,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +60,48 @@ impl Default for TranscriptNormalizationOptions {
     fn default() -> Self {
         Self {
             enable_timeline: false,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptTextReplacementRule {
+    #[serde(default)]
+    pub from: String,
+    #[serde(default)]
+    pub to: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptTextReplacementRuleSet {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub ignore_case: bool,
+    #[serde(default)]
+    pub rules: Vec<TranscriptTextReplacementRule>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptPostprocessOptions {
+    #[serde(default)]
+    pub text_replacement_sets: Vec<TranscriptTextReplacementRuleSet>,
+    #[serde(default = "default_drop_final_dot_segments")]
+    pub drop_final_dot_segments: bool,
+}
+
+fn default_drop_final_dot_segments() -> bool {
+    true
+}
+
+impl Default for TranscriptPostprocessOptions {
+    fn default() -> Self {
+        Self {
+            text_replacement_sets: Vec::new(),
+            drop_final_dot_segments: default_drop_final_dot_segments(),
         }
     }
 }

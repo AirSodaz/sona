@@ -12,7 +12,8 @@ use super::fs_utils::{
 };
 use super::types::HistoryBackupSnapshot;
 use super::{
-    HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
+    HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
+    HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
     HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, LiveRecordingDraftResult,
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
@@ -70,6 +71,71 @@ fn current_time_millis() -> Result<u64, String> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .map_err(|error| error.to_string())
+}
+
+fn sanitize_audio_extension(extension: &str, fallback: &str) -> String {
+    let extension = extension
+        .trim()
+        .trim_start_matches('.')
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>();
+    if extension.is_empty() {
+        fallback.to_string()
+    } else {
+        extension.to_ascii_lowercase()
+    }
+}
+
+fn extension_from_path(path: &str, fallback: &str) -> String {
+    PathBuf::from(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| sanitize_audio_extension(extension, fallback))
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn file_name_from_path(path: &str, fallback: &str) -> String {
+    PathBuf::from(path)
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .filter(|file_name| !file_name.trim().is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn build_recording_title(timestamp: u64) -> String {
+    let local_time = chrono::DateTime::<chrono::Local>::from(
+        UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
+    );
+    format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
+}
+
+fn build_history_item_record(
+    id: String,
+    timestamp: u64,
+    duration: f64,
+    audio_extension: &str,
+    title: String,
+    kind: HistoryItemKind,
+    project_id: Option<String>,
+    icon: Option<String>,
+) -> HistoryItemRecord {
+    HistoryItemRecord {
+        audio_path: format!("{id}.{audio_extension}"),
+        transcript_path: format!("{id}.json"),
+        id,
+        timestamp,
+        duration: duration.max(0.0),
+        title,
+        preview_text: String::new(),
+        icon,
+        kind,
+        search_content: String::new(),
+        project_id,
+        status: HistoryItemStatus::Complete,
+        draft_source: None,
+    }
 }
 
 #[derive(Clone)]
@@ -188,10 +254,22 @@ impl HistoryRepository {
 
     pub(super) fn create_live_draft(
         &self,
-        item_value: Value,
+        request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, String> {
         self.ensure_ready()?;
-        let mut item = normalize_history_item_value(&item_value);
+        let id = Uuid::new_v4().to_string();
+        let timestamp = current_time_millis()?;
+        let audio_extension = sanitize_audio_extension(&request.audio_extension, "webm");
+        let mut item = build_history_item_record(
+            id,
+            timestamp,
+            0.0,
+            &audio_extension,
+            build_recording_title(timestamp),
+            HistoryItemKind::Recording,
+            request.project_id,
+            request.icon,
+        );
         item.status = HistoryItemStatus::Draft;
         item.draft_source = Some(HistoryDraftSource::LiveRecord);
         write_json_pretty_atomic(
@@ -237,26 +315,58 @@ impl HistoryRepository {
 
     pub(super) fn save_recording(
         &self,
-        item_value: Value,
-        segments: Value,
-        audio_bytes: Option<Vec<u8>>,
-        native_audio_path: Option<String>,
+        request: HistorySaveRecordingRequest,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
-        let mut item = normalize_history_item_value(&item_value);
+        let normalized_transcript = normalize_history_transcript_segments(request.segments)?;
+        let timestamp = current_time_millis()?;
+        let id = Uuid::new_v4().to_string();
+        let audio_extension = request
+            .audio_extension
+            .as_deref()
+            .map(|extension| sanitize_audio_extension(extension, "webm"))
+            .or_else(|| {
+                request
+                    .native_audio_path
+                    .as_deref()
+                    .map(|path| extension_from_path(path, "wav"))
+            })
+            .unwrap_or_else(|| "webm".to_string());
+        let mut item = build_history_item_record(
+            id,
+            timestamp,
+            request.duration,
+            &audio_extension,
+            build_recording_title(timestamp),
+            HistoryItemKind::Recording,
+            request.project_id,
+            None,
+        );
         item.status = HistoryItemStatus::Complete;
         item.draft_source = None;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
-        match (audio_bytes, native_audio_path) {
+        match (request.audio_bytes, request.native_audio_path) {
             (Some(bytes), _) => {
                 let target_path = self.audio_path(&item.audio_path)?;
                 write_binary_atomic(&target_path, &bytes)?;
             }
-            (None, Some(_)) => {
-                // Native capture already wrote the file. We only persist transcript/index here.
+            (None, Some(native_audio_path)) => {
+                let source_path = PathBuf::from(native_audio_path);
+                if !source_path.is_file() {
+                    return Err(format!(
+                        "Native recording source file does not exist: {}",
+                        source_path.to_string_lossy()
+                    ));
+                }
+                let target_path = self.audio_path(&item.audio_path)?;
+                if source_path != target_path {
+                    if let Some(parent) = target_path.parent() {
+                        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                    }
+                    fs::copy(&source_path, &target_path).map_err(|error| error.to_string())?;
+                }
             }
             (None, None) => {
                 return Err(
@@ -275,19 +385,34 @@ impl HistoryRepository {
 
     pub(super) fn save_imported_file(
         &self,
-        item_value: Value,
-        segments: Value,
-        source_path: String,
+        request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let normalized_transcript = normalize_history_transcript_segments(segments)?;
-        let mut item = normalize_history_item_value(&item_value);
+        let normalized_transcript = normalize_history_transcript_segments(request.segments)?;
+        let timestamp = current_time_millis()?;
+        let id = Uuid::new_v4().to_string();
+        let title_file_name = file_name_from_path(&request.source_path, "Imported File");
+        let copy_source_path = request
+            .converted_source_path
+            .clone()
+            .unwrap_or_else(|| request.source_path.clone());
+        let audio_extension = extension_from_path(&copy_source_path, "wav");
+        let mut item = build_history_item_record(
+            id,
+            timestamp,
+            request.duration,
+            &audio_extension,
+            format!("Batch {title_file_name}"),
+            HistoryItemKind::Batch,
+            request.project_id,
+            None,
+        );
         item.status = HistoryItemStatus::Complete;
         item.draft_source = None;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
-        let source = PathBuf::from(source_path);
+        let source = PathBuf::from(copy_source_path);
         if !source.is_file() {
             return Err(format!(
                 "Imported source file does not exist: {}",
@@ -857,27 +982,33 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
 
         let draft = repository
-            .create_live_draft(json!({
-                "id": "draft-1",
-                "timestamp": 1,
-                "duration": 0,
-                "audioPath": "draft-1.webm",
-                "transcriptPath": "draft-1.json",
-                "title": "Draft",
-                "previewText": "",
-                "type": "recording",
-                "searchContent": "",
-                "projectId": null,
-                "status": "draft",
-                "draftSource": "live_record"
-            }))
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                audio_extension: "webm".to_string(),
+                project_id: Some("project-1".to_string()),
+                icon: Some("system:mic".to_string()),
+            })
             .unwrap();
         assert_eq!(draft.item.status, HistoryItemStatus::Draft);
-        assert!(PathBuf::from(&draft.audio_absolute_path).ends_with("draft-1.webm"));
+        assert!(!draft.item.id.is_empty());
+        assert!(draft.item.audio_path.ends_with(".webm"));
+        assert_eq!(draft.item.audio_path, format!("{}.webm", draft.item.id));
+        assert_eq!(
+            draft.item.transcript_path,
+            format!("{}.json", draft.item.id)
+        );
+        assert!(draft.item.title.starts_with("Recording "));
+        assert_eq!(draft.item.project_id.as_deref(), Some("project-1"));
+        assert_eq!(draft.item.icon.as_deref(), Some("system:mic"));
+        assert_eq!(draft.item.kind, HistoryItemKind::Recording);
+        assert_eq!(
+            draft.item.draft_source,
+            Some(HistoryDraftSource::LiveRecord)
+        );
+        assert!(PathBuf::from(&draft.audio_absolute_path).ends_with(&draft.item.audio_path));
 
         let completed = repository
             .complete_live_draft(
-                "draft-1",
+                &draft.item.id,
                 json!([segment_value("seg-1", "hello", 0.0, 3.0)]),
                 3.0,
             )
@@ -885,7 +1016,10 @@ mod tests {
 
         assert_eq!(completed.status, HistoryItemStatus::Complete);
         assert_eq!(completed.preview_text, "hello...");
-        let transcript = repository.load_transcript("draft-1.json").unwrap().unwrap();
+        let transcript = repository
+            .load_transcript(&draft.item.transcript_path)
+            .unwrap()
+            .unwrap();
         assert_eq!(transcript.as_array().unwrap().len(), 1);
     }
 
@@ -924,56 +1058,74 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
 
         let recording = repository
-            .save_recording(
-                json!({
-                    "id": "recording-1",
-                    "timestamp": 1,
-                    "duration": 2,
-                    "audioPath": "recording-1.wav",
-                    "transcriptPath": "recording-1.json",
-                    "title": "Recording",
-                    "previewText": "caller recording preview",
-                    "type": "recording",
-                    "searchContent": "caller recording search",
-                    "projectId": null,
-                    "status": "complete",
-                    "draftSource": null
-                }),
-                json!([segment_value("seg-1", "Recorded text", 0.0, 1.0)]),
-                Some(vec![0, 1, 2]),
-                None,
-            )
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([segment_value("seg-1", "Recorded text", 0.0, 1.0)]),
+                duration: 2.0,
+                project_id: Some("project-1".to_string()),
+                audio_bytes: Some(vec![0, 1, 2]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
             .unwrap();
 
         assert_eq!(recording.preview_text, "Recorded text...");
         assert_eq!(recording.search_content, "Recorded text");
+        assert!(!recording.id.is_empty());
+        assert_eq!(recording.audio_path, format!("{}.wav", recording.id));
+        assert_eq!(recording.transcript_path, format!("{}.json", recording.id));
+        assert!(recording.title.starts_with("Recording "));
+        assert_eq!(recording.project_id.as_deref(), Some("project-1"));
+        assert_eq!(recording.kind, HistoryItemKind::Recording);
+        assert_eq!(recording.status, HistoryItemStatus::Complete);
+        assert_eq!(recording.draft_source, None);
 
         let source_path = root.path().join("import-source.wav");
         fs::write(&source_path, [3, 4, 5]).unwrap();
 
         let imported = repository
-            .save_imported_file(
-                json!({
-                    "id": "imported-1",
-                    "timestamp": 1,
-                    "duration": 2,
-                    "audioPath": "imported-1.wav",
-                    "transcriptPath": "imported-1.json",
-                    "title": "Imported",
-                    "previewText": "caller imported preview",
-                    "type": "batch",
-                    "searchContent": "caller imported search",
-                    "projectId": null,
-                    "status": "complete",
-                    "draftSource": null
-                }),
-                json!([segment_value("seg-1", "Imported text", 0.0, 1.0)]),
-                source_path.to_string_lossy().into_owned(),
-            )
+            .save_imported_file(HistorySaveImportedFileRequest {
+                source_path: source_path.to_string_lossy().into_owned(),
+                segments: json!([segment_value("seg-1", "Imported text", 0.0, 1.0)]),
+                duration: 2.0,
+                project_id: Some("project-1".to_string()),
+                converted_source_path: None,
+            })
             .unwrap();
 
         assert_eq!(imported.preview_text, "Imported text...");
         assert_eq!(imported.search_content, "Imported text");
+        assert_eq!(imported.audio_path, format!("{}.wav", imported.id));
+        assert_eq!(imported.transcript_path, format!("{}.json", imported.id));
+        assert_eq!(imported.title, "Batch import-source.wav");
+        assert_eq!(imported.project_id.as_deref(), Some("project-1"));
+        assert_eq!(imported.kind, HistoryItemKind::Batch);
+    }
+
+    #[test]
+    fn imported_file_uses_original_name_for_title_and_converted_source_for_copy() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        let original_path = root.path().join("meeting.mp3");
+        let converted_path = root.path().join("converted.wav");
+        fs::write(&original_path, [1, 2, 3]).unwrap();
+        fs::write(&converted_path, [4, 5, 6]).unwrap();
+
+        let imported = repository
+            .save_imported_file(HistorySaveImportedFileRequest {
+                source_path: original_path.to_string_lossy().into_owned(),
+                segments: json!([segment_value("seg-1", "Converted text", 0.0, 1.0)]),
+                duration: 1.0,
+                project_id: None,
+                converted_source_path: Some(converted_path.to_string_lossy().into_owned()),
+            })
+            .unwrap();
+
+        assert_eq!(imported.title, "Batch meeting.mp3");
+        assert_eq!(imported.audio_path, format!("{}.wav", imported.id));
+        assert_eq!(
+            fs::read(repository.audio_path(&imported.audio_path).unwrap()).unwrap(),
+            vec![4, 5, 6]
+        );
     }
 
     #[test]
@@ -982,22 +1134,8 @@ mod tests {
         let repository = HistoryRepository::new(root.path().to_path_buf());
 
         let saved = repository
-            .save_recording(
-                json!({
-                    "id": "legacy-1",
-                    "timestamp": 1,
-                    "duration": 2,
-                    "audioPath": "legacy-1.wav",
-                    "transcriptPath": "legacy-1.json",
-                    "title": "Legacy",
-                    "previewText": "",
-                    "type": "recording",
-                    "searchContent": "",
-                    "projectId": null,
-                    "status": "complete",
-                    "draftSource": null
-                }),
-                json!([{
+            .save_recording(HistorySaveRecordingRequest {
+                segments: json!([{
                     "id": "seg-1",
                     "text": "\u{4f60}\u{597d}",
                     "start": 0.0,
@@ -1007,9 +1145,12 @@ mod tests {
                     "timestamps": [0.0, 0.5],
                     "durations": [0.5, 0.5]
                 }]),
-                Some(vec![0, 1, 2]),
-                None,
-            )
+                duration: 2.0,
+                project_id: None,
+                audio_bytes: Some(vec![0, 1, 2]),
+                native_audio_path: None,
+                audio_extension: Some("wav".to_string()),
+            })
             .unwrap();
 
         let transcript = repository

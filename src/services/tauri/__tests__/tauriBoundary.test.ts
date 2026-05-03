@@ -14,10 +14,13 @@ import {
 } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
+  historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
   historyLoadTranscriptSnapshot,
   historyQueryWorkspace,
+  historySaveImportedFile,
+  historySaveRecording,
   historyUpdateTranscript,
 } from '../history';
 import { generateLlmText } from '../llm';
@@ -48,6 +51,11 @@ import {
   projectSetActiveId,
   projectUpdate,
 } from '../project';
+import {
+  recoveryLoadSnapshot,
+  recoveryPersistQueueSnapshot,
+  recoverySaveSnapshot,
+} from '../recovery';
 import {
   annotateSpeakerSegmentsFromFile,
   applySpeakerProfileToGroup,
@@ -242,6 +250,44 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
+  it('history wrappers forward item creation intents without caller-built items', async () => {
+    await historyCreateLiveDraft('webm', 'project-1', 'system:mic');
+    await historySaveRecording({
+      segments: [],
+      duration: 3,
+      projectId: 'project-1',
+      audioBytes: [1, 2, 3],
+      audioExtension: 'webm',
+    });
+    await historySaveImportedFile({
+      sourcePath: 'D:/audio/meeting.mp3',
+      segments: [],
+      duration: 4,
+      projectId: null,
+      convertedSourcePath: 'C:/Temp/meeting.wav',
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.createLiveDraft, {
+      audioExtension: 'webm',
+      projectId: 'project-1',
+      icon: 'system:mic',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.saveRecording, {
+      segments: [],
+      duration: 3,
+      projectId: 'project-1',
+      audioBytes: [1, 2, 3],
+      audioExtension: 'webm',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.saveImportedFile, {
+      sourcePath: 'D:/audio/meeting.mp3',
+      segments: [],
+      duration: 4,
+      projectId: null,
+      convertedSourcePath: 'C:/Temp/meeting.wav',
+    });
+  });
+
   it('history wrappers forward transcript snapshot payloads', async () => {
     vi.mocked(invoke)
       .mockResolvedValueOnce({ id: 'snapshot-1' })
@@ -342,6 +388,10 @@ describe('tauri boundary wrappers', () => {
       normalizationOptions: {
         enableTimeline: false,
       },
+      postprocessOptions: {
+        textReplacementSets: [],
+        dropFinalDotSegments: true,
+      },
     });
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.recognizer.init, {
@@ -357,6 +407,10 @@ describe('tauri boundary wrappers', () => {
       hotwords: null,
       normalizationOptions: {
         enableTimeline: false,
+      },
+      postprocessOptions: {
+        textReplacementSets: [],
+        dropFinalDotSegments: true,
       },
     });
   });
@@ -475,6 +529,46 @@ describe('tauri boundary wrappers', () => {
       rule,
       globalConfig: {},
       project: null,
+    });
+  });
+
+  it('recovery wrappers forward repository commands', async () => {
+    const item = {
+      id: 'recovery-1',
+      filename: 'meeting.wav',
+      filePath: 'C:/watch/meeting.wav',
+      source: 'batch_import',
+      resolution: 'pending',
+      progress: 10,
+      segments: [],
+      projectId: null,
+      lastKnownStage: 'queued',
+      updatedAt: 100,
+      hasSourceFile: true,
+      canResume: true,
+    };
+    const queueItem = {
+      id: 'queue-1',
+      filename: 'meeting.wav',
+      filePath: 'C:/watch/meeting.wav',
+      status: 'pending',
+      progress: 10,
+      segments: [],
+      projectId: null,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
+
+    const snapshot = await recoveryLoadSnapshot();
+    await recoverySaveSnapshot([item as any]);
+    await recoveryPersistQueueSnapshot([queueItem as any]);
+
+    expect(snapshot).toEqual({ version: 1, updatedAt: 100, items: [item] });
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.recovery.loadSnapshot);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.recovery.saveSnapshot, {
+      items: [item],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.recovery.persistQueueSnapshot, {
+      queueItems: [queueItem],
     });
   });
 

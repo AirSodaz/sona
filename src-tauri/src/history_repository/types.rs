@@ -3,6 +3,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::sherpa::TranscriptSegment;
+
 #[derive(Clone, Debug)]
 pub(super) struct PreparedBackupImportSnapshot {
     pub(super) archive_path: String,
@@ -154,6 +156,32 @@ pub struct LiveRecordingDraftResult {
     pub audio_absolute_path: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistoryCreateLiveDraftRequest {
+    pub audio_extension: String,
+    pub project_id: Option<String>,
+    pub icon: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistorySaveRecordingRequest {
+    pub segments: Value,
+    pub duration: f64,
+    pub project_id: Option<String>,
+    pub audio_bytes: Option<Vec<u8>>,
+    pub native_audio_path: Option<String>,
+    pub audio_extension: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistorySaveImportedFileRequest {
+    pub source_path: String,
+    pub segments: Value,
+    pub duration: f64,
+    pub project_id: Option<String>,
+    pub converted_source_path: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TranscriptSnapshotReason {
@@ -178,6 +206,35 @@ pub struct TranscriptSnapshotMetadata {
 pub struct TranscriptSnapshotRecord {
     pub metadata: TranscriptSnapshotMetadata,
     pub segments: Value,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscriptDiffStatus {
+    Unchanged,
+    Modified,
+    Added,
+    Removed,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptDiffRow {
+    pub id: String,
+    pub status: TranscriptDiffStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_segment: Option<TranscriptSegment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_segment: Option<TranscriptSegment>,
+    pub snapshot_index: Option<usize>,
+    pub current_index: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptDiffResult {
+    pub rows: Vec<TranscriptDiffRow>,
+    pub changed_count: usize,
 }
 
 #[derive(Clone, Debug, Deserialize)]

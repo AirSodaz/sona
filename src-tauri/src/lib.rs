@@ -15,6 +15,7 @@ mod llm;
 pub mod pipeline;
 pub mod preset_models;
 mod project_repository;
+mod recovery;
 mod runtime_status;
 pub mod sherpa;
 pub mod speaker;
@@ -281,6 +282,8 @@ pub fn run() {
             history_repository::commands::history_create_transcript_snapshot,
             history_repository::commands::history_list_transcript_snapshots,
             history_repository::commands::history_load_transcript_snapshot,
+            history_repository::commands::history_build_transcript_diff,
+            history_repository::commands::history_restore_transcript_diff_rows,
             history_repository::commands::history_update_item_meta,
             history_repository::commands::history_update_project_assignments,
             history_repository::commands::history_reassign_project,
@@ -315,6 +318,9 @@ pub fn run() {
             runtime_status::open_log_folder,
             runtime_status::get_runtime_environment_status,
             runtime_status::get_path_statuses,
+            recovery::recovery_load_snapshot,
+            recovery::recovery_save_snapshot,
+            recovery::recovery_persist_queue_snapshot,
             automation_runtime::replace_automation_runtime_rules,
             automation_runtime::scan_automation_runtime_rule,
             automation_runtime::collect_automation_runtime_rule_paths,

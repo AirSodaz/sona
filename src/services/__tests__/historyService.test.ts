@@ -4,10 +4,6 @@ const testContext = vi.hoisted(() => ({
   invokeMock: vi.fn(),
 }));
 
-vi.mock('uuid', () => ({
-  v4: () => 'history-1',
-}));
-
 vi.mock('@tauri-apps/api/core', () => ({
   convertFileSrc: vi.fn().mockImplementation((path) => `asset://${path}`),
   invoke: testContext.invokeMock,
@@ -27,15 +23,14 @@ describe('historyService', () => {
     vi.clearAllMocks();
   });
 
-  it('createLiveRecordingDraft persists a draft through the Rust bridge and normalizes the returned item', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(123456789);
+  it('createLiveRecordingDraft lets Rust create the draft item and normalizes the returned item', async () => {
     testContext.invokeMock.mockResolvedValue({
       item: {
-        id: 'history-1',
+        id: 'rust-history-1',
         timestamp: 123456789,
         duration: 0,
-        audioPath: 'history-1.webm',
-        transcriptPath: 'history-1.json',
+        audioPath: 'rust-history-1.webm',
+        transcriptPath: 'rust-history-1.json',
         title: 'Recording 1970-01-02 10-17-36',
         previewText: '',
         icon: 'system:mic',
@@ -45,27 +40,121 @@ describe('historyService', () => {
         status: 'draft',
         draftSource: 'live_record',
       },
-      audioAbsolutePath: 'C:\\AppData\\history\\history-1.webm',
+      audioAbsolutePath: 'C:\\AppData\\history\\rust-history-1.webm',
     });
 
-    const result = await historyService.createLiveRecordingDraft('webm', null, 'system:mic');
+    const result = await historyService.createLiveRecordingDraft('.webm', 'project-1', 'system:mic');
 
     expect(testContext.invokeMock).toHaveBeenCalledWith('history_create_live_draft', {
-      item: expect.objectContaining({
-        id: 'history-1',
-        audioPath: 'history-1.webm',
-        transcriptPath: 'history-1.json',
-        status: 'draft',
-        draftSource: 'live_record',
-      }),
+      audioExtension: '.webm',
+      projectId: 'project-1',
+      icon: 'system:mic',
     });
     expect(result).toEqual(expect.objectContaining({
-      audioAbsolutePath: 'C:\\AppData\\history\\history-1.webm',
+      audioAbsolutePath: 'C:\\AppData\\history\\rust-history-1.webm',
       item: expect.objectContaining({
-        id: 'history-1',
+        id: 'rust-history-1',
         status: 'draft',
       }),
     }));
+  });
+
+  it('saveRecording sends browser audio bytes as transport and leaves item creation to Rust', async () => {
+    testContext.invokeMock.mockResolvedValue({
+      id: 'rust-recording-1',
+      timestamp: 123456789,
+      duration: 3,
+      audioPath: 'rust-recording-1.webm',
+      transcriptPath: 'rust-recording-1.json',
+      title: 'Recording 1970-01-02 10-17-36',
+      previewText: 'Hello...',
+      type: 'recording',
+      searchContent: 'Hello',
+      projectId: 'project-1',
+      status: 'complete',
+    });
+
+    const item = await historyService.saveRecording(
+      new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/webm' }),
+      [{ id: 'seg-1', text: 'Hello', start: 0, end: 3, isFinal: true }],
+      3,
+      'project-1',
+    );
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('history_save_recording', {
+      segments: [{ id: 'seg-1', text: 'Hello', start: 0, end: 3, isFinal: true }],
+      duration: 3,
+      projectId: 'project-1',
+      audioBytes: [1, 2, 3],
+      audioExtension: 'webm',
+    });
+    expect(item).toEqual(expect.objectContaining({
+      id: 'rust-recording-1',
+      previewText: 'Hello...',
+      searchContent: 'Hello',
+    }));
+  });
+
+  it('saveNativeRecording sends the native path and leaves item creation to Rust', async () => {
+    testContext.invokeMock.mockResolvedValue({
+      id: 'rust-native-1',
+      timestamp: 123456789,
+      duration: 4,
+      audioPath: 'capture.wav',
+      transcriptPath: 'rust-native-1.json',
+      title: 'Recording 1970-01-02 10-17-36',
+      previewText: 'Native...',
+      type: 'recording',
+      searchContent: 'Native',
+      projectId: null,
+      status: 'complete',
+    });
+
+    await historyService.saveNativeRecording(
+      'C:\\AppData\\history\\capture.wav',
+      [{ id: 'seg-1', text: 'Native', start: 0, end: 4, isFinal: true }],
+      4,
+    );
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('history_save_recording', {
+      segments: [{ id: 'seg-1', text: 'Native', start: 0, end: 4, isFinal: true }],
+      duration: 4,
+      projectId: null,
+      nativeAudioPath: 'C:\\AppData\\history\\capture.wav',
+      audioExtension: 'wav',
+    });
+  });
+
+  it('saveImportedFile preserves the original source path and passes converted source separately', async () => {
+    testContext.invokeMock.mockResolvedValue({
+      id: 'rust-import-1',
+      timestamp: 123456789,
+      duration: 5,
+      audioPath: 'rust-import-1.wav',
+      transcriptPath: 'rust-import-1.json',
+      title: 'Batch meeting.mp3',
+      previewText: 'Imported...',
+      type: 'batch',
+      searchContent: 'Imported',
+      projectId: 'project-1',
+      status: 'complete',
+    });
+
+    await historyService.saveImportedFile(
+      'D:\\audio\\meeting.mp3',
+      [{ id: 'seg-1', text: 'Imported', start: 0, end: 5, isFinal: true }],
+      5,
+      'C:\\Temp\\meeting.wav',
+      'project-1',
+    );
+
+    expect(testContext.invokeMock).toHaveBeenCalledWith('history_save_imported_file', {
+      sourcePath: 'D:\\audio\\meeting.mp3',
+      segments: [{ id: 'seg-1', text: 'Imported', start: 0, end: 5, isFinal: true }],
+      duration: 5,
+      projectId: 'project-1',
+      convertedSourcePath: 'C:\\Temp\\meeting.wav',
+    });
   });
 
   it('deleteRecordings forwards the whole id set through one Rust command', async () => {

@@ -170,9 +170,15 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 callbackInvoked: true,
             })
         );
+        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+            postprocessOptions: {
+                textReplacementSets: [],
+                dropFinalDotSegments: true,
+            },
+        }));
     });
 
-    it('logs when text replacements collapse a voice-typing segment to empty text', async () => {
+    it('does not apply frontend text replacements to recognizer events', async () => {
         mocks.config = {
             ...mocks.config,
             textReplacementSets: [
@@ -216,7 +222,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 upsertSegments: [
                     expect.objectContaining({
                         id: 'seg-2',
-                        text: '',
+                        text: '测试123',
                     }),
                 ],
             }),
@@ -227,11 +233,15 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 instanceId: 'voice-typing',
                 segmentId: 'seg-2',
                 rawTextLength: 5,
-                processedTextLength: 0,
-                replacementChanged: true,
-                replacedToEmpty: true,
+                processedTextLength: 5,
             })
         );
+        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+            postprocessOptions: {
+                textReplacementSets: mocks.config.textReplacementSets,
+                dropFinalDotSegments: true,
+            },
+        }));
     });
 
     it('sends null speakerProcessing for batch transcription when either speaker model is off', async () => {
@@ -297,4 +307,66 @@ describe('TranscriptionService voice typing diagnostics', () => {
             },
         }));
     });
+
+    it('passes postprocess options to batch and returns backend segments without local filtering', async () => {
+        mocks.config = {
+            ...mocks.config,
+            textReplacementSets: [
+                {
+                    id: 'set-1',
+                    name: 'test',
+                    enabled: true,
+                    ignoreCase: false,
+                    rules: [
+                        {
+                            from: 'apple',
+                            to: 'orange',
+                        },
+                    ],
+                },
+            ],
+        };
+        const backendSegments = [
+            {
+                id: 'seg-apple',
+                text: 'apple',
+                start: 0,
+                end: 1,
+                isFinal: true,
+            },
+            {
+                id: 'seg-dot',
+                text: '.',
+                start: 1,
+                end: 1.2,
+                isFinal: true,
+            },
+        ];
+        mocks.invoke.mockImplementation((async (...args: any[]) => {
+            const [command] = args;
+            if (command === 'process_batch_file') {
+                return backendSegments;
+            }
+            return undefined;
+        }) as any);
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        service.setModelPath('/models/offline');
+
+        const segments = await service.transcribeFile('C:/audio/demo.wav');
+
+        expect(mocks.invoke).toHaveBeenCalledWith('process_batch_file', expect.objectContaining({
+            postprocessOptions: {
+                textReplacementSets: mocks.config.textReplacementSets,
+                dropFinalDotSegments: true,
+            },
+        }));
+        expect(segments.map((segment) => ({ id: segment.id, text: segment.text }))).toEqual([
+            { id: 'seg-apple', text: 'apple' },
+            { id: 'seg-dot', text: '.' },
+        ]);
+    });
+
 });

@@ -1,8 +1,9 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { v4 as uuidv4 } from 'uuid';
 import { HistoryItem } from '../types/history';
 import { HistorySummaryPayload, TranscriptSegment } from '../types/transcript';
 import {
+    TranscriptDiffResult,
+    TranscriptDiffRow,
     TranscriptSnapshotMetadata,
     TranscriptSnapshotReason,
     TranscriptSnapshotRecord,
@@ -15,6 +16,7 @@ import {
     historyDeleteItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
+    historyBuildTranscriptDiff,
     historyListItems,
     historyLoadSummary,
     historyLoadTranscript,
@@ -22,6 +24,7 @@ import {
     historyLoadTranscriptSnapshot,
     historyOpenFolder,
     historyReassignProject,
+    historyRestoreTranscriptDiffRows,
     historyResolveAudioPath,
     historySaveImportedFile,
     historySaveRecording,
@@ -54,14 +57,20 @@ function normalizeHistoryItem(item: Partial<HistoryItem> | null | undefined): Hi
     };
 }
 
-function buildRecordingTitle(timestamp: number): string {
-    const dateStr = new Date(timestamp).toISOString().split('T')[0];
-    const timeStr = new Date(timestamp).toLocaleTimeString().replace(/:/g, '-');
-    return `Recording ${dateStr} ${timeStr}`;
+function inferAudioExtensionFromPath(filePath: string, fallback: string): string {
+    const fileName = filePath.split(/[/\\]/).pop() || '';
+    const extensionIndex = fileName.lastIndexOf('.');
+    const extension = extensionIndex >= 0 ? fileName.slice(extensionIndex + 1).trim() : '';
+    return extension || fallback;
 }
 
-function buildDraftAudioFileName(id: string, audioExtension: string): string {
-    return `${id}.${audioExtension.replace(/^\./, '')}`;
+function inferAudioExtensionFromBlob(blob: Blob): string {
+    const mimeType = blob.type.toLowerCase();
+    if (mimeType.includes('mp4')) return 'm4a';
+    if (mimeType.includes('aac')) return 'aac';
+    if (mimeType.includes('ogg')) return 'ogg';
+    if (mimeType.includes('wav')) return 'wav';
+    return 'webm';
 }
 
 export const historyService = {
@@ -80,25 +89,7 @@ export const historyService = {
         projectId: string | null = null,
         icon: string | null = 'system:mic',
     ): Promise<LiveRecordingDraftHandle> {
-        const id = uuidv4();
-        const timestamp = Date.now();
-        const item: HistoryItem = {
-            id,
-            timestamp,
-            duration: 0,
-            audioPath: buildDraftAudioFileName(id, audioExtension),
-            transcriptPath: `${id}.json`,
-            title: buildRecordingTitle(timestamp),
-            previewText: '',
-            icon: icon || undefined,
-            type: 'recording',
-            searchContent: '',
-            projectId,
-            status: 'draft',
-            draftSource: 'live_record',
-        };
-
-        const result = await historyCreateLiveDraft(item);
+        const result = await historyCreateLiveDraft(audioExtension, projectId, icon);
 
         return {
             item: normalizeHistoryItem(result?.item),
@@ -138,26 +129,12 @@ export const historyService = {
         }
 
         try {
-            const id = uuidv4();
-            const timestamp = Date.now();
-            const filename = absoluteWavPath.split(/[/\\]/).pop() || `${id}.wav`;
-
             const item = await historySaveRecording({
-                item: {
-                    id,
-                    timestamp,
-                    duration,
-                    audioPath: filename,
-                    transcriptPath: `${id}.json`,
-                    title: buildRecordingTitle(timestamp),
-                    previewText: '',
-                    type: 'recording',
-                    searchContent: '',
-                    projectId,
-                    status: 'complete',
-                },
                 segments,
+                duration,
+                projectId,
                 nativeAudioPath: absoluteWavPath,
+                audioExtension: inferAudioExtensionFromPath(absoluteWavPath, 'wav'),
             });
 
             return normalizeHistoryItem(item);
@@ -181,26 +158,14 @@ export const historyService = {
         }
 
         try {
-            const id = uuidv4();
-            const timestamp = Date.now();
             const audioBytes = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
 
             const item = await historySaveRecording({
-                item: {
-                    id,
-                    timestamp,
-                    duration,
-                    audioPath: `${id}.webm`,
-                    transcriptPath: `${id}.json`,
-                    title: buildRecordingTitle(timestamp),
-                    previewText: '',
-                    type: 'recording',
-                    searchContent: '',
-                    projectId,
-                    status: 'complete',
-                },
                 segments,
+                duration,
+                projectId,
                 audioBytes,
+                audioExtension: inferAudioExtensionFromBlob(audioBlob),
             });
 
             return normalizeHistoryItem(item);
@@ -225,27 +190,12 @@ export const historyService = {
         }
 
         try {
-            const id = uuidv4();
-            const timestamp = Date.now();
-            const filename = filePath.split(/[/\\]/).pop() || 'Imported File';
-            const targetExt = convertedFilePath ? 'wav' : (filename.split('.').pop() || 'wav');
-
             const item = await historySaveImportedFile({
-                item: {
-                    id,
-                    timestamp,
-                    duration,
-                    audioPath: `${id}.${targetExt}`,
-                    transcriptPath: `${id}.json`,
-                    title: `Batch ${filename}`,
-                    previewText: '',
-                    type: 'batch',
-                    searchContent: '',
-                    projectId,
-                    status: 'complete',
-                },
+                sourcePath: filePath,
                 segments,
-                sourcePath: convertedFilePath || filePath,
+                duration,
+                projectId,
+                convertedSourcePath: convertedFilePath,
             });
 
             return normalizeHistoryItem(item);
@@ -322,6 +272,20 @@ export const historyService = {
             ...record,
             segments: normalizeTranscriptSegments(record.segments),
         };
+    },
+
+    async buildTranscriptDiff(
+        snapshotSegments: TranscriptSegment[],
+        currentSegments: TranscriptSegment[],
+    ): Promise<TranscriptDiffResult> {
+        return historyBuildTranscriptDiff(snapshotSegments, currentSegments);
+    },
+
+    async restoreTranscriptDiffRows(
+        rows: TranscriptDiffRow[],
+        selectedRowIds: Iterable<string>,
+    ): Promise<TranscriptSegment[]> {
+        return historyRestoreTranscriptDiffRows(rows, selectedRowIds);
     },
 
     async updateItemMeta(id: string, updates: Partial<HistoryItem>): Promise<void> {

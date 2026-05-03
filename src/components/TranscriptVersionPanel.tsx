@@ -22,11 +22,6 @@ import type {
   TranscriptSnapshotRecord,
   TranscriptSnapshotReason,
 } from '../types/transcriptSnapshot';
-import {
-  buildTranscriptDiffRows,
-  countChangedTranscriptDiffRows,
-  restoreSelectedTranscriptDiffRows,
-} from '../utils/transcriptDiff';
 import './PanelModal.css';
 import './TranscriptVersionPanel.css';
 
@@ -82,8 +77,11 @@ export function TranscriptVersionPanel({
   const [snapshots, setSnapshots] = useState<TranscriptSnapshotMetadata[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<TranscriptSnapshotRecord | null>(null);
+  const [diffRows, setDiffRows] = useState<TranscriptDiffRow[]>([]);
+  const [changedCount, setChangedCount] = useState(0);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,15 +165,68 @@ export function TranscriptVersionPanel({
     };
   }, [historyId, isOpen, selectedSnapshotId, t]);
 
-  const diffRows = useMemo(() => (
-    selectedRecord ? buildTranscriptDiffRows(selectedRecord.segments, currentSegments) : []
-  ), [currentSegments, selectedRecord]);
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      if (!isOpen || !selectedRecord) {
+        setDiffRows([]);
+        setChangedCount(0);
+        setIsDiffLoading(false);
+        return;
+      }
+
+      setIsDiffLoading(true);
+      setError(null);
+      void transcriptSnapshotService.buildDiff(selectedRecord.segments, currentSegments)
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
+
+          setDiffRows(result.rows);
+          setChangedCount(result.changedCount);
+          setSelectedRowIds((current) => {
+            const changedRowIds = new Set(
+              result.rows
+                .filter((row) => row.status !== 'unchanged')
+                .map((row) => row.id),
+            );
+            const next = new Set(
+              Array.from(current).filter((rowId) => changedRowIds.has(rowId)),
+            );
+            return next.size === current.size ? current : next;
+          });
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+
+          setDiffRows([]);
+          setChangedCount(0);
+          setError(t('versions.error_load_snapshot'));
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsDiffLoading(false);
+          }
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSegments, isOpen, selectedRecord, t]);
 
   const changedRows = useMemo(
     () => diffRows.filter((row) => row.status !== 'unchanged'),
     [diffRows],
   );
-  const changedCount = countChangedTranscriptDiffRows(diffRows);
 
   const toggleRow = (rowId: string) => {
     setSelectedRowIds((current) => {
@@ -227,9 +278,10 @@ export function TranscriptVersionPanel({
     setError(null);
     try {
       const latestSegments = useTranscriptSessionStore.getState().segments;
-      const latestRows = buildTranscriptDiffRows(selectedRecord.segments, latestSegments);
+      const latestDiff = await transcriptSnapshotService.buildDiff(selectedRecord.segments, latestSegments);
       await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
-      await persistRestoredSegments(restoreSelectedTranscriptDiffRows(latestRows, selectedRowIds));
+      const restoredSegments = await transcriptSnapshotService.restoreDiffRows(latestDiff.rows, selectedRowIds);
+      await persistRestoredSegments(restoredSegments);
       await loadSnapshots();
     } catch (restoreError) {
       await showError({
@@ -307,7 +359,7 @@ export function TranscriptVersionPanel({
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => void handleRestoreSelected()}
-                disabled={isBusy || selectedRowIds.size === 0}
+                disabled={isBusy || isDiffLoading || selectedRowIds.size === 0}
               >
                 {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Undo2 size={14} />}
                 {t('versions.restore_selected')}
@@ -388,13 +440,19 @@ export function TranscriptVersionPanel({
 
           <section className="transcript-version-diff" aria-label={t('versions.diff_label')}>
             {selectedRecord ? (
-              <>
+              isDiffLoading ? (
+                <div className="transcript-version-empty">
+                  <Loader2 size={16} className="queue-icon-spin" />
+                  {t('versions.loading')}
+                </div>
+              ) : (
+                <>
                 <div className="transcript-version-diff-toolbar">
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={handleToggleAll}
-                    disabled={isBusy || changedRows.length === 0}
+                    disabled={isBusy || isDiffLoading || changedRows.length === 0}
                   >
                     {allChangedRowsSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                     {allChangedRowsSelected ? t('versions.clear_selection') : t('versions.select_all_changes')}
@@ -444,7 +502,8 @@ export function TranscriptVersionPanel({
                     );
                   })}
                 </div>
-              </>
+                </>
+              )
             ) : (
               <div className="transcript-version-empty">{t('versions.choose_snapshot')}</div>
             )}

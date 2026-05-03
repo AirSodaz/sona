@@ -46,6 +46,8 @@ export const TauriCommand = {
     createTranscriptSnapshot: 'history_create_transcript_snapshot',
     listTranscriptSnapshots: 'history_list_transcript_snapshots',
     loadTranscriptSnapshot: 'history_load_transcript_snapshot',
+    buildTranscriptDiff: 'history_build_transcript_diff',
+    restoreTranscriptDiffRows: 'history_restore_transcript_diff_rows',
     updateItemMeta: 'history_update_item_meta',
     updateProjectAssignments: 'history_update_project_assignments',
     reassignProject: 'history_reassign_project',
@@ -98,6 +100,11 @@ export const TauriCommand = {
     flush: 'flush_recognizer',
     feedAudioChunk: 'feed_audio_chunk',
     processBatchFile: 'process_batch_file',
+  },
+  recovery: {
+    loadSnapshot: 'recovery_load_snapshot',
+    saveSnapshot: 'recovery_save_snapshot',
+    persistQueueSnapshot: 'recovery_persist_queue_snapshot',
   },
   automation: {
     replaceRuntimeRules: 'replace_automation_runtime_rules',

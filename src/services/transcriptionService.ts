@@ -5,7 +5,6 @@ import type { AppConfig } from '../types/config';
 import type { ModelFileConfig } from '../types/model';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { modelService } from './modelService';
-import { applyTextReplacements } from '../utils/textProcessing';
 import { speakerService } from './speakerService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { findSelectedModelByMode } from '../utils/modelSelection';
@@ -55,6 +54,26 @@ interface ServiceConfig {
     fileConfig?: ModelFileConfig;
     hotwords?: string;
     enableTimeline: boolean;
+    postprocessOptions: TranscriptPostprocessOptions;
+}
+
+type TranscriptPostprocessOptions = {
+    textReplacementSets: NonNullable<AppConfig['textReplacementSets']>;
+    dropFinalDotSegments: boolean;
+};
+
+function buildPostprocessOptions(appConfig: AppConfig): TranscriptPostprocessOptions {
+    return {
+        textReplacementSets: appConfig.textReplacementSets || [],
+        dropFinalDotSegments: true,
+    };
+}
+
+function arePostprocessOptionsEqual(
+    left: TranscriptPostprocessOptions,
+    right: TranscriptPostprocessOptions,
+): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
 }
 
 /**
@@ -108,46 +127,25 @@ export class TranscriptionService {
             }
 
             try {
-                // Apply text replacements from global config
-                const appConfig = getEffectiveConfigSnapshot();
-                const processedUpdate = normalizeTranscriptUpdate({
-                    removeIds: update.removeIds,
-                    upsertSegments: update.upsertSegments.map((segment) => {
-                        const originalText = segment.text;
-                        const processedText = applyTextReplacements(originalText, appConfig.textReplacementSets);
-                        const replacementChanged = originalText !== processedText;
-                        const replacedToEmpty = originalText.trim().length > 0 && processedText.trim().length === 0;
+                for (const segment of update.upsertSegments) {
+                    if (shouldLogVoiceTypingDiagnostics(instanceId)) {
+                        logger.info(
+                            '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
+                            {
+                                instanceId,
+                                registrationId: instance.registrationId,
+                                segmentId: segment.id,
+                                isFinal: segment.isFinal,
+                                rawTextLength: segment.text.length,
+                                processedTextLength: segment.text.length,
+                                preview: previewTextForLog(segment.text),
+                                callbackInvoked: false,
+                            }
+                        );
+                    }
+                }
 
-                        if (shouldLogVoiceTypingDiagnostics(instanceId)) {
-                            logger.info(
-                                '[TranscriptionService:voice-typing] Prepared recognizer segment for callback',
-                                {
-                                    instanceId,
-                                    registrationId: instance.registrationId,
-                                    segmentId: segment.id,
-                                    isFinal: segment.isFinal,
-                                    rawTextLength: originalText.length,
-                                    processedTextLength: processedText.length,
-                                    preview: previewTextForLog(processedText || originalText),
-                                    replacementChanged,
-                                    replacedToEmpty,
-                                    callbackInvoked: false,
-                                }
-                            );
-                        }
-
-                        if (replacementChanged) {
-                            logger.debug(`[TranscriptionService:BUS] Replaced text in ${instanceId}: "${originalText}" -> "${processedText}"`);
-                        }
-
-                        return {
-                            ...segment,
-                            text: processedText,
-                        };
-                    }),
-                });
-
-                instance.onUpdate(processedUpdate);
+                instance.onUpdate(update);
             } catch (e) {
                 logger.error(`[TranscriptionService:BUS] Error in ${instanceId} callback:`, e);
             }
@@ -311,6 +309,7 @@ export class TranscriptionService {
                     .flatMap(set => set.rules.map(r => r.text))
                     .filter(text => text.trim() !== '') || [];
                 const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : undefined;
+                const postprocessOptions = buildPostprocessOptions(appConfig);
 
                 const configToUse: ServiceConfig = {
                     modelPath: this.modelPath,
@@ -323,6 +322,7 @@ export class TranscriptionService {
                     fileConfig: streamingModel?.fileConfig,
                     hotwords: hotwordsStr,
                     enableTimeline: this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
+                    postprocessOptions,
                 };
 
                 await initRecognizer({
@@ -340,6 +340,7 @@ export class TranscriptionService {
                     normalizationOptions: {
                         enableTimeline: configToUse.enableTimeline,
                     },
+                    postprocessOptions: configToUse.postprocessOptions,
                 });
 
                 this.runningConfig = configToUse;
@@ -399,6 +400,7 @@ export class TranscriptionService {
 
         const modelType = streamingModel?.type || 'sensevoice';
         const enableTimeline = this.instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false;
+        const postprocessOptions = buildPostprocessOptions(appConfig);
 
         const mismatches: string[] = [];
         if (this.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${this.modelPath} vs ${this.runningConfig.modelPath}`);
@@ -409,6 +411,7 @@ export class TranscriptionService {
         if (hotwordsStr !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${hotwordsStr} vs ${this.runningConfig.hotwords}`);
         if (modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${modelType} vs ${this.runningConfig.modelType}`);
         if (enableTimeline !== this.runningConfig.enableTimeline) mismatches.push(`enableTimeline: ${enableTimeline} vs ${this.runningConfig.enableTimeline}`);
+        if (!arePostprocessOptionsEqual(postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
 
         if (mismatches.length > 0) {
             logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
@@ -546,6 +549,7 @@ export class TranscriptionService {
             .flatMap(set => set.rules.map(r => r.text))
             .filter(text => text.trim() !== '') || [];
         const hotwordsStr = enabledHotwords.length > 0 ? enabledHotwords.join(',') : null;
+        const postprocessOptions = buildPostprocessOptions(appConfig);
 
         const segments = await processBatchFile({
             filePath, saveToPath: _saveToPath || null, modelPath: this.modelPath, numThreads: 4, enableItn: this.enableITN,
@@ -557,18 +561,10 @@ export class TranscriptionService {
             normalizationOptions: {
                 enableTimeline: appConfig.enableTimeline ?? false,
             },
+            postprocessOptions,
         });
 
-        // Filter segments: some models (like Whisper) occasionally produce single "." segments
-        const filteredSegments = normalizeTranscriptSegments(
-            segments.filter(seg => !(seg.text === '.' && seg.isFinal)),
-        );
-        
-        // Apply text replacements
-        const processedSegments = normalizeTranscriptSegments(filteredSegments.map(seg => ({
-            ...seg,
-            text: applyTextReplacements(seg.text, appConfig.textReplacementSets)
-        })));
+        const processedSegments = normalizeTranscriptSegments(segments);
 
         if (onProgress) onProgress(100);
         if (onSegment) processedSegments.forEach(seg => onSegment(seg));

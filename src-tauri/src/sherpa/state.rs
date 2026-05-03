@@ -4,7 +4,9 @@ use super::metrics::{
     AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 use super::model_config::{Punctuation, Recognizer, SafeStream, SafeVad};
-use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
+use super::types::{
+    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
+};
 use log::info;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,6 +65,7 @@ pub struct SherpaInstance {
     pub is_running: bool,
     pub record_diagnostics: RecordDiagnosticsState,
     pub normalization_options: TranscriptNormalizationOptions,
+    pub postprocess_options: TranscriptPostprocessOptions,
 }
 
 impl Default for SherpaInstance {
@@ -82,6 +85,7 @@ impl Default for SherpaInstance {
             is_running: false,
             record_diagnostics: RecordDiagnosticsState::default(),
             normalization_options: TranscriptNormalizationOptions::default(),
+            postprocess_options: TranscriptPostprocessOptions::default(),
         }
     }
 }

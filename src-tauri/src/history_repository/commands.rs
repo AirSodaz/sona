@@ -9,12 +9,14 @@ use super::fs_utils::remove_path_if_exists;
 use super::repository::HistoryRepository;
 use super::state::{HistoryRepositoryState, PreparedBackupImportState};
 use super::{
-    BackupManifest, ExportBackupArchiveRequest, HistoryItemRecord, HistoryWorkspaceDateFilter,
+    BackupManifest, ExportBackupArchiveRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
     HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
     HistoryWorkspaceScope, HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
-    PreparedBackupImport, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
-    TranscriptSnapshotRecord, HISTORY_DIR_NAME,
+    PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSnapshotRecord, HISTORY_DIR_NAME,
 };
+use crate::sherpa::TranscriptSegment;
 
 fn resolve_app_local_data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
@@ -77,10 +79,17 @@ pub async fn history_query_workspace<R: Runtime>(
 pub async fn history_create_live_draft<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    item: Value,
+    audio_extension: String,
+    project_id: Option<String>,
+    icon: Option<String>,
 ) -> Result<LiveRecordingDraftResult, String> {
+    let request = HistoryCreateLiveDraftRequest {
+        audio_extension,
+        project_id,
+        icon,
+    };
     run_history_task(app, state, move |repository| {
-        repository.create_live_draft(item)
+        repository.create_live_draft(request)
     })
     .await
 }
@@ -103,13 +112,23 @@ pub async fn history_complete_live_draft<R: Runtime>(
 pub async fn history_save_recording<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    item: Value,
     segments: Value,
+    duration: f64,
+    project_id: Option<String>,
     audio_bytes: Option<Vec<u8>>,
     native_audio_path: Option<String>,
+    audio_extension: Option<String>,
 ) -> Result<HistoryItemRecord, String> {
+    let request = HistorySaveRecordingRequest {
+        segments,
+        duration,
+        project_id,
+        audio_bytes,
+        native_audio_path,
+        audio_extension,
+    };
     run_history_task(app, state, move |repository| {
-        repository.save_recording(item, segments, audio_bytes, native_audio_path)
+        repository.save_recording(request)
     })
     .await
 }
@@ -118,12 +137,21 @@ pub async fn history_save_recording<R: Runtime>(
 pub async fn history_save_imported_file<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
-    item: Value,
-    segments: Value,
     source_path: String,
+    segments: Value,
+    duration: f64,
+    project_id: Option<String>,
+    converted_source_path: Option<String>,
 ) -> Result<HistoryItemRecord, String> {
+    let request = HistorySaveImportedFileRequest {
+        source_path,
+        segments,
+        duration,
+        project_id,
+        converted_source_path,
+    };
     run_history_task(app, state, move |repository| {
-        repository.save_imported_file(item, segments, source_path)
+        repository.save_imported_file(request)
     })
     .await
 }
@@ -199,6 +227,28 @@ pub async fn history_load_transcript_snapshot<R: Runtime>(
         repository.load_transcript_snapshot(&history_id, &snapshot_id)
     })
     .await
+}
+
+#[tauri::command]
+pub fn history_build_transcript_diff(
+    snapshot_segments: Vec<TranscriptSegment>,
+    current_segments: Vec<TranscriptSegment>,
+) -> Result<TranscriptDiffResult, String> {
+    Ok(super::transcript_diff::build_transcript_diff(
+        snapshot_segments,
+        current_segments,
+    ))
+}
+
+#[tauri::command]
+pub fn history_restore_transcript_diff_rows(
+    rows: Vec<TranscriptDiffRow>,
+    selected_row_ids: Vec<String>,
+) -> Result<Vec<TranscriptSegment>, String> {
+    Ok(super::transcript_diff::restore_transcript_diff_rows(
+        rows,
+        selected_row_ids,
+    ))
 }
 
 #[tauri::command]

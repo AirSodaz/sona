@@ -22,8 +22,10 @@ pub use runtime::feed_audio_samples;
 pub use state::SherpaState;
 pub(crate) use transcript::ensure_transcript_segment_timing;
 pub use types::{
-    BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptSegment, TranscriptTiming,
-    TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit, TranscriptUpdate,
+    BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    TranscriptSegment, TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet,
+    TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource, TranscriptTimingUnit,
+    TranscriptUpdate,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -42,6 +44,7 @@ pub async fn init_recognizer(
     file_config: Option<ModelFileConfig>,
     hotwords: Option<String>,
     normalization_options: Option<TranscriptNormalizationOptions>,
+    postprocess_options: Option<TranscriptPostprocessOptions>,
 ) -> Result<(), String> {
     runtime::init_recognizer_impl(
         state,
@@ -57,6 +60,7 @@ pub async fn init_recognizer(
         file_config,
         hotwords,
         normalization_options,
+        postprocess_options,
     )
     .await
 }
@@ -120,6 +124,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
     hotwords: Option<String>,
     speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     normalization_options: Option<TranscriptNormalizationOptions>,
+    postprocess_options: Option<TranscriptPostprocessOptions>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     batch::process_batch_file_impl(
         app,
@@ -138,6 +143,7 @@ pub async fn process_batch_file<R: tauri::Runtime>(
         hotwords,
         speaker_processing,
         normalization_options,
+        postprocess_options,
     )
     .await
 }

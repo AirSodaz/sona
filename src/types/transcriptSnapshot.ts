@@ -25,3 +25,8 @@ export interface TranscriptDiffRow {
   snapshotIndex: number | null;
   currentIndex: number | null;
 }
+
+export interface TranscriptDiffResult {
+  rows: TranscriptDiffRow[];
+  changedCount: number;
+}

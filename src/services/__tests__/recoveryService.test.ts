@@ -1,39 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BatchQueueItem } from '../../types/batchQueue';
-import {
-    clearAutomationRecoveryGuardEntry,
-    flushRecoverySnapshotWrites,
-    isAutomationRecoveryBlocked,
-    loadRecoverySnapshot,
-    markAutomationRecoveryItemsResumed,
-    persistQueueRecoverySnapshot,
-    resetRecoveryRuntimeForTests,
-} from '../recoveryService';
+import type { RecoveredQueueItem } from '../../types/recovery';
+import { TauriCommand } from '../tauri/commands';
 
 const testContext = vi.hoisted(() => ({
-    filePaths: new Set<string>(),
-    directoryPaths: new Set<string>(),
-    unknownPaths: new Set<string>(),
-    pathStatusError: null as Error | null,
-    storedRecoveryFile: '',
-    writeTextFileMock: vi.fn(),
-    readTextFileMock: vi.fn(),
-    existsMock: vi.fn(),
     invokeMock: vi.fn(),
-    mkdirMock: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
     convertFileSrc: (path: string) => `asset://${path}`,
     invoke: (...args: unknown[]) => testContext.invokeMock(...args),
-}));
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-    BaseDirectory: { AppLocalData: 3 },
-    exists: (...args: unknown[]) => testContext.existsMock(...args),
-    mkdir: (...args: unknown[]) => testContext.mkdirMock(...args),
-    readTextFile: (...args: unknown[]) => testContext.readTextFileMock(...args),
-    writeTextFile: (...args: unknown[]) => testContext.writeTextFileMock(...args),
 }));
 
 vi.mock('../../utils/logger', () => ({
@@ -42,233 +18,102 @@ vi.mock('../../utils/logger', () => ({
     },
 }));
 
+import {
+    clearAutomationRecoveryGuardEntry,
+    flushRecoverySnapshotWrites,
+    isAutomationRecoveryBlocked,
+    loadRecoverySnapshot,
+    markAutomationRecoveryItemsResumed,
+    persistQueueRecoverySnapshot,
+    resetRecoveryRuntimeForTests,
+    saveRecoveredItems,
+    toBatchQueueItem,
+} from '../recoveryService';
+
+function recoveryItem(overrides: Partial<RecoveredQueueItem> = {}): RecoveredQueueItem {
+    return {
+        id: 'recovery-1',
+        filename: 'meeting.wav',
+        filePath: 'C:\\watch\\meeting.wav',
+        source: 'batch_import',
+        resolution: 'pending',
+        progress: 30,
+        segments: [],
+        projectId: null,
+        lastKnownStage: 'transcribing',
+        updatedAt: 100,
+        hasSourceFile: true,
+        canResume: true,
+        exportConfig: null,
+        stageConfig: null,
+        ...overrides,
+    };
+}
+
+function queueItem(overrides: Partial<BatchQueueItem> = {}): BatchQueueItem {
+    return {
+        id: 'queue-1',
+        filename: 'meeting.wav',
+        filePath: 'C:\\watch\\meeting.wav',
+        status: 'pending',
+        progress: 0,
+        segments: [],
+        projectId: null,
+        lastKnownStage: 'queued',
+        ...overrides,
+    };
+}
+
 describe('recoveryService', () => {
     beforeEach(() => {
         resetRecoveryRuntimeForTests();
-        testContext.filePaths = new Set<string>();
-        testContext.directoryPaths = new Set<string>();
-        testContext.unknownPaths = new Set<string>();
-        testContext.pathStatusError = null;
-        testContext.storedRecoveryFile = '';
         vi.clearAllMocks();
-
-        testContext.existsMock.mockImplementation(async (path: string) => {
-            if (path === 'recovery' || path === 'recovery/queue-recovery.json') {
-                return testContext.storedRecoveryFile.length > 0;
+        testContext.invokeMock.mockImplementation(async (command: string) => {
+            if (command === TauriCommand.recovery.loadSnapshot) {
+                return { version: 1, updatedAt: null, items: [] };
             }
-            return false;
-        });
-        testContext.mkdirMock.mockResolvedValue(undefined);
-        testContext.readTextFileMock.mockImplementation(async () => testContext.storedRecoveryFile);
-        testContext.writeTextFileMock.mockImplementation(async (_path: string, content: string) => {
-            testContext.storedRecoveryFile = content;
-        });
-        testContext.invokeMock.mockImplementation(async (command: string, payload?: { paths?: string[] }) => {
-            if (command !== 'get_path_statuses') {
-                throw new Error(`Unexpected command: ${command}`);
+            if (command === TauriCommand.recovery.saveSnapshot) {
+                return { version: 1, updatedAt: null, items: [] };
             }
-
-            if (testContext.pathStatusError) {
-                throw testContext.pathStatusError;
+            if (command === TauriCommand.recovery.persistQueueSnapshot) {
+                return undefined;
             }
-
-            return (payload?.paths ?? []).map((path) => ({
-                path,
-                kind: testContext.unknownPaths.has(path)
-                    ? 'unknown'
-                    : testContext.filePaths.has(path)
-                        ? 'file'
-                        : testContext.directoryPaths.has(path)
-                            ? 'directory'
-                            : 'missing',
-                error: testContext.unknownPaths.has(path) ? 'Scope denied' : null,
-            }));
+            throw new Error(`Unexpected command: ${command}`);
         });
     });
 
-    it('persists only pending and processing queue items', async () => {
+    it('delegates queue persistence to the Rust recovery repository', async () => {
         const queueItems: BatchQueueItem[] = [
-            {
-                id: 'pending-1',
-                filename: 'pending.wav',
-                filePath: 'C:\\pending.wav',
-                status: 'pending',
-                progress: 0,
-                segments: [],
-                projectId: null,
-                lastKnownStage: 'queued',
-            },
-            {
-                id: 'processing-1',
-                filename: 'processing.wav',
-                filePath: 'C:\\processing.wav',
-                status: 'processing',
-                progress: 48,
-                segments: [],
-                projectId: null,
-                lastKnownStage: 'transcribing',
-            },
-            {
-                id: 'complete-1',
-                filename: 'complete.wav',
-                filePath: 'C:\\complete.wav',
-                status: 'complete',
-                progress: 100,
-                segments: [],
-                projectId: null,
-            },
-            {
-                id: 'error-1',
-                filename: 'error.wav',
-                filePath: 'C:\\error.wav',
-                status: 'error',
-                progress: 88,
-                segments: [],
-                projectId: null,
-            },
+            queueItem({ id: 'pending-1', status: 'pending' }),
+            queueItem({ id: 'complete-1', status: 'complete', progress: 100 }),
         ];
 
         persistQueueRecoverySnapshot(queueItems, { immediate: true });
         await flushRecoverySnapshotWrites();
 
-        const parsed = JSON.parse(testContext.storedRecoveryFile);
-        expect(parsed.items).toHaveLength(2);
-        expect(parsed.items.map((item: { id: string }) => item.id)).toEqual(['pending-1', 'processing-1']);
+        expect(testContext.invokeMock).toHaveBeenCalledWith(
+            TauriCommand.recovery.persistQueueSnapshot,
+            { queueItems },
+        );
     });
 
-    it('marks missing source files as discard-only when loading a saved snapshot', async () => {
-        testContext.storedRecoveryFile = JSON.stringify({
-            version: 1,
-            updatedAt: 100,
-            items: [
-                {
-                    id: 'recovery-1',
-                    filename: 'meeting.wav',
-                    filePath: 'C:\\watch\\meeting.wav',
-                    source: 'batch_import',
-                    resolution: 'pending',
-                    progress: 30,
-                    segments: [],
-                    projectId: null,
-                    lastKnownStage: 'transcribing',
-                    updatedAt: 100,
-                    hasSourceFile: true,
-                    canResume: true,
-                },
-            ],
+    it('loads snapshots through Rust and keeps automation items blocked', async () => {
+        const automationItem = recoveryItem({
+            id: 'recovery-automation-1',
+            source: 'automation',
+            automationRuleId: 'rule-1',
+            sourceFingerprint: 'fp-automation-1',
         });
-
-        const snapshot = await loadRecoverySnapshot();
-
-        expect(snapshot.items).toEqual([
-            expect.objectContaining({
-                id: 'recovery-1',
-                hasSourceFile: false,
-                canResume: false,
-            }),
-        ]);
-    });
-
-    it('keeps resumable recovery items when the runtime confirms the source file exists', async () => {
-        testContext.storedRecoveryFile = JSON.stringify({
-            version: 1,
-            updatedAt: 100,
-            items: [
-                {
-                    id: 'recovery-1',
-                    filename: 'meeting.wav',
-                    filePath: 'C:\\watch\\meeting.wav',
-                    source: 'batch_import',
-                    resolution: 'pending',
-                    progress: 30,
-                    segments: [],
-                    projectId: null,
-                    lastKnownStage: 'transcribing',
-                    updatedAt: 100,
-                    hasSourceFile: false,
-                    canResume: false,
-                },
-            ],
-        });
-        testContext.filePaths.add('C:\\watch\\meeting.wav');
-
-        const snapshot = await loadRecoverySnapshot();
-
-        expect(snapshot.items).toEqual([
-            expect.objectContaining({
-                id: 'recovery-1',
-                hasSourceFile: true,
-                canResume: true,
-            }),
-        ]);
-    });
-
-    it('preserves the saved recovery flags when path validation falls back to unknown', async () => {
-        testContext.storedRecoveryFile = JSON.stringify({
-            version: 1,
-            updatedAt: 100,
-            items: [
-                {
-                    id: 'recovery-1',
-                    filename: 'meeting.wav',
-                    filePath: 'C:\\watch\\meeting.wav',
-                    source: 'batch_import',
-                    resolution: 'pending',
-                    progress: 30,
-                    segments: [],
-                    projectId: null,
-                    lastKnownStage: 'transcribing',
-                    updatedAt: 100,
-                    hasSourceFile: true,
-                    canResume: true,
-                },
-            ],
-        });
-        testContext.pathStatusError = new Error('Scope denied');
-
-        const snapshot = await loadRecoverySnapshot();
-
-        expect(snapshot.items).toEqual([
-            expect.objectContaining({
-                id: 'recovery-1',
-                hasSourceFile: true,
-                canResume: true,
-            }),
-        ]);
-    });
-
-    it('keeps automation recovery items blocked until they settle', async () => {
-        testContext.storedRecoveryFile = JSON.stringify({
+        testContext.invokeMock.mockResolvedValueOnce({
             version: 1,
             updatedAt: 200,
-            items: [
-                {
-                    id: 'recovery-automation-1',
-                    filename: 'automation.wav',
-                    filePath: 'C:\\watch\\automation.wav',
-                    source: 'automation',
-                    resolution: 'pending',
-                    progress: 62,
-                    segments: [],
-                    projectId: null,
-                    lastKnownStage: 'translating',
-                    updatedAt: 200,
-                    hasSourceFile: true,
-                    canResume: true,
-                    automationRuleId: 'rule-1',
-                    automationRuleName: 'Inbox Rule',
-                    sourceFingerprint: 'fp-automation-1',
-                    fileStat: {
-                        size: 42,
-                        mtimeMs: 500,
-                    },
-                },
-            ],
+            items: [automationItem],
         });
-        testContext.filePaths.add('C:\\watch\\automation.wav');
 
         const snapshot = await loadRecoverySnapshot();
 
+        expect(snapshot.items).toEqual([automationItem]);
+        expect(testContext.invokeMock).toHaveBeenCalledWith(TauriCommand.recovery.loadSnapshot);
         expect(isAutomationRecoveryBlocked('rule-1', 'fp-automation-1')).toBe(true);
 
         markAutomationRecoveryItemsResumed(snapshot.items);
@@ -276,5 +121,71 @@ describe('recoveryService', () => {
 
         clearAutomationRecoveryGuardEntry('rule-1', 'fp-automation-1');
         expect(isAutomationRecoveryBlocked('rule-1', 'fp-automation-1')).toBe(false);
+    });
+
+    it('passes recovery items to Rust when saving so Rust owns filtering and normalization', async () => {
+        const pendingItem = recoveryItem({ id: 'pending-1' });
+        const discardedItem = recoveryItem({
+            id: 'discarded-1',
+            resolution: 'discarded',
+            canResume: false,
+        });
+        testContext.invokeMock.mockResolvedValueOnce({
+            version: 1,
+            updatedAt: 300,
+            items: [pendingItem],
+        });
+
+        await saveRecoveredItems([pendingItem, discardedItem]);
+
+        expect(testContext.invokeMock).toHaveBeenCalledWith(
+            TauriCommand.recovery.saveSnapshot,
+            { items: [pendingItem, discardedItem] },
+        );
+    });
+
+    it('adapts recovered queue items back into batch queue items for resume', () => {
+        const segment = {
+            id: 'segment-1',
+            text: 'Hello',
+            start: 0,
+            end: 1,
+            isFinal: true,
+            timing: {
+                level: 'segment' as const,
+                source: 'derived' as const,
+                units: [{ text: 'Hello', start: 0, end: 1 }],
+            },
+        };
+        const item = recoveryItem({
+            id: 'recovery-automation-1',
+            source: 'automation',
+            segments: [segment],
+            automationRuleId: 'rule-1',
+            automationRuleName: 'Inbox',
+            resolvedConfigSnapshot: {} as never,
+            exportConfig: null,
+            stageConfig: null,
+            sourceFingerprint: 'fp-1',
+            fileStat: { size: 42, mtimeMs: 1000 },
+            exportFileNamePrefix: 'meeting',
+        });
+
+        const queue = toBatchQueueItem(item);
+
+        expect(queue).toEqual(expect.objectContaining({
+            id: 'recovery-automation-1',
+            recoveryId: 'recovery-automation-1',
+            status: 'pending',
+            progress: 0,
+            audioUrl: 'asset://C:\\watch\\meeting.wav',
+            origin: 'automation',
+            lastKnownStage: 'queued',
+            automationRuleId: 'rule-1',
+            sourceFingerprint: 'fp-1',
+            fileStat: { size: 42, mtimeMs: 1000 },
+            exportFileNamePrefix: 'meeting',
+        }));
+        expect(queue.segments).toEqual([segment]);
     });
 });

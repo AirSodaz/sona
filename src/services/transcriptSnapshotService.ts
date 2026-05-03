@@ -3,6 +3,8 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
+  TranscriptDiffResult,
+  TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
@@ -77,5 +79,19 @@ export const transcriptSnapshotService = {
     }
 
     return historyService.loadTranscriptSnapshot(historyId, snapshotId);
+  },
+
+  async buildDiff(
+    snapshotSegments: TranscriptSegment[],
+    currentSegments: TranscriptSegment[],
+  ): Promise<TranscriptDiffResult> {
+    return historyService.buildTranscriptDiff(snapshotSegments, currentSegments);
+  },
+
+  async restoreDiffRows(
+    rows: TranscriptDiffRow[],
+    selectedRowIds: Iterable<string>,
+  ): Promise<TranscriptSegment[]> {
+    return historyService.restoreTranscriptDiffRows(rows, selectedRowIds);
   },
 };

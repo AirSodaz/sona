@@ -10,8 +10,14 @@ use super::model_config::{
     SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
 };
 use super::state::SherpaState;
-use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
-use super::types::{BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptSegment};
+use super::transcript::{
+    apply_timeline_normalization, format_transcript, postprocess_transcript_segments,
+    synthesize_durations,
+};
+use super::types::{
+    BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    TranscriptSegment,
+};
 use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
@@ -35,6 +41,7 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
     hotwords: Option<String>,
     speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     normalization_options: Option<TranscriptNormalizationOptions>,
+    postprocess_options: Option<TranscriptPostprocessOptions>,
 ) -> Result<Vec<TranscriptSegment>, String> {
     let request = BatchTranscriptionRequest {
         file_path,
@@ -51,6 +58,7 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         hotwords,
         speaker_processing,
         normalization_options: normalization_options.unwrap_or_default(),
+        postprocess_options: postprocess_options.unwrap_or_default(),
     };
     let progress_file_path = request.file_path.clone();
 
@@ -156,6 +164,8 @@ where
 
     let normalized_segments =
         apply_timeline_normalization(annotated_segments, request.normalization_options);
+    let postprocessed_segments =
+        postprocess_transcript_segments(normalized_segments, &request.postprocess_options);
 
     if let Some(metrics_store) = metrics_store.as_ref() {
         let audio_duration_ms = samples_to_ms(samples.len(), 16000.0);
@@ -172,14 +182,14 @@ where
             emit_latency_ms: None,
             total_ms: Some(duration_to_ms(total_started.elapsed())),
             rtf: calculate_rtf(decode_ms, audio_duration_ms),
-            segment_count: Some(normalized_segments.len()),
+            segment_count: Some(postprocessed_segments.len()),
             process_rss_mb: capture_process_memory_mb(),
         };
         set_batch_inference_metric(metrics_store, metric.clone());
         log_inference_metric(&metric);
     }
 
-    Ok(normalized_segments)
+    Ok(postprocessed_segments)
 }
 
 async fn process_batch_offline<F>(
