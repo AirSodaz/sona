@@ -3,6 +3,7 @@ use crate::sherpa::{
     ensure_transcript_segment_timing, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
 };
 use crate::text_alignment::{align_text_units_to_tokens, AlignedTextUnit};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use sherpa_onnx::{
     FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig,
@@ -13,8 +14,10 @@ use sherpa_onnx::{
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tauri::{AppHandle, Manager, Runtime};
 
+const SPEAKER_PROCESSING_LOG_TARGET: &str = "speaker_processing";
 const SAMPLE_RATE: i32 = 16_000;
 const IDENTIFICATION_MIN_DURATION_SECONDS: f32 = 1.5;
 const IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER: usize = 3;
@@ -128,6 +131,23 @@ struct ResolvedSpeakerAssignment {
     votes: usize,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct SpeakerAssignmentSummary {
+    identified: usize,
+    suggested: usize,
+    anonymous: usize,
+    candidate_clusters: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct SpeakerProfileIndexSummary {
+    enabled_profiles: usize,
+    ready_profiles: usize,
+    limited_profiles: usize,
+    skipped_profiles: usize,
+    usable_sample_embeddings: usize,
+}
+
 #[tauri::command]
 pub async fn annotate_speaker_segments_from_file(
     file_path: String,
@@ -185,30 +205,61 @@ pub fn annotate_segments_with_speakers(
     segments: &[TranscriptSegment],
     speaker_processing: Option<&SpeakerProcessingConfig>,
 ) -> Result<Vec<TranscriptSegment>, String> {
-    let Some(config) = speaker_processing else {
-        return Ok(segments.to_vec());
-    };
+    let total_started = Instant::now();
+    let input_segment_count = segments.len();
+    let audio_duration_ms = samples_to_duration_ms(samples.len());
 
     if segments.is_empty() {
+        log_speaker_processing_skip("no_segments", "setup");
         return Ok(Vec::new());
     }
 
+    let Some(config) = speaker_processing else {
+        log_speaker_processing_skip("disabled", "setup");
+        return Ok(segments.to_vec());
+    };
+
     let segmentation_model = resolve_model_path(config.speaker_segmentation_model_path.as_deref())?;
     let embedding_model = resolve_model_path(config.speaker_embedding_model_path.as_deref())?;
+
+    let diarization_started = Instant::now();
     let diarization_segments = run_diarization(samples, &segmentation_model, &embedding_model)?;
+    let diarization_ms = elapsed_ms(diarization_started);
+    let clusters = build_cluster_infos(&diarization_segments);
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=speaker_diarization_complete audio_duration_ms={:.1} input_segment_count={} diarization_segment_count={} cluster_count={} diarization_ms={:.1}",
+        audio_duration_ms,
+        input_segment_count,
+        diarization_segments.len(),
+        clusters.len(),
+        diarization_ms,
+    );
 
     if diarization_segments.is_empty() {
+        log_speaker_processing_skip("no_diarization_segments", "diarization");
+        log_speaker_processing_complete(
+            total_started,
+            input_segment_count,
+            segments.len(),
+            &SpeakerAssignmentSummary::default(),
+        );
         return Ok(segments.to_vec());
     }
 
-    let clusters = build_cluster_infos(&diarization_segments);
+    log_cluster_debug_summary(&clusters);
     let speaker_assignments =
         build_cluster_speaker_assignments(samples, &clusters, config, &embedding_model)?;
-    Ok(apply_speaker_tags_to_segments(
-        segments,
-        &clusters,
-        &speaker_assignments,
-    ))
+    let annotated_segments =
+        apply_speaker_tags_to_segments(segments, &clusters, &speaker_assignments);
+    let assignment_summary = summarize_speaker_assignments(&speaker_assignments);
+    log_speaker_processing_complete(
+        total_started,
+        input_segment_count,
+        annotated_segments.len(),
+        &assignment_summary,
+    );
+    Ok(annotated_segments)
 }
 
 fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
@@ -244,6 +295,121 @@ fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
         .into_iter()
         .next()
         .ok_or_else(|| format!("No .onnx file found in {}", path.display()))
+}
+
+fn elapsed_ms(started: Instant) -> f64 {
+    started.elapsed().as_secs_f64() * 1000.0
+}
+
+fn samples_to_duration_ms(sample_count: usize) -> f64 {
+    sample_count as f64 / SAMPLE_RATE as f64 * 1000.0
+}
+
+fn count_added_speaker_segments(input_segment_count: usize, output_segment_count: usize) -> usize {
+    output_segment_count.saturating_sub(input_segment_count)
+}
+
+fn summarize_speaker_assignments(
+    assignments: &HashMap<i32, ResolvedSpeakerAssignment>,
+) -> SpeakerAssignmentSummary {
+    assignments.values().fold(
+        SpeakerAssignmentSummary::default(),
+        |mut summary, assignment| {
+            match assignment.attribution.state.as_str() {
+                "identified" => summary.identified += 1,
+                "suggested" => summary.suggested += 1,
+                _ => summary.anonymous += 1,
+            }
+
+            if !assignment.attribution.candidates.is_empty() {
+                summary.candidate_clusters += 1;
+            }
+
+            summary
+        },
+    )
+}
+
+fn log_speaker_processing_skip(reason: &str, stage: &str) {
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=speaker_processing_skip reason={} stage={}",
+        reason,
+        stage,
+    );
+}
+
+fn log_speaker_profile_index_complete(summary: &SpeakerProfileIndexSummary, index_ms: f64) {
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=speaker_profile_index_complete enabled_profile_count={} ready_profile_count={} limited_profile_count={} skipped_profile_count={} usable_sample_embedding_count={} index_ms={:.1}",
+        summary.enabled_profiles,
+        summary.ready_profiles,
+        summary.limited_profiles,
+        summary.skipped_profiles,
+        summary.usable_sample_embeddings,
+        index_ms,
+    );
+}
+
+fn log_speaker_matching_complete(summary: &SpeakerAssignmentSummary, matching_ms: f64) {
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=speaker_matching_complete candidate_cluster_count={} identified_cluster_count={} suggested_cluster_count={} anonymous_cluster_count={} matching_ms={:.1}",
+        summary.candidate_clusters,
+        summary.identified,
+        summary.suggested,
+        summary.anonymous,
+        matching_ms,
+    );
+}
+
+fn log_speaker_processing_complete(
+    started: Instant,
+    input_segment_count: usize,
+    output_segment_count: usize,
+    summary: &SpeakerAssignmentSummary,
+) {
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=speaker_processing_complete total_ms={:.1} input_segment_count={} output_segment_count={} added_segment_count={} identified_cluster_count={} suggested_cluster_count={} anonymous_cluster_count={} candidate_cluster_count={}",
+        elapsed_ms(started),
+        input_segment_count,
+        output_segment_count,
+        count_added_speaker_segments(input_segment_count, output_segment_count),
+        summary.identified,
+        summary.suggested,
+        summary.anonymous,
+        summary.candidate_clusters,
+    );
+}
+
+fn log_cluster_debug_summary(clusters: &[ClusterInfo]) {
+    for (index, cluster) in clusters.iter().enumerate() {
+        let span_count = cluster.spans.len();
+        let total_duration_ms = cluster
+            .spans
+            .iter()
+            .map(|span| (span.end - span.start).max(0.0) as f64 * 1000.0)
+            .sum::<f64>();
+        let first_start_ms = cluster
+            .spans
+            .iter()
+            .map(|span| span.start)
+            .min_by(|left, right| left.partial_cmp(right).unwrap_or(Ordering::Equal))
+            .unwrap_or_default() as f64
+            * 1000.0;
+
+        debug!(
+            target: SPEAKER_PROCESSING_LOG_TARGET,
+            "event=speaker_cluster_summary cluster_index={} raw_speaker={} span_count={} total_duration_ms={:.1} first_start_ms={:.1}",
+            index,
+            cluster.raw_speaker,
+            span_count,
+            total_duration_ms,
+            first_start_ms,
+        );
+    }
 }
 
 fn run_diarization(
@@ -344,15 +510,23 @@ fn build_cluster_speaker_assignments(
         })
         .collect::<HashMap<_, _>>();
 
+    let index_started = Instant::now();
     let enabled_profiles = config
         .speaker_profiles
         .clone()
         .unwrap_or_default()
         .into_iter()
-        .filter(|profile| profile.enabled && !profile.samples.is_empty())
+        .filter(|profile| profile.enabled)
         .collect::<Vec<_>>();
+    let mut index_summary = SpeakerProfileIndexSummary {
+        enabled_profiles: enabled_profiles.len(),
+        ..Default::default()
+    };
 
     if enabled_profiles.is_empty() {
+        log_speaker_profile_index_complete(&index_summary, elapsed_ms(index_started));
+        log_speaker_processing_skip("no_enabled_profiles", "profile_index");
+        log_speaker_matching_complete(&summarize_speaker_assignments(&default_assignments), 0.0);
         return Ok(default_assignments);
     }
 
@@ -372,6 +546,7 @@ fn build_cluster_speaker_assignments(
     for profile in enabled_profiles {
         let readiness = derive_profile_readiness(&profile);
         if readiness == SpeakerProfileReadinessState::NotReady {
+            index_summary.skipped_profiles += 1;
             continue;
         }
 
@@ -386,6 +561,7 @@ fn build_cluster_speaker_assignments(
         }
 
         if embeddings.is_empty() {
+            index_summary.skipped_profiles += 1;
             continue;
         }
 
@@ -393,14 +569,24 @@ fn build_cluster_speaker_assignments(
             return Err(format!("Failed to index speaker profile {}", profile.name));
         }
 
+        match readiness {
+            SpeakerProfileReadinessState::Ready => index_summary.ready_profiles += 1,
+            SpeakerProfileReadinessState::Limited => index_summary.limited_profiles += 1,
+            SpeakerProfileReadinessState::NotReady => {}
+        }
+        index_summary.usable_sample_embeddings += embeddings.len();
         loaded_profile_names.insert(profile.id.clone(), profile.name.clone());
         profile_readiness.insert(profile.id.clone(), readiness);
     }
 
+    log_speaker_profile_index_complete(&index_summary, elapsed_ms(index_started));
     if loaded_profile_names.is_empty() {
+        log_speaker_processing_skip("no_usable_profiles", "profile_index");
+        log_speaker_matching_complete(&summarize_speaker_assignments(&default_assignments), 0.0);
         return Ok(default_assignments);
     }
 
+    let matching_started = Instant::now();
     let mut candidates = HashMap::new();
     for cluster in clusters {
         let cluster_candidates = identify_cluster_candidates(
@@ -419,6 +605,10 @@ fn build_cluster_speaker_assignments(
     for (raw_speaker, assignment) in default_assignments {
         assignments.entry(raw_speaker).or_insert(assignment);
     }
+    log_speaker_matching_complete(
+        &summarize_speaker_assignments(&assignments),
+        elapsed_ms(matching_started),
+    );
     Ok(assignments)
 }
 
@@ -573,9 +763,7 @@ fn sort_cluster_candidates(candidates: &mut [ClusterCandidate]) {
             .average_score
             .partial_cmp(&left.average_score)
             .unwrap_or(Ordering::Equal)
-            .then_with(|| {
-                right.votes.cmp(&left.votes)
-            })
+            .then_with(|| right.votes.cmp(&left.votes))
             .then_with(|| left.profile_name.cmp(&right.profile_name))
     });
 }
@@ -785,7 +973,12 @@ fn build_speaker_candidates(candidates: &[ClusterCandidate]) -> Vec<SpeakerCandi
 fn clusters_overlap(left: &ClusterInfo, right: &ClusterInfo) -> bool {
     left.spans.iter().any(|left_span| {
         right.spans.iter().any(|right_span| {
-            range_overlap(left_span.start, left_span.end, right_span.start, right_span.end) > 0.0
+            range_overlap(
+                left_span.start,
+                left_span.end,
+                right_span.start,
+                right_span.end,
+            ) > 0.0
         })
     })
 }
@@ -1280,11 +1473,16 @@ mod tests {
         let resolved = resolve_cluster_assignments(&clusters, &candidates, &readiness);
 
         assert_eq!(
-            resolved.get(&1).and_then(|value| value.speaker.as_ref()).map(|value| value.label.as_str()),
+            resolved
+                .get(&1)
+                .and_then(|value| value.speaker.as_ref())
+                .map(|value| value.label.as_str()),
             Some("Alice")
         );
         assert_eq!(
-            resolved.get(&1).map(|value| value.attribution.state.as_str()),
+            resolved
+                .get(&1)
+                .map(|value| value.attribution.state.as_str()),
             Some("identified")
         );
     }
@@ -1314,15 +1512,14 @@ mod tests {
             Some("Alice")
         );
         assert_eq!(
-            resolved
-                .get(&1)
-                .map(|value| {
-                    value.attribution
-                        .candidates
-                        .iter()
-                        .map(|candidate| candidate.profile_name.as_str())
-                        .collect::<Vec<_>>()
-                }),
+            resolved.get(&1).map(|value| {
+                value
+                    .attribution
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.profile_name.as_str())
+                    .collect::<Vec<_>>()
+            }),
             Some(vec!["Alice", "Bob"])
         );
     }
@@ -1330,19 +1527,20 @@ mod tests {
     #[test]
     fn resolve_cluster_assignments_keeps_limited_profiles_as_suggestions() {
         let clusters = vec![cluster(1, 0.0, 3.0, 1)];
-        let candidates = HashMap::from([(
-            1,
-            vec![candidate(1, "alice", "Alice", 3, 0.87)],
-        )]);
-        let readiness = HashMap::from([(
-            "alice".to_string(),
-            SpeakerProfileReadinessState::Limited,
-        )]);
+        let candidates = HashMap::from([(1, vec![candidate(1, "alice", "Alice", 3, 0.87)])]);
+        let readiness =
+            HashMap::from([("alice".to_string(), SpeakerProfileReadinessState::Limited)]);
 
         let resolved = resolve_cluster_assignments(&clusters, &candidates, &readiness);
         let assignment = resolved.get(&1).expect("assignment");
 
-        assert_eq!(assignment.speaker.as_ref().map(|value| value.label.as_str()), Some("Speaker 1"));
+        assert_eq!(
+            assignment
+                .speaker
+                .as_ref()
+                .map(|value| value.label.as_str()),
+            Some("Speaker 1")
+        );
         assert_eq!(assignment.attribution.state, "suggested");
         assert_eq!(assignment.attribution.confidence, "medium");
         assert_eq!(assignment.attribution.candidates.len(), 1);
@@ -1356,23 +1554,36 @@ mod tests {
             (1, vec![candidate(1, "alice", "Alice", 3, 0.89)]),
             (2, vec![candidate(2, "alice", "Alice", 2, 0.82)]),
         ]);
-        let readiness = HashMap::from([(
-            "alice".to_string(),
-            SpeakerProfileReadinessState::Ready,
-        )]);
+        let readiness = HashMap::from([("alice".to_string(), SpeakerProfileReadinessState::Ready)]);
 
         let resolved = resolve_cluster_assignments(&clusters, &candidates, &readiness);
 
         assert_eq!(
-            resolved.get(&1).and_then(|value| value.speaker.as_ref()).map(|value| value.label.as_str()),
+            resolved
+                .get(&1)
+                .and_then(|value| value.speaker.as_ref())
+                .map(|value| value.label.as_str()),
             Some("Alice")
         );
         assert_eq!(
-            resolved.get(&2).and_then(|value| value.speaker.as_ref()).map(|value| value.label.as_str()),
+            resolved
+                .get(&2)
+                .and_then(|value| value.speaker.as_ref())
+                .map(|value| value.label.as_str()),
             Some("Alice")
         );
-        assert_eq!(resolved.get(&1).map(|value| value.attribution.state.as_str()), Some("identified"));
-        assert_eq!(resolved.get(&2).map(|value| value.attribution.state.as_str()), Some("identified"));
+        assert_eq!(
+            resolved
+                .get(&1)
+                .map(|value| value.attribution.state.as_str()),
+            Some("identified")
+        );
+        assert_eq!(
+            resolved
+                .get(&2)
+                .map(|value| value.attribution.state.as_str()),
+            Some("identified")
+        );
     }
 
     #[test]
@@ -1382,29 +1593,117 @@ mod tests {
             (1, vec![candidate(1, "alice", "Alice", 3, 0.92)]),
             (2, vec![candidate(2, "alice", "Alice", 2, 0.81)]),
         ]);
-        let readiness = HashMap::from([(
-            "alice".to_string(),
-            SpeakerProfileReadinessState::Ready,
-        )]);
+        let readiness = HashMap::from([("alice".to_string(), SpeakerProfileReadinessState::Ready)]);
 
         let resolved = resolve_cluster_assignments(&clusters, &candidates, &readiness);
 
         assert_eq!(
-            resolved.get(&1).and_then(|value| value.speaker.as_ref()).map(|value| value.label.as_str()),
+            resolved
+                .get(&1)
+                .and_then(|value| value.speaker.as_ref())
+                .map(|value| value.label.as_str()),
             Some("Alice")
         );
         assert_eq!(
-            resolved.get(&1).map(|value| value.attribution.state.as_str()),
+            resolved
+                .get(&1)
+                .map(|value| value.attribution.state.as_str()),
             Some("identified")
         );
         assert_eq!(
-            resolved.get(&2).and_then(|value| value.speaker.as_ref()).map(|value| value.label.as_str()),
+            resolved
+                .get(&2)
+                .and_then(|value| value.speaker.as_ref())
+                .map(|value| value.label.as_str()),
             Some("Speaker 2")
         );
         assert_eq!(
-            resolved.get(&2).map(|value| value.attribution.state.as_str()),
+            resolved
+                .get(&2)
+                .map(|value| value.attribution.state.as_str()),
             Some("suggested")
         );
+    }
+
+    #[test]
+    fn speaker_assignment_summary_counts_states_and_candidate_clusters() {
+        let assignments = HashMap::from([
+            (
+                1,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 1,
+                    speaker: Some(speaker("profile-alice", "Alice", "identified", Some(0.91))),
+                    attribution: SpeakerAttribution {
+                        group_id: "anonymous-1".to_string(),
+                        anonymous_label: "Speaker 1".to_string(),
+                        state: "identified".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "high".to_string(),
+                        candidates: vec![SpeakerCandidate {
+                            profile_id: "profile-alice".to_string(),
+                            profile_name: "Alice".to_string(),
+                            score: 0.91,
+                            rank: 1,
+                        }],
+                    },
+                    average_score: Some(0.91),
+                    votes: 2,
+                },
+            ),
+            (
+                2,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 2,
+                    speaker: Some(speaker("anonymous-2", "Speaker 2", "anonymous", None)),
+                    attribution: SpeakerAttribution {
+                        group_id: "anonymous-2".to_string(),
+                        anonymous_label: "Speaker 2".to_string(),
+                        state: "suggested".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "medium".to_string(),
+                        candidates: vec![SpeakerCandidate {
+                            profile_id: "profile-bob".to_string(),
+                            profile_name: "Bob".to_string(),
+                            score: 0.74,
+                            rank: 1,
+                        }],
+                    },
+                    average_score: None,
+                    votes: 0,
+                },
+            ),
+            (
+                3,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 3,
+                    speaker: Some(speaker("anonymous-3", "Speaker 3", "anonymous", None)),
+                    attribution: SpeakerAttribution {
+                        group_id: "anonymous-3".to_string(),
+                        anonymous_label: "Speaker 3".to_string(),
+                        state: "anonymous".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "low".to_string(),
+                        candidates: Vec::new(),
+                    },
+                    average_score: None,
+                    votes: 0,
+                },
+            ),
+        ]);
+
+        let summary = summarize_speaker_assignments(&assignments);
+
+        assert_eq!(summary.identified, 1);
+        assert_eq!(summary.suggested, 1);
+        assert_eq!(summary.anonymous, 1);
+        assert_eq!(summary.candidate_clusters, 2);
+    }
+
+    #[test]
+    fn count_added_speaker_segments_never_reports_negative_values() {
+        assert_eq!(count_added_speaker_segments(3, 7), 4);
+        assert_eq!(count_added_speaker_segments(7, 3), 0);
+        assert_eq!(count_added_speaker_segments(5, 5), 0);
     }
 
     #[test]
