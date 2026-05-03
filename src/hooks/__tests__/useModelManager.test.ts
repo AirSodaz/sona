@@ -164,6 +164,7 @@ vi.mock('../../services/modelService', () => ({
         deleteModel: vi.fn(),
         getModelRules: vi.fn(),
         getModelCatalogSnapshot: vi.fn(),
+        resolveModelCatalogSelectedIds: vi.fn(),
     }
 }));
 
@@ -176,6 +177,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         vi.mocked(modelService.deleteModel).mockReset();
         vi.mocked(modelService.getModelRules).mockReset();
         vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
+        vi.mocked(modelService.resolveModelCatalogSelectedIds).mockReset();
 
         setTestConfig({
             streamingModelPath: '/current/live',
@@ -199,6 +201,12 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
         vi.mocked(modelService.getModelPath).mockImplementation(async (id: string) => `/models/${id}`);
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(modelCatalogSnapshot);
+        vi.mocked(modelService.resolveModelCatalogSelectedIds).mockResolvedValue({
+            streaming: null,
+            offline: null,
+            speakerSegmentation: null,
+            speakerEmbedding: null,
+        });
     });
 
     it('does not load the model catalog while inactive for settings tab prewarm', async () => {
@@ -211,6 +219,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         });
 
         expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
+        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
     });
 
@@ -227,6 +236,14 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
             expect(result.current.installedModels.has('preset-a')).toBe(true);
         });
+        await waitFor(() => {
+            expect(modelService.resolveModelCatalogSelectedIds).toHaveBeenCalledWith({
+                streamingModelPath: '/current/live',
+                offlineModelPath: '/current/offline',
+                speakerSegmentationModelPath: '/current/speaker-segmentation',
+                speakerEmbeddingModelPath: '/current/speaker-embedding',
+            });
+        });
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
     });
 
@@ -240,10 +257,12 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         rerender({ isOpen: true });
 
         expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
+        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
 
         await waitFor(() => {
             expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+            expect(modelService.resolveModelCatalogSelectedIds).toHaveBeenCalledTimes(1);
         });
         expect(modelService.isModelInstalled).not.toHaveBeenCalled();
     });

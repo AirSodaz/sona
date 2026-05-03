@@ -61,34 +61,6 @@ interface SettingsModelsTabProps {
     isActive?: boolean;
 }
 
-function normalizeModelPath(path: string): string {
-    return path.replace(/\\/g, '/').toLowerCase();
-}
-
-function resolveSelectedOptionId(
-    modelCatalog: ReturnType<typeof useModelManagerContext>['modelCatalog'],
-    modelPath: string,
-    options: ModelSelectionOption[],
-): string {
-    if (!modelPath.trim()) {
-        return '';
-    }
-
-    const optionIds = new Set(options.map((option) => option.id));
-    const normalizedPath = normalizeModelPath(modelPath);
-    const exactId = modelCatalog.modelIdByNormalizedPath[normalizedPath];
-    if (exactId && optionIds.has(exactId)) {
-        return exactId;
-    }
-
-    const matchedToken = modelCatalog.pathMatchTokens.find((token) => (
-        optionIds.has(token.id)
-        && token.token.length > 0
-        && normalizedPath.includes(token.token)
-    ));
-    return matchedToken?.id ?? '';
-}
-
 function toDropdownOptions(
     options: ModelSelectionOption[],
     selectedId: string,
@@ -111,6 +83,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const {
         installedModels,
         modelCatalog,
+        selectedModelIds,
         downloads,
         handleDelete,
         handleDownload,
@@ -118,10 +91,6 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         restoreDefaultModelSettings
     } = useModelManagerContext();
 
-    const streamingModelPath = modelConfig.streamingModelPath;
-    const offlineModelPath = modelConfig.offlineModelPath;
-    const speakerSegmentationModelPath = modelConfig.speakerSegmentationModelPath || '';
-    const speakerEmbeddingModelPath = modelConfig.speakerEmbeddingModelPath || '';
     const vadBufferSize = transcriptionConfig.vadBufferSize || 5;
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
@@ -138,20 +107,20 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     );
 
     const selectedStreamingModelId = useMemo(
-        () => resolveSelectedOptionId(modelCatalog, streamingModelPath || '', selectionOptions.streaming),
-        [modelCatalog, selectionOptions.streaming, streamingModelPath],
+        () => selectedModelIds.streaming ?? '',
+        [selectedModelIds.streaming],
     );
     const selectedOfflineModelId = useMemo(
-        () => resolveSelectedOptionId(modelCatalog, offlineModelPath || '', selectionOptions.offline),
-        [modelCatalog, offlineModelPath, selectionOptions.offline],
+        () => selectedModelIds.offline ?? '',
+        [selectedModelIds.offline],
     );
     const selectedSpeakerSegmentationModelId = useMemo(
-        () => resolveSelectedOptionId(modelCatalog, speakerSegmentationModelPath, selectionOptions.speakerSegmentation),
-        [modelCatalog, selectionOptions.speakerSegmentation, speakerSegmentationModelPath],
+        () => selectedModelIds.speakerSegmentation ?? '',
+        [selectedModelIds.speakerSegmentation],
     );
     const selectedSpeakerEmbeddingModelId = useMemo(
-        () => resolveSelectedOptionId(modelCatalog, speakerEmbeddingModelPath, selectionOptions.speakerEmbedding),
-        [modelCatalog, selectionOptions.speakerEmbedding, speakerEmbeddingModelPath],
+        () => selectedModelIds.speakerEmbedding ?? '',
+        [selectedModelIds.speakerEmbedding],
     );
 
     const applyDependencyRequests = (modelId: string) => {

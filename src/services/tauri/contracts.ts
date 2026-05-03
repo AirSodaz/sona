@@ -194,6 +194,20 @@ type ListLlmModelsRequest = {
   apiKey?: string;
 };
 
+export type ModelSelectionPaths = {
+  streamingModelPath: string;
+  offlineModelPath: string;
+  speakerSegmentationModelPath: string;
+  speakerEmbeddingModelPath: string;
+};
+
+export type ModelCatalogSelectedIds = {
+  streaming: string | null;
+  offline: string | null;
+  speakerSegmentation: string | null;
+  speakerEmbedding: string | null;
+};
+
 export type TauriCommandContractMap = {
   [TauriCommand.app.extractTarBz2]: {
     args: ExtractTarBz2Args;
@@ -214,6 +228,10 @@ export type TauriCommandContractMap = {
   [TauriCommand.app.getModelCatalogSnapshot]: {
     args: undefined;
     result: ModelCatalogSnapshot;
+  };
+  [TauriCommand.app.resolveModelCatalogSelectedIds]: {
+    args: { paths: ModelSelectionPaths };
+    result: ModelCatalogSelectedIds;
   };
   [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
     args: { input: DiagnosticsCoreInput };

@@ -120,13 +120,13 @@ describe('backupWebDavService', () => {
     });
   });
 
-  it('lists remote backups in descending modified-time order and ignores non-archive files', async () => {
-    testContext.invokeMock.mockResolvedValue([
+  it('passes through the backend-filtered remote backup list without frontend normalization', async () => {
+    const backendEntries = [
       {
-        href: 'https://dav.example.com/backups/a.txt',
-        fileName: 'a.txt',
-        size: 1,
-        modifiedAt: '2026-04-27T00:00:00.000Z',
+        href: 'https://dav.example.com/backups/newer.tar.bz2',
+        fileName: 'newer.tar.bz2',
+        size: 20,
+        modifiedAt: '2026-04-29T00:00:00.000Z',
       },
       {
         href: 'https://dav.example.com/backups/older.tar.bz2',
@@ -134,13 +134,8 @@ describe('backupWebDavService', () => {
         size: 10,
         modifiedAt: '2026-04-27T00:00:00.000Z',
       },
-      {
-        href: 'https://dav.example.com/backups/newer.tar.bz2',
-        fileName: 'newer.tar.bz2',
-        size: 20,
-        modifiedAt: '2026-04-29T00:00:00.000Z',
-      },
-    ]);
+    ];
+    testContext.invokeMock.mockResolvedValue(backendEntries);
 
     const result = await listBackups({
       serverUrl: 'https://dav.example.com',
@@ -149,10 +144,8 @@ describe('backupWebDavService', () => {
       password: 'secret',
     });
 
-    expect(result.map((entry) => entry.fileName)).toEqual([
-      'newer.tar.bz2',
-      'older.tar.bz2',
-    ]);
+    expect(result).toBe(backendEntries);
+    expect(result.map((entry) => entry.fileName)).toEqual(['newer.tar.bz2', 'older.tar.bz2']);
   });
 
   it('uploads a local backup archive through WebDAV and cleans temporary files', async () => {

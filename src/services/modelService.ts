@@ -10,6 +10,7 @@ import {
     downloadFile,
     extractTarBz2,
     getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
+    resolveModelCatalogSelectedIds as resolveModelCatalogSelectedIdsFromRust,
 } from './tauri/app';
 import { TauriEvent } from './tauri/events';
 import type { ModelFileConfig } from '../types/model';
@@ -159,6 +160,20 @@ export interface ModelCatalogSnapshot {
     restoreDefaults: ModelCatalogRestoreDefaults;
 }
 
+export interface ModelSelectionPaths {
+    streamingModelPath: string;
+    offlineModelPath: string;
+    speakerSegmentationModelPath: string;
+    speakerEmbeddingModelPath: string;
+}
+
+export interface ModelCatalogSelectedIds {
+    streaming: string | null;
+    offline: string | null;
+    speakerSegmentation: string | null;
+    speakerEmbedding: string | null;
+}
+
 export const DEFAULT_MODEL_RULES: ModelRules = {
     requiresVad: true,
     requiresPunctuation: false
@@ -171,62 +186,6 @@ export const PRESET_MODELS: ModelInfo[] = presetModelsData as ModelInfo[];
 export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
     PRESET_MODELS.map(model => [model.id, model])
 );
-
-function normalizeCatalogModel(model: ModelCatalogModel): ModelCatalogModel {
-    return {
-        ...model,
-        isArchive: model.isArchive ?? true,
-        rules: model.rules ?? DEFAULT_MODEL_RULES,
-        engine: model.engine ?? 'sherpa-onnx',
-    };
-}
-
-function normalizeCatalogSnapshot(snapshot: ModelCatalogSnapshot): ModelCatalogSnapshot {
-    const models = snapshot.models.map(normalizeCatalogModel);
-    const normalizedById = new Map(models.map(model => [model.id, model]));
-    const sections = snapshot.sections.map(section => ({
-        ...section,
-        groups: section.groups.map(group => ({
-            ...group,
-            models: group.models.map(model => normalizedById.get(model.id) ?? normalizeCatalogModel(model)),
-        })),
-    }));
-
-    return {
-        ...snapshot,
-        models,
-        sections,
-        selectionOptions: snapshot.selectionOptions ?? {
-            streaming: [],
-            offline: [],
-            speakerSegmentation: [],
-            speakerEmbedding: [],
-        },
-        modelPathById: snapshot.modelPathById ?? Object.fromEntries(
-            models.map(model => [model.id, model.installPath]),
-        ),
-        modelIdByNormalizedPath: snapshot.modelIdByNormalizedPath ?? Object.fromEntries(
-            models.map(model => [normalizeModelPath(model.installPath), model.id]),
-        ),
-        pathMatchTokens: snapshot.pathMatchTokens ?? models.map(model => ({
-            id: model.id,
-            token: normalizeModelPath(model.filename || model.id),
-        })),
-        dependencyRequestsByModelId: snapshot.dependencyRequestsByModelId ?? {},
-        restoreDefaults: snapshot.restoreDefaults ?? {
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
-            enableITN: true,
-            vadBufferSize: 5,
-            maxConcurrent: 2,
-        },
-    };
-}
-
-function normalizeModelPath(path: string): string {
-    return path.replace(/\\/g, '/').toLowerCase();
-}
 
 interface DownloadProgressPayloadObject {
     0?: number;
@@ -286,6 +245,21 @@ export type ProgressCallback = (percentage: number, status: string, isFinished?:
 class ModelService {
     private latestCatalogSnapshot: ModelCatalogSnapshot | null = null;
 
+    private async getCatalogModelFromLatestSnapshot(modelId: string): Promise<ModelCatalogModel | undefined> {
+        const cachedModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
+        if (cachedModel) {
+            return cachedModel;
+        }
+
+        try {
+            const snapshot = await this.getModelCatalogSnapshot();
+            return snapshot.models.find(model => model.id === modelId);
+        } catch (error) {
+            logger.warn('[ModelService] Failed to resolve model metadata from Rust catalog snapshot:', error);
+            return undefined;
+        }
+    }
+
     /**
      * Gets the local directory where models are stored.
      *
@@ -310,9 +284,12 @@ class ModelService {
      */
     async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
         const snapshot = await getModelCatalogSnapshotFromRust();
-        const normalized = normalizeCatalogSnapshot(snapshot);
-        this.latestCatalogSnapshot = normalized;
-        return normalized;
+        this.latestCatalogSnapshot = snapshot;
+        return snapshot;
+    }
+
+    async resolveModelCatalogSelectedIds(paths: ModelSelectionPaths): Promise<ModelCatalogSelectedIds> {
+        return await resolveModelCatalogSelectedIdsFromRust(paths);
     }
 
     /**
@@ -464,12 +441,13 @@ class ModelService {
      * @throws {Error} If the model is not found or download fails.
      */
     async downloadModel(modelId: string, onProgress?: ProgressCallback, signal?: AbortSignal): Promise<string> {
-        const model = PRESET_MODELS_MAP.get(modelId);
+        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
+        const model = catalogModel ?? PRESET_MODELS_MAP.get(modelId);
         if (!model) throw new Error('Model not found');
 
-        const modelsDir = await this.getModelsDir();
+        const modelsDir = this.latestCatalogSnapshot?.modelsDir ?? await this.getModelsDir();
         const targetFilename = model.filename || `${modelId}.tar.bz2`;
-        const tempFilePath = await join(modelsDir, targetFilename);
+        const tempFilePath = catalogModel?.downloadPath ?? await join(modelsDir, targetFilename);
 
         await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading');
 
@@ -511,6 +489,9 @@ class ModelService {
 
         onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
 
+        if (catalogModel?.installPath) {
+            return catalogModel.installPath;
+        }
         if (model.filename) {
             return await join(modelsDir, model.filename);
         }
@@ -535,18 +516,13 @@ class ModelService {
             return cachedPath;
         }
 
-        const model = PRESET_MODELS_MAP.get(modelId);
-        if (!model) {
-            try {
-                const snapshot = await this.getModelCatalogSnapshot();
-                const snapshotPath = snapshot.modelPathById[modelId];
-                if (snapshotPath) {
-                    return snapshotPath;
-                }
-            } catch (error) {
-                logger.warn('[ModelService] Failed to resolve model path from Rust catalog snapshot:', error);
-            }
+        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
+        if (catalogModel?.installPath) {
+            return catalogModel.installPath;
         }
+
+        const model = PRESET_MODELS_MAP.get(modelId);
+        if (!model) throw new Error('Model not found');
 
         const modelsDir = await this.getModelsDir();
         if (model && model.filename) {
@@ -562,6 +538,11 @@ class ModelService {
      * @return A promise resolving to true if installed, false otherwise.
      */
     async isModelInstalled(modelId: string): Promise<boolean> {
+        const catalogModel = await this.getCatalogModelFromLatestSnapshot(modelId);
+        if (catalogModel) {
+            return catalogModel.isInstalled;
+        }
+
         const modelPath = await this.getModelPath(modelId);
         return await exists(modelPath);
     }

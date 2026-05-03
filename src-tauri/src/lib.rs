@@ -46,6 +46,30 @@ fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
 }
 
+#[tauri::command]
+fn resolve_model_catalog_selected_ids<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    paths: preset_models::ModelSelectionPaths,
+) -> Result<preset_models::ModelCatalogSelectedIds, String> {
+    let models_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("models");
+
+    std::fs::create_dir_all(&models_dir).map_err(|error| {
+        format!(
+            "Failed to create models directory {}: {error}",
+            models_dir.display()
+        )
+    })?;
+
+    let snapshot = preset_models::build_model_catalog_snapshot(&models_dir);
+    Ok(preset_models::resolve_model_catalog_selected_ids(
+        &snapshot, &paths,
+    ))
+}
+
 #[cfg(target_os = "windows")]
 fn set_mute_windows(mute: bool) -> Result<(), String> {
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
@@ -276,6 +300,7 @@ pub fn run() {
             webdav::webdav_download_backup,
             downloads::cancel_download,
             preset_models::get_model_catalog_snapshot,
+            resolve_model_catalog_selected_ids,
             diagnostics_core::get_diagnostics_core_snapshot,
             hardware::check_gpu_availability,
             force_exit,

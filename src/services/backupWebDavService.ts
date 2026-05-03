@@ -58,18 +58,6 @@ function validateWebDavConfig(config: BackupWebDavConfig): BackupWebDavConfig {
   return normalized;
 }
 
-function normalizeRemoteEntries(entries: RemoteBackupEntry[]): RemoteBackupEntry[] {
-  return [...entries]
-    .filter((entry) => entry.fileName.endsWith('.tar.bz2'))
-    .sort((left, right) => {
-      const leftTime = left.modifiedAt ? new Date(left.modifiedAt).getTime() : 0;
-      const rightTime = right.modifiedAt ? new Date(right.modifiedAt).getTime() : 0;
-      const safeLeftTime = Number.isNaN(leftTime) ? 0 : leftTime;
-      const safeRightTime = Number.isNaN(rightTime) ? 0 : rightTime;
-      return safeRightTime - safeLeftTime;
-    });
-}
-
 function ensureCloudTransferOperationsIdle(): void {
   const blocker = getBackupOperationBlocker();
   if (!blocker) {
@@ -128,8 +116,7 @@ export async function testConnection(config?: BackupWebDavConfig): Promise<Backu
 export async function listBackups(config?: BackupWebDavConfig): Promise<RemoteBackupEntry[]> {
   ensureCloudTransferOperationsIdle();
   const resolvedConfig = await resolveWebDavConfig(config);
-  const entries = await webdavListBackups(resolvedConfig);
-  return normalizeRemoteEntries(entries);
+  return webdavListBackups(resolvedConfig);
 }
 
 export async function uploadBackup(config?: BackupWebDavConfig): Promise<UploadRemoteBackupResult> {

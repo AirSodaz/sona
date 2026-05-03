@@ -30,7 +30,6 @@ vi.mock('../../hooks/useModelManager', async (importOriginal) => {
             handleCancelDownload: vi.fn(),
             handleLoad: vi.fn(),
             handleDelete: vi.fn(),
-            isModelSelected: vi.fn(),
             restoreDefaultModelSettings: vi.fn(),
         }),
     };

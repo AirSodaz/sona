@@ -10,7 +10,7 @@ import type {
   DiagnosticsCoreSnapshot,
 } from '../diagnosticsSnapshotBuilders';
 import { TauriCommand } from './commands';
-import type { TauriCommandArgs } from './contracts';
+import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
 
 export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
@@ -18,6 +18,14 @@ export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downl
 export type ExtractTarBz2Request = TauriCommandArgs<typeof TauriCommand.app.extractTarBz2>;
 
 export type UpdateTrayMenuRequest = TauriCommandArgs<typeof TauriCommand.app.updateTrayMenu>;
+
+export type ModelSelectionPaths = TauriCommandArgs<
+  typeof TauriCommand.app.resolveModelCatalogSelectedIds
+>['paths'];
+
+export type ModelCatalogSelectedIds = TauriCommandResult<
+  typeof TauriCommand.app.resolveModelCatalogSelectedIds
+>;
 
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
   await invokeTauri(TauriCommand.app.extractTarBz2, request);
@@ -37,6 +45,12 @@ export async function openLogFolder(): Promise<void> {
 
 export async function getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
   return invokeTauri(TauriCommand.app.getModelCatalogSnapshot);
+}
+
+export async function resolveModelCatalogSelectedIds(
+  paths: ModelSelectionPaths,
+): Promise<ModelCatalogSelectedIds> {
+  return invokeTauri(TauriCommand.app.resolveModelCatalogSelectedIds, { paths });
 }
 
 export async function getDiagnosticsCoreSnapshot(

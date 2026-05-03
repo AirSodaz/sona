@@ -228,19 +228,107 @@ describe('ModelService', () => {
         });
     });
 
+    describe('resolveModelCatalogSelectedIds', () => {
+        it('delegates selected model path resolution to the Rust app wrapper', async () => {
+            vi.mocked(invoke).mockResolvedValueOnce({
+                streaming: 'streaming-id',
+                offline: null,
+                speakerSegmentation: null,
+                speakerEmbedding: 'speaker-embedding-id',
+            });
+
+            const result = await modelService.resolveModelCatalogSelectedIds({
+                streamingModelPath: 'C:/models/streaming',
+                offlineModelPath: '',
+                speakerSegmentationModelPath: '',
+                speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
+            });
+
+            expect(invoke).toHaveBeenCalledWith('resolve_model_catalog_selected_ids', {
+                paths: {
+                    streamingModelPath: 'C:/models/streaming',
+                    offlineModelPath: '',
+                    speakerSegmentationModelPath: '',
+                    speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
+                },
+            });
+            expect(result).toEqual({
+                streaming: 'streaming-id',
+                offline: null,
+                speakerSegmentation: null,
+                speakerEmbedding: 'speaker-embedding-id',
+            });
+        });
+    });
+
     describe('isModelInstalled', () => {
         it('returns true if file exists', async () => {
-            // vi.mocked(join).mockResolvedValue('/app/data/models/test-model');
+            const modelId = PRESET_MODELS[0].id;
             (exists as any).mockResolvedValue(true);
 
-            const result = await modelService.isModelInstalled('test-model');
+            const result = await modelService.isModelInstalled(modelId);
             expect(result).toBe(true);
         });
 
         it('returns false if file does not exist', async () => {
+            const modelId = PRESET_MODELS[0].id;
             (exists as any).mockResolvedValue(false);
-            const result = await modelService.isModelInstalled('test-model');
+            const result = await modelService.isModelInstalled(modelId);
             expect(result).toBe(false);
+        });
+
+        it('uses the latest Rust catalog install status when available', async () => {
+            const backendSnapshot = {
+                modelsDir: '/snapshot/models',
+                models: [
+                    {
+                        id: 'catalog-installed-model',
+                        name: 'Catalog Installed',
+                        description: 'settings.descriptions.catalog_installed',
+                        url: 'https://example.com/catalog-installed.tar.bz2',
+                        type: 'sensevoice',
+                        modes: ['streaming'],
+                        language: 'zh,en',
+                        size: '1 MB',
+                        isArchive: true,
+                        engine: 'sherpa-onnx',
+                        rules: {
+                            requiresVad: false,
+                            requiresPunctuation: false,
+                        },
+                        installPath: '/snapshot/models/catalog-installed-model',
+                        downloadPath: '/snapshot/models/catalog-installed-model.tar.bz2',
+                        isInstalled: true,
+                    },
+                ],
+                sections: [],
+                selectionOptions: {
+                    streaming: [],
+                    offline: [],
+                    speakerSegmentation: [],
+                    speakerEmbedding: [],
+                },
+                modelPathById: {
+                    'catalog-installed-model': '/snapshot/models/catalog-installed-model',
+                },
+                modelIdByNormalizedPath: {},
+                pathMatchTokens: [],
+                dependencyRequestsByModelId: {},
+                restoreDefaults: {
+                    punctuationModelPath: '',
+                    speakerSegmentationModelPath: '',
+                    speakerEmbeddingModelPath: '',
+                    enableITN: true,
+                    vadBufferSize: 5,
+                    maxConcurrent: 2,
+                },
+            };
+            vi.mocked(invoke).mockResolvedValueOnce(backendSnapshot);
+
+            const result = await modelService.isModelInstalled('catalog-installed-model');
+
+            expect(result).toBe(true);
+            expect(exists).not.toHaveBeenCalled();
         });
     });
 
@@ -265,14 +353,80 @@ describe('ModelService', () => {
             }));
             expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
         });
+
+        it('uses Rust catalog download and install paths when available', async () => {
+            const onProgress = vi.fn();
+            const catalogModel = {
+                id: 'catalog-download-model',
+                name: 'Catalog Download',
+                description: 'settings.descriptions.catalog_download',
+                url: 'https://example.com/catalog-download.tar.bz2',
+                type: 'sensevoice',
+                modes: ['offline'],
+                language: 'zh,en',
+                size: '1 MB',
+                isArchive: true,
+                engine: 'sherpa-onnx',
+                rules: {
+                    requiresVad: false,
+                    requiresPunctuation: false,
+                },
+                installPath: '/snapshot/models/catalog-download-model',
+                downloadPath: '/snapshot/models/downloads/catalog-download.tar.bz2',
+                isInstalled: false,
+            };
+            vi.mocked(invoke).mockImplementation((cmd: string) => {
+                if (cmd === 'get_model_catalog_snapshot') {
+                    return Promise.resolve({
+                        modelsDir: '/snapshot/models',
+                        models: [catalogModel],
+                        sections: [],
+                        selectionOptions: {
+                            streaming: [],
+                            offline: [],
+                            speakerSegmentation: [],
+                            speakerEmbedding: [],
+                        },
+                        modelPathById: {
+                            [catalogModel.id]: catalogModel.installPath,
+                        },
+                        modelIdByNormalizedPath: {},
+                        pathMatchTokens: [],
+                        dependencyRequestsByModelId: {},
+                        restoreDefaults: {
+                            punctuationModelPath: '',
+                            speakerSegmentationModelPath: '',
+                            speakerEmbeddingModelPath: '',
+                            enableITN: true,
+                            vadBufferSize: 5,
+                            maxConcurrent: 2,
+                        },
+                    });
+                }
+                return Promise.resolve();
+            });
+
+            const path = await modelService.downloadModel('catalog-download-model', onProgress);
+
+            expect(path).toBe('/snapshot/models/catalog-download-model');
+            expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
+                url: 'https://example.com/catalog-download.tar.bz2',
+                outputPath: '/snapshot/models/downloads/catalog-download.tar.bz2',
+            }));
+            expect(invoke).toHaveBeenCalledWith('extract_tar_bz2', {
+                archivePath: '/snapshot/models/downloads/catalog-download.tar.bz2',
+                targetDir: '/snapshot/models',
+            });
+        });
     });
 
     describe('deleteModel', () => {
         it('removes the model directory/file if it exists', async () => {
+            const modelId = PRESET_MODELS[0].id;
             (exists as any).mockResolvedValue(true);
             (remove as any).mockResolvedValue(undefined);
 
-            await modelService.deleteModel('test-model');
+            await modelService.deleteModel(modelId);
 
             expect(remove).toHaveBeenCalled();
         });

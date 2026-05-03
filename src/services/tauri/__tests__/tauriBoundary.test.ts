@@ -8,6 +8,7 @@ import {
   getDiagnosticsCoreSnapshot,
   getModelCatalogSnapshot,
   openLogFolder,
+  resolveModelCatalogSelectedIds,
   setLogLevel,
   setMinimizeToTray,
 } from '../app';
@@ -127,6 +128,29 @@ describe('tauri boundary wrappers', () => {
 
     expect(result).toEqual(snapshot);
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
+  });
+
+  it('app wrappers resolve model catalog selected ids', async () => {
+    const paths = {
+      streamingModelPath: 'C:/models/live',
+      offlineModelPath: 'C:/models/offline',
+      speakerSegmentationModelPath: '',
+      speakerEmbeddingModelPath: 'C:/models/speaker.onnx',
+    };
+    const selectedIds = {
+      streaming: 'live-model',
+      offline: 'offline-model',
+      speakerSegmentation: null,
+      speakerEmbedding: 'speaker-model',
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(selectedIds);
+
+    const result = await resolveModelCatalogSelectedIds(paths);
+
+    expect(result).toEqual(selectedIds);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.resolveModelCatalogSelectedIds, {
+      paths,
+    });
   });
 
   it('app wrappers expose the diagnostics core snapshot', async () => {

@@ -147,24 +147,34 @@ function buildModelCatalog(installedModels: Set<string>) {
 }
 
 function renderTab(installedModels: Set<string>) {
-    const managerValue = {
-        deletingId: null,
-        downloads: {},
-        installedModels,
-        modelCatalog: buildModelCatalog(installedModels),
-        handleDelete: vi.fn(),
-        handleDownload: vi.fn(),
-        handleCancelDownload: vi.fn(),
-        handleLoad: vi.fn(),
-        isModelSelected: vi.fn(),
-        restoreDefaultModelSettings: vi.fn(),
-    } as any;
+    function Harness() {
+        const config = useConfigStore((state) => state.config);
+        const managerValue = {
+            deletingId: null,
+            downloads: {},
+            installedModels,
+            modelCatalog: buildModelCatalog(installedModels),
+            selectedModelIds: {
+                streaming: null,
+                offline: null,
+                speakerSegmentation: config.speakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
+                speakerEmbedding: config.speakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
+            },
+            handleDelete: vi.fn(),
+            handleDownload: vi.fn(),
+            handleCancelDownload: vi.fn(),
+            handleLoad: vi.fn(),
+            restoreDefaultModelSettings: vi.fn(),
+        } as any;
 
-    return render(
-        <ModelManagerContext.Provider value={managerValue}>
-            <SettingsModelsTab />
-        </ModelManagerContext.Provider>,
-    );
+        return (
+            <ModelManagerContext.Provider value={managerValue}>
+                <SettingsModelsTab />
+            </ModelManagerContext.Provider>
+        );
+    }
+
+    return render(<Harness />);
 }
 
 describe('SettingsModelsTab speaker model selections', () => {

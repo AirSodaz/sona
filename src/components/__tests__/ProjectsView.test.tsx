@@ -10,6 +10,9 @@ import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 const virtuosoScrollToIndexMock = vi.hoisted(() => vi.fn());
 const virtuosoGridScrollToIndexMock = vi.hoisted(() => vi.fn());
+const workspaceQueryBackendMock = vi.hoisted(() => ({
+  impl: null as null | ((args: any, items: any[]) => any),
+}));
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -52,85 +55,6 @@ vi.mock('../../services/historyService', () => ({
 }));
 
 vi.mock('../../services/tauri/history', () => {
-  const normalizeSearch = (value: string) => value.toLowerCase();
-  const matchesQuery = (item: any, query: string) => {
-    const normalizedQuery = normalizeSearch(query.trim());
-    if (!normalizedQuery) {
-      return true;
-    }
-
-    return [item.title, item.previewText, item.searchContent]
-      .filter((value): value is string => typeof value === 'string')
-      .some((value) => normalizeSearch(value).includes(normalizedQuery));
-  };
-  const buildSearchMatch = (item: any, query: string) => {
-    const normalizedQuery = normalizeSearch(query.trim());
-    if (!normalizedQuery) {
-      return null;
-    }
-
-    const candidates = [
-      ['title', item.title],
-      ['previewText', item.previewText],
-      ['searchContent', item.searchContent],
-    ] as const;
-    const match = candidates.find(([, value]) => (
-      typeof value === 'string' && normalizeSearch(value).includes(normalizedQuery)
-    ));
-    if (!match || typeof match[1] !== 'string') {
-      return null;
-    }
-
-    const start = normalizeSearch(match[1]).indexOf(normalizedQuery);
-    const end = start + query.trim().length;
-    return {
-      matchedField: match[0],
-      titleMatch: match[0] === 'title' ? { start, end } : null,
-      displaySnippet: {
-        text: match[1],
-        highlightStart: start,
-        highlightEnd: end,
-      },
-    };
-  };
-  const isWithinDateFilter = (item: any, dateFilter: string) => {
-    if (dateFilter === 'all') {
-      return true;
-    }
-
-    const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
-    const age = now - Number(item.timestamp || 0);
-    if (dateFilter === 'today') {
-      return age <= dayMs;
-    }
-    if (dateFilter === 'week') {
-      return age <= 7 * dayMs;
-    }
-    if (dateFilter === 'month') {
-      return age <= 30 * dayMs;
-    }
-    return true;
-  };
-  const sortItems = (items: any[], sortOrder: string) => {
-    const nextItems = [...items];
-    nextItems.sort((left, right) => {
-      if (sortOrder === 'oldest') {
-        return Number(left.timestamp || 0) - Number(right.timestamp || 0);
-      }
-      if (sortOrder === 'duration_desc') {
-        return Number(right.duration || 0) - Number(left.duration || 0);
-      }
-      if (sortOrder === 'duration_asc') {
-        return Number(left.duration || 0) - Number(right.duration || 0);
-      }
-      if (sortOrder === 'title_asc') {
-        return String(left.title || '').localeCompare(String(right.title || ''));
-      }
-      return Number(right.timestamp || 0) - Number(left.timestamp || 0);
-    });
-    return nextItems;
-  };
   const summarize = (items: any[]) => ({
     totalItems: items.length,
     totalDuration: items.reduce((total, item) => total + Number(item.duration || 0), 0),
@@ -143,9 +67,14 @@ vi.mock('../../services/tauri/history', () => {
   });
 
   return {
-    historyQueryWorkspace: vi.fn(async ({ scope, query, filterType, dateFilter, sortOrder }: any) => {
+    historyQueryWorkspace: vi.fn(async (args: any) => {
+      const { scope } = args;
       const { useHistoryStore } = await import('../../stores/historyStore');
       const items = useHistoryStore.getState().items;
+      if (workspaceQueryBackendMock.impl) {
+        return workspaceQueryBackendMock.impl(args, items);
+      }
+
       const scopedItems = items.filter((item: any) => {
         if (scope.kind === 'all') {
           return true;
@@ -155,15 +84,6 @@ vi.mock('../../services/tauri/history', () => {
         }
         return item.projectId === scope.projectId;
       });
-      const typeFiltered = scopedItems.filter((item: any) => (
-        filterType === 'all' || item.type === filterType
-      ));
-      const dateFiltered = typeFiltered.filter((item: any) => isWithinDateFilter(item, dateFilter));
-      const queryFiltered = dateFiltered.filter((item: any) => matchesQuery(item, query));
-      const filteredItems = sortItems(queryFiltered, sortOrder);
-      const searchMatchByItemId = Object.fromEntries(
-        filteredItems.map((item: any) => [item.id, buildSearchMatch(item, query)]),
-      );
       const byProjectId: Record<string, number> = {};
       let inbox = 0;
       items.forEach((item: any) => {
@@ -175,10 +95,10 @@ vi.mock('../../services/tauri/history', () => {
       });
 
       return {
-        filteredItems,
+        filteredItems: scopedItems,
         scopedItems,
         scopedItemIds: scopedItems.map((item: any) => item.id),
-        searchMatchByItemId,
+        searchMatchByItemId: Object.fromEntries(scopedItems.map((item: any) => [item.id, null])),
         summary: summarize(scopedItems),
         itemCounts: {
           inbox,
@@ -352,8 +272,66 @@ describe('ProjectsView', () => {
     }))
   );
 
+  const summarizeWorkspaceItems = (items: any[]) => ({
+    totalItems: items.length,
+    totalDuration: items.reduce((total, item) => total + Number(item.duration || 0), 0),
+    latestTimestamp: items.reduce<number | null>((latest, item) => {
+      const timestamp = Number(item.timestamp || 0);
+      return latest === null || timestamp > latest ? timestamp : latest;
+    }, null),
+    recordingCount: items.filter((item) => item.type !== 'batch').length,
+    batchCount: items.filter((item) => item.type === 'batch').length,
+  });
+
+  const buildWorkspaceQueryResult = ({
+    filteredItems,
+    scopedItems = filteredItems,
+    searchMatchByItemId = {},
+    allItems = scopedItems,
+  }: {
+    filteredItems: any[];
+    scopedItems?: any[];
+    searchMatchByItemId?: Record<string, any>;
+    allItems?: any[];
+  }) => {
+    const byProjectId: Record<string, number> = {};
+    let inbox = 0;
+    allItems.forEach((item) => {
+      if (item.projectId) {
+        byProjectId[item.projectId] = (byProjectId[item.projectId] || 0) + 1;
+      } else {
+        inbox += 1;
+      }
+    });
+
+    return {
+      filteredItems,
+      scopedItems,
+      scopedItemIds: scopedItems.map((item) => item.id),
+      searchMatchByItemId: Object.fromEntries(
+        filteredItems.map((item) => [item.id, searchMatchByItemId[item.id] ?? null]),
+      ),
+      summary: summarizeWorkspaceItems(scopedItems),
+      itemCounts: {
+        inbox,
+        byProjectId,
+      },
+    };
+  };
+
+  const makeSearchMatch = (text: string, field = 'previewText') => ({
+    matchedField: field,
+    titleMatch: field === 'title' ? { start: 0, end: text.length } : null,
+    displaySnippet: {
+      text,
+      highlightStart: 0,
+      highlightEnd: text.length,
+    },
+  });
+
   beforeEach(async () => {
     vi.clearAllMocks();
+    workspaceQueryBackendMock.impl = null;
 
     useProjectStore.setState({
       projects: [
@@ -989,58 +967,92 @@ describe('ProjectsView', () => {
   it('searches, filters, and sorts only within the current browse scope', async () => {
     const now = Date.now();
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'hist-recording',
-          title: 'Client Call',
-          timestamp: now - (2 * 24 * 60 * 60 * 1000),
-          duration: 180,
-          audioPath: 'audio-1.wav',
-          transcriptPath: 'hist-recording.json',
-          previewText: 'Quarterly planning',
-          searchContent: 'Quarterly roadmap follow up',
-          type: 'recording',
-          projectId: 'project-1',
-        },
-        {
-          id: 'hist-batch-old',
-          title: 'Imported Deck',
-          timestamp: now - (10 * 24 * 60 * 60 * 1000),
-          duration: 320,
-          audioPath: 'audio-2.wav',
-          transcriptPath: 'hist-batch-old.json',
-          previewText: 'Slides transcript',
-          searchContent: 'Deck transcript import',
-          type: 'batch',
-          projectId: 'project-1',
-        },
-        {
-          id: 'hist-batch-recent',
-          title: 'Workshop Import',
-          timestamp: now - (24 * 60 * 60 * 1000),
-          duration: 240,
-          audioPath: 'audio-3.wav',
-          transcriptPath: 'hist-batch-recent.json',
-          previewText: 'Workshop notes',
-          searchContent: 'Training import summary',
-          type: 'batch',
-          projectId: 'project-1',
-        },
-        {
-          id: 'hist-inbox',
-          title: 'Inbox Item',
-          timestamp: now,
-          duration: 60,
-          audioPath: 'audio-4.wav',
-          transcriptPath: 'hist-inbox.json',
-          previewText: 'Inbox only',
-          searchContent: 'Should never appear',
-          type: 'recording',
-          projectId: null,
-        },
-      ],
-    } as any);
+    const items = [
+      {
+        id: 'hist-recording',
+        title: 'Client Call',
+        timestamp: now - (2 * 24 * 60 * 60 * 1000),
+        duration: 180,
+        audioPath: 'audio-1.wav',
+        transcriptPath: 'hist-recording.json',
+        previewText: 'Quarterly planning',
+        searchContent: 'Quarterly roadmap follow up',
+        type: 'recording',
+        projectId: 'project-1',
+      },
+      {
+        id: 'hist-batch-old',
+        title: 'Imported Deck',
+        timestamp: now - (10 * 24 * 60 * 60 * 1000),
+        duration: 320,
+        audioPath: 'audio-2.wav',
+        transcriptPath: 'hist-batch-old.json',
+        previewText: 'Slides transcript',
+        searchContent: 'Deck transcript import',
+        type: 'batch',
+        projectId: 'project-1',
+      },
+      {
+        id: 'hist-batch-recent',
+        title: 'Workshop Import',
+        timestamp: now - (24 * 60 * 60 * 1000),
+        duration: 240,
+        audioPath: 'audio-3.wav',
+        transcriptPath: 'hist-batch-recent.json',
+        previewText: 'Workshop notes',
+        searchContent: 'Training import summary',
+        type: 'batch',
+        projectId: 'project-1',
+      },
+      {
+        id: 'hist-inbox',
+        title: 'Inbox Item',
+        timestamp: now,
+        duration: 60,
+        audioPath: 'audio-4.wav',
+        transcriptPath: 'hist-inbox.json',
+        previewText: 'Inbox only',
+        searchContent: 'Should never appear',
+        type: 'recording',
+        projectId: null,
+      },
+    ];
+    useHistoryStore.setState({ items } as any);
+    const projectItems = items.filter((item) => item.projectId === 'project-1');
+    workspaceQueryBackendMock.impl = ({ query, filterType, dateFilter }) => {
+      if (query === 'roadmap') {
+        return buildWorkspaceQueryResult({
+          filteredItems: [items[0]],
+          scopedItems: projectItems,
+          allItems: items,
+          searchMatchByItemId: {
+            'hist-recording': makeSearchMatch('Quarterly roadmap follow up'),
+          },
+        });
+      }
+
+      if (filterType === 'batch' && dateFilter === 'week') {
+        return buildWorkspaceQueryResult({
+          filteredItems: [items[2]],
+          scopedItems: projectItems,
+          allItems: items,
+        });
+      }
+
+      if (filterType === 'batch') {
+        return buildWorkspaceQueryResult({
+          filteredItems: [items[1], items[2]],
+          scopedItems: projectItems,
+          allItems: items,
+        });
+      }
+
+      return buildWorkspaceQueryResult({
+        filteredItems: projectItems,
+        scopedItems: projectItems,
+        allItems: items,
+      });
+    };
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
@@ -1085,34 +1097,38 @@ describe('ProjectsView', () => {
 
   it('opens the filter popover and clears active filters without affecting sort controls', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'hist-recording',
-          title: 'Client Call',
-          timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000),
-          duration: 180,
-          audioPath: 'audio-1.wav',
-          transcriptPath: 'hist-recording.json',
-          previewText: 'Quarterly planning',
-          searchContent: 'Quarterly roadmap follow up',
-          type: 'recording',
-          projectId: 'project-1',
-        },
-        {
-          id: 'hist-batch',
-          title: 'Workshop Import',
-          timestamp: Date.now() - (24 * 60 * 60 * 1000),
-          duration: 240,
-          audioPath: 'audio-2.wav',
-          transcriptPath: 'hist-batch.json',
-          previewText: 'Workshop notes',
-          searchContent: 'Training import summary',
-          type: 'batch',
-          projectId: 'project-1',
-        },
-      ],
-    } as any);
+    const items = [
+      {
+        id: 'hist-recording',
+        title: 'Client Call',
+        timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000),
+        duration: 180,
+        audioPath: 'audio-1.wav',
+        transcriptPath: 'hist-recording.json',
+        previewText: 'Quarterly planning',
+        searchContent: 'Quarterly roadmap follow up',
+        type: 'recording',
+        projectId: 'project-1',
+      },
+      {
+        id: 'hist-batch',
+        title: 'Workshop Import',
+        timestamp: Date.now() - (24 * 60 * 60 * 1000),
+        duration: 240,
+        audioPath: 'audio-2.wav',
+        transcriptPath: 'hist-batch.json',
+        previewText: 'Workshop notes',
+        searchContent: 'Training import summary',
+        type: 'batch',
+        projectId: 'project-1',
+      },
+    ];
+    useHistoryStore.setState({ items } as any);
+    workspaceQueryBackendMock.impl = ({ filterType }) => buildWorkspaceQueryResult({
+      filteredItems: filterType === 'batch' ? [items[1]] : items,
+      scopedItems: items,
+      allItems: items,
+    });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
@@ -1233,22 +1249,47 @@ describe('ProjectsView', () => {
 
   it('refreshes workspace search results and snippets immediately after a transcript metadata sync', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'hist-1',
-          title: 'Alpha Plan',
-          timestamp: Date.now(),
-          duration: 120,
-          audioPath: 'audio-1.wav',
-          transcriptPath: 'hist-1.json',
-          previewText: 'Meeting notes',
-          searchContent: 'Meeting notes',
-          type: 'recording',
-          projectId: 'project-1',
-        },
-      ],
-    } as any);
+    const item = {
+      id: 'hist-1',
+      title: 'Alpha Plan',
+      timestamp: Date.now(),
+      duration: 120,
+      audioPath: 'audio-1.wav',
+      transcriptPath: 'hist-1.json',
+      previewText: 'Meeting notes',
+      searchContent: 'Meeting notes',
+      type: 'recording',
+      projectId: 'project-1',
+    };
+    useHistoryStore.setState({ items: [item] } as any);
+    let roadmapQueryCount = 0;
+    workspaceQueryBackendMock.impl = ({ query }, currentItems) => {
+      if (query === 'roadmap') {
+        roadmapQueryCount += 1;
+        if (roadmapQueryCount === 1) {
+          return buildWorkspaceQueryResult({
+            filteredItems: [],
+            scopedItems: currentItems,
+            allItems: currentItems,
+          });
+        }
+
+        return buildWorkspaceQueryResult({
+          filteredItems: currentItems,
+          scopedItems: currentItems,
+          allItems: currentItems,
+          searchMatchByItemId: {
+            'hist-1': makeSearchMatch('Fresh roadmap notes...'),
+          },
+        });
+      }
+
+      return buildWorkspaceQueryResult({
+        filteredItems: currentItems,
+        scopedItems: currentItems,
+        allItems: currentItems,
+      });
+    };
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
@@ -1339,34 +1380,38 @@ describe('ProjectsView', () => {
 
   it('shows a no-results state and trims hidden selections without dropping the open detail pane', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    useHistoryStore.setState({
-      items: [
-        {
-          id: 'hist-1',
-          title: 'Project Item',
-          timestamp: Date.now() - 500,
-          duration: 120,
-          audioPath: 'audio-1.wav',
-          transcriptPath: 'hist-1.json',
-          previewText: 'Preview',
-          searchContent: 'Preview',
-          type: 'recording',
-          projectId: 'project-1',
-        },
-        {
-          id: 'hist-2',
-          title: 'Batch Item',
-          timestamp: Date.now() - 1000,
-          duration: 360,
-          audioPath: 'audio-2.wav',
-          transcriptPath: 'hist-2.json',
-          previewText: 'Batch preview',
-          searchContent: 'Batch preview',
-          type: 'batch',
-          projectId: 'project-1',
-        },
-      ],
-    } as any);
+    const items = [
+      {
+        id: 'hist-1',
+        title: 'Project Item',
+        timestamp: Date.now() - 500,
+        duration: 120,
+        audioPath: 'audio-1.wav',
+        transcriptPath: 'hist-1.json',
+        previewText: 'Preview',
+        searchContent: 'Preview',
+        type: 'recording',
+        projectId: 'project-1',
+      },
+      {
+        id: 'hist-2',
+        title: 'Batch Item',
+        timestamp: Date.now() - 1000,
+        duration: 360,
+        audioPath: 'audio-2.wav',
+        transcriptPath: 'hist-2.json',
+        previewText: 'Batch preview',
+        searchContent: 'Batch preview',
+        type: 'batch',
+        projectId: 'project-1',
+      },
+    ];
+    useHistoryStore.setState({ items } as any);
+    workspaceQueryBackendMock.impl = ({ query }) => buildWorkspaceQueryResult({
+      filteredItems: query === 'missing item' ? [] : items,
+      scopedItems: items,
+      allItems: items,
+    });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();

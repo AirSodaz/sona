@@ -6,6 +6,7 @@ import {
     modelService,
 } from '../services/modelService';
 import type {
+    ModelCatalogSelectedIds,
     ModelCatalogModel,
     ModelCatalogSnapshot,
     ModelInfo,
@@ -43,6 +44,13 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
     },
 };
 
+const EMPTY_MODEL_CATALOG_SELECTED_IDS: ModelCatalogSelectedIds = {
+    streaming: null,
+    offline: null,
+    speakerSegmentation: null,
+    speakerEmbedding: null,
+};
+
 export type ModelManagerContextType = ReturnType<typeof useModelManager>;
 
 export const ModelManagerContext = createContext<ModelManagerContextType | null>(null);
@@ -55,34 +63,6 @@ function scheduleAfterFrame(callback: () => void): () => void {
 
     const timeoutId = window.setTimeout(callback, 0);
     return () => window.clearTimeout(timeoutId);
-}
-
-function normalizeModelPath(path: string): string {
-    return path.replace(/\\/g, '/').toLowerCase();
-}
-
-function resolveModelIdFromSnapshot(
-    snapshot: ModelCatalogSnapshot,
-    modelPath: string,
-    allowedModelIds: string[],
-): string {
-    if (!modelPath.trim()) {
-        return '';
-    }
-
-    const allowedIds = new Set(allowedModelIds);
-    const normalizedPath = normalizeModelPath(modelPath);
-    const exactId = snapshot.modelIdByNormalizedPath[normalizedPath];
-    if (exactId && allowedIds.has(exactId)) {
-        return exactId;
-    }
-
-    const tokenMatch = snapshot.pathMatchTokens.find((token) => (
-        allowedIds.has(token.id)
-        && token.token.length > 0
-        && normalizedPath.includes(token.token)
-    ));
-    return tokenMatch?.id ?? '';
 }
 
 export function useModelManagerContext() {
@@ -107,6 +87,7 @@ export function useModelManager(isOpen: boolean) {
     const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
     const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
     const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(EMPTY_MODEL_CATALOG_SNAPSHOT);
+    const [selectedModelIds, setSelectedModelIds] = useState<ModelCatalogSelectedIds>(EMPTY_MODEL_CATALOG_SELECTED_IDS);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const updateConfig = useCallback((updates: Partial<typeof config>) => {
@@ -149,6 +130,42 @@ export function useModelManager(isOpen: boolean) {
             void refreshModelCatalogSnapshot();
         });
     }, [isOpen, refreshModelCatalogSnapshot]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        let cancelled = false;
+        const cancelScheduledResolve = scheduleAfterFrame(() => {
+            void modelService.resolveModelCatalogSelectedIds({
+                streamingModelPath: config.streamingModelPath || '',
+                offlineModelPath: config.offlineModelPath || '',
+                speakerSegmentationModelPath: config.speakerSegmentationModelPath || '',
+                speakerEmbeddingModelPath: config.speakerEmbeddingModelPath || '',
+            }).then((selectedIds) => {
+                if (!cancelled) {
+                    setSelectedModelIds(selectedIds);
+                }
+            }).catch((error) => {
+                logger.warn('[useModelManager] Failed to resolve selected model ids:', error);
+                if (!cancelled) {
+                    setSelectedModelIds(EMPTY_MODEL_CATALOG_SELECTED_IDS);
+                }
+            });
+        });
+
+        return () => {
+            cancelled = true;
+            cancelScheduledResolve();
+        };
+    }, [
+        config.offlineModelPath,
+        config.speakerEmbeddingModelPath,
+        config.speakerSegmentationModelPath,
+        config.streamingModelPath,
+        isOpen,
+    ]);
 
     const setModelPath = useCallback((model: ModelInfo, path: string) => {
         const updates: Partial<typeof config> = {};
@@ -368,56 +385,6 @@ export function useModelManager(isOpen: boolean) {
         }
     }
 
-    function isModelSelected(model: ModelInfo): boolean {
-        if (model.modes && model.modes.length > 0) {
-            let isSelected = false;
-            if (model.modes.includes('streaming')) {
-                isSelected = isSelected || resolveModelIdFromSnapshot(
-                    modelCatalog,
-                    config.streamingModelPath || '',
-                    modelCatalog.selectionOptions.streaming.map((option) => option.id),
-                ) === model.id;
-            }
-            if (model.modes.includes('offline')) {
-                isSelected = isSelected || resolveModelIdFromSnapshot(
-                    modelCatalog,
-                    config.offlineModelPath || '',
-                    modelCatalog.selectionOptions.offline.map((option) => option.id),
-                ) === model.id;
-            }
-            return isSelected;
-        }
-        if (model.type === 'punctuation') {
-            return resolveModelIdFromSnapshot(
-                modelCatalog,
-                config.punctuationModelPath || '',
-                modelCatalog.models.filter((item) => item.type === 'punctuation').map((item) => item.id),
-            ) === model.id;
-        }
-        if (model.type === 'vad') {
-            return resolveModelIdFromSnapshot(
-                modelCatalog,
-                config.vadModelPath || '',
-                modelCatalog.models.filter((item) => item.type === 'vad').map((item) => item.id),
-            ) === model.id;
-        }
-        if (model.type === 'speaker-segmentation') {
-            return resolveModelIdFromSnapshot(
-                modelCatalog,
-                config.speakerSegmentationModelPath || '',
-                modelCatalog.selectionOptions.speakerSegmentation.map((option) => option.id),
-            ) === model.id;
-        }
-        if (model.type === 'speaker-embedding') {
-            return resolveModelIdFromSnapshot(
-                modelCatalog,
-                config.speakerEmbeddingModelPath || '',
-                modelCatalog.selectionOptions.speakerEmbedding.map((option) => option.id),
-            ) === model.id;
-        }
-        return false;
-    }
-
     async function restoreDefaultModelSettings() {
         const confirmed = await confirm(t('settings.restore_defaults_confirm'), {
             title: t('settings.restore_defaults'),
@@ -459,12 +426,12 @@ export function useModelManager(isOpen: boolean) {
         downloads,
         installedModels,
         modelCatalog,
+        selectedModelIds,
 
         handleDownload,
         handleCancelDownload,
         handleLoad,
         handleDelete,
-        isModelSelected,
         restoreDefaultModelSettings,
     };
 }

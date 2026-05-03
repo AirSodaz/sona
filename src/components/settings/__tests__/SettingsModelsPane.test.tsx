@@ -10,7 +10,6 @@ const useModelManagerMock = vi.hoisted(() => vi.fn(() => ({
     handleCancelDownload: vi.fn(),
     handleLoad: vi.fn(),
     handleDelete: vi.fn(),
-    isModelSelected: vi.fn(() => false),
     restoreDefaultModelSettings: vi.fn(),
 })));
 

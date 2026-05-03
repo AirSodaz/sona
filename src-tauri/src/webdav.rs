@@ -549,6 +549,50 @@ mod tests {
     }
 
     #[test]
+    fn parse_propfind_entries_falls_back_to_href_file_name_and_ties_by_file_name() {
+        let xml = r#"<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/remote.php/dav/files/demo/backups/sona/zeta-backup.tar.bz2</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getcontentlength>10</d:getcontentlength>
+        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/files/demo/backups/sona/alpha%20backup.tar.bz2</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getcontentlength>20</d:getcontentlength>
+        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/remote.php/dav/files/demo/backups/sona/named-from-display.tar.bz2</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>beta-backup.tar.bz2</d:displayname>
+        <d:getcontentlength>30</d:getcontentlength>
+        <d:getlastmodified>Wed, 29 Apr 2026 01:00:00 GMT</d:getlastmodified>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+        let collection_url =
+            Url::parse("https://dav.example.com/remote.php/dav/files/demo/backups/sona/").unwrap();
+
+        let result = parse_propfind_entries(xml, &collection_url).unwrap();
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].file_name, "alpha backup.tar.bz2");
+        assert_eq!(result[1].file_name, "beta-backup.tar.bz2");
+        assert_eq!(result[2].file_name, "zeta-backup.tar.bz2");
+    }
+
+    #[test]
     fn resolve_warning_message_marks_http_connections_as_warnings() {
         let result = resolve_warning_message(false, true);
 

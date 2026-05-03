@@ -464,3 +464,74 @@ fn match_workspace_item(
         display_snippet: build_snippet(source_text, &display_range, DEFAULT_SNIPPET_LENGTH),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::history_repository::test_support::sample_history_item;
+    use crate::history_repository::{
+        HistoryItemStatus, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
+        HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    };
+
+    fn base_request(query: &str) -> HistoryWorkspaceQueryRequest {
+        HistoryWorkspaceQueryRequest {
+            scope: HistoryWorkspaceScope::All,
+            query: query.to_string(),
+            filter_type: HistoryWorkspaceFilterType::All,
+            date_filter: HistoryWorkspaceDateFilter::All,
+            sort_order: HistoryWorkspaceSortOrder::Newest,
+        }
+    }
+
+    #[test]
+    fn workspace_search_preserves_legacy_frontend_match_semantics() {
+        let mut punctuation = sample_history_item("punctuation", HistoryItemStatus::Complete);
+        punctuation.title = "Chinese punctuation".to_string();
+        punctuation.preview_text = "你好，世界".to_string();
+        punctuation.search_content = punctuation.preview_text.clone();
+
+        let punctuation_result =
+            query_workspace_items(vec![punctuation.clone()], base_request("你好,世界"));
+        assert_eq!(punctuation_result.filtered_items, vec![punctuation.clone()]);
+        let punctuation_match = punctuation_result
+            .search_match_by_item_id
+            .get("punctuation")
+            .and_then(|entry| entry.as_ref())
+            .unwrap();
+        assert_eq!(punctuation_match.matched_field, "previewText");
+        assert_eq!(punctuation_match.display_snippet.text, "你好，世界");
+
+        let mut whitespace = sample_history_item("whitespace", HistoryItemStatus::Complete);
+        whitespace.title = "Whitespace".to_string();
+        whitespace.preview_text = "hello world".to_string();
+        whitespace.search_content = whitespace.preview_text.clone();
+
+        let whitespace_result =
+            query_workspace_items(vec![whitespace.clone()], base_request("helloworld"));
+        assert!(whitespace_result.filtered_items.is_empty());
+
+        let mut body_priority = sample_history_item("body-priority", HistoryItemStatus::Complete);
+        body_priority.title = "Roadmap Review".to_string();
+        body_priority.preview_text =
+            "Quarterly roadmap discussion with design and product.".to_string();
+        body_priority.search_content = body_priority.preview_text.clone();
+
+        let body_result =
+            query_workspace_items(vec![body_priority.clone()], base_request("roadmap"));
+        let body_match = body_result
+            .search_match_by_item_id
+            .get("body-priority")
+            .and_then(|entry| entry.as_ref())
+            .unwrap();
+        assert_eq!(body_match.matched_field, "title");
+        assert_eq!(
+            body_match.title_match,
+            Some(HistoryWorkspaceSearchRange { start: 0, end: 7 })
+        );
+        assert!(body_match
+            .display_snippet
+            .text
+            .contains("Quarterly roadmap discussion"));
+    }
+}
