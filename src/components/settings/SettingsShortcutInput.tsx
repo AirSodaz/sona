@@ -142,6 +142,7 @@ export function SettingsShortcutInput({
                 }}
                 data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip-pos="top"
+                aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 style={{
                     padding: '4px',
                     background: 'transparent',
