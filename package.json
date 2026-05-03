@@ -74,10 +74,5 @@
   },
   "lint-staged": {
     "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "pnpm run lint:staged --"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "ffmpeg-static"
-    ]
   }
 }
