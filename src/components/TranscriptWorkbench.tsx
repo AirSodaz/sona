@@ -146,6 +146,7 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
               <button
                 className="btn btn-icon btn-sm"
                 onClick={() => setIsSummaryOpen(true)}
+                aria-label={t('summary.title')}
                 data-tooltip={t('summary.title')}
                 data-tooltip-pos="bottom"
               >
@@ -191,6 +192,8 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
                 onClose();
               }}
               aria-label={t('common.close', { defaultValue: 'Close' })}
+              data-tooltip={t('common.close', { defaultValue: 'Close' })}
+              data-tooltip-pos="bottom-left"
               disabled={isManualHeaderActionsDisabled}
             >
               <CloseIcon />
