@@ -346,6 +346,7 @@ pub fn run() {
             llm::llm_usage::llm_usage_read_raw,
             llm::llm_usage::llm_usage_replace_raw,
             llm::polish_transcript_segments,
+            llm::run_transcript_llm_job,
             llm::summarize_transcript,
             llm::translate_transcript_segments,
             sherpa::init_recognizer,

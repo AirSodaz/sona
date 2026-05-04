@@ -60,7 +60,7 @@ describe('summaryService', () => {
     });
   });
 
-  it('builds the summarize request and persists history-backed summaries', async () => {
+  it('builds the unified summary job request and applies history-backed results', async () => {
     const { historyService } = await import('../historyService');
     const segments = [
       { id: '1', text: 'Hello world', start: 0, end: 2, isFinal: true },
@@ -81,15 +81,27 @@ describe('summaryService', () => {
       return vi.fn();
     });
     vi.mocked(invoke).mockResolvedValue({
-      templateId: 'meeting',
-      content: 'Meeting summary',
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      jobHistoryId: 'history-a',
+      summary: {
+        activeTemplateId: 'meeting',
+        record: {
+          templateId: 'meeting',
+          content: 'Meeting summary',
+          generatedAt: '2026-05-04T00:00:00.000Z',
+          sourceFingerprint: 'rust-fingerprint',
+        },
+      },
     });
 
     await summaryService.generateSummary('meeting');
 
-    expect(invoke).toHaveBeenCalledWith('summarize_transcript', {
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
       request: {
         taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: 'history-a',
         template: {
           id: 'meeting',
           name: 'Meeting',
@@ -107,16 +119,10 @@ describe('summaryService', () => {
         ],
       },
     });
-    expect(historyService.saveSummary).toHaveBeenCalledWith(
-      'history-a',
-      expect.objectContaining({
-        activeTemplateId: 'meeting',
-        record: expect.objectContaining({
-          content: 'Meeting summary',
-        }),
-      }),
-    );
+    expect(historyService.saveSummary).not.toHaveBeenCalled();
     expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Meeting summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.generatedAt).toBe('2026-05-04T00:00:00.000Z');
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.sourceFingerprint).toBe('rust-fingerprint');
     expect(useTranscriptStore.getState().getSummaryState('history-a').streamingContent).toBeUndefined();
     expect(useTranscriptStore.getState().getSummaryState('history-a').isGenerating).toBe(false);
   });
@@ -139,8 +145,18 @@ describe('summaryService', () => {
     vi.mocked(invoke).mockImplementation(async () => {
       invokeResolved = true;
       return {
-        templateId: 'general',
-        content: 'Final summary',
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: null,
+        summary: {
+          activeTemplateId: 'general',
+          record: {
+            templateId: 'general',
+            content: 'Final summary',
+            generatedAt: '2026-05-04T00:00:00.000Z',
+            sourceFingerprint: 'rust-fingerprint',
+          },
+        },
       };
     });
 
@@ -185,8 +201,18 @@ describe('summaryService', () => {
     vi.mocked(invoke).mockImplementation(async () => {
       useTranscriptStore.getState().setSourceHistoryId('history-new');
       return {
-        templateId: 'general',
-        content: 'Current summary',
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: null,
+        summary: {
+          activeTemplateId: 'general',
+          record: {
+            templateId: 'general',
+            content: 'Current summary',
+            generatedAt: '2026-05-04T00:00:00.000Z',
+            sourceFingerprint: 'rust-fingerprint',
+          },
+        },
       };
     });
 
@@ -276,7 +302,7 @@ describe('summaryService', () => {
     vi.mocked(invoke).mockClear();
 
     await expect(summaryService.generateSummary('general')).rejects.toThrow('Summary is disabled.');
-    expect(invoke).not.toHaveBeenCalledWith('summarize_transcript', expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith('run_transcript_llm_job', expect.anything());
   });
 
   it('rejects new summary generation when the summary config is incomplete', async () => {
@@ -297,6 +323,6 @@ describe('summaryService', () => {
     vi.mocked(invoke).mockClear();
 
     await expect(summaryService.generateSummary('general')).rejects.toThrow('LLM Service not fully configured.');
-    expect(invoke).not.toHaveBeenCalledWith('summarize_transcript', expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith('run_transcript_llm_job', expect.anything());
   });
 });

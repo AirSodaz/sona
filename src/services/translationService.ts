@@ -1,22 +1,20 @@
-import { useHistoryStore } from '../stores/historyStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { updateTranscriptSegment } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { historyService } from './historyService';
-import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
+  TranscriptLlmJobResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from './llmTaskService';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskService';
 import {
-  applySegmentItemsToTranscriptJob,
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
 } from './llm/segmentTask';
+import { runTranscriptLlmJob } from './tauri/llm';
 
 function buildTranslationMap(translations: TranslatedSegment[]): Map<string, TranslatedSegment> {
   const translationMap = new Map<string, TranslatedSegment>();
@@ -85,15 +83,26 @@ class TranslationService {
         useTranscriptSidecarStore.getState().updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
-        await transcriptSnapshotService.createSnapshot(jobHistoryId, 'translate', segments);
-        await this.translateSegmentsWithConfig(
-          config,
-          segments,
-          async (items) => {
-            await this.applyTranslations(items, jobHistoryId);
-          },
+        const unlistenJobUpdates = await listenToTranscriptLlmJobUpdates(
           taskId,
+          'translate',
+          (payload) => {
+            this.applyTranscriptJobUpdate(payload);
+          },
         );
+        try {
+          const result = await runTranscriptLlmJob({
+            taskId,
+            taskType: 'translate',
+            jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
+            config: llm!,
+            segments,
+            targetLanguage: config.translationLanguage || 'zh',
+          });
+          this.applyTranscriptJobUpdate(result);
+        } finally {
+          unlistenJobUpdates();
+        }
       },
       onSuccess: (jobHistoryId) => {
         useTranscriptSidecarStore.getState().updateLlmState({ translationProgress: 100 }, jobHistoryId);
@@ -133,30 +142,18 @@ class TranslationService {
     };
   }
 
-  private async applyTranslations(translations: TranslatedSegment[], jobHistoryId: string) {
-    await applySegmentItemsToTranscriptJob({
-      jobHistoryId,
-      items: translations,
-      logLabel: 'TranslationService',
-      getCurrentHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId || 'current',
-      applyToCurrentTranscript: (items) => {
-        this.applyTranslationsToCurrentTranscript(items);
-      },
-      loadTranscript: (filename) => historyService.loadTranscript(filename),
-      updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
-      mergeIntoSegments: (segmentsToMerge, items) => {
-        const translationMap = buildTranslationMap(items);
-        return applyTranslatedChunkToSegments(segmentsToMerge, translationMap);
-      },
-    });
-  }
+  private applyTranscriptJobUpdate(payload: TranscriptLlmJobResult) {
+    if (!payload.segments) {
+      return;
+    }
 
-  private applyTranslationsToCurrentTranscript(
-    translations: TranslatedSegment[],
-  ) {
-    translations.forEach(({ id, translation }) => {
-      updateTranscriptSegment(id, { translation });
-    });
+    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId || 'current';
+    const payloadHistoryId = payload.jobHistoryId || 'current';
+    if (currentHistoryId !== payloadHistoryId) {
+      return;
+    }
+
+    useTranscriptSessionStore.getState().setSegments(payload.segments);
   }
 }
 

@@ -1,24 +1,22 @@
-import { useHistoryStore } from '../stores/historyStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { updateTranscriptSegment } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import { historyService } from './historyService';
-import { transcriptSnapshotService } from './transcriptSnapshotService';
 import { getFeatureLlmConfig } from './llm/runtime';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
 import type {
   PolishSegmentsRequest,
   PolishedSegment,
+  TranscriptLlmJobResult,
 } from './llmTaskService';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskService';
 import {
-  applySegmentItemsToTranscriptJob,
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
 } from './llm/segmentTask';
+import { runTranscriptLlmJob } from './tauri/llm';
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
   const polishedMap = new Map<string, PolishedSegment>();
@@ -88,15 +86,28 @@ class PolishService {
         useTranscriptSidecarStore.getState().updateLlmState({ polishProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
-        await transcriptSnapshotService.createSnapshot(jobHistoryId, 'polish', segments);
-        await this.polishSegmentsWithConfig(
-          config,
-          segments,
-          async (items) => {
-            await this.applyPolishedSegments(items, jobHistoryId);
-          },
+        const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
+        const unlistenJobUpdates = await listenToTranscriptLlmJobUpdates(
           taskId,
+          'polish',
+          (payload) => {
+            this.applyTranscriptJobUpdate(payload);
+          },
         );
+        try {
+          const result = await runTranscriptLlmJob({
+            taskId,
+            taskType: 'polish',
+            jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
+            config: getFeatureLlmConfig(config, 'polish')!,
+            segments,
+            context: preset.context,
+            keywords: resolvePolishKeywords(config.polishKeywordSets),
+          });
+          this.applyTranscriptJobUpdate(result);
+        } finally {
+          unlistenJobUpdates();
+        }
       },
       onFinally: (jobHistoryId) => {
         useTranscriptSidecarStore.getState().updateLlmState({
@@ -131,30 +142,18 @@ class PolishService {
     };
   }
 
-  private async applyPolishedSegments(polishedSegments: PolishedSegment[], jobHistoryId: string) {
-    await applySegmentItemsToTranscriptJob({
-      jobHistoryId,
-      items: polishedSegments,
-      logLabel: 'PolishService',
-      getCurrentHistoryId: () => useTranscriptSessionStore.getState().sourceHistoryId || 'current',
-      applyToCurrentTranscript: (items) => {
-        this.applyPolishedSegmentsToCurrentTranscript(items);
-      },
-      loadTranscript: (filename) => historyService.loadTranscript(filename),
-      updateTranscript: (historyId, segmentsToSave) => useHistoryStore.getState().updateTranscript(historyId, segmentsToSave),
-      mergeIntoSegments: (segmentsToMerge, items) => {
-        const polishedMap = buildPolishedSegmentMap(items);
-        return applyPolishedChunkToSegments(segmentsToMerge, polishedMap);
-      },
-    });
-  }
+  private applyTranscriptJobUpdate(payload: TranscriptLlmJobResult) {
+    if (!payload.segments) {
+      return;
+    }
 
-  private applyPolishedSegmentsToCurrentTranscript(
-    polishedSegments: PolishedSegment[],
-  ) {
-    polishedSegments.forEach(({ id, text }) => {
-      updateTranscriptSegment(id, { text });
-    });
+    const currentHistoryId = useTranscriptSessionStore.getState().sourceHistoryId || 'current';
+    const payloadHistoryId = payload.jobHistoryId || 'current';
+    if (currentHistoryId !== payloadHistoryId) {
+      return;
+    }
+
+    useTranscriptSessionStore.getState().setSegments(payload.segments);
   }
 }
 

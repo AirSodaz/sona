@@ -3,6 +3,8 @@ import type {
   PolishSegmentsRequest,
   SummarizeTranscriptRequest,
   TranscriptSummaryResult,
+  TranscriptLlmJobRequest,
+  TranscriptLlmJobResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from '../llmTaskService';
@@ -26,6 +28,12 @@ export async function polishTranscriptSegments(
   request: PolishSegmentsRequest,
 ): Promise<PolishedSegment[]> {
   return invokeTauri(TauriCommand.llm.polishTranscriptSegments, { request });
+}
+
+export async function runTranscriptLlmJob(
+  request: TranscriptLlmJobRequest,
+): Promise<TranscriptLlmJobResult> {
+  return invokeTauri(TauriCommand.llm.runTranscriptJob, { request });
 }
 
 export async function summarizeTranscript(

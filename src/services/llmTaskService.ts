@@ -1,11 +1,19 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { v4 as uuidv4 } from 'uuid';
-import { LlmConfig, ResolvedSummaryTemplate, SummaryTemplateId } from '../types/transcript';
+import {
+  HistorySummaryPayload,
+  LlmConfig,
+  ResolvedSummaryTemplate,
+  SummaryTemplateId,
+  TranscriptSegment,
+} from '../types/transcript';
+import type { HistoryItem } from '../types/history';
 import { TauriEvent } from './tauri/events';
 
 export const LLM_TASK_PROGRESS_EVENT = TauriEvent.llm.taskProgress;
 export const LLM_TASK_CHUNK_EVENT = TauriEvent.llm.taskChunk;
 export const LLM_TASK_TEXT_EVENT = TauriEvent.llm.taskText;
+export const LLM_TRANSCRIPT_JOB_UPDATE_EVENT = TauriEvent.llm.transcriptJobUpdate;
 
 export type LlmTaskType = 'polish' | 'translate' | 'summary';
 
@@ -58,6 +66,44 @@ export interface SummarizeTranscriptRequest {
 export interface TranscriptSummaryResult {
   templateId: SummaryTemplateId;
   content: string;
+}
+
+interface TranscriptLlmJobRequestBase {
+  taskId: string;
+  taskType: LlmTaskType;
+  jobHistoryId?: string | null;
+  config: LlmConfig;
+  segments: TranscriptSegment[];
+}
+
+export interface TranslateTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {
+  taskType: 'translate';
+  targetLanguage: string;
+}
+
+export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {
+  taskType: 'polish';
+  context?: string;
+  keywords?: string;
+}
+
+export interface SummaryTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {
+  taskType: 'summary';
+  template: ResolvedSummaryTemplate;
+}
+
+export type TranscriptLlmJobRequest =
+  | TranslateTranscriptLlmJobRequest
+  | PolishTranscriptLlmJobRequest
+  | SummaryTranscriptLlmJobRequest;
+
+export interface TranscriptLlmJobResult {
+  taskId: string;
+  taskType: LlmTaskType;
+  jobHistoryId?: string | null;
+  segments?: TranscriptSegment[];
+  summary?: HistorySummaryPayload;
+  historyItem?: Partial<HistoryItem>;
 }
 
 export interface LlmTaskProgressPayload {
@@ -128,6 +174,18 @@ export async function listenToLlmTaskText(
   return listen<LlmTaskTextPayload>(LLM_TASK_TEXT_EVENT, ({ payload }) => {
     if (payload.taskId === taskId && payload.taskType === taskType) {
       void onText(payload);
+    }
+  });
+}
+
+export async function listenToTranscriptLlmJobUpdates(
+  taskId: string,
+  taskType: LlmTaskType,
+  onUpdate: (payload: TranscriptLlmJobResult) => void | Promise<void>,
+): Promise<UnlistenFn> {
+  return listen<TranscriptLlmJobResult>(LLM_TRANSCRIPT_JOB_UPDATE_EVENT, ({ payload }) => {
+    if (payload.taskId === taskId && payload.taskType === taskType) {
+      void onUpdate(payload);
     }
   });
 }

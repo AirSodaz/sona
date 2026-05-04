@@ -122,6 +122,17 @@ pub(crate) async fn polish_transcript_segments_command(
     app: AppHandle,
     request: PolishSegmentsRequest,
 ) -> Result<Vec<PolishedSegment>, String> {
+    polish_transcript_segments_with_observer(app, request, |_| Ok(())).await
+}
+
+pub(super) async fn polish_transcript_segments_with_observer<F>(
+    app: AppHandle,
+    request: PolishSegmentsRequest,
+    on_chunk_items: F,
+) -> Result<Vec<PolishedSegment>, String>
+where
+    F: FnMut(&[PolishedSegment]) -> Result<(), String> + Send + 'static,
+{
     validate_task_request(&request.task_id, &request.config)?;
 
     if request.config.provider == LlmProvider::GoogleTranslate {
@@ -134,6 +145,7 @@ pub(crate) async fn polish_transcript_segments_command(
     let chunk_events = CommandEventEmitter::new(app.clone());
     let progress_events = CommandEventEmitter::new(app.clone());
     let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Polish);
+    let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
 
     run_streaming_segment_task(
         SegmentTaskContext {
@@ -155,7 +167,14 @@ pub(crate) async fn polish_transcript_segments_command(
             },
             get_output_id: polished_segment_id,
             on_success: move |response: &StandardLlmResponse| usage.record(response),
-            emit_chunk: move |payload| chunk_events.emit_chunk(payload),
+            emit_chunk: move |payload: LlmTaskChunkPayload<PolishedSegment>| {
+                {
+                    let mut on_chunk_items =
+                        on_chunk_items.lock().map_err(|error| error.to_string())?;
+                    (on_chunk_items)(&payload.items)?;
+                }
+                chunk_events.emit_chunk(payload)
+            },
             emit_progress: move |payload| progress_events.emit_progress(payload),
         },
     )
@@ -166,6 +185,17 @@ pub(crate) async fn translate_transcript_segments_command(
     app: AppHandle,
     request: TranslateSegmentsRequest,
 ) -> Result<Vec<TranslatedSegment>, String> {
+    translate_transcript_segments_with_observer(app, request, |_| Ok(())).await
+}
+
+pub(super) async fn translate_transcript_segments_with_observer<F>(
+    app: AppHandle,
+    request: TranslateSegmentsRequest,
+    on_chunk_items: F,
+) -> Result<Vec<TranslatedSegment>, String>
+where
+    F: FnMut(&[TranslatedSegment]) -> Result<(), String> + Send + 'static,
+{
     validate_task_request(&request.task_id, &request.config)?;
 
     if request.target_language.trim().is_empty() {
@@ -176,6 +206,7 @@ pub(crate) async fn translate_transcript_segments_command(
     let target_language = request.target_language.clone();
     let events = CommandEventEmitter::new(app.clone());
     let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Translation);
+    let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
 
     if config.provider == LlmProvider::GoogleTranslate
         || config.provider == LlmProvider::GoogleTranslateFree
@@ -185,6 +216,7 @@ pub(crate) async fn translate_transcript_segments_command(
         let chunk_events = events.clone();
         let progress_events = events.clone();
         let usage = usage.clone();
+        let chunk_observer = on_chunk_items.clone();
         return run_segment_task(
             SegmentTaskContext {
                 task_id: &request.task_id,
@@ -356,7 +388,14 @@ pub(crate) async fn translate_transcript_segments_command(
                     future
                 },
                 on_success: move |response: &StandardLlmResponse| usage.record(response),
-                emit_chunk: move |payload| chunk_events.emit_chunk(payload),
+                emit_chunk: move |payload: LlmTaskChunkPayload<TranslatedSegment>| {
+                    {
+                        let mut on_chunk_items =
+                            chunk_observer.lock().map_err(|error| error.to_string())?;
+                        (on_chunk_items)(&payload.items)?;
+                    }
+                    chunk_events.emit_chunk(payload)
+                },
                 emit_progress: move |payload| progress_events.emit_progress(payload),
             },
         )
@@ -365,6 +404,7 @@ pub(crate) async fn translate_transcript_segments_command(
 
     let chunk_events = events.clone();
     let progress_events = events;
+    let chunk_observer = on_chunk_items.clone();
     run_streaming_segment_task(
         SegmentTaskContext {
             task_id: &request.task_id,
@@ -385,7 +425,14 @@ pub(crate) async fn translate_transcript_segments_command(
             },
             get_output_id: translated_segment_id,
             on_success: move |response: &StandardLlmResponse| usage.record(response),
-            emit_chunk: move |payload| chunk_events.emit_chunk(payload),
+            emit_chunk: move |payload: LlmTaskChunkPayload<TranslatedSegment>| {
+                {
+                    let mut on_chunk_items =
+                        chunk_observer.lock().map_err(|error| error.to_string())?;
+                    (on_chunk_items)(&payload.items)?;
+                }
+                chunk_events.emit_chunk(payload)
+            },
             emit_progress: move |payload| progress_events.emit_progress(payload),
         },
     )

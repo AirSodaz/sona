@@ -1,4 +1,5 @@
 use serde_json::Value;
+use serde_json::to_value;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, State};
 
@@ -10,9 +11,10 @@ use super::repository::HistoryRepository;
 use super::state::{HistoryRepositoryState, PreparedBackupImportState};
 use super::{
     BackupManifest, ExportBackupArchiveRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, LiveRecordingDraftResult,
+    HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    LiveRecordingDraftResult,
     PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, TranscriptSnapshotRecord, HISTORY_DIR_NAME,
 };
@@ -42,6 +44,128 @@ where
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+async fn run_history_task_with_state<R, T, F>(
+    app: AppHandle<R>,
+    state: HistoryRepositoryState,
+    task: F,
+) -> Result<T, String>
+where
+    R: Runtime,
+    T: Send + 'static,
+    F: FnOnce(HistoryRepository) -> Result<T, String> + Send + 'static,
+{
+    let app_local_data_dir = resolve_app_local_data_dir(&app)?;
+    let lock = state.lock.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = lock.lock().map_err(|error| error.to_string())?;
+        task(HistoryRepository::new(app_local_data_dir))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub(crate) async fn history_create_llm_transcript_snapshot<R: Runtime>(
+    app: AppHandle<R>,
+    state: HistoryRepositoryState,
+    history_id: String,
+    reason: TranscriptSnapshotReason,
+    segments: Vec<TranscriptSegment>,
+) -> Result<Option<TranscriptSnapshotMetadata>, String> {
+    run_history_task_with_state(app, state, move |repository| {
+        create_llm_transcript_snapshot_record(&repository, &history_id, reason, segments)
+    })
+    .await
+}
+
+pub(crate) async fn history_update_llm_transcript_segments<R: Runtime>(
+    app: AppHandle<R>,
+    state: HistoryRepositoryState,
+    history_id: String,
+    segments: Vec<TranscriptSegment>,
+) -> Result<Option<HistoryItemRecord>, String> {
+    if history_id.trim().is_empty() || history_id == "current" {
+        return Ok(None);
+    }
+
+    run_history_task_with_state(app, state, move |repository| {
+        update_llm_transcript_segments_record(&repository, &history_id, segments)
+    })
+    .await
+}
+
+pub(crate) async fn history_save_llm_summary<R: Runtime>(
+    app: AppHandle<R>,
+    state: HistoryRepositoryState,
+    history_id: String,
+    summary_payload: Value,
+) -> Result<(), String> {
+    if history_id.trim().is_empty() || history_id == "current" {
+        return Ok(());
+    }
+
+    run_history_task_with_state(app, state, move |repository| {
+        save_llm_summary_payload(&repository, &history_id, summary_payload)
+    })
+    .await
+}
+
+fn create_llm_transcript_snapshot_record(
+    repository: &HistoryRepository,
+    history_id: &str,
+    reason: TranscriptSnapshotReason,
+    segments: Vec<TranscriptSegment>,
+) -> Result<Option<TranscriptSnapshotMetadata>, String> {
+    if history_id.trim().is_empty() || history_id == "current" || segments.is_empty() {
+        return Ok(None);
+    }
+
+    let items = repository.list_items()?;
+    let Some(item) = items.iter().find(|entry| entry.id == history_id) else {
+        return Ok(None);
+    };
+
+    if item.status == HistoryItemStatus::Draft {
+        return Ok(None);
+    }
+
+    repository
+        .create_transcript_snapshot(
+            history_id,
+            reason,
+            to_value(segments).map_err(|error| error.to_string())?,
+        )
+        .map(Some)
+}
+
+fn update_llm_transcript_segments_record(
+    repository: &HistoryRepository,
+    history_id: &str,
+    segments: Vec<TranscriptSegment>,
+) -> Result<Option<HistoryItemRecord>, String> {
+    if history_id.trim().is_empty() || history_id == "current" {
+        return Ok(None);
+    }
+
+    repository
+        .update_transcript(
+            history_id,
+            to_value(segments).map_err(|error| error.to_string())?,
+        )
+        .map(Some)
+}
+
+fn save_llm_summary_payload(
+    repository: &HistoryRepository,
+    history_id: &str,
+    summary_payload: Value,
+) -> Result<(), String> {
+    if history_id.trim().is_empty() || history_id == "current" {
+        return Ok(());
+    }
+
+    repository.save_summary(history_id, summary_payload)
 }
 
 #[tauri::command]
@@ -431,4 +555,157 @@ pub async fn dispose_prepared_backup_import(
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::history_repository::test_support::sample_history_item;
+    use crate::sherpa::TranscriptSegment;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    fn segment(id: &str, text: &str) -> TranscriptSegment {
+        TranscriptSegment {
+            id: id.to_string(),
+            text: text.to_string(),
+            start: 0.0,
+            end: 1.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }
+    }
+
+    #[test]
+    fn llm_history_helpers_create_snapshot_then_update_transcript() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        let snapshot = create_llm_transcript_snapshot_record(
+            &repository,
+            &item.id,
+            TranscriptSnapshotReason::Translate,
+            vec![segment("seg-1", "before")],
+        )
+        .unwrap()
+        .unwrap();
+
+        let mut translated = segment("seg-1", "before");
+        translated.translation = Some("after".to_string());
+        let updated = update_llm_transcript_segments_record(
+            &repository,
+            &item.id,
+            vec![translated],
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(snapshot.reason, TranscriptSnapshotReason::Translate);
+        assert_eq!(updated.preview_text, "before...");
+        let snapshots = repository.list_transcript_snapshots(&item.id).unwrap();
+        assert_eq!(snapshots.len(), 1);
+        let snapshot_record = repository
+            .load_transcript_snapshot(&item.id, &snapshot.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot_record.segments[0].text, "before");
+        let transcript = repository
+            .load_transcript(&item.transcript_path)
+            .unwrap()
+            .unwrap();
+        assert_eq!(transcript[0].translation.as_deref(), Some("after"));
+    }
+
+    #[test]
+    fn llm_history_helpers_skip_current_jobs_without_writing() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let snapshot = create_llm_transcript_snapshot_record(
+            &repository,
+            "current",
+            TranscriptSnapshotReason::Polish,
+            vec![segment("seg-1", "before")],
+        )
+        .unwrap();
+        let updated = update_llm_transcript_segments_record(
+            &repository,
+            "current",
+            vec![segment("seg-1", "after")],
+        )
+        .unwrap();
+        save_llm_summary_payload(
+            &repository,
+            "current",
+            json!({ "activeTemplateId": "general" }),
+        )
+        .unwrap();
+
+        assert!(snapshot.is_none());
+        assert!(updated.is_none());
+        assert!(!repository.history_dir().exists());
+    }
+
+    #[test]
+    fn llm_history_snapshot_helper_skips_drafts() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+        let item = sample_history_item("draft-1", HistoryItemStatus::Draft);
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        let snapshot = create_llm_transcript_snapshot_record(
+            &repository,
+            &item.id,
+            TranscriptSnapshotReason::Polish,
+            vec![segment("seg-1", "before")],
+        )
+        .unwrap();
+
+        assert!(snapshot.is_none());
+        assert!(repository.list_transcript_snapshots(&item.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn llm_history_summary_helper_saves_sidecar_payload() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        save_llm_summary_payload(
+            &repository,
+            "history-1",
+            json!({
+                "activeTemplateId": "meeting",
+                "record": {
+                    "templateId": "meeting",
+                    "content": "Summary",
+                    "generatedAt": "2026-05-04T00:00:00.000Z",
+                    "sourceFingerprint": "fingerprint"
+                }
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(
+            repository.load_summary("history-1").unwrap(),
+            Some(json!({
+                "activeTemplateId": "meeting",
+                "record": {
+                    "templateId": "meeting",
+                    "content": "Summary",
+                    "generatedAt": "2026-05-04T00:00:00.000Z",
+                    "sourceFingerprint": "fingerprint"
+                }
+            }))
+        );
+    }
 }

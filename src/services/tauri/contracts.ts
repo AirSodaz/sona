@@ -32,6 +32,8 @@ import type {
   PolishedSegment,
   PolishSegmentsRequest,
   SummarizeTranscriptRequest,
+  TranscriptLlmJobRequest,
+  TranscriptLlmJobResult,
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
@@ -562,6 +564,10 @@ export type TauriCommandContractMap = {
   [TauriCommand.llm.polishTranscriptSegments]: {
     args: { request: PolishSegmentsRequest };
     result: PolishedSegment[];
+  };
+  [TauriCommand.llm.runTranscriptJob]: {
+    args: { request: TranscriptLlmJobRequest };
+    result: TranscriptLlmJobResult;
   };
   [TauriCommand.llm.summarizeTranscript]: {
     args: { request: SummarizeTranscriptRequest };

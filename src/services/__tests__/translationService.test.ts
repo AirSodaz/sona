@@ -11,6 +11,7 @@ import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
+const mockListenToTranscriptLlmJobUpdates = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
 const mockCreateSnapshot = vi.fn();
 
@@ -73,6 +74,7 @@ vi.mock('../llmTaskService', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
+  listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),
 }));
 
 vi.mock('../transcriptSnapshotService', () => ({
@@ -96,6 +98,7 @@ describe('TranslationService', () => {
     mockCreateLlmTaskId.mockReturnValue('translate-task-id');
     mockListenToLlmTaskChunks.mockResolvedValue(vi.fn());
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockListenToTranscriptLlmJobUpdates.mockResolvedValue(vi.fn());
     mockCreateSnapshot.mockResolvedValue(null);
   });
 
@@ -112,28 +115,32 @@ describe('TranslationService', () => {
       expect(useTranscriptStore.getState().getLlmState('current').translationProgress).toBe(50);
       return vi.fn();
     });
-    mockListenToLlmTaskChunks.mockImplementation(async (_taskId, _taskType, onChunk) => {
-      await onChunk({
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      await onUpdate({
         taskId: 'translate-task-id',
         taskType: 'translate',
-        chunkIndex: 1,
-        totalChunks: 2,
-        items: [{ id: '1', translation: 'こんにちは' }],
+        jobHistoryId: null,
+        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
       });
       expect(useTranscriptStore.getState().segments[0]?.translation).toBe('こんにちは');
       return vi.fn();
     });
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: '1', translation: 'こんにちは' },
-    ]);
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
+    });
 
     await translationService.translateCurrentTranscript();
 
-    expect(invoke).toHaveBeenCalledWith('translate_transcript_segments', {
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
       request: {
         taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: null,
         config: expect.objectContaining({ apiKey: 'test-key', temperature: 0.7 }),
-        segments: [{ id: '1', text: 'hello' }],
+        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
         targetLanguage: 'ja',
       },
     });
@@ -159,7 +166,12 @@ describe('TranslationService', () => {
         },
       },
     });
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', translation: 'こんにちは' }]);
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
+    });
 
     await translationService.translateCurrentTranscript();
 
@@ -181,32 +193,34 @@ describe('TranslationService', () => {
       },
     });
 
-    mockListenToLlmTaskChunks.mockImplementation(async (_taskId, _taskType, onChunk) => {
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
       useTranscriptStore.setState({ sourceHistoryId: 'history-b' });
-      await onChunk({
+      await onUpdate({
         taskId: 'translate-task-id',
         taskType: 'translate',
-        chunkIndex: 1,
-        totalChunks: 1,
-        items: [{ id: '1', translation: '你好' }],
+        jobHistoryId: 'history-a',
+        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' }],
       });
       return vi.fn();
     });
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: '1', translation: '你好' },
-    ]);
-    (historyService.loadTranscript as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
-    ]);
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-a',
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' }],
+    });
 
     await translationService.translateCurrentTranscript();
 
-    expect(historyService.loadTranscript).toHaveBeenCalledWith('history-a.json');
-    expect(historyService.updateTranscript).toHaveBeenCalledWith('history-a', [
-      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' },
-    ]);
-    expect(mockCreateSnapshot).toHaveBeenCalledWith('history-a', 'translate', [
-      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
-    ]);
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: 'history-a',
+      }),
+    });
+    expect(historyService.loadTranscript).not.toHaveBeenCalled();
+    expect(historyService.updateTranscript).not.toHaveBeenCalled();
+    expect(mockCreateSnapshot).not.toHaveBeenCalled();
   });
 });

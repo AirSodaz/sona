@@ -1,4 +1,5 @@
 mod commands;
+mod jobs;
 #[path = "llm_usage.rs"]
 pub(crate) mod llm_usage;
 mod providers;
@@ -20,8 +21,10 @@ const MIN_SUMMARY_CHUNK_CHAR_BUDGET: usize = 1200;
 const LLM_TASK_PROGRESS_EVENT: &str = "llm-task-progress";
 const LLM_TASK_CHUNK_EVENT: &str = "llm-task-chunk";
 const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";
+const LLM_TRANSCRIPT_JOB_UPDATE_EVENT: &str = "llm-transcript-job-update";
 const LLM_USAGE_RECORDED_EVENT: &str = "llm-usage-recorded";
 
+pub(crate) use jobs::*;
 pub(crate) use providers::*;
 pub(crate) use streaming::*;
 pub(crate) use tasks::*;
@@ -57,6 +60,15 @@ pub async fn summarize_transcript(
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
     commands::summarize_transcript_command(app, request).await
+}
+
+#[tauri::command]
+pub async fn run_transcript_llm_job(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::history_repository::HistoryRepositoryState>,
+    request: TranscriptLlmJobRequest,
+) -> Result<TranscriptLlmJobResult, String> {
+    jobs::run_transcript_llm_job_command(app, state, request).await
 }
 
 #[tauri::command]

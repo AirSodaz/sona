@@ -11,6 +11,7 @@ import { TranscriptSegment } from '../../types/transcript';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
+const mockListenToTranscriptLlmJobUpdates = vi.fn();
 const mockCreateLlmTaskId = vi.fn();
 const mockCreateSnapshot = vi.fn();
 
@@ -73,6 +74,7 @@ vi.mock('../llmTaskService', () => ({
   createLlmTaskId: (...args: unknown[]) => mockCreateLlmTaskId(...args),
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
+  listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),
 }));
 
 vi.mock('../transcriptSnapshotService', () => ({
@@ -88,6 +90,7 @@ describe('PolishService', () => {
     mockCreateLlmTaskId.mockReturnValue('polish-task-id');
     mockListenToLlmTaskChunks.mockResolvedValue(vi.fn());
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
+    mockListenToTranscriptLlmJobUpdates.mockResolvedValue(vi.fn());
     mockCreateSnapshot.mockResolvedValue(null);
 
     useTranscriptStore.setState({
@@ -234,18 +237,22 @@ describe('PolishService', () => {
       expect(useTranscriptStore.getState().getLlmState('current').polishProgress).toBe(50);
       return vi.fn();
     });
-    mockListenToLlmTaskChunks.mockImplementation(async (_taskId, _taskType, onChunk) => {
-      await onChunk({
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, onUpdate) => {
+      await onUpdate({
         taskId: 'polish-task-id',
         taskType: 'polish',
-        chunkIndex: 1,
-        totalChunks: 2,
-        items: [{ id: '1', text: 'Hello' }],
+        jobHistoryId: null,
+        segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
       });
       expect(useTranscriptStore.getState().segments[0]?.text).toBe('Hello');
       return vi.fn();
     });
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      jobHistoryId: null,
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
 
     await polishService.polishTranscript();
 
@@ -254,7 +261,7 @@ describe('PolishService', () => {
       'polish',
       expect.any(Function),
     );
-    expect(mockListenToLlmTaskChunks).toHaveBeenCalledWith(
+    expect(mockListenToTranscriptLlmJobUpdates).toHaveBeenCalledWith(
       'polish-task-id',
       'polish',
       expect.any(Function),
@@ -266,7 +273,7 @@ describe('PolishService', () => {
     }));
   });
 
-  it('creates one saved-history snapshot before polishing writes chunks', async () => {
+  it('delegates saved-history snapshot and writeback to the Rust transcript job', async () => {
     const segments: TranscriptSegment[] = [
       { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
     ];
@@ -275,11 +282,22 @@ describe('PolishService', () => {
       segments,
       sourceHistoryId: 'history-a',
     });
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: '1', text: 'Hello' }]);
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      jobHistoryId: 'history-a',
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
 
     await polishService.polishTranscript();
 
-    expect(mockCreateSnapshot).toHaveBeenCalledTimes(1);
-    expect(mockCreateSnapshot).toHaveBeenCalledWith('history-a', 'polish', segments);
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'polish-task-id',
+        taskType: 'polish',
+        jobHistoryId: 'history-a',
+      }),
+    });
+    expect(mockCreateSnapshot).not.toHaveBeenCalled();
   });
 });

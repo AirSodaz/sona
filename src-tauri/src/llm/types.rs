@@ -249,3 +249,50 @@ pub struct LlmTaskTextPayload {
     pub text: String,
     pub delta: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptLlmJobRequest {
+    pub task_id: String,
+    pub task_type: LlmTaskType,
+    pub job_history_id: Option<String>,
+    pub config: LlmConfig,
+    pub segments: Vec<crate::sherpa::TranscriptSegment>,
+    pub target_language: Option<String>,
+    pub context: Option<String>,
+    pub keywords: Option<String>,
+    pub template: Option<SummaryTemplateConfig>,
+    pub chunk_size: Option<usize>,
+    pub chunk_char_budget: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptSummaryRecordPayload {
+    pub template_id: String,
+    pub content: String,
+    pub generated_at: String,
+    pub source_fingerprint: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySummaryPayload {
+    pub active_template_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<TranscriptSummaryRecordPayload>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptLlmJobResult {
+    pub task_id: String,
+    pub task_type: LlmTaskType,
+    pub job_history_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segments: Option<Vec<crate::sherpa::TranscriptSegment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<HistorySummaryPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_item: Option<crate::history_repository::HistoryItemRecord>,
+}

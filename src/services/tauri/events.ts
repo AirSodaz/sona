@@ -27,6 +27,7 @@ export const TauriEvent = {
     taskProgress: 'llm-task-progress',
     taskChunk: 'llm-task-chunk',
     taskText: 'llm-task-text',
+    transcriptJobUpdate: 'llm-transcript-job-update',
     usageRecorded: 'llm-usage-recorded',
   },
   auxWindow: {

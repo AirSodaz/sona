@@ -61,6 +61,84 @@ fn sample_summary_template(id: &str, name: &str, instructions: &str) -> SummaryT
     }
 }
 
+fn sample_transcript_segment(id: &str, text: &str) -> crate::sherpa::TranscriptSegment {
+    crate::sherpa::TranscriptSegment {
+        id: id.to_string(),
+        text: text.to_string(),
+        start: 0.0,
+        end: 1.0,
+        is_final: true,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    }
+}
+
+#[test]
+fn transcript_job_translation_merge_preserves_existing_segment_fields() {
+    let mut first = sample_transcript_segment("1", "hello");
+    first.speaker = Some(crate::speaker::SpeakerTag {
+        id: "speaker-a".to_string(),
+        label: "Alice".to_string(),
+        kind: "identified".to_string(),
+        score: Some(0.91),
+    });
+    let second = sample_transcript_segment("2", "world");
+
+    let merged = merge_translated_items_into_segments(
+        vec![first.clone(), second.clone()],
+        &[TranslatedSegment {
+            id: "1".to_string(),
+            translation: "你好".to_string(),
+        }],
+    );
+
+    assert_eq!(merged[0].text, "hello");
+    assert_eq!(merged[0].translation.as_deref(), Some("你好"));
+    assert_eq!(merged[0].speaker, first.speaker);
+    assert_eq!(merged[1], second);
+}
+
+#[test]
+fn transcript_job_polish_merge_only_rewrites_text() {
+    let mut segment = sample_transcript_segment("1", "hello");
+    segment.translation = Some("你好".to_string());
+
+    let merged = merge_polished_items_into_segments(
+        vec![segment.clone()],
+        &[PolishedSegment {
+            id: "1".to_string(),
+            text: "Hello.".to_string(),
+        }],
+    );
+
+    assert_eq!(merged[0].text, "Hello.");
+    assert_eq!(merged[0].translation, segment.translation);
+    assert_eq!(merged[0].start, segment.start);
+    assert_eq!(merged[0].end, segment.end);
+}
+
+#[test]
+fn transcript_job_summary_fingerprint_matches_frontend_contract() {
+    let mut segment = sample_transcript_segment("1", "Hello");
+    segment.speaker = Some(crate::speaker::SpeakerTag {
+        id: "speaker-a".to_string(),
+        label: "Alice".to_string(),
+        kind: "identified".to_string(),
+        score: Some(0.91),
+    });
+    segment.translation = Some("Bonjour".to_string());
+
+    assert_eq!(
+        compute_summary_source_fingerprint(&[segment]),
+        "1:Hello:0:1:true:speaker-a:Alice:identified:0.91"
+    );
+}
+
 #[test]
 fn openai_models_url_accepts_root_or_v1() {
     assert_eq!(

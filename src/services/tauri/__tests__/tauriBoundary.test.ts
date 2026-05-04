@@ -25,7 +25,7 @@ import {
   historySaveRecording,
   historyUpdateTranscript,
 } from '../history';
-import { generateLlmText } from '../llm';
+import { generateLlmText, runTranscriptLlmJob } from '../llm';
 import { initRecognizer } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import {
@@ -422,6 +422,36 @@ describe('tauri boundary wrappers', () => {
         config: {} as any,
         input: 'hello',
         source: 'generic',
+      },
+    });
+  });
+
+  it('transcript llm job wrapper forwards the unified job request', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-a',
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '你好' }],
+    });
+
+    const result = await runTranscriptLlmJob({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-a',
+      config: {} as any,
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      targetLanguage: 'zh',
+    });
+
+    expect(result.segments?.[0].translation).toBe('你好');
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.runTranscriptJob, {
+      request: {
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: 'history-a',
+        config: {} as any,
+        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
+        targetLanguage: 'zh',
       },
     });
   });

@@ -18,11 +18,10 @@ import {
   createLlmTaskId,
   listenToLlmTaskProgress,
   listenToLlmTaskText,
-  SummarizeTranscriptRequest,
-  SummarySegmentInput,
+  SummaryTranscriptLlmJobRequest,
 } from './llmTaskService';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
-import { summarizeTranscript } from './tauri/llm';
+import { runTranscriptLlmJob } from './tauri/llm';
 
 // Once we have local state, prefer it over re-hydrating from disk. This prevents a late
 // sidecar read from clobbering in-memory edits, streaming text, or template switches.
@@ -180,9 +179,6 @@ class SummaryService {
     );
     const activeTemplateId = resolvedTemplate.id;
     const jobHistoryId = sessionStore.sourceHistoryId || 'current';
-    // Streaming summary updates must stay attached to the exact segment snapshot that
-    // started the job, even if an unsaved transcript gets persisted mid-generation.
-    const sourceFingerprint = computeSummarySourceFingerprint(segments);
     const taskId = createLlmTaskId('summary');
 
     sidecarStore.updateSummaryState({
@@ -195,41 +191,46 @@ class SummaryService {
     }, jobHistoryId);
 
     const unlistenProgress = await listenToLlmTaskProgress(taskId, 'summary', ({ completedChunks, totalChunks }) => {
-      this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
+      this.updateJobSummaryState(jobHistoryId, {
         generationProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
       });
     });
     const unlistenText = await listenToLlmTaskText(taskId, 'summary', ({ text }) => {
-      this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
+      this.updateJobSummaryState(jobHistoryId, {
         streamingContent: text,
       });
     });
 
     try {
-      const result = await summarizeTranscript(this.buildRequest(taskId, resolvedTemplate, segments));
-
-      const resultTemplateId = coerceSummaryTemplateId(
-        result.templateId,
-        config.summaryCustomTemplates,
+      const result = await runTranscriptLlmJob(
+        this.buildRequest(taskId, jobHistoryId, resolvedTemplate, segments),
       );
+      const summary = result.summary;
+      const summaryRecord = summary?.record;
+
+      if (!summary || !summaryRecord) {
+        throw new Error('Summary job did not return a summary record.');
+      }
+
+      const resultTemplateId = coerceSummaryTemplateId(summary.activeTemplateId, config.summaryCustomTemplates);
       const record: TranscriptSummaryRecord = {
-        templateId: resultTemplateId,
-        content: result.content.trim(),
-        generatedAt: new Date().toISOString(),
-        sourceFingerprint,
+        templateId: coerceSummaryTemplateId(summaryRecord.templateId, config.summaryCustomTemplates),
+        content: summaryRecord.content,
+        generatedAt: summaryRecord.generatedAt,
+        sourceFingerprint: summaryRecord.sourceFingerprint,
       };
 
-      const targetHistoryId = this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
+      const targetHistoryId = this.updateJobSummaryState(jobHistoryId, {
         activeTemplateId: resultTemplateId,
         record,
         streamingContent: undefined,
       });
 
-      if (targetHistoryId !== 'current') {
+      if (jobHistoryId === 'current' && targetHistoryId !== 'current') {
         await this.persistSummary(targetHistoryId);
       }
     } catch (error) {
-      this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
+      this.updateJobSummaryState(jobHistoryId, {
         generationProgress: 0,
       });
       throw Object.assign(new Error(normalizeError(error).message), { cause: error });
@@ -237,7 +238,7 @@ class SummaryService {
       unlistenProgress();
       unlistenText();
 
-      this.updateJobSummaryState(jobHistoryId, sourceFingerprint, {
+      this.updateJobSummaryState(jobHistoryId, {
         isGenerating: false,
         generationProgress: 0,
       });
@@ -246,47 +247,41 @@ class SummaryService {
 
   private buildRequest(
     taskId: string,
+    jobHistoryId: string,
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
-  ): SummarizeTranscriptRequest {
+  ): SummaryTranscriptLlmJobRequest {
     const config = getEffectiveConfigSnapshot();
 
     return {
       taskId,
+      taskType: 'summary',
+      jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
       config: getFeatureLlmConfig(config, 'summary')!,
       template,
-      segments: segments.map<SummarySegmentInput>(({ id, text, start, end, isFinal, speaker }) => ({
-        id,
-        text: speaker?.label ? `${speaker.label}: ${text}` : text,
-        start,
-        end,
-        isFinal,
-      })),
+      segments,
     };
   }
 
   private updateJobSummaryState(
     jobHistoryId: string,
-    sourceFingerprint: string,
     state: Partial<TranscriptSummaryState>,
   ): string {
-    const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId, sourceFingerprint);
+    const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId);
     useTranscriptSidecarStore.getState().updateSummaryState(state, targetHistoryId);
     return targetHistoryId;
   }
 
-  private resolveTargetHistoryId(jobHistoryId: string, sourceFingerprint: string): string {
+  private resolveTargetHistoryId(jobHistoryId: string): string {
     if (jobHistoryId !== 'current') {
       return jobHistoryId;
     }
 
     const sessionStore = useTranscriptSessionStore.getState();
-    // A "current" job can become history-backed after save. Re-anchor follow-up updates
-    // only when the saved transcript still matches the same segment fingerprint.
-    if (
-      sessionStore.sourceHistoryId &&
-      computeSummarySourceFingerprint(sessionStore.segments) === sourceFingerprint
-    ) {
+    // A "current" job can become history-backed after save. The coordinator rekeys
+    // the transient summary state during that save, so follow-up UI updates should
+    // continue on the newly durable history id.
+    if (sessionStore.sourceHistoryId) {
       return sessionStore.sourceHistoryId;
     }
 

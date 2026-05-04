@@ -92,6 +92,7 @@ export const TauriCommand = {
     generateText: 'generate_llm_text',
     listModels: 'list_llm_models',
     polishTranscriptSegments: 'polish_transcript_segments',
+    runTranscriptJob: 'run_transcript_llm_job',
     summarizeTranscript: 'summarize_transcript',
     translateTranscriptSegments: 'translate_transcript_segments',
   },
