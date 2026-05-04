@@ -3,44 +3,8 @@
 #[path = "../src/recovery/mod.rs"]
 mod recovery;
 
-mod history_repository {
-    pub(crate) mod fs_utils {
-        use serde::Serialize;
-        use std::fs::{self, File};
-        use std::io::{BufWriter, Write};
-        use std::path::Path;
-        use uuid::Uuid;
-
-        pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
-            path: &Path,
-            value: &T,
-        ) -> Result<(), String> {
-            let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            }
-            let temp_path = path.with_extension(format!(
-                "{}.tmp-{}",
-                path.extension()
-                    .and_then(|extension| extension.to_str())
-                    .unwrap_or("json"),
-                Uuid::new_v4()
-            ));
-            {
-                let mut writer =
-                    BufWriter::new(File::create(&temp_path).map_err(|error| error.to_string())?);
-                writer
-                    .write_all(&serialized)
-                    .map_err(|error| error.to_string())?;
-                writer.flush().map_err(|error| error.to_string())?;
-            }
-            if path.exists() {
-                fs::remove_file(path).map_err(|error| error.to_string())?;
-            }
-            fs::rename(&temp_path, path).map_err(|error| error.to_string())
-        }
-    }
-}
+#[path = "../src/storage.rs"]
+mod storage;
 
 use recovery::repository::RecoveryRepository;
 use serde_json::{json, Value};
@@ -226,6 +190,124 @@ fn load_snapshot_recomputes_source_file_status_and_resume_guard() {
     assert_eq!(snapshot.items[1].can_resume, false);
     assert_eq!(snapshot.items[2].has_source_file, false);
     assert_eq!(snapshot.items[2].can_resume, false);
+}
+
+#[test]
+fn load_snapshot_keeps_valid_items_when_one_recovery_item_is_unreadable() {
+    let dir = tempdir().unwrap();
+    let first_file = dir.path().join("first.wav");
+    let second_file = dir.path().join("second.wav");
+    File::create(&first_file).unwrap();
+    File::create(&second_file).unwrap();
+    fs::create_dir_all(dir.path().join("recovery")).unwrap();
+    fs::write(
+        recovery_file(dir.path()),
+        serde_json::to_string_pretty(&json!({
+            "version": 1,
+            "updatedAt": 100,
+            "items": [
+                {
+                    "id": "first",
+                    "filename": "first.wav",
+                    "filePath": first_file,
+                    "source": "batch_import",
+                    "resolution": "pending",
+                    "progress": 30,
+                    "segments": [],
+                    "projectId": null,
+                    "updatedAt": 100,
+                    "hasSourceFile": true,
+                    "canResume": true,
+                    "exportConfig": null,
+                    "stageConfig": null
+                },
+                "locally-corrupt-item",
+                {
+                    "id": "second",
+                    "filename": "second.wav",
+                    "filePath": second_file,
+                    "source": "batch_import",
+                    "resolution": "pending",
+                    "progress": 40,
+                    "segments": [],
+                    "projectId": null,
+                    "updatedAt": 101,
+                    "hasSourceFile": true,
+                    "canResume": true,
+                    "exportConfig": null,
+                    "stageConfig": null
+                }
+            ]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+
+    let snapshot = repository.load_snapshot().unwrap();
+
+    assert_eq!(snapshot.items.len(), 2);
+    assert_eq!(snapshot.items[0].id, "first");
+    assert_eq!(snapshot.items[1].id, "second");
+    assert_eq!(snapshot.updated_at, Some(100));
+}
+
+#[test]
+fn load_snapshot_keeps_valid_segments_when_one_segment_is_unreadable() {
+    let dir = tempdir().unwrap();
+    let source_file = dir.path().join("recording.wav");
+    File::create(&source_file).unwrap();
+    fs::create_dir_all(dir.path().join("recovery")).unwrap();
+    fs::write(
+        recovery_file(dir.path()),
+        serde_json::to_string_pretty(&json!({
+            "version": 1,
+            "updatedAt": 100,
+            "items": [
+                {
+                    "id": "recording",
+                    "filename": "recording.wav",
+                    "filePath": source_file,
+                    "source": "batch_import",
+                    "resolution": "pending",
+                    "progress": 30,
+                    "segments": [
+                        {
+                            "id": "segment-1",
+                            "text": "Hello",
+                            "start": 0.0,
+                            "end": 0.5,
+                            "isFinal": true
+                        },
+                        "locally-corrupt-segment",
+                        {
+                            "id": "segment-2",
+                            "text": "World",
+                            "start": 0.5,
+                            "end": 1.0,
+                            "isFinal": true
+                        }
+                    ],
+                    "projectId": null,
+                    "updatedAt": 100,
+                    "hasSourceFile": true,
+                    "canResume": true,
+                    "exportConfig": null,
+                    "stageConfig": null
+                }
+            ]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+
+    let snapshot = repository.load_snapshot().unwrap();
+
+    assert_eq!(snapshot.items.len(), 1);
+    assert_eq!(snapshot.items[0].segments.len(), 2);
+    assert_eq!(snapshot.items[0].segments[0].id, "segment-1");
+    assert_eq!(snapshot.items[0].segments[1].id, "segment-2");
 }
 
 #[test]

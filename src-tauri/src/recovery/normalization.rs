@@ -24,9 +24,8 @@ struct RawRecoverySnapshot {
     #[serde_as(as = "DefaultOnError")]
     #[serde(default)]
     updated_at: Option<u64>,
-    #[serde_as(as = "DefaultOnError")]
     #[serde(default)]
-    items: Vec<RawRecoveredQueueItem>,
+    items: Vec<Value>,
 }
 
 #[serde_as]
@@ -62,7 +61,7 @@ struct RawRecoveredQueueItem {
     progress: Option<f64>,
     #[serde_as(as = "DefaultOnError")]
     #[serde(default)]
-    segments: Vec<RecoveredTranscriptSegment>,
+    segments: Vec<Value>,
     #[serde_as(as = "DefaultOnError")]
     #[serde(default)]
     project_id: Option<String>,
@@ -232,6 +231,7 @@ pub fn snapshot_from_value(value: Value, include_only_pending: bool) -> Recovery
     let items = raw
         .items
         .into_iter()
+        .filter_map(RawRecoveredQueueItem::from_value)
         .filter_map(|item| item.normalize_recovered(now))
         .filter(|item| !include_only_pending || item.resolution == "pending")
         .collect::<Vec<_>>();
@@ -251,12 +251,14 @@ pub fn recovered_item_from_saved_value(value: Value, now: u64) -> Option<Recover
     RawRecoveredQueueItem::from_value(value)?.normalize_recovered(now)
 }
 
-fn normalize_segments(
-    segments: Vec<RecoveredTranscriptSegment>,
-) -> Vec<RecoveredTranscriptSegment> {
+fn normalize_segments(segments: Vec<Value>) -> Vec<RecoveredTranscriptSegment> {
     segments
         .into_iter()
-        .map(normalize_transcript_segment)
+        .filter_map(|segment| {
+            serde_json::from_value::<RecoveredTranscriptSegment>(segment)
+                .ok()
+                .map(normalize_transcript_segment)
+        })
         .collect()
 }
 

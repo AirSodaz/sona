@@ -21,6 +21,7 @@ pub mod sherpa;
 pub mod speaker;
 mod speaker_correction;
 mod speaker_review;
+mod storage;
 pub mod system;
 mod text_alignment;
 mod tray;
