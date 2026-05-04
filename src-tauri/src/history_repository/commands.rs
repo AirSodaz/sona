@@ -170,7 +170,7 @@ pub async fn history_load_transcript<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
     filename: String,
-) -> Result<Option<Value>, String> {
+) -> Result<Option<Vec<TranscriptSegment>>, String> {
     run_history_task(app, state, move |repository| {
         repository.load_transcript(&filename)
     })

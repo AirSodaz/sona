@@ -9,7 +9,6 @@ import type {
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
 } from '../types/transcriptSnapshot';
-import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import { historyService } from './historyService';
 
 interface SnapshotTarget {
@@ -18,7 +17,7 @@ interface SnapshotTarget {
 }
 
 function cloneSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
-  return normalizeTranscriptSegments(JSON.parse(JSON.stringify(segments)) as TranscriptSegment[]);
+  return JSON.parse(JSON.stringify(segments)) as TranscriptSegment[];
 }
 
 function resolveCurrentSnapshotTarget(): SnapshotTarget {

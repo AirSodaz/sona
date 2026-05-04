@@ -1,5 +1,5 @@
 use crate::llm::llm_usage;
-use chrono::{Duration, Local, SecondsFormat, TimeZone, Utc};
+use chrono::{Duration, Local, NaiveDate, SecondsFormat, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -51,22 +51,34 @@ enum SpeakerKind {
 #[serde(rename_all = "camelCase")]
 struct ContentTrendPoint {
     date: String,
+    date_label: String,
     item_count: u64,
+    item_count_display: String,
     duration_seconds: f64,
+    duration_display: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OverviewStats {
     item_count: u64,
+    item_count_display: String,
     project_count: u64,
+    project_count_display: String,
     total_duration_seconds: f64,
+    total_duration_display: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     transcript_character_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transcript_character_count_display: Option<String>,
     recording_count: u64,
+    recording_count_display: String,
     batch_count: u64,
+    batch_count_display: String,
     inbox_count: u64,
+    inbox_count_display: String,
     project_assigned_count: u64,
+    project_assigned_count_display: String,
     recent_daily_items: Vec<ContentTrendPoint>,
     is_deep_loaded: bool,
 }
@@ -77,23 +89,41 @@ struct SpeakerLeader {
     speaker_id: String,
     label: String,
     duration_seconds: f64,
+    duration_display: String,
     segment_count: u64,
+    segment_count_display: String,
     item_count: u64,
+    item_count_display: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SpeakerStats {
     annotated_item_count: u64,
+    annotated_item_count_display: String,
     speaker_attributed_duration: f64,
+    speaker_attributed_duration_display: String,
     identified_speaker_count: u64,
+    identified_speaker_count_display: String,
     anonymous_speaker_slot_count: u64,
+    anonymous_speaker_slot_count_display: String,
     speaker_tagged_segment_count: u64,
+    speaker_tagged_segment_count_display: String,
     total_segment_count: u64,
+    total_segment_count_display: String,
     total_segment_duration: f64,
+    total_segment_duration_display: String,
     identified_duration: f64,
+    identified_duration_display: String,
     anonymous_duration: f64,
+    anonymous_duration_display: String,
+    segment_coverage_ratio: f64,
+    segment_coverage_label: String,
+    duration_coverage_ratio: f64,
+    duration_coverage_label: String,
     top_identified_speakers: Vec<SpeakerLeader>,
+    top_identified_speaker_rows: Vec<SpeakerLeader>,
+    top_identified_speaker_max_value: f64,
     is_deep_loaded: bool,
 }
 
@@ -135,6 +165,9 @@ fn build_dashboard_snapshot(app_dir: &Path, deep: bool) -> Result<Value, String>
     let speakers = if deep {
         let transcript_analytics = aggregate_transcript_analytics(app_dir, &history_items);
         overview.transcript_character_count = Some(transcript_analytics.transcript_character_count);
+        overview.transcript_character_count_display = Some(format_number(
+            transcript_analytics.transcript_character_count,
+        ));
         Some(transcript_analytics.speakers)
     } else {
         None
@@ -205,15 +238,27 @@ fn create_overview(
         .filter(|item| item.project_id.is_none())
         .count() as u64;
 
+    let total_duration_seconds = history_items.iter().map(|item| item.duration).sum();
+    let batch_count = item_count.saturating_sub(recording_count);
+    let project_assigned_count = item_count.saturating_sub(inbox_count);
+
     OverviewStats {
         item_count,
+        item_count_display: format_number(item_count),
         project_count,
-        total_duration_seconds: history_items.iter().map(|item| item.duration).sum(),
+        project_count_display: format_number(project_count),
+        total_duration_seconds,
+        total_duration_display: format_duration(total_duration_seconds),
         transcript_character_count: None,
+        transcript_character_count_display: None,
         recording_count,
-        batch_count: item_count.saturating_sub(recording_count),
+        recording_count_display: format_number(recording_count),
+        batch_count,
+        batch_count_display: format_number(batch_count),
         inbox_count,
-        project_assigned_count: item_count.saturating_sub(inbox_count),
+        inbox_count_display: format_number(inbox_count),
+        project_assigned_count,
+        project_assigned_count_display: format_number(project_assigned_count),
         recent_daily_items: create_recent_daily_trend(history_items),
         is_deep_loaded,
     }
@@ -228,11 +273,16 @@ fn create_recent_daily_trend(history_items: &[HistoryItem]) -> Vec<ContentTrendP
             .and_modify(|existing| {
                 existing.item_count += 1;
                 existing.duration_seconds += item.duration;
+                existing.item_count_display = format_number(existing.item_count);
+                existing.duration_display = format_duration(existing.duration_seconds);
             })
             .or_insert(ContentTrendPoint {
-                date: key,
+                date: key.clone(),
+                date_label: format_date_key(&key),
                 item_count: 1,
+                item_count_display: format_number(1),
                 duration_seconds: item.duration,
+                duration_display: format_duration(item.duration),
             });
     }
 
@@ -244,9 +294,12 @@ fn create_recent_daily_trend(history_items: &[HistoryItem]) -> Vec<ContentTrendP
                 .format("%Y-%m-%d")
                 .to_string();
             aggregates.remove(&key).unwrap_or(ContentTrendPoint {
-                date: key,
+                date: key.clone(),
+                date_label: format_date_key(&key),
                 item_count: 0,
+                item_count_display: format_number(0),
                 duration_seconds: 0.0,
+                duration_display: format_duration(0.0),
             })
         })
         .collect()
@@ -330,6 +383,7 @@ fn aggregate_transcript_analytics(
 
     speakers.identified_speaker_count = identified_speaker_ids.len() as u64;
     speakers.top_identified_speakers = to_sorted_leaders(leader_map);
+    refresh_speaker_view_fields(&mut speakers);
 
     TranscriptAnalytics {
         transcript_character_count,
@@ -353,8 +407,11 @@ fn to_sorted_leaders(leader_map: HashMap<String, SpeakerLeaderAccumulator>) -> V
             speaker_id: leader.speaker_id,
             label: leader.label,
             duration_seconds: leader.duration_seconds,
+            duration_display: format_duration(leader.duration_seconds),
             segment_count: leader.segment_count,
+            segment_count_display: format_number(leader.segment_count),
             item_count: leader.item_ids.len() as u64,
+            item_count_display: format_number(leader.item_ids.len() as u64),
         })
         .collect();
 
@@ -373,17 +430,68 @@ fn to_sorted_leaders(leader_map: HashMap<String, SpeakerLeaderAccumulator>) -> V
 fn create_empty_speaker_stats(is_deep_loaded: bool) -> SpeakerStats {
     SpeakerStats {
         annotated_item_count: 0,
+        annotated_item_count_display: format_number(0),
         speaker_attributed_duration: 0.0,
+        speaker_attributed_duration_display: format_duration(0.0),
         identified_speaker_count: 0,
+        identified_speaker_count_display: format_number(0),
         anonymous_speaker_slot_count: 0,
+        anonymous_speaker_slot_count_display: format_number(0),
         speaker_tagged_segment_count: 0,
+        speaker_tagged_segment_count_display: format_number(0),
         total_segment_count: 0,
+        total_segment_count_display: format_number(0),
         total_segment_duration: 0.0,
+        total_segment_duration_display: format_duration(0.0),
         identified_duration: 0.0,
+        identified_duration_display: format_duration(0.0),
         anonymous_duration: 0.0,
+        anonymous_duration_display: format_duration(0.0),
+        segment_coverage_ratio: 0.0,
+        segment_coverage_label: format_percent(0.0),
+        duration_coverage_ratio: 0.0,
+        duration_coverage_label: format_percent(0.0),
         top_identified_speakers: Vec::new(),
+        top_identified_speaker_rows: Vec::new(),
+        top_identified_speaker_max_value: 0.0,
         is_deep_loaded,
     }
+}
+
+fn refresh_speaker_view_fields(speakers: &mut SpeakerStats) {
+    speakers.annotated_item_count_display = format_number(speakers.annotated_item_count);
+    speakers.speaker_attributed_duration_display =
+        format_duration(speakers.speaker_attributed_duration);
+    speakers.identified_speaker_count_display = format_number(speakers.identified_speaker_count);
+    speakers.anonymous_speaker_slot_count_display =
+        format_number(speakers.anonymous_speaker_slot_count);
+    speakers.speaker_tagged_segment_count_display =
+        format_number(speakers.speaker_tagged_segment_count);
+    speakers.total_segment_count_display = format_number(speakers.total_segment_count);
+    speakers.total_segment_duration_display = format_duration(speakers.total_segment_duration);
+    speakers.identified_duration_display = format_duration(speakers.identified_duration);
+    speakers.anonymous_duration_display = format_duration(speakers.anonymous_duration);
+    speakers.segment_coverage_ratio = coverage_ratio(
+        speakers.speaker_tagged_segment_count as f64,
+        speakers.total_segment_count as f64,
+    );
+    speakers.segment_coverage_label = format_percent(speakers.segment_coverage_ratio);
+    speakers.duration_coverage_ratio = coverage_ratio(
+        speakers.speaker_attributed_duration,
+        speakers.total_segment_duration,
+    );
+    speakers.duration_coverage_label = format_percent(speakers.duration_coverage_ratio);
+    speakers.top_identified_speaker_rows = speakers
+        .top_identified_speakers
+        .iter()
+        .take(5)
+        .cloned()
+        .collect();
+    speakers.top_identified_speaker_max_value = speakers
+        .top_identified_speaker_rows
+        .iter()
+        .map(|speaker| speaker.duration_seconds)
+        .fold(0.0, f64::max);
 }
 
 fn parse_transcript_segments(input: &Value) -> Vec<ParsedTranscriptSegment> {
@@ -458,6 +566,48 @@ fn local_date_key_from_timestamp(timestamp: f64) -> String {
         .unwrap_or_else(Local::now)
         .format("%Y-%m-%d")
         .to_string()
+}
+
+fn format_number(value: u64) -> String {
+    let raw = value.to_string();
+    let mut formatted = String::new();
+    for (index, character) in raw.chars().rev().enumerate() {
+        if index > 0 && index % 3 == 0 {
+            formatted.push(',');
+        }
+        formatted.push(character);
+    }
+    formatted.chars().rev().collect()
+}
+
+fn format_duration(seconds: f64) -> String {
+    let total_minutes = (seconds / 60.0).round().max(0.0) as u64;
+    let hours = total_minutes / 60;
+    let minutes = total_minutes % 60;
+
+    if hours > 0 {
+        return format!("{hours}h {minutes}m");
+    }
+
+    format!("{total_minutes}m")
+}
+
+fn coverage_ratio(numerator: f64, denominator: f64) -> f64 {
+    if denominator <= 0.0 || !numerator.is_finite() || !denominator.is_finite() {
+        return 0.0;
+    }
+
+    (numerator / denominator).clamp(0.0, 1.0)
+}
+
+fn format_percent(value: f64) -> String {
+    format!("{}%", (value.clamp(0.0, 1.0) * 100.0).round() as u64)
+}
+
+fn format_date_key(date_key: &str) -> String {
+    NaiveDate::parse_from_str(date_key, "%Y-%m-%d")
+        .map(|date| date.format("%m-%d").to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -620,5 +770,133 @@ mod tests {
         assert_eq!(snapshot["content"]["overview"]["isDeepLoaded"], false);
         assert!(snapshot["content"]["overview"]["transcriptCharacterCount"].is_null());
         assert!(snapshot["content"]["speakers"].is_null());
+    }
+
+    #[test]
+    fn snapshot_includes_view_ready_display_fields_alongside_raw_stats() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let today_timestamp = Local::now().timestamp_millis() as u64;
+        fs::create_dir_all(temp_dir.path().join("history")).expect("history dir");
+        fs::create_dir_all(temp_dir.path().join("projects")).expect("projects dir");
+        fs::write(
+            temp_dir.path().join(HISTORY_INDEX_PATH),
+            serde_json::to_string(&json!([
+                {
+                    "id": "hist-1",
+                    "timestamp": today_timestamp,
+                    "duration": 3720,
+                    "transcriptPath": "hist-1.json",
+                    "type": "recording",
+                    "projectId": "project-1"
+                },
+                {
+                    "id": "hist-2",
+                    "timestamp": today_timestamp,
+                    "duration": 60,
+                    "transcriptPath": "hist-2.json",
+                    "type": "batch"
+                }
+            ]))
+            .expect("json"),
+        )
+        .expect("write history");
+        fs::write(
+            temp_dir.path().join(PROJECT_INDEX_PATH),
+            serde_json::to_string(&json!([{ "id": "project-1" }])).expect("json"),
+        )
+        .expect("write projects");
+        fs::write(
+            temp_dir.path().join("history/hist-1.json"),
+            serde_json::to_string(&json!([
+                {
+                    "start": 0,
+                    "end": 120,
+                    "text": "speaker text",
+                    "speaker": { "id": "speaker-alice", "label": "Alice", "kind": "identified" }
+                },
+                {
+                    "start": 120,
+                    "end": 180,
+                    "text": "anonymous text",
+                    "speaker": { "id": "anonymous-1", "label": "Speaker 1", "kind": "anonymous" }
+                },
+                {
+                    "start": 180,
+                    "end": 240,
+                    "text": "untagged text"
+                }
+            ]))
+            .expect("json"),
+        )
+        .expect("write transcript 1");
+        fs::write(
+            temp_dir.path().join("history/hist-2.json"),
+            serde_json::to_string(&json!([
+                {
+                    "start": 0,
+                    "end": 60,
+                    "text": "more speaker text",
+                    "speaker": { "id": "speaker-alice", "label": "Alice", "kind": "identified" }
+                }
+            ]))
+            .expect("json"),
+        )
+        .expect("write transcript 2");
+        fs::create_dir_all(temp_dir.path().join("analytics")).expect("analytics dir");
+        fs::write(
+            temp_dir.path().join("analytics/llm-usage.json"),
+            serde_json::to_string(&json!({
+                "startedAt": "2026-04-01T00:00:00.000Z",
+                "lastUpdatedAt": "2026-04-28T00:00:00.000Z",
+                "totals": {
+                    "callCount": 2,
+                    "callsWithUsage": 1,
+                    "callsWithoutUsage": 1,
+                    "promptTokens": 1200,
+                    "completionTokens": 600,
+                    "totalTokens": 1800
+                },
+                "byProvider": {
+                    "ollama": { "callCount": 1, "totalTokens": 400 },
+                    "open_ai": { "callCount": 2, "totalTokens": 1800 }
+                },
+                "byCategory": {},
+                "daily": {}
+            }))
+            .expect("json"),
+        )
+        .expect("write usage");
+
+        let snapshot = build_dashboard_snapshot(temp_dir.path(), true).expect("snapshot");
+        let overview = &snapshot["content"]["overview"];
+        let speakers = &snapshot["content"]["speakers"];
+        let llm_usage = &snapshot["llmUsage"];
+
+        assert_eq!(overview["itemCount"], 2);
+        assert_eq!(overview["itemCountDisplay"], "2");
+        assert_eq!(overview["totalDurationSeconds"], 3780.0);
+        assert_eq!(overview["totalDurationDisplay"], "1h 3m");
+        assert_eq!(overview["recentDailyItems"][29]["itemCountDisplay"], "2");
+        assert_eq!(overview["recentDailyItems"][29]["durationDisplay"], "1h 3m");
+
+        assert_eq!(speakers["segmentCoverageRatio"], 0.75);
+        assert_eq!(speakers["segmentCoverageLabel"], "75%");
+        assert_eq!(speakers["durationCoverageRatio"], 0.8);
+        assert_eq!(speakers["durationCoverageLabel"], "80%");
+        assert_eq!(
+            speakers["topIdentifiedSpeakers"][0]["durationDisplay"],
+            "3m"
+        );
+        assert_eq!(
+            speakers["topIdentifiedSpeakerRows"][0]["durationDisplay"],
+            "3m"
+        );
+        assert_eq!(speakers["topIdentifiedSpeakerMaxValue"], 180.0);
+
+        assert_eq!(llm_usage["totals"]["totalTokensDisplay"], "1,800");
+        assert_eq!(llm_usage["trackingSinceDisplay"], "2026-04-01");
+        assert_eq!(llm_usage["byProvider"][0]["label"], "open_ai");
+        assert_eq!(llm_usage["byProviderTopRows"][0]["value"], 1800);
+        assert_eq!(llm_usage["byProviderMaxValue"], 1800);
     }
 }

@@ -22,6 +22,12 @@ vi.mock('../../../services/historyService', () => ({
   },
 }));
 
+vi.mock('../../../services/tauri/speaker', () => ({
+  applySpeakerProfileToGroup: vi.fn(),
+  confirmSpeakerGroupReview: vi.fn(),
+  resetSpeakerGroupToAnonymous: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: { defaultValue?: string }) => params?.defaultValue ?? key,
@@ -43,6 +49,7 @@ vi.mock('../SegmentTimestamp', () => ({
 }));
 
 import { projectService } from '../../../services/projectService';
+import { applySpeakerProfileToGroup } from '../../../services/tauri/speaker';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
@@ -112,6 +119,27 @@ describe('SegmentItem speaker correction', () => {
         ...existing,
         ...updates,
         defaults: updates.defaults ?? existing.defaults,
+      };
+    });
+
+    vi.mocked(applySpeakerProfileToGroup).mockImplementation(async (request) => {
+      const profile = request.speakerProfiles.find((item) => item.id === request.targetProfileId);
+      const nextSpeaker = {
+        id: request.targetProfileId,
+        label: profile?.name || request.targetProfileId,
+        kind: 'identified' as const,
+      };
+
+      return {
+        segments: request.segments.map((segment) => (
+          segment.speaker?.id === request.groupId
+            ? { ...segment, speaker: nextSpeaker }
+            : segment
+        )),
+        enabledSpeakerProfileIds: Array.from(new Set([
+          ...request.enabledSpeakerProfileIds,
+          request.targetProfileId,
+        ])),
       };
     });
 

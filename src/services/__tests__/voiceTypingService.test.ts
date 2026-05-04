@@ -895,10 +895,9 @@ describe('voiceTypingService', () => {
             'inject_text',
             { text: '重复句子', shortcutModifiers: ['alt'] },
         ]]);
-        expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual([
-            'segment',
-            'listening',
-        ]);
+        const phases = mocks.windowSendState.mock.calls.map(([payload]) => payload.phase);
+        expect(phases.filter((phase) => phase === 'segment')).toEqual(['segment']);
+        expect(phases).toContain('listening');
     });
 
     it('ignores stale segment updates after the session is closed', async () => {

@@ -139,11 +139,14 @@ function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string
     if (existing) {
       existing.segmentCount += 1;
       existing.durationSeconds += Math.max(0, segment.end - segment.start);
+      existing.displayDuration = '8 sec from Rust';
       existing.firstStart = Math.min(existing.firstStart, segment.start);
       existing.previewSegments.push({
         id: segment.id,
         start: segment.start,
         end: segment.end,
+        displayStart: `rust-start-${segment.id}`,
+        displayDuration: `rust-duration-${segment.id}`,
         text: segment.text,
       });
       if (attribution.source === 'manual') {
@@ -173,16 +176,23 @@ function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string
       reviewStatus,
       riskReason,
       priority: riskPriority(riskReason),
-      candidates: attribution.candidates,
+      candidates: attribution.candidates.map((candidate) => ({
+        ...candidate,
+        displayScore: `rust-score-${candidate.profileId}`,
+      })),
       speaker: segment.speaker,
       segmentCount: 1,
       durationSeconds: Math.max(0, segment.end - segment.start),
+      displayDuration: '8 sec from Rust',
       firstSegmentId: segment.id,
       firstStart: segment.start,
+      displayStart: `rust-group-start-${segment.id}`,
       previewSegments: [{
         id: segment.id,
         start: segment.start,
         end: segment.end,
+        displayStart: `rust-start-${segment.id}`,
+        displayDuration: `rust-duration-${segment.id}`,
         text: segment.text,
       }],
     });
@@ -503,12 +513,13 @@ describe('TranscriptSpeakerReviewPanel', () => {
     const suggestedGroup = screen.getByTestId('speaker-review-group-anonymous-1');
     expectGroupActive(suggestedGroup);
     expect(within(suggestedGroup).getByText('Medium confidence')).toBeDefined();
-    expect(within(suggestedGroup).getByText('0:12')).toBeDefined();
+    expect(within(suggestedGroup).getByText('8 sec from Rust')).toBeDefined();
+    expect(within(suggestedGroup).getByText('rust-start-seg-1')).toBeDefined();
     expect(within(suggestedGroup).getByText('Hello there')).toBeDefined();
-    expect(within(suggestedGroup).getByText('0:20')).toBeDefined();
+    expect(within(suggestedGroup).getByText('rust-start-seg-1b')).toBeDefined();
     expect(within(suggestedGroup).getByText('Follow up')).toBeDefined();
-    expect(within(suggestedGroup).getByText('Alice 0.79')).toBeDefined();
-    expect(within(suggestedGroup).getByText('Bob 0.72')).toBeDefined();
+    expect(within(suggestedGroup).getByText('Alice rust-score-alice')).toBeDefined();
+    expect(within(suggestedGroup).getByText('Bob rust-score-bob')).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Apply Alice' })).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Confirm current label' })).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Alice' })).toBeDefined();

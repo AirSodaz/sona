@@ -9,7 +9,6 @@ import {
     TranscriptSnapshotRecord,
 } from '../types/transcriptSnapshot';
 import { logger } from '../utils/logger';
-import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import {
     historyCompleteLiveDraft,
     historyCreateLiveDraft,
@@ -224,12 +223,7 @@ export const historyService = {
 
     async loadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
         try {
-            const raw = await historyLoadTranscript(filename);
-            if (!Array.isArray(raw)) {
-                return raw === null ? null : normalizeTranscriptSegments([]);
-            }
-
-            return normalizeTranscriptSegments(raw as TranscriptSegment[]);
+            return await historyLoadTranscript(filename);
         } catch (error) {
             logger.error('Failed to load transcript:', error);
             return null;
@@ -251,8 +245,7 @@ export const historyService = {
         reason: TranscriptSnapshotReason,
         segments: TranscriptSegment[],
     ): Promise<TranscriptSnapshotMetadata> {
-        const normalizedSegments = normalizeTranscriptSegments(segments);
-        return historyCreateTranscriptSnapshot(historyId, reason, normalizedSegments);
+        return historyCreateTranscriptSnapshot(historyId, reason, segments);
     },
 
     async listTranscriptSnapshots(historyId: string): Promise<TranscriptSnapshotMetadata[]> {
@@ -263,15 +256,7 @@ export const historyService = {
         historyId: string,
         snapshotId: string,
     ): Promise<TranscriptSnapshotRecord | null> {
-        const record = await historyLoadTranscriptSnapshot(historyId, snapshotId);
-        if (!record) {
-            return null;
-        }
-
-        return {
-            ...record,
-            segments: normalizeTranscriptSegments(record.segments),
-        };
+        return historyLoadTranscriptSnapshot(historyId, snapshotId);
     },
 
     async buildTranscriptDiff(

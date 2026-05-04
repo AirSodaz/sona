@@ -325,17 +325,17 @@ impl HistoryRepository {
         Ok(())
     }
 
-    pub(super) fn load_transcript(&self, file_name: &str) -> Result<Option<Value>, String> {
+    pub(super) fn load_transcript(
+        &self,
+        file_name: &str,
+    ) -> Result<Option<Vec<crate::sherpa::TranscriptSegment>>, String> {
         let transcript_path = self.transcript_path(file_name)?;
         if !transcript_path.exists() {
             return Ok(None);
         }
 
         let value = read_json_value(&transcript_path)?;
-        Ok(Some(ensure_json_array_value(
-            value,
-            "History transcript file",
-        )?))
+        Ok(Some(normalize_history_transcript_segments(value)?.segments))
     }
 
     pub(super) fn create_transcript_snapshot(
@@ -345,7 +345,8 @@ impl HistoryRepository {
         segments: Value,
     ) -> Result<TranscriptSnapshotMetadata, String> {
         self.ensure_ready()?;
-        let segments = ensure_json_array_value(segments, "Transcript snapshot segments")?;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+        let segments = normalized_transcript.segments;
         let items = self.list_items()?;
         if !items.iter().any(|entry| entry.id == history_id) {
             return Err(format!("History item not found: {history_id}"));
@@ -357,7 +358,7 @@ impl HistoryRepository {
             history_id: history_id.to_string(),
             reason,
             created_at,
-            segment_count: segments.as_array().map_or(0, |items| items.len() as u64),
+            segment_count: segments.len() as u64,
         };
 
         let versions_dir = self.transcript_versions_dir(history_id)?;
@@ -426,9 +427,12 @@ impl HistoryRepository {
         }
 
         let raw = read_json_value(&snapshot_path)?;
-        let record: TranscriptSnapshotRecord =
+        let mut record: TranscriptSnapshotRecord =
             serde_json::from_value(raw).map_err(|error| error.to_string())?;
-        ensure_json_array_value(record.segments.clone(), "Transcript snapshot file")?;
+        record.segments = normalize_history_transcript_segments(
+            to_value(record.segments).map_err(|error| error.to_string())?,
+        )?
+        .segments;
         Ok(Some(record))
     }
 
@@ -872,7 +876,7 @@ mod tests {
             .load_transcript(&draft.item.transcript_path)
             .unwrap()
             .unwrap();
-        assert_eq!(transcript.as_array().unwrap().len(), 1);
+        assert_eq!(transcript.len(), 1);
     }
 
     #[test]
@@ -1009,13 +1013,44 @@ mod tests {
             .load_transcript(&saved.transcript_path)
             .unwrap()
             .unwrap();
-        let segment = &transcript.as_array().unwrap()[0];
-        assert_eq!(segment["timing"]["level"], "token");
-        assert_eq!(segment["timing"]["source"], "model");
-        assert_eq!(segment["timing"]["units"][0]["text"], "\u{4f60}");
-        assert_eq!(segment["timing"]["units"][0]["start"], 0.0);
-        assert_eq!(segment["timing"]["units"][1]["text"], "\u{597d}");
-        assert_eq!(segment["timing"]["units"][1]["end"], 1.0);
+        let timing = transcript[0].timing.as_ref().unwrap();
+        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.units[0].text, "\u{4f60}");
+        assert_eq!(timing.units[0].start, 0.0);
+        assert_eq!(timing.units[1].text, "\u{597d}");
+        assert_eq!(timing.units[1].end, 1.0);
+    }
+
+    #[test]
+    fn load_transcript_normalizes_legacy_timing_fields_from_disk() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        write_json_pretty_atomic(
+            &repository.transcript_path("legacy.json").unwrap(),
+            &json!([{
+                "id": "seg-1",
+                "text": "\u{4f60}\u{597d}",
+                "start": 0.0,
+                "end": 1.0,
+                "isFinal": true,
+                "tokens": ["\u{4f60}", "\u{597d}"],
+                "timestamps": [0.0, 0.5],
+                "durations": [0.5, 0.5]
+            }]),
+        )
+        .unwrap();
+
+        let transcript = repository.load_transcript("legacy.json").unwrap().unwrap();
+        let timing = transcript[0].timing.as_ref().unwrap();
+        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.units[0].text, "\u{4f60}");
+        assert_eq!(timing.units[0].start, 0.0);
+        assert_eq!(timing.units[1].text, "\u{597d}");
+        assert_eq!(timing.units[1].end, 1.0);
     }
 
     #[test]
@@ -1071,7 +1106,44 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(record.metadata.reason, TranscriptSnapshotReason::Polish);
-        assert_eq!(record.segments.as_array().unwrap().len(), 1);
+        assert_eq!(record.segments.len(), 1);
+    }
+
+    #[test]
+    fn transcript_snapshot_paths_normalize_legacy_timing_fields() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+        repository.ensure_ready().unwrap();
+
+        let item = sample_history_item("history-1", HistoryItemStatus::Complete);
+        repository.write_index(&vec![item.clone()]).unwrap();
+
+        let metadata = repository
+            .create_transcript_snapshot(
+                &item.id,
+                TranscriptSnapshotReason::Polish,
+                json!([{
+                    "id": "seg-1",
+                    "text": "\u{4f60}\u{597d}",
+                    "start": 0.0,
+                    "end": 1.0,
+                    "isFinal": true,
+                    "tokens": ["\u{4f60}", "\u{597d}"],
+                    "timestamps": [0.0, 0.5],
+                    "durations": [0.5, 0.5]
+                }]),
+            )
+            .unwrap();
+
+        let record = repository
+            .load_transcript_snapshot(&item.id, &metadata.id)
+            .unwrap()
+            .unwrap();
+        let timing = record.segments[0].timing.as_ref().unwrap();
+        assert_eq!(timing.level, crate::sherpa::TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, crate::sherpa::TranscriptTimingSource::Model);
+        assert_eq!(timing.units[0].text, "\u{4f60}");
+        assert_eq!(timing.units[1].end, 1.0);
     }
 
     #[test]

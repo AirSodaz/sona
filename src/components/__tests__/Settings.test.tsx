@@ -13,18 +13,43 @@ const mockListSystemAudioDeviceOptions = vi.fn();
 const mockListLlmModels = vi.fn();
 const MODEL_TAB_LOAD_TIMEOUT_MS = 6000;
 
+function createUsageBucket() {
+    return {
+        callCount: 0,
+        callCountDisplay: '0',
+        callsWithUsage: 0,
+        callsWithUsageDisplay: '0',
+        callsWithoutUsage: 0,
+        callsWithoutUsageDisplay: '0',
+        promptTokens: 0,
+        promptTokensDisplay: '0',
+        completionTokens: 0,
+        completionTokensDisplay: '0',
+        totalTokens: 0,
+        totalTokensDisplay: '0',
+    };
+}
+
 function createEmptyDashboardSnapshot(): DashboardSnapshot {
     return {
         content: {
             overview: {
                 itemCount: 0,
+                itemCountDisplay: '0',
                 projectCount: 0,
+                projectCountDisplay: '0',
                 totalDurationSeconds: 0,
+                totalDurationDisplay: '0m',
                 transcriptCharacterCount: undefined,
+                transcriptCharacterCountDisplay: undefined,
                 recordingCount: 0,
+                recordingCountDisplay: '0',
                 batchCount: 0,
+                batchCountDisplay: '0',
                 inboxCount: 0,
+                inboxCountDisplay: '0',
                 projectAssignedCount: 0,
+                projectAssignedCountDisplay: '0',
                 recentDailyItems: [],
                 isDeepLoaded: false,
             },
@@ -33,16 +58,15 @@ function createEmptyDashboardSnapshot(): DashboardSnapshot {
         llmUsage: {
             startedAt: '2026-04-01T00:00:00.000Z',
             lastUpdatedAt: '2026-04-28T00:00:00.000Z',
-            totals: {
-                callCount: 0,
-                callsWithUsage: 0,
-                callsWithoutUsage: 0,
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0,
-            },
+            trackingSinceDisplay: 'Apr 1, 2026',
+            lastUpdatedDisplay: 'Apr 28, 2026',
+            totals: createUsageBucket(),
             byProvider: [],
+            byProviderTopRows: [],
+            byProviderMaxValue: 0,
             byCategory: [],
+            byCategoryTopRows: [],
+            byCategoryMaxValue: 0,
             recentDaily: [],
         },
         generatedAt: '2026-04-28T00:00:00.000Z',
@@ -79,7 +103,13 @@ vi.mock('../../services/modelService', () => ({
         getModelPath: vi.fn().mockImplementation((id) => Promise.resolve(`/path/to/${id}`)),
         getModelCatalogSnapshot: vi.fn(),
         deleteModel: vi.fn(),
-        getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false })
+        getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false }),
+        resolveModelCatalogSelectedIds: vi.fn().mockResolvedValue({
+            streaming: null,
+            offline: null,
+            speakerSegmentation: null,
+            speakerEmbedding: null,
+        }),
     }
 }));
 

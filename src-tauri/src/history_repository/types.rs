@@ -205,7 +205,7 @@ pub struct TranscriptSnapshotMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSnapshotRecord {
     pub metadata: TranscriptSnapshotMetadata,
-    pub segments: Value,
+    pub segments: Vec<TranscriptSegment>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

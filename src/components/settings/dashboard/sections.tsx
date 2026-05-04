@@ -12,13 +12,7 @@ import type {
   DashboardLlmUsageStats,
   DashboardSpeakerStats,
 } from '../../../types/dashboard';
-import {
-  calculateCoverage,
-  formatDateLabel,
-  formatDuration,
-  formatNumber,
-  type DashboardTranslation,
-} from './formatters';
+import { type DashboardTranslation } from './formatters';
 import {
   KpiCard,
   SpeakerOverviewCard,
@@ -41,11 +35,11 @@ export function ContentOverviewSection({
   t: DashboardTranslation;
 }): React.JSX.Element {
   const itemSparkline = overview.recentDailyItems.map((point) => ({
-    label: formatDateLabel(point.date),
+    label: point.dateLabel,
     value: point.itemCount,
   }));
   const durationSparkline = overview.recentDailyItems.map((point) => ({
-    label: formatDateLabel(point.date),
+    label: point.dateLabel,
     value: point.durationSeconds,
   }));
 
@@ -81,7 +75,7 @@ export function ContentOverviewSection({
       <div className="settings-dashboard-feature-grid">
         <KpiCard
           label={t('settings.dashboard.items', { defaultValue: 'Items' })}
-          value={formatNumber(overview.itemCount)}
+          value={overview.itemCountDisplay}
           badge={<FileText size={16} />}
           variant="feature"
           tone="accent"
@@ -92,13 +86,13 @@ export function ContentOverviewSection({
               <StatPill>
                 {t('settings.dashboard.recording_pill', {
                   defaultValue: '{{count}} recording',
-                  count: formatNumber(overview.recordingCount),
+                  count: overview.recordingCountDisplay,
                 })}
               </StatPill>
               <StatPill>
                 {t('settings.dashboard.batch_pill', {
                   defaultValue: '{{count}} batch',
-                  count: formatNumber(overview.batchCount),
+                  count: overview.batchCountDisplay,
                 })}
               </StatPill>
             </div>
@@ -106,7 +100,7 @@ export function ContentOverviewSection({
         />
         <KpiCard
           label={t('settings.dashboard.total_duration', { defaultValue: 'Total Duration' })}
-          value={formatDuration(overview.totalDurationSeconds, t)}
+          value={overview.totalDurationDisplay}
           badge={<Clock3 size={16} />}
           variant="feature"
           tone="warm"
@@ -119,7 +113,7 @@ export function ContentOverviewSection({
         <KpiCard
           label={t('settings.dashboard.transcript_characters', { defaultValue: 'Transcript Characters' })}
           value={typeof overview.transcriptCharacterCount === 'number'
-            ? formatNumber(overview.transcriptCharacterCount)
+            ? overview.transcriptCharacterCountDisplay || ''
             : t('settings.dashboard.scanning', { defaultValue: 'Scanning...' })}
           muted={typeof overview.transcriptCharacterCount !== 'number'}
           detail={typeof overview.transcriptCharacterCount !== 'number'
@@ -128,19 +122,19 @@ export function ContentOverviewSection({
         />
         <KpiCard
           label={t('settings.dashboard.projects', { defaultValue: 'Projects' })}
-          value={formatNumber(overview.projectCount)}
+          value={overview.projectCountDisplay}
           detail={(
             <div className="settings-dashboard-pill-row">
               <StatPill>
                 {t('settings.dashboard.inbox_pill', {
                   defaultValue: '{{count}} in Inbox',
-                  count: formatNumber(overview.inboxCount),
+                  count: overview.inboxCountDisplay,
                 })}
               </StatPill>
               <StatPill>
                 {t('settings.dashboard.project_pill', {
                   defaultValue: '{{count}} in projects',
-                  count: formatNumber(overview.projectAssignedCount),
+                  count: overview.projectAssignedCountDisplay,
                 })}
               </StatPill>
             </div>
@@ -164,12 +158,6 @@ export function SpeakerInsightsSection({
   error: string | null;
   t: DashboardTranslation;
 }): React.JSX.Element {
-  const segmentCoverage = speakers
-    ? calculateCoverage(speakers.speakerTaggedSegmentCount, speakers.totalSegmentCount)
-    : 0;
-  const durationCoverage = speakers
-    ? calculateCoverage(speakers.speakerAttributedDuration, speakers.totalSegmentDuration)
-    : 0;
   const statusMessage = isDeepLoading
     ? t('settings.dashboard.deep_scan_loading', { defaultValue: 'Speaker stats are still scanning saved transcripts.' })
     : error;
@@ -194,25 +182,25 @@ export function SpeakerInsightsSection({
       <div className="settings-dashboard-speaker-kpi-grid">
         <KpiCard
           label={t('settings.dashboard.annotated_items', { defaultValue: 'Speaker-Annotated Items' })}
-          value={speakers ? formatNumber(speakers.annotatedItemCount) : '...'}
+          value={speakers ? speakers.annotatedItemCountDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
           label={t('settings.dashboard.speaker_attributed_duration', { defaultValue: 'Speaker-Attributed Duration' })}
-          value={speakers ? formatDuration(speakers.speakerAttributedDuration, t) : '...'}
+          value={speakers ? speakers.speakerAttributedDurationDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
           label={t('settings.dashboard.identified_speakers', { defaultValue: 'Identified Speakers' })}
-          value={speakers ? formatNumber(speakers.identifiedSpeakerCount) : '...'}
+          value={speakers ? speakers.identifiedSpeakerCountDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
           label={t('settings.dashboard.anonymous_slots', { defaultValue: 'Anonymous Speaker Slots' })}
-          value={speakers ? formatNumber(speakers.anonymousSpeakerSlotCount) : '...'}
+          value={speakers ? speakers.anonymousSpeakerSlotCountDisplay : '...'}
           muted={!speakers}
           compact
         />
@@ -221,8 +209,6 @@ export function SpeakerInsightsSection({
       <div className="settings-dashboard-speaker-detail-grid">
         <SpeakerOverviewCard
           speakers={speakers}
-          segmentCoverage={segmentCoverage}
-          durationCoverage={durationCoverage}
           t={t}
           statusMessage={statusMessage}
         />
@@ -244,11 +230,11 @@ export function LlmUsagePanel({
   t: DashboardTranslation;
 }): React.JSX.Element {
   const callSparkline = llmUsage.recentDaily.map((point) => ({
-    label: formatDateLabel(point.date),
+    label: point.dateLabel,
     value: point.callCount,
   }));
   const tokenSparkline = llmUsage.recentDaily.map((point) => ({
-    label: formatDateLabel(point.date),
+    label: point.dateLabel,
     value: point.totalTokens,
   }));
 
@@ -257,7 +243,7 @@ export function LlmUsagePanel({
       <div className="settings-dashboard-feature-grid">
         <KpiCard
           label={t('settings.dashboard.llm_call_count', { defaultValue: 'Successful Calls' })}
-          value={formatNumber(llmUsage.totals.callCount)}
+          value={llmUsage.totals.callCountDisplay}
           badge={<Bot size={16} />}
           variant="feature"
           tone="info"
@@ -266,7 +252,7 @@ export function LlmUsagePanel({
         />
         <KpiCard
           label={t('settings.dashboard.total_tokens', { defaultValue: 'Total Tokens' })}
-          value={formatNumber(llmUsage.totals.totalTokens)}
+          value={llmUsage.totals.totalTokensDisplay}
           badge={<BarChart3 size={16} />}
           variant="feature"
           tone="accent"
@@ -278,11 +264,11 @@ export function LlmUsagePanel({
       <div className="settings-dashboard-support-grid">
         <KpiCard
           label={t('settings.dashboard.calls_with_usage', { defaultValue: 'Calls With Usage' })}
-          value={formatNumber(llmUsage.totals.callsWithUsage)}
+          value={llmUsage.totals.callsWithUsageDisplay}
         />
         <KpiCard
           label={t('settings.dashboard.calls_without_usage', { defaultValue: 'Calls Missing Usage' })}
-          value={formatNumber(llmUsage.totals.callsWithoutUsage)}
+          value={llmUsage.totals.callsWithoutUsageDisplay}
           tone={llmUsage.totals.callsWithoutUsage > 0 ? 'warm' : 'default'}
         />
       </div>
@@ -293,8 +279,8 @@ export function LlmUsagePanel({
           <span>
             {t('settings.dashboard.tokens_hint', {
               defaultValue: '{{prompt}} prompt / {{completion}} completion',
-              prompt: formatNumber(llmUsage.totals.promptTokens),
-              completion: formatNumber(llmUsage.totals.completionTokens),
+              prompt: llmUsage.totals.promptTokensDisplay,
+              completion: llmUsage.totals.completionTokensDisplay,
             })}
           </span>
         </div>
@@ -304,7 +290,7 @@ export function LlmUsagePanel({
             {llmUsage.startedAt
               ? t('settings.dashboard.tracking_since', {
                 defaultValue: 'Tracking since {{date}}',
-                date: new Date(llmUsage.startedAt).toLocaleString(),
+                date: llmUsage.trackingSinceDisplay || llmUsage.startedAt,
               })
               : t('settings.dashboard.no_tracked_calls', { defaultValue: 'No tracked calls yet.' })}
           </span>
@@ -315,7 +301,7 @@ export function LlmUsagePanel({
             <span>
               {t('settings.dashboard.missing_usage_hint', {
                 defaultValue: '{{count}} successful calls did not include token usage from the provider.',
-                count: formatNumber(llmUsage.totals.callsWithoutUsage),
+                count: llmUsage.totals.callsWithoutUsageDisplay,
               })}
             </span>
           </div>
@@ -326,12 +312,14 @@ export function LlmUsagePanel({
         <TokenTrend points={llmUsage.recentDaily} t={t} />
         <UsageBreakdown
           title={t('settings.dashboard.by_provider', { defaultValue: 'By Provider' })}
-          breakdown={llmUsage.byProvider}
+          breakdown={llmUsage.byProviderTopRows}
+          maxValue={llmUsage.byProviderMaxValue}
           t={t}
         />
         <UsageBreakdown
           title={t('settings.dashboard.by_category', { defaultValue: 'By Category' })}
-          breakdown={llmUsage.byCategory}
+          breakdown={llmUsage.byCategoryTopRows}
+          maxValue={llmUsage.byCategoryMaxValue}
           t={t}
         />
       </div>

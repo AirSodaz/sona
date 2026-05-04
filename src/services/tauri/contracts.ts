@@ -369,7 +369,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.history.loadTranscript]: {
     args: { filename: string };
-    result: unknown;
+    result: TranscriptSegment[] | null;
   };
   [TauriCommand.history.updateTranscript]: {
     args: {

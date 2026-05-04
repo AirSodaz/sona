@@ -1,4 +1,4 @@
-import type { SpeakerAttribution, SpeakerCandidate, SpeakerTag } from '../types/speaker';
+import type { SpeakerAttribution, SpeakerTag } from '../types/speaker';
 import type { TranscriptSegment } from '../types/transcript';
 import { buildSpeakerReviewSnapshot as buildSpeakerReviewSnapshotFromRust } from './tauri/speaker';
 
@@ -22,7 +22,17 @@ export interface SpeakerReviewSegmentPreview {
   id: string;
   start: number;
   end: number;
+  displayStart: string;
+  displayDuration: string;
   text: string;
+}
+
+export interface SpeakerReviewCandidate {
+  profileId: string;
+  profileName: string;
+  score: number;
+  rank: number;
+  displayScore: string;
 }
 
 export interface SpeakerReviewGroup {
@@ -35,12 +45,14 @@ export interface SpeakerReviewGroup {
   reviewStatus: SpeakerReviewStatus;
   riskReason: SpeakerReviewRiskReason;
   priority: number;
-  candidates: SpeakerCandidate[];
+  candidates: SpeakerReviewCandidate[];
   speaker?: SpeakerTag;
   segmentCount: number;
   durationSeconds: number;
+  displayDuration: string;
   firstSegmentId: string;
   firstStart: number;
+  displayStart: string;
   previewSegments: SpeakerReviewSegmentPreview[];
 }
 

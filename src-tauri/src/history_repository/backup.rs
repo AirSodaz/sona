@@ -1129,9 +1129,8 @@ mod tests {
             restored_first.metadata.reason,
             TranscriptSnapshotReason::Polish
         );
-        assert_eq!(
-            restored_first.segments,
-            json!([{ "id": "seg-1", "text": "before" }])
-        );
+        assert_eq!(restored_first.segments.len(), 1);
+        assert_eq!(restored_first.segments[0].id, "seg-1");
+        assert_eq!(restored_first.segments[0].text, "before");
     }
 }

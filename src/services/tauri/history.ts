@@ -95,7 +95,7 @@ export async function historyDeleteItems(ids: string[]): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteItems, { ids });
 }
 
-export async function historyLoadTranscript(filename: string): Promise<unknown> {
+export async function historyLoadTranscript(filename: string): Promise<TranscriptSegment[] | null> {
   return invokeTauri(TauriCommand.history.loadTranscript, { filename });
 }
 

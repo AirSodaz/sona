@@ -55,25 +55,6 @@ function createEmptySpeakerReviewSnapshot(): SpeakerReviewSnapshot {
   };
 }
 
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '0s';
-  }
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60);
-    const remain = Math.round(seconds % 60);
-    return `${minutes}m ${remain.toString().padStart(2, '0')}s`;
-  }
-  return `${Math.round(seconds)}s`;
-}
-
-function formatTimestamp(seconds: number): string {
-  const safeSeconds = Math.max(0, Math.floor(seconds));
-  const minutes = Math.floor(safeSeconds / 60);
-  const remain = safeSeconds % 60;
-  return `${minutes}:${remain.toString().padStart(2, '0')}`;
-}
-
 function getStatusKey(group: SpeakerReviewGroup): string {
   switch (group.reviewStatus) {
     case 'reviewed':
@@ -479,7 +460,7 @@ export function TranscriptSpeakerReviewPanel({
                         <span>{t(getStateKey(group))}</span>
                         <span>{t(getConfidenceKey(group))}</span>
                         <span>{t('editor.speaker_review_segments_count', { count: group.segmentCount })}</span>
-                        <span>{t('editor.speaker_review_duration', { duration: formatDuration(group.durationSeconds) })}</span>
+                        <span>{t('editor.speaker_review_duration', { duration: group.displayDuration })}</span>
                       </div>
                     </div>
                     <button
@@ -500,7 +481,7 @@ export function TranscriptSpeakerReviewPanel({
                     <div className="transcript-speaker-review-preview-list">
                       {group.previewSegments.map((preview) => (
                         <div key={preview.id} className="transcript-speaker-review-preview-row">
-                          <span className="transcript-speaker-review-time">{formatTimestamp(preview.start)}</span>
+                          <span className="transcript-speaker-review-time">{preview.displayStart}</span>
                           <span className="transcript-speaker-review-text">{preview.text}</span>
                         </div>
                       ))}
@@ -516,7 +497,7 @@ export function TranscriptSpeakerReviewPanel({
                       <div className="transcript-speaker-review-candidate-list">
                         {group.candidates.map((candidate) => (
                           <span key={`${group.groupId}-${candidate.profileId}`} className="transcript-speaker-review-candidate">
-                            {candidate.profileName} {candidate.score.toFixed(2)}
+                            {candidate.profileName} {candidate.displayScore}
                           </span>
                         ))}
                       </div>

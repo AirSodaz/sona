@@ -1,5 +1,4 @@
 import React from 'react';
-import { formatDateLabel, formatDuration, formatNumber } from './formatters';
 import { joinClassNames } from './classNames';
 import { DashboardTrendChart, type DashboardChartPoint } from './charts';
 import type {
@@ -51,10 +50,12 @@ export function ContentTrends({
           defaultValue: 'Saved recordings and imports per day.',
         })}
         points={points.map((point) => ({
-          label: formatDateLabel(point.date),
+          label: point.dateLabel,
           value: point.itemCount,
         }))}
-        valueFormatter={formatNumber}
+        valueFormatter={(value) => (
+          points.find((point) => point.itemCount === value)?.itemCountDisplay || String(value)
+        )}
       />
       <TrendCard
         title={t('settings.dashboard.recent_duration_trend', { defaultValue: 'Recent 30 Day Duration Trend' })}
@@ -62,10 +63,12 @@ export function ContentTrends({
           defaultValue: 'Total saved duration per day.',
         })}
         points={points.map((point) => ({
-          label: formatDateLabel(point.date),
+          label: point.dateLabel,
           value: point.durationSeconds,
         }))}
-        valueFormatter={(value) => formatDuration(value, t)}
+        valueFormatter={(value) => (
+          points.find((point) => point.durationSeconds === value)?.durationDisplay || String(value)
+        )}
       />
     </div>
   );
@@ -85,10 +88,12 @@ export function TokenTrend({
         defaultValue: 'Prompt + completion tokens recorded each day.',
       })}
       points={points.map((point) => ({
-        label: formatDateLabel(point.date),
+        label: point.dateLabel,
         value: point.totalTokens,
       }))}
-      valueFormatter={formatNumber}
+      valueFormatter={(value) => (
+        points.find((point) => point.totalTokens === value)?.totalTokensDisplay || String(value)
+      )}
       tone="info"
     />
   );

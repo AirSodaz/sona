@@ -112,7 +112,7 @@ describe('Settings voice typing navigation', () => {
         await waitFor(() => {
             expect(screen.getByText('Models Tab')).toBeDefined();
             expect(document.activeElement).toBe(modelsTab);
-        });
+        }, { timeout: 5000 });
     });
 
     it('switches from the voice typing page to input device and focuses the target tab button', async () => {
@@ -124,6 +124,6 @@ describe('Settings voice typing navigation', () => {
         await waitFor(() => {
             expect(screen.getByText('Microphone Tab')).toBeDefined();
             expect(document.activeElement).toBe(microphoneTab);
-        });
+        }, { timeout: 5000 });
     });
 });

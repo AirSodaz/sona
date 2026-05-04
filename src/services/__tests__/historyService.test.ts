@@ -167,7 +167,7 @@ describe('historyService', () => {
     });
   });
 
-  it('loadTranscript still normalizes legacy timing payloads from the Rust bridge', async () => {
+  it('loadTranscript trusts Rust-normalized timing from the Rust bridge', async () => {
     testContext.invokeMock.mockResolvedValue([
       {
         id: 'seg-1',
@@ -186,14 +186,7 @@ describe('historyService', () => {
       filename: 'legacy.json',
     });
     expect(segments).toHaveLength(1);
-    expect(segments?.[0].timing).toEqual(expect.objectContaining({
-      level: 'token',
-      source: 'model',
-    }));
-    expect(segments?.[0].timing?.units).toEqual([
-      expect.objectContaining({ text: '你', start: 0, end: 0.5 }),
-      expect.objectContaining({ text: '好', start: 0.5, end: 1 }),
-    ]);
+    expect(segments?.[0].timing).toBeUndefined();
   });
 
   it('creates and loads transcript snapshots through the Rust bridge', async () => {
@@ -235,16 +228,13 @@ describe('historyService', () => {
       historyId: 'history-1',
       reason: 'polish',
       segments: [
-        expect.objectContaining({ id: 'seg-1', text: '你好' }),
+        { id: 'seg-1', text: '你好', start: 0, end: 1, isFinal: true },
       ],
     });
     expect(testContext.invokeMock).toHaveBeenNthCalledWith(2, 'history_load_transcript_snapshot', {
       historyId: 'history-1',
       snapshotId: 'snapshot-1',
     });
-    expect(record?.segments[0].timing).toEqual(expect.objectContaining({
-      level: 'token',
-      source: 'model',
-    }));
+    expect(record?.segments[0].timing).toBeUndefined();
   });
 });

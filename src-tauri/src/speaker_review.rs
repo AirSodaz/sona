@@ -40,7 +40,19 @@ pub struct SpeakerReviewSegmentPreview {
     pub id: String,
     pub start: f64,
     pub end: f64,
+    pub display_start: String,
+    pub display_duration: String,
     pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeakerReviewCandidate {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub score: f32,
+    pub rank: usize,
+    pub display_score: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -55,13 +67,15 @@ pub struct SpeakerReviewGroup {
     pub review_status: SpeakerReviewStatus,
     pub risk_reason: SpeakerReviewRiskReason,
     pub priority: usize,
-    pub candidates: Vec<SpeakerCandidate>,
+    pub candidates: Vec<SpeakerReviewCandidate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<SpeakerTag>,
     pub segment_count: usize,
     pub duration_seconds: f64,
+    pub display_duration: String,
     pub first_segment_id: String,
     pub first_start: f64,
+    pub display_start: String,
     pub preview_segments: Vec<SpeakerReviewSegmentPreview>,
 }
 
@@ -197,7 +211,7 @@ fn build_speaker_review_groups(segments: &[TranscriptSegment]) -> Vec<SpeakerRev
             }
 
             if attribution.candidates.len() > existing.candidates.len() {
-                existing.candidates = attribution.candidates.clone();
+                existing.candidates = review_candidates(&attribution.candidates);
             }
 
             if existing.speaker.is_none() {
@@ -238,12 +252,14 @@ fn build_speaker_review_groups(segments: &[TranscriptSegment]) -> Vec<SpeakerRev
                 review_status,
                 risk_reason,
                 priority: get_priority(risk_reason),
-                candidates: attribution.candidates.clone(),
+                candidates: review_candidates(&attribution.candidates),
                 speaker: segment.speaker.clone(),
                 segment_count: 1,
                 duration_seconds: segment_duration(segment),
+                display_duration: format_duration(segment_duration(segment)),
                 first_segment_id: segment.id.clone(),
                 first_start: segment.start,
+                display_start: format_timestamp(segment.start),
                 preview_segments: vec![segment_preview(segment)],
             },
         );
@@ -256,6 +272,8 @@ fn build_speaker_review_groups(segments: &[TranscriptSegment]) -> Vec<SpeakerRev
                 resolve_review_status(&group.source, &group.state, &group.confidence);
             group.risk_reason = resolve_risk_reason(&group.source, &group.state, &group.confidence);
             group.priority = get_priority(group.risk_reason);
+            group.display_duration = format_duration(group.duration_seconds);
+            group.display_start = format_timestamp(group.first_start);
             group
                 .preview_segments
                 .sort_by(|left, right| compare_f64(left.start, right.start));
@@ -368,8 +386,49 @@ fn segment_preview(segment: &TranscriptSegment) -> SpeakerReviewSegmentPreview {
         id: segment.id.clone(),
         start: segment.start,
         end: segment.end,
+        display_start: format_timestamp(segment.start),
+        display_duration: format_duration(segment_duration(segment)),
         text: segment.text.clone(),
     }
+}
+
+fn review_candidates(candidates: &[SpeakerCandidate]) -> Vec<SpeakerReviewCandidate> {
+    candidates
+        .iter()
+        .map(|candidate| SpeakerReviewCandidate {
+            profile_id: candidate.profile_id.clone(),
+            profile_name: candidate.profile_name.clone(),
+            score: candidate.score,
+            rank: candidate.rank,
+            display_score: format_score(candidate.score),
+        })
+        .collect()
+}
+
+fn format_duration(seconds: f64) -> String {
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return "0s".to_string();
+    }
+
+    let rounded_seconds = seconds.round() as u64;
+    if rounded_seconds >= 60 {
+        let minutes = rounded_seconds / 60;
+        let remaining = rounded_seconds % 60;
+        return format!("{minutes}m {remaining:02}s");
+    }
+
+    format!("{rounded_seconds}s")
+}
+
+fn format_timestamp(seconds: f64) -> String {
+    let safe_seconds = seconds.max(0.0).floor() as u64;
+    let minutes = safe_seconds / 60;
+    let remaining = safe_seconds % 60;
+    format!("{minutes}:{remaining:02}")
+}
+
+fn format_score(score: f32) -> String {
+    format!("{score:.2}")
 }
 
 fn review_state_weight(state: &str) -> usize {
@@ -674,5 +733,39 @@ mod tests {
             .map(|preview| preview.id.as_str())
             .collect();
         assert_eq!(preview_ids, vec!["seg-1", "seg-2", "seg-3"]);
+    }
+
+    #[test]
+    fn produces_view_ready_display_values_for_groups_previews_and_candidates() {
+        let snapshot = build_speaker_review_snapshot(
+            vec![
+                segment(
+                    "seg-1",
+                    "anonymous-1",
+                    "Speaker 1",
+                    "suggested",
+                    "auto",
+                    "medium",
+                    61.2,
+                ),
+                segment(
+                    "seg-2",
+                    "anonymous-1",
+                    "Speaker 1",
+                    "suggested",
+                    "auto",
+                    "medium",
+                    70.0,
+                ),
+            ],
+            SpeakerReviewFilter::All,
+        );
+
+        let group = &snapshot.groups[0];
+        assert_eq!(group.display_start, "1:01");
+        assert_eq!(group.display_duration, "8s");
+        assert_eq!(group.preview_segments[0].display_start, "1:01");
+        assert_eq!(group.preview_segments[0].display_duration, "4s");
+        assert_eq!(group.candidates[0].display_score, "0.82");
     }
 }

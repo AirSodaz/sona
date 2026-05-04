@@ -1,9 +1,5 @@
 import React from 'react';
 import {
-  calculateCoverage,
-  formatDuration,
-  formatNumber,
-  formatPercent,
   type DashboardTranslation,
 } from './formatters';
 import { joinClassNames } from './classNames';
@@ -106,26 +102,28 @@ function CoverageMeter({
   label,
   numerator,
   denominator,
+  coverage,
+  coverageLabel,
   unitFormatter,
 }: {
   label: string;
   numerator: number;
   denominator: number;
+  coverage: number;
+  coverageLabel: string;
   unitFormatter: (value: number) => string;
 }): React.JSX.Element {
-  const coverage = calculateCoverage(numerator, denominator);
-
   return (
     <div className="settings-dashboard-coverage-block">
       <div className="settings-dashboard-subtitle">{label}</div>
-      <div className="settings-dashboard-coverage-value">{formatPercent(coverage)}</div>
+      <div className="settings-dashboard-coverage-value">{coverageLabel}</div>
       <div className="settings-dashboard-note">
         {unitFormatter(numerator)} / {unitFormatter(denominator)}
       </div>
       <CoverageBarChart
         label={label}
         value={coverage}
-        valueFormatter={formatPercent}
+        valueFormatter={() => coverageLabel}
       />
     </div>
   );
@@ -134,12 +132,20 @@ function CoverageMeter({
 function IdentifiedAnonymousDistribution({
   identifiedDuration,
   anonymousDuration,
+  identifiedDurationDisplay,
+  anonymousDurationDisplay,
   t,
 }: {
   identifiedDuration: number;
   anonymousDuration: number;
+  identifiedDurationDisplay: string;
+  anonymousDurationDisplay: string;
   t: DashboardTranslation;
 }): React.JSX.Element {
+  const formatSplitDuration = (value: number): string => (
+    value === identifiedDuration ? identifiedDurationDisplay : anonymousDurationDisplay
+  );
+
   return (
     <div className="settings-dashboard-distribution-panel">
       <div className="settings-dashboard-chart-header">
@@ -159,20 +165,20 @@ function IdentifiedAnonymousDistribution({
           anonymousLabel={t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}
           identifiedDuration={identifiedDuration}
           anonymousDuration={anonymousDuration}
-          valueFormatter={(value) => formatDuration(value, t)}
+          valueFormatter={formatSplitDuration}
         />
       </div>
       <div className="settings-dashboard-bar-list compact">
         <div className="settings-dashboard-bar-item">
           <div className="settings-dashboard-bar-label-row">
             <span>{t('settings.dashboard.identified_duration', { defaultValue: 'Identified duration' })}</span>
-            <span>{formatDuration(identifiedDuration, t)}</span>
+            <span>{identifiedDurationDisplay}</span>
           </div>
         </div>
         <div className="settings-dashboard-bar-item">
           <div className="settings-dashboard-bar-label-row">
             <span>{t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}</span>
-            <span>{formatDuration(anonymousDuration, t)}</span>
+            <span>{anonymousDurationDisplay}</span>
           </div>
         </div>
       </div>
@@ -182,14 +188,10 @@ function IdentifiedAnonymousDistribution({
 
 export function SpeakerOverviewCard({
   speakers,
-  segmentCoverage,
-  durationCoverage,
   t,
   statusMessage,
 }: {
   speakers: DashboardSpeakerStats | null;
-  segmentCoverage: number;
-  durationCoverage: number;
   t: DashboardTranslation;
   statusMessage?: string | null;
 }): React.JSX.Element {
@@ -223,8 +225,8 @@ export function SpeakerOverviewCard({
         <div className="settings-dashboard-note">
           {t('settings.dashboard.coverage_summary', {
             defaultValue: '{{segmentCoverage}} segment coverage · {{durationCoverage}} duration coverage',
-            segmentCoverage: formatPercent(segmentCoverage),
-            durationCoverage: formatPercent(durationCoverage),
+            segmentCoverage: speakers.segmentCoverageLabel,
+            durationCoverage: speakers.durationCoverageLabel,
           })}
         </div>
       </div>
@@ -233,18 +235,28 @@ export function SpeakerOverviewCard({
           label={t('settings.dashboard.segment_coverage', { defaultValue: 'Speaker-Tagged Segments' })}
           numerator={speakers.speakerTaggedSegmentCount}
           denominator={speakers.totalSegmentCount}
-          unitFormatter={(value) => formatNumber(value)}
+          coverage={speakers.segmentCoverageRatio}
+          coverageLabel={speakers.segmentCoverageLabel}
+          unitFormatter={(value) => value === speakers.speakerTaggedSegmentCount
+            ? speakers.speakerTaggedSegmentCountDisplay
+            : speakers.totalSegmentCountDisplay}
         />
         <CoverageMeter
           label={t('settings.dashboard.duration_coverage', { defaultValue: 'Speaker-Tagged Duration' })}
           numerator={speakers.speakerAttributedDuration}
           denominator={speakers.totalSegmentDuration}
-          unitFormatter={(value) => formatDuration(value, t)}
+          coverage={speakers.durationCoverageRatio}
+          coverageLabel={speakers.durationCoverageLabel}
+          unitFormatter={(value) => value === speakers.speakerAttributedDuration
+            ? speakers.speakerAttributedDurationDisplay
+            : speakers.totalSegmentDurationDisplay}
         />
       </div>
       <IdentifiedAnonymousDistribution
         identifiedDuration={speakers.identifiedDuration}
         anonymousDuration={speakers.anonymousDuration}
+        identifiedDurationDisplay={speakers.identifiedDurationDisplay}
+        anonymousDurationDisplay={speakers.anonymousDurationDisplay}
         t={t}
       />
     </div>
@@ -253,9 +265,11 @@ export function SpeakerOverviewCard({
 
 function RankedSpeakers({
   speakers,
+  maxValue,
   t,
 }: {
   speakers: DashboardSpeakerLeader[];
+  maxValue: number;
   t: DashboardTranslation;
 }): React.JSX.Element {
   if (speakers.length === 0) {
@@ -268,11 +282,9 @@ function RankedSpeakers({
     );
   }
 
-  const maxDuration = speakers.reduce((max, speaker) => Math.max(max, speaker.durationSeconds), 0);
-
   return (
     <div className="settings-dashboard-bar-list" data-testid="dashboard-recharts-ranking">
-      {speakers.slice(0, 5).map((speaker) => {
+      {speakers.map((speaker) => {
         return (
           <div key={speaker.speakerId} className="settings-dashboard-bar-item">
             <div className="settings-dashboard-bar-label-row">
@@ -281,18 +293,18 @@ function RankedSpeakers({
                 <div className="settings-dashboard-note">
                   {t('settings.dashboard.top_speakers_meta', {
                     defaultValue: '{{segments}} segments · {{items}} items',
-                    segments: speaker.segmentCount,
-                    items: speaker.itemCount,
+                    segments: speaker.segmentCountDisplay,
+                    items: speaker.itemCountDisplay,
                   })}
                 </div>
               </div>
-              <div className="settings-dashboard-bar-value">{formatDuration(speaker.durationSeconds, t)}</div>
+              <div className="settings-dashboard-bar-value">{speaker.durationDisplay}</div>
             </div>
             <MiniValueBarChart
               label={speaker.label}
               value={speaker.durationSeconds}
-              maxValue={maxDuration}
-              valueFormatter={(value) => formatDuration(value, t)}
+              maxValue={maxValue}
+              valueFormatter={() => speaker.durationDisplay}
             />
           </div>
         );
@@ -325,7 +337,11 @@ export function SpeakerRankingCard({
         </div>
       </div>
       {speakers ? (
-        <RankedSpeakers speakers={speakers.topIdentifiedSpeakers} t={t} />
+        <RankedSpeakers
+          speakers={speakers.topIdentifiedSpeakerRows}
+          maxValue={speakers.topIdentifiedSpeakerMaxValue}
+          t={t}
+        />
       ) : (
         <div className="settings-dashboard-placeholder-stack" aria-hidden="true">
           <div className="settings-dashboard-placeholder-line wide" />
@@ -340,10 +356,12 @@ export function SpeakerRankingCard({
 export function UsageBreakdown<TValue extends string>({
   title,
   breakdown,
+  maxValue,
   t,
 }: {
   title: string;
   breakdown: DashboardLlmUsageBreakdown<TValue>[];
+  maxValue: number;
   t: DashboardTranslation;
 }): React.JSX.Element {
   if (breakdown.length === 0) {
@@ -357,33 +375,30 @@ export function UsageBreakdown<TValue extends string>({
     );
   }
 
-  const maxValue = breakdown.reduce((max, item) => Math.max(max, item.stats.totalTokens, item.stats.callCount), 0);
-
   return (
     <div className="settings-dashboard-chart-card">
       <div className="settings-dashboard-subtitle">{title}</div>
       <div className="settings-dashboard-bar-list" data-testid="dashboard-recharts-breakdown">
-        {breakdown.slice(0, 6).map((item) => {
-          const value = Math.max(item.stats.totalTokens, item.stats.callCount);
+        {breakdown.map((item) => {
           return (
             <div key={item.key} className="settings-dashboard-bar-item">
               <div className="settings-dashboard-bar-label-row">
                 <div>
-                  <div className="settings-dashboard-bar-label">{item.key}</div>
+                  <div className="settings-dashboard-bar-label">{item.label}</div>
                   <div className="settings-dashboard-note">
                     {t('settings.dashboard.calls_and_tokens', {
                       defaultValue: '{{calls}} calls · {{tokens}} tokens',
-                      calls: formatNumber(item.stats.callCount),
-                      tokens: formatNumber(item.stats.totalTokens),
+                      calls: item.stats.callCountDisplay,
+                      tokens: item.stats.totalTokensDisplay,
                     })}
                   </div>
                 </div>
               </div>
               <MiniValueBarChart
-                label={item.key}
-                value={value}
+                label={item.label}
+                value={item.value}
                 maxValue={maxValue}
-                valueFormatter={formatNumber}
+                valueFormatter={() => item.valueDisplay}
               />
             </div>
           );
