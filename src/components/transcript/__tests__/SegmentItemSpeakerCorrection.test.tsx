@@ -1,3 +1,26 @@
+
+vi.mock('../../../services/tauri/speaker', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    applySpeakerProfileToGroup: vi.fn().mockImplementation(async (request) => {
+      const { segments, groupId, targetProfileId } = request;
+      const newSegments = segments.map(seg => {
+        if (seg.speaker && (seg.speaker.id === groupId || seg.speaker.id === 'anonymous-1')) {
+          return {
+            ...seg,
+            speaker: { id: targetProfileId, label: 'Bob', kind: 'identified' }
+          };
+        }
+        return seg;
+      });
+      return {
+        segments: newSegments,
+        enabledSpeakerProfileIds: ['speaker-1', 'speaker-2']
+      };
+    })
+  };
+});
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand';
