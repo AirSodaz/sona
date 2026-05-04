@@ -4,6 +4,7 @@ import {
   Virtuoso,
   VirtuosoGrid,
   type Components,
+  type GridComponents,
   type VirtuosoGridHandle,
   type VirtuosoHandle,
 } from 'react-virtuoso';
@@ -45,6 +46,7 @@ interface ProjectsVirtualContext {
 }
 
 const VIRTUAL_VIEWPORT_INCREASE = { top: 360, bottom: 720 };
+const VIRTUAL_SCROLL_CLASS_NAME = 'projects-main-scroll projects-main-scroll--virtual';
 
 const ProjectsVirtualList = React.forwardRef<
   HTMLDivElement,
@@ -63,6 +65,14 @@ const ProjectsVirtualList = React.forwardRef<
     </div>
   );
 });
+
+function ProjectsVirtualTopSpacer(): React.JSX.Element {
+  return <div className="projects-virtual-spacer projects-virtual-spacer--top" aria-hidden="true" />;
+}
+
+function ProjectsVirtualBottomSpacer(): React.JSX.Element {
+  return <div className="projects-virtual-spacer projects-virtual-spacer--bottom" aria-hidden="true" />;
+}
 
 function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
   if (context?.viewMode !== 'table') {
@@ -95,9 +105,24 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
   );
 }
 
+function ProjectsVirtualHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element {
+  return (
+    <>
+      <ProjectsVirtualTopSpacer />
+      <ProjectsTableHeader context={context} />
+    </>
+  );
+}
+
 const PROJECTS_LIST_COMPONENTS: Components<HistoryItemType, ProjectsVirtualContext> = {
-  Header: ProjectsTableHeader,
+  Footer: ProjectsVirtualBottomSpacer,
+  Header: ProjectsVirtualHeader,
   List: ProjectsVirtualList,
+};
+
+const PROJECTS_GRID_COMPONENTS: GridComponents = {
+  Footer: ProjectsVirtualBottomSpacer,
+  Header: ProjectsVirtualTopSpacer,
 };
 
 export function ProjectsResults({
@@ -251,7 +276,8 @@ export function ProjectsResults({
 
       {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode === 'grid' && (
         <VirtuosoGrid
-          className="projects-main-scroll"
+          className={VIRTUAL_SCROLL_CLASS_NAME}
+          components={PROJECTS_GRID_COMPONENTS}
           computeItemKey={(_index, item) => item.id}
           data={filteredAndSortedItems}
           increaseViewportBy={VIRTUAL_VIEWPORT_INCREASE}
@@ -265,7 +291,7 @@ export function ProjectsResults({
 
       {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode !== 'grid' && (
         <Virtuoso
-          className="projects-main-scroll"
+          className={VIRTUAL_SCROLL_CLASS_NAME}
           components={PROJECTS_LIST_COMPONENTS}
           computeItemKey={(_index, item) => item.id}
           context={listContext}

@@ -173,15 +173,18 @@ vi.mock('react-virtuoso', async () => {
     }));
 
     const Header = components?.Header;
+    const Footer = components?.Footer;
     return (
       <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-list">
         {Header && <Header context={context} />}
         {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item, context))}
+        {Footer && <Footer context={context} />}
       </div>
     );
   });
   const VirtuosoGrid = React.forwardRef(({
     className,
+    components,
     data = [],
     itemContent,
     onScroll,
@@ -192,9 +195,13 @@ vi.mock('react-virtuoso', async () => {
       scrollBy: vi.fn(),
     }));
 
+    const Header = components?.Header;
+    const Footer = components?.Footer;
     return (
       <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-grid">
+        {Header && <Header />}
         {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+        {Footer && <Footer />}
       </div>
     );
   });
@@ -445,6 +452,20 @@ describe('ProjectsView', () => {
     expect(screen.getByTestId('history-item-hist-0')).toBeDefined();
     expect(screen.queryByTestId('history-item-hist-149')).toBeNull();
     expect(screen.getAllByTestId(/history-item-/)).toHaveLength(20);
+  });
+
+  it('uses virtual scroll spacing instead of relying on scroll-container padding for file lists', async () => {
+    useHistoryStore.setState({
+      items: createHistoryItems(3, null),
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    const list = screen.getByTestId('projects-virtuoso-list');
+    expect(list.classList.contains('projects-main-scroll--virtual')).toBe(true);
+    expect(list.querySelector('.projects-virtual-spacer--top')).not.toBeNull();
+    expect(list.querySelector('.projects-virtual-spacer--bottom')).not.toBeNull();
   });
 
   it('scrolls the virtualized workspace list to keyboard search results outside the mounted window', async () => {
