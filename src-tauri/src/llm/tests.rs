@@ -1,3 +1,7 @@
+use super::jobs::{
+    compute_summary_source_fingerprint, merge_polished_items_into_segments,
+    merge_translated_items_into_segments,
+};
 use super::*;
 use futures_util::future::BoxFuture;
 use reqwest::{header::RETRY_AFTER, StatusCode};

@@ -24,7 +24,6 @@ const LLM_TASK_TEXT_EVENT: &str = "llm-task-text";
 const LLM_TRANSCRIPT_JOB_UPDATE_EVENT: &str = "llm-transcript-job-update";
 const LLM_USAGE_RECORDED_EVENT: &str = "llm-usage-recorded";
 
-pub(crate) use jobs::*;
 pub(crate) use providers::*;
 pub(crate) use streaming::*;
 pub(crate) use tasks::*;
