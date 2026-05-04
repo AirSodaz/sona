@@ -15,6 +15,27 @@ vi.mock('../../../services/projectService', () => ({
   },
 }));
 
+
+vi.mock('../../../services/tauri/speaker', () => ({
+  applySpeakerProfileToGroup: vi.fn().mockImplementation(async (request) => {
+    const { segments, targetProfileId, groupId } = request;
+    const updated = segments.map((s) => {
+        if (s.speaker?.id === groupId || (s.speaker?.kind === 'anonymous' && groupId === `anonymous-${s.speaker.label?.replace('Speaker ', '')}`)) {
+            return {
+                ...s,
+                speaker: {
+                    id: targetProfileId,
+                    label: targetProfileId === 'speaker-2' ? 'Bob' : 'Alice',
+                    kind: 'identified',
+                }
+            };
+        }
+        return s;
+    });
+    return { segments: updated, enabledSpeakerProfileIds: ['speaker-1', 'speaker-2'] };
+  }),
+}));
+
 vi.mock('../../../services/historyService', () => ({
   historyService: {
     updateProjectAssignments: vi.fn(),

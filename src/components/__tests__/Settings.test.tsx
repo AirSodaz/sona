@@ -79,7 +79,13 @@ vi.mock('../../services/modelService', () => ({
         getModelPath: vi.fn().mockImplementation((id) => Promise.resolve(`/path/to/${id}`)),
         getModelCatalogSnapshot: vi.fn(),
         deleteModel: vi.fn(),
-        getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false })
+        getModelRules: vi.fn().mockReturnValue({ requiresVad: true, requiresPunctuation: false }),
+        resolveModelCatalogSelectedIds: vi.fn().mockResolvedValue({
+            streamingModelId: null,
+            offlineModelId: null,
+            speakerSegmentationModelId: null,
+            speakerEmbeddingModelId: null,
+        })
     }
 }));
 
