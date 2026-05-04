@@ -73,6 +73,7 @@ vi.mock('../../services/modelService', () => ({
         { id: 'itn-zh-number', name: 'Chinese Number ITN', description: 'Test ITN', filename: 'itn_zh_number.fst', type: 'itn', engine: 'sherpa-onnx' }
     ],
     modelService: {
+        resolveModelCatalogSelectedIds: vi.fn().mockResolvedValue({}),
         isModelInstalled: vi.fn().mockResolvedValue(false), // Default: Not installed
         checkHardware: vi.fn().mockResolvedValue({ compatible: true }),
         downloadModel: vi.fn(),

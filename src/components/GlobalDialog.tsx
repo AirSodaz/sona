@@ -246,7 +246,9 @@ export function GlobalDialog(): React.JSX.Element | null {
                                         className="btn btn-icon btn-sm"
                                         onClick={handleAiClick}
                                         disabled={isAiLoading}
-                                        title={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                                        aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                                        data-tooltip={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                                        data-tooltip-pos="top"
                                         style={{
                                             position: 'absolute',
                                             right: '4px',

@@ -425,7 +425,9 @@ export function NotificationCenter({
                         type="button"
                         className="btn btn-icon notification-center-item-close"
                         onClick={dismissUpdateNotification}
-                        aria-label={t('common.close')}
+                        aria-label={t('notification.dismiss_update', { defaultValue: 'Dismiss update notification' })}
+                        data-tooltip={t('notification.dismiss_update', { defaultValue: 'Dismiss update notification' })}
+                        data-tooltip-pos="left"
                         disabled={notification.isBusy}
                     >
                         <CloseIcon />
@@ -507,7 +509,9 @@ export function NotificationCenter({
                         type="button"
                         className="btn btn-icon notification-center-item-close"
                         onClick={() => dismissAutomationNotification(notification.notificationId)}
-                        aria-label={t('common.close')}
+                        aria-label={t('notification.dismiss', { defaultValue: 'Dismiss notification' })}
+                        data-tooltip={t('notification.dismiss', { defaultValue: 'Dismiss notification' })}
+                        data-tooltip-pos="left"
                     >
                         <CloseIcon />
                     </button>

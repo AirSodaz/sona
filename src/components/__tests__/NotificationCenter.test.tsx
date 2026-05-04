@@ -423,7 +423,7 @@ describe('NotificationCenter', () => {
     expect(view.container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: /Close|Dismiss/i }));
 
     view.rerender(
       <NotificationCenter
@@ -451,7 +451,7 @@ describe('NotificationCenter', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: /Close|Dismiss/i }));
 
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);
     expect(useAppUpdaterStore.getState().dismissedVersion).toBe('1.2.3');
