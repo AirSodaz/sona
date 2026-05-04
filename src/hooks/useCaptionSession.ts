@@ -1,336 +1,479 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { captionTranscriptionService, TranscriptionService } from '../services/transcriptionService';
-import { captionWindowService } from '../services/captionWindowService';
-import type { AppConfig } from '../types/config';
-import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { remove } from '@tauri-apps/plugin-fs';
-import { logger } from '../utils/logger';
-import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { captionWindowService } from '../services/captionWindowService';
 import {
-    startSystemAudioCapture,
-    stopSystemAudioCapture,
+  captionTranscriptionService,
+  type TranscriptionService,
+} from '../services/transcriptionService';
+import {
+  startSystemAudioCapture,
+  stopSystemAudioCapture,
 } from '../services/tauri/audio';
 import { TauriEvent } from '../services/tauri/events';
+import type { AppConfig } from '../types/config';
+import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
+import { logger } from '../utils/logger';
+import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 
-export function useCaptionSession(config: AppConfig, isCaptionMode: boolean) {
-    const [isInitializing, setIsInitializing] = useState(false);
+interface CaptionSessionState {
+  isInitializing: boolean;
+}
 
-    // Refs to hold instances across renders
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const processorRef = useRef<AudioWorkletNode | null>(null);
-    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const activeServiceRef = useRef<TranscriptionService>(captionTranscriptionService);
+type CaptionWindowOpenOptions = Parameters<typeof captionWindowService.open>[0];
+type CaptionWindowStyleOptions = Parameters<typeof captionWindowService.updateStyle>[0];
 
-    // Native capture refs
-    const usingNativeCaptureRef = useRef(false);
-    const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
+function getCaptionDeviceName(config: AppConfig): string | null {
+  if (config.systemAudioDeviceId && config.systemAudioDeviceId !== 'default') {
+    return config.systemAudioDeviceId;
+  }
 
-    // Track active state to handle race conditions
-    const activeRef = useRef(isCaptionMode);
+  return null;
+}
 
-    useEffect(() => {
-        activeRef.current = isCaptionMode;
-    }, [isCaptionMode]);
+function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions {
+  return {
+    alwaysOnTop: config.alwaysOnTop ?? true,
+    lockWindow: config.lockWindow ?? false,
+    width: config.captionWindowWidth,
+    fontSize: config.captionFontSize,
+    color: config.captionFontColor,
+    backgroundOpacity: config.captionBackgroundOpacity,
+  };
+}
 
-    // Configuration is now updated globally via useTranscriptionServiceSync,
-    // so we don't need updateServiceConfig here anymore.
+function buildCaptionWindowStyle({
+  width,
+  fontSize,
+  color,
+  backgroundOpacity,
+}: {
+  width?: number;
+  fontSize?: number;
+  color?: string;
+  backgroundOpacity?: number;
+}): CaptionWindowStyleOptions {
+  return {
+    width,
+    fontSize,
+    color,
+    backgroundOpacity,
+  };
+}
 
-    const stopCaptionSession = useCallback(async () => {
-        logger.info('[CaptionSession] Stopping session...');
+function buildDisplayMediaOptions(): DisplayMediaStreamOptions {
+  return {
+    video: {
+      width: 1,
+      height: 1,
+      frameRate: 1,
+    },
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+  };
+}
 
-        // Close Window
-        try {
-            await captionWindowService.close();
-        } catch (e) { logger.error('Error:', e); }
+function isCaptionSessionRunning(
+  stream: MediaStream | null,
+  audioContext: AudioContext | null,
+  usingNativeCapture: boolean,
+): boolean {
+  return Boolean(
+    (stream && audioContext?.state === 'running')
+    || usingNativeCapture,
+  );
+}
 
-        // Stop Native Capture
-        if (usingNativeCaptureRef.current) {
-            try {
-                const savedWavPath = await stopSystemAudioCapture('caption');
-                if (savedWavPath) {
-                    logger.info('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
-                    try {
-                        await remove(savedWavPath);
-                    } catch (err) {
-                        logger.error('[CaptionSession] Failed to delete native capture file:', err);
-                    }
-                }
-            } catch (e) { logger.error('Error:', e); }
-            usingNativeCaptureRef.current = false;
-        }
+function stopStreamTracks(stream: MediaStream): void {
+  stream.getTracks().forEach((track) => track.stop());
+}
 
-        if (systemAudioUnlistenRef.current) {
-            systemAudioUnlistenRef.current();
-            systemAudioUnlistenRef.current = null;
-        }
+function clearNativePeakListener(unlisten: UnlistenFn | null): void {
+  if (unlisten) {
+    unlisten();
+  }
+}
 
-        // Stop Audio Context (Web API fallback)
-        if (audioContextRef.current) {
-            try {
-                await audioContextRef.current.close();
-            } catch (e) { logger.error('Error:', e); }
-            audioContextRef.current = null;
-        }
+async function closeCaptionWindow(): Promise<void> {
+  try {
+    await captionWindowService.close();
+  } catch (error) {
+    logger.error('Error:', error);
+  }
+}
 
-        // Stop Stream (Web API fallback)
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(t => t.stop());
-            streamRef.current = null;
-        }
+async function deleteNativeCaptureFile(savedWavPath: string): Promise<void> {
+  logger.info('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
 
-        // Stop Service
-        await activeServiceRef.current.stop();
-        activeServiceRef.current = captionTranscriptionService;
+  try {
+    await remove(savedWavPath);
+  } catch (error) {
+    logger.error('[CaptionSession] Failed to delete native capture file:', error);
+  }
+}
 
-        processorRef.current = null;
-        sourceRef.current = null;
-        setIsInitializing(false);
-    }, []);
+async function stopNativeCaptureAndDiscardFile(): Promise<void> {
+  try {
+    const savedWavPath = await stopSystemAudioCapture('caption');
+    if (savedWavPath) {
+      await deleteNativeCaptureFile(savedWavPath);
+    }
+  } catch (error) {
+    logger.error('Error:', error);
+  }
+}
 
-    const startCaptionSession = useCallback(async () => {
-        if (!config.streamingModelPath) {
-            logger.warn('Cannot start caption: streaming model path is not set.');
-            return;
-        }
+async function closeAudioContext(audioContext: AudioContext | null): Promise<void> {
+  if (!audioContext) {
+    return;
+  }
 
-        if (
-            (streamRef.current && audioContextRef.current && audioContextRef.current.state === 'running') ||
-            (usingNativeCaptureRef.current)
-        ) {
-            // Already running
-            return;
-        }
+  try {
+    await audioContext.close();
+  } catch (error) {
+    logger.error('Error:', error);
+  }
+}
 
-        try {
-            setIsInitializing(true);
-            logger.info('[CaptionSession] Starting caption session...');
+async function tryStartNativeCaptionCapture(config: AppConfig): Promise<{
+  started: boolean;
+  unlisten: UnlistenFn | null;
+}> {
+  try {
+    logger.info('[CaptionSession] Attempting native system audio capture...');
+    await startSystemAudioCapture({
+      deviceName: getCaptionDeviceName(config),
+      instanceId: 'caption',
+    });
+    const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
+      // The Rust backend feeds the recognizer directly for native caption capture.
+    });
 
-            if (!activeRef.current) return;
-
-            const captionService = captionTranscriptionService;
-            activeServiceRef.current = captionService;
-
-            // 1. Get Audio Source (Try Native -> Fallback to Web API)
-            if (!streamRef.current && !usingNativeCaptureRef.current) {
-                let nativeSuccess = false;
-                try {
-                    logger.info('[CaptionSession] Attempting native system audio capture...');
-                    const deviceName = config.systemAudioDeviceId && config.systemAudioDeviceId !== 'default'
-                        ? config.systemAudioDeviceId
-                        : null;
-                    await startSystemAudioCapture({
-                        deviceName,
-                        instanceId: 'caption',
-                    });
-                    const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
-                        // The Rust backend now feeds itself directly.
-                    });
-                    systemAudioUnlistenRef.current = unlisten;
-                    usingNativeCaptureRef.current = true;
-                    nativeSuccess = true;
-                    logger.info('[CaptionSession] Native capture started.');
-                } catch (e) {
-                    logger.warn('[CaptionSession] Native capture failed, falling back to Web API:', e);
-                }
-
-                if (!nativeSuccess) {
-                    // Fallback to Web API
-                    let stream: MediaStream;
-                    try {
-                        stream = await navigator.mediaDevices.getDisplayMedia({
-                            video: {
-                                width: 1,
-                                height: 1,
-                                frameRate: 1,
-                            },
-                            audio: {
-                                echoCancellation: false,
-                                noiseSuppression: false,
-                                autoGainControl: false,
-                            }
-                        });
-
-                        // Check active again after async
-                        if (!activeRef.current) {
-                            stream.getTracks().forEach(t => t.stop());
-                            return;
-                        }
-
-                        const audioTracks = stream.getAudioTracks();
-                        if (audioTracks.length === 0) {
-                            throw new Error('No audio track selected in screen share.');
-                        }
-
-                        stream.getVideoTracks().forEach(t => t.stop());
-                        stream = new MediaStream([audioTracks[0]]);
-                        streamRef.current = stream;
-
-                        stream.getAudioTracks()[0].onended = () => {
-                            logger.info('[CaptionSession] Stream ended by user.');
-                            stopCaptionSession();
-                        };
-                    } catch (err) {
-                        if (!activeRef.current) return;
-                        logger.error('[CaptionSession] Failed to get display media:', err);
-                        throw err;
-                    }
-                }
-            }
-
-            if (!activeRef.current) return;
-
-            // 2. Initialize Audio Context (ONLY for Web API fallback)
-            if (!usingNativeCaptureRef.current) {
-                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                    const audioContext = new AudioContext({ sampleRate: 16000 });
-                    audioContextRef.current = audioContext;
-                    try {
-                        await audioContext.audioWorklet.addModule('/audio-processor.js');
-                    } catch (e) {
-                        if (!activeRef.current) {
-                            await audioContext.close();
-                            audioContextRef.current = null;
-                            return;
-                        }
-                        throw e;
-                    }
-                } else if (audioContextRef.current.state === 'suspended') {
-                    await audioContextRef.current.resume();
-                }
-
-                if (!activeRef.current) {
-                    if (audioContextRef.current) {
-                        await audioContextRef.current.close();
-                        audioContextRef.current = null;
-                    }
-                    return;
-                }
-            }
-
-            // 3. Open Window early so the floating subtitle surface is visible
-            // even if recognizer startup or the first VAD result is delayed.
-            logger.info('[CaptionSession] Opening caption window...');
-            await captionWindowService.open({
-                alwaysOnTop: config.alwaysOnTop ?? true,
-                lockWindow: config.lockWindow ?? false,
-                width: config.captionWindowWidth,
-                fontSize: config.captionFontSize,
-                color: config.captionFontColor,
-                backgroundOpacity: config.captionBackgroundOpacity
-            });
-
-            if (!activeRef.current) return;
-
-            // 4. Start Service (Configuration is already handled globally)
-            logger.info('[CaptionSession] Starting caption recognizer...');
-            await captionService.start(
-                (update: TranscriptUpdate | TranscriptSegment) => {
-                    const normalizedUpdate = normalizeTranscriptUpdate(update);
-                    captionWindowService.sendSegments(normalizedUpdate.upsertSegments).catch(logger.error);
-                },
-                (error: string) => {
-                    logger.error('[CaptionSession] Service error:', error);
-                }
-            );
-            logger.info('[CaptionSession] Caption recognizer started.');
-
-            if (!activeRef.current) {
-                await captionService.stop();
-                return;
-            }
-
-            // 5. Connect Audio Pipeline (ONLY for Web API fallback)
-            if (!usingNativeCaptureRef.current && !processorRef.current && audioContextRef.current && streamRef.current) {
-                const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
-                sourceRef.current = source;
-
-                const processor = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-                processorRef.current = processor;
-
-                processor.port.onmessage = (e) => {
-                    captionService.sendAudioInt16(e.data).catch(logger.error);
-                };
-
-                source.connect(processor);
-                processor.connect(audioContextRef.current.destination);
-            }
-
-            if (!activeRef.current) return;
-
-        } catch (error) {
-            logger.error('[CaptionSession] Error starting session:', error);
-            stopCaptionSession();
-        } finally {
-            setIsInitializing(false);
-        }
-    }, [config, stopCaptionSession]);
-
-
-    // Effect: Manage Session based on Mode
-    useEffect(() => {
-        queueMicrotask(() => {
-            if (isCaptionMode) {
-                void startCaptionSession();
-                return;
-            }
-
-            void stopCaptionSession();
-        });
-    }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
-
-
-    // Effect: Handle Service Config Changes while Active (Restart Service)
-    useEffect(() => {
-        const update = async () => {
-            // Configuration updates are handled globally in useTranscriptionServiceSync.
-            // When config changes, it updates the global transcriptionService.
-            // We just need to restart the stream if we are in caption mode.
-            if (isCaptionMode && !isInitializing) {
-                const captionService = captionTranscriptionService;
-                activeServiceRef.current = captionService;
-                await captionService.start(
-                    (update: TranscriptUpdate | TranscriptSegment) => {
-                        const normalizedUpdate = normalizeTranscriptUpdate(update);
-                        return captionWindowService.sendSegments(normalizedUpdate.upsertSegments).catch(logger.error);
-                    },
-                    (error: string) => logger.error('[CaptionSession] Service error:', error)
-                );
-            }
-        };
-        update();
-    }, [
-        config.streamingModelPath,
-        config.language,
-        config.enableITN,
-        config.punctuationModelPath,
-        config.vadModelPath,
-        config.vadBufferSize,
-        isCaptionMode,
-        isInitializing,
-    ]);
-
-    // Effect: Handle Style Changes (No Restart)
-    useEffect(() => {
-        if (isCaptionMode && !isInitializing) {
-            captionWindowService.updateStyle({
-                width: config.captionWindowWidth,
-                fontSize: config.captionFontSize,
-                color: config.captionFontColor,
-                backgroundOpacity: config.captionBackgroundOpacity
-            }).catch(logger.error);
-        }
-    }, [config.captionWindowWidth, config.captionFontSize, config.captionFontColor, config.captionBackgroundOpacity, isCaptionMode, isInitializing]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            void stopCaptionSession();
-        };
-    }, [stopCaptionSession]);
-
+    logger.info('[CaptionSession] Native capture started.');
     return {
-        isInitializing
+      started: true,
+      unlisten,
     };
+  } catch (error) {
+    logger.warn('[CaptionSession] Native capture failed, falling back to Web API:', error);
+    return {
+      started: false,
+      unlisten: null,
+    };
+  }
+}
+
+async function requestDisplayMediaFallback(
+  isActive: () => boolean,
+  onStreamEnded: () => void,
+): Promise<MediaStream | null> {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia(buildDisplayMediaOptions());
+
+    if (!isActive()) {
+      stopStreamTracks(stream);
+      return null;
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      throw new Error('No audio track selected in screen share.');
+    }
+
+    stream.getVideoTracks().forEach((track) => track.stop());
+    const audioOnlyStream = new MediaStream([audioTracks[0]]);
+    audioOnlyStream.getAudioTracks()[0].onended = onStreamEnded;
+
+    return audioOnlyStream;
+  } catch (error) {
+    if (!isActive()) {
+      return null;
+    }
+
+    logger.error('[CaptionSession] Failed to get display media:', error);
+    throw error;
+  }
+}
+
+async function resolveCaptionAudioContext(
+  existingAudioContext: AudioContext | null,
+  isActive: () => boolean,
+): Promise<AudioContext | null> {
+  let audioContext = existingAudioContext;
+
+  if (!audioContext || audioContext.state === 'closed') {
+    audioContext = new AudioContext({ sampleRate: 16000 });
+
+    try {
+      await audioContext.audioWorklet.addModule('/audio-processor.js');
+    } catch (error) {
+      if (!isActive()) {
+        await audioContext.close();
+        return null;
+      }
+
+      throw error;
+    }
+  } else if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
+  if (!isActive()) {
+    await audioContext.close();
+    return null;
+  }
+
+  return audioContext;
+}
+
+function sendCaptionSegments(update: TranscriptUpdate | TranscriptSegment): void {
+  const normalizedUpdate = normalizeTranscriptUpdate(update);
+  void captionWindowService.sendSegments(normalizedUpdate.upsertSegments).catch(logger.error);
+}
+
+function logCaptionServiceError(error: string): void {
+  logger.error('[CaptionSession] Service error:', error);
+}
+
+async function startCaptionRecognizer(captionService: TranscriptionService): Promise<void> {
+  logger.info('[CaptionSession] Starting caption recognizer...');
+  await captionService.start(sendCaptionSegments, logCaptionServiceError);
+  logger.info('[CaptionSession] Caption recognizer started.');
+}
+
+function connectWebAudioPipeline(
+  audioContext: AudioContext,
+  stream: MediaStream,
+  captionService: TranscriptionService,
+): {
+  processor: AudioWorkletNode;
+  source: MediaStreamAudioSourceNode;
+} {
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = new AudioWorkletNode(audioContext, 'audio-processor');
+
+  processor.port.onmessage = (event) => {
+    void captionService.sendAudioInt16(event.data).catch(logger.error);
+  };
+
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  return {
+    processor,
+    source,
+  };
+}
+
+export function useCaptionSession(
+  config: AppConfig,
+  isCaptionMode: boolean,
+): CaptionSessionState {
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const activeServiceRef = useRef<TranscriptionService>(captionTranscriptionService);
+  const usingNativeCaptureRef = useRef(false);
+  const systemAudioUnlistenRef = useRef<UnlistenFn | null>(null);
+  const activeRef = useRef(isCaptionMode);
+
+  useEffect(() => {
+    activeRef.current = isCaptionMode;
+  }, [isCaptionMode]);
+
+  const stopCaptionSession = useCallback(async function stopCaptionSession(): Promise<void> {
+    logger.info('[CaptionSession] Stopping session...');
+
+    await closeCaptionWindow();
+
+    if (usingNativeCaptureRef.current) {
+      await stopNativeCaptureAndDiscardFile();
+      usingNativeCaptureRef.current = false;
+    }
+
+    clearNativePeakListener(systemAudioUnlistenRef.current);
+    systemAudioUnlistenRef.current = null;
+
+    await closeAudioContext(audioContextRef.current);
+    audioContextRef.current = null;
+
+    if (streamRef.current) {
+      stopStreamTracks(streamRef.current);
+      streamRef.current = null;
+    }
+
+    await activeServiceRef.current.stop();
+    activeServiceRef.current = captionTranscriptionService;
+
+    processorRef.current = null;
+    sourceRef.current = null;
+    setIsInitializing(false);
+  }, []);
+
+  const startCaptionSession = useCallback(async function startCaptionSession(): Promise<void> {
+    if (!config.streamingModelPath) {
+      logger.warn('Cannot start caption: streaming model path is not set.');
+      return;
+    }
+
+    if (isCaptionSessionRunning(
+      streamRef.current,
+      audioContextRef.current,
+      usingNativeCaptureRef.current,
+    )) {
+      return;
+    }
+
+    try {
+      setIsInitializing(true);
+      logger.info('[CaptionSession] Starting caption session...');
+
+      if (!activeRef.current) {
+        return;
+      }
+
+      const captionService = captionTranscriptionService;
+      activeServiceRef.current = captionService;
+
+      if (!streamRef.current && !usingNativeCaptureRef.current) {
+        const nativeCapture = await tryStartNativeCaptionCapture(config);
+        if (nativeCapture.started) {
+          systemAudioUnlistenRef.current = nativeCapture.unlisten;
+          usingNativeCaptureRef.current = true;
+        } else {
+          const stream = await requestDisplayMediaFallback(
+            () => activeRef.current,
+            () => {
+              logger.info('[CaptionSession] Stream ended by user.');
+              void stopCaptionSession();
+            },
+          );
+          streamRef.current = stream;
+        }
+      }
+
+      if (!activeRef.current) {
+        return;
+      }
+
+      if (!usingNativeCaptureRef.current) {
+        audioContextRef.current = await resolveCaptionAudioContext(
+          audioContextRef.current,
+          () => activeRef.current,
+        );
+
+        if (!activeRef.current) {
+          return;
+        }
+      }
+
+      logger.info('[CaptionSession] Opening caption window...');
+      await captionWindowService.open(buildCaptionWindowOptions(config));
+
+      if (!activeRef.current) {
+        return;
+      }
+
+      await startCaptionRecognizer(captionService);
+
+      if (!activeRef.current) {
+        await captionService.stop();
+        return;
+      }
+
+      if (
+        !usingNativeCaptureRef.current
+        && !processorRef.current
+        && audioContextRef.current
+        && streamRef.current
+      ) {
+        const pipeline = connectWebAudioPipeline(
+          audioContextRef.current,
+          streamRef.current,
+          captionService,
+        );
+        sourceRef.current = pipeline.source;
+        processorRef.current = pipeline.processor;
+      }
+
+      if (!activeRef.current) {
+        return;
+      }
+    } catch (error) {
+      logger.error('[CaptionSession] Error starting session:', error);
+      void stopCaptionSession();
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [config, stopCaptionSession]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (isCaptionMode) {
+        void startCaptionSession();
+        return;
+      }
+
+      void stopCaptionSession();
+    });
+  }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
+
+  useEffect(() => {
+    async function restartCaptionRecognizer(): Promise<void> {
+      if (!isCaptionMode || isInitializing) {
+        return;
+      }
+
+      const captionService = captionTranscriptionService;
+      activeServiceRef.current = captionService;
+      await captionService.start(sendCaptionSegments, logCaptionServiceError);
+    }
+
+    void restartCaptionRecognizer();
+  }, [
+    config.streamingModelPath,
+    config.language,
+    config.enableITN,
+    config.punctuationModelPath,
+    config.vadModelPath,
+    config.vadBufferSize,
+    isCaptionMode,
+    isInitializing,
+  ]);
+
+  useEffect(() => {
+    if (!isCaptionMode || isInitializing) {
+      return;
+    }
+
+    void captionWindowService.updateStyle(buildCaptionWindowStyle({
+      width: config.captionWindowWidth,
+      fontSize: config.captionFontSize,
+      color: config.captionFontColor,
+      backgroundOpacity: config.captionBackgroundOpacity,
+    })).catch(logger.error);
+  }, [
+    config.captionWindowWidth,
+    config.captionFontSize,
+    config.captionFontColor,
+    config.captionBackgroundOpacity,
+    isCaptionMode,
+    isInitializing,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      void stopCaptionSession();
+    };
+  }, [stopCaptionSession]);
+
+  return {
+    isInitializing,
+  };
 }

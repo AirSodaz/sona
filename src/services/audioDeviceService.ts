@@ -1,9 +1,9 @@
 import { logger } from '../utils/logger';
-import { getMicrophoneDevices, getSystemAudioDevices } from './tauri/audio';
-
-interface AudioDevice {
-  name: string;
-}
+import {
+  getMicrophoneDevices,
+  getSystemAudioDevices,
+  type AudioDevice,
+} from './tauri/audio';
 
 export interface DeviceOption {
   label: string;
@@ -19,33 +19,82 @@ export interface DeviceProbeResult {
   errorMessage?: string;
 }
 
+const DEFAULT_DEVICE_VALUE = 'default';
+const MICROPHONE_ENUMERATION_UNAVAILABLE_MESSAGE = 'Browser device enumeration is unavailable.';
+const NO_MICROPHONE_DEVICES_MESSAGE = 'No microphone devices were returned.';
+const NO_SYSTEM_AUDIO_DEVICES_MESSAGE = 'No system audio devices were returned.';
+
+function createDefaultDeviceOption(defaultLabel: string): DeviceOption {
+  return {
+    label: defaultLabel,
+    value: DEFAULT_DEVICE_VALUE,
+  };
+}
+
+function createFallbackProbeResult(
+  defaultLabel: string,
+  errorMessage: string,
+): DeviceProbeResult {
+  return {
+    options: [createDefaultDeviceOption(defaultLabel)],
+    available: false,
+    source: 'fallback',
+    errorMessage,
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function dedupeOptions(options: DeviceOption[]): DeviceOption[] {
   return options.filter((option, index, currentOptions) => (
     index === currentOptions.findIndex((candidate) => candidate.value === option.value)
   ));
 }
 
-function toBrowserDeviceOptions(
-  devices: MediaDeviceInfo[],
+function mapDeviceOptions<TDevice>(
   defaultLabel: string,
+  devices: TDevice[],
+  toOption: (device: TDevice) => DeviceOption,
 ): DeviceOption[] {
   return dedupeOptions([
-    { label: defaultLabel, value: 'default' },
-    ...devices.map((device) => ({
-      label: device.label || `Microphone ${device.deviceId.slice(0, 5)}...`,
-      value: device.deviceId,
-    })),
+    createDefaultDeviceOption(defaultLabel),
+    ...devices.map(toOption),
   ]);
 }
 
+function toBrowserDeviceOption(device: MediaDeviceInfo): DeviceOption {
+  return {
+    label: device.label || `Microphone ${device.deviceId.slice(0, 5)}...`,
+    value: device.deviceId,
+  };
+}
+
+function toNativeDeviceOption(device: AudioDevice): DeviceOption {
+  return {
+    label: device.name,
+    value: device.name,
+  };
+}
+
+function getAudioInputDevices(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  return devices.filter((device) => device.kind === 'audioinput');
+}
+
+function hasVisibleDeviceLabels(devices: MediaDeviceInfo[]): boolean {
+  return devices.some((device) => device.label);
+}
+
+function toBrowserDeviceOptions(
+  audioInputDevices: MediaDeviceInfo[],
+  defaultLabel: string,
+): DeviceOption[] {
+  return mapDeviceOptions(defaultLabel, audioInputDevices, toBrowserDeviceOption);
+}
+
 function toNativeDeviceOptions(devices: AudioDevice[], defaultLabel: string): DeviceOption[] {
-  return dedupeOptions([
-    { label: defaultLabel, value: 'default' },
-    ...devices.map((device) => ({
-      label: device.name,
-      value: device.name,
-    })),
-  ]);
+  return mapDeviceOptions(defaultLabel, devices, toNativeDeviceOption);
 }
 
 export async function getMicrophonePermissionState(): Promise<MicrophonePermissionState> {
@@ -90,7 +139,7 @@ export async function requestMicrophonePermission(): Promise<boolean> {
 export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
   try {
     const nativeDevices = await getMicrophoneDevices();
-    if (nativeDevices && nativeDevices.length > 0) {
+    if (nativeDevices.length > 0) {
       return {
         options: toNativeDeviceOptions(nativeDevices, defaultLabel),
         available: true,
@@ -102,31 +151,21 @@ export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promis
   }
 
   if (!navigator.mediaDevices?.enumerateDevices) {
-    return {
-      options: [{ label: defaultLabel, value: 'default' }],
-      available: false,
-      source: 'fallback',
-      errorMessage: 'Browser device enumeration is unavailable.',
-    };
+    return createFallbackProbeResult(defaultLabel, MICROPHONE_ENUMERATION_UNAVAILABLE_MESSAGE);
   }
 
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const audioInputs = devices.filter((device) => device.kind === 'audioinput');
+    const audioInputs = getAudioInputDevices(devices);
     return {
       options: toBrowserDeviceOptions(audioInputs, defaultLabel),
       available: audioInputs.length > 0,
       source: 'browser',
-      errorMessage: audioInputs.length > 0 ? undefined : 'No microphone devices were returned.',
+      errorMessage: audioInputs.length > 0 ? undefined : NO_MICROPHONE_DEVICES_MESSAGE,
     };
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
-    return {
-      options: [{ label: defaultLabel, value: 'default' }],
-      available: false,
-      source: 'fallback',
-      errorMessage: error instanceof Error ? error.message : String(error),
-    };
+    return createFallbackProbeResult(defaultLabel, getErrorMessage(error));
   }
 }
 
@@ -140,23 +179,23 @@ export async function listMicrophoneDeviceOptions(defaultLabel: string): Promise
   }
 
   if (!navigator.mediaDevices?.enumerateDevices) {
-    return [{ label: defaultLabel, value: 'default' }];
+    return [createDefaultDeviceOption(defaultLabel)];
   }
 
   try {
     let devices = await navigator.mediaDevices.enumerateDevices();
-    let audioInputs = devices.filter((device) => device.kind === 'audioinput');
+    let audioInputs = getAudioInputDevices(devices);
 
-    if (!audioInputs.some((device) => device.label)) {
+    if (!hasVisibleDeviceLabels(audioInputs)) {
       await requestMicrophonePermission();
       devices = await navigator.mediaDevices.enumerateDevices();
-      audioInputs = devices.filter((device) => device.kind === 'audioinput');
+      audioInputs = getAudioInputDevices(devices);
     }
 
     return toBrowserDeviceOptions(audioInputs, defaultLabel);
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to enumerate browser microphones:', error);
-    return [{ label: defaultLabel, value: 'default' }];
+    return [createDefaultDeviceOption(defaultLabel)];
   }
 }
 
@@ -171,33 +210,17 @@ export async function listSystemAudioDeviceOptions(defaultLabel: string): Promis
 export async function probeSystemAudioDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
   try {
     const devices = await getSystemAudioDevices();
-    if (!devices || devices.length === 0) {
-      return {
-        options: [{ label: defaultLabel, value: 'default' }],
-        available: false,
-        source: 'fallback',
-        errorMessage: 'No system audio devices were returned.',
-      };
+    if (devices.length === 0) {
+      return createFallbackProbeResult(defaultLabel, NO_SYSTEM_AUDIO_DEVICES_MESSAGE);
     }
 
     return {
-      options: dedupeOptions([
-        { label: defaultLabel, value: 'default' },
-        ...devices.map((device) => ({
-          label: device.name,
-          value: device.name,
-        })),
-      ]),
+      options: toNativeDeviceOptions(devices, defaultLabel),
       available: true,
       source: 'native',
     };
   } catch (error) {
     logger.error('[AudioDeviceService] Failed to get system audio devices:', error);
-    return {
-      options: [{ label: defaultLabel, value: 'default' }],
-      available: false,
-      source: 'fallback',
-      errorMessage: error instanceof Error ? error.message : String(error),
-    };
+    return createFallbackProbeResult(defaultLabel, getErrorMessage(error));
   }
 }

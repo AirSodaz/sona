@@ -1,14 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
-import { Dropdown } from './Dropdown';
-import { useFocusTrap } from '../hooks/useFocusTrap';
-import { useConfigStore } from '../stores/configStore';
-import { useOnboardingStore } from '../stores/onboardingStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useShallow } from 'zustand/react/shallow';
+import { Dropdown } from './Dropdown';
+import { CheckIcon, DownloadIcon, WaveformIcon } from './Icons';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
-  DeviceOption,
+  type DeviceOption,
   listMicrophoneDeviceOptions,
   requestMicrophonePermission,
 } from '../services/audioDeviceService';
@@ -17,8 +14,12 @@ import {
   getRecommendedOnboardingConfig,
   getRecommendedOnboardingModels,
 } from '../services/onboardingService';
-import { hasRequiredOnboardingModels } from '../utils/onboarding';
+import { useConfigStore } from '../stores/configStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import type { OnboardingStep } from '../types/onboarding';
 import { logger } from '../utils/logger';
+import { hasRequiredOnboardingModels } from '../utils/onboarding';
 
 type ModelStepStatus = 'idle' | 'downloading' | 'error';
 type PermissionState = 'idle' | 'granted' | 'denied';
@@ -40,6 +41,93 @@ interface OnboardingActionsProps {
     onClick: () => void;
   };
   secondaryActionsDisabled?: boolean;
+}
+
+type OnboardingTranslate = (key: string) => string;
+
+function getActiveStepIndex(currentStep: OnboardingStep): number {
+  switch (currentStep) {
+    case 'welcome':
+      return 0;
+    case 'models':
+      return 1;
+    case 'microphone':
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+function getSecondaryActionsDisabled(
+  currentStep: OnboardingStep,
+  modelStepStatus: ModelStepStatus,
+  isLoadingDevices: boolean,
+): boolean {
+  switch (currentStep) {
+    case 'models':
+      return modelStepStatus === 'downloading';
+    case 'microphone':
+      return isLoadingDevices;
+    default:
+      return false;
+  }
+}
+
+function getPreferredMicrophoneId(
+  currentValue: string,
+  configMicrophoneId: string | undefined,
+  options: DeviceOption[],
+): string {
+  const preferredValue = currentValue || configMicrophoneId || 'default';
+  const matchingOption = options.find((option) => option.value === preferredValue);
+  if (matchingOption) {
+    return matchingOption.value;
+  }
+
+  return options[0]?.value || 'default';
+}
+
+function getSelectedMicrophoneLabel(
+  selectedMicrophoneId: string,
+  defaultMicrophoneLabel: string,
+): string {
+  if (selectedMicrophoneId === 'default') {
+    return defaultMicrophoneLabel;
+  }
+
+  return selectedMicrophoneId;
+}
+
+function getModelActionButtonText(
+  modelStepStatus: ModelStepStatus,
+  t: OnboardingTranslate,
+): string {
+  if (modelStepStatus === 'error') {
+    return t('first_run.actions.retry');
+  }
+
+  return t('first_run.actions.download_recommended');
+}
+
+function getModelPrimaryActionLabel({
+  hasModelsConfigured,
+  modelStepStatus,
+  t,
+}: {
+  hasModelsConfigured: boolean;
+  modelStepStatus: ModelStepStatus;
+  t: OnboardingTranslate;
+}): React.ReactNode {
+  if (hasModelsConfigured) {
+    return t('first_run.actions.continue');
+  }
+
+  return (
+    <>
+      <DownloadIcon />
+      {getModelActionButtonText(modelStepStatus, t)}
+    </>
+  );
 }
 
 function StepIndicator({
@@ -181,9 +269,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
 
       setDeviceOptions(options);
       setSelectedMicrophoneId((currentValue) => {
-        const preferredValue = currentValue || config.microphoneId || 'default';
-        const matchingOption = options.find((option) => option.value === preferredValue);
-        return matchingOption ? matchingOption.value : options[0]?.value || 'default';
+        return getPreferredMicrophoneId(currentValue, config.microphoneId, options);
       });
       setIsLoadingDevices(false);
     }
@@ -264,26 +350,22 @@ export function FirstRunGuide(): React.JSX.Element | null {
     return null;
   }
 
-  const activeStepIndex = (() => {
-    switch (currentStep) {
-      case 'welcome': return 0;
-      case 'models': return 1;
-      case 'microphone': return 2;
-      default: return 0;
-    }
-  })();
-
+  const activeStepIndex = getActiveStepIndex(currentStep);
   const isMicrophoneReady = permissionState === 'granted' && deviceOptions.length > 0;
-
-  let areSecondaryActionsDisabled = false;
-  switch (currentStep) {
-    case 'models':
-      areSecondaryActionsDisabled = modelStepStatus === 'downloading';
-      break;
-    case 'microphone':
-      areSecondaryActionsDisabled = isLoadingDevices;
-      break;
-  }
+  const areSecondaryActionsDisabled = getSecondaryActionsDisabled(
+    currentStep,
+    modelStepStatus,
+    isLoadingDevices,
+  );
+  const modelPrimaryActionLabel = getModelPrimaryActionLabel({
+    hasModelsConfigured,
+    modelStepStatus,
+    t,
+  });
+  const selectedMicrophoneLabel = getSelectedMicrophoneLabel(
+    selectedMicrophoneId,
+    t('settings.mic_auto'),
+  );
 
   return (
     <div className="settings-overlay" style={{ zIndex: 2100 }}>
@@ -433,41 +515,18 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
               )}
 
-              {(() => {
-                let primaryActionLabel;
-                if (hasModelsConfigured) {
-                  primaryActionLabel = t('first_run.actions.continue');
-                } else {
-                  let buttonText;
-                  if (modelStepStatus === 'error') {
-                    buttonText = t('first_run.actions.retry');
-                  } else {
-                    buttonText = t('first_run.actions.download_recommended');
-                  }
-
-                  primaryActionLabel = (
-                    <>
-                      <DownloadIcon />
-                      {buttonText}
-                    </>
-                  );
-                }
-
-                return (
-                  <OnboardingActions
-                    backLabel={t('first_run.actions.back')}
-                    laterLabel={t('first_run.actions.later')}
-                    onBack={handleBack}
-                    onLater={defer}
-                    primaryAction={{
-                      disabled: modelStepStatus === 'downloading',
-                      label: primaryActionLabel,
-                      onClick: hasModelsConfigured ? () => setStep('microphone') : handleModelDownload,
-                    }}
-                    secondaryActionsDisabled={areSecondaryActionsDisabled}
-                  />
-                );
-              })()}
+              <OnboardingActions
+                backLabel={t('first_run.actions.back')}
+                laterLabel={t('first_run.actions.later')}
+                onBack={handleBack}
+                onLater={defer}
+                primaryAction={{
+                  disabled: modelStepStatus === 'downloading',
+                  label: modelPrimaryActionLabel,
+                  onClick: hasModelsConfigured ? () => setStep('microphone') : handleModelDownload,
+                }}
+                secondaryActionsDisabled={areSecondaryActionsDisabled}
+              />
             </section>
           )}
 
@@ -486,10 +545,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 </div>
                 <div>
                   <span className="onboarding-summary-label">{t('first_run.microphone.device_label')}</span>
-                  <strong>{selectedMicrophoneId === 'default'
-                    ? t('settings.mic_auto')
-                    : selectedMicrophoneId}
-                  </strong>
+                  <strong>{selectedMicrophoneLabel}</strong>
                 </div>
               </div>
 
