@@ -1,11 +1,15 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { StoreApi } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 vi.mock('../../../services/tauri/speaker', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof import('../../../services/tauri/speaker')>();
   return {
     ...actual,
-    applySpeakerProfileToGroup: vi.fn().mockImplementation(async (request) => {
+    applySpeakerProfileToGroup: vi.fn().mockImplementation(async (request: any) => {
       const { segments, groupId, targetProfileId } = request;
-      const newSegments = segments.map(seg => {
+      const newSegments = segments.map((seg: any) => {
         if (seg.speaker && (seg.speaker.id === groupId || seg.speaker.id === 'anonymous-1')) {
           return {
             ...seg,
@@ -21,10 +25,6 @@ vi.mock('../../../services/tauri/speaker', async (importOriginal) => {
     })
   };
 });
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StoreApi } from 'zustand';
-import { createStore } from 'zustand/vanilla';
 
 vi.mock('../../../services/projectService', () => ({
   projectService: {
