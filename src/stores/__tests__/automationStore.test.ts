@@ -34,6 +34,10 @@ const testContext = vi.hoisted(() => {
         collectAutomationRuntimeRulePathsMock: vi.fn(),
         isAutomationRecoveryBlockedMock: vi.fn(),
         listenToAutomationRuntimeCandidatesMock: vi.fn(),
+        resolveEffectiveConfigMock: vi.fn((config: any, project: any) => ({
+            ...config,
+            translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
+        })),
         runtimeCandidateHandler: null as ((payload: any) => void | Promise<void>) | null,
         replaceAutomationRuntimeRulesMock: vi.fn(),
         scanAutomationRuntimeRuleMock: vi.fn().mockResolvedValue(undefined),
@@ -69,6 +73,7 @@ const {
     listenToAutomationRuntimeCandidatesMock,
     loadAutomationProcessedEntriesMock,
     loadAutomationRulesMock,
+    resolveEffectiveConfigMock,
     replaceAutomationRuntimeRulesMock,
     scanAutomationRuntimeRuleMock,
     saveAutomationProcessedEntriesMock,
@@ -102,10 +107,7 @@ vi.mock('../projectStore', () => ({
 }));
 
 vi.mock('../../services/effectiveConfigService', () => ({
-    resolveEffectiveConfig: vi.fn((config: any, project: any) => ({
-        ...config,
-        translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
-    })),
+    resolveEffectiveConfig: testContext.resolveEffectiveConfigMock,
 }));
 
 vi.mock('../../services/automationService', () => ({
@@ -183,6 +185,14 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     };
 }
 
+function createDeferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((next) => {
+        resolve = next;
+    });
+    return { promise, resolve };
+}
+
 describe('automationStore', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
@@ -198,6 +208,10 @@ describe('automationStore', () => {
             translationLanguage: 'en',
             polishCustomPresets: [],
         };
+        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => ({
+            ...config,
+            translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
+        }));
         batchQueueState.addFiles = addFilesMock;
         batchQueueState.queueItems = [];
 
@@ -497,6 +511,192 @@ describe('automationStore', () => {
             }),
         );
         expect(useAutomationStore.getState().notifications).toEqual([]);
+    });
+
+    it('starts retry candidate config resolution concurrently before awaiting the first candidate', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntries = [
+            {
+                ruleId: rule.id,
+                filePath: 'C:\\watch\\failed-a.wav',
+                sourceFingerprint: 'failed-fingerprint-a',
+                size: 8,
+                mtimeMs: 10,
+                status: 'error' as const,
+                processedAt: 20,
+                errorMessage: 'Network error',
+            },
+            {
+                ruleId: rule.id,
+                filePath: 'C:\\watch\\failed-b.wav',
+                sourceFingerprint: 'failed-fingerprint-b',
+                size: 9,
+                mtimeMs: 11,
+                status: 'error' as const,
+                processedAt: 21,
+                errorMessage: 'Network error',
+            },
+        ];
+        const configResolutions: Array<ReturnType<typeof createDeferred<any>>> = [];
+
+        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => {
+            const deferred = createDeferred<any>();
+            configResolutions.push(deferred);
+            return deferred.promise.then(() => ({
+                ...config,
+                translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
+            }));
+        });
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: failedEntries,
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 2,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: 2,
+                    latestFilePath: failedEntries[1].filePath,
+                    latestMessage: 'Network error',
+                    createdAt: 20,
+                    updatedAt: 21,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntries[0].filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: failedEntries[0].filePath,
+                    sourceFingerprint: 'retry-fingerprint-a',
+                    size: 8,
+                    mtimeMs: 10,
+                },
+            },
+            {
+                filePath: failedEntries[1].filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: failedEntries[1].filePath,
+                    sourceFingerprint: 'retry-fingerprint-b',
+                    size: 9,
+                    mtimeMs: 11,
+                },
+            },
+        ]);
+
+        const retryPromise = useAutomationStore.getState().retryFailed(rule.id);
+        for (let index = 0; index < 10 && configResolutions.length === 0; index += 1) {
+            await Promise.resolve();
+        }
+        const startedBeforeFirstResolution = configResolutions.length;
+
+        configResolutions[0]?.resolve(undefined);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        configResolutions[1]?.resolve(undefined);
+        if (configResolutions.length >= 2) {
+            await retryPromise;
+        }
+
+        expect(startedBeforeFirstResolution).toBe(2);
+        expect(addFilesMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('benchmarks retry candidate handling with delayed config resolution', async () => {
+        vi.useRealTimers();
+
+        const rule = createRule({ enabled: false });
+        const candidateCount = 8;
+        const configDelayMs = 25;
+        const failedEntries = Array.from({ length: candidateCount }, (_, index) => ({
+            ruleId: rule.id,
+            filePath: `C:\\watch\\failed-${index}.wav`,
+            sourceFingerprint: `failed-fingerprint-${index}`,
+            size: 8 + index,
+            mtimeMs: 10 + index,
+            status: 'error' as const,
+            processedAt: 20 + index,
+            errorMessage: 'Network error',
+        }));
+
+        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => (
+            new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve({
+                        ...config,
+                        translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
+                    });
+                }, configDelayMs);
+            })
+        ));
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: failedEntries,
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: candidateCount,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [
+                {
+                    id: 'automation-failure-rule-1',
+                    kind: 'failure',
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                    count: candidateCount,
+                    latestFilePath: failedEntries[candidateCount - 1].filePath,
+                    latestMessage: 'Network error',
+                    createdAt: 20,
+                    updatedAt: 20 + candidateCount,
+                    retryable: true,
+                },
+            ],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue(failedEntries.map((entry, index) => ({
+            filePath: entry.filePath,
+            outcome: 'candidate',
+            candidate: {
+                ruleId: rule.id,
+                filePath: entry.filePath,
+                sourceFingerprint: `retry-fingerprint-${index}`,
+                size: entry.size,
+                mtimeMs: entry.mtimeMs,
+            },
+        })));
+
+        const startTime = performance.now();
+        await useAutomationStore.getState().retryFailed(rule.id);
+        const elapsedMs = performance.now() - startTime;
+
+        console.log(
+            `retryFailed handled ${candidateCount} delayed candidates in ${elapsedMs.toFixed(1)}ms`,
+        );
+        expect(addFilesMock).toHaveBeenCalledTimes(candidateCount);
+        expect(resolveEffectiveConfigMock).toHaveBeenCalledTimes(candidateCount);
     });
 
     it('retries failure notifications through the rule-level retry flow', async () => {
