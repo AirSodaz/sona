@@ -198,6 +198,95 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
 
     const runtimeSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
 
+    let shortcutTone: BadgeTone;
+    let shortcutLabel: string;
+    let shortcutHint: string;
+    if (readiness.shortcutConfigured) {
+        shortcutTone = 'ready';
+        shortcutLabel = t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+        shortcutHint = t('settings.voice_typing_dependency_shortcut_ready', { defaultValue: 'A global shortcut is configured for starting Voice Typing.' });
+    } else {
+        shortcutTone = 'missing';
+        shortcutLabel = t('settings.voice_typing_status_missing_shortcut', { defaultValue: 'Missing shortcut' });
+        shortcutHint = t('settings.voice_typing_dependency_shortcut_missing', { defaultValue: 'Set a global shortcut before Voice Typing can start listening.' });
+    }
+
+    let modelTone: BadgeTone;
+    let modelLabel: string;
+    let modelHint: string;
+    if (readiness.liveModelConfigured) {
+        modelTone = 'ready';
+        modelLabel = t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+        modelHint = t('settings.voice_typing_dependency_model_ready', { defaultValue: 'Voice Typing can reuse the selected live transcription model.' });
+    } else {
+        modelTone = 'missing';
+        modelLabel = t('settings.voice_typing_status_missing_model', { defaultValue: 'Missing model' });
+        modelHint = t('settings.voice_typing_dependency_model_missing', { defaultValue: 'Choose a live transcription model in Model Hub before using Voice Typing.' });
+    }
+
+    let vadTone: BadgeTone;
+    let vadLabel: string;
+    let vadHint: string;
+    if (!readiness.requiresVad) {
+        vadTone = 'off';
+        vadLabel = t('settings.voice_typing_dependency_vad_not_needed_badge', { defaultValue: 'Not needed' });
+        vadHint = t('settings.voice_typing_dependency_vad_not_required', { defaultValue: 'The selected live model does not require a separate VAD model.' });
+    } else if (readiness.vadConfigured) {
+        vadTone = 'ready';
+        vadLabel = t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+        vadHint = t('settings.voice_typing_dependency_vad_ready', { defaultValue: 'The required VAD model is configured.' });
+    } else {
+        vadTone = 'missing';
+        vadLabel = t('settings.voice_typing_status_missing_vad', { defaultValue: 'Missing VAD' });
+        vadHint = t('settings.voice_typing_dependency_vad_missing', { defaultValue: 'The selected live model requires a VAD model in Model Hub.' });
+    }
+
+    let inputTone: BadgeTone;
+    let inputLabel: string;
+    let inputHint: string;
+    if (readiness.inputDeviceState === 'failed') {
+        inputTone = 'missing';
+        inputLabel = t('settings.voice_typing_status_failed', { defaultValue: 'Failed' });
+        inputHint = readiness.lastErrorMessage || '';
+    } else if (readiness.inputDeviceState === 'off') {
+        inputTone = 'off';
+        inputLabel = t('settings.voice_typing_status_off', { defaultValue: 'Off' });
+        inputHint = t('settings.voice_typing_dependency_input_ready', { defaultValue: 'Voice Typing uses the current Input Device setting. The default device is valid.' });
+    } else {
+        inputTone = 'ready';
+        inputLabel = t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+        inputHint = t('settings.voice_typing_dependency_input_ready', { defaultValue: 'Voice Typing uses the current Input Device setting. The default device is valid.' });
+    }
+
+    let runtimeTone: BadgeTone;
+    let runtimeLabel: string;
+    let runtimeHint: string;
+    if (readiness.runtimeState === 'failed') {
+        runtimeTone = 'missing';
+        runtimeLabel = t('settings.voice_typing_status_failed', { defaultValue: 'Failed' });
+        if (runtimeSourceLabel) {
+            runtimeHint = t('settings.voice_typing_dependency_runtime_failed_with_source', {
+                defaultValue: '{{source}}: {{message}}',
+                source: runtimeSourceLabel,
+                message: readiness.lastErrorMessage,
+            });
+        } else {
+            runtimeHint = readiness.lastErrorMessage || '';
+        }
+    } else if (readiness.runtimeState === 'ready') {
+        runtimeTone = 'ready';
+        runtimeLabel = t('settings.voice_typing_status_ready', { defaultValue: 'Ready' });
+        runtimeHint = t('settings.voice_typing_dependency_runtime_ready', { defaultValue: 'Shortcut registration and warm-up have completed.' });
+    } else if (readiness.runtimeState === 'off') {
+        runtimeTone = 'off';
+        runtimeLabel = t('settings.voice_typing_status_off', { defaultValue: 'Off' });
+        runtimeHint = t('settings.voice_typing_dependency_runtime_off', { defaultValue: 'Background warm-up starts only when Voice Typing is enabled.' });
+    } else {
+        runtimeTone = 'pending';
+        runtimeLabel = t('settings.voice_typing_status_preparing', { defaultValue: 'Preparing' });
+        runtimeHint = t('settings.voice_typing_dependency_runtime_preparing', { defaultValue: 'Sona is waiting for registration and warm-up to settle.' });
+    }
+
     return (
         <SettingsSection
             title={t('settings.voice_typing_dependencies', {
@@ -210,117 +299,37 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
         >
             <SettingsItem
                 title={t('settings.voice_typing_dependency_shortcut', { defaultValue: 'Shortcut' })}
-                hint={
-                    readiness.shortcutConfigured
-                        ? t('settings.voice_typing_dependency_shortcut_ready', {
-                            defaultValue: 'A global shortcut is configured for starting Voice Typing.',
-                        })
-                        : t('settings.voice_typing_dependency_shortcut_missing', {
-                            defaultValue: 'Set a global shortcut before Voice Typing can start listening.',
-                        })
-                }
+                hint={shortcutHint}
             >
-                <StatusBadge
-                    tone={readiness.shortcutConfigured ? 'ready' : 'missing'}
-                    label={
-                        readiness.shortcutConfigured
-                            ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                            : t('settings.voice_typing_status_missing_shortcut', {
-                                defaultValue: 'Missing shortcut',
-                            })
-                    }
-                />
+                <StatusBadge tone={shortcutTone} label={shortcutLabel} />
             </SettingsItem>
 
             <SettingsItem
                 title={t('settings.voice_typing_dependency_model', { defaultValue: 'Live Record Model' })}
-                hint={
-                    readiness.liveModelConfigured
-                        ? t('settings.voice_typing_dependency_model_ready', {
-                            defaultValue: 'Voice Typing can reuse the selected live transcription model.',
-                        })
-                        : t('settings.voice_typing_dependency_model_missing', {
-                            defaultValue: 'Choose a live transcription model in Model Hub before using Voice Typing.',
-                        })
-                }
+                hint={modelHint}
             >
                 <div className="settings-status-actions">
-                    <StatusBadge
-                        tone={readiness.liveModelConfigured ? 'ready' : 'missing'}
-                        label={
-                            readiness.liveModelConfigured
-                                ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                                : t('settings.voice_typing_status_missing_model', {
-                                    defaultValue: 'Missing model',
-                                })
-                        }
-                    />
+                    <StatusBadge tone={modelTone} label={modelLabel} />
                     {!readiness.liveModelConfigured ? modelCta : null}
                 </div>
             </SettingsItem>
 
             <SettingsItem
                 title={t('settings.voice_typing_dependency_vad', { defaultValue: 'VAD Model' })}
-                hint={
-                    !readiness.requiresVad
-                        ? t('settings.voice_typing_dependency_vad_not_required', {
-                            defaultValue: 'The selected live model does not require a separate VAD model.',
-                        })
-                        : readiness.vadConfigured
-                            ? t('settings.voice_typing_dependency_vad_ready', {
-                                defaultValue: 'The required VAD model is configured.',
-                            })
-                            : t('settings.voice_typing_dependency_vad_missing', {
-                                defaultValue: 'The selected live model requires a VAD model in Model Hub.',
-                            })
-                }
+                hint={vadHint}
             >
                 <div className="settings-status-actions">
-                    <StatusBadge
-                        tone={!readiness.requiresVad ? 'off' : readiness.vadConfigured ? 'ready' : 'missing'}
-                        label={
-                            !readiness.requiresVad
-                                ? t('settings.voice_typing_dependency_vad_not_needed_badge', {
-                                    defaultValue: 'Not needed',
-                                })
-                                : readiness.vadConfigured
-                                    ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                                    : t('settings.voice_typing_status_missing_vad', {
-                                        defaultValue: 'Missing VAD',
-                                    })
-                        }
-                    />
+                    <StatusBadge tone={vadTone} label={vadLabel} />
                     {readiness.requiresVad && !readiness.vadConfigured ? modelCta : null}
                 </div>
             </SettingsItem>
 
             <SettingsItem
                 title={t('settings.voice_typing_dependency_input', { defaultValue: 'Input Device' })}
-                hint={
-                    readiness.inputDeviceState === 'failed' && readiness.lastErrorMessage
-                        ? readiness.lastErrorMessage
-                        : t('settings.voice_typing_dependency_input_ready', {
-                            defaultValue: 'Voice Typing uses the current Input Device setting. The default device is valid.',
-                        })
-                }
+                hint={inputHint}
             >
                 <div className="settings-status-actions">
-                    <StatusBadge
-                        tone={
-                            readiness.inputDeviceState === 'failed'
-                                ? 'missing'
-                                : readiness.inputDeviceState === 'off'
-                                    ? 'off'
-                                    : 'ready'
-                        }
-                        label={
-                            readiness.inputDeviceState === 'failed'
-                                ? t('settings.voice_typing_status_failed', { defaultValue: 'Failed' })
-                                : readiness.inputDeviceState === 'off'
-                                    ? t('settings.voice_typing_status_off', { defaultValue: 'Off' })
-                                    : t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                        }
-                    />
+                    <StatusBadge tone={inputTone} label={inputLabel} />
                     {readiness.inputDeviceState === 'failed' ? inputCta : null}
                 </div>
             </SettingsItem>
@@ -329,50 +338,9 @@ function VoiceTypingDependenciesSection(): React.JSX.Element {
                 title={t('settings.voice_typing_dependency_runtime', {
                     defaultValue: 'Background Status',
                 })}
-                hint={
-                    readiness.runtimeState === 'failed' && readiness.lastErrorMessage
-                        ? runtimeSourceLabel
-                            ? t('settings.voice_typing_dependency_runtime_failed_with_source', {
-                                defaultValue: '{{source}}: {{message}}',
-                                source: runtimeSourceLabel,
-                                message: readiness.lastErrorMessage,
-                            })
-                            : readiness.lastErrorMessage
-                        : readiness.runtimeState === 'ready'
-                            ? t('settings.voice_typing_dependency_runtime_ready', {
-                                defaultValue: 'Shortcut registration and warm-up have completed.',
-                            })
-                            : readiness.runtimeState === 'off'
-                                ? t('settings.voice_typing_dependency_runtime_off', {
-                                    defaultValue: 'Background warm-up starts only when Voice Typing is enabled.',
-                                })
-                                : t('settings.voice_typing_dependency_runtime_preparing', {
-                                    defaultValue: 'Sona is waiting for registration and warm-up to settle.',
-                                })
-                }
+                hint={runtimeHint}
             >
-                <StatusBadge
-                    tone={
-                        readiness.runtimeState === 'failed'
-                            ? 'missing'
-                            : readiness.runtimeState === 'ready'
-                                ? 'ready'
-                                : readiness.runtimeState === 'off'
-                                    ? 'off'
-                                    : 'pending'
-                    }
-                    label={
-                        readiness.runtimeState === 'failed'
-                            ? t('settings.voice_typing_status_failed', { defaultValue: 'Failed' })
-                            : readiness.runtimeState === 'ready'
-                                ? t('settings.voice_typing_status_ready', { defaultValue: 'Ready' })
-                                : readiness.runtimeState === 'off'
-                                    ? t('settings.voice_typing_status_off', { defaultValue: 'Off' })
-                                    : t('settings.voice_typing_status_preparing', {
-                                        defaultValue: 'Preparing',
-                                    })
-                    }
-                />
+                <StatusBadge tone={runtimeTone} label={runtimeLabel} />
             </SettingsItem>
         </SettingsSection>
     );
