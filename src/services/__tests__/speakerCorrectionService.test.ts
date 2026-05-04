@@ -45,7 +45,21 @@ describe('speakerCorrectionService', () => {
     resetTranscriptStores();
     vi.clearAllMocks();
 
-    vi.mocked(invokeTauri).mockResolvedValue({ segments: [] } as never);
+    vi.mocked(invokeTauri).mockImplementation(async (command: string, args?: any) => {
+      if (command === 'resolve_effective_config') {
+        const globalConfig = args?.globalConfig ?? useConfigStore.getState().config;
+        const enabledIds = new Set(args?.project?.defaults?.enabledSpeakerProfileIds ?? []);
+        return {
+          ...globalConfig,
+          speakerProfiles: globalConfig.speakerProfiles?.map((profile: any) => ({
+            ...profile,
+            enabled: enabledIds.has(profile.id),
+          })),
+        } as never;
+      }
+
+      return { segments: [] } as never;
+    });
 
     useConfigStore.setState((state) => ({
       ...state,

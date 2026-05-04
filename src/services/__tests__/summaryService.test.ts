@@ -273,9 +273,10 @@ describe('summaryService', () => {
         summaryEnabled: false,
       },
     });
+    vi.mocked(invoke).mockClear();
 
     await expect(summaryService.generateSummary('general')).rejects.toThrow('Summary is disabled.');
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith('summarize_transcript', expect.anything());
   });
 
   it('rejects new summary generation when the summary config is incomplete', async () => {
@@ -293,8 +294,9 @@ describe('summaryService', () => {
         }),
       },
     });
+    vi.mocked(invoke).mockClear();
 
     await expect(summaryService.generateSummary('general')).rejects.toThrow('LLM Service not fully configured.');
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith('summarize_transcript', expect.anything());
   });
 });

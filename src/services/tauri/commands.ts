@@ -13,6 +13,8 @@ export const TauriCommand = {
     getModelCatalogSnapshot: 'get_model_catalog_snapshot',
     resolveModelCatalogSelectedIds: 'resolve_model_catalog_selected_ids',
     getDiagnosticsCoreSnapshot: 'get_diagnostics_core_snapshot',
+    migrateAppConfig: 'migrate_app_config',
+    resolveEffectiveConfig: 'resolve_effective_config',
     getRuntimeEnvironmentStatus: 'get_runtime_environment_status',
     getAsrRuntimeMetrics: 'get_asr_runtime_metrics',
     getPathStatuses: 'get_path_statuses',

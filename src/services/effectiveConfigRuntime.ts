@@ -1,9 +1,12 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
+import { logger } from '../utils/logger';
 
 function syncEffectiveConfig() {
-  useEffectiveConfigStore.getState().syncConfig();
+  void useEffectiveConfigStore.getState().syncConfig().catch((error) => {
+    logger.error('[EffectiveConfig] Failed to resolve effective config:', error);
+  });
 }
 
 class EffectiveConfigRuntime {

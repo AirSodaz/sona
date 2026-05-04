@@ -3,11 +3,12 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
-import type { AppLogLevel } from '../../types/config';
+import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { ProjectRecord } from '../../types/project';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {
   DiagnosticsCoreInput,
-  DiagnosticsCoreSnapshot,
+  DiagnosticsCoreSnapshotSpec,
 } from '../diagnosticsSnapshotBuilders';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
@@ -25,6 +26,10 @@ export type ModelSelectionPaths = TauriCommandArgs<
 
 export type ModelCatalogSelectedIds = TauriCommandResult<
   typeof TauriCommand.app.resolveModelCatalogSelectedIds
+>;
+
+export type AppConfigMigrationResult = TauriCommandResult<
+  typeof TauriCommand.app.migrateAppConfig
 >;
 
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
@@ -55,8 +60,30 @@ export async function resolveModelCatalogSelectedIds(
 
 export async function getDiagnosticsCoreSnapshot(
   input: DiagnosticsCoreInput,
-): Promise<DiagnosticsCoreSnapshot> {
+): Promise<DiagnosticsCoreSnapshotSpec> {
   return invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, { input });
+}
+
+export async function migrateAppConfig(
+  savedConfig: AppConfig | null | undefined,
+  legacyConfig: unknown,
+  defaultRuleSetName: string,
+): Promise<AppConfigMigrationResult> {
+  return invokeTauri(TauriCommand.app.migrateAppConfig, {
+    savedConfig: savedConfig ?? null,
+    legacyConfig: legacyConfig ?? null,
+    defaultRuleSetName,
+  });
+}
+
+export async function resolveEffectiveConfig(
+  globalConfig: AppConfig,
+  project: ProjectRecord | null,
+): Promise<AppConfig> {
+  return invokeTauri(TauriCommand.app.resolveEffectiveConfig, {
+    globalConfig,
+    project,
+  });
 }
 
 export async function getRuntimeEnvironmentStatus(): Promise<RuntimeEnvironmentStatus> {

@@ -123,7 +123,7 @@ const SIDECAR_KEYS = new Set<keyof SidecarPatch>([
 ]);
 
 function syncEffectiveConfig(): void {
-  useEffectiveConfigStore.getState().syncConfig();
+  void useEffectiveConfigStore.getState().syncConfig();
 }
 
 function applySessionPatch(patch: SessionPatch): void {
@@ -186,6 +186,7 @@ function applyTranscriptStatePatch(patch: Partial<LegacyTranscriptState>): void 
         ...state,
         config: value as AppConfig,
       }));
+      syncEffectiveConfig();
       return;
     }
 

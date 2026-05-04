@@ -21,7 +21,7 @@ import { diagnosticsService } from '../diagnosticsService';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
-import type { DiagnosticsCoreSnapshot } from '../diagnosticsSnapshotBuilders';
+import type { DiagnosticsCoreSnapshotSpec } from '../diagnosticsSnapshotBuilders';
 
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const OFFLINE_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
@@ -32,7 +32,7 @@ const runtimeEnvironment = {
   ffmpegExists: true,
   logDirPath: 'C:\\app\\logs',
 };
-let coreSnapshot: DiagnosticsCoreSnapshot;
+let coreSnapshot: DiagnosticsCoreSnapshotSpec;
 
 function t(key: string, options?: Record<string, unknown>) {
   const translated: Record<string, string> = {
@@ -48,7 +48,7 @@ function text(key: string, defaultValue: string, params?: Record<string, unknown
   return { key, defaultValue, params };
 }
 
-function makeCoreSnapshot(): DiagnosticsCoreSnapshot {
+function makeCoreSnapshot(): DiagnosticsCoreSnapshotSpec {
   return {
     scannedAt: '2026-05-03T00:00:00.000Z',
     runtimeEnvironment,
@@ -85,7 +85,7 @@ function makeCoreSnapshot(): DiagnosticsCoreSnapshot {
               'The current input-device selection is still available.',
             ),
             status: 'ready',
-            meta: 'settings.mic_auto',
+            meta: text('settings.mic_auto', 'Auto'),
           },
           {
             id: 'microphone-permission',
@@ -99,6 +99,26 @@ function makeCoreSnapshot(): DiagnosticsCoreSnapshot {
               kind: 'request_microphone_permission',
               label: text('settings.diagnostics.request_permission', 'Request Permission'),
             },
+          },
+        ],
+      },
+      {
+        id: 'runtime-environment',
+        title: text('settings.diagnostics.runtime_section', 'Runtime Environment'),
+        description: text(
+          'settings.diagnostics.runtime_section_description',
+          'Check bundled runtime dependencies and troubleshooting paths.',
+        ),
+        checks: [
+          {
+            id: 'log-dir',
+            title: text('settings.diagnostics.log_dir_title', 'Log Directory'),
+            description: text(
+              'settings.diagnostics.log_dir_ready',
+              'Runtime logs can be resolved for troubleshooting.',
+            ),
+            status: 'ready',
+            meta: text('diagnostics.literal_meta', 'C:\\app\\logs'),
           },
         ],
       },
@@ -187,7 +207,9 @@ describe('diagnosticsService', () => {
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const liveOverview = snapshot.overview.find((card) => card.id === 'live-record');
     const inputSection = snapshot.sections.find((section) => section.id === 'input-capture');
+    const runtimeSection = snapshot.sections.find((section) => section.id === 'runtime-environment');
     const microphoneCheck = inputSection?.checks.find((check) => check.id === 'microphone-device');
+    const logDirCheck = runtimeSection?.checks.find((check) => check.id === 'log-dir');
     const permissionCheck = inputSection?.checks.find((check) => check.id === 'microphone-permission');
 
     expect(snapshot.scannedAt).toBe('2026-05-03T00:00:00.000Z');
@@ -205,6 +227,12 @@ describe('diagnosticsService', () => {
       expect.objectContaining({
         title: 'Input Device',
         meta: '自动',
+      }),
+    );
+    expect(logDirCheck).toEqual(
+      expect.objectContaining({
+        title: 'Log Directory',
+        meta: 'C:\\app\\logs',
       }),
     );
     expect(permissionCheck?.action).toEqual(

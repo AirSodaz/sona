@@ -56,6 +56,6 @@ export function setTestConfig(overrides: DeepPartial<AppConfig> = {}): AppConfig
     ...state,
     config,
   }));
-  useEffectiveConfigStore.getState().syncConfig();
+  void useEffectiveConfigStore.getState().syncConfig();
   return config;
 }

@@ -5,6 +5,7 @@ mod automation_repository;
 mod automation_runtime;
 mod aux_window_state;
 pub mod cli;
+mod config_core;
 mod dashboard;
 mod diagnostics_core;
 mod downloads;
@@ -325,6 +326,8 @@ pub fn run() {
             automation_runtime::replace_automation_runtime_rules,
             automation_runtime::scan_automation_runtime_rule,
             automation_runtime::collect_automation_runtime_rule_paths,
+            config_core::migrate_app_config,
+            config_core::resolve_effective_config,
             system::inject_text,
             system::get_mouse_position,
             system::get_text_cursor_position,

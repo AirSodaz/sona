@@ -4,6 +4,7 @@ import type {
   DiagnosticOverviewCard,
   DiagnosticSection,
   DiagnosticStatus,
+  DiagnosticsSnapshot,
 } from '../types/diagnostics';
 import type { SettingsTab } from '../hooks/useSettingsLogic';
 import type { RuntimeEnvironmentStatus } from '../types/runtime';
@@ -33,7 +34,7 @@ export interface DiagnosticCheckSpec {
   description: DiagnosticTextSpec;
   status: DiagnosticStatus;
   action?: DiagnosticActionSpec;
-  meta?: string;
+  meta?: DiagnosticTextSpec;
 }
 
 export interface DiagnosticSectionSpec {
@@ -65,7 +66,7 @@ export interface DiagnosticsCoreInput {
   voiceTypingReadiness: VoiceTypingReadinessSnapshot;
 }
 
-export interface DiagnosticsCoreSnapshot {
+export interface DiagnosticsCoreSnapshotSpec {
   scannedAt: string;
   overview: DiagnosticOverviewCardSpec[];
   sections: DiagnosticSectionSpec[];
@@ -105,12 +106,8 @@ function hydrateAction(t: Translate, action?: DiagnosticActionSpec): DiagnosticA
   }
 }
 
-function hydrateMeta(t: Translate, meta?: string): string | undefined {
-  if (meta === 'settings.mic_auto') {
-    return t('settings.mic_auto');
-  }
-
-  return meta;
+function hydrateMeta(t: Translate, meta?: DiagnosticTextSpec): string | undefined {
+  return meta ? hydrateText(t, meta) : undefined;
 }
 
 function hydrateCheck(t: Translate, check: DiagnosticCheckSpec): DiagnosticCheck {
@@ -148,8 +145,8 @@ function hydrateOverviewCard(
 
 export function hydrateDiagnosticsCoreSnapshot(
   t: Translate,
-  snapshot: DiagnosticsCoreSnapshot,
-) {
+  snapshot: DiagnosticsCoreSnapshotSpec,
+): DiagnosticsSnapshot {
   return {
     scannedAt: snapshot.scannedAt,
     overview: snapshot.overview.map((card) => hydrateOverviewCard(t, card)),

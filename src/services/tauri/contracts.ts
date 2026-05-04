@@ -40,7 +40,7 @@ import type { ModelFileConfig } from '../../types/model';
 import type { ModelCatalogSnapshot } from '../modelService';
 import type {
   DiagnosticsCoreInput,
-  DiagnosticsCoreSnapshot,
+  DiagnosticsCoreSnapshotSpec,
 } from '../diagnosticsSnapshotBuilders';
 import type {
   ApplySpeakerProfileToGroupRequest,
@@ -248,7 +248,25 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.app.getDiagnosticsCoreSnapshot]: {
     args: { input: DiagnosticsCoreInput };
-    result: DiagnosticsCoreSnapshot;
+    result: DiagnosticsCoreSnapshotSpec;
+  };
+  [TauriCommand.app.migrateAppConfig]: {
+    args: {
+      savedConfig: AppConfig | null;
+      legacyConfig: unknown;
+      defaultRuleSetName: string;
+    };
+    result: {
+      config: AppConfig;
+      migrated: boolean;
+    };
+  };
+  [TauriCommand.app.resolveEffectiveConfig]: {
+    args: {
+      globalConfig: AppConfig;
+      project: ProjectRecord | null;
+    };
+    result: AppConfig;
   };
   [TauriCommand.app.getRuntimeEnvironmentStatus]: {
     args: undefined;

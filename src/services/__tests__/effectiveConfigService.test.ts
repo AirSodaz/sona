@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { resolveEffectiveConfig } from '../effectiveConfigService';
 import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
 import { createLlmSettings } from '../llm/state';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
+import { resolveEffectiveConfig as resolveEffectiveConfigInRust } from '../tauri/app';
+
+vi.mock('../tauri/app', () => ({
+  resolveEffectiveConfig: vi.fn(),
+}));
 
 function createBaseConfig(): AppConfig {
   return buildTestConfig({
@@ -65,13 +70,46 @@ function createProject(): ProjectRecord {
 }
 
 describe('effectiveConfigService', () => {
-  it('keeps global config unchanged when no project is active', () => {
-    const config = createBaseConfig();
-    expect(resolveEffectiveConfig(config, null)).toEqual(config);
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('overrides workflow defaults and filters enabled rule sets for an active project', () => {
-    const effective = resolveEffectiveConfig(createBaseConfig(), createProject());
+  it('delegates global config resolution to Rust when no project is active', async () => {
+    const config = createBaseConfig();
+    vi.mocked(resolveEffectiveConfigInRust).mockResolvedValueOnce(config);
+
+    await expect(resolveEffectiveConfig(config, null)).resolves.toEqual(config);
+    expect(resolveEffectiveConfigInRust).toHaveBeenCalledWith(config, null);
+  });
+
+  it('returns the Rust-resolved project overrides and filtered rule-set states', async () => {
+    const config = createBaseConfig();
+    const project = createProject();
+    const effectiveConfig = {
+      ...config,
+      summaryTemplateId: 'meeting',
+      translationLanguage: 'ja',
+      polishPresetId: 'meeting',
+      polishKeywordSets: config.polishKeywordSets?.map((set) => ({
+        ...set,
+        enabled: set.id === 'kw-2',
+      })),
+      textReplacementSets: config.textReplacementSets?.map((set) => ({
+        ...set,
+        enabled: set.id === 'set-b',
+      })),
+      hotwordSets: config.hotwordSets?.map((set) => ({
+        ...set,
+        enabled: set.id === 'hot-a',
+      })),
+      speakerProfiles: config.speakerProfiles?.map((profile) => ({
+        ...profile,
+        enabled: profile.id === 'speaker-b',
+      })),
+    };
+    vi.mocked(resolveEffectiveConfigInRust).mockResolvedValueOnce(effectiveConfig);
+
+    const effective = await resolveEffectiveConfig(config, project);
 
     expect(effective.summaryTemplateId).toBe('meeting');
     expect(effective.translationLanguage).toBe('ja');
@@ -85,5 +123,6 @@ describe('effectiveConfigService', () => {
     expect(effective.hotwordSets?.find((set) => set.id === 'hot-b')?.enabled).toBe(false);
     expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-a')?.enabled).toBe(false);
     expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-b')?.enabled).toBe(true);
+    expect(resolveEffectiveConfigInRust).toHaveBeenCalledWith(config, project);
   });
 });

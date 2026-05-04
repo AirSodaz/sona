@@ -9,7 +9,7 @@ import {
   BatchQueueItemStatus,
 } from '../types/batchQueue';
 import { TranscriptSegment } from '../types/transcript';
-import { resolveEffectiveConfig } from '../services/effectiveConfigService';
+import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
 import { processBatchQueueItem } from '../services/batch/batchItemProcessor';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
@@ -111,15 +111,11 @@ function scheduleRecoverySnapshotSync(queueItems: BatchQueueItem[], immediate = 
 }
 
 function resolveQueueItemConfig(item: BatchQueueItem): AppConfig {
-    const projectStore = useProjectStore.getState();
     if (item.resolvedConfigSnapshot) {
         return item.resolvedConfigSnapshot;
     }
 
-    const project = item.projectId && typeof projectStore.getProjectById === 'function'
-        ? projectStore.getProjectById(item.projectId)
-        : null;
-    return resolveEffectiveConfig(useConfigStore.getState().config, project);
+    return getEffectiveConfigSnapshot();
 }
 
 async function notifyAutomationResult(
@@ -167,7 +163,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             ? (typeof projectStore.getProjectById === 'function' ? projectStore.getProjectById(activeProjectId) : null)
             : (typeof projectStore.getActiveProject === 'function' ? projectStore.getActiveProject() : null);
         const resolvedConfigSnapshot = options?.resolvedConfigSnapshot
-            ?? resolveEffectiveConfig(useConfigStore.getState().config, activeProject);
+            ?? getEffectiveConfigSnapshot();
         const exportFileNamePrefix = options?.exportFileNamePrefix
             ?? activeProject?.defaults.exportFileNamePrefix
             ?? '';

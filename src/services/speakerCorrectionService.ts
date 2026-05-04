@@ -80,7 +80,7 @@ class SpeakerCorrectionService {
       });
     }
 
-    useEffectiveConfigStore.getState().syncConfig();
+    await useEffectiveConfigStore.getState().syncConfig();
     return response.segments;
   }
 

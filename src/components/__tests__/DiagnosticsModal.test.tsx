@@ -71,6 +71,7 @@ const snapshot = {
           title: 'Microphone Permission',
           description: 'Microphone access has not been granted yet.',
           status: 'warning' as const,
+          meta: 'Automatic',
           action: {
             kind: 'request_microphone_permission' as const,
             label: 'Request Permission',
@@ -106,6 +107,7 @@ describe('DiagnosticsModal', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
     expect(screen.getByText('Live Record')).toBeDefined();
     expect(screen.getByText('Input & Capture')).toBeDefined();
+    expect(screen.getByText('Automatic')).toBeDefined();
     expect(mocks.collectSnapshot.mock.calls.length).toBeGreaterThan(0);
   });
 

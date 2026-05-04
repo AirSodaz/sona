@@ -7,7 +7,9 @@ import {
   getAsrRuntimeMetrics,
   getDiagnosticsCoreSnapshot,
   getModelCatalogSnapshot,
+  migrateAppConfig,
   openLogFolder,
+  resolveEffectiveConfig,
   resolveModelCatalogSelectedIds,
   setLogLevel,
   setMinimizeToTray,
@@ -212,6 +214,57 @@ describe('tauri boundary wrappers', () => {
     expect(result).toEqual(coreSnapshot);
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getDiagnosticsCoreSnapshot, {
       input,
+    });
+  });
+
+  it('app wrappers delegate config migration and effective config resolution to Rust', async () => {
+    const globalConfig = {
+      configVersion: 6,
+      streamingModelPath: '',
+      offlineModelPath: '',
+      appLanguage: 'auto',
+      language: 'auto',
+      llmSettings: {},
+      translationLanguage: 'zh',
+      polishPresetId: 'general',
+    } as any;
+    const project = {
+      id: 'project-1',
+      name: 'Project',
+      description: '',
+      createdAt: 1,
+      updatedAt: 1,
+      defaults: {
+        summaryTemplateId: 'general',
+        translationLanguage: 'ja',
+        polishPresetId: 'meeting',
+        exportFileNamePrefix: '',
+        enabledTextReplacementSetIds: [],
+        enabledHotwordSetIds: [],
+        enabledPolishKeywordSetIds: [],
+        enabledSpeakerProfileIds: [],
+      },
+    };
+    const migrationResult = { config: globalConfig, migrated: false };
+    const effectiveConfig = {
+      ...globalConfig,
+      translationLanguage: 'ja',
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(migrationResult)
+      .mockResolvedValueOnce(effectiveConfig);
+
+    await expect(migrateAppConfig(globalConfig, null, 'Default Rules')).resolves.toEqual(migrationResult);
+    await expect(resolveEffectiveConfig(globalConfig, project)).resolves.toEqual(effectiveConfig);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.app.migrateAppConfig, {
+      savedConfig: globalConfig,
+      legacyConfig: null,
+      defaultRuleSetName: 'Default Rules',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.resolveEffectiveConfig, {
+      globalConfig,
+      project,
     });
   });
 

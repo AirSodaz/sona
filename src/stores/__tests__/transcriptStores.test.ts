@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, useConfigStore } from '../configStore';
 import { getEffectiveConfigSnapshot, useEffectiveConfigStore } from '../effectiveConfigStore';
 import { useProjectStore } from '../projectStore';
@@ -13,6 +13,20 @@ import {
   syncSavedRecordingMeta,
 } from '../transcriptCoordinator';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+
+vi.mock('../../services/tauri/app', () => ({
+  resolveEffectiveConfig: vi.fn(async (globalConfig: any, project: any) => {
+    if (!project) {
+      return globalConfig;
+    }
+    return {
+      ...globalConfig,
+      summaryTemplateId: project.defaults.summaryTemplateId || globalConfig.summaryTemplateId,
+      translationLanguage: project.defaults.translationLanguage || globalConfig.translationLanguage,
+      polishPresetId: project.defaults.polishPresetId || globalConfig.polishPresetId,
+    };
+  }),
+}));
 
 describe('Transcript Stores', () => {
   beforeEach(() => {
@@ -210,7 +224,7 @@ describe('Transcript Stores', () => {
     }));
   });
 
-  it('effective config store resolves active-project overrides and exposes a synchronous snapshot getter', () => {
+  it('effective config store resolves active-project overrides and exposes a synchronous snapshot getter', async () => {
     useConfigStore.setState((state) => ({
       ...state,
       config: {
@@ -244,7 +258,7 @@ describe('Transcript Stores', () => {
       ],
     }));
 
-    useEffectiveConfigStore.getState().syncConfig();
+    await useEffectiveConfigStore.getState().syncConfig();
 
     expect(useEffectiveConfigStore.getState().config).toEqual(expect.objectContaining({
       summaryTemplateId: 'meeting',

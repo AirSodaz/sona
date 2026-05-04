@@ -208,7 +208,7 @@ pub struct DiagnosticCheckSpec {
     pub description: TextSpec,
     pub status: DiagnosticStatus,
     pub action: Option<DiagnosticActionSpec>,
-    pub meta: Option<String>,
+    pub meta: Option<TextSpec>,
 }
 
 struct BuiltChecks {
@@ -469,16 +469,16 @@ fn build_model_checks(input: &DiagnosticsCoreInput) -> ModelChecks {
             "The selected model is configured and reachable.",
         ),
         action: Some(open_model_settings_action()),
-        missing_path_meta: Some(config.streaming_model_path.clone()),
-        unknown_path_meta: Some(streaming_path.to_string()),
-        ready_meta: Some(
+        missing_path_meta: Some(literal_meta(config.streaming_model_path.clone())),
+        unknown_path_meta: Some(literal_meta(streaming_path)),
+        ready_meta: Some(literal_meta(
             input
                 .selected_models
                 .live
                 .as_ref()
                 .map(|model| model.name.clone())
                 .unwrap_or_else(|| config.streaming_model_path.clone()),
-        ),
+        )),
     });
 
     let offline_model_check = build_model_path_policy_check(PathPolicyCheckArgs {
@@ -501,16 +501,16 @@ fn build_model_checks(input: &DiagnosticsCoreInput) -> ModelChecks {
             "The selected model is configured and reachable.",
         ),
         action: Some(open_model_settings_action()),
-        missing_path_meta: Some(config.offline_model_path.clone()),
-        unknown_path_meta: Some(offline_path.to_string()),
-        ready_meta: Some(
+        missing_path_meta: Some(literal_meta(config.offline_model_path.clone())),
+        unknown_path_meta: Some(literal_meta(offline_path)),
+        ready_meta: Some(literal_meta(
             input
                 .selected_models
                 .offline
                 .as_ref()
                 .map(|model| model.name.clone())
                 .unwrap_or_else(|| config.offline_model_path.clone()),
-        ),
+        )),
     });
 
     let vad_check = if input.selected_models.live.is_none() {
@@ -561,8 +561,8 @@ fn build_model_checks(input: &DiagnosticsCoreInput) -> ModelChecks {
                 "The required VAD model is configured and reachable.",
             ),
             action: Some(open_model_settings_action()),
-            missing_path_meta: Some(config.vad_model_path.clone()),
-            unknown_path_meta: Some(vad_path.to_string()),
+            missing_path_meta: Some(literal_meta(config.vad_model_path.clone())),
+            unknown_path_meta: Some(literal_meta(vad_path)),
             ready_meta: None,
         })
     };
@@ -603,8 +603,8 @@ fn build_model_checks(input: &DiagnosticsCoreInput) -> ModelChecks {
                 "The required punctuation model is configured and reachable.",
             ),
             action: Some(open_model_settings_action()),
-            missing_path_meta: Some(punctuation_path.to_string()),
-            unknown_path_meta: Some(punctuation_path.to_string()),
+            missing_path_meta: Some(literal_meta(punctuation_path)),
+            unknown_path_meta: Some(literal_meta(punctuation_path)),
             ready_meta: None,
         })
     };
@@ -628,9 +628,9 @@ struct PathPolicyCheckArgs<'a> {
     unknown_path_status: DiagnosticStatus,
     ready_description: TextSpec,
     action: Option<DiagnosticActionSpec>,
-    missing_path_meta: Option<String>,
-    unknown_path_meta: Option<String>,
-    ready_meta: Option<String>,
+    missing_path_meta: Option<TextSpec>,
+    unknown_path_meta: Option<TextSpec>,
+    ready_meta: Option<TextSpec>,
 }
 
 fn build_model_path_policy_check(args: PathPolicyCheckArgs<'_>) -> DiagnosticCheckSpec {
@@ -776,9 +776,9 @@ fn build_input_checks(input: &DiagnosticsCoreInput) -> InputChecks {
             ),
             None,
             Some(if microphone_id == "default" {
-                "settings.mic_auto".to_string()
+                translated_meta("settings.mic_auto", "Auto")
             } else {
-                microphone_id.to_string()
+                literal_meta(microphone_id)
             }),
         )
     } else {
@@ -791,7 +791,7 @@ fn build_input_checks(input: &DiagnosticsCoreInput) -> InputChecks {
                 "The saved microphone selection is no longer available.",
             ),
             Some(open_input_device_action()),
-            Some(microphone_id.to_string()),
+            Some(literal_meta(microphone_id)),
         )
     };
 
@@ -853,7 +853,7 @@ fn build_runtime_checks(input: &DiagnosticsCoreInput) -> RuntimeChecks {
                 "The bundled FFmpeg sidecar is present.",
             ),
             None,
-            Some(input.runtime_environment.ffmpeg_path.clone()),
+            Some(literal_meta(input.runtime_environment.ffmpeg_path.clone())),
         )
     } else {
         check(
@@ -865,7 +865,7 @@ fn build_runtime_checks(input: &DiagnosticsCoreInput) -> RuntimeChecks {
                 "The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.",
             ),
             Some(open_log_folder_action()),
-            Some(input.runtime_environment.ffmpeg_path.clone()),
+            Some(literal_meta(input.runtime_environment.ffmpeg_path.clone())),
         )
     };
     let log_dir_check = if input.runtime_environment.log_dir_path.trim().is_empty() {
@@ -890,7 +890,7 @@ fn build_runtime_checks(input: &DiagnosticsCoreInput) -> RuntimeChecks {
                 "Runtime logs can be resolved for troubleshooting.",
             ),
             Some(open_log_folder_action()),
-            Some(input.runtime_environment.log_dir_path.clone()),
+            Some(literal_meta(input.runtime_environment.log_dir_path.clone())),
         )
     };
 
@@ -1001,7 +1001,7 @@ fn build_asr_performance_checks(input: &DiagnosticsCoreInput) -> AsrPerformanceC
             .with_param("modelType", &model_load.model_type)
             .with_param("recognizerKind", &model_load.recognizer_kind),
             None,
-            Some(
+            Some(literal_meta(
                 [
                     format!("{} {}", model_load.model_type, model_load.recognizer_kind),
                     format!(
@@ -1018,7 +1018,7 @@ fn build_asr_performance_checks(input: &DiagnosticsCoreInput) -> AsrPerformanceC
                     model_load.instance_id.clone(),
                 ]
                 .join(" · "),
-            ),
+            )),
         )
     } else {
         check(
@@ -1056,7 +1056,7 @@ fn build_asr_performance_checks(input: &DiagnosticsCoreInput) -> AsrPerformanceC
                 )
                 .with_param("instanceId", instance_id),
                 None,
-                Some(describe_inference_metric(live_inference)),
+                Some(literal_meta(describe_inference_metric(live_inference))),
             )
         } else {
             check(
@@ -1089,7 +1089,7 @@ fn build_asr_performance_checks(input: &DiagnosticsCoreInput) -> AsrPerformanceC
                     "Last batch transcription run completed.",
                 ),
                 None,
-                Some(describe_inference_metric(batch_inference)),
+                Some(literal_meta(describe_inference_metric(batch_inference))),
             )
         } else {
             check(
@@ -1264,7 +1264,7 @@ fn check(
     status: DiagnosticStatus,
     description: TextSpec,
     action: Option<DiagnosticActionSpec>,
-    meta: Option<String>,
+    meta: Option<TextSpec>,
 ) -> DiagnosticCheckSpec {
     DiagnosticCheckSpec {
         id: id.to_string(),
@@ -1278,6 +1278,18 @@ fn check(
 
 fn text(key: &str, default_value: &str) -> TextSpec {
     TextSpec::new(key, default_value)
+}
+
+fn literal_meta(value: impl Into<String>) -> TextSpec {
+    TextSpec {
+        key: "diagnostics.literal_meta".to_string(),
+        default_value: value.into(),
+        params: HashMap::new(),
+    }
+}
+
+fn translated_meta(key: &str, default_value: &str) -> TextSpec {
+    text(key, default_value)
 }
 
 fn path_unverified_text() -> TextSpec {
@@ -1516,6 +1528,22 @@ mod tests {
             .expect("diagnostic check should exist")
     }
 
+    fn assert_meta_text(check: &DiagnosticCheckSpec, expected_key: &str, expected_default: &str) {
+        let meta = check.meta.as_ref().expect("check should include meta text");
+        assert_eq!(meta.key, expected_key);
+        assert_eq!(meta.default_value, expected_default);
+    }
+
+    #[test]
+    fn check_meta_uses_text_specs_for_translated_and_literal_values() {
+        let snapshot = build_diagnostics_core_snapshot(base_input());
+        let microphone = find_check(&snapshot, "input-capture", "microphone-device");
+        let ffmpeg = find_check(&snapshot, "runtime-environment", "ffmpeg");
+
+        assert_meta_text(microphone, "settings.mic_auto", "Auto");
+        assert_meta_text(ffmpeg, "diagnostics.literal_meta", "C:\\app\\ffmpeg.exe");
+    }
+
     #[test]
     fn path_policy_keeps_unknown_models_non_blocking_and_punctuation_warning() {
         let mut input = base_input();
@@ -1614,13 +1642,15 @@ mod tests {
         assert_eq!(model.status, DiagnosticStatus::Ready);
         assert!(model
             .meta
-            .as_deref()
+            .as_ref()
+            .map(|meta| meta.default_value.as_str())
             .unwrap_or_default()
             .contains("RSS 512.5 MB"));
         assert_eq!(live.status, DiagnosticStatus::Ready);
         assert!(live
             .meta
-            .as_deref()
+            .as_ref()
+            .map(|meta| meta.default_value.as_str())
             .unwrap_or_default()
             .contains("latency 60 ms"));
     }

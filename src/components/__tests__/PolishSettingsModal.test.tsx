@@ -17,6 +17,25 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('../../services/tauri/app', () => ({
+  resolveEffectiveConfig: vi.fn(async (globalConfig: any, project: any) => {
+    if (!project) {
+      return globalConfig;
+    }
+    const enabledKeywordIds = new Set(project.defaults.enabledPolishKeywordSetIds);
+    return {
+      ...globalConfig,
+      summaryTemplateId: project.defaults.summaryTemplateId || globalConfig.summaryTemplateId,
+      translationLanguage: project.defaults.translationLanguage || globalConfig.translationLanguage,
+      polishPresetId: project.defaults.polishPresetId || globalConfig.polishPresetId,
+      polishKeywordSets: globalConfig.polishKeywordSets?.map((set: any) => ({
+        ...set,
+        enabled: enabledKeywordIds.has(set.id),
+      })),
+    };
+  }),
+}));
+
 describe('PolishSettingsModal', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -84,9 +103,10 @@ describe('PolishSettingsModal', () => {
       projects: [project],
       activeProjectId: 'project-1',
     });
+    const effectiveConfig = await resolveEffectiveConfig(useConfigStore.getState().config, project);
     useTranscriptStore.setState({
       ...useTranscriptStore.getState(),
-      config: resolveEffectiveConfig(useConfigStore.getState().config, project),
+      config: effectiveConfig,
     });
 
     render(<PolishSettingsModal isOpen onClose={() => undefined} />);

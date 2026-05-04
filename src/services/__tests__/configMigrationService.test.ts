@@ -1,194 +1,64 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { migrateConfig } from '../configMigrationService';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 import type { AppConfig } from '../../types/config';
+import { migrateAppConfig } from '../tauri/app';
 
-function createSavedConfig(overrides: Partial<AppConfig>): AppConfig {
-  return {
-    ...DEFAULT_CONFIG,
-    ...overrides,
-  };
-}
+vi.mock('../../i18n', () => ({
+  default: {
+    t: vi.fn((key: string, options?: { defaultValue?: string }) => {
+      if (key === 'settings.default_rule_set_name') {
+        return 'Default Rules';
+      }
+      return options?.defaultValue ?? key;
+    }),
+  },
+}));
+
+vi.mock('../tauri/app', () => ({
+  migrateAppConfig: vi.fn(),
+}));
 
 describe('configMigrationService', () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it('normalizes missing summaryEnabled to true for existing configs', async () => {
-    const savedConfig = {
+  it('delegates saved and legacy config normalization to Rust with the localized default rule-set name', async () => {
+    const savedConfig: AppConfig = {
       ...DEFAULT_CONFIG,
-      summaryEnabled: undefined,
+      logLevel: 'debug',
     };
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.summaryEnabled).toBe(true);
-    expect(result.migrated).toBe(true);
-  });
-
-  it('preserves an explicitly disabled summary setting without forcing migration', async () => {
-    const savedConfig = {
-      ...DEFAULT_CONFIG,
-      summaryEnabled: false,
-    };
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.summaryEnabled).toBe(false);
-  });
-
-  it('fills missing summary template registry fields with defaults', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 4,
-      summaryTemplateId: undefined,
-      summaryCustomTemplates: undefined,
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.summaryTemplateId).toBe('general');
-    expect(result.config.summaryCustomTemplates).toEqual([]);
-    expect(result.migrated).toBe(true);
-  });
-
-  it('migrates a legacy built-in polish scenario to polishPresetId', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 2,
-      polishPresetId: undefined,
-      polishCustomPresets: undefined,
-      polishScenario: 'meeting',
-      polishContext: '',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.polishPresetId).toBe('meeting');
-    expect(result.config.polishCustomPresets).toEqual([]);
-    expect(result.migrated).toBe(true);
-  });
-
-  it('maps a legacy empty custom context to the general preset', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 2,
-      polishPresetId: undefined,
-      polishCustomPresets: undefined,
-      polishScenario: 'custom',
-      polishContext: '',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.polishPresetId).toBe('general');
-    expect(result.config.polishCustomPresets).toEqual([]);
-  });
-
-  it('imports a legacy non-empty custom context into custom presets', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 2,
-      polishPresetId: undefined,
-      polishCustomPresets: undefined,
-      polishScenario: 'custom',
-      polishContext: 'Focus on investor updates and roadmap terms.',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.polishCustomPresets).toHaveLength(1);
-    expect(result.config.polishCustomPresets?.[0]).toEqual(expect.objectContaining({
-      context: 'Focus on investor updates and roadmap terms.',
-    }));
-    expect(result.config.polishPresetId).toBe(result.config.polishCustomPresets?.[0].id);
-  });
-
-  it('migrates an empty legacy polishKeywords string to an empty keyword set array', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 3,
-      polishKeywordSets: undefined,
-      polishKeywords: '',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.polishKeywordSets).toEqual([]);
-    expect(result.config.polishKeywords).toBe('');
-  });
-
-  it('imports a legacy non-empty polishKeywords string into an enabled keyword set', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 3,
-      polishKeywordSets: undefined,
-      polishKeywords: 'Sona\nSherpa-onnx',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.polishKeywordSets).toHaveLength(1);
-    expect(result.config.polishKeywordSets?.[0]).toEqual(expect.objectContaining({
-      enabled: true,
-      keywords: 'Sona\nSherpa-onnx',
-    }));
-    expect(result.config.polishKeywords).toBe('');
-  });
-
-  it('fills missing speaker model and profile fields with defaults', async () => {
-    const savedConfig = createSavedConfig({
-      configVersion: 5,
-      speakerProfiles: undefined,
-      speakerSegmentationModelPath: undefined,
-      speakerEmbeddingModelPath: undefined,
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.speakerProfiles).toEqual([]);
-    expect(result.config.speakerSegmentationModelPath).toBe('');
-    expect(result.config.speakerEmbeddingModelPath).toBe('');
-    expect(result.migrated).toBe(true);
-  });
-
-  it('fills missing logLevel with info', async () => {
-    const savedConfig = createSavedConfig({
-      logLevel: undefined,
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.logLevel).toBe('info');
-    expect(result.migrated).toBe(true);
-  });
-
-  it('normalizes invalid logLevel values to info', async () => {
-    const savedConfig = createSavedConfig({
-      logLevel: 'verbose',
-    } as unknown as Partial<AppConfig>);
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.logLevel).toBe('info');
-    expect(result.migrated).toBe(true);
-  });
-
-  it('preserves a valid saved logLevel', async () => {
-    const savedConfig = createSavedConfig({
-      logLevel: 'trace',
-    });
-
-    const result = await migrateConfig(savedConfig);
-
-    expect(result.config.logLevel).toBe('trace');
-  });
-
-  it('accepts a legacy config object as pure input without relying on storage side effects', async () => {
     const legacyConfig = {
-      modelPath: '/legacy/model.onnx',
-      recognitionModelPath: '/legacy/model.onnx',
+      recognitionModelPath: '/legacy/model',
     };
+    vi.mocked(migrateAppConfig).mockResolvedValueOnce({
+      config: {
+        ...savedConfig,
+        streamingModelPath: '/legacy/model',
+      },
+      migrated: true,
+    });
 
-    const result = await migrateConfig(null, legacyConfig);
+    const result = await migrateConfig(savedConfig, legacyConfig);
 
-    expect(result.config.streamingModelPath).toBe('/legacy/model.onnx');
-    expect(result.config.offlineModelPath).toBe('/legacy/model.onnx');
     expect(result.migrated).toBe(true);
+    expect(result.config.streamingModelPath).toBe('/legacy/model');
+    expect(migrateAppConfig).toHaveBeenCalledWith(
+      savedConfig,
+      legacyConfig,
+      'Default Rules',
+    );
+  });
+
+  it('passes nulls for missing startup config inputs', async () => {
+    vi.mocked(migrateAppConfig).mockResolvedValueOnce({
+      config: { ...DEFAULT_CONFIG },
+      migrated: false,
+    });
+
+    await migrateConfig(undefined);
+
+    expect(migrateAppConfig).toHaveBeenCalledWith(null, null, 'Default Rules');
   });
 });

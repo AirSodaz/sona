@@ -42,6 +42,7 @@ import type {
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../types/automation';
+import type { AppConfig } from '../types/config';
 
 interface HandleAutomationRuntimeCandidateOptions {
   suppressFailureNotification?: boolean;
@@ -230,28 +231,39 @@ export function createAutomationRuntimeCoordinator({
       return { status: 'blocked', reason: 'project_missing' };
     }
 
-    const effectiveConfig = {
-      ...resolveEffectiveConfig(useConfigStore.getState().config, project),
-      translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
-      polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
-    };
     pendingFingerprints.add(pendingKey);
+    let effectiveConfig: AppConfig;
+    try {
+      effectiveConfig = {
+        ...await resolveEffectiveConfig(useConfigStore.getState().config, project),
+        translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
+        polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
+      };
+    } catch (error) {
+      pendingFingerprints.delete(pendingKey);
+      throw error;
+    }
 
-    useBatchQueueStore.getState().addFiles([payload.filePath], {
-      origin: 'automation',
-      automationRuleId: latestRule.id,
-      automationRuleName: latestRule.name,
-      resolvedConfigSnapshot: effectiveConfig,
-      exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
-      stageConfig: latestRule.stageConfig,
-      sourceFingerprint: payload.sourceFingerprint,
-      projectId: isInboxOrNone ? null : latestRule.projectId,
-      fileStat: {
-        size: payload.size,
-        mtimeMs: payload.mtimeMs,
-      },
-      exportFileNamePrefix: latestRule.exportConfig.prefix || '',
-    });
+    try {
+      useBatchQueueStore.getState().addFiles([payload.filePath], {
+        origin: 'automation',
+        automationRuleId: latestRule.id,
+        automationRuleName: latestRule.name,
+        resolvedConfigSnapshot: effectiveConfig,
+        exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
+        stageConfig: latestRule.stageConfig,
+        sourceFingerprint: payload.sourceFingerprint,
+        projectId: isInboxOrNone ? null : latestRule.projectId,
+        fileStat: {
+          size: payload.size,
+          mtimeMs: payload.mtimeMs,
+        },
+        exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+      });
+    } catch (error) {
+      pendingFingerprints.delete(pendingKey);
+      throw error;
+    }
 
     setState((current) => ({
       ...applyRuntimeQueuedState(current, {
