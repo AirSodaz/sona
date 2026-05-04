@@ -382,11 +382,15 @@ export function createAutomationRuntimeCoordinator({
         reason: AutomationRuntimeBlockReason;
       }> = [];
 
-      for (const result of candidateResults) {
+      const handledCandidateResults = await Promise.all(candidateResults.map(async (result) => {
         const candidate = result.candidate!;
         const handled = await handleRuntimeCandidatePayload(candidate, {
           suppressFailureNotification: true,
         });
+        return { candidate, handled };
+      }));
+
+      for (const { candidate, handled } of handledCandidateResults) {
         if (
           handled.status === 'blocked'
           && (handled.reason === 'recovery_blocked' || handled.reason === 'project_missing')
