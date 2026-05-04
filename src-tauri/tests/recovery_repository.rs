@@ -1,9 +1,48 @@
 #![allow(dead_code)]
 
-#[path = "../src/recovery.rs"]
+#[path = "../src/recovery/mod.rs"]
 mod recovery;
 
-use recovery::RecoveryRepository;
+mod history_repository {
+    pub(crate) mod fs_utils {
+        use serde::Serialize;
+        use std::fs::{self, File};
+        use std::io::{BufWriter, Write};
+        use std::path::Path;
+        use uuid::Uuid;
+
+        pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
+            path: &Path,
+            value: &T,
+        ) -> Result<(), String> {
+            let serialized = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+            let temp_path = path.with_extension(format!(
+                "{}.tmp-{}",
+                path.extension()
+                    .and_then(|extension| extension.to_str())
+                    .unwrap_or("json"),
+                Uuid::new_v4()
+            ));
+            {
+                let mut writer =
+                    BufWriter::new(File::create(&temp_path).map_err(|error| error.to_string())?);
+                writer
+                    .write_all(&serialized)
+                    .map_err(|error| error.to_string())?;
+                writer.flush().map_err(|error| error.to_string())?;
+            }
+            if path.exists() {
+                fs::remove_file(path).map_err(|error| error.to_string())?;
+            }
+            fs::rename(&temp_path, path).map_err(|error| error.to_string())
+        }
+    }
+}
+
+use recovery::repository::RecoveryRepository;
 use serde_json::{json, Value};
 use std::fs::{self, File};
 use std::path::Path;

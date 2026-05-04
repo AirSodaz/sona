@@ -78,19 +78,46 @@ fn build_row_id(snapshot_index: Option<usize>, current_index: Option<usize>) -> 
     )
 }
 
-pub(super) fn build_transcript_diff(
-    snapshot_segments: Vec<TranscriptSegment>,
-    current_segments: Vec<TranscriptSegment>,
-) -> TranscriptDiffResult {
-    let snapshot_segments = normalize_segments(snapshot_segments);
-    let current_segments = normalize_segments(current_segments);
+fn match_segments(
+    snapshot_segments: &[TranscriptSegment],
+    current_segments: &[TranscriptSegment],
+) -> HashMap<usize, usize> {
+    let mut matches = HashMap::<usize, usize>::new();
+    let mut used_current_indexes = HashSet::<usize>::new();
+
+    match_segments_by_id(
+        snapshot_segments,
+        current_segments,
+        &mut matches,
+        &mut used_current_indexes,
+    );
+    match_segments_by_time(
+        snapshot_segments,
+        current_segments,
+        &mut matches,
+        &mut used_current_indexes,
+    );
+    match_remaining_segments_by_order(
+        snapshot_segments,
+        current_segments,
+        &mut matches,
+        &mut used_current_indexes,
+    );
+
+    matches
+}
+
+fn match_segments_by_id(
+    snapshot_segments: &[TranscriptSegment],
+    current_segments: &[TranscriptSegment],
+    matches: &mut HashMap<usize, usize>,
+    used_current_indexes: &mut HashSet<usize>,
+) {
     let current_index_by_id = current_segments
         .iter()
         .enumerate()
         .map(|(index, segment)| (segment.id.clone(), index))
         .collect::<HashMap<_, _>>();
-    let mut matches = HashMap::<usize, usize>::new();
-    let mut used_current_indexes = HashSet::<usize>::new();
 
     for (snapshot_index, snapshot_segment) in snapshot_segments.iter().enumerate() {
         let Some(current_index) = current_index_by_id.get(&snapshot_segment.id).copied() else {
@@ -103,14 +130,21 @@ pub(super) fn build_transcript_diff(
         matches.insert(snapshot_index, current_index);
         used_current_indexes.insert(current_index);
     }
+}
 
+fn match_segments_by_time(
+    snapshot_segments: &[TranscriptSegment],
+    current_segments: &[TranscriptSegment],
+    matches: &mut HashMap<usize, usize>,
+    used_current_indexes: &mut HashSet<usize>,
+) {
     for (snapshot_index, snapshot_segment) in snapshot_segments.iter().enumerate() {
         if matches.contains_key(&snapshot_index) {
             continue;
         }
 
         let Some(current_index) =
-            find_best_time_match(snapshot_segment, &current_segments, &used_current_indexes)
+            find_best_time_match(snapshot_segment, current_segments, used_current_indexes)
         else {
             continue;
         };
@@ -118,7 +152,14 @@ pub(super) fn build_transcript_diff(
         matches.insert(snapshot_index, current_index);
         used_current_indexes.insert(current_index);
     }
+}
 
+fn match_remaining_segments_by_order(
+    snapshot_segments: &[TranscriptSegment],
+    current_segments: &[TranscriptSegment],
+    matches: &mut HashMap<usize, usize>,
+    used_current_indexes: &mut HashSet<usize>,
+) {
     let unmatched_snapshot_indexes = (0..snapshot_segments.len())
         .filter(|index| !matches.contains_key(index))
         .collect::<Vec<_>>();
@@ -136,39 +177,29 @@ pub(super) fn build_transcript_diff(
         );
         used_current_indexes.insert(unmatched_current_indexes[index]);
     }
+}
 
+fn build_diff_rows(
+    snapshot_segments: &[TranscriptSegment],
+    current_segments: &[TranscriptSegment],
+    matches: &HashMap<usize, usize>,
+) -> Vec<TranscriptDiffRow> {
     let mut rows = Vec::new();
     let mut final_matched_current_indexes = HashSet::<usize>::new();
 
     for (snapshot_index, snapshot_segment) in snapshot_segments.iter().enumerate() {
         let Some(current_index) = matches.get(&snapshot_index).copied() else {
-            rows.push(TranscriptDiffRow {
-                id: build_row_id(Some(snapshot_index), None),
-                status: TranscriptDiffStatus::Removed,
-                snapshot_segment: Some(snapshot_segment.clone()),
-                current_segment: None,
-                snapshot_index: Some(snapshot_index),
-                current_index: None,
-            });
+            rows.push(removed_row(snapshot_index, snapshot_segment));
             continue;
         };
 
         final_matched_current_indexes.insert(current_index);
-        let current_segment = current_segments[current_index].clone();
-        let status = if is_same_segment_content(Some(snapshot_segment), Some(&current_segment)) {
-            TranscriptDiffStatus::Unchanged
-        } else {
-            TranscriptDiffStatus::Modified
-        };
-
-        rows.push(TranscriptDiffRow {
-            id: build_row_id(Some(snapshot_index), Some(current_index)),
-            status,
-            snapshot_segment: Some(snapshot_segment.clone()),
-            current_segment: Some(current_segment),
-            snapshot_index: Some(snapshot_index),
-            current_index: Some(current_index),
-        });
+        rows.push(matched_row(
+            snapshot_index,
+            snapshot_segment,
+            current_index,
+            &current_segments[current_index],
+        ));
     }
 
     for (current_index, current_segment) in current_segments.iter().enumerate() {
@@ -176,14 +207,7 @@ pub(super) fn build_transcript_diff(
             continue;
         }
 
-        rows.push(TranscriptDiffRow {
-            id: build_row_id(None, Some(current_index)),
-            status: TranscriptDiffStatus::Added,
-            snapshot_segment: None,
-            current_segment: Some(current_segment.clone()),
-            snapshot_index: None,
-            current_index: Some(current_index),
-        });
+        rows.push(added_row(current_index, current_segment));
     }
 
     rows.sort_by(|left, right| {
@@ -199,11 +223,68 @@ pub(super) fn build_transcript_diff(
             .cmp(&right_index)
             .then_with(|| left.id.cmp(&right.id))
     });
+    rows
+}
 
-    let changed_count = rows
-        .iter()
+fn matched_row(
+    snapshot_index: usize,
+    snapshot_segment: &TranscriptSegment,
+    current_index: usize,
+    current_segment: &TranscriptSegment,
+) -> TranscriptDiffRow {
+    let status = if is_same_segment_content(Some(snapshot_segment), Some(current_segment)) {
+        TranscriptDiffStatus::Unchanged
+    } else {
+        TranscriptDiffStatus::Modified
+    };
+
+    TranscriptDiffRow {
+        id: build_row_id(Some(snapshot_index), Some(current_index)),
+        status,
+        snapshot_segment: Some(snapshot_segment.clone()),
+        current_segment: Some(current_segment.clone()),
+        snapshot_index: Some(snapshot_index),
+        current_index: Some(current_index),
+    }
+}
+
+fn removed_row(snapshot_index: usize, snapshot_segment: &TranscriptSegment) -> TranscriptDiffRow {
+    TranscriptDiffRow {
+        id: build_row_id(Some(snapshot_index), None),
+        status: TranscriptDiffStatus::Removed,
+        snapshot_segment: Some(snapshot_segment.clone()),
+        current_segment: None,
+        snapshot_index: Some(snapshot_index),
+        current_index: None,
+    }
+}
+
+fn added_row(current_index: usize, current_segment: &TranscriptSegment) -> TranscriptDiffRow {
+    TranscriptDiffRow {
+        id: build_row_id(None, Some(current_index)),
+        status: TranscriptDiffStatus::Added,
+        snapshot_segment: None,
+        current_segment: Some(current_segment.clone()),
+        snapshot_index: None,
+        current_index: Some(current_index),
+    }
+}
+
+fn changed_row_count(rows: &[TranscriptDiffRow]) -> usize {
+    rows.iter()
         .filter(|row| row.status != TranscriptDiffStatus::Unchanged)
-        .count();
+        .count()
+}
+
+pub(super) fn build_transcript_diff(
+    snapshot_segments: Vec<TranscriptSegment>,
+    current_segments: Vec<TranscriptSegment>,
+) -> TranscriptDiffResult {
+    let snapshot_segments = normalize_segments(snapshot_segments);
+    let current_segments = normalize_segments(current_segments);
+    let matches = match_segments(&snapshot_segments, &current_segments);
+    let rows = build_diff_rows(&snapshot_segments, &current_segments, &matches);
+    let changed_count = changed_row_count(&rows);
 
     TranscriptDiffResult {
         rows,

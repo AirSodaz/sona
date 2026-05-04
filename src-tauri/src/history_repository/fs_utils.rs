@@ -53,7 +53,7 @@ pub(super) fn read_json_value(path: &Path) -> Result<Value, String> {
     serde_json::from_str(&content).map_err(|error| error.to_string())
 }
 
-pub(super) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
+pub(crate) fn write_json_pretty_atomic<T: Serialize + ?Sized>(
     path: &Path,
     value: &T,
 ) -> Result<(), String> {

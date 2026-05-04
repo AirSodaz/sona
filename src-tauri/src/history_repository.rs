@@ -1,11 +1,13 @@
 mod backup;
 pub(crate) mod commands;
-mod fs_utils;
+pub(crate) mod fs_utils;
+mod item_factory;
 mod repository;
 mod state;
 #[cfg(test)]
 mod test_support;
 mod transcript_diff;
+mod transcript_payload;
 mod types;
 mod workspace_query;
 

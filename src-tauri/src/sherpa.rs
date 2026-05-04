@@ -4,6 +4,7 @@ use tauri::{AppHandle, State};
 mod batch;
 mod metrics;
 mod model_config;
+mod postprocess;
 mod runtime;
 mod state;
 mod transcript;
@@ -18,6 +19,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 pub use batch::transcribe_batch_with_progress;
 pub use metrics::{AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot};
 pub use model_config::ModelFileConfig;
+pub use postprocess::TranscriptPostprocessor;
 pub use runtime::feed_audio_samples;
 pub use state::SherpaState;
 pub(crate) use transcript::ensure_transcript_segment_timing;

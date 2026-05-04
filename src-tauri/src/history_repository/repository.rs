@@ -1,8 +1,7 @@
-use serde_json::{from_value, to_value, Map, Value};
+use serde_json::{to_value, Map, Value};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use super::fs_utils::{
@@ -10,6 +9,10 @@ use super::fs_utils::{
     optional_history_child_path, read_json_value, remove_path_if_exists, write_binary_atomic,
     write_json_pretty_atomic,
 };
+use super::item_factory::{
+    create_imported_file_item, create_live_draft_item, create_recording_item, current_time_millis,
+};
+use super::transcript_payload::normalize_history_transcript_segments;
 use super::types::HistoryBackupSnapshot;
 use super::{
     HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind, HistoryItemRecord,
@@ -21,122 +24,6 @@ use super::{
     HISTORY_DIR_NAME, HISTORY_INDEX_FILE_NAME, HISTORY_VERSIONS_DIR_NAME, SUMMARY_FILE_SUFFIX,
     TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
 };
-use crate::sherpa::{ensure_transcript_segment_timing, TranscriptSegment};
-
-#[derive(Debug)]
-struct NormalizedHistoryTranscript {
-    segments: Value,
-    preview_text: String,
-    search_content: String,
-}
-
-fn normalize_history_transcript_segments(
-    segments: Value,
-) -> Result<NormalizedHistoryTranscript, String> {
-    let segments = ensure_json_array_value(segments, "History transcript segments")?;
-    let mut parsed_segments: Vec<TranscriptSegment> = from_value(segments).map_err(|error| {
-        format!("History transcript segments must match transcript schema: {error}")
-    })?;
-
-    for segment in &mut parsed_segments {
-        ensure_transcript_segment_timing(segment);
-    }
-
-    let search_content = parsed_segments
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let preview_text =
-        preview_text_from_search_content(&search_content, !parsed_segments.is_empty());
-    let segments = to_value(&parsed_segments).map_err(|error| error.to_string())?;
-
-    Ok(NormalizedHistoryTranscript {
-        segments,
-        preview_text,
-        search_content,
-    })
-}
-
-fn preview_text_from_search_content(search_content: &str, has_segments: bool) -> String {
-    let mut preview_text = search_content.chars().take(100).collect::<String>();
-    if has_segments {
-        preview_text.push_str("...");
-    }
-    preview_text
-}
-
-fn current_time_millis() -> Result<u64, String> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .map_err(|error| error.to_string())
-}
-
-fn sanitize_audio_extension(extension: &str, fallback: &str) -> String {
-    let extension = extension
-        .trim()
-        .trim_start_matches('.')
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .collect::<String>();
-    if extension.is_empty() {
-        fallback.to_string()
-    } else {
-        extension.to_ascii_lowercase()
-    }
-}
-
-fn extension_from_path(path: &str, fallback: &str) -> String {
-    PathBuf::from(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| sanitize_audio_extension(extension, fallback))
-        .unwrap_or_else(|| fallback.to_string())
-}
-
-fn file_name_from_path(path: &str, fallback: &str) -> String {
-    PathBuf::from(path)
-        .file_name()
-        .and_then(|file_name| file_name.to_str())
-        .filter(|file_name| !file_name.trim().is_empty())
-        .unwrap_or(fallback)
-        .to_string()
-}
-
-fn build_recording_title(timestamp: u64) -> String {
-    let local_time = chrono::DateTime::<chrono::Local>::from(
-        UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-    );
-    format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
-}
-
-fn build_history_item_record(
-    id: String,
-    timestamp: u64,
-    duration: f64,
-    audio_extension: &str,
-    title: String,
-    kind: HistoryItemKind,
-    project_id: Option<String>,
-    icon: Option<String>,
-) -> HistoryItemRecord {
-    HistoryItemRecord {
-        audio_path: format!("{id}.{audio_extension}"),
-        transcript_path: format!("{id}.json"),
-        id,
-        timestamp,
-        duration: duration.max(0.0),
-        title,
-        preview_text: String::new(),
-        icon,
-        kind,
-        search_content: String::new(),
-        project_id,
-        status: HistoryItemStatus::Complete,
-        draft_source: None,
-    }
-}
 
 #[derive(Clone)]
 pub(super) struct HistoryRepository {
@@ -257,21 +144,7 @@ impl HistoryRepository {
         request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, String> {
         self.ensure_ready()?;
-        let id = Uuid::new_v4().to_string();
-        let timestamp = current_time_millis()?;
-        let audio_extension = sanitize_audio_extension(&request.audio_extension, "webm");
-        let mut item = build_history_item_record(
-            id,
-            timestamp,
-            0.0,
-            &audio_extension,
-            build_recording_title(timestamp),
-            HistoryItemKind::Recording,
-            request.project_id,
-            request.icon,
-        );
-        item.status = HistoryItemStatus::Draft;
-        item.draft_source = Some(HistoryDraftSource::LiveRecord);
+        let item = create_live_draft_item(request)?;
         write_json_pretty_atomic(
             &self.transcript_path(&item.transcript_path)?,
             &Value::Array(Vec::new()),
@@ -318,36 +191,25 @@ impl HistoryRepository {
         request: HistorySaveRecordingRequest,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let normalized_transcript = normalize_history_transcript_segments(request.segments)?;
-        let timestamp = current_time_millis()?;
-        let id = Uuid::new_v4().to_string();
-        let audio_extension = request
-            .audio_extension
-            .as_deref()
-            .map(|extension| sanitize_audio_extension(extension, "webm"))
-            .or_else(|| {
-                request
-                    .native_audio_path
-                    .as_deref()
-                    .map(|path| extension_from_path(path, "wav"))
-            })
-            .unwrap_or_else(|| "webm".to_string());
-        let mut item = build_history_item_record(
-            id,
-            timestamp,
-            request.duration,
-            &audio_extension,
-            build_recording_title(timestamp),
-            HistoryItemKind::Recording,
-            request.project_id,
-            None,
-        );
-        item.status = HistoryItemStatus::Complete;
-        item.draft_source = None;
+        let HistorySaveRecordingRequest {
+            segments,
+            duration,
+            project_id,
+            audio_bytes,
+            native_audio_path,
+            audio_extension,
+        } = request;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+        let mut item = create_recording_item(
+            duration,
+            project_id,
+            audio_extension.as_deref(),
+            native_audio_path.as_deref(),
+        )?;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
-        match (request.audio_bytes, request.native_audio_path) {
+        match (audio_bytes, native_audio_path) {
             (Some(bytes), _) => {
                 let target_path = self.audio_path(&item.audio_path)?;
                 write_binary_atomic(&target_path, &bytes)?;
@@ -388,31 +250,21 @@ impl HistoryRepository {
         request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, String> {
         self.ensure_ready()?;
-        let normalized_transcript = normalize_history_transcript_segments(request.segments)?;
-        let timestamp = current_time_millis()?;
-        let id = Uuid::new_v4().to_string();
-        let title_file_name = file_name_from_path(&request.source_path, "Imported File");
-        let copy_source_path = request
-            .converted_source_path
-            .clone()
-            .unwrap_or_else(|| request.source_path.clone());
-        let audio_extension = extension_from_path(&copy_source_path, "wav");
-        let mut item = build_history_item_record(
-            id,
-            timestamp,
-            request.duration,
-            &audio_extension,
-            format!("Batch {title_file_name}"),
-            HistoryItemKind::Batch,
-            request.project_id,
-            None,
-        );
-        item.status = HistoryItemStatus::Complete;
-        item.draft_source = None;
+        let HistorySaveImportedFileRequest {
+            source_path,
+            segments,
+            duration,
+            project_id,
+            converted_source_path,
+        } = request;
+        let normalized_transcript = normalize_history_transcript_segments(segments)?;
+        let imported =
+            create_imported_file_item(source_path, converted_source_path, duration, project_id)?;
+        let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
-        let source = PathBuf::from(copy_source_path);
+        let source = PathBuf::from(imported.copy_source_path);
         if !source.is_file() {
             return Err(format!(
                 "Imported source file does not exist: {}",

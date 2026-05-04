@@ -1,4 +1,5 @@
 use super::model_config::ModelFileConfig;
+use super::postprocess::TranscriptPostprocessor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
@@ -17,7 +18,7 @@ pub struct BatchTranscriptionRequest {
     pub hotwords: Option<String>,
     pub speaker_processing: Option<crate::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
-    pub postprocess_options: TranscriptPostprocessOptions,
+    pub postprocessor: TranscriptPostprocessor,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

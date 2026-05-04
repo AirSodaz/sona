@@ -13,12 +13,13 @@ use super::state::{
 };
 use super::transcript::{
     build_transcript_update, emit_transcript_update, finalize_transcript_text, format_transcript,
-    log_text_transform_diagnostics, normalize_recognizer_text, postprocess_transcript_update,
-    preview_text_for_log, synthesize_durations,
+    log_text_transform_diagnostics, normalize_recognizer_text, preview_text_for_log,
+    synthesize_durations,
 };
 use super::types::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptSegment,
 };
+use super::TranscriptPostprocessor;
 use log::{debug, info, trace};
 use sherpa_onnx::OfflineRecognizer;
 use std::path::Path;
@@ -75,7 +76,7 @@ fn run_offline_inference<R: tauri::Runtime>(
     stage: &'static str,
     first_segment_emitted: Option<Arc<AtomicBool>>,
     normalization_options: TranscriptNormalizationOptions,
-    postprocess_options: TranscriptPostprocessOptions,
+    postprocessor: TranscriptPostprocessor,
     metrics_store: Option<AsrMetricsStore>,
     triggered_at: Instant,
 ) {
@@ -209,10 +210,8 @@ fn run_offline_inference<R: tauri::Runtime>(
                 speaker: None,
                 speaker_attribution: None,
             };
-            let update = postprocess_transcript_update(
-                build_transcript_update(segment, normalization_options),
-                &postprocess_options,
-            );
+            let update = postprocessor
+                .process_update(build_transcript_update(segment, normalization_options));
             emit_transcript_update(
                 app,
                 instance_id,
@@ -334,7 +333,8 @@ pub async fn init_recognizer_impl(
     instance.vad_model = vad_model.clone();
     instance.vad_buffer = vad_buffer;
     instance.normalization_options = normalization_options.unwrap_or_default();
-    instance.postprocess_options = postprocess_options.unwrap_or_default();
+    instance.postprocessor =
+        TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?;
 
     Ok(())
 }
@@ -451,7 +451,7 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                     .is_some()
                     .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                 let normalization_options = instance.normalization_options;
-                let postprocess_options = instance.postprocess_options.clone();
+                let postprocessor = instance.postprocessor.clone();
                 let metrics_store = state.metrics.clone();
                 let triggered_at = Instant::now();
 
@@ -478,7 +478,7 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                             "flush_offline",
                             first_segment_emitted,
                             normalization_options,
-                            postprocess_options,
+                            postprocessor,
                             Some(metrics_store),
                             triggered_at,
                         );
@@ -553,10 +553,12 @@ pub async fn flush_recognizer_impl<R: tauri::Runtime>(
                         speaker: None,
                         speaker_attribution: None,
                     };
-                    let update = postprocess_transcript_update(
-                        build_transcript_update(segment, instance.normalization_options),
-                        &instance.postprocess_options,
-                    );
+                    let update = instance
+                        .postprocessor
+                        .process_update(build_transcript_update(
+                            segment,
+                            instance.normalization_options,
+                        ));
                     emit_transcript_update(
                         &app,
                         &instance_id,
@@ -731,7 +733,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                     let normalization_options = instance.normalization_options;
-                    let postprocess_options = instance.postprocess_options.clone();
+                    let postprocessor = instance.postprocessor.clone();
                     let should_record_partial_metric = instance.last_partial_metric_sample == 0
                         || instance
                             .total_samples
@@ -767,7 +769,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                                 "partial",
                                 first_segment_emitted,
                                 normalization_options,
-                                postprocess_options,
+                                postprocessor,
                                 metrics_store,
                                 triggered_at,
                             );
@@ -807,7 +809,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         .is_some()
                         .then(|| instance.record_diagnostics.first_segment_emitted.clone());
                     let normalization_options = instance.normalization_options;
-                    let postprocess_options = instance.postprocess_options.clone();
+                    let postprocessor = instance.postprocessor.clone();
                     let metrics_store = state.metrics.clone();
                     let triggered_at = Instant::now();
 
@@ -835,7 +837,7 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                                 "final",
                                 first_segment_emitted,
                                 normalization_options,
-                                postprocess_options,
+                                postprocessor,
                                 Some(metrics_store),
                                 triggered_at,
                             );
@@ -927,10 +929,12 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                         speaker: None,
                         speaker_attribution: None,
                     };
-                    let update = postprocess_transcript_update(
-                        build_transcript_update(segment, instance.normalization_options),
-                        &instance.postprocess_options,
-                    );
+                    let update = instance
+                        .postprocessor
+                        .process_update(build_transcript_update(
+                            segment,
+                            instance.normalization_options,
+                        ));
                     emit_transcript_update(
                         app,
                         instance_id,
@@ -1012,10 +1016,13 @@ pub async fn feed_audio_samples<R: tauri::Runtime>(
                             speaker: None,
                             speaker_attribution: None,
                         };
-                        let update = postprocess_transcript_update(
-                            build_transcript_update(segment, instance.normalization_options),
-                            &instance.postprocess_options,
-                        );
+                        let update =
+                            instance
+                                .postprocessor
+                                .process_update(build_transcript_update(
+                                    segment,
+                                    instance.normalization_options,
+                                ));
                         emit_transcript_update(
                             app,
                             instance_id,

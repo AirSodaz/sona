@@ -10,14 +10,12 @@ use super::model_config::{
     SafeOfflineRecognizer, SafeOnlineRecognizer, SafeStream,
 };
 use super::state::SherpaState;
-use super::transcript::{
-    apply_timeline_normalization, format_transcript, postprocess_transcript_segments,
-    synthesize_durations,
-};
+use super::transcript::{apply_timeline_normalization, format_transcript, synthesize_durations};
 use super::types::{
     BatchTranscriptionRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptSegment,
 };
+use super::TranscriptPostprocessor;
 use super::BATCH_PROGRESS_EVENT;
 use log::debug;
 use std::path::Path;
@@ -58,7 +56,7 @@ pub async fn process_batch_file_impl<R: tauri::Runtime>(
         hotwords,
         speaker_processing,
         normalization_options: normalization_options.unwrap_or_default(),
-        postprocess_options: postprocess_options.unwrap_or_default(),
+        postprocessor: TranscriptPostprocessor::compile(postprocess_options.unwrap_or_default())?,
     };
     let progress_file_path = request.file_path.clone();
 
@@ -164,8 +162,7 @@ where
 
     let normalized_segments =
         apply_timeline_normalization(annotated_segments, request.normalization_options);
-    let postprocessed_segments =
-        postprocess_transcript_segments(normalized_segments, &request.postprocess_options);
+    let postprocessed_segments = request.postprocessor.process_segments(normalized_segments);
 
     if let Some(metrics_store) = metrics_store.as_ref() {
         let audio_duration_ms = samples_to_ms(samples.len(), 16000.0);

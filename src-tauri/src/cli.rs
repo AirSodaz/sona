@@ -2,7 +2,7 @@ use crate::export::{export_segments, ExportFormat};
 use crate::preset_models::{find_preset_model, preset_models, PresetModel};
 use crate::sherpa::{
     transcribe_batch_with_progress, BatchTranscriptionRequest, TranscriptNormalizationOptions,
-    TranscriptPostprocessOptions,
+    TranscriptPostprocessOptions, TranscriptPostprocessor,
 };
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
@@ -415,7 +415,9 @@ pub fn resolve_transcribe_options(
             hotwords: cli.hotwords,
             speaker_processing: None,
             normalization_options: TranscriptNormalizationOptions::default(),
-            postprocess_options: TranscriptPostprocessOptions::default(),
+            postprocessor: TranscriptPostprocessor::compile(
+                TranscriptPostprocessOptions::default(),
+            )?,
         },
     })
 }
