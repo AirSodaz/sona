@@ -7,6 +7,7 @@ import {
     saveRecoveredItems,
 } from '../services/recoveryService';
 import {
+    createBatchTaskLedgerId,
     buildRecoveryTaskLedgerRecord,
     createRecoveryTaskLedgerId,
     patchTaskLedgerRecord,
@@ -39,6 +40,7 @@ function mirrorRecoveryItemsToTaskLedger(items: RecoveredQueueItem[]): void {
     items
         .filter((item) => item.resolution === 'pending')
         .forEach((item) => {
+            removeStaleQueueTask(item);
             upsertTaskLedgerRecord(buildRecoveryTaskLedgerRecord(item));
         });
 }
@@ -56,7 +58,16 @@ function patchRecoveryTaskRecoverable(item: RecoveredQueueItem, errorMessage: st
 }
 
 function removeRecoveryTask(item: RecoveredQueueItem): void {
+    removeStaleQueueTask(item);
     removeTaskLedgerRecord(createRecoveryTaskLedgerId(item.id));
+}
+
+function removeRecoveryLedgerTask(item: RecoveredQueueItem): void {
+    removeTaskLedgerRecord(createRecoveryTaskLedgerId(item.id));
+}
+
+function removeStaleQueueTask(item: RecoveredQueueItem): void {
+    removeTaskLedgerRecord(createBatchTaskLedgerId(item.id));
 }
 
 export const useRecoveryStore = create<RecoveryState>((set, get) => ({
@@ -105,6 +116,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         set({ isBusy: true, error: null });
 
         try {
+            removeStaleQueueTask(target);
             markAutomationRecoveryItemsResumed([target]);
             useBatchQueueStore.getState().enqueueRecoveredItems([target]);
             const nextItems = get().items.filter((item) => item.id !== id);
@@ -115,7 +127,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
                 isBusy: false,
                 error: null,
             });
-            removeRecoveryTask(target);
+            removeRecoveryLedgerTask(target);
         } catch (error) {
             const errorMessage = extractErrorMessage(error) || 'Failed to resume recovery item.';
             logger.error('[Recovery] Failed to resume recovery item:', error);
@@ -141,10 +153,11 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         set({ isBusy: true, error: null });
 
         try {
+            pendingItems.forEach(removeStaleQueueTask);
             markAutomationRecoveryItemsResumed(pendingItems);
             useBatchQueueStore.getState().enqueueRecoveredItems(pendingItems);
             await persistRecoveryItems([]);
-            pendingItems.forEach(removeRecoveryTask);
+            pendingItems.forEach(removeRecoveryLedgerTask);
             set({
                 items: [],
                 updatedAt: null,

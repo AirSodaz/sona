@@ -119,4 +119,66 @@ describe('createRecordingPersistence', () => {
         expect(transcriptState.setAudioUrl).toHaveBeenNthCalledWith(1, 'file://C:/history/web-history.webm');
         expect(transcriptState.setAudioUrl).toHaveBeenNthCalledWith(2, 'file://native.wav');
     });
+
+    it('deletes empty live recording drafts instead of leaving stale workspace badges', async () => {
+        const transcriptState: RecordingPersistenceTranscriptState = {
+            config: {} as RecordingPersistenceTranscriptState['config'],
+            segments: [],
+            setAudioUrl: vi.fn(),
+            setSegments: vi.fn(),
+        };
+
+        const addHistoryItem = vi.fn();
+        const upsertHistoryItem = vi.fn();
+        const deleteHistoryItem = vi.fn().mockResolvedValue(undefined);
+        const syncSavedRecordingMeta = vi.fn();
+        const persistSummary = vi.fn().mockResolvedValue(undefined);
+        const setActiveProjectId = vi.fn().mockResolvedValue(undefined);
+        const createLiveRecordingDraft = vi.fn()
+            .mockResolvedValueOnce(createDraftHandle('empty-web-history', 'webm'))
+            .mockResolvedValueOnce(createDraftHandle('empty-native-history', 'wav'));
+        const completeLiveRecordingDraft = vi.fn();
+        const removeFile = vi.fn().mockResolvedValue(undefined);
+        const writeFile = vi.fn().mockResolvedValue(undefined);
+
+        const persistence = createRecordingPersistence({
+            logger: {
+                info: vi.fn(),
+                warn: vi.fn(),
+                error: vi.fn(),
+            },
+            history: {
+                createLiveRecordingDraft,
+                completeLiveRecordingDraft,
+                discardLiveRecordingDraft: vi.fn().mockResolvedValue(undefined),
+                saveRecording: vi.fn(),
+                saveNativeRecording: vi.fn(),
+            },
+            getTranscriptState: () => transcriptState,
+            getActiveProjectId: () => 'project-1',
+            setActiveProjectId,
+            addHistoryItem,
+            upsertHistoryItem,
+            deleteHistoryItem,
+            persistSummary,
+            annotateSegmentsForFile: vi.fn(async (_filePath, segments) => segments),
+            syncSavedRecordingMeta,
+            writeFile,
+            removeFile,
+            fileSrcFromPath: (filePath) => `file://${filePath}`,
+        });
+
+        const webDraft = await persistence.createLiveRecordingDraft('webm');
+        const nativeDraft = await persistence.createLiveRecordingDraft('wav');
+
+        await persistence.persistBrowserRecording(webDraft, new Blob(['web'], { type: 'audio/webm' }), 3);
+        await persistence.persistNativeRecording(nativeDraft, 'native.wav', 3);
+
+        expect(deleteHistoryItem).toHaveBeenNthCalledWith(1, 'empty-web-history');
+        expect(deleteHistoryItem).toHaveBeenNthCalledWith(2, 'empty-native-history');
+        expect(completeLiveRecordingDraft).not.toHaveBeenCalled();
+        expect(upsertHistoryItem).not.toHaveBeenCalled();
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(removeFile).toHaveBeenCalledWith('native.wav');
+    });
 });

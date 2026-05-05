@@ -7,7 +7,7 @@ mod recovery;
 mod storage;
 
 use recovery::repository::RecoveryRepository;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs::{self, File};
 use std::path::Path;
 use tempfile::tempdir;
@@ -110,6 +110,96 @@ fn persist_queue_snapshot_filters_queue_items_and_normalizes_recovery_payloads()
     let persisted = read_recovery_json(dir.path());
     assert_eq!(persisted["version"], 1);
     assert_eq!(persisted["items"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn persist_queue_snapshot_merges_with_unresolved_recovery_items_from_previous_crashes() {
+    let dir = tempdir().unwrap();
+    let old_source = dir.path().join("old.wav");
+    let same_source = dir.path().join("same.wav");
+    let fresh_source = dir.path().join("fresh.wav");
+    File::create(&old_source).unwrap();
+    File::create(&same_source).unwrap();
+    File::create(&fresh_source).unwrap();
+    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+
+    repository
+        .save_snapshot(vec![
+            json!({
+                "id": "old-recovery",
+                "filename": "old.wav",
+                "filePath": old_source,
+                "source": "batch_import",
+                "resolution": "pending",
+                "progress": 30,
+                "segments": [],
+                "projectId": null,
+                "lastKnownStage": "transcribing",
+                "updatedAt": 10,
+                "hasSourceFile": true,
+                "canResume": true
+            }),
+            json!({
+                "id": "same-recovery",
+                "filename": "same-old.wav",
+                "filePath": same_source,
+                "source": "batch_import",
+                "resolution": "pending",
+                "progress": 40,
+                "segments": [],
+                "projectId": null,
+                "lastKnownStage": "transcribing",
+                "updatedAt": 11,
+                "hasSourceFile": true,
+                "canResume": true
+            }),
+        ])
+        .unwrap();
+
+    let snapshot = repository
+        .persist_queue_snapshot(vec![
+            json!({
+                "id": "queue-same",
+                "recoveryId": "same-recovery",
+                "filename": "same-new.wav",
+                "filePath": same_source,
+                "status": "processing",
+                "progress": 75,
+                "segments": [],
+                "projectId": null,
+                "lastKnownStage": "exporting"
+            }),
+            json!({
+                "id": "fresh-recovery",
+                "filename": "fresh.wav",
+                "filePath": fresh_source,
+                "status": "pending",
+                "progress": 5,
+                "segments": [],
+                "projectId": null,
+                "lastKnownStage": "queued"
+            }),
+        ])
+        .unwrap();
+
+    assert_eq!(snapshot.items.len(), 3);
+    assert!(snapshot.items.iter().any(|item| item.id == "old-recovery"));
+
+    let same = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == "same-recovery")
+        .unwrap();
+    assert_eq!(same.filename, "same-new.wav");
+    assert_eq!(same.progress, 75.0);
+    assert_eq!(same.last_known_stage, "exporting");
+
+    let fresh = snapshot
+        .items
+        .iter()
+        .find(|item| item.id == "fresh-recovery")
+        .unwrap();
+    assert_eq!(fresh.filename, "fresh.wav");
 }
 
 #[test]

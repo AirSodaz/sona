@@ -114,6 +114,7 @@ export function createRecordingPersistence({
         let segments = transcriptState.segments;
 
         if (segments.length === 0) {
+            await discardLiveRecordingDraft(draft);
             return;
         }
 
@@ -172,6 +173,7 @@ export function createRecordingPersistence({
         } catch (error) {
             logger.error('[useAudioRecorder] Failed to delete empty WAV file:', error);
         }
+        await discardLiveRecordingDraft(draft);
     }
 
     return {

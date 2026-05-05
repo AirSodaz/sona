@@ -324,6 +324,44 @@ describe('NotificationCenter task center', () => {
     expect(screen.queryByRole('dialog', { name: 'Task Center' })).toBeNull();
   });
 
+  it('shows only the recoverable entry when a stale batch task exists for the same recovery item', () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-recovery-1',
+        kind: 'batchImport',
+        status: 'pending',
+        title: 'recover.wav',
+        progress: 0,
+        cancelable: true,
+        recoverable: false,
+        stage: 'transcribing',
+      }),
+      makeTask({
+        id: 'recovery-recovery-1',
+        kind: 'recovery',
+        status: 'recoverable',
+        title: 'recover.wav',
+        progress: 25,
+        recoverable: true,
+        cancelable: false,
+        stage: 'transcribing',
+      }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    expect(screen.getAllByText('recover.wav')).toHaveLength(1);
+    expect(screen.getByText(/Recovery .* Recoverable/)).toBeDefined();
+    expect(screen.queryByText(/Batch import .* Pending/)).toBeNull();
+  });
+
   it('retries failed batch ledger tasks through the batch queue', async () => {
     taskLedgerState.tasks = [
       makeTask({

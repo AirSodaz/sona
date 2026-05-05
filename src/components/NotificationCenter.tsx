@@ -90,6 +90,14 @@ function getTaskSection(task: TaskLedgerRecord): TaskCenterSection {
     return 'recent';
 }
 
+function getStaleQueueTaskIdForRecovery(task: TaskLedgerRecord): string | null {
+    if (task.kind !== 'recovery' || task.status !== 'recoverable' || !task.id.startsWith('recovery-')) {
+        return null;
+    }
+
+    return `batch-${task.id.slice('recovery-'.length)}`;
+}
+
 function getTaskKindLabel(
     kind: TaskLedgerKind,
     t: (key: string, options?: Record<string, unknown>) => string,
@@ -320,12 +328,19 @@ export function NotificationCenter({
     });
 
     const entries = useMemo<TaskCenterEntry[]>(() => {
-        const nextEntries: TaskCenterEntry[] = tasks.map((task) => ({
-            source: 'ledger',
-            id: task.id,
-            section: getTaskSection(task),
-            task,
-        }));
+        const staleQueueTaskIds = new Set(
+            tasks
+                .map(getStaleQueueTaskIdForRecovery)
+                .filter((id): id is string => Boolean(id)),
+        );
+        const nextEntries: TaskCenterEntry[] = tasks
+            .filter((task) => !staleQueueTaskIds.has(task.id))
+            .map((task) => ({
+                source: 'ledger',
+                id: task.id,
+                section: getTaskSection(task),
+                task,
+            }));
 
         if (notificationVisible && updateInfo) {
             let body: string | null;

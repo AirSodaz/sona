@@ -46,6 +46,7 @@ vi.mock('../automationStore', () => ({
 }));
 
 vi.mock('../../services/taskLedgerRuntime', () => ({
+    createBatchTaskLedgerId: (id: string) => `batch-${id}`,
     buildRecoveryTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.buildRecoveryTaskLedgerRecordMock, undefined, args),
     upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.upsertTaskLedgerRecordMock, undefined, args),
     patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.patchTaskLedgerRecordMock, undefined, args),
@@ -114,6 +115,36 @@ describe('recoveryStore', () => {
         }));
     });
 
+    it('removes stale batch ledger tasks when an item becomes recoverable', async () => {
+        const recoveryItem = {
+            id: 'recovery-1',
+            filename: 'meeting.wav',
+            filePath: 'C:\\watch\\meeting.wav',
+            source: 'batch_import' as const,
+            resolution: 'pending' as const,
+            progress: 33,
+            segments: [],
+            projectId: null,
+            lastKnownStage: 'transcribing' as const,
+            updatedAt: 100,
+            hasSourceFile: true,
+            canResume: true,
+        };
+        testContext.loadRecoverySnapshotMock.mockResolvedValueOnce({
+            version: 1,
+            updatedAt: 100,
+            items: [recoveryItem],
+        });
+
+        await useRecoveryStore.getState().loadRecovery();
+
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-1');
+        expect(testContext.upsertTaskLedgerRecordMock).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'recovery-recovery-1',
+            status: 'recoverable',
+        }));
+    });
+
     it('re-enqueues resumable items and clears the persisted recovery snapshot', async () => {
         const snapshotItems = [
             {
@@ -146,6 +177,7 @@ describe('recoveryStore', () => {
         expect(testContext.markAutomationRecoveryItemsResumedMock).toHaveBeenCalledWith(snapshotItems);
         expect(testContext.enqueueRecoveredItemsMock).toHaveBeenCalledWith(snapshotItems);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-1');
         expect(useRecoveryStore.getState().items).toEqual([]);
     });
@@ -176,6 +208,7 @@ describe('recoveryStore', () => {
         await useRecoveryStore.getState().resumeItem('recovery-single');
 
         expect(testContext.enqueueRecoveredItemsMock).toHaveBeenCalledWith([recoveryItem]);
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-single');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-single');
         expect(testContext.patchTaskLedgerRecordMock).not.toHaveBeenCalledWith('recovery-recovery-single', expect.objectContaining({
             status: 'succeeded',
@@ -299,6 +332,7 @@ describe('recoveryStore', () => {
 
         expect(testContext.markRecoveryItemDiscardedMock).toHaveBeenCalledWith(automationItem);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([batchItem]);
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-automation-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-automation-1');
         expect(useRecoveryStore.getState().items).toEqual([batchItem]);
     });
@@ -348,6 +382,8 @@ describe('recoveryStore', () => {
 
         expect(testContext.markRecoveryItemDiscardedMock).toHaveBeenCalledWith(items[1]);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-batch-1');
+        expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-automation-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-batch-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-automation-1');
         expect(useRecoveryStore.getState().items).toEqual([]);

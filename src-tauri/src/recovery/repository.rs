@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -8,7 +9,7 @@ use super::normalization::{
     empty_snapshot, now_ms, recovered_item_from_queue_value, recovered_item_from_saved_value,
     snapshot_from_items, snapshot_from_value,
 };
-use super::types::{RecoverySnapshot, QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME};
+use super::types::{QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoverySnapshot};
 
 #[derive(Clone, Debug)]
 pub struct RecoveryRepository {
@@ -71,10 +72,21 @@ impl RecoveryRepository {
     ) -> Result<RecoverySnapshot, String> {
         self.ensure_ready()?;
         let now = now_ms();
-        let items = queue_items
+        let mut items = queue_items
             .into_iter()
             .filter_map(|item| recovered_item_from_queue_value(item, now))
             .collect::<Vec<_>>();
+        let current_item_ids = items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<HashSet<_>>();
+        let existing_items = self.load_snapshot()?.items;
+
+        items.extend(
+            existing_items.into_iter().filter(|item| {
+                item.resolution == "pending" && !current_item_ids.contains(&item.id)
+            }),
+        );
         let snapshot = snapshot_from_items(items);
         write_json_pretty_atomic(&self.queue_recovery_path(), &snapshot)?;
         Ok(snapshot)

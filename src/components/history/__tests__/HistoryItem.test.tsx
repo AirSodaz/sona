@@ -180,4 +180,35 @@ describe('HistoryItem', () => {
       /\.history-item--table:last-child\s*{[^}]*border-bottom:\s*none;/s,
     );
   });
+
+  it('removes the draft badge when the same live recording history item completes', () => {
+    const { rerender } = render(
+      <HistoryItem
+        item={{
+          ...item,
+          status: 'draft',
+          draftSource: 'live_record',
+        }}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Draft')).toBeDefined();
+
+    rerender(
+      <HistoryItem
+        item={{
+          ...item,
+          status: 'complete',
+          draftSource: undefined,
+          previewText: 'Finished transcript',
+        }}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Draft')).toBeNull();
+  });
 });
