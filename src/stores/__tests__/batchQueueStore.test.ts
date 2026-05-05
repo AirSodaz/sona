@@ -135,6 +135,82 @@ describe('batchQueueStore', () => {
         }));
     });
 
+    it('creates new batch and automation ledger records when recovered items are enqueued', () => {
+        useBatchQueueStore.getState().enqueueRecoveredItems([
+            {
+                id: 'recovery-batch-1',
+                filename: 'batch.wav',
+                filePath: '/batch.wav',
+                source: 'batch_import',
+                resolution: 'pending',
+                progress: 25,
+                segments: [],
+                projectId: null,
+                lastKnownStage: 'transcribing',
+                updatedAt: 100,
+                hasSourceFile: true,
+                canResume: true,
+            },
+            {
+                id: 'recovery-automation-1',
+                filename: 'automation.wav',
+                filePath: '/automation.wav',
+                source: 'automation',
+                resolution: 'pending',
+                progress: 60,
+                segments: [],
+                projectId: 'project-1',
+                lastKnownStage: 'transcribing',
+                updatedAt: 101,
+                hasSourceFile: true,
+                canResume: true,
+                automationRuleId: 'rule-1',
+                sourceFingerprint: 'fp-1',
+            },
+        ]);
+
+        expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'batch-recovery-batch-1',
+            kind: 'batchImport',
+            status: 'pending',
+            title: 'batch.wav',
+        }));
+        expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'batch-recovery-automation-1',
+            kind: 'automation',
+            status: 'pending',
+            title: 'automation.wav',
+        }));
+    });
+
+    it('records recovered item failures on the new batch ledger record', () => {
+        useBatchQueueStore.setState({
+            queueItems: [
+                {
+                    id: 'recovery-automation-1',
+                    recoveryId: 'recovery-automation-1',
+                    filename: 'automation.wav',
+                    filePath: '/automation.wav',
+                    status: 'pending',
+                    progress: 0,
+                    segments: [],
+                    audioUrl: 'asset:///automation.wav',
+                    projectId: null,
+                    origin: 'automation',
+                },
+            ],
+            activeItemId: 'recovery-automation-1',
+        });
+
+        useBatchQueueStore.getState().setItemError('recovery-automation-1', 'still broken');
+
+        expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('batch-recovery-automation-1', expect.objectContaining({
+            status: 'failed',
+            errorMessage: 'still broken',
+            retryable: true,
+        }));
+    });
+
     it('should sync to transcript store when removing the active item', () => {
         // Setup
         useBatchQueueStore.setState({

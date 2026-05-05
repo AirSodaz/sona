@@ -10,6 +10,7 @@ import {
     buildRecoveryTaskLedgerRecord,
     createRecoveryTaskLedgerId,
     patchTaskLedgerRecord,
+    removeTaskLedgerRecord,
     upsertTaskLedgerRecord,
 } from '../services/taskLedgerRuntime';
 import type { RecoveredQueueItem } from '../types/recovery';
@@ -40,6 +41,22 @@ function mirrorRecoveryItemsToTaskLedger(items: RecoveredQueueItem[]): void {
         .forEach((item) => {
             upsertTaskLedgerRecord(buildRecoveryTaskLedgerRecord(item));
         });
+}
+
+function patchRecoveryTaskRecoverable(item: RecoveredQueueItem, errorMessage: string): void {
+    patchTaskLedgerRecord(createRecoveryTaskLedgerId(item.id), {
+        status: 'recoverable',
+        progress: item.progress,
+        retryable: item.canResume,
+        cancelable: false,
+        recoverable: item.canResume,
+        stage: item.lastKnownStage,
+        errorMessage,
+    });
+}
+
+function removeRecoveryTask(item: RecoveredQueueItem): void {
+    removeTaskLedgerRecord(createRecoveryTaskLedgerId(item.id));
 }
 
 export const useRecoveryStore = create<RecoveryState>((set, get) => ({
@@ -98,15 +115,11 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
                 isBusy: false,
                 error: null,
             });
-            patchTaskLedgerRecord(createRecoveryTaskLedgerId(id), {
-                status: 'succeeded',
-                progress: 100,
-                retryable: false,
-                recoverable: false,
-            });
+            removeRecoveryTask(target);
         } catch (error) {
             const errorMessage = extractErrorMessage(error) || 'Failed to resume recovery item.';
             logger.error('[Recovery] Failed to resume recovery item:', error);
+            patchRecoveryTaskRecoverable(target, errorMessage);
             set({
                 isBusy: false,
                 error: errorMessage,
@@ -131,14 +144,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
             markAutomationRecoveryItemsResumed(pendingItems);
             useBatchQueueStore.getState().enqueueRecoveredItems(pendingItems);
             await persistRecoveryItems([]);
-            pendingItems.forEach((item) => {
-                patchTaskLedgerRecord(createRecoveryTaskLedgerId(item.id), {
-                    status: 'succeeded',
-                    progress: 100,
-                    retryable: false,
-                    recoverable: false,
-                });
-            });
+            pendingItems.forEach(removeRecoveryTask);
             set({
                 items: [],
                 updatedAt: null,
@@ -148,6 +154,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         } catch (error) {
             const errorMessage = extractErrorMessage(error) || 'Failed to resume recovery items.';
             logger.error('[Recovery] Failed to resume recovery items:', error);
+            pendingItems.forEach((item) => patchRecoveryTaskRecoverable(item, errorMessage));
             set({
                 isBusy: false,
                 error: errorMessage,
@@ -171,11 +178,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
 
             const nextItems = get().items.filter((item) => item.id !== id);
             await persistRecoveryItems(nextItems);
-            patchTaskLedgerRecord(createRecoveryTaskLedgerId(id), {
-                status: 'cancelled',
-                retryable: false,
-                recoverable: false,
-            });
+            removeRecoveryTask(target);
             set({
                 items: nextItems,
                 updatedAt: nextItems.length > 0 ? Date.now() : null,
@@ -185,6 +188,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         } catch (error) {
             const errorMessage = extractErrorMessage(error) || 'Failed to discard recovery item.';
             logger.error('[Recovery] Failed to discard recovery item:', error);
+            patchRecoveryTaskRecoverable(target, errorMessage);
             set({
                 isBusy: false,
                 error: errorMessage,
@@ -206,13 +210,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
                 .filter((item) => item.source === 'automation')
                 .map((item) => useAutomationStore.getState().markRecoveryItemDiscarded(item)));
             await persistRecoveryItems([]);
-            items.forEach((item) => {
-                patchTaskLedgerRecord(createRecoveryTaskLedgerId(item.id), {
-                    status: 'cancelled',
-                    retryable: false,
-                    recoverable: false,
-                });
-            });
+            items.forEach(removeRecoveryTask);
             set({
                 items: [],
                 updatedAt: null,
@@ -222,6 +220,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         } catch (error) {
             const errorMessage = extractErrorMessage(error) || 'Failed to discard recovery items.';
             logger.error('[Recovery] Failed to discard all recovery items:', error);
+            items.forEach((item) => patchRecoveryTaskRecoverable(item, errorMessage));
             set({
                 isBusy: false,
                 error: errorMessage,
