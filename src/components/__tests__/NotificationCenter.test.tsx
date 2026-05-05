@@ -27,6 +27,7 @@ const batchQueueState = {
   addFiles: vi.fn(),
 };
 
+const retryAutomationTaskFromLedgerMock = vi.fn();
 const relaunchMock = vi.fn();
 const showErrorMock = vi.fn();
 const runGuardedQuitMock = vi.fn();
@@ -43,6 +44,10 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
 
 vi.mock('../../services/quitGuard', () => ({
   runGuardedQuit: (...args: unknown[]) => runGuardedQuitMock(...args),
+}));
+
+vi.mock('../../services/automationTaskRetryService', () => ({
+  retryAutomationTaskFromLedger: (...args: unknown[]) => retryAutomationTaskFromLedgerMock(...args),
 }));
 
 vi.mock('../../stores/errorDialogStore', () => ({
@@ -167,6 +172,7 @@ describe('NotificationCenter task center', () => {
     vi.clearAllMocks();
     taskLedgerState.tasks = [];
     automationState.notifications = [];
+    retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
       await onExit();
@@ -349,7 +355,8 @@ describe('NotificationCenter task center', () => {
     expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-failed');
   });
 
-  it('retries failed automation ledger tasks through the automation store', async () => {
+  it('opens automation settings for rule-level automation failures without retry metadata', async () => {
+    const onOpenAutomationSettings = vi.fn();
     taskLedgerState.tasks = [
       makeTask({
         id: 'automation-failed',
@@ -357,25 +364,26 @@ describe('NotificationCenter task center', () => {
         status: 'failed',
         title: 'watch.wav',
         automationRuleId: 'rule-1',
+        filePath: undefined,
       }),
     ];
 
     render(
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
+        onOpenAutomationSettings={onOpenAutomationSettings}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open Automation' }));
       await Promise.resolve();
     });
 
-    expect(automationState.retryFailed).toHaveBeenCalledWith('rule-1');
-    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('automation-failed');
+    expect(onOpenAutomationSettings).toHaveBeenCalled();
+    expect(taskLedgerState.removeTask).not.toHaveBeenCalledWith('automation-failed');
   });
 
   it('keeps visible updates as transient task center entries', () => {
@@ -425,7 +433,7 @@ describe('NotificationCenter task center', () => {
     expect(closeButton.disabled).toBe(true);
   });
 
-  it('retries existing automation failure notifications inside the task center', async () => {
+  it('does not render legacy automation session notifications in the task center', async () => {
     automationState.notifications = [
       {
         id: 'automation-failure-rule-2',
@@ -451,12 +459,38 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
+    expect(screen.queryByText('Failure Rule needs attention')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry Failed' })).toBeNull();
+    expect(screen.getByText('No active tasks right now.')).toBeDefined();
+  });
+
+  it('retries failed automation ledger file tasks through the task retry service', async () => {
+    const task = makeTask({
+      id: 'automation-failed-file',
+      kind: 'automation',
+      status: 'failed',
+      title: 'failed.wav',
+      automationRuleId: 'rule-2',
+      filePath: 'C:\\watch\\failed.wav',
+    });
+    taskLedgerState.tasks = [task];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Retry Failed' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
       await Promise.resolve();
     });
 
-    expect(automationState.retryNotification).toHaveBeenCalledWith('automation-failure-rule-2');
+    expect(retryAutomationTaskFromLedgerMock).toHaveBeenCalledWith(task);
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('automation-failed-file');
   });
 
   it('updates the transient update task while installing and then offers relaunch', async () => {

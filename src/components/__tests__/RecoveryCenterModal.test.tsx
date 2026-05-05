@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { RecoveryCenterModal } from '../RecoveryCenterModal';
 
 const mockResumeAll = vi.fn();
+const mockResumeItem = vi.fn();
 const mockDiscardAll = vi.fn();
 const mockDiscardItem = vi.fn();
 
@@ -46,6 +47,7 @@ const recoveryState = {
   isBusy: false,
   error: null,
   resumeAll: (...args: unknown[]) => mockResumeAll(...args),
+  resumeItem: (...args: unknown[]) => mockResumeItem(...args),
   discardAll: (...args: unknown[]) => mockDiscardAll(...args),
   discardItem: (...args: unknown[]) => mockDiscardItem(...args),
 };
@@ -61,6 +63,7 @@ vi.mock('react-i18next', () => ({
       if (key === 'recovery.actions.resume_all') return 'Resume All';
       if (key === 'recovery.actions.discard_all') return 'Discard All';
       if (key === 'recovery.actions.discard') return 'Discard';
+      if (key === 'common.resume') return 'Resume';
       if (key === 'recovery.overview.batch_description') return 'Batch overview';
       if (key === 'recovery.overview.automation_description') return 'Automation overview';
       if (key === 'recovery.overview.pending_count') return `${options?.count} file`;
@@ -154,15 +157,37 @@ describe('RecoveryCenterModal', () => {
     expect(screen.getByText('automation.wav')).toBeDefined();
   });
 
-  it('triggers resume all and discard item actions', async () => {
+  it('triggers resume all, resume item, and discard item actions', async () => {
     render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume All' }));
+    const meetingRow = screen.getByText('meeting.wav').closest('.recovery-item-row') as HTMLElement;
+    fireEvent.click(within(meetingRow).getByRole('button', { name: 'Resume' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Discard' })[0]);
 
     await waitFor(() => {
       expect(mockResumeAll).toHaveBeenCalledTimes(1);
+      expect(mockResumeItem).toHaveBeenCalledWith('recovery-batch-1');
       expect(mockDiscardItem).toHaveBeenCalledWith('recovery-batch-1');
     });
+  });
+
+  it('disables single-item resume for missing sources while keeping discard available', () => {
+    recoveryState.items = [
+      {
+        ...recoveryState.items[0],
+        hasSourceFile: false,
+        canResume: false,
+      },
+    ];
+
+    render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
+
+    const meetingRow = screen.getByText('meeting.wav').closest('.recovery-item-row') as HTMLElement;
+    const resumeButton = within(meetingRow).getByRole('button', { name: 'Resume' }) as HTMLButtonElement;
+    const discardButton = within(meetingRow).getByRole('button', { name: 'Discard' }) as HTMLButtonElement;
+
+    expect(resumeButton.disabled).toBe(true);
+    expect(discardButton.disabled).toBe(false);
   });
 });

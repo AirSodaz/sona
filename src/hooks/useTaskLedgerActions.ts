@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
-import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
@@ -9,6 +8,7 @@ import {
   isTaskLedgerActionableStatus,
   isTaskLedgerActiveStatus,
 } from '../types/taskLedger';
+import { retryAutomationTaskFromLedger } from '../services/automationTaskRetryService';
 import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
 
 export type TaskCenterActionId =
@@ -43,12 +43,6 @@ export interface TaskCenterUpdateActionInput {
   isBusy: boolean;
 }
 
-export interface TaskCenterAutomationNotificationActionInput {
-  notificationId: string;
-  kind: 'automationFailure' | 'automationSuccess';
-  retryable: boolean;
-}
-
 type TaskCenterTranslate = (key: string, options?: Record<string, unknown>) => string;
 
 interface BatchAddOptions {
@@ -61,9 +55,7 @@ export interface TaskCenterActionDependencies {
   removeTask: (id: string) => Promise<void>;
   resumeRecoveryItem: (id: string) => Promise<void>;
   discardRecoveryItem: (id: string) => Promise<void>;
-  retryAutomationRule: (ruleId: string) => Promise<void>;
-  retryAutomationNotification: (notificationId: string) => Promise<void>;
-  dismissAutomationNotification: (notificationId: string) => void;
+  retryAutomationTask: (task: TaskLedgerRecord) => Promise<void>;
   addBatchFiles: (filePaths: string[], options?: BatchAddOptions) => void;
   retryLlmTask: (task: TaskLedgerRecord) => Promise<void>;
   installUpdate: () => Promise<void>;
@@ -77,9 +69,6 @@ export interface TaskCenterActionDependencies {
 export interface TaskCenterActionRegistry {
   getLedgerTaskActions: (task: TaskLedgerRecord) => TaskCenterAction[];
   getUpdateTaskActions: (entry: TaskCenterUpdateActionInput) => TaskCenterResolvedActions;
-  getAutomationNotificationActions: (
-    entry: TaskCenterAutomationNotificationActionInput
-  ) => TaskCenterResolvedActions;
 }
 
 export interface UseTaskLedgerActionsInput {
@@ -190,17 +179,17 @@ export function createTaskCenterActionRegistry(
       }
 
       if (isTaskLedgerActionableStatus(task.status)) {
-        const canRetryAutomation = task.kind === 'automation' && Boolean(task.automationRuleId);
+        const canRetryAutomationFile = task.kind === 'automation' && Boolean(task.automationRuleId) && Boolean(task.filePath);
         const canRetryBatch = task.kind === 'batchImport' && Boolean(task.filePath);
         const actions: TaskCenterAction[] = [];
 
-        if (canRetryAutomation && task.automationRuleId) {
+        if (canRetryAutomationFile) {
           actions.push({
             id: 'retry',
             label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
             variant: 'primary',
             run: async () => {
-              await deps.retryAutomationRule(task.automationRuleId as string);
+              await deps.retryAutomationTask(task);
               await deps.removeTask(task.id);
             },
           });
@@ -272,31 +261,6 @@ export function createTaskCenterActionRegistry(
         },
       };
     },
-
-    getAutomationNotificationActions: ({ notificationId, kind, retryable }) => {
-      const openTarget = createOpenAutomationAction(deps);
-      const row = kind === 'automationFailure' && retryable
-        ? [
-          {
-            id: 'retry' as const,
-            label: deps.t('automation.retry_failed', { defaultValue: 'Retry Failed' }),
-            variant: 'primary' as const,
-            run: () => deps.retryAutomationNotification(notificationId),
-          },
-        ]
-        : [openTarget];
-
-      return {
-        row,
-        open: openTarget,
-        close: {
-          id: 'dismiss',
-          label: deps.t('common.close'),
-          variant: 'secondarySoft',
-          run: () => deps.dismissAutomationNotification(notificationId),
-        },
-      };
-    },
   };
 }
 
@@ -311,9 +275,6 @@ export function useTaskLedgerActions({
   const removeTask = useTaskLedgerStore((state) => state.removeTask);
   const resumeRecoveryItem = useRecoveryStore((state) => state.resumeItem);
   const discardRecoveryItem = useRecoveryStore((state) => state.discardItem);
-  const retryAutomationRule = useAutomationStore((state) => state.retryFailed);
-  const retryAutomationNotification = useAutomationStore((state) => state.retryNotification);
-  const dismissAutomationNotification = useAutomationStore((state) => state.dismissNotification);
   const addBatchFiles = useBatchQueueStore((state) => state.addFiles);
 
   return useMemo(() => createTaskCenterActionRegistry({
@@ -322,9 +283,7 @@ export function useTaskLedgerActions({
     removeTask,
     resumeRecoveryItem,
     discardRecoveryItem,
-    retryAutomationRule,
-    retryAutomationNotification,
-    dismissAutomationNotification,
+    retryAutomationTask: retryAutomationTaskFromLedger,
     addBatchFiles,
     retryLlmTask: retryLlmTaskFromLedger,
     installUpdate: updater.installUpdate,
@@ -337,14 +296,11 @@ export function useTaskLedgerActions({
     addBatchFiles,
     closePanel,
     discardRecoveryItem,
-    dismissAutomationNotification,
     onOpenAutomationSettings,
     onOpenRecoveryCenter,
     removeTask,
     requestTaskCancel,
     resumeRecoveryItem,
-    retryAutomationNotification,
-    retryAutomationRule,
     t,
     updater.dismissNotification,
     updater.installUpdate,

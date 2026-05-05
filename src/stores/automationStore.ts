@@ -60,6 +60,7 @@ interface AutomationState {
   toggleRuleEnabled: (ruleId: string, enabled: boolean) => Promise<void>;
   scanRuleNow: (ruleId: string) => Promise<void>;
   retryFailed: (ruleId: string) => Promise<void>;
+  retryFailedFile: (ruleId: string, filePath: string) => Promise<void>;
   dismissNotification: (notificationId: string) => void;
   retryNotification: (notificationId: string) => Promise<void>;
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
@@ -317,6 +318,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
   retryFailed: async (ruleId) => {
     await automationRuntimeCoordinator.retryFailed(ruleId);
+  },
+
+  retryFailedFile: async (ruleId, filePath) => {
+    await automationRuntimeCoordinator.retryFailedFile(ruleId, filePath);
   },
 
   dismissNotification: (notificationId) => {

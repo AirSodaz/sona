@@ -70,6 +70,7 @@ export function RecoveryCenterModal({
     const isBusy = useRecoveryStore((state) => state.isBusy);
     const error = useRecoveryStore((state) => state.error);
     const resumeAll = useRecoveryStore((state) => state.resumeAll);
+    const resumeItem = useRecoveryStore((state) => state.resumeItem);
     const discardItem = useRecoveryStore((state) => state.discardItem);
     const discardAll = useRecoveryStore((state) => state.discardAll);
 
@@ -126,6 +127,14 @@ export function RecoveryCenterModal({
     const handleDiscardItem = async (id: string) => {
         try {
             await discardItem(id);
+        } catch {
+            // Store error state drives the banner.
+        }
+    };
+
+    const handleResumeItem = async (id: string) => {
+        try {
+            await resumeItem(id);
         } catch {
             // Store error state drives the banner.
         }
@@ -267,15 +276,26 @@ export function RecoveryCenterModal({
                                                         {describeRecoveryItem(item, projectName, t)}
                                                     </div>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
-                                                    onClick={() => void handleDiscardItem(item.id)}
-                                                    disabled={isBusy}
-                                                >
-                                                    {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Trash2 size={14} />}
-                                                    {t('recovery.actions.discard')}
-                                                </button>
+                                                <div className="recovery-item-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                                                        onClick={() => void handleResumeItem(item.id)}
+                                                        disabled={isBusy || !item.canResume}
+                                                    >
+                                                        {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
+                                                        {t('common.resume', { defaultValue: 'Resume' })}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                                                        onClick={() => void handleDiscardItem(item.id)}
+                                                        disabled={isBusy}
+                                                    >
+                                                        {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Trash2 size={14} />}
+                                                        {t('recovery.actions.discard')}
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     })}

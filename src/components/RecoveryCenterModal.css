@@ -113,6 +113,14 @@
   line-height: 1.5;
 }
 
+.recovery-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 980px) {
   .recovery-overview-grid {
     grid-template-columns: 1fr;
@@ -126,5 +134,9 @@
 
   .recovery-inline-action {
     align-self: flex-start;
+  }
+
+  .recovery-item-actions {
+    justify-content: flex-start;
   }
 }

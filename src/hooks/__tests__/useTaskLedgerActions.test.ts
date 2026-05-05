@@ -34,9 +34,7 @@ function makeDeps(
     removeTask: vi.fn().mockResolvedValue(undefined),
     resumeRecoveryItem: vi.fn().mockResolvedValue(undefined),
     discardRecoveryItem: vi.fn().mockResolvedValue(undefined),
-    retryAutomationRule: vi.fn().mockResolvedValue(undefined),
-    retryAutomationNotification: vi.fn().mockResolvedValue(undefined),
-    dismissAutomationNotification: vi.fn(),
+    retryAutomationTask: vi.fn().mockResolvedValue(undefined),
     addBatchFiles: vi.fn(),
     retryLlmTask: vi.fn().mockResolvedValue(undefined),
     installUpdate: vi.fn().mockResolvedValue(undefined),
@@ -114,29 +112,62 @@ describe('createTaskCenterActionRegistry', () => {
     expect(deps.relaunchToUpdate).toHaveBeenCalled();
   });
 
-  it('routes automation notification actions through the automation store and open target callback', async () => {
+  it('retries failed automation file tasks and clears the old ledger record', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+    const task = makeTask({
+      id: 'automation-failed-file',
+      kind: 'automation',
+      status: 'failed',
+      title: 'failed.wav',
+      automationRuleId: 'rule-1',
+      filePath: 'C:\\watch\\failed.wav',
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+
+    expect(actions.map((action) => action.id)).toEqual(['retry', 'dismiss']);
+
+    await getAction(actions, 'retry').run();
+
+    expect(deps.retryAutomationTask).toHaveBeenCalledWith(task);
+    expect(deps.removeTask).toHaveBeenCalledWith('automation-failed-file');
+  });
+
+  it('keeps failed automation file tasks when retry preflight fails', async () => {
+    const deps = makeDeps({
+      retryAutomationTask: vi.fn().mockRejectedValue(new Error('Source file is no longer available for retry.')),
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    await expect(getAction(registry.getLedgerTaskActions(makeTask({
+      id: 'automation-failed-file',
+      kind: 'automation',
+      status: 'failed',
+      automationRuleId: 'rule-1',
+      filePath: 'C:\\watch\\failed.wav',
+    })), 'retry').run()).rejects.toThrow('Source file is no longer available for retry.');
+
+    expect(deps.removeTask).not.toHaveBeenCalled();
+  });
+
+  it('opens automation settings for rule-level automation failures without a retry file', async () => {
     const deps = makeDeps();
     const registry = createTaskCenterActionRegistry(deps);
 
-    const retryable = registry.getAutomationNotificationActions({
-      notificationId: 'automation-failure-rule-1',
-      kind: 'automationFailure',
-      retryable: true,
-    });
-    expect(retryable.row.map((action) => action.id)).toEqual(['retry']);
-    expect(retryable.close?.id).toBe('dismiss');
-    await getAction(retryable.row, 'retry').run();
-    retryable.close?.run();
-    expect(deps.retryAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-1');
-    expect(deps.dismissAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-1');
+    const actions = registry.getLedgerTaskActions(makeTask({
+      id: 'automation-rule-failed',
+      kind: 'automation',
+      status: 'failed',
+      title: 'Meeting Inbox',
+      filePath: undefined,
+      automationRuleId: 'rule-1',
+    }));
 
-    const success = registry.getAutomationNotificationActions({
-      notificationId: 'automation-success-rule-1',
-      kind: 'automationSuccess',
-      retryable: false,
-    });
-    expect(success.row.map((action) => action.id)).toEqual(['openTarget']);
-    await getAction(success.row, 'openTarget').run();
+    expect(actions.map((action) => action.id)).toEqual(['openTarget', 'dismiss']);
+
+    await getAction(actions, 'openTarget').run();
+
     expect(deps.closePanel).toHaveBeenCalled();
     expect(deps.onOpenAutomationSettings).toHaveBeenCalled();
   });

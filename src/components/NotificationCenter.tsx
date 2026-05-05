@@ -14,7 +14,6 @@ import {
     RestoreIcon,
     SparklesIcon,
 } from './Icons';
-import { useAutomationStore } from '../stores/automationStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { useAppUpdater } from '../hooks/useAppUpdater';
 import { useTaskLedgerActions, type TaskCenterAction } from '../hooks/useTaskLedgerActions';
@@ -52,20 +51,7 @@ interface UpdateTaskEntry {
     isBusy: boolean;
 }
 
-interface AutomationNotificationEntry {
-    source: 'automationNotification';
-    id: string;
-    section: 'needsAction' | 'recent';
-    notificationId: string;
-    kind: 'automationFailure' | 'automationSuccess';
-    title: string;
-    body: string;
-    detail: string | null;
-    message: string | null;
-    retryable: boolean;
-}
-
-type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry | AutomationNotificationEntry;
+type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry;
 type NotificationTone = 'update' | 'recovery' | 'automation-failure' | 'automation-success' | 'task-active' | 'task-recent';
 
 function getFileName(filePath?: string): string | null {
@@ -306,7 +292,6 @@ export function NotificationCenter({
     const { t } = useTranslation();
     const tasks = useTaskLedgerStore((state) => state.tasks);
     const clearResolvedTasks = useTaskLedgerStore((state) => state.clearResolved);
-    const automationNotifications = useAutomationStore((state) => state.notifications);
     const {
         status,
         updateInfo,
@@ -363,71 +348,12 @@ export function NotificationCenter({
             });
         }
 
-        automationNotifications
-            .filter((notification) => notification.kind === 'failure')
-            .sort((a, b) => b.updatedAt - a.updatedAt)
-            .forEach((notification) => {
-                const latestFileName = getFileName(notification.latestFilePath)
-                    || t('automation.notifications.file_unknown');
-                const stageLabel = getStageLabel(notification.latestStage, t);
-
-                nextEntries.push({
-                    source: 'automationNotification',
-                    id: notification.id,
-                    section: 'needsAction',
-                    notificationId: notification.id,
-                    kind: 'automationFailure',
-                    title: t('automation.notifications.failure_title', {
-                        ruleName: notification.ruleName,
-                    }),
-                    body: t('automation.notifications.failure_body', {
-                        count: notification.count,
-                        fileName: latestFileName,
-                    }),
-                    detail: stageLabel
-                        ? t('automation.notifications.stage_detail', { stage: stageLabel })
-                        : null,
-                    message: notification.latestMessage || null,
-                    retryable: notification.retryable,
-                });
-            });
-
-        automationNotifications
-            .filter((notification) => notification.kind === 'success')
-            .sort((a, b) => b.updatedAt - a.updatedAt)
-            .forEach((notification) => {
-                const latestFileName = getFileName(notification.latestFilePath)
-                    || t('automation.notifications.file_unknown');
-                const stageLabel = getStageLabel(notification.latestStage, t);
-
-                nextEntries.push({
-                    source: 'automationNotification',
-                    id: notification.id,
-                    section: 'recent',
-                    notificationId: notification.id,
-                    kind: 'automationSuccess',
-                    title: t('automation.notifications.success_title', {
-                        ruleName: notification.ruleName,
-                    }),
-                    body: t('automation.notifications.success_body', {
-                        count: notification.count,
-                        fileName: latestFileName,
-                    }),
-                    detail: stageLabel
-                        ? t('automation.notifications.stage_detail', { stage: stageLabel })
-                        : null,
-                    message: null,
-                    retryable: false,
-                });
-            });
-
         return nextEntries.sort((a, b) => {
             const aUpdatedAt = a.source === 'ledger' ? a.task.updatedAt : a.source === 'update' ? Number.MAX_SAFE_INTEGER : 0;
             const bUpdatedAt = b.source === 'ledger' ? b.task.updatedAt : b.source === 'update' ? Number.MAX_SAFE_INTEGER : 0;
             return bUpdatedAt - aUpdatedAt;
         });
     }, [
-        automationNotifications,
         notificationVisible,
         progress,
         status,
@@ -624,56 +550,9 @@ export function NotificationCenter({
         );
     };
 
-    const renderAutomationNotification = (entry: AutomationNotificationEntry) => {
-        const isFailure = entry.kind === 'automationFailure';
-        const actions = taskActions.getAutomationNotificationActions({
-            notificationId: entry.notificationId,
-            kind: entry.kind,
-            retryable: entry.retryable,
-        });
-        const openAction = actions.open;
-        const support = entry.detail || (isFailure && entry.message)
-            ? (
-                <>
-                    {entry.detail ? (
-                        <div className="notification-center-item-detail">
-                            {entry.detail}
-                        </div>
-                    ) : null}
-                    {isFailure && entry.message ? (
-                        <div className="notification-center-item-message">
-                            {entry.message}
-                        </div>
-                    ) : null}
-                </>
-            )
-            : null;
-
-        return (
-            <NotificationCard
-                key={entry.id}
-                tone={isFailure ? 'automation-failure' : 'automation-success'}
-                itemClassName={isFailure
-                    ? 'notification-center-item-automation-failure'
-                    : 'notification-center-item-automation-success'}
-                icon={isFailure ? <ErrorIcon /> : <AutomationIcon />}
-                title={entry.title}
-                body={entry.body}
-                onOpen={openAction ? () => runAction(openAction) : undefined}
-                closeButton={renderCloseAction(actions.close)}
-                support={support}
-                actions={renderActions(actions.row)}
-            />
-        );
-    };
-
     const renderEntry = (entry: TaskCenterEntry) => {
         if (entry.source === 'update') {
             return renderUpdateEntry(entry);
-        }
-
-        if (entry.source === 'automationNotification') {
-            return renderAutomationNotification(entry);
         }
 
         return renderLedgerTask(entry);

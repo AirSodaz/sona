@@ -831,6 +831,277 @@ describe('automationStore', () => {
         }));
     });
 
+    it('retries one automation ledger file without clearing unrelated failed entries', async () => {
+        const rule = createRule({ enabled: false });
+        const targetEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\target.wav',
+            sourceFingerprint: 'target-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+        const otherEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\other.wav',
+            sourceFingerprint: 'other-fingerprint',
+            size: 9,
+            mtimeMs: 11,
+            status: 'error' as const,
+            processedAt: 21,
+            errorMessage: 'Still broken',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [targetEntry, otherEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 2,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: targetEntry.filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: targetEntry.filePath,
+                    sourceFingerprint: 'retry-target-fingerprint',
+                    size: 12,
+                    mtimeMs: 22,
+                },
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailedFile(rule.id, targetEntry.filePath);
+
+        expect(collectAutomationRuntimeRulePathsMock).toHaveBeenCalledWith(expect.objectContaining({
+            ruleId: rule.id,
+        }), [targetEntry.filePath]);
+        expect(addFilesMock).toHaveBeenCalledWith(
+            [targetEntry.filePath],
+            expect.objectContaining({
+                automationRuleId: rule.id,
+                sourceFingerprint: 'retry-target-fingerprint',
+            }),
+        );
+        expect(useAutomationStore.getState().processedEntries).toEqual([otherEntry]);
+    });
+
+    it('keeps the failed entry when a single automation ledger file retry has no rule', async () => {
+        const failedEntry = {
+            ruleId: 'missing-rule',
+            filePath: 'C:\\watch\\orphan.wav',
+            sourceFingerprint: 'orphan-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Rule was deleted',
+        };
+
+        useAutomationStore.setState({
+            rules: [],
+            processedEntries: [failedEntry],
+            runtimeStates: {},
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+
+        await expect(useAutomationStore.getState().retryFailedFile('missing-rule', failedEntry.filePath))
+            .rejects.toThrow('Automation rule not found.');
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+        expect(useAutomationStore.getState().processedEntries).toEqual([failedEntry]);
+    });
+
+    it('recreates a missing-source error for a single automation ledger file retry', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\missing.wav',
+            sourceFingerprint: 'missing-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntry.filePath,
+                outcome: 'missing',
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailedFile(rule.id, failedEntry.filePath);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+        expect(useAutomationStore.getState().processedEntries).toEqual([
+            expect.objectContaining({
+                ruleId: rule.id,
+                filePath: failedEntry.filePath,
+                status: 'error',
+                errorMessage: 'Source file is no longer available for retry.',
+            }),
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            lastBlockedReason: 'retry_source_missing',
+            lastBlockedFilePath: failedEntry.filePath,
+            failureCount: 1,
+        }));
+    });
+
+    it('recreates a recovery-blocked error for a single automation ledger file retry', async () => {
+        const rule = createRule({ enabled: false });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\blocked.wav',
+            sourceFingerprint: 'blocked-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+        isAutomationRecoveryBlockedMock.mockReturnValue(true);
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntry.filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: failedEntry.filePath,
+                    sourceFingerprint: 'retry-blocked-fingerprint',
+                    size: 12,
+                    mtimeMs: 22,
+                },
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailedFile(rule.id, failedEntry.filePath);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+        expect(useAutomationStore.getState().processedEntries).toEqual([
+            expect.objectContaining({
+                ruleId: rule.id,
+                filePath: failedEntry.filePath,
+                sourceFingerprint: 'retry-blocked-fingerprint',
+                status: 'error',
+                errorMessage: 'File is currently blocked by recovery state.',
+            }),
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            lastBlockedReason: 'recovery_blocked',
+            lastBlockedFilePath: failedEntry.filePath,
+            failureCount: 1,
+        }));
+    });
+
+    it('recreates a project-missing error for a single automation ledger file retry', async () => {
+        const rule = createRule({ enabled: false, projectId: 'missing-project' });
+        const failedEntry = {
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\project-missing.wav',
+            sourceFingerprint: 'project-fingerprint',
+            size: 8,
+            mtimeMs: 10,
+            status: 'error' as const,
+            processedAt: 20,
+            errorMessage: 'Network error',
+        };
+
+        useAutomationStore.setState({
+            rules: [rule],
+            processedEntries: [failedEntry],
+            runtimeStates: {
+                [rule.id]: {
+                    ruleId: rule.id,
+                    status: 'stopped',
+                    failureCount: 1,
+                    lastResult: 'error',
+                },
+            },
+            notifications: [],
+            isLoaded: true,
+            error: null,
+        });
+        collectAutomationRuntimeRulePathsMock.mockResolvedValue([
+            {
+                filePath: failedEntry.filePath,
+                outcome: 'candidate',
+                candidate: {
+                    ruleId: rule.id,
+                    filePath: failedEntry.filePath,
+                    sourceFingerprint: 'retry-project-fingerprint',
+                    size: 12,
+                    mtimeMs: 22,
+                },
+            },
+        ]);
+
+        await useAutomationStore.getState().retryFailedFile(rule.id, failedEntry.filePath);
+
+        expect(addFilesMock).not.toHaveBeenCalled();
+        expect(useAutomationStore.getState().processedEntries).toEqual([
+            expect.objectContaining({
+                ruleId: rule.id,
+                filePath: failedEntry.filePath,
+                sourceFingerprint: 'retry-project-fingerprint',
+                status: 'error',
+                errorMessage: 'Project not found.',
+            }),
+        ]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
+            lastBlockedReason: 'project_missing',
+            lastBlockedFilePath: failedEntry.filePath,
+            failureCount: 1,
+        }));
+    });
+
     it('recreates a retryable failure entry when a retried candidate is blocked by recovery state', async () => {
         const rule = createRule({ enabled: false });
         const failedEntry = {
