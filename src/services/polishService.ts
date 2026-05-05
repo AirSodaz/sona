@@ -17,6 +17,10 @@ import {
   runTranscriptSegmentTaskJob,
 } from './llm/segmentTask';
 import { runTranscriptLlmJob } from './tauri/llm';
+import {
+  createLlmTaskLedgerId,
+  isTaskLedgerCancelRequested,
+} from './taskLedgerRuntime';
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
   const polishedMap = new Map<string, PolishedSegment>();
@@ -91,6 +95,9 @@ class PolishService {
           taskId,
           'polish',
           (payload) => {
+            if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+              return;
+            }
             this.applyTranscriptJobUpdate(payload);
           },
         );
@@ -104,6 +111,9 @@ class PolishService {
             context: preset.context,
             keywords: resolvePolishKeywords(config.polishKeywordSets),
           });
+          if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+            return;
+          }
           this.applyTranscriptJobUpdate(result);
         } finally {
           unlistenJobUpdates();

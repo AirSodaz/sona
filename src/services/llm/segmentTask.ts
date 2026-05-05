@@ -17,6 +17,13 @@ import {
   polishTranscriptSegments,
   translateTranscriptSegments,
 } from '../tauri/llm';
+import {
+  buildLlmTaskLedgerRecord,
+  createLlmTaskLedgerId,
+  isTaskLedgerCancelRequested,
+  patchTaskLedgerRecord,
+  upsertTaskLedgerRecord,
+} from '../taskLedgerRuntime';
 
 type SegmentTaskFeature = 'translation' | 'polish';
 type SegmentTaskType = Extract<LlmTaskType, 'translate' | 'polish'>;
@@ -46,6 +53,7 @@ interface RunTranscriptSegmentTaskJobOptions<TTaskType extends SegmentTaskType> 
   taskType: TTaskType;
   segments: TranscriptSegment[];
   sourceHistoryId: string | null;
+  targetLanguage?: string;
   runTask: (taskId: string, jobHistoryId: string) => Promise<void>;
   onStart?: (jobHistoryId: string) => void | Promise<void>;
   onProgress?: (progress: number, jobHistoryId: string) => void | Promise<void>;
@@ -134,6 +142,7 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
   taskType,
   segments,
   sourceHistoryId,
+  targetLanguage,
   runTask,
   onStart,
   onProgress,
@@ -147,23 +156,63 @@ export async function runTranscriptSegmentTaskJob<TTaskType extends SegmentTaskT
 
   const jobHistoryId = sourceHistoryId || 'current';
   const taskId = createLlmTaskId(taskType);
-  const unlistenProgress = await listenToLlmTaskProgress(
-    taskId,
-    taskType,
-    ({ completedChunks, totalChunks }) => {
-      if (!onProgress) {
-        return;
-      }
-      void onProgress(calculateProgressPercent(completedChunks, totalChunks), jobHistoryId);
-    },
-  );
+  const ledgerId = createLlmTaskLedgerId(taskId);
+  let unlistenProgress: () => void = () => undefined;
 
   try {
+    upsertTaskLedgerRecord(buildLlmTaskLedgerRecord({
+      taskId,
+      taskType,
+      jobHistoryId,
+      targetLanguage,
+    }));
+    unlistenProgress = await listenToLlmTaskProgress(
+      taskId,
+      taskType,
+      ({ completedChunks, totalChunks }) => {
+        if (isTaskLedgerCancelRequested(ledgerId)) {
+          return;
+        }
+
+        const progress = calculateProgressPercent(completedChunks, totalChunks);
+        patchTaskLedgerRecord(ledgerId, {
+          status: 'running',
+          progress,
+        });
+        if (onProgress) {
+          void onProgress(progress, jobHistoryId);
+        }
+      },
+    );
     await onStart?.(jobHistoryId);
     await runTask(taskId, jobHistoryId);
+
+    if (isTaskLedgerCancelRequested(ledgerId)) {
+      patchTaskLedgerRecord(ledgerId, {
+        status: 'cancelled',
+        progress: 0,
+        cancelable: false,
+        retryable: false,
+      });
+      return;
+    }
+
     await onSuccess?.(jobHistoryId);
+    patchTaskLedgerRecord(ledgerId, {
+      status: 'succeeded',
+      progress: 100,
+      cancelable: false,
+      retryable: false,
+    });
   } catch (error) {
     await onError?.(jobHistoryId, error);
+    patchTaskLedgerRecord(ledgerId, {
+      status: 'failed',
+      progress: 0,
+      cancelable: false,
+      retryable: true,
+      errorMessage: normalizeError(error).message,
+    });
     throw Object.assign(new Error(normalizeError(error).message), { cause: error });
   } finally {
     unlistenProgress();

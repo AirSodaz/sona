@@ -593,8 +593,9 @@ export function applyTaskSettledState(
     current.runtimeStates[payload.ruleId]?.lastBlockedFilePath === payload.filePath
     && (current.runtimeStates[payload.ruleId]?.lastBlockedAt ?? 0) <= payload.processedAt
   );
-  const nextNotifications = payload.status === 'complete'
-    ? appendOrMergeSuccessNotification(current.notifications, {
+  let nextNotifications = current.notifications;
+  if (payload.status === 'complete') {
+    nextNotifications = appendOrMergeSuccessNotification(current.notifications, {
       ruleId: payload.ruleId,
       ruleName: nextRuleName,
       filePath: payload.filePath,
@@ -602,8 +603,9 @@ export function applyTaskSettledState(
       occurredAt: payload.processedAt,
       waveActive: options.waveActive,
       nextSuccessNotificationId: options.nextSuccessNotificationId,
-    })
-    : upsertFailureNotification(current.notifications, {
+    });
+  } else if (payload.status === 'error') {
+    nextNotifications = upsertFailureNotification(current.notifications, {
       ruleId: payload.ruleId,
       ruleName: nextRuleName,
       filePath: payload.filePath,
@@ -612,6 +614,7 @@ export function applyTaskSettledState(
       retryable: hasRetryableFailures(payload.ruleId, current.processedEntries),
       occurredAt: payload.processedAt,
     });
+  }
 
   return {
     processedEntries: current.processedEntries,
@@ -626,7 +629,9 @@ export function applyTaskSettledState(
           status: nextRule?.enabled ? 'watching' : 'stopped',
           lastProcessedAt: payload.processedAt,
           lastProcessedFilePath: payload.filePath,
-          lastResult: payload.status === 'complete' ? 'success' : 'error',
+          lastResult: payload.status === 'discarded'
+            ? current.runtimeStates[payload.ruleId]?.lastResult
+            : payload.status === 'complete' ? 'success' : 'error',
           lastResultMessage: payload.errorMessage,
           ...(shouldClearBlockedHint
             ? {

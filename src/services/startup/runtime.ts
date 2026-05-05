@@ -1,5 +1,6 @@
 import { useAutomationStore } from '../../stores/automationStore';
 import { useRecoveryStore } from '../../stores/recoveryStore';
+import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { logger } from '../../utils/logger';
 import { healthCheckService } from '../healthCheckService';
 import { voiceTypingService } from '../voiceTypingService';
@@ -13,6 +14,10 @@ async function runStartupStep(label: string, action: () => Promise<void>): Promi
 }
 
 export async function startAppRuntimeServices(): Promise<void> {
+  await runStartupStep('load task ledger', () => (
+    useTaskLedgerStore.getState().loadTasks()
+  ));
+
   await runStartupStep('load recovery state', () => (
     useRecoveryStore.getState().loadRecovery()
   ));

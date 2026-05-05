@@ -27,6 +27,7 @@ interface BatchItemProcessorCallbacks {
     onHistorySaved: (historyItem: HistoryItem) => void | Promise<void>;
     onExportComplete: (exportPath: string) => void;
     isActiveItem: () => boolean;
+    isCancelRequested: () => boolean;
 }
 
 interface ProcessBatchItemOptions {
@@ -62,6 +63,12 @@ async function removeTempFile(tempWavPath: string | undefined): Promise<void> {
         await remove(tempWavPath);
     } catch (error) {
         logger.warn('[BatchQueue] Failed to remove temp file:', error);
+    }
+}
+
+function throwIfCancelRequested(callbacks: BatchItemProcessorCallbacks): void {
+    if (callbacks.isCancelRequested()) {
+        throw new Error('Task cancelled.');
     }
 }
 
@@ -148,11 +155,13 @@ export async function processBatchQueueItem({
             config,
         );
 
+        throwIfCancelRequested(callbacks);
         setCurrentSegments(segments);
         await ensureHistorySaved();
         await persistHistorySnapshot();
 
         if (stageConfig.autoPolish && currentSegments.length > 0) {
+            throwIfCancelRequested(callbacks);
             const llm = getFeatureLlmConfig(config, 'polish');
             if (!isLlmConfigComplete(llm)) {
                 throw new Error('Polish model is not configured.');
@@ -171,6 +180,7 @@ export async function processBatchQueueItem({
         }
 
         if (stageConfig.autoTranslate && currentSegments.length > 0) {
+            throwIfCancelRequested(callbacks);
             const llm = getFeatureLlmConfig(config, 'translation');
             if (!isLlmConfigComplete(llm)) {
                 throw new Error('Translation model is not configured.');
@@ -189,6 +199,7 @@ export async function processBatchQueueItem({
         }
 
         if (item.exportConfig) {
+            throwIfCancelRequested(callbacks);
             callbacks.updateStatus('processing', 99, 'exporting');
             const exportPath = await exportTranscriptToDirectory({
                 segments: currentSegments,

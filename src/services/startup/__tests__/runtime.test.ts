@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { startAppRuntimeServices } from '../runtime';
 
 const mockLoadRecovery = vi.fn();
+const mockLoadTasks = vi.fn();
 const mockLoadAndStart = vi.fn();
 const mockVoiceTypingInit = vi.fn();
 const mockRunHealthCheck = vi.fn();
@@ -11,6 +12,14 @@ vi.mock('../../../stores/recoveryStore', () => ({
   useRecoveryStore: {
     getState: vi.fn(() => ({
       loadRecovery: (...args: unknown[]) => mockLoadRecovery(...args),
+    })),
+  },
+}));
+
+vi.mock('../../../stores/taskLedgerStore', () => ({
+  useTaskLedgerStore: {
+    getState: vi.fn(() => ({
+      loadTasks: (...args: unknown[]) => mockLoadTasks(...args),
     })),
   },
 }));
@@ -44,6 +53,7 @@ vi.mock('../../../utils/logger', () => ({
 describe('startAppRuntimeServices', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadTasks.mockResolvedValue(undefined);
     mockLoadRecovery.mockResolvedValue(undefined);
     mockLoadAndStart.mockResolvedValue(undefined);
     mockVoiceTypingInit.mockReturnValue(undefined);
@@ -55,6 +65,7 @@ describe('startAppRuntimeServices', () => {
 
     await startAppRuntimeServices();
 
+    expect(mockLoadTasks).toHaveBeenCalledTimes(1);
     expect(mockLoadRecovery).toHaveBeenCalledTimes(1);
     expect(mockLoadAndStart).toHaveBeenCalledTimes(1);
     expect(mockVoiceTypingInit).toHaveBeenCalledTimes(1);
@@ -65,8 +76,11 @@ describe('startAppRuntimeServices', () => {
     );
   });
 
-  it('loads recovery state before restoring the automation runtime', async () => {
+  it('loads the task ledger before recovery state and automation runtime', async () => {
     const callOrder: string[] = [];
+    mockLoadTasks.mockImplementation(async () => {
+      callOrder.push('task-ledger');
+    });
     mockLoadRecovery.mockImplementation(async () => {
       callOrder.push('recovery');
     });
@@ -76,6 +90,6 @@ describe('startAppRuntimeServices', () => {
 
     await startAppRuntimeServices();
 
-    expect(callOrder).toEqual(['recovery', 'automation']);
+    expect(callOrder).toEqual(['task-ledger', 'recovery', 'automation']);
   });
 });

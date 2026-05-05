@@ -21,6 +21,8 @@ const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
             return <CompleteIcon />;
         case 'error':
             return <ErrorIcon />;
+        case 'cancelled':
+            return <ErrorIcon />;
         default:
             return <PendingIcon />;
     }

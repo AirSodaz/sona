@@ -22,6 +22,13 @@ import {
 } from './llmTaskService';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
 import { runTranscriptLlmJob } from './tauri/llm';
+import {
+  buildLlmTaskLedgerRecord,
+  createLlmTaskLedgerId,
+  isTaskLedgerCancelRequested,
+  patchTaskLedgerRecord,
+  upsertTaskLedgerRecord,
+} from './taskLedgerRuntime';
 
 // Once we have local state, prefer it over re-hydrating from disk. This prevents a late
 // sidecar read from clobbering in-memory edits, streaming text, or template switches.
@@ -180,6 +187,14 @@ class SummaryService {
     const activeTemplateId = resolvedTemplate.id;
     const jobHistoryId = sessionStore.sourceHistoryId || 'current';
     const taskId = createLlmTaskId('summary');
+    const ledgerId = createLlmTaskLedgerId(taskId);
+
+    upsertTaskLedgerRecord(buildLlmTaskLedgerRecord({
+      taskId,
+      taskType: 'summary',
+      jobHistoryId,
+      templateId: activeTemplateId,
+    }));
 
     sidecarStore.updateSummaryState({
       activeTemplateId,
@@ -191,11 +206,22 @@ class SummaryService {
     }, jobHistoryId);
 
     const unlistenProgress = await listenToLlmTaskProgress(taskId, 'summary', ({ completedChunks, totalChunks }) => {
+      if (isTaskLedgerCancelRequested(ledgerId)) {
+        return;
+      }
+      const generationProgress = Math.round((completedChunks / Math.max(totalChunks, 1)) * 100);
+      patchTaskLedgerRecord(ledgerId, {
+        status: 'running',
+        progress: generationProgress,
+      });
       this.updateJobSummaryState(jobHistoryId, {
-        generationProgress: Math.round((completedChunks / Math.max(totalChunks, 1)) * 100),
+        generationProgress,
       });
     });
     const unlistenText = await listenToLlmTaskText(taskId, 'summary', ({ text }) => {
+      if (isTaskLedgerCancelRequested(ledgerId)) {
+        return;
+      }
       this.updateJobSummaryState(jobHistoryId, {
         streamingContent: text,
       });
@@ -210,6 +236,16 @@ class SummaryService {
 
       if (!summary || !summaryRecord) {
         throw new Error('Summary job did not return a summary record.');
+      }
+
+      if (isTaskLedgerCancelRequested(ledgerId)) {
+        patchTaskLedgerRecord(ledgerId, {
+          status: 'cancelled',
+          progress: 0,
+          cancelable: false,
+          retryable: false,
+        });
+        return;
       }
 
       const resultTemplateId = coerceSummaryTemplateId(summary.activeTemplateId, config.summaryCustomTemplates);
@@ -229,7 +265,29 @@ class SummaryService {
       if (jobHistoryId === 'current' && targetHistoryId !== 'current') {
         await this.persistSummary(targetHistoryId);
       }
+      patchTaskLedgerRecord(ledgerId, {
+        status: 'succeeded',
+        progress: 100,
+        cancelable: false,
+        retryable: false,
+      });
     } catch (error) {
+      if (isTaskLedgerCancelRequested(ledgerId)) {
+        patchTaskLedgerRecord(ledgerId, {
+          status: 'cancelled',
+          progress: 0,
+          cancelable: false,
+          retryable: false,
+        });
+      } else {
+        patchTaskLedgerRecord(ledgerId, {
+          status: 'failed',
+          progress: 0,
+          cancelable: false,
+          retryable: true,
+          errorMessage: normalizeError(error).message,
+        });
+      }
       this.updateJobSummaryState(jobHistoryId, {
         generationProgress: 0,
       });

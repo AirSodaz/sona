@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 
+const taskLedgerContext = vi.hoisted(() => ({
+    upsertTaskLedgerRecord: vi.fn(),
+    patchTaskLedgerRecord: vi.fn(),
+    isTaskLedgerCancelRequested: vi.fn(() => false),
+}));
+
 // Mock dependencies
 vi.mock('uuid', () => ({
     v4: () => 'test-uuid-123'
@@ -53,12 +59,33 @@ vi.mock('../projectStore', () => ({
     },
 }));
 
+vi.mock('../../services/taskLedgerRuntime', () => ({
+    buildBatchTaskLedgerRecord: (item: any, status = 'pending') => ({
+        id: `batch-${item.id}`,
+        kind: item.origin === 'automation' ? 'automation' : 'batchImport',
+        status,
+        title: item.filename,
+        progress: item.progress,
+        createdAt: 100,
+        updatedAt: 100,
+        retryable: true,
+        cancelable: true,
+        recoverable: false,
+        filePath: item.filePath,
+    }),
+    createBatchTaskLedgerId: (id: string) => `batch-${id}`,
+    upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
+    patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
+    isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
+}));
+
 describe('batchQueueStore', () => {
     beforeEach(() => {
         useBatchQueueStore.getState().clearQueue();
         useTranscriptStore.getState().setAudioUrl(null);
         useTranscriptStore.getState().clearSegments();
         vi.clearAllMocks();
+        taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(false);
     });
 
     it('should automatically set active item and sync to transcript store when adding files', () => {
@@ -75,6 +102,37 @@ describe('batchQueueStore', () => {
         // Assert Transcript Store State
         const transcriptState = useTranscriptStore.getState();
         expect(transcriptState.audioUrl).toBe('asset:///path/to/test.wav');
+        expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'batch-test-uuid-123',
+            kind: 'batchImport',
+            status: 'pending',
+            title: 'test.wav',
+            progress: 0,
+            filePath: '/path/to/test.wav',
+        }));
+    });
+
+    it('records task ledger progress and failures for queue items', () => {
+        useBatchQueueStore.setState({
+            queueItems: [
+                { id: '1', filename: '1.wav', filePath: '/1.wav', status: 'pending', progress: 0, segments: [], audioUrl: 'asset:///1.wav', projectId: null },
+            ],
+            activeItemId: '1',
+        });
+
+        useBatchQueueStore.getState().updateItemStatus('1', 'processing', 55, 'transcribing');
+        useBatchQueueStore.getState().setItemError('1', 'broken');
+
+        expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenNthCalledWith(1, 'batch-1', expect.objectContaining({
+            status: 'running',
+            progress: 55,
+            stage: 'transcribing',
+        }));
+        expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenNthCalledWith(2, 'batch-1', expect.objectContaining({
+            status: 'failed',
+            errorMessage: 'broken',
+            retryable: true,
+        }));
     });
 
     it('should sync to transcript store when removing the active item', () => {

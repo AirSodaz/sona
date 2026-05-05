@@ -8,6 +8,26 @@ import { buildTestConfig } from '../../test-utils/configTestUtils';
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockListenToLlmTaskText = vi.fn();
+const taskLedgerContext = vi.hoisted(() => ({
+  upsertTaskLedgerRecord: vi.fn(),
+  patchTaskLedgerRecord: vi.fn(),
+  createLlmTaskLedgerId: vi.fn((taskId: string) => `llm-${taskId}`),
+  isTaskLedgerCancelRequested: vi.fn(() => false),
+  buildLlmTaskLedgerRecord: vi.fn((input: any) => ({
+    id: `llm-${input.taskId}`,
+    kind: 'llmSummary',
+    status: 'running',
+    title: 'AI Summary',
+    progress: 0,
+    createdAt: 100,
+    updatedAt: 100,
+    retryable: true,
+    cancelable: true,
+    recoverable: false,
+    historyId: input.jobHistoryId === 'current' ? undefined : input.jobHistoryId,
+    templateId: input.templateId,
+  })),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -31,6 +51,14 @@ vi.mock('../historyService', () => ({
   },
 }));
 
+vi.mock('../taskLedgerRuntime', () => ({
+  buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
+  createLlmTaskLedgerId: (...args: unknown[]) => Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
+  isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
+  patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
+  upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
+}));
+
 function createSummaryReadyConfig() {
   let llmSettings = createLlmSettings('open_ai');
   llmSettings = updateProviderSetting(llmSettings, 'open_ai', {
@@ -51,6 +79,7 @@ describe('summaryService', () => {
     mockCreateLlmTaskId.mockReturnValue('summary-task-id');
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
     mockListenToLlmTaskText.mockResolvedValue(vi.fn());
+    taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(false);
 
     useTranscriptStore.setState({
       segments: [],

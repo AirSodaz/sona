@@ -66,6 +66,13 @@ import {
   resetSpeakerGroupToAnonymous,
 } from '../speaker';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
+import {
+  taskLedgerClearResolved,
+  taskLedgerLoadSnapshot,
+  taskLedgerPatchTask,
+  taskLedgerRemoveTask,
+  taskLedgerUpsertTask,
+} from '../taskLedger';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -653,6 +660,42 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.recovery.persistQueueSnapshot, {
       queueItems: [queueItem],
     });
+  });
+
+  it('task ledger wrappers forward repository commands', async () => {
+    const record = {
+      id: 'task-1',
+      kind: 'batchImport',
+      status: 'running',
+      title: 'meeting.wav',
+      progress: 50,
+      createdAt: 100,
+      updatedAt: 101,
+      retryable: true,
+      cancelable: true,
+      recoverable: false,
+    };
+    vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [record] });
+
+    const snapshot = await taskLedgerLoadSnapshot();
+    await taskLedgerUpsertTask(record as any);
+    await taskLedgerPatchTask('task-1', { status: 'cancelRequested' });
+    await taskLedgerRemoveTask('task-1');
+    await taskLedgerClearResolved();
+
+    expect(snapshot).toEqual({ version: 1, updatedAt: 101, tasks: [record] });
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.taskLedger.loadSnapshot);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.taskLedger.upsertTask, {
+      record,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.taskLedger.patchTask, {
+      id: 'task-1',
+      patch: { status: 'cancelRequested' },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.taskLedger.removeTask, {
+      id: 'task-1',
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.taskLedger.clearResolved);
   });
 
   it('llm usage wrappers forward analytics repository commands', async () => {

@@ -105,6 +105,42 @@
         "notifications_panel": "Notifications",
         "notifications_empty": "No notifications right now."
     },
+    "task_center": {
+        "panel_title": "Task Center",
+        "empty": "No active tasks right now.",
+        "needs_action": "Needs action",
+        "active": "Active",
+        "recent": "Recent",
+        "clear_recent": "Clear recent",
+        "clear": "Clear",
+        "dismiss": "Dismiss",
+        "discard": "Discard",
+        "retry": "Retry",
+        "stopping": "Stopping",
+        "progress": "Progress",
+        "task_body": "{{kind}} · {{status}}",
+        "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
+        "task_body_file": "{{base}} · {{fileName}}",
+        "kind": {
+            "batchImport": "Batch import",
+            "automation": "Automation",
+            "llmPolish": "LLM polish",
+            "llmTranslate": "Translation",
+            "llmSummary": "AI summary",
+            "recovery": "Recovery",
+            "update": "Update"
+        },
+        "status": {
+            "pending": "Pending",
+            "running": "Running",
+            "cancelRequested": "Stopping",
+            "failed": "Failed",
+            "recoverable": "Recoverable",
+            "interrupted": "Interrupted",
+            "cancelled": "Cancelled",
+            "succeeded": "Succeeded"
+        }
+    },
     "panel": {
         "live_record": "Live Record",
         "batch_import": "Batch Import",
@@ -173,7 +209,8 @@
         "status_pending": "Pending",
         "status_processing": "Processing",
         "status_complete": "Complete",
-        "status_error": "Failed"
+        "status_error": "Failed",
+        "status_cancelled": "Cancelled"
     },
     "player": {
         "play": "Play",

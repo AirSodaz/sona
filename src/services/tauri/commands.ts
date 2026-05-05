@@ -109,6 +109,13 @@ export const TauriCommand = {
     saveSnapshot: 'recovery_save_snapshot',
     persistQueueSnapshot: 'recovery_persist_queue_snapshot',
   },
+  taskLedger: {
+    loadSnapshot: 'task_ledger_load_snapshot',
+    upsertTask: 'task_ledger_upsert_task',
+    patchTask: 'task_ledger_patch_task',
+    removeTask: 'task_ledger_remove_task',
+    clearResolved: 'task_ledger_clear_resolved',
+  },
   automation: {
     replaceRuntimeRules: 'replace_automation_runtime_rules',
     scanRuntimeRule: 'scan_automation_runtime_rule',

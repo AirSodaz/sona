@@ -6,6 +6,12 @@ import {
     markAutomationRecoveryItemsResumed,
     saveRecoveredItems,
 } from '../services/recoveryService';
+import {
+    buildRecoveryTaskLedgerRecord,
+    createRecoveryTaskLedgerId,
+    patchTaskLedgerRecord,
+    upsertTaskLedgerRecord,
+} from '../services/taskLedgerRuntime';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
@@ -17,6 +23,7 @@ interface RecoveryState {
     isBusy: boolean;
     error: string | null;
     loadRecovery: () => Promise<void>;
+    resumeItem: (id: string) => Promise<void>;
     resumeAll: () => Promise<void>;
     discardItem: (id: string) => Promise<void>;
     discardAll: () => Promise<void>;
@@ -25,6 +32,14 @@ interface RecoveryState {
 
 async function persistRecoveryItems(items: RecoveredQueueItem[]): Promise<void> {
     await saveRecoveredItems(items);
+}
+
+function mirrorRecoveryItemsToTaskLedger(items: RecoveredQueueItem[]): void {
+    items
+        .filter((item) => item.resolution === 'pending')
+        .forEach((item) => {
+            upsertTaskLedgerRecord(buildRecoveryTaskLedgerRecord(item));
+        });
 }
 
 export const useRecoveryStore = create<RecoveryState>((set, get) => ({
@@ -39,6 +54,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
 
         try {
             const snapshot = await loadRecoverySnapshot();
+            mirrorRecoveryItemsToTaskLedger(snapshot.items);
             set({
                 items: snapshot.items,
                 updatedAt: snapshot.updatedAt,
@@ -59,6 +75,46 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         }
     },
 
+    resumeItem: async (id) => {
+        const target = get().items.find((item) => item.id === id && item.resolution === 'pending');
+        if (!target) {
+            return;
+        }
+
+        if (!target.canResume) {
+            throw new Error('Discard missing source files before resuming recovery.');
+        }
+
+        set({ isBusy: true, error: null });
+
+        try {
+            markAutomationRecoveryItemsResumed([target]);
+            useBatchQueueStore.getState().enqueueRecoveredItems([target]);
+            const nextItems = get().items.filter((item) => item.id !== id);
+            await persistRecoveryItems(nextItems);
+            set({
+                items: nextItems,
+                updatedAt: nextItems.length > 0 ? Date.now() : null,
+                isBusy: false,
+                error: null,
+            });
+            patchTaskLedgerRecord(createRecoveryTaskLedgerId(id), {
+                status: 'succeeded',
+                progress: 100,
+                retryable: false,
+                recoverable: false,
+            });
+        } catch (error) {
+            const errorMessage = extractErrorMessage(error) || 'Failed to resume recovery item.';
+            logger.error('[Recovery] Failed to resume recovery item:', error);
+            set({
+                isBusy: false,
+                error: errorMessage,
+            });
+            throw error;
+        }
+    },
+
     resumeAll: async () => {
         const pendingItems = get().items.filter((item) => item.resolution === 'pending');
         if (pendingItems.length === 0) {
@@ -74,6 +130,15 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
         try {
             markAutomationRecoveryItemsResumed(pendingItems);
             useBatchQueueStore.getState().enqueueRecoveredItems(pendingItems);
+            await persistRecoveryItems([]);
+            pendingItems.forEach((item) => {
+                patchTaskLedgerRecord(createRecoveryTaskLedgerId(item.id), {
+                    status: 'succeeded',
+                    progress: 100,
+                    retryable: false,
+                    recoverable: false,
+                });
+            });
             set({
                 items: [],
                 updatedAt: null,
@@ -106,6 +171,11 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
 
             const nextItems = get().items.filter((item) => item.id !== id);
             await persistRecoveryItems(nextItems);
+            patchTaskLedgerRecord(createRecoveryTaskLedgerId(id), {
+                status: 'cancelled',
+                retryable: false,
+                recoverable: false,
+            });
             set({
                 items: nextItems,
                 updatedAt: nextItems.length > 0 ? Date.now() : null,
@@ -136,6 +206,13 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
                 .filter((item) => item.source === 'automation')
                 .map((item) => useAutomationStore.getState().markRecoveryItemDiscarded(item)));
             await persistRecoveryItems([]);
+            items.forEach((item) => {
+                patchTaskLedgerRecord(createRecoveryTaskLedgerId(item.id), {
+                    status: 'cancelled',
+                    retryable: false,
+                    recoverable: false,
+                });
+            });
             set({
                 items: [],
                 updatedAt: null,

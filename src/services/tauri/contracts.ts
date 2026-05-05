@@ -28,6 +28,7 @@ import type {
 } from '../../types/transcriptSnapshot';
 import type { BatchQueueItem } from '../../types/batchQueue';
 import type { RecoveredQueueItem, RecoverySnapshot } from '../../types/recovery';
+import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -649,6 +650,26 @@ export type TauriCommandContractMap = {
   [TauriCommand.recovery.persistQueueSnapshot]: {
     args: { queueItems: BatchQueueItem[] };
     result: void;
+  };
+  [TauriCommand.taskLedger.loadSnapshot]: {
+    args: undefined;
+    result: TaskLedgerSnapshot;
+  };
+  [TauriCommand.taskLedger.upsertTask]: {
+    args: { record: TaskLedgerRecord };
+    result: TaskLedgerSnapshot;
+  };
+  [TauriCommand.taskLedger.patchTask]: {
+    args: { id: string; patch: TaskLedgerPatch };
+    result: TaskLedgerSnapshot;
+  };
+  [TauriCommand.taskLedger.removeTask]: {
+    args: { id: string };
+    result: TaskLedgerSnapshot;
+  };
+  [TauriCommand.taskLedger.clearResolved]: {
+    args: undefined;
+    result: TaskLedgerSnapshot;
   };
   [TauriCommand.automation.replaceRuntimeRules]: {
     args: { rules: unknown[] };

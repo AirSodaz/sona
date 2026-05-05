@@ -24,6 +24,7 @@ mod speaker_correction;
 mod speaker_review;
 mod storage;
 pub mod system;
+mod task_ledger;
 mod text_alignment;
 mod tray;
 mod webdav;
@@ -320,6 +321,11 @@ pub fn run() {
             runtime_status::open_log_folder,
             runtime_status::get_runtime_environment_status,
             runtime_status::get_path_statuses,
+            task_ledger::commands::task_ledger_load_snapshot,
+            task_ledger::commands::task_ledger_upsert_task,
+            task_ledger::commands::task_ledger_patch_task,
+            task_ledger::commands::task_ledger_remove_task,
+            task_ledger::commands::task_ledger_clear_resolved,
             recovery::commands::recovery_load_snapshot,
             recovery::commands::recovery_save_snapshot,
             recovery::commands::recovery_persist_queue_snapshot,

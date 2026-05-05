@@ -279,4 +279,54 @@ describe('automationSessionState', () => {
       lastBlockedFilePath: undefined,
     }));
   });
+
+  it('records discarded settled automation items without creating failure notifications', () => {
+    const rule = createRule();
+    const processedEntries: AutomationProcessedEntry[] = [
+      {
+        ruleId: rule.id,
+        filePath: 'C:\\watch\\cancelled.wav',
+        sourceFingerprint: 'fp-discarded',
+        size: 42,
+        mtimeMs: 1000,
+        status: 'discarded',
+        processedAt: 500,
+      },
+    ];
+    const payload: AutomationTaskSettledPayload = {
+      ruleId: rule.id,
+      filePath: 'C:\\watch\\cancelled.wav',
+      sourceFingerprint: 'fp-discarded',
+      size: 42,
+      mtimeMs: 1000,
+      status: 'discarded',
+      processedAt: 500,
+    };
+
+    const nextState = applyTaskSettledState(
+      {
+        rules: [rule],
+        processedEntries,
+        runtimeStates: {
+          [rule.id]: createRuntimeState({
+            status: 'watching',
+            lastResult: 'success',
+          }),
+        },
+        notifications: [],
+      },
+      payload,
+      {
+        waveActive: false,
+        nextSuccessNotificationId: () => 'automation-success-rule-1-1',
+      },
+    );
+
+    expect(nextState.notifications).toEqual([]);
+    expect(nextState.runtimeStates[rule.id]).toEqual(expect.objectContaining({
+      status: 'watching',
+      lastResult: 'success',
+      lastProcessedFilePath: 'C:\\watch\\cancelled.wav',
+    }));
+  });
 });

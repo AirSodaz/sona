@@ -12,6 +12,26 @@ const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
 const mockGetFeatureLlmConfig = vi.fn();
 const mockIsLlmConfigComplete = vi.fn();
+const taskLedgerContext = vi.hoisted(() => ({
+  upsertTaskLedgerRecord: vi.fn(),
+  patchTaskLedgerRecord: vi.fn(),
+  createLlmTaskLedgerId: vi.fn((taskId: string) => `llm-${taskId}`),
+  isTaskLedgerCancelRequested: vi.fn(() => false),
+  buildLlmTaskLedgerRecord: vi.fn((input: any) => ({
+    id: `llm-${input.taskId}`,
+    kind: input.taskType === 'polish' ? 'llmPolish' : 'llmTranslate',
+    status: 'running',
+    title: input.taskType,
+    progress: 0,
+    createdAt: 100,
+    updatedAt: 100,
+    retryable: true,
+    cancelable: true,
+    recoverable: false,
+    historyId: input.jobHistoryId === 'current' ? undefined : input.jobHistoryId,
+    targetLanguage: input.targetLanguage,
+  })),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -28,6 +48,14 @@ vi.mock('../runtime', () => ({
   isLlmConfigComplete: (...args: unknown[]) => mockIsLlmConfigComplete(...args),
 }));
 
+vi.mock('../../taskLedgerRuntime', () => ({
+  buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
+  upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
+  patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
+  createLlmTaskLedgerId: (...args: unknown[]) => Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
+  isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
+}));
+
 describe('segmentTask helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,6 +70,7 @@ describe('segmentTask helpers', () => {
       temperature: 0.7,
     });
     mockIsLlmConfigComplete.mockReturnValue(true);
+    taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(false);
   });
 
   it('runConfiguredSegmentTask falls back to the final payload and cleans up the chunk listener', async () => {
@@ -130,6 +159,34 @@ describe('segmentTask helpers', () => {
     expect(onSuccess).toHaveBeenCalledWith('current');
     expect(unlistenProgress).toHaveBeenCalledTimes(1);
     expect(onFinally).toHaveBeenCalledWith('current');
+    expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'llm-shared-task-id',
+      kind: 'llmPolish',
+      status: 'running',
+      historyId: undefined,
+    }));
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
+      status: 'succeeded',
+      progress: 100,
+    }));
+  });
+
+  it('marks LLM segment jobs as cancelled when a soft cancel was requested', async () => {
+    taskLedgerContext.isTaskLedgerCancelRequested.mockReturnValue(true);
+    const runTask = vi.fn().mockResolvedValue(undefined);
+
+    await runTranscriptSegmentTaskJob({
+      taskType: 'translate',
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      sourceHistoryId: 'history-a',
+      runTask,
+    });
+
+    expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-a');
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
+      status: 'cancelled',
+      progress: 0,
+    }));
   });
 
   it('applySegmentItemsToTranscriptJob patches the original background history record after navigation changes', async () => {

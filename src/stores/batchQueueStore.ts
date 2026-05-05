@@ -13,6 +13,13 @@ import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { emitAutomationTaskSettled } from '../services/automationRuntimeBridge';
 import { processBatchQueueItem } from '../services/batch/batchItemProcessor';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
+import {
+  buildBatchTaskLedgerRecord,
+  createBatchTaskLedgerId,
+  isTaskLedgerCancelRequested,
+  patchTaskLedgerRecord,
+  upsertTaskLedgerRecord,
+} from '../services/taskLedgerRuntime';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import {
@@ -23,6 +30,7 @@ import {
 } from './transcriptCoordinator';
 import { logger } from '../utils/logger';
 import type { RecoveredQueueItem } from '../types/recovery';
+import type { TaskLedgerStatus } from '../types/taskLedger';
 
 interface AddFilesOptions {
     origin?: BatchQueueItemOrigin;
@@ -110,6 +118,29 @@ function scheduleRecoverySnapshotSync(queueItems: BatchQueueItem[], immediate = 
     persistQueueRecoverySnapshot(queueItems, { immediate });
 }
 
+function upsertQueueItemTask(item: BatchQueueItem, status?: ReturnType<typeof buildBatchTaskLedgerRecord>['status']) {
+    upsertTaskLedgerRecord(buildBatchTaskLedgerRecord(item, status));
+}
+
+function patchQueueItemTask(item: BatchQueueItem, patch: Parameters<typeof patchTaskLedgerRecord>[1]) {
+    patchTaskLedgerRecord(createBatchTaskLedgerId(item.id), patch);
+}
+
+function toTaskLedgerStatus(status: BatchQueueItemStatus): TaskLedgerStatus {
+    switch (status) {
+        case 'pending':
+            return 'pending';
+        case 'processing':
+            return 'running';
+        case 'complete':
+            return 'succeeded';
+        case 'cancelled':
+            return 'cancelled';
+        case 'error':
+            return 'failed';
+    }
+}
+
 function resolveQueueItemConfig(item: BatchQueueItem): AppConfig {
     if (item.resolvedConfigSnapshot) {
         return item.resolvedConfigSnapshot;
@@ -120,7 +151,7 @@ function resolveQueueItemConfig(item: BatchQueueItem): AppConfig {
 
 async function notifyAutomationResult(
     item: BatchQueueItem,
-    status: 'complete' | 'error',
+    status: 'complete' | 'error' | 'discarded',
     errorMessage?: string,
 ): Promise<void> {
     if (
@@ -200,6 +231,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             };
         });
         scheduleRecoverySnapshotSync(nextQueueItems, true);
+        newItems.forEach((item) => upsertQueueItemTask(item, 'pending'));
 
         const state = get();
         if (!state.activeItemId && newItems.length > 0) {
@@ -225,6 +257,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             };
         });
         scheduleRecoverySnapshotSync(nextQueueItems, true);
+        recoveredQueueItems.forEach((item) => upsertQueueItemTask(item, 'pending'));
 
         const state = get();
         if (!state.activeItemId && recoveredQueueItems.length > 0) {
@@ -269,6 +302,19 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         const config = resolveQueueItemConfig(item);
 
+        if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
+            get().updateItemStatus(itemId, 'cancelled', 0);
+            patchQueueItemTask(item, {
+                status: 'cancelled',
+                progress: 0,
+                cancelable: false,
+                retryable: false,
+                errorMessage: undefined,
+            });
+            await notifyAutomationResult(item, 'discarded');
+            return;
+        }
+
         if (!config.offlineModelPath) {
             const message = 'No offline model path configured.';
             get().setItemError(itemId, message);
@@ -305,6 +351,11 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                             };
                         });
                         scheduleRecoverySnapshotSync(nextQueueItems, true);
+                        patchQueueItemTask(item, {
+                            historyId: historyItem.id,
+                            projectId: historyItem.projectId ?? item.projectId,
+                            title: historyItem.title,
+                        });
 
                         if (get().activeItemId === itemId) {
                             syncSavedRecordingMeta(historyItem.title, historyItem.id, historyItem.icon || null);
@@ -319,17 +370,49 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                         }));
                     },
                     isActiveItem: () => get().activeItemId === itemId,
+                    isCancelRequested: () => isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId)),
                 },
             });
 
-            get().updateItemStatus(itemId, 'complete', 100);
-            await notifyAutomationResult(item, 'complete');
+            if (isTaskLedgerCancelRequested(createBatchTaskLedgerId(itemId))) {
+                get().updateItemStatus(itemId, 'cancelled', 0);
+                patchQueueItemTask(item, {
+                    status: 'cancelled',
+                    progress: 0,
+                    cancelable: false,
+                    retryable: false,
+                    errorMessage: undefined,
+                });
+                await notifyAutomationResult(item, 'discarded');
+            } else {
+                get().updateItemStatus(itemId, 'complete', 100);
+                patchQueueItemTask(item, {
+                    status: 'succeeded',
+                    progress: 100,
+                    cancelable: false,
+                    retryable: false,
+                    errorMessage: undefined,
+                });
+                await notifyAutomationResult(item, 'complete');
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
 
-            get().setItemError(itemId, message);
-            await notifyAutomationResult(item, 'error', message);
+            if (message === 'Task cancelled.') {
+                get().updateItemStatus(itemId, 'cancelled', 0);
+                patchQueueItemTask(item, {
+                    status: 'cancelled',
+                    progress: 0,
+                    cancelable: false,
+                    retryable: false,
+                    errorMessage: undefined,
+                });
+                await notifyAutomationResult(item, 'discarded');
+            } else {
+                get().setItemError(itemId, message);
+                await notifyAutomationResult(item, 'error', message);
+            }
         } finally {
             void get().processQueue();
         }
@@ -365,6 +448,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 shouldFlushImmediately = item.status !== status || (
                     lastKnownStage !== undefined && item.lastKnownStage !== lastKnownStage
                 );
+                patchQueueItemTask(item, {
+                    status: toTaskLedgerStatus(status),
+                    progress: progress !== undefined ? progress : item.progress,
+                    stage: lastKnownStage ?? item.lastKnownStage,
+                    cancelable: status === 'pending' || status === 'processing',
+                });
                 return {
                     ...item,
                     status,
@@ -411,6 +500,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             };
         });
         scheduleRecoverySnapshotSync(nextQueueItems, true);
+        const failedItem = nextQueueItems.find((item) => item.id === id);
+        if (failedItem) {
+            patchQueueItemTask(failedItem, {
+                status: 'failed',
+                errorMessage: message,
+                retryable: true,
+                cancelable: false,
+            });
+        }
     },
 
     removeItem: (id) => {
@@ -421,6 +519,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
         set({ queueItems: newItems });
         scheduleRecoverySnapshotSync(newItems, true);
+        const removedItem = state.queueItems.find((item) => item.id === id);
+        if (removedItem) {
+            patchQueueItemTask(removedItem, {
+                status: removedItem.status === 'complete' ? 'succeeded' : 'cancelled',
+                cancelable: false,
+                retryable: false,
+            });
+        }
 
         if (isActiveItem) {
             get().setActiveItem(newActiveId);
@@ -428,12 +534,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     },
 
     clearQueue: () => {
+        const state = get();
         set({
             queueItems: [],
             activeItemId: null,
             isQueueProcessing: false,
         });
         scheduleRecoverySnapshotSync([], true);
+        state.queueItems.forEach((item) => patchQueueItemTask(item, {
+            status: item.status === 'complete' ? 'succeeded' : 'cancelled',
+            cancelable: false,
+            retryable: false,
+        }));
         clearActiveTranscriptSession({ clearAudio: true });
     },
 }));

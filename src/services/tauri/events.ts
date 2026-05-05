@@ -23,6 +23,9 @@ export const TauriEvent = {
   automation: {
     runtimeCandidate: 'automation-runtime-candidate',
   },
+  taskLedger: {
+    updated: 'task-ledger-updated',
+  },
   llm: {
     taskProgress: 'llm-task-progress',
     taskChunk: 'llm-task-chunk',

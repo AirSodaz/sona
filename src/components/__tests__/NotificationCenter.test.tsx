@@ -2,16 +2,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NotificationCenter } from '../NotificationCenter';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import type { TaskLedgerRecord } from '../../types/taskLedger';
+
+const taskLedgerState = {
+  tasks: [] as TaskLedgerRecord[],
+  requestCancel: vi.fn(),
+  removeTask: vi.fn(),
+  clearResolved: vi.fn(),
+};
 
 const recoveryState = {
-  items: [] as any[],
-  isLoaded: true,
+  resumeItem: vi.fn(),
+  discardItem: vi.fn(),
 };
 
 const automationState = {
   notifications: [] as any[],
   dismissNotification: vi.fn(),
   retryNotification: vi.fn(),
+  retryFailed: vi.fn(),
+};
+
+const batchQueueState = {
+  addFiles: vi.fn(),
 };
 
 const relaunchMock = vi.fn();
@@ -42,51 +55,22 @@ vi.mock('../../stores/errorDialogStore', () => ({
 
 vi.mock('../../i18n', () => ({
   default: {
-    t: (key: string, options?: Record<string, unknown>) => options?.version ? `${key}:${options.version}` : key,
+    t: (key: string, options?: Record<string, unknown>) => translate(key, options),
   },
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => {
-      if (key === 'header.notifications') return 'Notifications';
-      if (key === 'header.notifications_panel') return 'Notifications';
-      if (key === 'header.notifications_empty') return 'No notifications right now.';
-      if (key === 'recovery.banner.title') return 'Interrupted work is ready to recover';
-      if (key === 'recovery.banner.body') {
-        return `${options?.count} file(s) waiting. Batch: ${options?.batchCount} · Automation: ${options?.automationCount}`;
-      }
-      if (key === 'recovery.actions.open_center') return 'Open Recovery Center';
-      if (key === 'recovery.stage.transcribing') return 'Transcribing';
-      if (key === 'recovery.stage.translating') return 'Translating';
-      if (key === 'recovery.stage.exporting') return 'Exporting';
-      if (key === 'settings.update_available') return `settings.update_available:${options?.version}`;
-      if (key === 'settings.update_desc_default') return 'A new version of Sona is available.';
-      if (key === 'settings.update_downloading') return 'Downloading update...';
-      if (key === 'settings.update_installing') return 'Installing update...';
-      if (key === 'settings.update_relaunch') return 'Relaunch to update';
-      if (key === 'settings.update_btn_install') return 'Install Update';
-      if (key === 'settings.update_btn_relaunch') return 'Relaunch';
-      if (key === 'automation.retry_failed') return 'Retry Failed';
-      if (key === 'automation.open_settings') return 'Open Automation';
-      if (key === 'automation.notifications.failure_title') return `${options?.ruleName} needs attention`;
-      if (key === 'automation.notifications.failure_body') {
-        return `${options?.count} failed file(s). Latest: ${options?.fileName}`;
-      }
-      if (key === 'automation.notifications.success_title') return `${options?.ruleName} completed`;
-      if (key === 'automation.notifications.success_body') {
-        return `${options?.count} completed file(s). Latest: ${options?.fileName}`;
-      }
-      if (key === 'automation.notifications.stage_detail') return `Latest stage: ${options?.stage}`;
-      if (key === 'automation.notifications.file_unknown') return 'Latest item unavailable';
-      if (key === 'common.close') return 'Close';
-      return key;
-    },
+    t: (key: string, options?: Record<string, unknown>) => translate(key, options),
   }),
   initReactI18next: {
     type: '3rdParty',
     init: () => undefined,
   },
+}));
+
+vi.mock('../../stores/taskLedgerStore', () => ({
+  useTaskLedgerStore: (selector: any) => selector(taskLedgerState),
 }));
 
 vi.mock('../../stores/recoveryStore', () => ({
@@ -97,12 +81,70 @@ vi.mock('../../stores/automationStore', () => ({
   useAutomationStore: (selector: any) => selector(automationState),
 }));
 
+vi.mock('../../stores/batchQueueStore', () => ({
+  useBatchQueueStore: (selector: any) => selector(batchQueueState),
+}));
+
+function interpolate(template: string, options?: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
+}
+
+function translate(key: string, options?: Record<string, unknown>): string {
+  if (options?.defaultValue && typeof options.defaultValue === 'string') {
+    return interpolate(options.defaultValue, options);
+  }
+
+  if (key === 'header.notifications') return 'Notifications';
+  if (key === 'task_center.panel_title') return 'Task Center';
+  if (key === 'task_center.empty') return 'No active tasks right now.';
+  if (key === 'task_center.needs_action') return 'Needs action';
+  if (key === 'task_center.active') return 'Active';
+  if (key === 'task_center.recent') return 'Recent';
+  if (key === 'task_center.clear_recent') return 'Clear recent';
+  if (key === 'settings.update_available') return `Update ${options?.version}`;
+  if (key === 'settings.update_desc_default') return 'A new version of Sona is available.';
+  if (key === 'settings.update_downloading') return 'Downloading update...';
+  if (key === 'settings.update_installing') return 'Installing update...';
+  if (key === 'settings.update_relaunch') return 'Relaunch to update';
+  if (key === 'settings.update_btn_install') return 'Install Update';
+  if (key === 'settings.update_btn_relaunch') return 'Relaunch';
+  if (key === 'common.cancel') return 'Cancel';
+  if (key === 'common.close') return 'Close';
+  if (key === 'common.resume') return 'Resume';
+  if (key === 'recovery.actions.open_center') return 'Open Recovery Center';
+  if (key === 'automation.retry_failed') return 'Retry Failed';
+  if (key === 'automation.open_settings') return 'Open Automation';
+  if (key === 'automation.notifications.failure_title') return `${options?.ruleName} needs attention`;
+  if (key === 'automation.notifications.failure_body') return `${options?.count} failed file(s). Latest: ${options?.fileName}`;
+  if (key === 'automation.notifications.stage_detail') return `Latest stage: ${options?.stage}`;
+  if (key === 'automation.notifications.file_unknown') return 'Latest item unavailable';
+  if (key === 'recovery.stage.transcribing') return 'Transcribing';
+  return key;
+}
+
 function makeUpdate(version: string, overrides: Record<string, unknown> = {}) {
   return {
     currentVersion: '0.6.0',
     version,
     body: 'Release notes',
     downloadAndInstall: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function makeTask(overrides: Partial<TaskLedgerRecord> = {}): TaskLedgerRecord {
+  return {
+    id: 'task-1',
+    kind: 'batchImport',
+    status: 'running',
+    title: 'meeting.wav',
+    progress: 25,
+    createdAt: 100,
+    updatedAt: 100,
+    retryable: true,
+    cancelable: true,
+    recoverable: false,
+    filePath: 'C:\\audio\\meeting.wav',
     ...overrides,
   };
 }
@@ -119,22 +161,11 @@ function resetUpdaterStore() {
   });
 }
 
-function resetAutomationState() {
-  automationState.notifications = [];
-  automationState.dismissNotification.mockImplementation((notificationId: string) => {
-    automationState.notifications = automationState.notifications.filter((item) => item.id !== notificationId);
-  });
-  automationState.retryNotification.mockImplementation(async (notificationId: string) => {
-    automationState.notifications = automationState.notifications.filter((item) => item.id !== notificationId);
-  });
-}
-
-describe('NotificationCenter', () => {
+describe('NotificationCenter task center', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    recoveryState.items = [];
-    recoveryState.isLoaded = true;
-    resetAutomationState();
+    taskLedgerState.tasks = [];
+    automationState.notifications = [];
     resetUpdaterStore();
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
       await onExit();
@@ -142,25 +173,101 @@ describe('NotificationCenter', () => {
     });
   });
 
-  it('shows the empty state and no badge when there are no notifications', () => {
+  it('shows an empty task center with no badge when there is no active or actionable task', () => {
     const { container } = render(
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
         onOpenAutomationSettings={vi.fn()}
-      />
+      />,
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeDefined();
-    expect(screen.getByText('No notifications right now.')).toBeDefined();
-    expect(screen.queryByText('Interrupted work is ready to recover')).toBeNull();
-    expect(screen.queryByText('settings.update_available:1.2.3')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Task Center' })).toBeDefined();
+    expect(screen.getByText('No active tasks right now.')).toBeDefined();
   });
 
-  it('renders one update notification when the automatic update reminder is visible', () => {
+  it('groups task ledger records into Needs action, Active, and Recent sections', () => {
+    taskLedgerState.tasks = [
+      makeTask({ id: 'active-task', status: 'running', title: 'active.wav', updatedAt: 300 }),
+      makeTask({
+        id: 'failed-task',
+        status: 'failed',
+        title: 'failed.wav',
+        updatedAt: 200,
+        errorMessage: 'Transcription failed',
+      }),
+      makeTask({ id: 'recent-task', status: 'succeeded', title: 'done.wav', progress: 100, updatedAt: 100 }),
+    ];
+
+    const { container } = render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    expect(screen.getByText('Needs action')).toBeDefined();
+    expect(screen.getByText('Active')).toBeDefined();
+    expect(screen.getByText('Recent')).toBeDefined();
+    expect(screen.getByText('failed.wav')).toBeDefined();
+    expect(screen.getByText('active.wav')).toBeDefined();
+    expect(screen.getByText('done.wav')).toBeDefined();
+    expect(screen.getByText('Transcription failed')).toBeDefined();
+  });
+
+  it('requests soft cancellation for active ledger tasks', () => {
+    taskLedgerState.tasks = [
+      makeTask({ id: 'active-task', status: 'running', title: 'active.wav' }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(taskLedgerState.requestCancel).toHaveBeenCalledWith('active-task');
+  });
+
+  it('resumes and discards individual recovery tasks from the task center', () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'recovery-recovery-1',
+        kind: 'recovery',
+        status: 'recoverable',
+        title: 'recover.wav',
+        recoverable: true,
+        cancelable: false,
+      }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+
+    expect(recoveryState.resumeItem).toHaveBeenCalledWith('recovery-1');
+    expect(recoveryState.discardItem).toHaveBeenCalledWith('recovery-1');
+  });
+
+  it('keeps visible updates as transient task center entries', () => {
     useAppUpdaterStore.setState({
       status: 'available',
       updateInfo: makeUpdate('1.2.3') as any,
@@ -171,190 +278,19 @@ describe('NotificationCenter', () => {
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
         onOpenAutomationSettings={vi.fn()}
-      />
+      />,
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByText('settings.update_available:1.2.3')).toBeDefined();
+    expect(screen.getByText('Update 1.2.3')).toBeDefined();
     expect(screen.getByText('Release notes')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Install Update' })).toBeDefined();
   });
 
-  it('renders one recovery notification with the aggregated counts', () => {
-    recoveryState.items = [
-      { id: 'recovery-1', source: 'batch_import', resolution: 'pending' },
-      { id: 'recovery-2', source: 'batch_import', resolution: 'pending' },
-      { id: 'recovery-3', source: 'automation', resolution: 'pending' },
-    ];
-
-    const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-
-    expect(screen.getByText('Interrupted work is ready to recover')).toBeDefined();
-    expect(screen.getByText('3 file(s) waiting. Batch: 2 · Automation: 1')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open Recovery Center' })).toBeDefined();
-  });
-
-  it('shows update, automation failure, recovery, and automation success notifications in order', () => {
-    recoveryState.items = [
-      { id: 'recovery-1', source: 'batch_import', resolution: 'pending' },
-    ];
-    automationState.notifications = [
-      {
-        id: 'automation-success-rule-1-1',
-        kind: 'success',
-        ruleId: 'rule-1',
-        ruleName: 'Success Rule',
-        count: 2,
-        latestFilePath: 'C:\\watch\\done.wav',
-        latestStage: 'exporting',
-        createdAt: 10,
-        updatedAt: 12,
-        retryable: false,
-      },
-      {
-        id: 'automation-failure-rule-2',
-        kind: 'failure',
-        ruleId: 'rule-2',
-        ruleName: 'Failure Rule',
-        count: 1,
-        latestFilePath: 'C:\\watch\\failed.wav',
-        latestStage: 'translating',
-        latestMessage: 'Translation failed',
-        createdAt: 9,
-        updatedAt: 11,
-        retryable: true,
-      },
-    ];
-    useAppUpdaterStore.setState({
-      status: 'available',
-      updateInfo: makeUpdate('1.2.3') as any,
-      notificationVisible: true,
-    });
-
-    const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('4');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-
-    const titles = Array.from(container.querySelectorAll('.notification-center-item strong')).map((node) => node.textContent);
-    expect(titles).toEqual([
-      'settings.update_available:1.2.3',
-      'Failure Rule needs attention',
-      'Interrupted work is ready to recover',
-      'Success Rule completed',
-    ]);
-    expect(container.querySelectorAll('.notification-center-item-header')).toHaveLength(4);
-    expect(container.querySelectorAll('.notification-center-item-actions')).toHaveLength(4);
-  });
-
-  it('caps the trigger badge at 9+ while keeping the full notification list', () => {
-    automationState.notifications = Array.from({ length: 10 }, (_, index) => ({
-      id: `automation-success-rule-${index}`,
-      kind: 'success',
-      ruleId: `rule-${index}`,
-      ruleName: `Success Rule ${index}`,
-      count: 1,
-      latestFilePath: `C:\\watch\\done-${index}.wav`,
-      latestStage: 'exporting',
-      createdAt: index,
-      updatedAt: index,
-      retryable: false,
-    }));
-
-    const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('9+');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    expect(container.querySelectorAll('.notification-center-item')).toHaveLength(10);
-  });
-
-  it('opens the recovery center from either the notification body or the CTA', () => {
-    recoveryState.items = [
-      { id: 'recovery-1', source: 'batch_import', resolution: 'pending' },
-    ];
-    const onOpenRecoveryCenter = vi.fn();
-
-    render(
-      <NotificationCenter
-        onOpenRecoveryCenter={onOpenRecoveryCenter}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: /Interrupted work is ready to recover/i }));
-
-    expect(onOpenRecoveryCenter).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Center' }));
-
-    expect(onOpenRecoveryCenter).toHaveBeenCalledTimes(2);
-    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull();
-  });
-
-  it('opens automation settings from the notification body and CTA', () => {
-    automationState.notifications = [
-      {
-        id: 'automation-success-rule-1-1',
-        kind: 'success',
-        ruleId: 'rule-1',
-        ruleName: 'Success Rule',
-        count: 2,
-        latestFilePath: 'C:\\watch\\done.wav',
-        latestStage: 'exporting',
-        createdAt: 10,
-        updatedAt: 12,
-        retryable: false,
-      },
-    ];
-    const onOpenAutomationSettings = vi.fn();
-
-    render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={onOpenAutomationSettings}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: /Success Rule completed/i }));
-
-    expect(onOpenAutomationSettings).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Automation' }));
-
-    expect(onOpenAutomationSettings).toHaveBeenCalledTimes(2);
-  });
-
-  it('retries failed automation notifications and removes the failure entry', async () => {
+  it('retries existing automation failure notifications inside the task center', async () => {
     automationState.notifications = [
       {
         id: 'automation-failure-rule-2',
@@ -363,19 +299,19 @@ describe('NotificationCenter', () => {
         ruleName: 'Failure Rule',
         count: 1,
         latestFilePath: 'C:\\watch\\failed.wav',
-        latestStage: 'translating',
-        latestMessage: 'Translation failed',
+        latestStage: 'transcribing',
+        latestMessage: 'Transcription failed',
         createdAt: 9,
         updatedAt: 11,
         retryable: true,
       },
     ];
 
-    const view = render(
+    render(
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
         onOpenAutomationSettings={vi.fn()}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -386,78 +322,9 @@ describe('NotificationCenter', () => {
     });
 
     expect(automationState.retryNotification).toHaveBeenCalledWith('automation-failure-rule-2');
-
-    view.rerender(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByText('Failure Rule needs attention')).toBeNull();
   });
 
-  it('dismisses automation notifications and updates the badge count', () => {
-    automationState.notifications = [
-      {
-        id: 'automation-success-rule-1-1',
-        kind: 'success',
-        ruleId: 'rule-1',
-        ruleName: 'Success Rule',
-        count: 1,
-        latestFilePath: 'C:\\watch\\done.wav',
-        latestStage: 'exporting',
-        createdAt: 10,
-        updatedAt: 12,
-        retryable: false,
-      },
-    ];
-
-    const view = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(view.container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-    view.rerender(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(view.container.querySelector('.notification-center-trigger-badge')).toBeNull();
-    expect(screen.queryByText('Success Rule completed')).toBeNull();
-  });
-
-  it('dismisses the update notification and records the dismissed version', () => {
-    useAppUpdaterStore.setState({
-      status: 'available',
-      updateInfo: makeUpdate('1.2.3') as any,
-      notificationVisible: true,
-    });
-
-    render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-    expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);
-    expect(useAppUpdaterStore.getState().dismissedVersion).toBe('1.2.3');
-  });
-
-  it('updates the notification in place while installing and then offers relaunch', async () => {
+  it('updates the transient update task while installing and then offers relaunch', async () => {
     const downloadAndInstall = vi.fn().mockImplementation(async (onEvent: any) => {
       onEvent({ event: 'Started', data: { contentLength: 100 } });
       onEvent({ event: 'Progress', data: { chunkLength: 40 } });
@@ -475,7 +342,7 @@ describe('NotificationCenter', () => {
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
         onOpenAutomationSettings={vi.fn()}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -491,48 +358,5 @@ describe('NotificationCenter', () => {
       expect(screen.getByText('Relaunch to update')).toBeDefined();
       expect(screen.getByRole('button', { name: 'Relaunch' })).toBeDefined();
     });
-  });
-
-  it('does not surface a manual update result through the notification center when the reminder is hidden', () => {
-    useAppUpdaterStore.setState({
-      status: 'available',
-      updateInfo: makeUpdate('1.2.3') as any,
-      notificationVisible: false,
-    });
-
-    const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    expect(container.querySelector('.notification-center-trigger-badge')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-
-    expect(screen.queryByText('settings.update_available:1.2.3')).toBeNull();
-    expect(screen.getByText('No notifications right now.')).toBeDefined();
-  });
-
-  it('closes the open panel on outside click and Escape', () => {
-    render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeDefined();
-
-    fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeDefined();
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull();
   });
 });

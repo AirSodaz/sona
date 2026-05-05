@@ -6,6 +6,20 @@ const testContext = vi.hoisted(() => ({
     saveRecoveredItemsMock: vi.fn(),
     enqueueRecoveredItemsMock: vi.fn(),
     markRecoveryItemDiscardedMock: vi.fn(),
+    upsertTaskLedgerRecordMock: vi.fn(),
+    patchTaskLedgerRecordMock: vi.fn(),
+    buildRecoveryTaskLedgerRecordMock: vi.fn((item: any) => ({
+        id: `recovery-${item.id}`,
+        kind: 'recovery',
+        status: 'recoverable',
+        title: item.filename,
+        progress: item.progress,
+        createdAt: item.updatedAt,
+        updatedAt: item.updatedAt,
+        retryable: item.canResume,
+        cancelable: false,
+        recoverable: item.canResume,
+    })),
 }));
 
 vi.mock('../../services/recoveryService', () => ({
@@ -28,6 +42,13 @@ vi.mock('../automationStore', () => ({
             markRecoveryItemDiscarded: (...args: unknown[]) => testContext.markRecoveryItemDiscardedMock(...args),
         }),
     },
+}));
+
+vi.mock('../../services/taskLedgerRuntime', () => ({
+    buildRecoveryTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.buildRecoveryTaskLedgerRecordMock, undefined, args),
+    upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.upsertTaskLedgerRecordMock, undefined, args),
+    patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(testContext.patchTaskLedgerRecordMock, undefined, args),
+    createRecoveryTaskLedgerId: (id: string) => `recovery-${id}`,
 }));
 
 import { useRecoveryStore } from '../recoveryStore';
@@ -58,6 +79,36 @@ describe('recoveryStore', () => {
             items: [],
             isLoaded: true,
             error: null,
+        }));
+    });
+
+    it('mirrors pending recovery items into the task ledger', async () => {
+        const recoveryItem = {
+            id: 'recovery-1',
+            filename: 'meeting.wav',
+            filePath: 'C:\\watch\\meeting.wav',
+            source: 'batch_import' as const,
+            resolution: 'pending' as const,
+            progress: 33,
+            segments: [],
+            projectId: null,
+            lastKnownStage: 'transcribing' as const,
+            updatedAt: 100,
+            hasSourceFile: true,
+            canResume: true,
+        };
+        testContext.loadRecoverySnapshotMock.mockResolvedValueOnce({
+            version: 1,
+            updatedAt: 100,
+            items: [recoveryItem],
+        });
+
+        await useRecoveryStore.getState().loadRecovery();
+
+        expect(testContext.upsertTaskLedgerRecordMock).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'recovery-recovery-1',
+            status: 'recoverable',
+            title: 'meeting.wav',
         }));
     });
 
@@ -92,7 +143,41 @@ describe('recoveryStore', () => {
 
         expect(testContext.markAutomationRecoveryItemsResumedMock).toHaveBeenCalledWith(snapshotItems);
         expect(testContext.enqueueRecoveredItemsMock).toHaveBeenCalledWith(snapshotItems);
-        expect(testContext.saveRecoveredItemsMock).not.toHaveBeenCalled();
+        expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(useRecoveryStore.getState().items).toEqual([]);
+    });
+
+    it('resumes one recovery item from the task center', async () => {
+        const recoveryItem = {
+            id: 'recovery-single',
+            filename: 'single.wav',
+            filePath: 'C:\\watch\\single.wav',
+            source: 'batch_import' as const,
+            resolution: 'pending' as const,
+            progress: 20,
+            segments: [],
+            projectId: null,
+            lastKnownStage: 'queued' as const,
+            updatedAt: 100,
+            hasSourceFile: true,
+            canResume: true,
+        };
+        useRecoveryStore.setState({
+            items: [recoveryItem],
+            updatedAt: 100,
+            isLoaded: true,
+            isBusy: false,
+            error: null,
+        });
+
+        await useRecoveryStore.getState().resumeItem('recovery-single');
+
+        expect(testContext.enqueueRecoveredItemsMock).toHaveBeenCalledWith([recoveryItem]);
+        expect(testContext.patchTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-single', expect.objectContaining({
+            status: 'succeeded',
+            progress: 100,
+        }));
+        expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
         expect(useRecoveryStore.getState().items).toEqual([]);
     });
 

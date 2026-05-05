@@ -6,7 +6,7 @@ import type { RecoveryItemStage } from './recovery';
 /**
  * Status of a batch queue item.
  */
-export type BatchQueueItemStatus = 'pending' | 'processing' | 'complete' | 'error';
+export type BatchQueueItemStatus = 'pending' | 'processing' | 'complete' | 'error' | 'cancelled';
 
 export type BatchQueueItemOrigin = 'manual' | 'automation';
 

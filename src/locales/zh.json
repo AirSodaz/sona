@@ -105,6 +105,42 @@
         "notifications_panel": "通知",
         "notifications_empty": "暂时没有通知。"
     },
+    "task_center": {
+        "panel_title": "任务中心",
+        "empty": "当前没有正在处理的任务。",
+        "needs_action": "需要处理",
+        "active": "进行中",
+        "recent": "最近",
+        "clear_recent": "清理最近",
+        "clear": "清除",
+        "dismiss": "忽略",
+        "discard": "丢弃",
+        "retry": "重试",
+        "stopping": "停止中",
+        "progress": "进度",
+        "task_body": "{{kind}} · {{status}}",
+        "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
+        "task_body_file": "{{base}} · {{fileName}}",
+        "kind": {
+            "batchImport": "批量转录",
+            "automation": "自动化",
+            "llmPolish": "LLM 润色",
+            "llmTranslate": "翻译",
+            "llmSummary": "AI 摘要",
+            "recovery": "恢复",
+            "update": "更新"
+        },
+        "status": {
+            "pending": "等待中",
+            "running": "运行中",
+            "cancelRequested": "停止中",
+            "failed": "失败",
+            "recoverable": "可恢复",
+            "interrupted": "已中断",
+            "cancelled": "已取消",
+            "succeeded": "已完成"
+        }
+    },
     "panel": {
         "live_record": "实时录音",
         "batch_import": "批量导入",
@@ -173,7 +209,8 @@
         "status_pending": "等待中",
         "status_processing": "处理中",
         "status_complete": "已完成",
-        "status_error": "失败"
+        "status_error": "失败",
+        "status_cancelled": "已取消"
     },
     "player": {
         "play": "播放",

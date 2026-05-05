@@ -15,6 +15,10 @@ import {
   runTranscriptSegmentTaskJob,
 } from './llm/segmentTask';
 import { runTranscriptLlmJob } from './tauri/llm';
+import {
+  createLlmTaskLedgerId,
+  isTaskLedgerCancelRequested,
+} from './taskLedgerRuntime';
 
 function buildTranslationMap(translations: TranslatedSegment[]): Map<string, TranslatedSegment> {
   const translationMap = new Map<string, TranslatedSegment>();
@@ -74,6 +78,7 @@ class TranslationService {
       taskType: 'translate',
       segments,
       sourceHistoryId: sessionStore.sourceHistoryId,
+      targetLanguage: config.translationLanguage || 'zh',
       onStart: (jobHistoryId) => {
         sidecarStore.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
       },
@@ -87,6 +92,9 @@ class TranslationService {
           taskId,
           'translate',
           (payload) => {
+            if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+              return;
+            }
             this.applyTranscriptJobUpdate(payload);
           },
         );
@@ -99,6 +107,9 @@ class TranslationService {
             segments,
             targetLanguage: config.translationLanguage || 'zh',
           });
+          if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
+            return;
+          }
           this.applyTranscriptJobUpdate(result);
         } finally {
           unlistenJobUpdates();
