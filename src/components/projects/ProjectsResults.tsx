@@ -41,6 +41,7 @@ interface ProjectsResultsProps {
 
 interface ProjectsVirtualContext {
   isSelectionMode: boolean;
+  showProjectBadge: boolean;
   t: TranslationFn;
   viewMode: 'list' | 'table';
 }
@@ -48,17 +49,22 @@ interface ProjectsVirtualContext {
 const VIRTUAL_VIEWPORT_INCREASE = { top: 360, bottom: 720 };
 const VIRTUAL_SCROLL_CLASS_NAME = 'projects-main-scroll projects-main-scroll--virtual';
 
+function getVirtualScrollClassName(viewMode: ProjectsResultsProps['viewMode']): string {
+  return `${VIRTUAL_SCROLL_CLASS_NAME} projects-results-scroll projects-results-scroll--${viewMode}`;
+}
+
 const ProjectsVirtualList = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { context?: ProjectsVirtualContext }
 >(function ProjectsVirtualList({ children, context, style, ...props }, ref) {
   const viewMode = context?.viewMode ?? 'list';
+  const gutterClassName = viewMode === 'list' ? 'projects-layout-guttered' : '';
 
   return (
     <div
       {...props}
       ref={ref}
-      className={`projects-list projects-layout-${viewMode}`}
+      className={`projects-list projects-layout-${viewMode} ${gutterClassName}`.trim()}
       style={style}
     >
       {children}
@@ -66,11 +72,19 @@ const ProjectsVirtualList = React.forwardRef<
   );
 });
 
-function ProjectsVirtualTopSpacer(): React.JSX.Element {
+function ProjectsVirtualTopSpacer({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
+  if (context?.viewMode === 'table') {
+    return null;
+  }
+
   return <div className="projects-virtual-spacer projects-virtual-spacer--top" aria-hidden="true" />;
 }
 
-function ProjectsVirtualBottomSpacer(): React.JSX.Element {
+function ProjectsVirtualBottomSpacer({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
+  if (context?.viewMode === 'table') {
+    return null;
+  }
+
   return <div className="projects-virtual-spacer projects-virtual-spacer--bottom" aria-hidden="true" />;
 }
 
@@ -80,18 +94,27 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
   }
 
   const { isSelectionMode, t } = context;
+  const showProjectBadge = context.showProjectBadge;
 
   return (
     <div className="projects-table-header" role="row">
-      {isSelectionMode && <div role="columnheader" style={{ width: '40px' }} />}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+      {isSelectionMode && (
+        <div
+          className="projects-table-header-selection"
+          role="columnheader"
+          aria-label={t('projects.table_header_select', { defaultValue: 'Select' })}
+        />
+      )}
+      <div className="projects-table-header-content">
         <div className="projects-table-header-cell projects-table-header-title" role="columnheader">
           {t('projects.table_header_name', { defaultValue: 'Name' })}
         </div>
-        <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
-          {t('projects.table_header_project', { defaultValue: 'Project' })}
-        </div>
-        <div style={{ flex: 2, display: 'flex', alignItems: 'center' }}>
+        {showProjectBadge && (
+          <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
+            {t('projects.table_header_project', { defaultValue: 'Project' })}
+          </div>
+        )}
+        <div className="projects-table-header-meta">
           <div className="projects-table-header-cell projects-table-header-date" role="columnheader">
             {t('projects.table_header_date', { defaultValue: 'Date' })}
           </div>
@@ -100,7 +123,13 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
           </div>
         </div>
       </div>
-      {!isSelectionMode && <div role="columnheader" style={{ width: '48px' }} />}
+      {!isSelectionMode && (
+        <div
+          className="projects-table-header-actions"
+          role="columnheader"
+          aria-label={t('projects.table_header_actions', { defaultValue: 'Actions' })}
+        />
+      )}
     </div>
   );
 }
@@ -108,7 +137,7 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
 function ProjectsVirtualHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element {
   return (
     <>
-      <ProjectsVirtualTopSpacer />
+      <ProjectsVirtualTopSpacer context={context} />
       <ProjectsTableHeader context={context} />
     </>
   );
@@ -150,11 +179,14 @@ export function ProjectsResults({
   const virtuosoRef = React.useRef<VirtuosoHandle | null>(null);
   const virtuosoGridRef = React.useRef<VirtuosoGridHandle | null>(null);
   const selectedIdsSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+  const showProjectBadge = isAllItemsScope;
+  const scrollClassName = React.useMemo(() => getVirtualScrollClassName(viewMode), [viewMode]);
   const listContext = React.useMemo<ProjectsVirtualContext>(() => ({
     isSelectionMode,
+    showProjectBadge,
     t,
     viewMode: viewMode === 'table' ? 'table' : 'list',
-  }), [isSelectionMode, t, viewMode]);
+  }), [isSelectionMode, showProjectBadge, t, viewMode]);
   const activeSearchResultIndex = React.useMemo(() => {
     if (!activeSearchResultId) {
       return -1;
@@ -204,6 +236,7 @@ export function ProjectsResults({
         isKeyboardActive={!isSelectionMode && activeSearchResultId === item.id}
         onToggleSelection={onToggleSelection}
         layout={viewMode}
+        showProjectBadge={showProjectBadge}
       />
     );
   }, [
@@ -218,6 +251,7 @@ export function ProjectsResults({
     searchQuery,
     selectedHistoryId,
     selectedIdsSet,
+    showProjectBadge,
     viewMode,
   ]);
 
@@ -276,14 +310,15 @@ export function ProjectsResults({
 
       {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode === 'grid' && (
         <VirtuosoGrid
-          className={VIRTUAL_SCROLL_CLASS_NAME}
+          key={viewMode}
+          className={scrollClassName}
           components={PROJECTS_GRID_COMPONENTS}
           computeItemKey={(_index, item) => item.id}
           data={filteredAndSortedItems}
           increaseViewportBy={VIRTUAL_VIEWPORT_INCREASE}
           itemClassName="projects-grid-virtual-item"
           itemContent={renderVirtualItem}
-          listClassName="projects-list projects-layout-grid"
+          listClassName="projects-list projects-layout-grid projects-layout-guttered"
           onScroll={onScroll}
           ref={virtuosoGridRef}
         />
@@ -291,7 +326,8 @@ export function ProjectsResults({
 
       {!isHistoryLoading && filteredAndSortedItems.length > 0 && viewMode !== 'grid' && (
         <Virtuoso
-          className={VIRTUAL_SCROLL_CLASS_NAME}
+          key={viewMode}
+          className={scrollClassName}
           components={PROJECTS_LIST_COMPONENTS}
           computeItemKey={(_index, item) => item.id}
           context={listContext}

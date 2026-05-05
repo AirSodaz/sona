@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HistoryItem } from '../HistoryItem';
 import { useProjectStore } from '../../../stores/projectStore';
+
+const historyLayoutsCss = readFileSync(
+  'src/styles/history-layouts.css',
+  'utf8',
+);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -119,6 +125,29 @@ describe('HistoryItem', () => {
     expect(screen.getByText('roadmap').tagName).toBe('MARK');
   });
 
+  it('keeps the project badge visible by default and hides it when requested', () => {
+    const { rerender } = render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Alpha')).toBeDefined();
+
+    rerender(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        showProjectBadge={false}
+      />,
+    );
+
+    expect(screen.queryByText('Alpha')).toBeNull();
+  });
+
   it('shows the snippet as a compact secondary line in table layout', () => {
     const { container } = render(
       <HistoryItem
@@ -138,6 +167,17 @@ describe('HistoryItem', () => {
 
     expect(container.querySelector('.history-item')?.classList.contains('keyboard-active')).toBe(true);
     expect(container.querySelector('.history-item-preview--table')).not.toBeNull();
+    expect(container.querySelector('.history-item--table .history-item-header .history-item-preview--table')).not.toBeNull();
     expect(screen.getByText('planning').tagName).toBe('MARK');
+  });
+
+  it('keeps table row dividers active in virtualized table rows', () => {
+    expect(historyLayoutsCss).toMatch(/--projects-table-row-divider:\s*color-mix\(/);
+    expect(historyLayoutsCss).toMatch(
+      /\.history-item--table\s*{[^}]*border-bottom:\s*1px solid var\(--projects-table-row-divider\);/s,
+    );
+    expect(historyLayoutsCss).not.toMatch(
+      /\.history-item--table:last-child\s*{[^}]*border-bottom:\s*none;/s,
+    );
   });
 });

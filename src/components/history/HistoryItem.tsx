@@ -27,6 +27,7 @@ interface HistoryItemProps {
     isLoadDisabled?: boolean;
     isRenameDisabled?: boolean;
     isDeleteDisabled?: boolean;
+    showProjectBadge?: boolean;
 }
 
 /**
@@ -131,6 +132,7 @@ function HistoryItemComponent({
     isLoadDisabled = false,
     isRenameDisabled = false,
     isDeleteDisabled = false,
+    showProjectBadge = true,
 }: HistoryItemProps): React.JSX.Element {
     const { t, i18n } = useTranslation();
     const projectName = useProjectStore((state) => {
@@ -167,7 +169,7 @@ function HistoryItemComponent({
         <div
             id={`workspace-search-result-${item.id}`}
             data-history-item-id={item.id}
-            className={`history-item history-item--${layout} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''}`}
+            className={`history-item history-item--${layout} ${showProjectBadge ? '' : 'history-item--without-project-badge'} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''}`}
             onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
             role={layout === 'table' ? 'row' : 'listitem'}
         >
@@ -202,23 +204,23 @@ function HistoryItemComponent({
                         )}
                     </div>
 
-                    {layout !== 'table' && (
+                    {layout === 'table' && searchQuery.trim() && searchSnippet && (
+                        <p className="history-item-preview history-item-preview--table">
+                            {renderSnippet(searchSnippet)}
+                        </p>
+                    )}
+
+                    {layout !== 'table' && showProjectBadge && (
                         <span className="history-item-project-badge">
                             {projectName}
                         </span>
                     )}
                 </div>
 
-                {layout === 'table' && (
+                {layout === 'table' && showProjectBadge && (
                     <div className="history-item-table-cell history-item-table-project" role="cell">
                         <span className="history-item-project-badge">{projectName}</span>
                     </div>
-                )}
-
-                {layout === 'table' && searchQuery.trim() && searchSnippet && (
-                    <p className="history-item-preview history-item-preview--table">
-                        {renderSnippet(searchSnippet)}
-                    </p>
                 )}
 
                 {layout !== 'table' && (

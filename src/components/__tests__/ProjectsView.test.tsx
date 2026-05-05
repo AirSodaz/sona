@@ -133,7 +133,17 @@ vi.mock('../ErrorBoundary', () => ({
 }));
 
 vi.mock('../history/HistoryItem', () => ({
-  HistoryItem: ({ item, onLoad, isSelectionMode, isSelected, isKeyboardActive, onToggleSelection, searchQuery, searchSnippet }: any) => (
+  HistoryItem: ({
+    item,
+    onLoad,
+    isSelectionMode,
+    isSelected,
+    isKeyboardActive,
+    onToggleSelection,
+    searchQuery,
+    searchSnippet,
+    showProjectBadge = true,
+  }: any) => (
     <div
       id={`workspace-search-result-${item.id}`}
       data-testid={`history-item-${item.id}`}
@@ -141,7 +151,7 @@ vi.mock('../history/HistoryItem', () => ({
       data-keyboard-active={isKeyboardActive ? 'true' : 'false'}
     >
       <button onClick={() => onLoad(item)}>{item.title}</button>
-      <span>{`Project ${item.projectId ?? 'inbox'}`}</span>
+      {showProjectBadge && <span>{`Project ${item.projectId ?? 'inbox'}`}</span>}
       {searchQuery && <span>{`Query ${searchQuery}`}</span>}
       {searchSnippet?.text && <span>{`Snippet ${searchSnippet.text}`}</span>}
       {isSelected && <span>{`Active ${item.id}`}</span>}
@@ -174,10 +184,12 @@ vi.mock('react-virtuoso', async () => {
 
     const Header = components?.Header;
     const Footer = components?.Footer;
+    const List = components?.List;
+    const items = data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item, context));
     return (
       <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-list">
         {Header && <Header context={context} />}
-        {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item, context))}
+        {List ? <List context={context}>{items}</List> : items}
         {Footer && <Footer context={context} />}
       </div>
     );
@@ -187,6 +199,7 @@ vi.mock('react-virtuoso', async () => {
     components,
     data = [],
     itemContent,
+    listClassName,
     onScroll,
   }: any, ref) => {
     React.useImperativeHandle(ref, () => ({
@@ -200,7 +213,9 @@ vi.mock('react-virtuoso', async () => {
     return (
       <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-grid">
         {Header && <Header />}
-        {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+        <div className={listClassName}>
+          {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+        </div>
         {Footer && <Footer />}
       </div>
     );
@@ -454,7 +469,7 @@ describe('ProjectsView', () => {
     expect(screen.getAllByTestId(/history-item-/)).toHaveLength(20);
   });
 
-  it('uses virtual scroll spacing instead of relying on scroll-container padding for file lists', async () => {
+  it('keeps list and grid gutters while letting table start flush with its header', async () => {
     useHistoryStore.setState({
       items: createHistoryItems(3, null),
     } as any);
@@ -463,9 +478,71 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     const list = screen.getByTestId('projects-virtuoso-list');
+    expect(list.classList.contains('projects-results-scroll')).toBe(true);
+    expect(list.classList.contains('projects-results-scroll--list')).toBe(true);
     expect(list.classList.contains('projects-main-scroll--virtual')).toBe(true);
+    expect(list.querySelector('.projects-layout-list')?.classList.contains('projects-layout-guttered')).toBe(true);
     expect(list.querySelector('.projects-virtual-spacer--top')).not.toBeNull();
     expect(list.querySelector('.projects-virtual-spacer--bottom')).not.toBeNull();
+
+    await clickAsync(screen.getByRole('button', { name: 'Grid View' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('projects-virtuoso-grid')).toBeDefined();
+    });
+
+    const grid = screen.getByTestId('projects-virtuoso-grid');
+    expect(grid.classList.contains('projects-results-scroll')).toBe(true);
+    expect(grid.classList.contains('projects-results-scroll--grid')).toBe(true);
+    expect(grid.querySelector('.projects-layout-grid')?.classList.contains('projects-layout-guttered')).toBe(true);
+    expect(grid.querySelector('.projects-virtual-spacer--top')).not.toBeNull();
+    expect(grid.querySelector('.projects-virtual-spacer--bottom')).not.toBeNull();
+
+    await clickAsync(screen.getByRole('button', { name: 'Table View' }));
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: 'Name' })).toBeDefined();
+    });
+
+    const table = screen.getByTestId('projects-virtuoso-list');
+    expect(table.classList.contains('projects-results-scroll')).toBe(true);
+    expect(table.classList.contains('projects-results-scroll--table')).toBe(true);
+    expect(table.querySelector('.projects-layout-table')?.classList.contains('projects-layout-guttered')).toBe(false);
+    expect(table.querySelector('.projects-virtual-spacer--top')).toBeNull();
+    expect(table.querySelector('.projects-virtual-spacer--bottom')).toBeNull();
+    expect(table.querySelector('.projects-table-header-title')).not.toBeNull();
+    expect(table.querySelector('.projects-table-header-meta')).not.toBeNull();
+    expect(table.querySelector('.projects-table-header-actions')).not.toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeDefined();
+  });
+
+  it('hides repeated project badges outside the All Items scope', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-project',
+          title: 'Project Item',
+          timestamp: Date.now(),
+          duration: 180,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-project.json',
+          previewText: 'Project preview',
+          type: 'recording',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    expect(screen.getByText('Project Item')).toBeDefined();
+    expect(screen.queryByText('Project project-1')).toBeNull();
+
+    await clickAsync(getButtonByContent('All Items'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Project project-1')).toBeDefined();
+    });
   });
 
   it('scrolls the virtualized workspace list to keyboard search results outside the mounted window', async () => {
