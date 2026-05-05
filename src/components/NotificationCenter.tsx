@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     AutomationIcon,
@@ -14,11 +14,10 @@ import {
     RestoreIcon,
     SparklesIcon,
 } from './Icons';
-import { useRecoveryStore } from '../stores/recoveryStore';
 import { useAutomationStore } from '../stores/automationStore';
-import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { useAppUpdater } from '../hooks/useAppUpdater';
+import { useTaskLedgerActions, type TaskCenterAction } from '../hooks/useTaskLedgerActions';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
 import type { RecoveryItemStage } from '../types/recovery';
 import type { TaskLedgerKind, TaskLedgerRecord, TaskLedgerStatus } from '../types/taskLedger';
@@ -47,7 +46,6 @@ interface UpdateTaskEntry {
     section: Exclude<TaskCenterSection, 'recent'>;
     title: string;
     body: string | null;
-    actionLabel: string;
     version: string;
     progress: number;
     status: UpdateStatus;
@@ -65,7 +63,6 @@ interface AutomationNotificationEntry {
     detail: string | null;
     message: string | null;
     retryable: boolean;
-    actionLabel: string;
 }
 
 type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry | AutomationNotificationEntry;
@@ -191,10 +188,6 @@ function getTaskIcon(task: TaskLedgerRecord): React.ReactNode {
     }
 }
 
-function getRecoveryIdFromTask(taskId: string): string {
-    return taskId.startsWith('recovery-') ? taskId.slice('recovery-'.length) : taskId;
-}
-
 function getTaskBody(
     task: TaskLedgerRecord,
     t: (key: string, options?: Record<string, unknown>) => string,
@@ -308,16 +301,8 @@ export function NotificationCenter({
 }: NotificationCenterProps): React.JSX.Element {
     const { t } = useTranslation();
     const tasks = useTaskLedgerStore((state) => state.tasks);
-    const requestTaskCancel = useTaskLedgerStore((state) => state.requestCancel);
-    const removeTask = useTaskLedgerStore((state) => state.removeTask);
     const clearResolvedTasks = useTaskLedgerStore((state) => state.clearResolved);
-    const resumeRecoveryItem = useRecoveryStore((state) => state.resumeItem);
-    const discardRecoveryItem = useRecoveryStore((state) => state.discardItem);
-    const retryAutomationRule = useAutomationStore((state) => state.retryFailed);
     const automationNotifications = useAutomationStore((state) => state.notifications);
-    const dismissAutomationNotification = useAutomationStore((state) => state.dismissNotification);
-    const retryAutomationNotification = useAutomationStore((state) => state.retryNotification);
-    const addBatchFiles = useBatchQueueStore((state) => state.addFiles);
     const {
         status,
         updateInfo,
@@ -330,6 +315,20 @@ export function NotificationCenter({
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const panelId = useId();
+    const closePanel = useCallback(() => {
+        setIsOpen(false);
+    }, []);
+    const taskActions = useTaskLedgerActions({
+        t,
+        onOpenRecoveryCenter,
+        onOpenAutomationSettings,
+        closePanel,
+        updater: {
+            installUpdate,
+            dismissNotification: dismissUpdateNotification,
+            relaunchToUpdate,
+        },
+    });
 
     const entries = useMemo<TaskCenterEntry[]>(() => {
         const nextEntries: TaskCenterEntry[] = tasks.map((task) => ({
@@ -347,24 +346,12 @@ export function NotificationCenter({
                 body = null;
             }
 
-            let actionLabel: string;
-            if (status === 'downloaded') {
-                actionLabel = t('settings.update_btn_relaunch');
-            } else if (status === 'downloading') {
-                actionLabel = t('settings.update_downloading');
-            } else if (status === 'installing') {
-                actionLabel = t('settings.update_installing');
-            } else {
-                actionLabel = t('settings.update_btn_install');
-            }
-
             nextEntries.push({
                 source: 'update',
                 id: 'update',
                 section: status === 'downloading' || status === 'installing' ? 'active' : 'needsAction',
                 title: t('settings.update_available', { version: updateInfo.version }),
                 body,
-                actionLabel,
                 version: updateInfo.version,
                 progress,
                 status,
@@ -397,9 +384,6 @@ export function NotificationCenter({
                         ? t('automation.notifications.stage_detail', { stage: stageLabel })
                         : null,
                     message: notification.latestMessage || null,
-                    actionLabel: notification.retryable
-                        ? t('automation.retry_failed', { defaultValue: 'Retry Failed' })
-                        : t('automation.open_settings', { defaultValue: 'Open Automation' }),
                     retryable: notification.retryable,
                 });
             });
@@ -429,7 +413,6 @@ export function NotificationCenter({
                         ? t('automation.notifications.stage_detail', { stage: stageLabel })
                         : null,
                     message: null,
-                    actionLabel: t('automation.open_settings', { defaultValue: 'Open Automation' }),
                     retryable: false,
                 });
             });
@@ -487,36 +470,58 @@ export function NotificationCenter({
         };
     }, [isOpen]);
 
-    const openRecoveryCenter = () => {
-        setIsOpen(false);
-        onOpenRecoveryCenter();
+    const getActionButtonClassName = (action: TaskCenterAction) => {
+        const variantClassName = action.variant === 'primary'
+            ? 'btn-primary'
+            : action.variant === 'secondary'
+                ? 'btn-secondary'
+                : 'btn-secondary-soft';
+
+        return `btn ${variantClassName} btn-sm notification-center-item-action`;
     };
 
-    const openAutomationSettings = () => {
-        setIsOpen(false);
-        onOpenAutomationSettings();
-    };
-
-    const handleUpdateAction = () => {
-        if (status === 'downloaded') {
-            void relaunchToUpdate();
+    const runAction = (action: TaskCenterAction) => {
+        if (action.disabled) {
             return;
         }
 
-        void installUpdate();
+        void action.run();
     };
 
-    const handleRetryTask = (task: TaskLedgerRecord) => {
-        if (task.kind === 'automation' && task.automationRuleId) {
-            void retryAutomationRule(task.automationRuleId);
-            void removeTask(task.id);
-            return;
+    const renderActions = (actions: TaskCenterAction[]): React.ReactNode => {
+        if (actions.length === 0) {
+            return null;
         }
 
-        if (task.kind === 'batchImport' && task.filePath) {
-            addBatchFiles([task.filePath], { projectId: task.projectId ?? null });
-            void removeTask(task.id);
+        return actions.map((action) => (
+            <button
+                key={action.id}
+                type="button"
+                className={getActionButtonClassName(action)}
+                onClick={() => runAction(action)}
+                disabled={action.disabled}
+            >
+                {action.label}
+            </button>
+        ));
+    };
+
+    const renderCloseAction = (action?: TaskCenterAction): React.ReactNode => {
+        if (!action) {
+            return null;
         }
+
+        return (
+            <button
+                type="button"
+                className="btn btn-icon notification-center-item-close"
+                onClick={() => runAction(action)}
+                aria-label={action.label}
+                disabled={action.disabled}
+            >
+                <CloseIcon />
+            </button>
+        );
     };
 
     const renderProgress = (progressValue: number) => (
@@ -532,6 +537,10 @@ export function NotificationCenter({
     );
 
     const renderUpdateEntry = (entry: UpdateTaskEntry) => {
+        const actions = taskActions.getUpdateTaskActions({
+            status: entry.status,
+            isBusy: entry.isBusy,
+        });
         const support = (entry.status === 'downloading' || entry.status === 'installing' || entry.status === 'downloaded')
             ? (
                 <>
@@ -555,125 +564,16 @@ export function NotificationCenter({
                 title={entry.title}
                 body={entry.body}
                 bodyClassName="notification-center-update-body"
-                closeButton={(
-                    <button
-                        type="button"
-                        className="btn btn-icon notification-center-item-close"
-                        onClick={dismissUpdateNotification}
-                        aria-label={t('common.close')}
-                        disabled={entry.isBusy}
-                    >
-                        <CloseIcon />
-                    </button>
-                )}
+                closeButton={renderCloseAction(actions.close)}
                 support={support}
-                actions={(
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-sm notification-center-item-action"
-                        onClick={handleUpdateAction}
-                        disabled={entry.isBusy}
-                    >
-                        {entry.actionLabel}
-                    </button>
-                )}
+                actions={renderActions(actions.row)}
             />
         );
     };
 
-    const renderLedgerTaskActions = (task: TaskLedgerRecord): React.ReactNode => {
-        if (task.kind === 'recovery' && task.status === 'recoverable') {
-            const recoveryId = getRecoveryIdFromTask(task.id);
-            return (
-                <>
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-sm notification-center-item-action"
-                        onClick={() => void resumeRecoveryItem(recoveryId)}
-                        disabled={!task.recoverable}
-                    >
-                        {t('common.resume', { defaultValue: 'Resume' })}
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary-soft btn-sm notification-center-item-action"
-                        onClick={() => void discardRecoveryItem(recoveryId)}
-                    >
-                        {t('task_center.discard', { defaultValue: 'Discard' })}
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-sm notification-center-item-action"
-                        onClick={openRecoveryCenter}
-                    >
-                        {t('recovery.actions.open_center')}
-                    </button>
-                </>
-            );
-        }
-
-        if (isTaskLedgerActiveStatus(task.status)) {
-            return (
-                <button
-                    type="button"
-                    className="btn btn-secondary-soft btn-sm notification-center-item-action"
-                    onClick={() => void requestTaskCancel(task.id)}
-                    disabled={!task.cancelable || task.status === 'cancelRequested'}
-                >
-                    {task.status === 'cancelRequested'
-                        ? t('task_center.stopping', { defaultValue: 'Stopping' })
-                        : t('common.cancel')}
-                </button>
-            );
-        }
-
-        if (isTaskLedgerActionableStatus(task.status)) {
-            const canRetry = (
-                (task.kind === 'automation' && !!task.automationRuleId)
-                || (task.kind === 'batchImport' && !!task.filePath)
-            );
-
-            return (
-                <>
-                    {canRetry ? (
-                        <button
-                            type="button"
-                            className="btn btn-primary btn-sm notification-center-item-action"
-                            onClick={() => handleRetryTask(task)}
-                        >
-                            {t('task_center.retry', { defaultValue: 'Retry' })}
-                        </button>
-                    ) : null}
-                    {task.kind === 'automation' && !canRetry ? (
-                        <button
-                            type="button"
-                            className="btn btn-secondary btn-sm notification-center-item-action"
-                            onClick={openAutomationSettings}
-                        >
-                            {t('automation.open_settings', { defaultValue: 'Open Automation' })}
-                        </button>
-                    ) : null}
-                    <button
-                        type="button"
-                        className="btn btn-secondary-soft btn-sm notification-center-item-action"
-                        onClick={() => void removeTask(task.id)}
-                    >
-                        {t('task_center.dismiss', { defaultValue: 'Dismiss' })}
-                    </button>
-                </>
-            );
-        }
-
-        return (
-            <button
-                type="button"
-                className="btn btn-secondary-soft btn-sm notification-center-item-action"
-                onClick={() => void removeTask(task.id)}
-            >
-                {t('task_center.clear', { defaultValue: 'Clear' })}
-            </button>
-        );
-    };
+    const renderLedgerTaskActions = (task: TaskLedgerRecord): React.ReactNode => (
+        renderActions(taskActions.getLedgerTaskActions(task))
+    );
 
     const renderLedgerTask = (entry: LedgerTaskEntry) => {
         const { task } = entry;
@@ -711,9 +611,12 @@ export function NotificationCenter({
 
     const renderAutomationNotification = (entry: AutomationNotificationEntry) => {
         const isFailure = entry.kind === 'automationFailure';
-        const actionClassName = isFailure && entry.retryable
-            ? 'btn btn-primary btn-sm notification-center-item-action'
-            : 'btn btn-secondary btn-sm notification-center-item-action';
+        const actions = taskActions.getAutomationNotificationActions({
+            notificationId: entry.notificationId,
+            kind: entry.kind,
+            retryable: entry.retryable,
+        });
+        const openAction = actions.open;
         const support = entry.detail || (isFailure && entry.message)
             ? (
                 <>
@@ -741,33 +644,10 @@ export function NotificationCenter({
                 icon={isFailure ? <ErrorIcon /> : <AutomationIcon />}
                 title={entry.title}
                 body={entry.body}
-                onOpen={openAutomationSettings}
-                closeButton={(
-                    <button
-                        type="button"
-                        className="btn btn-icon notification-center-item-close"
-                        onClick={() => dismissAutomationNotification(entry.notificationId)}
-                        aria-label={t('common.close')}
-                    >
-                        <CloseIcon />
-                    </button>
-                )}
+                onOpen={openAction ? () => runAction(openAction) : undefined}
+                closeButton={renderCloseAction(actions.close)}
                 support={support}
-                actions={(
-                    <button
-                        type="button"
-                        className={actionClassName}
-                        onClick={() => {
-                            if (isFailure && entry.retryable) {
-                                void retryAutomationNotification(entry.notificationId);
-                                return;
-                            }
-                            openAutomationSettings();
-                        }}
-                    >
-                        {entry.actionLabel}
-                    </button>
-                )}
+                actions={renderActions(actions.row)}
             />
         );
     };

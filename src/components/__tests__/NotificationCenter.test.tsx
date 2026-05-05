@@ -267,6 +267,93 @@ describe('NotificationCenter task center', () => {
     expect(recoveryState.discardItem).toHaveBeenCalledWith('recovery-1');
   });
 
+  it('opens the recovery center from individual recovery ledger tasks', () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'recovery-recovery-1',
+        kind: 'recovery',
+        status: 'recoverable',
+        title: 'recover.wav',
+        recoverable: true,
+        cancelable: false,
+      }),
+    ];
+    const onOpenRecoveryCenter = vi.fn();
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={onOpenRecoveryCenter}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Recovery Center' }));
+
+    expect(onOpenRecoveryCenter).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Task Center' })).toBeNull();
+  });
+
+  it('retries failed batch ledger tasks through the batch queue', async () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-failed',
+        status: 'failed',
+        title: 'failed.wav',
+        filePath: 'C:\\audio\\failed.wav',
+        projectId: 'project-2',
+      }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await Promise.resolve();
+    });
+
+    expect(batchQueueState.addFiles).toHaveBeenCalledWith(['C:\\audio\\failed.wav'], {
+      projectId: 'project-2',
+    });
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-failed');
+  });
+
+  it('retries failed automation ledger tasks through the automation store', async () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'automation-failed',
+        kind: 'automation',
+        status: 'failed',
+        title: 'watch.wav',
+        automationRuleId: 'rule-1',
+      }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await Promise.resolve();
+    });
+
+    expect(automationState.retryFailed).toHaveBeenCalledWith('rule-1');
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('automation-failed');
+  });
+
   it('keeps visible updates as transient task center entries', () => {
     useAppUpdaterStore.setState({
       status: 'available',
@@ -288,6 +375,30 @@ describe('NotificationCenter task center', () => {
     expect(screen.getByText('Update 1.2.3')).toBeDefined();
     expect(screen.getByText('Release notes')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Install Update' })).toBeDefined();
+  });
+
+  it('disables update actions while an update is downloading', () => {
+    useAppUpdaterStore.setState({
+      status: 'downloading',
+      updateInfo: makeUpdate('1.2.3') as any,
+      progress: 35,
+      notificationVisible: true,
+    });
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    const downloadingButton = screen.getByRole('button', { name: 'Downloading update...' }) as HTMLButtonElement;
+    const closeButton = screen.getByRole('button', { name: 'Close' }) as HTMLButtonElement;
+
+    expect(downloadingButton.disabled).toBe(true);
+    expect(closeButton.disabled).toBe(true);
   });
 
   it('retries existing automation failure notifications inside the task center', async () => {
