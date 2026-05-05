@@ -78,6 +78,27 @@ describe('ExportButton', () => {
         expect(screen.getByText('export.modal_title')).toBeDefined();
     });
 
+    it('renders the modal overlay at document body level when opened from the detail header', async () => {
+        render(
+            <div className="projects-detail-header">
+                <ExportButton />
+            </div>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('dialog')).toBeDefined();
+        });
+
+        const bodyOverlay = Array.from(document.body.children).find((element) =>
+            element.classList.contains('settings-overlay')
+        );
+
+        expect(bodyOverlay).toBeDefined();
+        expect(bodyOverlay?.querySelector('#export-modal-title')?.textContent).toBe('export.modal_title');
+    });
+
     it('hides button when no segments', () => {
         useTranscriptStore.setState({ segments: [] });
         render(<ExportButton />);

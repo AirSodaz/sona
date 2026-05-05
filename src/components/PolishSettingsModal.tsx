@@ -10,6 +10,7 @@ import { Checkbox } from './Checkbox';
 import { isFeatureLlmConfigComplete } from '../services/llm/runtime';
 import { getPolishPresetOptions } from '../utils/polishPresets';
 import { normalizePolishKeywordSets } from '../utils/polishKeywords';
+import { ModalPortal } from './ModalPortal';
 
 interface PolishSettingsModalProps {
     isOpen: boolean;
@@ -69,7 +70,7 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
         });
     };
 
-    return (
+    const modalContent = (
         <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
             <div
                 className="dialog-modal"
@@ -222,4 +223,6 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
             </div>
         </div>
     );
+
+    return <ModalPortal>{modalContent}</ModalPortal>;
 }

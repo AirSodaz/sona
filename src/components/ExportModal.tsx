@@ -10,6 +10,7 @@ import { exportTranscriptToDirectory } from '../services/exportService';
 import { Dropdown } from './Dropdown';
 import { XIcon, FolderIcon } from './Icons';
 import { logger } from '../utils/logger';
+import { ModalPortal } from './ModalPortal';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -141,7 +142,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
         { value: 'txt', label: 'Plain Text (.txt)' },
     ];
 
-    return (
+    const modalContent = (
         <div className="settings-overlay" onClick={onClose} style={{ zIndex: 2000 }}>
             <div
                 className="dialog-modal"
@@ -309,4 +310,6 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
             </div>
         </div>
     );
+
+    return <ModalPortal>{modalContent}</ModalPortal>;
 }

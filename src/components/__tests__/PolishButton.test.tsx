@@ -193,4 +193,23 @@ describe('PolishButton', () => {
         expect(screen.getByText('Brand Terms')).toBeDefined();
         expect(screen.getByText('polish.preset_label')).toBeDefined();
     });
+
+    it('renders advanced settings overlay at document body level when opened from the detail header', () => {
+        render(
+            <div className="projects-detail-header">
+                <PolishButton />
+            </div>
+        );
+
+        fireEvent.click(screen.getByRole('button', { expanded: false }));
+        fireEvent.click(screen.getByText('polish.advanced_settings'));
+
+        const bodyOverlay = Array.from(document.body.children).find((element) =>
+            element.classList.contains('settings-overlay')
+        );
+
+        expect(bodyOverlay).toBeDefined();
+        expect(bodyOverlay?.querySelector('#polish-settings-modal-title')?.textContent).toBe('polish.advanced_settings');
+        expect(screen.getByText('polish.keywords')).toBeDefined();
+    });
 });
