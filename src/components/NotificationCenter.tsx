@@ -24,6 +24,7 @@ import {
     isTaskLedgerActionableStatus,
     isTaskLedgerActiveStatus,
 } from '../types/taskLedger';
+import { useRecoveryStore } from '../stores/recoveryStore';
 
 interface NotificationCenterProps {
     onOpenRecoveryCenter: () => void;
@@ -186,6 +187,20 @@ function isLlmTaskKind(kind: TaskLedgerKind): boolean {
     return kind === 'llmPolish' || kind === 'llmTranslate' || kind === 'llmSummary';
 }
 
+function shouldHideRecoveryRelatedTaskUntilLoaded(task: TaskLedgerRecord): boolean {
+    if (task.kind === 'recovery') {
+        return true;
+    }
+
+    if (task.kind !== 'batchImport' && task.kind !== 'automation') {
+        return false;
+    }
+
+    return task.status === 'interrupted'
+        || task.status === 'recoverable'
+        || isTaskLedgerActiveStatus(task.status);
+}
+
 function getTaskBody(
     task: TaskLedgerRecord,
     t: (key: string, options?: Record<string, unknown>) => string,
@@ -300,6 +315,7 @@ export function NotificationCenter({
     const { t } = useTranslation();
     const tasks = useTaskLedgerStore((state) => state.tasks);
     const clearResolvedTasks = useTaskLedgerStore((state) => state.clearResolved);
+    const isRecoveryLoaded = useRecoveryStore((state) => state.isLoaded);
     const {
         status,
         updateInfo,
@@ -334,6 +350,9 @@ export function NotificationCenter({
                 .filter((id): id is string => Boolean(id)),
         );
         const nextEntries: TaskCenterEntry[] = tasks
+            .filter((task) => (
+                isRecoveryLoaded || !shouldHideRecoveryRelatedTaskUntilLoaded(task)
+            ))
             .filter((task) => !staleQueueTaskIds.has(task.id))
             .map((task) => ({
                 source: 'ledger',
@@ -375,6 +394,7 @@ export function NotificationCenter({
         t,
         tasks,
         updateInfo,
+        isRecoveryLoaded,
     ]);
 
     const groupedEntries = useMemo(() => ({

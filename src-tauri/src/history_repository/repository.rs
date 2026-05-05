@@ -56,6 +56,27 @@ impl HistoryRepository {
     }
 
     pub(super) fn list_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
+        self.read_index_items()
+    }
+
+    pub(super) fn list_items_with_reconciled_live_drafts(
+        &self,
+    ) -> Result<Vec<HistoryItemRecord>, String> {
+        let mut items = self.read_index_items()?;
+        let mut changed = false;
+
+        for item in &mut items {
+            changed |= self.reconcile_live_draft_item(item)?;
+        }
+
+        if changed {
+            self.write_index(&items)?;
+        }
+
+        Ok(items)
+    }
+
+    fn read_index_items(&self) -> Result<Vec<HistoryItemRecord>, String> {
         self.ensure_ready()?;
         let raw = read_json_value(&self.history_index_path())?;
         let items = raw
@@ -67,11 +88,78 @@ impl HistoryRepository {
         Ok(items)
     }
 
+    fn reconcile_live_draft_item(&self, item: &mut HistoryItemRecord) -> Result<bool, String> {
+        if item.status != HistoryItemStatus::Draft
+            || item.draft_source != Some(HistoryDraftSource::LiveRecord)
+        {
+            return Ok(false);
+        }
+
+        let Some(audio_path) = optional_history_child_path(&self.history_dir(), &item.audio_path)
+        else {
+            return Ok(false);
+        };
+        let audio_metadata = match fs::metadata(&audio_path) {
+            Ok(metadata) if metadata.is_file() && metadata.len() > 0 => metadata,
+            _ => return Ok(false),
+        };
+
+        let Some(transcript_path) =
+            optional_history_child_path(&self.history_dir(), &item.transcript_path)
+        else {
+            return Ok(false);
+        };
+        if !transcript_path.exists() {
+            return Ok(false);
+        }
+
+        let transcript_value = match read_json_value(&transcript_path) {
+            Ok(value) => value,
+            Err(error) => {
+                log::warn!(
+                    "[History] Skipping live draft reconciliation for {}: {}",
+                    item.id,
+                    error
+                );
+                return Ok(false);
+            }
+        };
+        let normalized_transcript = match normalize_history_transcript_segments(transcript_value) {
+            Ok(transcript) if !transcript.segments.is_empty() => transcript,
+            Ok(_) => return Ok(false),
+            Err(error) => {
+                log::warn!(
+                    "[History] Skipping live draft reconciliation for {}: {}",
+                    item.id,
+                    error
+                );
+                return Ok(false);
+            }
+        };
+
+        write_json_pretty_atomic(&transcript_path, &normalized_transcript.segments)?;
+        item.preview_text = normalized_transcript.preview_text;
+        item.search_content = normalized_transcript.search_content;
+        let transcript_duration = normalized_transcript
+            .segments
+            .iter()
+            .filter_map(|segment| segment.end.is_finite().then_some(segment.end))
+            .fold(0.0, f64::max);
+        item.duration = item.duration.max(transcript_duration).max(0.0);
+        if audio_metadata.len() == 0 {
+            return Ok(false);
+        }
+        item.status = HistoryItemStatus::Complete;
+        item.draft_source = None;
+
+        Ok(true)
+    }
+
     pub(super) fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
     ) -> Result<HistoryWorkspaceQueryResult, String> {
-        let items = self.list_items()?;
+        let items = self.list_items_with_reconciled_live_drafts()?;
         Ok(super::workspace_query::query_workspace_items(
             items, request,
         ))
@@ -877,6 +965,109 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(transcript.len(), 1);
+    }
+
+    #[test]
+    fn list_items_reconciles_restart_live_drafts_with_saved_audio_and_transcript() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let draft = repository
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                audio_extension: "wav".to_string(),
+                project_id: None,
+                icon: Some("system:mic".to_string()),
+            })
+            .unwrap();
+        fs::write(
+            repository.audio_path(&draft.item.audio_path).unwrap(),
+            b"audio",
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &repository
+                .transcript_path(&draft.item.transcript_path)
+                .unwrap(),
+            &json!([segment_value("seg-1", "Recovered text", 0.0, 2.5)]),
+        )
+        .unwrap();
+
+        let items = repository
+            .list_items_with_reconciled_live_drafts()
+            .unwrap();
+
+        assert_eq!(items[0].id, draft.item.id);
+        assert_eq!(items[0].status, HistoryItemStatus::Complete);
+        assert_eq!(items[0].draft_source, None);
+        assert_eq!(items[0].preview_text, "Recovered text...");
+        assert_eq!(items[0].search_content, "Recovered text");
+        assert_eq!(items[0].duration, 2.5);
+
+        let persisted = repository.list_items().unwrap();
+        assert_eq!(persisted[0].status, HistoryItemStatus::Complete);
+        assert_eq!(persisted[0].draft_source, None);
+    }
+
+    #[test]
+    fn list_items_keeps_empty_or_missing_audio_live_drafts_as_drafts() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let draft = repository
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                audio_extension: "wav".to_string(),
+                project_id: None,
+                icon: Some("system:mic".to_string()),
+            })
+            .unwrap();
+
+        let items = repository
+            .list_items_with_reconciled_live_drafts()
+            .unwrap();
+
+        assert_eq!(items[0].id, draft.item.id);
+        assert_eq!(items[0].status, HistoryItemStatus::Draft);
+        assert_eq!(
+            items[0].draft_source,
+            Some(HistoryDraftSource::LiveRecord)
+        );
+    }
+
+    #[test]
+    fn list_items_keeps_empty_transcript_live_drafts_as_drafts() {
+        let root = tempdir().unwrap();
+        let repository = HistoryRepository::new(root.path().to_path_buf());
+
+        let draft = repository
+            .create_live_draft(HistoryCreateLiveDraftRequest {
+                audio_extension: "wav".to_string(),
+                project_id: None,
+                icon: Some("system:mic".to_string()),
+            })
+            .unwrap();
+        fs::write(
+            repository.audio_path(&draft.item.audio_path).unwrap(),
+            b"audio",
+        )
+        .unwrap();
+        write_json_pretty_atomic(
+            &repository
+                .transcript_path(&draft.item.transcript_path)
+                .unwrap(),
+            &json!([]),
+        )
+        .unwrap();
+
+        let items = repository
+            .list_items_with_reconciled_live_drafts()
+            .unwrap();
+
+        assert_eq!(items[0].id, draft.item.id);
+        assert_eq!(items[0].status, HistoryItemStatus::Draft);
+        assert_eq!(
+            items[0].draft_source,
+            Some(HistoryDraftSource::LiveRecord)
+        );
     }
 
     #[test]

@@ -203,6 +203,80 @@ fn persist_queue_snapshot_merges_with_unresolved_recovery_items_from_previous_cr
 }
 
 #[test]
+fn persist_queue_snapshot_clears_previous_recovery_when_queue_item_resolves() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("resolved.wav");
+    File::create(&source).unwrap();
+    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+
+    repository
+        .save_snapshot(vec![json!({
+            "id": "recovery-resolved",
+            "filename": "resolved.wav",
+            "filePath": source,
+            "source": "batch_import",
+            "resolution": "pending",
+            "progress": 60,
+            "segments": [],
+            "projectId": null,
+            "lastKnownStage": "transcribing",
+            "updatedAt": 100,
+            "hasSourceFile": true,
+            "canResume": true
+        })])
+        .unwrap();
+
+    let snapshot = repository
+        .persist_queue_snapshot(vec![json!({
+            "id": "queue-resolved",
+            "recoveryId": "recovery-resolved",
+            "filename": "resolved.wav",
+            "filePath": dir.path().join("resolved.wav"),
+            "status": "complete",
+            "progress": 100,
+            "segments": [],
+            "projectId": null
+        })])
+        .unwrap();
+
+    assert!(snapshot.items.is_empty());
+}
+
+#[test]
+fn persist_queue_snapshot_resolved_ids_clear_recovery_when_queue_is_empty() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("discarded.wav");
+    File::create(&source).unwrap();
+    let repository = RecoveryRepository::new(dir.path().to_path_buf());
+
+    repository
+        .save_snapshot(vec![json!({
+            "id": "recovery-discarded",
+            "filename": "discarded.wav",
+            "filePath": source,
+            "source": "batch_import",
+            "resolution": "pending",
+            "progress": 40,
+            "segments": [],
+            "projectId": null,
+            "lastKnownStage": "transcribing",
+            "updatedAt": 100,
+            "hasSourceFile": true,
+            "canResume": true
+        })])
+        .unwrap();
+
+    let snapshot = repository
+        .persist_queue_snapshot_with_resolved_ids(
+            vec![],
+            vec!["recovery-discarded".to_string()],
+        )
+        .unwrap();
+
+    assert!(snapshot.items.is_empty());
+}
+
+#[test]
 fn load_snapshot_recomputes_source_file_status_and_resume_guard() {
     let dir = tempdir().unwrap();
     let existing_file = dir.path().join("existing.wav");

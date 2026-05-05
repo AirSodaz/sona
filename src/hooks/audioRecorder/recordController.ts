@@ -39,7 +39,7 @@ interface RecordControllerCapture {
     startFileRecording: (sessionId: string) => boolean;
     cleanupPartialStart: (sessionId: string) => Promise<void>;
     stopCaptureForSession: (sessionId: string) => Promise<string | null>;
-    stopFileRecording: () => void;
+    stopFileRecording: () => Promise<void>;
     teardownWebCaptureResources: () => Promise<void>;
     pauseCapture: (sessionId: string) => Promise<void>;
     resumeCapture: (sessionId: string) => Promise<void>;
@@ -258,7 +258,7 @@ export function createRecordController({
 
         if (!liveDraft || latestSegments.length === 0) {
             liveDraftRef.current = null;
-            capture.stopFileRecording();
+            await capture.stopFileRecording();
             await capture.teardownWebCaptureResources();
 
             if (config.muteDuringRecording) {
@@ -294,7 +294,7 @@ export function createRecordController({
             timing.clearFinalizedDurationSeconds();
         }
 
-        capture.stopFileRecording();
+        await capture.stopFileRecording();
         await capture.teardownWebCaptureResources();
 
         if (config.muteDuringRecording) {

@@ -12,6 +12,7 @@ const taskLedgerState = {
 };
 
 const recoveryState = {
+  isLoaded: true,
   resumeItem: vi.fn(),
   discardItem: vi.fn(),
 };
@@ -171,6 +172,7 @@ describe('NotificationCenter task center', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     taskLedgerState.tasks = [];
+    recoveryState.isLoaded = true;
     automationState.notifications = [];
     retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
@@ -360,6 +362,49 @@ describe('NotificationCenter task center', () => {
     expect(screen.getAllByText('recover.wav')).toHaveLength(1);
     expect(screen.getByText(/Recovery .* Recoverable/)).toBeDefined();
     expect(screen.queryByText(/Batch import .* Pending/)).toBeNull();
+  });
+
+  it('hides stale recovery-related ledger tasks until recovery state has loaded', () => {
+    recoveryState.isLoaded = false;
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-recovery-1',
+        kind: 'batchImport',
+        status: 'interrupted',
+        title: 'recover.wav',
+        stage: 'transcribing',
+      }),
+      makeTask({
+        id: 'automation-recovery-2',
+        kind: 'automation',
+        status: 'running',
+        title: 'automation.wav',
+        automationRuleId: 'rule-1',
+        sourceFingerprint: 'fp-1',
+        stage: 'transcribing',
+      }),
+      makeTask({
+        id: 'llm-current',
+        kind: 'llmSummary',
+        status: 'failed',
+        title: 'Summary',
+      }),
+    ];
+
+    const { container } = render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    expect(screen.queryByText('recover.wav')).toBeNull();
+    expect(screen.queryByText('automation.wav')).toBeNull();
+    expect(screen.getByText('Summary')).toBeDefined();
   });
 
   it('retries failed batch ledger tasks through the batch queue', async () => {

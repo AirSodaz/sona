@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const testContext = vi.hoisted(() => ({
     loadRecoverySnapshotMock: vi.fn(),
     markAutomationRecoveryItemsResumedMock: vi.fn(),
+    persistQueueRecoverySnapshotMock: vi.fn(),
+    flushRecoverySnapshotWritesMock: vi.fn(),
     saveRecoveredItemsMock: vi.fn(),
     enqueueRecoveredItemsMock: vi.fn(),
     markRecoveryItemDiscardedMock: vi.fn(),
@@ -26,12 +28,15 @@ const testContext = vi.hoisted(() => ({
 vi.mock('../../services/recoveryService', () => ({
     loadRecoverySnapshot: (...args: unknown[]) => testContext.loadRecoverySnapshotMock(...args),
     markAutomationRecoveryItemsResumed: (...args: unknown[]) => testContext.markAutomationRecoveryItemsResumedMock(...args),
+    persistQueueRecoverySnapshot: (...args: unknown[]) => testContext.persistQueueRecoverySnapshotMock(...args),
+    flushRecoverySnapshotWrites: (...args: unknown[]) => testContext.flushRecoverySnapshotWritesMock(...args),
     saveRecoveredItems: (...args: unknown[]) => testContext.saveRecoveredItemsMock(...args),
 }));
 
 vi.mock('../batchQueueStore', () => ({
     useBatchQueueStore: {
         getState: () => ({
+            queueItems: [],
             enqueueRecoveredItems: (...args: unknown[]) => testContext.enqueueRecoveredItemsMock(...args),
         }),
     },
@@ -65,6 +70,7 @@ describe('recoveryStore', () => {
             items: [],
         });
         testContext.saveRecoveredItemsMock.mockResolvedValue(undefined);
+        testContext.flushRecoverySnapshotWritesMock.mockResolvedValue(undefined);
         testContext.markRecoveryItemDiscardedMock.mockResolvedValue(undefined);
         useRecoveryStore.setState({
             items: [],
@@ -177,6 +183,11 @@ describe('recoveryStore', () => {
         expect(testContext.markAutomationRecoveryItemsResumedMock).toHaveBeenCalledWith(snapshotItems);
         expect(testContext.enqueueRecoveredItemsMock).toHaveBeenCalledWith(snapshotItems);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(testContext.persistQueueRecoverySnapshotMock).toHaveBeenCalledWith([], {
+            immediate: true,
+            resolvedIds: ['recovery-1'],
+        });
+        expect(testContext.flushRecoverySnapshotWritesMock).toHaveBeenCalled();
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-1');
         expect(useRecoveryStore.getState().items).toEqual([]);
@@ -214,6 +225,10 @@ describe('recoveryStore', () => {
             status: 'succeeded',
         }));
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(testContext.persistQueueRecoverySnapshotMock).toHaveBeenCalledWith([], {
+            immediate: true,
+            resolvedIds: ['recovery-single'],
+        });
         expect(useRecoveryStore.getState().items).toEqual([]);
     });
 
@@ -332,6 +347,10 @@ describe('recoveryStore', () => {
 
         expect(testContext.markRecoveryItemDiscardedMock).toHaveBeenCalledWith(automationItem);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([batchItem]);
+        expect(testContext.persistQueueRecoverySnapshotMock).toHaveBeenCalledWith([], {
+            immediate: true,
+            resolvedIds: ['recovery-automation-1'],
+        });
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-automation-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-automation-1');
         expect(useRecoveryStore.getState().items).toEqual([batchItem]);
@@ -382,6 +401,10 @@ describe('recoveryStore', () => {
 
         expect(testContext.markRecoveryItemDiscardedMock).toHaveBeenCalledWith(items[1]);
         expect(testContext.saveRecoveredItemsMock).toHaveBeenCalledWith([]);
+        expect(testContext.persistQueueRecoverySnapshotMock).toHaveBeenCalledWith([], {
+            immediate: true,
+            resolvedIds: ['recovery-batch-1', 'recovery-automation-1'],
+        });
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-batch-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('batch-recovery-automation-1');
         expect(testContext.removeTaskLedgerRecordMock).toHaveBeenCalledWith('recovery-recovery-batch-1');

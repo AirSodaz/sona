@@ -73,6 +73,8 @@ export function createAudioRecorderCapture({
     type NativePeakEventName =
         | typeof TauriEvent.audio.systemPeak
         | typeof TauriEvent.audio.microphonePeak;
+    let pendingWebRecordingStop: Promise<void> | null = null;
+    let resolvePendingWebRecordingStop: (() => void) | null = null;
 
     function isDesktopCaptureActive(): boolean {
         return refs.activeInputSourceRef.current === 'desktop';
@@ -411,18 +413,31 @@ export function createAudioRecorderCapture({
         recorder.onstop = () => {
             const type = refs.mimeTypeRef.current || recorder.mimeType || 'audio/webm';
             const blob = new Blob(chunks, { type });
-            void onWebRecordingStop(blob, type).catch((error) => {
-                logger.error('[useAudioRecorder] Failed to persist MediaRecorder fallback audio:', error);
-            });
+            void onWebRecordingStop(blob, type)
+                .catch((error) => {
+                    logger.error('[useAudioRecorder] Failed to persist MediaRecorder fallback audio:', error);
+                })
+                .finally(() => {
+                    resolvePendingWebRecordingStop?.();
+                    resolvePendingWebRecordingStop = null;
+                    pendingWebRecordingStop = null;
+                });
         };
 
         recorder.start();
         return activateRecordSession(sessionId);
     }
 
-    function stopFileRecording(): void {
-        if (refs.mediaRecorderRef.current && refs.mediaRecorderRef.current.state !== 'inactive') {
-            refs.mediaRecorderRef.current.stop();
+    async function stopFileRecording(): Promise<void> {
+        const recorder = refs.mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
+            pendingWebRecordingStop = new Promise((resolve) => {
+                resolvePendingWebRecordingStop = resolve;
+            });
+            recorder.stop();
+            await pendingWebRecordingStop;
+        } else if (pendingWebRecordingStop) {
+            await pendingWebRecordingStop;
         }
         setIsRecording(false);
         setIsPaused(false);

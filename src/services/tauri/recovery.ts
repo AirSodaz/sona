@@ -15,6 +15,10 @@ export async function recoverySaveSnapshot(
 
 export async function recoveryPersistQueueSnapshot(
   queueItems: BatchQueueItem[],
+  resolvedIds?: string[],
 ): Promise<void> {
-  await invokeTauri(TauriCommand.recovery.persistQueueSnapshot, { queueItems });
+  await invokeTauri(TauriCommand.recovery.persistQueueSnapshot, {
+    queueItems,
+    ...(resolvedIds && resolvedIds.length > 0 ? { resolvedIds } : {}),
+  });
 }

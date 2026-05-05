@@ -42,9 +42,12 @@ pub async fn recovery_save_snapshot<R: Runtime>(
 pub async fn recovery_persist_queue_snapshot<R: Runtime>(
     app: AppHandle<R>,
     queue_items: Vec<Value>,
+    resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
     run_repository_task(app, move |repository| {
-        repository.persist_queue_snapshot(queue_items).map(|_| ())
+        repository
+            .persist_queue_snapshot_with_resolved_ids(queue_items, resolved_ids.unwrap_or_default())
+            .map(|_| ())
     })
     .await
 }

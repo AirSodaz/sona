@@ -4,6 +4,8 @@ import { useBatchQueueStore } from './batchQueueStore';
 import {
     loadRecoverySnapshot,
     markAutomationRecoveryItemsResumed,
+    flushRecoverySnapshotWrites,
+    persistQueueRecoverySnapshot,
     saveRecoveredItems,
 } from '../services/recoveryService';
 import {
@@ -34,6 +36,14 @@ interface RecoveryState {
 
 async function persistRecoveryItems(items: RecoveredQueueItem[]): Promise<void> {
     await saveRecoveredItems(items);
+}
+
+async function persistCurrentQueueRecoverySnapshot(resolvedIds: string[]): Promise<void> {
+    persistQueueRecoverySnapshot(useBatchQueueStore.getState().queueItems, {
+        immediate: true,
+        resolvedIds,
+    });
+    await flushRecoverySnapshotWrites();
 }
 
 function mirrorRecoveryItemsToTaskLedger(items: RecoveredQueueItem[]): void {
@@ -121,6 +131,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
             useBatchQueueStore.getState().enqueueRecoveredItems([target]);
             const nextItems = get().items.filter((item) => item.id !== id);
             await persistRecoveryItems(nextItems);
+            await persistCurrentQueueRecoverySnapshot([target.id]);
             set({
                 items: nextItems,
                 updatedAt: nextItems.length > 0 ? Date.now() : null,
@@ -157,6 +168,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
             markAutomationRecoveryItemsResumed(pendingItems);
             useBatchQueueStore.getState().enqueueRecoveredItems(pendingItems);
             await persistRecoveryItems([]);
+            await persistCurrentQueueRecoverySnapshot(pendingItems.map((item) => item.id));
             pendingItems.forEach(removeRecoveryLedgerTask);
             set({
                 items: [],
@@ -191,6 +203,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
 
             const nextItems = get().items.filter((item) => item.id !== id);
             await persistRecoveryItems(nextItems);
+            await persistCurrentQueueRecoverySnapshot([target.id]);
             removeRecoveryTask(target);
             set({
                 items: nextItems,
@@ -223,6 +236,7 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
                 .filter((item) => item.source === 'automation')
                 .map((item) => useAutomationStore.getState().markRecoveryItemDiscarded(item)));
             await persistRecoveryItems([]);
+            await persistCurrentQueueRecoverySnapshot(items.map((item) => item.id));
             items.forEach(removeRecoveryTask);
             set({
                 items: [],

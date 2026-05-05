@@ -648,7 +648,7 @@ export type TauriCommandContractMap = {
     result: RecoverySnapshot;
   };
   [TauriCommand.recovery.persistQueueSnapshot]: {
-    args: { queueItems: BatchQueueItem[] };
+    args: { queueItems: BatchQueueItem[]; resolvedIds?: string[] };
     result: void;
   };
   [TauriCommand.taskLedger.loadSnapshot]: {

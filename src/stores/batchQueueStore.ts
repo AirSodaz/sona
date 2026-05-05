@@ -114,8 +114,17 @@ interface BatchQueueState {
     _processItem: (itemId: string) => Promise<void>;
 }
 
-function scheduleRecoverySnapshotSync(queueItems: BatchQueueItem[], immediate = false) {
-    persistQueueRecoverySnapshot(queueItems, { immediate });
+function getQueueRecoveryIds(item: BatchQueueItem): string[] {
+    return [item.id, item.recoveryId]
+        .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+}
+
+function scheduleRecoverySnapshotSync(
+    queueItems: BatchQueueItem[],
+    immediate = false,
+    resolvedIds: string[] = [],
+) {
+    persistQueueRecoverySnapshot(queueItems, { immediate, resolvedIds });
 }
 
 function upsertQueueItemTask(item: BatchQueueItem, status?: ReturnType<typeof buildBatchTaskLedgerRecord>['status']) {
@@ -513,13 +522,13 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     removeItem: (id) => {
         const state = get();
+        const removedItem = state.queueItems.find((item) => item.id === id);
         const newItems = state.queueItems.filter((item) => item.id !== id);
         const isActiveItem = state.activeItemId === id;
         const newActiveId = newItems.length > 0 ? newItems[0].id : null;
 
         set({ queueItems: newItems });
-        scheduleRecoverySnapshotSync(newItems, true);
-        const removedItem = state.queueItems.find((item) => item.id === id);
+        scheduleRecoverySnapshotSync(newItems, true, removedItem ? getQueueRecoveryIds(removedItem) : []);
         if (removedItem) {
             patchQueueItemTask(removedItem, {
                 status: removedItem.status === 'complete' ? 'succeeded' : 'cancelled',
@@ -540,7 +549,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             activeItemId: null,
             isQueueProcessing: false,
         });
-        scheduleRecoverySnapshotSync([], true);
+        scheduleRecoverySnapshotSync([], true, state.queueItems.flatMap(getQueueRecoveryIds));
         state.queueItems.forEach((item) => patchQueueItemTask(item, {
             status: item.status === 'complete' ? 'succeeded' : 'cancelled',
             cancelable: false,

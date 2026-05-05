@@ -173,7 +173,10 @@ pub async fn history_list_items<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
-    run_history_task(app, state, |repository| repository.list_items()).await
+    run_history_task(app, state, |repository| {
+        repository.list_items_with_reconciled_live_drafts()
+    })
+    .await
 }
 
 #[tauri::command]

@@ -614,6 +614,64 @@ describe('LiveRecord', () => {
         expect(useTranscriptStore.getState().icon).toBe('system:mic');
     });
 
+    it('keeps web fallback recording active until the live draft is finalized', async () => {
+        const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === 'start_microphone_capture') {
+                throw new Error('native unavailable');
+            }
+            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
+                return '/mock/path/to/audio.wav';
+            }
+            return undefined;
+        });
+        mockCreateLiveRecordingDraft
+            .mockResolvedValueOnce(createDraftHandle('native-fallback-draft', 'wav'))
+            .mockResolvedValueOnce(createDraftHandle('web-history-id', 'webm'));
+
+        let resolveComplete: (() => void) | null = null;
+        mockCompleteLiveRecordingDraft.mockImplementationOnce(() => new Promise((resolve) => {
+            resolveComplete = () => resolve(createCompletedHistoryItem('web-history-id', 'webm', {
+                title: 'Recording finalized',
+                icon: 'system:mic',
+                projectId: null,
+            }));
+        }));
+
+        render(<LiveRecord />);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.start_recording/i }));
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        act(() => {
+            useTranscriptStore.setState({
+                segments: [{ id: 'web-seg', text: 'Pending finalize', start: 0, end: 1, isFinal: true }],
+            });
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /live.stop/i }));
+            await Promise.resolve();
+        });
+
+        expect(mockCompleteLiveRecordingDraft).toHaveBeenCalledWith(
+            'web-history-id',
+            expect.any(Array),
+            expect.any(Number),
+        );
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+
+        await act(async () => {
+            resolveComplete?.();
+            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(1);
+        });
+
+        expect(useTranscriptStore.getState().isRecording).toBe(false);
+    });
+
     it('should start caption mode independently without recording', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         const { captionWindowService } = await import('../../services/captionWindowService');

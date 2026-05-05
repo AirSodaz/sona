@@ -15,6 +15,7 @@ const pendingAutomationRecoveryGuard = new Set<string>();
 const activeAutomationRecoveryGuard = new Set<string>();
 
 let pendingQueueSnapshotWrite: BatchQueueItem[] | null = null;
+const pendingResolvedRecoveryIds = new Set<string>();
 let snapshotWriteTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshotWriteChain = Promise.resolve();
 
@@ -52,7 +53,9 @@ async function flushPendingSnapshotWrite(): Promise<void> {
     }
 
     const queueItems = pendingQueueSnapshotWrite;
+    const resolvedIds = Array.from(pendingResolvedRecoveryIds);
     pendingQueueSnapshotWrite = null;
+    pendingResolvedRecoveryIds.clear();
 
     if (!queueItems) {
         return;
@@ -60,7 +63,7 @@ async function flushPendingSnapshotWrite(): Promise<void> {
 
     snapshotWriteChain = snapshotWriteChain
         .catch(() => undefined)
-        .then(() => recoveryPersistQueueSnapshot(queueItems));
+        .then(() => recoveryPersistQueueSnapshot(queueItems, resolvedIds));
 
     await snapshotWriteChain;
 
@@ -69,8 +72,16 @@ async function flushPendingSnapshotWrite(): Promise<void> {
     }
 }
 
-function queueSnapshotWrite(queueItems: BatchQueueItem[], immediate = false): void {
+function queueSnapshotWrite(
+    queueItems: BatchQueueItem[],
+    immediate = false,
+    resolvedIds: string[] = [],
+): void {
     pendingQueueSnapshotWrite = cloneQueueItemsForRecovery(queueItems);
+    resolvedIds
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .forEach((id) => pendingResolvedRecoveryIds.add(id));
 
     if (immediate) {
         void flushPendingSnapshotWrite();
@@ -168,15 +179,16 @@ export async function loadRecoverySnapshot(): Promise<RecoverySnapshot> {
 }
 
 export async function saveRecoveredItems(items: RecoveredQueueItem[]): Promise<void> {
+    await flushPendingSnapshotWrite();
     const snapshot = await recoverySaveSnapshot(items);
     syncPendingAutomationRecoveryGuard(snapshot.items);
 }
 
 export function persistQueueRecoverySnapshot(
     queueItems: BatchQueueItem[],
-    options?: { immediate?: boolean },
+    options?: { immediate?: boolean; resolvedIds?: string[] },
 ): void {
-    queueSnapshotWrite(queueItems, Boolean(options?.immediate));
+    queueSnapshotWrite(queueItems, Boolean(options?.immediate), options?.resolvedIds ?? []);
 }
 
 export async function flushRecoverySnapshotWrites(): Promise<void> {
@@ -188,6 +200,7 @@ export function resetRecoveryRuntimeForTests(): void {
     pendingAutomationRecoveryGuard.clear();
     activeAutomationRecoveryGuard.clear();
     pendingQueueSnapshotWrite = null;
+    pendingResolvedRecoveryIds.clear();
     if (snapshotWriteTimer) {
         clearTimeout(snapshotWriteTimer);
         snapshotWriteTimer = null;

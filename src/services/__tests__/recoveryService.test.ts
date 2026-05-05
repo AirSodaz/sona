@@ -97,6 +97,42 @@ describe('recoveryService', () => {
         );
     });
 
+    it('passes resolved recovery ids when persisting queue snapshots', async () => {
+        const queueItems = [queueItem({ id: 'pending-1', recoveryId: 'recovery-1' })];
+
+        persistQueueRecoverySnapshot(queueItems, {
+            immediate: true,
+            resolvedIds: ['recovery-cleared'],
+        });
+        await flushRecoverySnapshotWrites();
+
+        expect(testContext.invokeMock).toHaveBeenCalledWith(
+            TauriCommand.recovery.persistQueueSnapshot,
+            {
+                queueItems,
+                resolvedIds: ['recovery-cleared'],
+            },
+        );
+    });
+
+    it('flushes pending queue snapshot writes before saving recovered items', async () => {
+        const queueItems = [queueItem({ id: 'pending-before-save' })];
+
+        persistQueueRecoverySnapshot(queueItems);
+        await saveRecoveredItems([]);
+
+        expect(testContext.invokeMock).toHaveBeenNthCalledWith(
+            1,
+            TauriCommand.recovery.persistQueueSnapshot,
+            { queueItems },
+        );
+        expect(testContext.invokeMock).toHaveBeenNthCalledWith(
+            2,
+            TauriCommand.recovery.saveSnapshot,
+            { items: [] },
+        );
+    });
+
     it('loads snapshots through Rust and keeps automation items blocked', async () => {
         const automationItem = recoveryItem({
             id: 'recovery-automation-1',
