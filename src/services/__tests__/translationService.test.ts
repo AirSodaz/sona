@@ -223,4 +223,38 @@ describe('TranslationService', () => {
     expect(historyService.updateTranscript).not.toHaveBeenCalled();
     expect(mockCreateSnapshot).not.toHaveBeenCalled();
   });
+
+  it('retries a saved transcript translation with the ledger target language', async () => {
+    const segments = [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }];
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+      segments: [],
+      sourceHistoryId: null,
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: 'history-retry',
+      segments: [{ ...segments[0], translation: 'こんにちは' }],
+    });
+
+    await translationService.retryTranslateTranscriptJob({
+      segments,
+      historyId: 'history-retry',
+      targetLanguage: 'ja',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        jobHistoryId: 'history-retry',
+        segments,
+        targetLanguage: 'ja',
+      }),
+    });
+    expect(historyService.updateTranscript).not.toHaveBeenCalled();
+  });
 });

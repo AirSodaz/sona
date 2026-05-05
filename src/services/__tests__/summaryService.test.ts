@@ -354,4 +354,45 @@ describe('summaryService', () => {
     await expect(summaryService.generateSummary('general')).rejects.toThrow('LLM Service not fully configured.');
     expect(invoke).not.toHaveBeenCalledWith('run_transcript_llm_job', expect.anything());
   });
+
+  it('retries summary generation with the ledger template id and explicit history segments', async () => {
+    const segments = [
+      { id: '1', text: 'Retry summary text', start: 0, end: 2, isFinal: true },
+    ];
+    useTranscriptStore.setState({
+      segments: [],
+      sourceHistoryId: null,
+    });
+    vi.mocked(invoke).mockResolvedValue({
+      taskId: 'summary-task-id',
+      taskType: 'summary',
+      jobHistoryId: 'history-retry',
+      summary: {
+        activeTemplateId: 'meeting',
+        record: {
+          templateId: 'meeting',
+          content: 'Retried summary',
+          generatedAt: '2026-05-05T00:00:00.000Z',
+          sourceFingerprint: 'retry-fingerprint',
+        },
+      },
+    });
+
+    await summaryService.retrySummaryTranscriptJob({
+      segments,
+      historyId: 'history-retry',
+      templateId: 'meeting',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: 'history-retry',
+        template: expect.objectContaining({ id: 'meeting' }),
+        segments,
+      }),
+    });
+    expect(useTranscriptStore.getState().getSummaryState('history-retry').record?.content).toBe('Retried summary');
+  });
 });

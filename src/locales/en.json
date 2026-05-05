@@ -117,6 +117,7 @@
         "discard": "Discard",
         "retry": "Retry",
         "stopping": "Stopping",
+        "cancel_pending_hint": "Stops after the current step and skips the final writeback.",
         "progress": "Progress",
         "task_body": "{{kind}} · {{status}}",
         "task_body_stage": "{{kind}} · {{status}} · {{stage}}",

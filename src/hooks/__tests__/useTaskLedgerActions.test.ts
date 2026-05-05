@@ -38,6 +38,7 @@ function makeDeps(
     retryAutomationNotification: vi.fn().mockResolvedValue(undefined),
     dismissAutomationNotification: vi.fn(),
     addBatchFiles: vi.fn(),
+    retryLlmTask: vi.fn().mockResolvedValue(undefined),
     installUpdate: vi.fn().mockResolvedValue(undefined),
     dismissUpdateNotification: vi.fn(),
     relaunchToUpdate: vi.fn().mockResolvedValue(undefined),
@@ -138,5 +139,42 @@ describe('createTaskCenterActionRegistry', () => {
     await getAction(success.row, 'openTarget').run();
     expect(deps.closePanel).toHaveBeenCalled();
     expect(deps.onOpenAutomationSettings).toHaveBeenCalled();
+  });
+
+  it('retries failed LLM ledger tasks through the LLM retry service and clears the old task', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+    const task = makeTask({
+      id: 'llm-failed',
+      kind: 'llmSummary',
+      status: 'failed',
+      filePath: undefined,
+      templateId: 'meeting',
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+
+    expect(actions.map((action) => action.id)).toEqual(['retry', 'dismiss']);
+
+    await getAction(actions, 'retry').run();
+
+    expect(deps.retryLlmTask).toHaveBeenCalledWith(task);
+    expect(deps.removeTask).toHaveBeenCalledWith('llm-failed');
+  });
+
+  it('keeps failed LLM ledger tasks when retry preflight fails', async () => {
+    const deps = makeDeps({
+      retryLlmTask: vi.fn().mockRejectedValue(new Error('Transcript is no longer available for retry.')),
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    await expect(getAction(registry.getLedgerTaskActions(makeTask({
+      id: 'llm-failed',
+      kind: 'llmTranslate',
+      status: 'failed',
+      filePath: undefined,
+    })), 'retry').run()).rejects.toThrow('Transcript is no longer available for retry.');
+
+    expect(deps.removeTask).not.toHaveBeenCalled();
   });
 });

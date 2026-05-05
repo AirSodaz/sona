@@ -300,4 +300,36 @@ describe('PolishService', () => {
     });
     expect(mockCreateSnapshot).not.toHaveBeenCalled();
   });
+
+  it('retries a saved transcript polish job through the Rust transcript job', async () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
+    ];
+
+    useTranscriptStore.setState({
+      segments: [],
+      sourceHistoryId: null,
+    });
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      taskId: 'polish-task-id',
+      taskType: 'polish',
+      jobHistoryId: 'history-retry',
+      segments: [{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+    });
+
+    await polishService.retryPolishTranscriptJob({
+      segments,
+      historyId: 'history-retry',
+    });
+
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'polish-task-id',
+        taskType: 'polish',
+        jobHistoryId: 'history-retry',
+        segments,
+      }),
+    });
+    expect(mockCreateSnapshot).not.toHaveBeenCalled();
+  });
 });

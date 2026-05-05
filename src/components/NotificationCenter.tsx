@@ -188,6 +188,10 @@ function getTaskIcon(task: TaskLedgerRecord): React.ReactNode {
     }
 }
 
+function isLlmTaskKind(kind: TaskLedgerKind): boolean {
+    return kind === 'llmPolish' || kind === 'llmTranslate' || kind === 'llmSummary';
+}
+
 function getTaskBody(
     task: TaskLedgerRecord,
     t: (key: string, options?: Record<string, unknown>) => string,
@@ -578,10 +582,21 @@ export function NotificationCenter({
     const renderLedgerTask = (entry: LedgerTaskEntry) => {
         const { task } = entry;
         const stageLabel = getStageLabel(task.stage, t);
-        const hasSupport = isTaskLedgerActiveStatus(task.status) || Boolean(stageLabel) || Boolean(task.errorMessage);
+        const isCancelPendingLlmTask = task.status === 'cancelRequested' && isLlmTaskKind(task.kind);
+        const hasSupport = isTaskLedgerActiveStatus(task.status)
+            || Boolean(stageLabel)
+            || Boolean(task.errorMessage)
+            || isCancelPendingLlmTask;
         const support = hasSupport ? (
             <>
                 {isTaskLedgerActiveStatus(task.status) ? renderProgress(task.progress) : null}
+                {isCancelPendingLlmTask ? (
+                    <div className="notification-center-item-detail">
+                        {t('task_center.cancel_pending_hint', {
+                            defaultValue: 'Stops after the current step and skips the final writeback.',
+                        })}
+                    </div>
+                ) : null}
                 {stageLabel && !isTaskLedgerActiveStatus(task.status) ? (
                     <div className="notification-center-item-detail">
                         {t('automation.notifications.stage_detail', { stage: stageLabel })}

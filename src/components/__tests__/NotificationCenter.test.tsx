@@ -101,6 +101,7 @@ function translate(key: string, options?: Record<string, unknown>): string {
   if (key === 'task_center.active') return 'Active';
   if (key === 'task_center.recent') return 'Recent';
   if (key === 'task_center.clear_recent') return 'Clear recent';
+  if (key === 'task_center.cancel_pending_hint') return 'Stops after the current step and skips the final writeback.';
   if (key === 'settings.update_available') return `Update ${options?.version}`;
   if (key === 'settings.update_desc_default') return 'A new version of Sona is available.';
   if (key === 'settings.update_downloading') return 'Downloading update...';
@@ -238,6 +239,29 @@ describe('NotificationCenter task center', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(taskLedgerState.requestCancel).toHaveBeenCalledWith('active-task');
+  });
+
+  it('explains that cancel-requested LLM tasks stop after the current step', () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'llm-stopping',
+        kind: 'llmSummary',
+        status: 'cancelRequested',
+        title: 'AI Summary',
+        cancelable: false,
+      }),
+    ];
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    expect(screen.getByText('Stops after the current step and skips the final writeback.')).toBeDefined();
   });
 
   it('resumes and discards individual recovery tasks from the task center', () => {

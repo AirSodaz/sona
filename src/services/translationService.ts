@@ -20,6 +20,12 @@ import {
   isTaskLedgerCancelRequested,
 } from './taskLedgerRuntime';
 
+interface RetryTranslateTranscriptJobOptions {
+  segments: TranscriptSegment[];
+  historyId: string | null;
+  targetLanguage?: string;
+}
+
 function buildTranslationMap(translations: TranslatedSegment[]): Map<string, TranslatedSegment> {
   const translationMap = new Map<string, TranslatedSegment>();
   for (let index = 0; index < translations.length; index += 1) {
@@ -65,6 +71,17 @@ class TranslationService {
 
   async translateCurrentTranscript() {
     const sessionStore = useTranscriptSessionStore.getState();
+    await this.retryTranslateTranscriptJob({
+      segments: sessionStore.segments,
+      historyId: sessionStore.sourceHistoryId,
+    });
+  }
+
+  async retryTranslateTranscriptJob({
+    segments,
+    historyId,
+    targetLanguage,
+  }: RetryTranslateTranscriptJobOptions): Promise<void> {
     const sidecarStore = useTranscriptSidecarStore.getState();
     const config = getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'translation');
@@ -73,12 +90,12 @@ class TranslationService {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const segments = sessionStore.segments;
+    const resolvedTargetLanguage = targetLanguage || config.translationLanguage || 'zh';
     await runTranscriptSegmentTaskJob({
       taskType: 'translate',
       segments,
-      sourceHistoryId: sessionStore.sourceHistoryId,
-      targetLanguage: config.translationLanguage || 'zh',
+      sourceHistoryId: historyId,
+      targetLanguage: resolvedTargetLanguage,
       onStart: (jobHistoryId) => {
         sidecarStore.updateLlmState({ isTranslating: true, translationProgress: 0 }, jobHistoryId);
       },
@@ -105,7 +122,7 @@ class TranslationService {
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
             config: llm!,
             segments,
-            targetLanguage: config.translationLanguage || 'zh',
+            targetLanguage: resolvedTargetLanguage,
           });
           if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
             return;

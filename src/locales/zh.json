@@ -117,6 +117,7 @@
         "discard": "丢弃",
         "retry": "重试",
         "stopping": "停止中",
+        "cancel_pending_hint": "当前步骤结束后停止，不会写回最终结果。",
         "progress": "进度",
         "task_body": "{{kind}} · {{status}}",
         "task_body_stage": "{{kind}} · {{status}} · {{stage}}",

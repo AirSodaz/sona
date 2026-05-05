@@ -3,7 +3,7 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import { getFeatureLlmConfig } from './llm/runtime';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/runtime';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
 import type {
@@ -21,6 +21,11 @@ import {
   createLlmTaskLedgerId,
   isTaskLedgerCancelRequested,
 } from './taskLedgerRuntime';
+
+interface RetryPolishTranscriptJobOptions {
+  segments: TranscriptSegment[];
+  historyId: string | null;
+}
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
   const polishedMap = new Map<string, PolishedSegment>();
@@ -74,13 +79,28 @@ class PolishService {
 
   async polishTranscript() {
     const sessionStore = useTranscriptSessionStore.getState();
+    await this.retryPolishTranscriptJob({
+      segments: sessionStore.segments,
+      historyId: sessionStore.sourceHistoryId,
+    });
+  }
+
+  async retryPolishTranscriptJob({
+    segments,
+    historyId,
+  }: RetryPolishTranscriptJobOptions): Promise<void> {
     const sidecarStore = useTranscriptSidecarStore.getState();
     const config = getEffectiveConfigSnapshot();
-    const segments = sessionStore.segments;
+    const llm = getFeatureLlmConfig(config, 'polish');
+
+    if (!isLlmConfigComplete(llm)) {
+      throw new Error('LLM Service not fully configured.');
+    }
+
     await runTranscriptSegmentTaskJob({
       taskType: 'polish',
       segments,
-      sourceHistoryId: sessionStore.sourceHistoryId,
+      sourceHistoryId: historyId,
       onStart: (jobHistoryId) => {
         sidecarStore.updateLlmState({ isPolishing: true, polishProgress: 0 }, jobHistoryId);
       },
@@ -106,7 +126,7 @@ class PolishService {
             taskId,
             taskType: 'polish',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
-            config: getFeatureLlmConfig(config, 'polish')!,
+            config: llm!,
             segments,
             context: preset.context,
             keywords: resolvePolishKeywords(config.polishKeywordSets),

@@ -30,6 +30,12 @@ import {
   upsertTaskLedgerRecord,
 } from './taskLedgerRuntime';
 
+interface RetrySummaryTranscriptJobOptions {
+  segments: TranscriptSegment[];
+  historyId: string | null;
+  templateId?: SummaryTemplateId;
+}
+
 // Once we have local state, prefer it over re-hydrating from disk. This prevents a late
 // sidecar read from clobbering in-memory edits, streaming text, or template switches.
 function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined): boolean {
@@ -164,6 +170,30 @@ class SummaryService {
 
   async generateSummary(templateId?: SummaryTemplateId): Promise<void> {
     const sessionStore = useTranscriptSessionStore.getState();
+    await this.retrySummaryTranscriptJob({
+      segments: sessionStore.segments,
+      historyId: sessionStore.sourceHistoryId,
+      templateId,
+    });
+  }
+
+  async retrySummaryTranscriptJob({
+    segments,
+    historyId,
+    templateId,
+  }: RetrySummaryTranscriptJobOptions): Promise<void> {
+    await this.runSummaryTranscriptJob({
+      segments,
+      historyId,
+      templateId,
+    });
+  }
+
+  private async runSummaryTranscriptJob({
+    segments,
+    historyId,
+    templateId,
+  }: RetrySummaryTranscriptJobOptions): Promise<void> {
     const sidecarStore = useTranscriptSidecarStore.getState();
     const config = getEffectiveConfigSnapshot();
 
@@ -175,17 +205,16 @@ class SummaryService {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const segments = sessionStore.segments;
     if (!segments || segments.length === 0) {
       return;
     }
 
+    const jobHistoryId = historyId || 'current';
     const resolvedTemplate = resolveSummaryTemplate(
-      templateId ?? sidecarStore.getSummaryState().activeTemplateId ?? config.summaryTemplateId,
+      templateId ?? sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ?? config.summaryTemplateId,
       config.summaryCustomTemplates,
     );
     const activeTemplateId = resolvedTemplate.id;
-    const jobHistoryId = sessionStore.sourceHistoryId || 'current';
     const taskId = createLlmTaskId('summary');
     const ledgerId = createLlmTaskLedgerId(taskId);
 

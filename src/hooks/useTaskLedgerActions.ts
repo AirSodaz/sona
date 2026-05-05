@@ -9,6 +9,7 @@ import {
   isTaskLedgerActionableStatus,
   isTaskLedgerActiveStatus,
 } from '../types/taskLedger';
+import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
 
 export type TaskCenterActionId =
   | 'retry'
@@ -64,6 +65,7 @@ export interface TaskCenterActionDependencies {
   retryAutomationNotification: (notificationId: string) => Promise<void>;
   dismissAutomationNotification: (notificationId: string) => void;
   addBatchFiles: (filePaths: string[], options?: BatchAddOptions) => void;
+  retryLlmTask: (task: TaskLedgerRecord) => Promise<void>;
   installUpdate: () => Promise<void>;
   dismissUpdateNotification: () => void;
   relaunchToUpdate: () => Promise<void>;
@@ -144,6 +146,10 @@ function createClearTaskAction(
   };
 }
 
+function isLlmTask(task: TaskLedgerRecord): boolean {
+  return task.kind === 'llmPolish' || task.kind === 'llmTranslate' || task.kind === 'llmSummary';
+}
+
 export function createTaskCenterActionRegistry(
   deps: TaskCenterActionDependencies,
 ): TaskCenterActionRegistry {
@@ -205,6 +211,16 @@ export function createTaskCenterActionRegistry(
             variant: 'primary',
             run: async () => {
               deps.addBatchFiles([task.filePath as string], { projectId: task.projectId ?? null });
+              await deps.removeTask(task.id);
+            },
+          });
+        } else if (isLlmTask(task)) {
+          actions.push({
+            id: 'retry',
+            label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
+            variant: 'primary',
+            run: async () => {
+              await deps.retryLlmTask(task);
               await deps.removeTask(task.id);
             },
           });
@@ -310,6 +326,7 @@ export function useTaskLedgerActions({
     retryAutomationNotification,
     dismissAutomationNotification,
     addBatchFiles,
+    retryLlmTask: retryLlmTaskFromLedger,
     installUpdate: updater.installUpdate,
     dismissUpdateNotification: updater.dismissNotification,
     relaunchToUpdate: updater.relaunchToUpdate,
