@@ -20,6 +20,11 @@ export function openTranscriptSession({
   icon,
   audioUrl,
 }: OpenTranscriptSessionArgs): void {
+  const previousHistoryId = useTranscriptSessionStore.getState().sourceHistoryId;
+  if (sourceHistoryId && sourceHistoryId !== previousHistoryId) {
+    useTranscriptSidecarStore.getState().clearAutoSaveState(sourceHistoryId);
+  }
+
   useTranscriptSessionStore.getState().openSession({
     segments,
     sourceHistoryId,

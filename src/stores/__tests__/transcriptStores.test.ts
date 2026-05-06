@@ -118,6 +118,25 @@ describe('Transcript Stores', () => {
     }));
   });
 
+  it('clears stale auto-save status when opening a persisted transcript session', () => {
+    const sidecarStore = useTranscriptSidecarStore.getState();
+
+    sidecarStore.setAutoSaveState('hist-1', 'saving');
+    sidecarStore.setAutoSaveState('hist-2', 'saved');
+
+    openTranscriptSession({
+      segments: [{ id: 'seg-1', text: 'Loaded', start: 0, end: 1, isFinal: true }],
+      sourceHistoryId: 'hist-1',
+      title: 'Loaded transcript',
+    });
+
+    expect(useTranscriptSidecarStore.getState().autoSaveStates['hist-1']).toBeUndefined();
+    expect(useTranscriptSidecarStore.getState().autoSaveStates['hist-2']).toEqual({
+      status: 'saved',
+      updatedAt: expect.any(Number),
+    });
+  });
+
   it('playback store tracks seek requests and active segment highlighting from the session snapshot', () => {
     openTranscriptSession({
       segments: [

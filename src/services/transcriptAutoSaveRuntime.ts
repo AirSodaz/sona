@@ -95,7 +95,14 @@ class TranscriptAutoSaveRuntime {
       const currentId = state.sourceHistoryId;
       const prevId = prevState.sourceHistoryId;
 
-      if (prevId && prevId !== currentId) {
+      if (prevId !== currentId) {
+        // Opening a different transcript replaces the session baseline; it is
+        // not itself an edit that should show auto-save status for the new item.
+        if (!prevId) {
+          this.lastFingerprint = computeSegmentsFingerprint(state.segments);
+          return;
+        }
+
         if (this.timeout) {
           logger.info('[AutoSave] Switching items, flushing save for:', prevId);
           void this.flushPending(prevId, prevState.segments);

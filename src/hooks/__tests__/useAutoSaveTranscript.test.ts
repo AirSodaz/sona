@@ -49,6 +49,28 @@ describe('useAutoSaveTranscript', () => {
     vi.useRealTimers();
   });
 
+  it('does not auto-save when opening a persisted transcript without edits', async () => {
+    renderHook(() => useAutoSaveTranscript());
+
+    act(() => {
+      useTranscriptStore.getState().loadTranscript(
+        [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
+        'hist-1',
+      );
+    });
+
+    expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    await flushMicrotasks();
+
+    const { historyService } = await import('../../services/historyService');
+    expect(historyService.updateTranscript).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
+  });
+
   it('transitions from saving to saved for persisted transcript edits', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'hist-1',

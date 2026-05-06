@@ -52,6 +52,27 @@ describe('EditorToolbar', () => {
         expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
     });
 
+    it('does not render stale auto-save status when opening a persisted transcript', () => {
+        useTranscriptStore.setState({
+            autoSaveStates: {
+                'hist-1': {
+                    status: 'saving',
+                    updatedAt: Date.now(),
+                },
+            },
+        });
+
+        useTranscriptStore.getState().loadTranscript(
+            [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
+            'hist-1',
+        );
+
+        const { container } = render(<EditorToolbar />);
+
+        expect(container.firstChild).toBeNull();
+        expect(screen.queryByRole('status')).toBeNull();
+    });
+
     it('does not show a save pill for unsaved content while still exposing edit controls', () => {
         useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 
