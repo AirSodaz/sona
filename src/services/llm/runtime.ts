@@ -34,12 +34,15 @@ function getFeatureTemperature(
   config: Pick<AppConfig, 'llmSettings'>,
   feature: LlmFeature,
 ): number | undefined {
-  const selectionTemperature =
-    feature === 'polish'
-      ? config.llmSettings?.selections.polishTemperature
-      : feature === 'translation'
-        ? config.llmSettings?.selections.translationTemperature
-        : config.llmSettings?.selections.summaryTemperature;
+  let selectionTemperature: number | undefined;
+
+  if (feature === 'polish') {
+    selectionTemperature = config.llmSettings?.selections.polishTemperature;
+  } else if (feature === 'translation') {
+    selectionTemperature = config.llmSettings?.selections.translationTemperature;
+  } else {
+    selectionTemperature = config.llmSettings?.selections.summaryTemperature;
+  }
 
   return selectionTemperature ?? DEFAULT_LLM_TEMPERATURE;
 }

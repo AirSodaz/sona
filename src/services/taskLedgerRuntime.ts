@@ -84,16 +84,24 @@ export function buildLlmTaskLedgerRecord({
   targetLanguage?: string;
 }): TaskLedgerRecord {
   const now = nowTaskLedgerTimestamp();
-  const kind: TaskLedgerKind = taskType === 'polish'
-    ? 'llmPolish'
-    : taskType === 'translate'
-      ? 'llmTranslate'
-      : 'llmSummary';
+  let kind: TaskLedgerKind;
+  let title: string;
+  if (taskType === 'polish') {
+    kind = 'llmPolish';
+    title = 'LLM Polish';
+  } else if (taskType === 'translate') {
+    kind = 'llmTranslate';
+    title = 'Translate';
+  } else {
+    kind = 'llmSummary';
+    title = 'AI Summary';
+  }
+
   return {
     id: createLlmTaskLedgerId(taskId),
     kind,
     status: 'running',
-    title: taskType === 'polish' ? 'LLM Polish' : taskType === 'translate' ? 'Translate' : 'AI Summary',
+    title,
     progress: 0,
     createdAt: now,
     updatedAt: now,
