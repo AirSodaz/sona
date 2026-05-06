@@ -8,6 +8,7 @@ export interface AuxWindowDisplayState {
     position?: [number, number] | null;
     size?: { width: number; height: number } | null;
     focus?: boolean;
+    alwaysOnTop?: boolean;
 }
 
 interface AuxWindowCreationState {

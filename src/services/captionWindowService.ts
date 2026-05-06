@@ -1,4 +1,3 @@
-import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { TranscriptSegment } from '../types/transcript';
 import { AuxWindowController } from './auxWindowController';
@@ -35,6 +34,42 @@ export const DEFAULT_CAPTION_WINDOW_STATE: CaptionWindowState = {
     style: DEFAULT_CAPTION_STYLE,
 };
 
+function areCaptionStylesEqual(
+    left: CaptionWindowStyle,
+    right: CaptionWindowStyle
+): boolean {
+    return left.width === right.width
+        && left.fontSize === right.fontSize
+        && left.color === right.color
+        && left.backgroundOpacity === right.backgroundOpacity;
+}
+
+function isWindowNotFoundError(error: unknown): boolean {
+    if (error instanceof Error) {
+        return error.message.toLowerCase().includes('window not found');
+    }
+
+    return typeof error === 'string'
+        && error.toLowerCase().includes('window not found');
+}
+
+async function applyCaptionWindowFlag(
+    action: string,
+    operation: () => Promise<void>
+): Promise<void> {
+    try {
+        await operation();
+    } catch (error) {
+        const logPayload = { action, error };
+        if (isWindowNotFoundError(error)) {
+            await logger.debug('[CaptionWindowService] Caption window flag skipped', logPayload);
+            return;
+        }
+
+        await logger.warn('[CaptionWindowService] Failed to apply caption window flag', logPayload);
+    }
+}
+
 class CaptionWindowService {
     private controller = new AuxWindowController<CaptionWindowState>({
         label: CAPTION_WINDOW_LABEL,
@@ -43,7 +78,7 @@ class CaptionWindowService {
             new WebviewWindow(CAPTION_WINDOW_LABEL, {
                 url: '/index.html?window=caption',
                 title: 'Sona Live Caption',
-                alwaysOnTop: true,
+                alwaysOnTop: displayState.alwaysOnTop ?? true,
                 decorations: false,
                 transparent: true,
                 skipTaskbar: true,
@@ -107,9 +142,13 @@ class CaptionWindowService {
 
         await this.commitState({ style: nextStyle });
 
+        const requestedAlwaysOnTop = options?.alwaysOnTop;
+        const requestedLockWindow = options?.lockWindow;
+        const hadExistingWindow = Boolean(await this.controller.getWindow());
         const windowInstance = await this.controller.open({
             size: { width: nextStyle.width, height: CAPTION_INITIAL_HEIGHT },
             focus: true,
+            alwaysOnTop: requestedAlwaysOnTop ?? true,
         });
 
         if (!windowInstance) {
@@ -117,12 +156,18 @@ class CaptionWindowService {
             return;
         }
 
-        if (options?.alwaysOnTop !== undefined) {
-            await windowInstance.setAlwaysOnTop(options.alwaysOnTop);
+        if (requestedAlwaysOnTop !== undefined && hadExistingWindow) {
+            await applyCaptionWindowFlag(
+                'alwaysOnTop',
+                () => windowInstance.setAlwaysOnTop(requestedAlwaysOnTop)
+            );
         }
 
-        if (options?.lockWindow !== undefined) {
-            await windowInstance.setIgnoreCursorEvents(options.lockWindow);
+        if (requestedLockWindow !== undefined) {
+            await applyCaptionWindowFlag(
+                'lockWindow',
+                () => windowInstance.setIgnoreCursorEvents(requestedLockWindow)
+            );
         }
 
         logger.info('[CaptionWindowService] Caption window open request completed');
@@ -158,14 +203,20 @@ class CaptionWindowService {
     async setAlwaysOnTop(enabled: boolean) {
         const windowInstance = await this.controller.getWindow();
         if (windowInstance) {
-            await windowInstance.setAlwaysOnTop(enabled);
+            await applyCaptionWindowFlag(
+                'alwaysOnTop',
+                () => windowInstance.setAlwaysOnTop(enabled)
+            );
         }
     }
 
     async setClickThrough(enabled: boolean) {
         const windowInstance = await this.controller.getWindow();
         if (windowInstance) {
-            await windowInstance.setIgnoreCursorEvents(enabled);
+            await applyCaptionWindowFlag(
+                'clickThrough',
+                () => windowInstance.setIgnoreCursorEvents(enabled)
+            );
         }
     }
 
@@ -183,25 +234,11 @@ class CaptionWindowService {
                 style.backgroundOpacity ?? this.state.style.backgroundOpacity,
         };
 
+        if (areCaptionStylesEqual(nextStyle, this.state.style)) {
+            return;
+        }
+
         await this.commitState({ style: nextStyle });
-
-        if (!style.width) {
-            return;
-        }
-
-        const windowInstance = await this.controller.getWindow();
-        if (!windowInstance) {
-            return;
-        }
-
-        try {
-            const factor = await windowInstance.scaleFactor();
-            const size = await windowInstance.innerSize();
-            const targetWidth = Math.ceil(style.width * factor);
-            await windowInstance.setSize(new PhysicalSize(targetWidth, size.height));
-        } catch (error) {
-            logger.error('[CaptionWindowService] Failed to resize window:', error);
-        }
     }
 
     async getSnapshot() {

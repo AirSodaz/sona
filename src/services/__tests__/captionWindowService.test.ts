@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => {
     const invoke = vi.fn().mockResolvedValue(undefined);
     const getByLabel = vi.fn().mockResolvedValue(null);
     const createdWindows: any[] = [];
+    const nextWindowFailures = {
+        setAlwaysOnTop: null as unknown,
+        setIgnoreCursorEvents: null as unknown,
+    };
 
     class MockPhysicalSize {
         constructor(
@@ -13,7 +17,8 @@ const mocks = vi.hoisted(() => {
         ) { }
     }
 
-    const buildWindow = () => ({
+    const buildWindow = () => {
+        const windowInstance = {
         once: vi.fn((event: string, callback: (payload?: unknown) => void) => {
             if (event === 'tauri://created') {
                 callback();
@@ -28,7 +33,17 @@ const mocks = vi.hoisted(() => {
         scaleFactor: vi.fn().mockResolvedValue(1),
         innerSize: vi.fn().mockResolvedValue({ width: 800, height: 120 }),
         setSize: vi.fn().mockResolvedValue(undefined),
-    });
+        };
+
+        if (nextWindowFailures.setAlwaysOnTop) {
+            windowInstance.setAlwaysOnTop.mockRejectedValueOnce(nextWindowFailures.setAlwaysOnTop);
+        }
+        if (nextWindowFailures.setIgnoreCursorEvents) {
+            windowInstance.setIgnoreCursorEvents.mockRejectedValueOnce(nextWindowFailures.setIgnoreCursorEvents);
+        }
+
+        return windowInstance;
+    };
 
     class MockWebviewWindow {
         label: string;
@@ -56,6 +71,7 @@ const mocks = vi.hoisted(() => {
         emitTo,
         getByLabel,
         invoke,
+        nextWindowFailures,
     };
 });
 
@@ -92,6 +108,8 @@ describe('CaptionWindowService', () => {
         mocks.getByLabel.mockResolvedValue(null);
         mocks.invoke.mockResolvedValue(undefined);
         mocks.emitTo.mockResolvedValue(undefined);
+        mocks.nextWindowFailures.setAlwaysOnTop = null;
+        mocks.nextWindowFailures.setIgnoreCursorEvents = null;
     });
 
     it('opens the window with the default caption state and shared transport payload', async () => {
@@ -160,9 +178,10 @@ describe('CaptionWindowService', () => {
             expect.objectContaining({
                 url: '/index.html?window=caption',
                 width: 1000,
+                alwaysOnTop: false,
             })
         );
-        expect(createdWindow.setAlwaysOnTop).toHaveBeenCalledWith(false);
+        expect(createdWindow.setAlwaysOnTop).not.toHaveBeenCalled();
         expect(createdWindow.setIgnoreCursorEvents).toHaveBeenCalledWith(true);
         expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
             label: 'caption',
@@ -179,7 +198,48 @@ describe('CaptionWindowService', () => {
         });
     });
 
-    it('reuses an existing window and keeps style updates flowing through shared state', async () => {
+    it('keeps opening when post-create caption window flags hit a stale window handle', async () => {
+        mocks.nextWindowFailures.setIgnoreCursorEvents = new Error('window not found');
+
+        const { captionWindowService } = await import('../captionWindowService');
+
+        await expect(captionWindowService.open({
+            lockWindow: true,
+        })).resolves.toBeUndefined();
+
+        expect(mocks.createdWindows).toHaveLength(1);
+        expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
+            label: 'caption',
+            payload: {
+                revision: 1,
+                segments: [],
+                style: {
+                    width: 800,
+                    fontSize: 24,
+                    color: '#ffffff',
+                    backgroundOpacity: 0.6,
+                },
+            },
+        });
+        expect(mocks.createdWindows[0].windowInstance.setIgnoreCursorEvents).toHaveBeenCalledWith(true);
+    });
+
+    it('ignores stale-window failures when applying caption window flags later', async () => {
+        const existingWindow = mocks.buildWindow();
+        existingWindow.setAlwaysOnTop.mockRejectedValueOnce(new Error('window not found'));
+        existingWindow.setIgnoreCursorEvents.mockRejectedValueOnce(new Error('window not found'));
+        mocks.getByLabel.mockResolvedValue(existingWindow);
+
+        const { captionWindowService } = await import('../captionWindowService');
+
+        await expect(captionWindowService.setAlwaysOnTop(false)).resolves.toBeUndefined();
+        await expect(captionWindowService.setClickThrough(true)).resolves.toBeUndefined();
+
+        expect(existingWindow.setAlwaysOnTop).toHaveBeenCalledWith(false);
+        expect(existingWindow.setIgnoreCursorEvents).toHaveBeenCalledWith(true);
+    });
+
+    it('reuses an existing window and keeps style updates flowing through shared state without resizing from the service', async () => {
         const existingWindow = mocks.buildWindow();
         mocks.getByLabel.mockResolvedValue(existingWindow);
 
@@ -222,8 +282,21 @@ describe('CaptionWindowService', () => {
                 },
             },
         });
-        expect(existingWindow.setSize).toHaveBeenCalledWith(
-            expect.objectContaining({ width: 1400, height: 120 })
-        );
+        expect(existingWindow.setSize).not.toHaveBeenCalled();
+    });
+
+    it('skips committing style updates when the caption style is unchanged', async () => {
+        const { captionWindowService } = await import('../captionWindowService');
+
+        await captionWindowService.updateStyle({
+            width: 800,
+            fontSize: 24,
+            color: '#ffffff',
+            backgroundOpacity: 0.6,
+        });
+
+        expect(mocks.invoke).not.toHaveBeenCalled();
+        expect(mocks.emitTo).not.toHaveBeenCalled();
+        expect(mocks.getByLabel).not.toHaveBeenCalled();
     });
 });

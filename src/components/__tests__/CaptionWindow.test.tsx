@@ -243,5 +243,46 @@ describe('CaptionWindow', () => {
         expect(mocks.mockSetSize).toHaveBeenCalled();
         const resizedCall = mocks.mockSetSize.mock.calls[mocks.mockSetSize.mock.calls.length - 1]?.[0];
         expect(resizedCall?.height).toBe(300);
+
+        mocks.mockSetSize.mockClear();
+        HTMLElement.prototype.getBoundingClientRect = () => ({
+            width: 960, height: 90, top: 0, left: 0, bottom: 90, right: 960, x: 0, y: 0, toJSON: () => { }
+        });
+
+        await act(async () => {
+            mocks.listenCallbacks['caption:state']?.({
+                payload: {
+                    revision: 2,
+                    segments: [
+                        {
+                            id: '2',
+                            text: 'Wider caption',
+                            start: 1,
+                            end: 2,
+                            isFinal: false,
+                            tokens: [],
+                            timestamps: [],
+                            durations: [],
+                        },
+                    ],
+                    style: {
+                        ...defaultStyle,
+                        width: 960,
+                    },
+                }
+            });
+        });
+
+        mocks.mockSetSize.mockClear();
+
+        await act(async () => {
+            mocks.resizeObserverInstance.triggerResize();
+            await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(mocks.mockSetSize).toHaveBeenCalled();
+        const widthChangedCall = mocks.mockSetSize.mock.calls[mocks.mockSetSize.mock.calls.length - 1]?.[0];
+        expect(widthChangedCall?.width).toBe(1920);
+        expect(widthChangedCall?.height).toBe(180);
     });
 });
