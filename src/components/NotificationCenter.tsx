@@ -363,10 +363,18 @@ export function NotificationCenter({
             });
         }
 
+        const getUpdatedAt = (entry: TaskCenterEntry): number => {
+            if (entry.source === 'ledger') {
+                return entry.task.updatedAt;
+            }
+            if (entry.source === 'update') {
+                return Number.MAX_SAFE_INTEGER;
+            }
+            return 0;
+        };
+
         return nextEntries.sort((a, b) => {
-            const aUpdatedAt = a.source === 'ledger' ? a.task.updatedAt : a.source === 'update' ? Number.MAX_SAFE_INTEGER : 0;
-            const bUpdatedAt = b.source === 'ledger' ? b.task.updatedAt : b.source === 'update' ? Number.MAX_SAFE_INTEGER : 0;
-            return bUpdatedAt - aUpdatedAt;
+            return getUpdatedAt(b) - getUpdatedAt(a);
         });
     }, [
         notificationVisible,

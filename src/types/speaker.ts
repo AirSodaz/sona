@@ -119,17 +119,25 @@ export function normalizeSpeakerAttribution(input: unknown): SpeakerAttribution 
     return undefined;
   }
 
-  const state: SpeakerAttributionState = source.state === 'identified'
-    ? 'identified'
-    : source.state === 'suggested'
-      ? 'suggested'
-      : 'anonymous';
+  let state: SpeakerAttributionState;
+  if (source.state === 'identified') {
+    state = 'identified';
+  } else if (source.state === 'suggested') {
+    state = 'suggested';
+  } else {
+    state = 'anonymous';
+  }
+
   const sourceValue: SpeakerAttributionSource = source.source === 'manual' ? 'manual' : 'auto';
-  const confidence: SpeakerAttributionConfidence = source.confidence === 'high'
-    ? 'high'
-    : source.confidence === 'medium'
-      ? 'medium'
-      : 'low';
+
+  let confidence: SpeakerAttributionConfidence;
+  if (source.confidence === 'high') {
+    confidence = 'high';
+  } else if (source.confidence === 'medium') {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
   const candidates = Array.isArray(source.candidates)
     ? source.candidates
         .map((candidate) => normalizeSpeakerCandidate(candidate))
