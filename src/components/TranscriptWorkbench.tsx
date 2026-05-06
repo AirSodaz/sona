@@ -91,7 +91,12 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
     && (!currentHistoryItem || !isHistoryItemDraft(currentHistoryItem)),
   );
 
-  const displayIconType = defaultIconType || (mode === 'batch' ? 'batch' : 'recording');
+  const historyDefaultIconType = currentHistoryItem?.type === 'batch'
+    ? 'batch'
+    : currentHistoryItem?.type === 'recording'
+      ? 'recording'
+      : undefined;
+  const displayIconType = defaultIconType || historyDefaultIconType || (mode === 'batch' ? 'batch' : 'recording');
 
   // Determine display title
   const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));

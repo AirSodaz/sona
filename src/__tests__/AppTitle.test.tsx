@@ -121,7 +121,8 @@ describe('App Title Logic', () => {
     const { container } = render(<App />);
 
     expect(screen.getByText('ProjectsView')).not.toBeNull();
-    expect(screen.queryByText('TranscriptWorkbench')).toBeNull();
+    expect(screen.getByText('TranscriptWorkbench')).not.toBeNull();
+    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
 
     const workspaceShell = container.querySelector('.workspace-mode-shell');
     expect((workspaceShell as HTMLElement).style.display).toBe('none');

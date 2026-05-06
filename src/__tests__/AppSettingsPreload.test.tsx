@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 
 const settingsModuleLoaded = vi.hoisted(() => vi.fn());
 const preloadSettingsTabMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const preloadAllSettingsTabsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const markSettingsPerfMock = vi.hoisted(() => vi.fn());
 const projectsViewRenderMock = vi.hoisted(() => vi.fn());
+const transcriptWorkbenchMountMock = vi.hoisted(() => vi.fn());
+const transcriptWorkbenchUnmountMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -19,7 +23,25 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNavigation</div> }));
-vi.mock('../components/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
+vi.mock('../components/TranscriptWorkbench', async () => {
+  const React = await import('react');
+
+  return {
+    TranscriptWorkbench: ({ onClose }: { onClose: () => void }) => {
+      React.useEffect(() => {
+        transcriptWorkbenchMountMock();
+        return () => transcriptWorkbenchUnmountMock();
+      }, []);
+
+      return (
+        <div data-testid="transcript-workbench">
+          TranscriptWorkbench
+          <button type="button" onClick={onClose}>Close Transcript</button>
+        </div>
+      );
+    },
+  };
+});
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({
@@ -111,6 +133,10 @@ describe('App settings preload', () => {
     preloadAllSettingsTabsMock.mockClear();
     markSettingsPerfMock.mockClear();
     projectsViewRenderMock.mockClear();
+    transcriptWorkbenchMountMock.mockClear();
+    transcriptWorkbenchUnmountMock.mockClear();
+    useTranscriptSessionStore.getState().clearSegments();
+    useTranscriptPlaybackStore.getState().clearSession({ clearAudio: true });
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'live',
       setMode: vi.fn(),
@@ -210,15 +236,70 @@ describe('App settings preload', () => {
     expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: true }));
   });
 
-  it('does not keep the workspace editor mounted while projects mode is active', () => {
+  it('keeps one transcript workbench instance while switching tabs around projects mode', () => {
+    const runtimeState = {
+      mode: 'projects' as 'projects' | 'batch' | 'live',
+      setMode: vi.fn(),
+    };
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector(runtimeState));
+
+    const { rerender } = render(<App />);
+
+    expect(screen.getByTestId('transcript-workbench')).toBeDefined();
+    expect(transcriptWorkbenchMountMock).toHaveBeenCalledTimes(1);
+
+    runtimeState.mode = 'batch';
+    rerender(<App />);
+
+    expect(screen.getByTestId('transcript-workbench')).toBeDefined();
+    expect(transcriptWorkbenchMountMock).toHaveBeenCalledTimes(1);
+    expect(transcriptWorkbenchUnmountMock).not.toHaveBeenCalled();
+
+    runtimeState.mode = 'projects';
+    rerender(<App />);
+
+    expect(screen.getByTestId('transcript-workbench')).toBeDefined();
+    expect(transcriptWorkbenchMountMock).toHaveBeenCalledTimes(1);
+    expect(transcriptWorkbenchUnmountMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the shared editor mounted but hidden when projects mode has no active transcript', () => {
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
       mode: 'projects',
       setMode: vi.fn(),
     }));
 
-    render(<App />);
+    const { container } = render(<App />);
 
-    expect(screen.queryByText('TranscriptWorkbench')).toBeNull();
+    expect(screen.getByTestId('transcript-workbench')).toBeDefined();
+    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
+  });
+
+  it('closes the shared transcript session and hides the projects detail host', async () => {
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
+      mode: 'projects',
+      setMode: vi.fn(),
+    }));
+    useTranscriptSessionStore.getState().openSession({
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+      sourceHistoryId: 'hist-1',
+      title: 'History Item',
+      icon: null,
+    });
+    useTranscriptPlaybackStore.getState().openSession('mock-audio-url');
+
+    const { container } = render(<App />);
+
+    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Transcript' }));
+
+    await waitFor(() => {
+      expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
+    });
+    expect(useTranscriptSessionStore.getState().sourceHistoryId).toBeNull();
+    expect(useTranscriptSessionStore.getState().segments).toHaveLength(0);
+    expect(useTranscriptPlaybackStore.getState().audioUrl).toBeNull();
   });
 });

@@ -12,9 +12,26 @@
 }
 
 .app-main {
+  position: relative;
   display: flex;
   flex: 1;
   overflow: hidden;
+}
+
+.persistent-transcript-host {
+  position: absolute;
+  inset: 0 0 0 350px;
+  z-index: 2;
+}
+
+.persistent-transcript-host.is-hidden {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .app-main--projects .persistent-transcript-host {
+    inset: 320px 0 0 0;
+  }
 }
 
 /* ===========================

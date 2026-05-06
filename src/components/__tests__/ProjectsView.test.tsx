@@ -252,6 +252,8 @@ describe('ProjectsView', () => {
 
   const getMainTitleIcon = () => document.querySelector('.projects-main-title-icon');
 
+  const getDetailPlaceholder = () => document.querySelector('.projects-detail-pane[data-projects-detail-placeholder="true"]');
+
   const selectDropdownOption = (ariaLabel: string, optionLabel: string) => {
     fireEvent.click(screen.getByRole('button', { name: ariaLabel }));
     fireEvent.click(screen.getByRole('option', { name: optionLabel }));
@@ -895,7 +897,7 @@ describe('ProjectsView', () => {
     await clickAsync(screen.getByRole('button', { name: 'Project Item' }));
 
     await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(getDetailPlaceholder()).not.toBeNull();
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-project');
       expect(useProjectStore.getState().activeProjectId).toBe('project-1');
     });
@@ -927,14 +929,14 @@ describe('ProjectsView', () => {
     await clickAsync(screen.getByRole('button', { name: 'Project Item' }));
 
     await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(getDetailPlaceholder()).not.toBeNull();
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-1');
     });
 
     await clickAsync(getButtonByContent('Inbox'));
 
     await waitFor(() => {
-      expect(screen.queryByText('TranscriptEditor')).toBeNull();
+      expect(getDetailPlaceholder()).toBeNull();
       expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
     });
   });
@@ -969,7 +971,7 @@ describe('ProjectsView', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(getDetailPlaceholder()).not.toBeNull();
     });
 
     await act(async () => {
@@ -977,7 +979,7 @@ describe('ProjectsView', () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText('TranscriptEditor')).toBeNull();
+      expect(getDetailPlaceholder()).toBeNull();
       expect(screen.getByRole('textbox', { name: 'Search in Alpha...' })).toBeDefined();
     });
   });
@@ -1284,14 +1286,20 @@ describe('ProjectsView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Project Item' }));
     await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(getDetailPlaceholder()).not.toBeNull();
     });
 
-    const detailButton = screen.getByRole('button', { name: 'Detail Focus' });
+    const detailHost = document.createElement('div');
+    detailHost.className = 'projects-detail-pane';
+    const detailButton = document.createElement('button');
+    detailButton.textContent = 'Detail Focus';
+    detailHost.appendChild(detailButton);
+    document.body.appendChild(detailHost);
     detailButton.focus();
     fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
 
     expect(document.activeElement).toBe(detailButton);
+    detailHost.remove();
   });
 
   it('navigates workspace search results with arrow keys and opens the active result on Enter', async () => {
@@ -1340,7 +1348,7 @@ describe('ProjectsView', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(screen.getByText('TranscriptEditor')).toBeDefined();
+      expect(getDetailPlaceholder()).not.toBeNull();
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-2');
     });
   });

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RenameModal } from './RenameModal';
-import { TranscriptWorkbench } from './TranscriptWorkbench';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
 import { ProjectsHeader } from './projects/ProjectsHeader';
@@ -554,13 +553,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       )}
 
       {selectedItem && (
-        <aside className="projects-detail-pane">
-          <TranscriptWorkbench
-            onClose={clearOpenedItem}
-            title={selectedItem.title}
-            defaultIconType={selectedItem.type}
-          />
-        </aside>
+        <aside
+          className="projects-detail-pane"
+          data-projects-detail-placeholder="true"
+          aria-hidden="true"
+        />
       )}
 
       <ProjectCreateModal

@@ -12,7 +12,9 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { OnboardingReminderBanner } from './components/OnboardingReminderBanner';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useProjectStore } from './stores/projectStore';
+import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 import { AutomationIcon, SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -23,7 +25,7 @@ import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync
 import { SettingsTab } from './hooks/useSettingsLogic';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { diagnosticsService } from './services/diagnosticsService';
-import { clearTranscriptSegments } from './stores/transcriptCoordinator';
+import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
@@ -74,6 +76,9 @@ function App(): React.JSX.Element {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general');
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
+  const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
@@ -160,12 +165,23 @@ function App(): React.JSX.Element {
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
   }, [reopenOnboarding]);
 
+  const closeTranscriptSession = useCallback(() => {
+    clearActiveTranscriptSession({ clearAudio: true });
+  }, []);
+
   if (!isLoaded) {
     return <></>; // Wait for config and onboarding state to load
   }
 
   const panelTitle = getPanelTitle(mode, t);
   const isProjectsMode = mode === 'projects';
+  const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
+  const shouldShowTranscriptHost = !isProjectsMode || hasActiveTranscript;
+  const appMainClassName = [
+    'app-main',
+    isProjectsMode ? 'app-main--projects' : 'app-main--workspace',
+    shouldShowTranscriptHost ? 'app-main--with-transcript' : 'app-main--without-transcript',
+  ].join(' ');
 
   return (
     <div className="app">
@@ -209,7 +225,7 @@ function App(): React.JSX.Element {
       <OnboardingReminderBanner />
 
       {/* Main Content */}
-      <main id="main-content" className="app-main">
+      <main id="main-content" className={appMainClassName}>
         <div className="projects-mode-shell" style={{ display: isProjectsMode ? undefined : 'none' }}>
           <ProjectsView isActive={isProjectsMode} />
         </div>
@@ -241,10 +257,14 @@ function App(): React.JSX.Element {
             </div>
 
             {/* Right Panel - Editor */}
-            <div className="panel panel-right">
-              {!isProjectsMode && <TranscriptWorkbench onClose={clearTranscriptSegments} />}
-            </div>
+            <div className="panel panel-right" aria-hidden="true" />
           </div>
+        </div>
+        <div
+          className={`persistent-transcript-host projects-detail-pane ${shouldShowTranscriptHost ? '' : 'is-hidden'}`}
+          aria-hidden={shouldShowTranscriptHost ? undefined : true}
+        >
+          <TranscriptWorkbench onClose={closeTranscriptSession} />
         </div>
       </main>
 

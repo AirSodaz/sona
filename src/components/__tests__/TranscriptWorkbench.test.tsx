@@ -5,6 +5,7 @@ import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 
 const mockUpdateItemMeta = vi.fn();
+const mockHistoryItems = vi.hoisted(() => ({ current: [] as any[] }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,9 +19,19 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../stores/historyStore', () => ({
   useHistoryStore: (selector: (state: { items: any[]; updateItemMeta: typeof mockUpdateItemMeta }) => unknown) => selector({
-    items: [],
+    items: mockHistoryItems.current,
     updateItemMeta: mockUpdateItemMeta,
   }),
+}));
+
+vi.mock('../Icons', () => ({
+  CloseIcon: () => <span data-testid="icon-close" />,
+  SummaryIcon: () => <span data-testid="icon-summary" />,
+  EditIcon: () => <span data-testid="icon-edit" />,
+  MicIcon: () => <span data-testid="icon-mic" />,
+  FileTextIcon: () => <span data-testid="icon-file-text" />,
+  FolderIcon: () => <span data-testid="icon-folder" />,
+  CodeIcon: () => <span data-testid="icon-code" />,
 }));
 
 vi.mock('../ErrorBoundary', () => ({
@@ -76,6 +87,7 @@ vi.mock('../../services/aiRenameService', () => ({
 describe('TranscriptWorkbench', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHistoryItems.current = [];
     useTranscriptStore.setState({
       segments: [
         { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true },
@@ -146,6 +158,26 @@ describe('TranscriptWorkbench', () => {
     });
 
     expect(screen.getByText('TranscriptSpeakerReviewPanel')).toBeDefined();
+  });
+
+  it('uses the saved batch history type as the default icon while projects mode is active', () => {
+    mockHistoryItems.current = [
+      {
+        id: 'history-batch',
+        type: 'batch',
+        status: 'complete',
+      },
+    ];
+    useTranscriptStore.setState({
+      sourceHistoryId: 'history-batch',
+      mode: 'projects',
+      icon: null,
+    });
+
+    render(<TranscriptWorkbench onClose={() => undefined} />);
+
+    expect(screen.getByTestId('icon-file-text')).toBeDefined();
+    expect(screen.queryByTestId('icon-mic')).toBeNull();
   });
 
   it('disables rename and close while recording is active', async () => {
