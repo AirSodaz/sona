@@ -247,6 +247,7 @@ export function GlobalDialog(): React.JSX.Element | null {
                                         onClick={handleAiClick}
                                         disabled={isAiLoading}
                                         title={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
+                                        aria-label={t('common.ai_rename', { defaultValue: 'AI Auto-rename' })}
                                         style={{
                                             position: 'absolute',
                                             right: '4px',

@@ -87,6 +87,7 @@ export function SettingsShortcutInput({
                 <input
                     type="text"
                     value={tempValue}
+                    aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                     onChange={(e) => setTempValue(e.target.value)}
                     onBlur={() => {
                         onChange(tempValue);
@@ -140,6 +141,7 @@ export function SettingsShortcutInput({
                     setTempValue(value);
                     setIsEditing(true);
                 }}
+                aria-label={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip={t('shortcuts.edit_manually', { defaultValue: 'Edit manually' })}
                 data-tooltip-pos="top"
                 style={{
