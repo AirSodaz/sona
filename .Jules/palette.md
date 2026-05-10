@@ -1,0 +1,3 @@
+## 2024-05-10 - [GlobalDialog AI Auto-rename Accessibility]
+**Learning:** Found that an actionable icon button (`btn btn-icon btn-sm`) specifically used for AI Auto-rename within the `GlobalDialog` component was missing an `aria-label`, leaving it inaccessible to screen readers despite having a native `title` attribute.
+**Action:** Always ensure that icon-only buttons include an `aria-label` attribute (in this case matching the visual `title` attribute using the `t()` translation function) so that screen readers correctly announce the button's purpose without relying solely on visual tooltips.
