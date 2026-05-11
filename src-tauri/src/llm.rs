@@ -2,6 +2,7 @@ mod commands;
 mod jobs;
 #[path = "llm_usage.rs"]
 pub(crate) mod llm_usage;
+mod network;
 mod providers;
 mod streaming;
 mod tasks;

@@ -55,6 +55,7 @@ enum CollectionProbe {
 fn build_client() -> Result<Client, String> {
     Client::builder()
         .user_agent("Sona/1.0")
+        .https_only(true)
         .build()
         .map_err(|error| format!("Failed to create the WebDAV client: {error}"))
 }
@@ -73,9 +74,7 @@ fn parse_server_url(value: &str) -> Result<Url, String> {
     let mut url =
         Url::parse(&trimmed).map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
 
-    if url.scheme() != "https" {
-        return Err("WebDAV server URL must start with https://.".to_string());
-    }
+    enforce_https_url(&url, "WebDAV server URL")?;
 
     let normalized_path = if url.path().ends_with('/') {
         url.path().to_string()
@@ -84,6 +83,19 @@ fn parse_server_url(value: &str) -> Result<Url, String> {
     };
     url.set_path(&normalized_path);
 
+    Ok(url)
+}
+
+fn enforce_https_url(url: &Url, label: &str) -> Result<(), String> {
+    if url.scheme() != "https" {
+        return Err(format!("{label} must start with https://."));
+    }
+
+    Ok(())
+}
+
+fn checked_webdav_request_url(url: Url, label: &str) -> Result<Url, String> {
+    enforce_https_url(&url, label)?;
     Ok(url)
 }
 
@@ -232,6 +244,7 @@ async fn propfind(
     url: Url,
     depth: &str,
 ) -> Result<reqwest::Response, String> {
+    let url = checked_webdav_request_url(url, "WebDAV request URL")?;
     client
         .request(
             Method::from_bytes(b"PROPFIND")
@@ -294,7 +307,7 @@ async fn ensure_remote_directory(
             .request(
                 Method::from_bytes(b"MKCOL")
                     .map_err(|error| format!("Failed to build the MKCOL request: {error}"))?,
-                segment_url.clone(),
+                checked_webdav_request_url(segment_url.clone(), "WebDAV directory URL")?,
             )
             .basic_auth(&config.username, Some(&config.password))
             .send()
@@ -391,7 +404,10 @@ pub async fn webdav_upload_backup(
         .and_then(|value| value.to_str())
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "Backup archive path is missing a file name.".to_string())?;
-    let target_url = build_file_url(&collection_url, file_name)?;
+    let target_url = checked_webdav_request_url(
+        build_file_url(&collection_url, file_name)?,
+        "WebDAV backup URL",
+    )?;
     let archive_bytes = tokio::fs::read(&local_archive_path)
         .await
         .map_err(|error| format!("Failed to read the local backup archive: {error}"))?;
@@ -424,9 +440,12 @@ pub async fn webdav_download_backup(
     let normalized = normalize_config(&config)?;
     let client = build_client()?;
     let base_url = parse_server_url(&normalized.server_url)?;
-    let backup_url = base_url
-        .join(href.trim())
-        .map_err(|error| format!("WebDAV backup URL is invalid: {error}"))?;
+    let backup_url = checked_webdav_request_url(
+        base_url
+            .join(href.trim())
+            .map_err(|error| format!("WebDAV backup URL is invalid: {error}"))?,
+        "WebDAV backup URL",
+    )?;
 
     if let Some(parent) = Path::new(&output_path).parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|error| {
@@ -466,7 +485,8 @@ pub async fn webdav_download_backup(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_collection_url, parse_propfind_entries, resolve_warning_message, WebDavConnectionStatus,
+        build_collection_url, parse_propfind_entries, resolve_warning_message,
+        WebDavConnectionStatus,
     };
     use reqwest::Url;
 
@@ -482,6 +502,17 @@ mod tests {
         let result = super::parse_server_url("https://dav.example.com/root").unwrap();
 
         assert_eq!(result.as_str(), "https://dav.example.com/root/");
+    }
+
+    #[test]
+    fn checked_webdav_request_url_rejects_http_before_credentials_are_sent() {
+        let error = super::checked_webdav_request_url(
+            Url::parse("http://dav.example.com/backups/sona.tar.bz2").unwrap(),
+            "WebDAV backup URL",
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "WebDAV backup URL must start with https://.");
     }
 
     #[test]

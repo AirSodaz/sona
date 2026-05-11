@@ -1,3 +1,4 @@
+use super::network::{post_json_request, LlmApiUrl};
 use super::*;
 use futures_util::StreamExt;
 use log::warn;
@@ -264,8 +265,8 @@ async fn stream_openai_chat_completion<EmitFn>(
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
-    let client = Client::new();
-    let url = build_openai_stream_url(config);
+    let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
+    let client = url.client()?;
     let payload = if config.provider == LlmProvider::AzureOpenAi {
         json!({
             "messages": [
@@ -292,7 +293,7 @@ where
     };
 
     let mut request = client
-        .post(&url)
+        .post(url.reqwest_url())
         .header("Content-Type", "application/json")
         .header("Accept", "text/event-stream");
 
@@ -383,13 +384,11 @@ async fn stream_openai_responses_completion<EmitFn>(
 where
     EmitFn: FnMut(&str, &str) -> Result<(), String>,
 {
-    let client = Client::new();
-    let url = join_url(
-        &config.base_url,
-        config.api_path.as_deref().unwrap_or("/v1/responses"),
-    );
+    let base_url = LlmApiUrl::parse(&config.base_url)?;
+    let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/responses"))?;
+    let client = url.client()?;
     let response = client
-        .post(&url)
+        .post(url.reqwest_url())
         .header("Content-Type", "application/json")
         .header("Accept", "text/event-stream")
         .header("Authorization", format!("Bearer {}", config.api_key))
@@ -574,38 +573,8 @@ where
     }
 }
 
-pub(crate) async fn post_json_request(
-    url: &str,
-    headers: Vec<(&str, String)>,
-    body: Value,
-) -> Result<Value, String> {
-    let client = Client::new();
-    let mut request = client.post(url).header("Content-Type", "application/json");
-
-    for (key, value) in headers {
-        if !value.is_empty() {
-            request = request.header(key, value);
-        }
-    }
-
-    let response = request
-        .json(&body)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-
-    let status = response.status();
-    let text = response.text().await.map_err(|error| error.to_string())?;
-
-    if !status.is_success() {
-        return Err(format!("LLM API Error: {} {}", status, text));
-    }
-
-    serde_json::from_str(&text).map_err(|error| error.to_string())
-}
-
 pub(crate) async fn generate_with_openai_chat_api(
-    url: &str,
+    url: &LlmApiUrl,
     api_key: &str,
     model: &str,
     input: &str,
@@ -644,7 +613,8 @@ pub(crate) async fn generate_with_openai_responses_api(
     temperature: Option<f32>,
     api_path: Option<&str>,
 ) -> Result<StandardLlmResponse, String> {
-    let url = join_url(base_url, api_path.unwrap_or("/v1/responses"));
+    let base_url = LlmApiUrl::parse(base_url)?;
+    let url = base_url.join(api_path.unwrap_or("/v1/responses"))?;
     let payload = json!({
         "model": model,
         "input": input,
@@ -674,12 +644,13 @@ pub(crate) async fn generate_with_azure_openai(
 ) -> Result<StandardLlmResponse, String> {
     let version = api_version.unwrap_or("2024-10-21");
     let deployment = deployment.trim();
-    let endpoint = format!(
-        "{}/openai/deployments/{}/chat/completions?api-version={}",
-        base_url.trim_end_matches('/'),
-        deployment,
-        version
-    );
+    let base_url = LlmApiUrl::parse(base_url)?;
+    let endpoint = base_url
+        .join(&format!(
+            "/openai/deployments/{}/chat/completions",
+            deployment
+        ))?
+        .with_query(&format!("api-version={}", version))?;
 
     let payload = json!({
         "messages": [
@@ -708,7 +679,8 @@ pub(crate) async fn generate_with_openai_custom_path(
     temperature: Option<f32>,
     api_path: Option<&str>,
 ) -> Result<StandardLlmResponse, String> {
-    let url = join_url(base_url, api_path.unwrap_or("/v1/chat/completions"));
+    let base_url = LlmApiUrl::parse(base_url)?;
+    let url = base_url.join(api_path.unwrap_or("/v1/chat/completions"))?;
     generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
 }
 
@@ -718,15 +690,8 @@ pub(crate) async fn generate_with_perplexity(
     input: &str,
     temperature: Option<f32>,
 ) -> Result<StandardLlmResponse, String> {
-    generate_with_openai_chat_api(
-        "https://api.perplexity.ai/chat/completions",
-        api_key,
-        model,
-        input,
-        temperature,
-        vec![],
-    )
-    .await
+    let url = LlmApiUrl::parse("https://api.perplexity.ai/chat/completions")?;
+    generate_with_openai_chat_api(&url, api_key, model, input, temperature, vec![]).await
 }
 
 pub(crate) async fn generate_with_rig(

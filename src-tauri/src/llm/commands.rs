@@ -1,7 +1,7 @@
+use super::network::{validate_llm_api_host, LlmApiUrl};
 use super::*;
 use futures_util::future::BoxFuture;
 use log::info;
-use reqwest::Client;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -211,8 +211,9 @@ where
     if config.provider == LlmProvider::GoogleTranslate
         || config.provider == LlmProvider::GoogleTranslateFree
     {
-        let client = Client::new();
         let translate_provider = config.provider;
+        let base_url = LlmApiUrl::parse(&config.base_url)?;
+        let client = base_url.client()?;
         let chunk_events = events.clone();
         let progress_events = events.clone();
         let usage = usage.clone();
@@ -302,6 +303,7 @@ where
                     let config = config.clone();
                     let target_language = target_language.clone();
                     let client = client.clone();
+                    let base_url = base_url.clone();
                     let future: BoxFuture<'static, Result<StandardLlmResponse, String>> =
                         Box::pin(async move {
                             let texts: Vec<String> =
@@ -314,13 +316,10 @@ where
                                     format: "text".to_string(),
                                 };
 
-                                let url = format!(
-                                    "{}?key={}",
-                                    config.base_url.trim_end_matches('/'),
-                                    config.api_key
-                                );
+                                let url = base_url.clone();
                                 let response = client
-                                    .post(&url)
+                                    .post(url.reqwest_url())
+                                    .header("x-goog-api-key", config.api_key)
                                     .json(&payload)
                                     .send()
                                     .await
@@ -343,7 +342,6 @@ where
                                     texts.len(),
                                     GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY
                                 );
-                                let base_url = config.base_url.clone();
                                 let translations = run_google_translate_free_requests_in_order(
                                     texts,
                                     GOOGLE_TRANSLATE_FREE_MAX_CONCURRENCY,
@@ -362,7 +360,7 @@ where
                                                     async move {
                                                         fetch_google_translate_free_translation(
                                                             &client,
-                                                            base_url.as_str(),
+                                                            &base_url,
                                                             target_language.as_str(),
                                                             text.as_str(),
                                                         )
@@ -511,15 +509,12 @@ pub(crate) async fn list_llm_models_command(
     }
     validate_llm_api_host(&request.base_url)?;
 
-    let client = Client::new();
+    let base_url = LlmApiUrl::parse(&request.base_url)?;
+    let client = base_url.client()?;
 
     match request.provider {
-        LlmProvider::Gemini => {
-            get_gemini_models(&client, &request.api_key, &request.base_url).await
-        }
-        LlmProvider::Ollama => {
-            get_openai_models(&client, &request.api_key, &request.base_url, true).await
-        }
-        _ => get_openai_models(&client, &request.api_key, &request.base_url, false).await,
+        LlmProvider::Gemini => get_gemini_models(&client, &request.api_key, &base_url).await,
+        LlmProvider::Ollama => get_openai_models(&client, &request.api_key, &base_url, true).await,
+        _ => get_openai_models(&client, &request.api_key, &base_url, false).await,
     }
 }

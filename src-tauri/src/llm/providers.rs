@@ -1,3 +1,4 @@
+use super::network::{post_json_request, LlmApiUrl};
 use super::*;
 use async_trait::async_trait;
 use log::warn;
@@ -216,9 +217,9 @@ impl LlmAdapter for GoogleTranslateAdapter {
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
+        let base_url = LlmApiUrl::parse(&config.base_url)?;
 
         if config.provider == LlmProvider::GoogleTranslateFree {
-            let base_url = config.base_url.clone();
             let fetch_client = client.clone();
 
             let (_, text) = execute_google_translate_free_request(
@@ -226,16 +227,18 @@ impl LlmAdapter for GoogleTranslateAdapter {
                 input,
                 "en".to_string(),
                 move |text, target| {
-                    let url = format!(
-                        "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
-                        base_url.trim_end_matches('/'),
-                        target,
-                        urlencoding::encode(&text)
-                    );
+                    let url = base_url
+                        .with_query(&format!(
+                            "client=gtx&sl=auto&tl={}&dt=t&q={}",
+                            target,
+                            urlencoding::encode(&text)
+                        ))
+                        .map_err(GoogleTranslateFreeAttemptError::Message);
                     let client = fetch_client.clone();
                     async move {
+                        let url = url?;
                         let response =
-                            client.get(&url).send().await.map_err(|e| {
+                            client.get(url.reqwest_url()).send().await.map_err(|e| {
                                 GoogleTranslateFreeAttemptError::Message(e.to_string())
                             })?;
                         let status = response.status();
@@ -280,13 +283,14 @@ impl LlmAdapter for GoogleTranslateAdapter {
             format: "text".to_string(),
         };
 
-        let url = format!(
-            "{}?key={}",
-            config.base_url.trim_end_matches('/'),
-            config.api_key
-        );
+        let url = base_url;
 
-        let response = post_json_request(&url, vec![], json!(payload)).await?;
+        let response = post_json_request(
+            &url,
+            vec![("x-goog-api-key", config.api_key.clone())],
+            json!(payload),
+        )
+        .await?;
         let text = extract_text_from_json_response(&response)?;
 
         Ok(StandardLlmResponse { text, usage: None })
@@ -441,10 +445,14 @@ pub(crate) fn clean_gemini_base_url(base_url: &str) -> &str {
     base
 }
 
-pub(crate) fn format_gemini_models_url(base_url: &str, api_key: &str) -> String {
+pub(crate) fn format_gemini_models_url(base_url: &str) -> String {
     let cleaned_base = clean_gemini_base_url(base_url);
 
-    format!("{}/v1beta/models?key={}", cleaned_base, api_key)
+    format!("{}/v1beta/models", cleaned_base)
+}
+
+pub(crate) fn build_gemini_models_url(base_url: &LlmApiUrl) -> Result<LlmApiUrl, String> {
+    LlmApiUrl::parse(&format_gemini_models_url(base_url.as_str()))
 }
 
 pub(crate) fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
@@ -469,18 +477,31 @@ pub(crate) fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<
     }
 }
 
+pub(crate) fn build_openai_models_urls(
+    base_url: &LlmApiUrl,
+    is_ollama: bool,
+) -> Result<Vec<LlmApiUrl>, String> {
+    format_openai_models_urls(base_url.as_str(), is_ollama)
+        .into_iter()
+        .map(|url| LlmApiUrl::parse(&url))
+        .collect()
+}
+
 pub(crate) async fn get_gemini_models(
     client: &Client,
     api_key: &str,
-    base_url: &str,
+    base_url: &LlmApiUrl,
 ) -> Result<Vec<String>, String> {
-    let url = format_gemini_models_url(base_url, api_key);
-    let res = client
-        .get(&url)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let url = build_gemini_models_url(base_url)?;
+    let mut request = client
+        .get(url.reqwest_url())
+        .header("Content-Type", "application/json");
+
+    if !api_key.is_empty() {
+        request = request.header("x-goog-api-key", api_key);
+    }
+
+    let res = request.send().await.map_err(|e| e.to_string())?;
 
     if !res.status().is_success() {
         return Err(format!("Gemini API Error: {}", res.status()));
@@ -500,11 +521,13 @@ pub(crate) async fn get_gemini_models(
 pub(crate) async fn get_openai_models(
     client: &Client,
     api_key: &str,
-    base_url: &str,
+    base_url: &LlmApiUrl,
     is_ollama: bool,
 ) -> Result<Vec<String>, String> {
-    for url in format_openai_models_urls(base_url, is_ollama) {
-        let mut req = client.get(&url).header("Content-Type", "application/json");
+    for url in build_openai_models_urls(base_url, is_ollama)? {
+        let mut req = client
+            .get(url.reqwest_url())
+            .header("Content-Type", "application/json");
 
         if !api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", api_key));
