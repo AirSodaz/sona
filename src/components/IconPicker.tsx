@@ -151,6 +151,7 @@ export function IconPicker({ icon, onChange, defaultIcon }: IconPickerProps): Re
                         <input
                             type="text"
                             placeholder={t('history.custom_emoji_placeholder', { defaultValue: 'Custom emoji' })}
+                            aria-label={t('history.custom_emoji_placeholder', { defaultValue: 'Custom emoji' })}
                             maxLength={2}
                             style={{ 
                                 width: '100%', 
