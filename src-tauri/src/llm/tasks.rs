@@ -1,7 +1,8 @@
+use super::network::{validate_llm_api_host, LlmApiUrl};
 use super::*;
 use futures_util::{future::BoxFuture, stream, StreamExt};
 use log::{info, warn};
-use reqwest::{header::RETRY_AFTER, Client, StatusCode, Url};
+use reqwest::{header::RETRY_AFTER, Client, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{future::Future, time::Duration};
@@ -348,18 +349,19 @@ fn extract_google_translate_free_translation(
 
 pub(crate) async fn fetch_google_translate_free_translation(
     client: &Client,
-    base_url: &str,
+    base_url: &LlmApiUrl,
     target_language: &str,
     text: &str,
 ) -> Result<String, GoogleTranslateFreeAttemptError> {
-    let url = format!(
-        "{}?client=gtx&sl=auto&tl={}&dt=t&q={}",
-        base_url.trim_end_matches('/'),
-        target_language,
-        urlencoding::encode(text)
-    );
+    let url = base_url
+        .with_query(&format!(
+            "client=gtx&sl=auto&tl={}&dt=t&q={}",
+            target_language,
+            urlencoding::encode(text)
+        ))
+        .map_err(GoogleTranslateFreeAttemptError::Message)?;
     let response = client
-        .get(&url)
+        .get(url.reqwest_url())
         .send()
         .await
         .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
@@ -463,30 +465,6 @@ pub(crate) fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
     validate_llm_api_host(&config.base_url)?;
 
     Ok(())
-}
-
-pub(crate) fn validate_llm_api_host(base_url: &str) -> Result<(), String> {
-    let trimmed = base_url.trim();
-    if trimmed.is_empty() {
-        return Err("LLM API host cannot be empty".to_string());
-    }
-
-    let url = Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))?;
-    match url.scheme() {
-        "https" => Ok(()),
-        "http" if is_loopback_host(&url) => Ok(()),
-        "http" => Err("LLM API host must use https:// unless it points to localhost.".to_string()),
-        _ => Err("LLM API host must start with https:// or localhost http://.".to_string()),
-    }
-}
-
-fn is_loopback_host(url: &Url) -> bool {
-    url.host_str()
-        .map(|host| {
-            let normalized = host.trim_matches(['[', ']']).to_ascii_lowercase();
-            normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
-        })
-        .unwrap_or(false)
 }
 
 pub(crate) fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {

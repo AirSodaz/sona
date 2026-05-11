@@ -1,8 +1,9 @@
+use super::commands::list_llm_models_command;
 use super::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments,
 };
-use super::commands::list_llm_models_command;
+use super::network::LlmApiUrl;
 use super::*;
 use futures_util::future::BoxFuture;
 use reqwest::{header::RETRY_AFTER, StatusCode};
@@ -111,6 +112,30 @@ fn validate_llm_config_accepts_https_and_loopback_http_api_hosts() {
     assert!(validate_llm_config(&sample_llm_config("http://localhost:1234/v1")).is_ok());
     assert!(validate_llm_config(&sample_llm_config("http://127.0.0.1:11434")).is_ok());
     assert!(validate_llm_config(&sample_llm_config("http://[::1]:11434")).is_ok());
+}
+
+#[test]
+fn llm_api_url_preserves_https_policy_when_joining_and_querying() {
+    let root = LlmApiUrl::parse("https://api.example.com/v1").unwrap();
+
+    assert_eq!(
+        root.join("/v1/chat/completions").unwrap().as_str(),
+        "https://api.example.com/v1/chat/completions"
+    );
+    assert_eq!(
+        root.with_query("api-version=2024-10-21").unwrap().as_str(),
+        "https://api.example.com/v1?api-version=2024-10-21"
+    );
+}
+
+#[test]
+fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
+    let error = LlmApiUrl::parse("http://api.example.com/v1").unwrap_err();
+
+    assert_eq!(
+        error,
+        "LLM API host must use https:// unless it points to localhost."
+    );
 }
 
 #[tokio::test]
@@ -228,11 +253,8 @@ fn gemini_base_url_is_cleaned() {
 #[test]
 fn gemini_models_url_accepts_common_inputs() {
     assert_eq!(
-        format_gemini_models_url(
-            "https://generativelanguage.googleapis.com/v1beta/openai",
-            "test-key"
-        ),
-        "https://generativelanguage.googleapis.com/v1beta/models?key=test-key"
+        format_gemini_models_url("https://generativelanguage.googleapis.com/v1beta/openai"),
+        "https://generativelanguage.googleapis.com/v1beta/models"
     );
 }
 
