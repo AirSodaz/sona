@@ -73,11 +73,8 @@ fn parse_server_url(value: &str) -> Result<Url, String> {
     let mut url =
         Url::parse(&trimmed).map_err(|error| format!("WebDAV server URL is invalid: {error}"))?;
 
-    match url.scheme() {
-        "http" | "https" => {}
-        _ => {
-            return Err("WebDAV server URL must start with http:// or https://.".to_string());
-        }
+    if url.scheme() != "https" {
+        return Err("WebDAV server URL must start with https://.".to_string());
     }
 
     let normalized_path = if url.path().ends_with('/') {
@@ -320,13 +317,10 @@ async fn ensure_remote_directory(
     Ok(collection_url)
 }
 
-fn resolve_warning_message(collection_missing: bool, uses_http: bool) -> WebDavConnectionResult {
+fn resolve_warning_message(collection_missing: bool) -> WebDavConnectionResult {
     let mut warnings = Vec::new();
     if collection_missing {
         warnings.push("Connected to the WebDAV server, but the remote directory does not exist yet. It will be created on the first upload.".to_string());
-    }
-    if uses_http {
-        warnings.push("This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.".to_string());
     }
 
     if warnings.is_empty() {
@@ -352,10 +346,7 @@ pub async fn webdav_test_connection(
     let collection_url = build_collection_url(&base_url, &normalized.remote_dir)?;
     let probe = probe_collection(&client, &normalized, &collection_url).await?;
 
-    Ok(resolve_warning_message(
-        probe == CollectionProbe::Missing,
-        base_url.scheme() == "http",
-    ))
+    Ok(resolve_warning_message(probe == CollectionProbe::Missing))
 }
 
 #[tauri::command]
@@ -475,10 +466,23 @@ pub async fn webdav_download_backup(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_collection_url, parse_propfind_entries, resolve_warning_message,
-        WebDavConnectionStatus,
+        build_collection_url, parse_propfind_entries, resolve_warning_message, WebDavConnectionStatus,
     };
     use reqwest::Url;
+
+    #[test]
+    fn parse_server_url_rejects_http_before_credentials_are_sent() {
+        let error = super::parse_server_url("http://nas.local/dav").unwrap_err();
+
+        assert_eq!(error, "WebDAV server URL must start with https://.");
+    }
+
+    #[test]
+    fn parse_server_url_accepts_https() {
+        let result = super::parse_server_url("https://dav.example.com/root").unwrap();
+
+        assert_eq!(result.as_str(), "https://dav.example.com/root/");
+    }
 
     #[test]
     fn build_collection_url_appends_nested_remote_directory() {
@@ -593,10 +597,10 @@ mod tests {
     }
 
     #[test]
-    fn resolve_warning_message_marks_http_connections_as_warnings() {
-        let result = resolve_warning_message(false, true);
+    fn resolve_warning_message_marks_missing_collection_as_warning() {
+        let result = resolve_warning_message(true);
 
         assert_eq!(result.status, WebDavConnectionStatus::Warning);
-        assert!(result.message.contains("HTTP"));
+        assert!(result.message.contains("remote directory does not exist"));
     }
 }

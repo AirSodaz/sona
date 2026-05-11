@@ -1,7 +1,7 @@
 use super::*;
 use futures_util::{future::BoxFuture, stream, StreamExt};
 use log::{info, warn};
-use reqwest::{header::RETRY_AFTER, Client, StatusCode};
+use reqwest::{header::RETRY_AFTER, Client, StatusCode, Url};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{future::Future, time::Duration};
@@ -460,7 +460,33 @@ pub(crate) fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
         return Err("Model name cannot be empty".to_string());
     }
 
+    validate_llm_api_host(&config.base_url)?;
+
     Ok(())
+}
+
+pub(crate) fn validate_llm_api_host(base_url: &str) -> Result<(), String> {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return Err("LLM API host cannot be empty".to_string());
+    }
+
+    let url = Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))?;
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback_host(&url) => Ok(()),
+        "http" => Err("LLM API host must use https:// unless it points to localhost.".to_string()),
+        _ => Err("LLM API host must start with https:// or localhost http://.".to_string()),
+    }
+}
+
+fn is_loopback_host(url: &Url) -> bool {
+    url.host_str()
+        .map(|host| {
+            let normalized = host.trim_matches(['[', ']']).to_ascii_lowercase();
+            normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
+        })
+        .unwrap_or(false)
 }
 
 pub(crate) fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {

@@ -226,7 +226,7 @@
         "error_src_not_supported": "音频格式不支持或文件丢失。"
     },
     "editor": {
-        "empty_state": "暂无转录分段。<br />开始录音或导入文件。",
+        "empty_state": "暂无转录分段。\n开始录音或导入文件。",
         "seek_tooltip": "点击跳转",
         "edit_tooltip": "编辑分段",
         "merge_tooltip": "合并至下一段",
@@ -599,7 +599,7 @@
             "cloud_password": "密码",
             "cloud_loading": "正在加载已保存的 WebDAV 设置...",
             "cloud_local_config_error": "WebDAV 设置无法保存在本机：{{message}}",
-            "cloud_http_warning": "这个 WebDAV 端点使用 HTTP，传输过程中的凭证和备份归档都不会被加密保护。",
+            "cloud_https_required": "WebDAV 云同步需要使用 HTTPS，以保护传输过程中的凭证和备份归档。",
             "cloud_test_title": "WebDAV 连接",
             "cloud_test_button": "测试连接",
             "cloud_test_busy": "正在测试...",

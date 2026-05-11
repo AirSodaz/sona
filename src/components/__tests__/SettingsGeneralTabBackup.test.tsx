@@ -277,7 +277,7 @@ describe('SettingsGeneralTab backup entry', () => {
     expect(screen.getByText('Stop Live Record before exporting or importing backups.')).toBeDefined();
   });
 
-  it('shows an HTTP transport warning for WebDAV endpoints that are not encrypted', async () => {
+  it('shows an HTTPS-required warning for WebDAV endpoints that are not encrypted', async () => {
     testContext.loadWebDavConfigMock.mockResolvedValue({
       serverUrl: 'http://nas.local/dav',
       remoteDir: 'backups',
@@ -290,7 +290,7 @@ describe('SettingsGeneralTab backup entry', () => {
     await openWebDavAccordion();
 
     await waitFor(() => {
-      expect(screen.getByText('This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.')).toBeDefined();
+      expect(screen.getByText('WebDAV cloud sync requires HTTPS to protect credentials and backup archives in transit.')).toBeDefined();
     });
   });
 

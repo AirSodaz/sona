@@ -67,6 +67,34 @@ describe('TranscriptEditor Formatting', () => {
         expect(world.tagName).toBe('B');
     });
 
+    it('renders only safe transcript formatting in view mode', () => {
+        useTranscriptStore.setState({
+            segments: [
+                {
+                    id: 'safe-formatting',
+                    start: 0,
+                    end: 1,
+                    text: 'Safe <b>bold</b> <b onclick="alert(1)">literal</b> <img src=x onerror="alert(2)"> <script>alert(3)</script> 2 < 3',
+                    isFinal: true,
+                    tokens: [],
+                    timestamps: []
+                }
+            ]
+        });
+
+        render(<TranscriptEditor />);
+
+        const bold = screen.getByText('bold');
+        expect(bold.tagName).toBe('B');
+        const segmentText = document.querySelector('.segment-text')?.textContent || '';
+        expect(segmentText).toContain('<b onclick="alert(1)">literal</b>');
+        expect(segmentText).toContain('<img src=x onerror="alert(2)">');
+        expect(segmentText).toContain('<script>alert(3)</script>');
+        expect(document.querySelector('script')).toBeNull();
+        expect(document.querySelector('img')).toBeNull();
+        expect(segmentText).toContain('2 < 3');
+    });
+
     it('renders newline in view mode', () => {
          useTranscriptStore.setState({
             segments: [

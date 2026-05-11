@@ -509,6 +509,7 @@ pub(crate) async fn list_llm_models_command(
     if !provider_supports_model_listing(&request.provider) {
         return Ok(vec![]);
     }
+    validate_llm_api_host(&request.base_url)?;
 
     let client = Client::new();
 
