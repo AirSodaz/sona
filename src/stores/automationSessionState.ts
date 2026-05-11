@@ -180,6 +180,15 @@ export function deriveRuntimeState(
   const latest = ruleEntries[0];
   const failureCount = ruleEntries.filter((entry) => entry.status === 'error').length;
 
+  let derivedLastResult: AutomationRuntimeState['lastResult'] = existing?.lastResult;
+  if (latest) {
+    if (latest.status === 'complete') {
+      derivedLastResult = 'success';
+    } else {
+      derivedLastResult = 'error';
+    }
+  }
+
   return {
     ruleId,
     status: resolveRuntimeOverride(overrides, 'status', existing?.status ?? 'stopped'),
@@ -193,7 +202,7 @@ export function deriveRuntimeState(
     lastResult: resolveRuntimeOverride(
       overrides,
       'lastResult',
-      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult,
+      derivedLastResult,
     ),
     lastResultMessage: resolveRuntimeOverride(
       overrides,
@@ -616,6 +625,15 @@ export function applyTaskSettledState(
     });
   }
 
+  let payloadLastResult: AutomationRuntimeState['lastResult'] = current.runtimeStates[payload.ruleId]?.lastResult;
+  if (payload.status !== 'discarded') {
+    if (payload.status === 'complete') {
+      payloadLastResult = 'success';
+    } else {
+      payloadLastResult = 'error';
+    }
+  }
+
   return {
     processedEntries: current.processedEntries,
     notifications: nextNotifications,
@@ -629,9 +647,7 @@ export function applyTaskSettledState(
           status: nextRule?.enabled ? 'watching' : 'stopped',
           lastProcessedAt: payload.processedAt,
           lastProcessedFilePath: payload.filePath,
-          lastResult: payload.status === 'discarded'
-            ? current.runtimeStates[payload.ruleId]?.lastResult
-            : payload.status === 'complete' ? 'success' : 'error',
+          lastResult: payloadLastResult,
           lastResultMessage: payload.errorMessage,
           ...(shouldClearBlockedHint
             ? {

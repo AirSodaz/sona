@@ -169,6 +169,11 @@ export function GlobalDialog(): React.JSX.Element | null {
         }
     };
 
+    let defaultConfirmLabel = t('common.ok', { defaultValue: 'OK' });
+    if (type === 'confirm' || type === 'prompt') {
+        defaultConfirmLabel = t('common.confirm', { defaultValue: 'Confirm' });
+    }
+
     return (
         <div className="settings-overlay" style={{ zIndex: 2000 }}>
             <div
@@ -328,7 +333,7 @@ export function GlobalDialog(): React.JSX.Element | null {
                         className={`btn ${variant === 'error' ? 'btn-danger' : 'btn-primary'}`}
                         onClick={handleConfirm}
                     >
-                        {confirmLabel || (type === 'confirm' || type === 'prompt' ? t('common.confirm', { defaultValue: 'Confirm' }) : t('common.ok', { defaultValue: 'OK' }))}
+                        {confirmLabel || defaultConfirmLabel}
                     </button>
                 </div>
             </div>

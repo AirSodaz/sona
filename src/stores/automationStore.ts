@@ -236,9 +236,17 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       await validateRuleBeforeActivation(nextRule);
     }
 
-    const nextRules = existing
-      ? state.rules.map((rule) => (rule.id === existing.id ? nextRule : rule))
-      : [nextRule, ...state.rules];
+    let nextRules;
+    if (existing) {
+      nextRules = state.rules.map((rule) => {
+        if (rule.id === existing.id) {
+          return nextRule;
+        }
+        return rule;
+      });
+    } else {
+      nextRules = [nextRule, ...state.rules];
+    }
 
     await persistAutomationRules(nextRules);
     set((current) => ({
