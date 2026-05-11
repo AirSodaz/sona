@@ -2,6 +2,7 @@ use super::jobs::{
     compute_summary_source_fingerprint, merge_polished_items_into_segments,
     merge_translated_items_into_segments,
 };
+use super::commands::list_llm_models_command;
 use super::*;
 use futures_util::future::BoxFuture;
 use reqwest::{header::RETRY_AFTER, StatusCode};
@@ -80,6 +81,52 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::sherpa::TranscriptS
         speaker: None,
         speaker_attribution: None,
     }
+}
+
+fn sample_llm_config(base_url: &str) -> LlmConfig {
+    LlmConfig {
+        provider: LlmProvider::OpenAi,
+        base_url: base_url.to_string(),
+        api_key: "test-key".to_string(),
+        model: "test-model".to_string(),
+        api_path: None,
+        api_version: None,
+        temperature: None,
+    }
+}
+
+#[test]
+fn validate_llm_config_rejects_remote_http_api_hosts() {
+    let error = validate_llm_config(&sample_llm_config("http://api.example.com/v1")).unwrap_err();
+
+    assert_eq!(
+        error,
+        "LLM API host must use https:// unless it points to localhost."
+    );
+}
+
+#[test]
+fn validate_llm_config_accepts_https_and_loopback_http_api_hosts() {
+    assert!(validate_llm_config(&sample_llm_config("https://api.example.com/v1")).is_ok());
+    assert!(validate_llm_config(&sample_llm_config("http://localhost:1234/v1")).is_ok());
+    assert!(validate_llm_config(&sample_llm_config("http://127.0.0.1:11434")).is_ok());
+    assert!(validate_llm_config(&sample_llm_config("http://[::1]:11434")).is_ok());
+}
+
+#[tokio::test]
+async fn list_llm_models_rejects_remote_http_before_requesting_models() {
+    let error = list_llm_models_command(LlmModelsRequest {
+        provider: LlmProvider::OpenAi,
+        base_url: "http://api.example.com/v1".to_string(),
+        api_key: "test-key".to_string(),
+    })
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        error,
+        "LLM API host must use https:// unless it points to localhost."
+    );
 }
 
 #[test]

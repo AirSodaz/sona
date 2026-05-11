@@ -215,7 +215,7 @@ export function TranscriptEditor(): React.JSX.Element {
         return (
             <div className="empty-state">
                 <PlusCircleIcon />
-                <p dangerouslySetInnerHTML={{ __html: t('editor.empty_state') }} />
+                <p style={{ whiteSpace: 'pre-line' }}>{t('editor.empty_state')}</p>
             </div>
         );
     }

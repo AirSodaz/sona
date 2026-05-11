@@ -226,7 +226,7 @@
         "error_src_not_supported": "Audio format not supported or file missing."
     },
     "editor": {
-        "empty_state": "No transcript segments yet.<br />Start recording or import a file.",
+        "empty_state": "No transcript segments yet.\nStart recording or import a file.",
         "seek_tooltip": "Click to seek",
         "edit_tooltip": "Edit segment",
         "merge_tooltip": "Merge with next",
@@ -601,7 +601,7 @@
             "cloud_password": "Password",
             "cloud_loading": "Loading saved WebDAV settings...",
             "cloud_local_config_error": "WebDAV settings could not be saved locally: {{message}}",
-            "cloud_http_warning": "This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.",
+            "cloud_https_required": "WebDAV cloud sync requires HTTPS to protect credentials and backup archives in transit.",
             "cloud_test_title": "WebDAV connection",
             "cloud_test_button": "Test Connection",
             "cloud_test_busy": "Testing...",

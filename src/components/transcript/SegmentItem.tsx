@@ -18,6 +18,7 @@ import {
     buildSpeakerCorrectionProfileSections,
     speakerCorrectionService,
 } from '../../services/speakerCorrectionService';
+import { editorHtmlToTranscriptText, transcriptTextToEditorHtml } from './richText';
 
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
@@ -31,37 +32,6 @@ export interface SegmentItemProps {
     onDelete: (id: string) => void;
     onMergeWithNext: (id: string) => void;
     onAnimationEnd: (id: string) => void;
-}
-
-function textToHtml(text: string): string {
-    if (!text) return '';
-    return text.replace(/\n/g, '<br>');
-}
-
-function htmlToText(html: string): string {
-    if (!html) return '';
-
-    // Replace block elements and breaks with newlines
-    let text = html
-        .replace(/<div>/gi, '\n')
-        .replace(/<\/div>/gi, '')
-        .replace(/<p>/gi, '\n')
-        .replace(/<\/p>/gi, '')
-        .replace(/<br\s*\/?>/gi, '\n');
-
-    // Normalize formatting tags
-    text = text
-        .replace(/<(\/?)strong/gi, '<$1b')
-        .replace(/<(\/?)em/gi, '<$1i');
-
-    // Normalize spaces
-    text = text.replace(/&nbsp;/g, ' ');
-
-    // Strip all tags EXCEPT b, i, u
-    // Regex explanation: Match <...> where content does NOT start with /?(b|i|u) followed by > or space
-    text = text.replace(/<(?!\/?(?:b|i|u)(?:>|\s))[^>]*>/gi, '');
-
-    return text;
 }
 
 const ContentEditable = React.forwardRef<HTMLDivElement, {
@@ -172,7 +142,7 @@ function SegmentItemComponent({
     }, [segment.id]));
 
     // Local state stores HTML for the editor
-    const [editText, setEditText] = useState(() => textToHtml(segment.text));
+    const [editText, setEditText] = useState(() => transcriptTextToEditorHtml(segment.text));
     const [isSpeakerMenuOpen, setIsSpeakerMenuOpen] = useState(false);
     const [showAllSpeakerProfiles, setShowAllSpeakerProfiles] = useState(false);
     const [isApplyingSpeakerProfile, setIsApplyingSpeakerProfile] = useState(false);
@@ -220,7 +190,7 @@ function SegmentItemComponent({
     function handleTextDoubleClick(e: React.MouseEvent): void {
         if (!isEditing) {
             e.stopPropagation();
-            setEditText(textToHtml(segment.text));
+            setEditText(transcriptTextToEditorHtml(segment.text));
             onEdit(segment.id);
         }
     }
@@ -229,12 +199,12 @@ function SegmentItemComponent({
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             // Save current HTML converted to text
-            onSave(segment.id, htmlToText(e.currentTarget.innerHTML));
+            onSave(segment.id, editorHtmlToTranscriptText(e.currentTarget.innerHTML));
             return;
         }
 
         if (e.key === 'Escape') {
-            setEditText(textToHtml(segment.text));
+            setEditText(transcriptTextToEditorHtml(segment.text));
             // Save original (cancel)
             onSave(segment.id, segment.text);
             return;
@@ -259,7 +229,7 @@ function SegmentItemComponent({
     function handleBlur(): void {
         // Use current state or ref? State updates onInput, so editText is up to date (mostly).
         // But safer to use htmlToText(editText)
-        onSave(segment.id, htmlToText(editText));
+        onSave(segment.id, editorHtmlToTranscriptText(editText));
     }
 
     function handleChange(e: React.FormEvent<HTMLDivElement>) {

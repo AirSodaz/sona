@@ -25,8 +25,9 @@ interface WebDavBackupPanelProps {
   onUploadBackup: () => Promise<void>;
 }
 
-function isHttpUrl(value: string): boolean {
-  return value.trim().toLowerCase().startsWith('http://');
+function isNotHttpsUrl(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !trimmed.toLowerCase().startsWith('https://');
 }
 
 function formatRemoteBackupSize(size: number): string {
@@ -203,14 +204,14 @@ export function WebDavBackupPanel({
           </div>
         ) : null}
 
-        {isHttpUrl(webDavConfig.serverUrl) ? (
+        {isNotHttpsUrl(webDavConfig.serverUrl) ? (
           <div
             className="settings-hint"
             style={{ color: 'var(--color-warning-text, #b7791f)' }}
           >
-            {t('settings.backup.cloud_http_warning', {
+            {t('settings.backup.cloud_https_required', {
               defaultValue:
-                'This WebDAV endpoint uses HTTP, so credentials and backup archives are not protected in transit.',
+                'WebDAV cloud sync requires HTTPS to protect credentials and backup archives in transit.',
             })}
           </div>
         ) : null}

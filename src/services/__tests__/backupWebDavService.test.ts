@@ -93,31 +93,14 @@ describe('backupWebDavService', () => {
     });
   });
 
-  it('allows http endpoints for connection tests and returns warning results', async () => {
-    testContext.invokeMock.mockResolvedValue({
-      status: 'warning',
-      message: 'HTTP transport is not encrypted.',
-    });
-
-    const result = await testConnection({
+  it('rejects http endpoints before sending WebDAV credentials', async () => {
+    await expect(testConnection({
       serverUrl: 'http://nas.local/dav',
       remoteDir: 'sona',
       username: 'demo',
       password: 'secret',
-    });
-
-    expect(result).toEqual({
-      status: 'warning',
-      message: 'HTTP transport is not encrypted.',
-    });
-    expect(testContext.invokeMock).toHaveBeenCalledWith('webdav_test_connection', {
-      config: {
-        serverUrl: 'http://nas.local/dav',
-        remoteDir: 'sona',
-        username: 'demo',
-        password: 'secret',
-      },
-    });
+    })).rejects.toThrow('WebDAV server URL must start with https://.');
+    expect(testContext.invokeMock).not.toHaveBeenCalled();
   });
 
   it('passes through the backend-filtered remote backup list without frontend normalization', async () => {

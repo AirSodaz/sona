@@ -3,6 +3,7 @@ import { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript'
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
+import { renderSafeTranscriptRichText } from './richText';
 
 /** Props for SegmentTokens component. */
 export interface SegmentTokensProps {
@@ -153,12 +154,13 @@ function TokenListComponent({
                                     }
                                 }
                             }}
-                            dangerouslySetInnerHTML={{ __html: tokenObj.text }}
-                        />
+                        >
+                            {renderSafeTranscriptRichText(tokenObj.text)}
+                        </span>
                     );
                 })
             ) : (
-                <span dangerouslySetInnerHTML={{ __html: segmentText || '(empty)' }} />
+                <span>{renderSafeTranscriptRichText(segmentText)}</span>
             )}
         </p>
     );

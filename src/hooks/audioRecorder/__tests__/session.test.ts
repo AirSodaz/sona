@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRecordSessionController } from '../session';
+import { createRecordSessionController, createRecordSessionId } from '../session';
 import type { MutableRefLike, RecordSessionPhase, RecordSessionRefs } from '../types';
 
 function createRef<T>(value: T): MutableRefLike<T> {
@@ -7,6 +7,18 @@ function createRef<T>(value: T): MutableRefLike<T> {
 }
 
 describe('createRecordSessionController', () => {
+    it('creates unique record-prefixed session ids without Math.random', () => {
+        const randomSpy = vi.spyOn(Math, 'random');
+
+        const firstSessionId = createRecordSessionId();
+        const secondSessionId = createRecordSessionId();
+
+        expect(firstSessionId).toMatch(/^record-/);
+        expect(secondSessionId).toMatch(/^record-/);
+        expect(firstSessionId).not.toBe(secondSessionId);
+        expect(randomSpy).not.toHaveBeenCalled();
+    });
+
     it('ignores stale resets from an older session', () => {
         const refs: RecordSessionRefs = {
             recordSessionIdRef: createRef<string | null>(null),

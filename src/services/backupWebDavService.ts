@@ -43,8 +43,8 @@ function validateWebDavConfig(config: BackupWebDavConfig): BackupWebDavConfig {
     throw new Error('WebDAV server URL is invalid.');
   }
 
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw new Error('WebDAV server URL must start with http:// or https://.');
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error('WebDAV server URL must start with https://.');
   }
 
   if (!normalized.username) {

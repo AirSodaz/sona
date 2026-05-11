@@ -8,7 +8,21 @@ import type {
 } from './types';
 
 export function createRecordSessionId(): string {
-    return `record-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `record-${crypto.randomUUID()}`;
+    }
+
+    const bytes = new Uint8Array(16);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        crypto.getRandomValues(bytes);
+    } else {
+        for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = (Date.now() + index) % 256;
+        }
+    }
+
+    const randomPart = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `record-${Date.now()}-${randomPart}`;
 }
 
 export function shouldAcceptRecordSegment(phase: RecordSessionPhase, segment: TranscriptSegment): boolean {
