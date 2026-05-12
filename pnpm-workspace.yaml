@@ -1,2 +1,8 @@
 allowBuilds:
   ffmpeg-static: true
+minimumReleaseAgeExclude:
+  - fast-uri@3.1.1
+  - fast-uri@3.1.2
+overrides:
+  fast-uri@<=3.1.0: ^3.1.1
+  fast-uri@<=3.1.1: ^3.1.2
