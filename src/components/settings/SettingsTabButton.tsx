@@ -24,6 +24,7 @@ export function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab, ta
             className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
             onClick={() => setActiveTab(id)}
             role="tab"
+            aria-label={label}
             aria-selected={activeTab === id}
             aria-controls={`settings-panel-${id}`}
             id={`settings-tab-${id}`}
