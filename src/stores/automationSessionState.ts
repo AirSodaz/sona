@@ -180,6 +180,11 @@ export function deriveRuntimeState(
   const latest = ruleEntries[0];
   const failureCount = ruleEntries.filter((entry) => entry.status === 'error').length;
 
+  let computedLastResult: AutomationRuntimeState['lastResult'] = existing?.lastResult;
+  if (latest) {
+    computedLastResult = latest.status === 'complete' ? 'success' : 'error';
+  }
+
   return {
     ruleId,
     status: resolveRuntimeOverride(overrides, 'status', existing?.status ?? 'stopped'),
@@ -193,7 +198,7 @@ export function deriveRuntimeState(
     lastResult: resolveRuntimeOverride(
       overrides,
       'lastResult',
-      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult,
+      computedLastResult,
     ),
     lastResultMessage: resolveRuntimeOverride(
       overrides,

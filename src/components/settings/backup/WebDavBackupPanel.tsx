@@ -257,76 +257,74 @@ export function WebDavBackupPanel({
           </button>
         </div>
 
-        {hasLoadedRemoteBackups ? (
-          remoteBackups.length > 0 ? (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                marginTop: '4px',
-              }}
-            >
-              <div className="settings-label" style={{ marginBottom: 0 }}>
-                {t('settings.backup.cloud_list_title', {
-                  defaultValue: 'Remote Snapshots',
-                })}
-              </div>
-              {remoteBackups.map((entry) => (
-                <div
-                  key={entry.href}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    background: 'var(--color-bg-elevated)',
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontWeight: 500,
-                        color: 'var(--color-text-primary)',
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {entry.fileName}
-                    </div>
-                    <div className="settings-hint">
-                      {formatRemoteBackupModifiedAt(entry.modifiedAt, t)} ·{' '}
-                      {formatRemoteBackupSize(entry.size)}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => onRestoreRemoteBackup(entry)}
-                    disabled={webDavTransferDisabled}
-                  >
-                    {busyAction === 'webdav_restore'
-                      ? t('settings.backup.cloud_restore_busy', {
-                          defaultValue: 'Preparing...',
-                        })
-                      : t('settings.backup.cloud_restore_button', {
-                          defaultValue: 'Restore',
-                        })}
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="settings-hint">
-              {t('settings.backup.cloud_empty', {
-                defaultValue:
-                  'No WebDAV backup archives were found in the current remote directory.',
+        {!hasLoadedRemoteBackups ? null : remoteBackups.length > 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              marginTop: '4px',
+            }}
+          >
+            <div className="settings-label" style={{ marginBottom: 0 }}>
+              {t('settings.backup.cloud_list_title', {
+                defaultValue: 'Remote Snapshots',
               })}
             </div>
-          )
-        ) : null}
+            {remoteBackups.map((entry) => (
+              <div
+                key={entry.href}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-bg-elevated)',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 500,
+                      color: 'var(--color-text-primary)',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {entry.fileName}
+                  </div>
+                  <div className="settings-hint">
+                    {formatRemoteBackupModifiedAt(entry.modifiedAt, t)} ·{' '}
+                    {formatRemoteBackupSize(entry.size)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => onRestoreRemoteBackup(entry)}
+                  disabled={webDavTransferDisabled}
+                >
+                  {busyAction === 'webdav_restore'
+                    ? t('settings.backup.cloud_restore_busy', {
+                        defaultValue: 'Preparing...',
+                      })
+                    : t('settings.backup.cloud_restore_button', {
+                        defaultValue: 'Restore',
+                      })}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="settings-hint">
+            {t('settings.backup.cloud_empty', {
+              defaultValue:
+                'No WebDAV backup archives were found in the current remote directory.',
+            })}
+          </div>
+        )}
       </div>
     </SettingsAccordion>
   );

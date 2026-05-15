@@ -439,14 +439,15 @@ export function TranscriptVersionPanel({
           </aside>
 
           <section className="transcript-version-diff" aria-label={t('versions.diff_label')}>
-            {selectedRecord ? (
-              isDiffLoading ? (
-                <div className="transcript-version-empty">
-                  <Loader2 size={16} className="queue-icon-spin" />
-                  {t('versions.loading')}
-                </div>
-              ) : (
-                <>
+            {!selectedRecord ? (
+              <div className="transcript-version-empty">{t('versions.choose_snapshot')}</div>
+            ) : isDiffLoading ? (
+              <div className="transcript-version-empty">
+                <Loader2 size={16} className="queue-icon-spin" />
+                {t('versions.loading')}
+              </div>
+            ) : (
+              <>
                 <div className="transcript-version-diff-toolbar">
                   <button
                     type="button"
@@ -502,10 +503,7 @@ export function TranscriptVersionPanel({
                     );
                   })}
                 </div>
-                </>
-              )
-            ) : (
-              <div className="transcript-version-empty">{t('versions.choose_snapshot')}</div>
+              </>
             )}
           </section>
         </div>

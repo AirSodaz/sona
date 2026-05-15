@@ -151,13 +151,16 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         type: 'streaming' | 'offline' | 'speakerSegmentation' | 'speakerEmbedding',
         modelId: string,
     ) => {
-        const configKey = type === 'streaming'
-            ? 'streamingModelPath'
-            : type === 'offline'
-                ? 'offlineModelPath'
-                : type === 'speakerSegmentation'
-                    ? 'speakerSegmentationModelPath'
-                    : 'speakerEmbeddingModelPath';
+        let configKey: 'streamingModelPath' | 'offlineModelPath' | 'speakerSegmentationModelPath' | 'speakerEmbeddingModelPath';
+        if (type === 'streaming') {
+            configKey = 'streamingModelPath';
+        } else if (type === 'offline') {
+            configKey = 'offlineModelPath';
+        } else if (type === 'speakerSegmentation') {
+            configKey = 'speakerSegmentationModelPath';
+        } else {
+            configKey = 'speakerEmbeddingModelPath';
+        }
 
         if (!modelId) {
             updateConfig({ [configKey]: '' });

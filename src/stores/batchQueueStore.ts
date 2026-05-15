@@ -199,9 +199,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     addFiles: (filePaths, options) => {
         const projectStore = useProjectStore.getState();
         const activeProjectId = options?.projectId ?? projectStore.activeProjectId;
-        const activeProject = activeProjectId
-            ? (typeof projectStore.getProjectById === 'function' ? projectStore.getProjectById(activeProjectId) : null)
-            : (typeof projectStore.getActiveProject === 'function' ? projectStore.getActiveProject() : null);
+        let activeProject: { defaults: { exportFileNamePrefix?: string } } | null = null;
+        if (activeProjectId) {
+            if (typeof projectStore.getProjectById === 'function') {
+                activeProject = projectStore.getProjectById(activeProjectId);
+            }
+        } else {
+            if (typeof projectStore.getActiveProject === 'function') {
+                activeProject = projectStore.getActiveProject();
+            }
+        }
         const resolvedConfigSnapshot = options?.resolvedConfigSnapshot
             ?? getEffectiveConfigSnapshot();
         const exportFileNamePrefix = options?.exportFileNamePrefix
