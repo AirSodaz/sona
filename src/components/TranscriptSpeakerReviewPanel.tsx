@@ -423,17 +423,24 @@ export function TranscriptSpeakerReviewPanel({
           </div>
 
           <div className="transcript-speaker-review-list">
-            {isSnapshotLoading && visibleGroups.length === 0 ? (
-              <div className="transcript-speaker-review-empty">
-                <Loader2 size={18} className="queue-icon-spin" />
-                {t('common.loading', { defaultValue: 'Loading...' })}
-              </div>
-            ) : visibleGroups.length === 0 ? (
-              <div className="transcript-speaker-review-empty">
-                <CheckCircle2 size={18} />
-                {t('editor.speaker_review_empty')}
-              </div>
-            ) : visibleGroups.map((group) => {
+            {(() => {
+              if (isSnapshotLoading && visibleGroups.length === 0) {
+                return (
+                  <div className="transcript-speaker-review-empty">
+                    <Loader2 size={18} className="queue-icon-spin" />
+                    {t('common.loading', { defaultValue: 'Loading...' })}
+                  </div>
+                );
+              }
+              if (visibleGroups.length === 0) {
+                return (
+                  <div className="transcript-speaker-review-empty">
+                    <CheckCircle2 size={18} />
+                    {t('editor.speaker_review_empty')}
+                  </div>
+                );
+              }
+              return visibleGroups.map((group) => {
               const isBusy = busyGroupId === group.groupId;
               const isActive = effectiveActiveGroupId === group.groupId;
               const showAllProfiles = expandedGroupIds.has(group.groupId);
@@ -591,7 +598,8 @@ export function TranscriptSpeakerReviewPanel({
                   </div>
                 </article>
               );
-            })}
+            });
+            })()}
           </div>
         </div>
       </div>

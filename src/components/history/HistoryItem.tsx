@@ -146,11 +146,13 @@ function HistoryItemComponent({
         : t('projects.filter_recordings', { defaultValue: 'Recordings' });
     const isDraft = isHistoryItemDraft(item);
     const isLiveDraft = isLiveRecordDraftHistoryItem(item);
-    const previewText = item.previewText
-        ? item.previewText
-        : isLiveDraft
-            ? t('history.live_record_draft_description', { defaultValue: 'Interrupted live recording draft' })
-            : null;
+
+    let previewText: string | null = null;
+    if (item.previewText) {
+        previewText = item.previewText;
+    } else if (isLiveDraft) {
+        previewText = t('history.live_record_draft_description', { defaultValue: 'Interrupted live recording draft' });
+    }
 
     const handleClick = (e: React.MouseEvent) => {
         if (isSelectionMode && onToggleSelection) {
@@ -225,11 +227,15 @@ function HistoryItemComponent({
 
                 {layout !== 'table' && (
                     <p className="history-item-preview">
-                        {searchQuery.trim() && searchSnippet
-                            ? renderSnippet(searchSnippet)
-                            : previewText
-                            ? previewText
-                            : <em>{t('history.no_transcript')}</em>}
+                        {(() => {
+                            if (searchQuery.trim() && searchSnippet) {
+                                return renderSnippet(searchSnippet);
+                            }
+                            if (previewText) {
+                                return previewText;
+                            }
+                            return <em>{t('history.no_transcript')}</em>;
+                        })()}
                     </p>
                 )}
 

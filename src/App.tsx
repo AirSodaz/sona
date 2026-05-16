@@ -272,7 +272,7 @@ function App(): React.JSX.Element {
       {/* {isCaptionMode && isRecording && <LiveCaptionOverlay />} */}
 
       {/* Settings Modal */}
-      {isSettingsOpen || shouldPrewarmSettings ? (
+      {(isSettingsOpen || shouldPrewarmSettings) && (
         <Suspense fallback={null}>
           <SettingsModal
             isOpen={isSettingsOpen}
@@ -282,7 +282,7 @@ function App(): React.JSX.Element {
             onOpenDiagnostics={openDiagnostics}
           />
         </Suspense>
-      ) : null}
+      )}
       {isDiagnosticsOpen ? (
         <Suspense fallback={null}>
           <DiagnosticsPanel
