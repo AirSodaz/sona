@@ -274,6 +274,8 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             className="btn btn-icon"
             onClick={() => { void handleCloseRequest(); }}
             aria-label={t('common.close')}
+            data-tooltip={t('common.close')}
+            data-tooltip-pos="bottom-left"
           >
             <XIcon />
           </button>
