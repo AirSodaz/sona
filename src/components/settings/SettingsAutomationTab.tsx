@@ -382,90 +382,88 @@ export function SettingsAutomationTab(): React.JSX.Element {
                     defaultValue: 'Each rule binds to a project. Language, Polish Preset, and Export Prefix are configured independently.',
                 })}
             >
-                <div className="settings-section-content">
-                    <div className="settings-item-container layout-horizontal">
+                <div className="settings-item-container layout-horizontal">
+                    <div className="settings-item-info">
+                        <div className="settings-item-title">
+                            {projects.length === 0
+                                ? t('automation.no_projects', { defaultValue: 'Create a project first before adding automation rules.' })
+                                : t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: rules.length })}
+                        </div>
+                        <div className="settings-item-hint">
+                            {t('automation.list_hint', {
+                                defaultValue: 'Configure folder monitoring and define behavior for each automation stage.',
+                            })}
+                        </div>
+                    </div>
+                    <div className="settings-item-action">
+                        <button className="btn btn-primary" onClick={beginCreateRule} disabled={projects.length === 0}>
+                            {t('automation.new_rule', { defaultValue: 'New Rule' })}
+                        </button>
+                    </div>
+                </div>
+
+                {newRuleDraft && (
+                    <AutomationRuleCard
+                        title={newRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' })}
+                        projectLabel={projectOptions.find((opt) => opt.value === newRuleDraft.projectId)?.label
+                            || t('projects.unknown_project')}
+                        watchDirectory={newRuleDraft.watchDirectory}
+                        outputDirectory={newRuleDraft.exportConfig.directory}
+                        resultLabel={t('automation.draft_badge', { defaultValue: 'Draft' })}
+                        enabled={true}
+                        canToggle={false}
+                        isExpanded={expandedRuleIds.has(NEW_RULE_KEY)}
+                        onToggleExpand={() => toggleExpanded(NEW_RULE_KEY, createRuleDraft('inbox'))}
+                        editor={createEditor(NEW_RULE_KEY, newRuleDraft)}
+                    />
+                )}
+
+                {rules.length === 0 && !newRuleDraft ? (
+                    <div className="settings-item-container">
                         <div className="settings-item-info">
                             <div className="settings-item-title">
-                                {projects.length === 0
-                                    ? t('automation.no_projects', { defaultValue: 'Create a project first before adding automation rules.' })
-                                    : t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: rules.length })}
+                                {t('automation.empty_title', { defaultValue: 'No automation rules yet.' })}
                             </div>
                             <div className="settings-item-hint">
-                                {t('automation.list_hint', {
-                                    defaultValue: 'Configure folder monitoring and define behavior for each automation stage.',
+                                {t('automation.empty_hint', {
+                                    defaultValue: 'Add a rule to keep a folder watched and push new files through the batch pipeline automatically.',
                                 })}
                             </div>
                         </div>
-                        <div className="settings-item-action">
-                            <button className="btn btn-primary" onClick={beginCreateRule} disabled={projects.length === 0}>
-                                {t('automation.new_rule', { defaultValue: 'New Rule' })}
-                            </button>
-                        </div>
                     </div>
+                ) : rules.map((rule: AutomationRule) => {
+                    const draft = drafts[rule.id];
+                    const displayRule = draft || createDraftFromRule(rule);
+                    const runtime = runtimeStates[rule.id];
+                    const queueSummary = queueSummaryByRuleId.get(rule.id);
 
-                    {newRuleDraft && (
+                    return (
                         <AutomationRuleCard
-                            title={newRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' })}
-                            projectLabel={projectOptions.find((opt) => opt.value === newRuleDraft.projectId)?.label
+                            key={rule.id}
+                            title={displayRule.name}
+                            projectLabel={projectOptions.find((opt) => opt.value === displayRule.projectId)?.label
                                 || t('projects.unknown_project')}
-                            watchDirectory={newRuleDraft.watchDirectory}
-                            outputDirectory={newRuleDraft.exportConfig.directory}
-                            resultLabel={t('automation.draft_badge', { defaultValue: 'Draft' })}
-                            enabled={true}
-                            canToggle={false}
-                            isExpanded={expandedRuleIds.has(NEW_RULE_KEY)}
-                            onToggleExpand={() => toggleExpanded(NEW_RULE_KEY, createRuleDraft('inbox'))}
-                            editor={createEditor(NEW_RULE_KEY, newRuleDraft)}
+                            watchDirectory={displayRule.watchDirectory}
+                            outputDirectory={displayRule.exportConfig.directory}
+                            statusLabel={getRuntimeStatusLabel(runtime?.status)}
+                            resultLabel={describeLastResult(rule.id)}
+                            failureCount={runtime?.failureCount || 0}
+                            pendingCount={queueSummary?.pending || 0}
+                            processingCount={queueSummary?.processing || 0}
+                            resultMessage={runtime?.lastResultMessage}
+                            blockedHint={describeLatestBlockedHint(rule.id)}
+                            enabled={rule.enabled}
+                            canToggle={true}
+                            isExpanded={expandedRuleIds.has(rule.id)}
+                            onToggleExpand={() => toggleExpanded(rule.id, createDraftFromRule(rule))}
+                            onToggleEnabled={(value) => { void handleToggleRule(rule, value); }}
+                            onScanNow={() => { void handleScanNow(rule.id); }}
+                            onRetryFailed={() => { void handleRetryFailed(rule.id); }}
+                            onDelete={() => { void handleDelete(rule.id); }}
+                            editor={createEditor(rule.id, displayRule)}
                         />
-                    )}
-
-                    {rules.length === 0 && !newRuleDraft ? (
-                        <div className="settings-item-container">
-                            <div className="settings-item-info">
-                                <div className="settings-item-title">
-                                    {t('automation.empty_title', { defaultValue: 'No automation rules yet.' })}
-                                </div>
-                                <div className="settings-item-hint">
-                                    {t('automation.empty_hint', {
-                                        defaultValue: 'Add a rule to keep a folder watched and push new files through the batch pipeline automatically.',
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    ) : rules.map((rule: AutomationRule) => {
-                        const draft = drafts[rule.id];
-                        const displayRule = draft || createDraftFromRule(rule);
-                        const runtime = runtimeStates[rule.id];
-                        const queueSummary = queueSummaryByRuleId.get(rule.id);
-
-                        return (
-                            <AutomationRuleCard
-                                key={rule.id}
-                                title={displayRule.name}
-                                projectLabel={projectOptions.find((opt) => opt.value === displayRule.projectId)?.label
-                                    || t('projects.unknown_project')}
-                                watchDirectory={displayRule.watchDirectory}
-                                outputDirectory={displayRule.exportConfig.directory}
-                                statusLabel={getRuntimeStatusLabel(runtime?.status)}
-                                resultLabel={describeLastResult(rule.id)}
-                                failureCount={runtime?.failureCount || 0}
-                                pendingCount={queueSummary?.pending || 0}
-                                processingCount={queueSummary?.processing || 0}
-                                resultMessage={runtime?.lastResultMessage}
-                                blockedHint={describeLatestBlockedHint(rule.id)}
-                                enabled={rule.enabled}
-                                canToggle={true}
-                                isExpanded={expandedRuleIds.has(rule.id)}
-                                onToggleExpand={() => toggleExpanded(rule.id, createDraftFromRule(rule))}
-                                onToggleEnabled={(value) => { void handleToggleRule(rule, value); }}
-                                onScanNow={() => { void handleScanNow(rule.id); }}
-                                onRetryFailed={() => { void handleRetryFailed(rule.id); }}
-                                onDelete={() => { void handleDelete(rule.id); }}
-                                editor={createEditor(rule.id, displayRule)}
-                            />
-                        );
-                    })}
-                </div>
+                    );
+                })}
             </SettingsSection>
         </SettingsTabContainer>
     );

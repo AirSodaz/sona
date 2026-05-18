@@ -223,6 +223,11 @@
   gap: var(--spacing-md, 16px);
 }
 
+.settings-section-content > .accordion-wrapper:last-child .accordion-content-panel {
+  border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
+}
+
 /* --- Model Card overrides for unified linear layout within sections --- */
 .settings-section-content .model-card {
   border: none;

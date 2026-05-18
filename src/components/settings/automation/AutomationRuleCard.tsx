@@ -105,7 +105,6 @@ export function AutomationRuleCard({
     return (
         <div
             style={{
-                borderBottom: '1px solid var(--color-border-subtle)',
                 background: enabled ? 'var(--color-bg-primary)' : 'var(--color-bg-secondary-soft)',
             }}
         >
