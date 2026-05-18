@@ -207,15 +207,18 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     await persistDraftIfNeeded();
   };
 
-  const statusLabel = isGenerating
-    ? generationProgress > 0
-      ? t('summary.generating_progress', { progress: generationProgress })
-      : t('summary.generating_short')
-    : isSaving
-      ? t('summary.saving')
-      : record && isStale
-        ? t('summary.stale')
-        : null;
+  let statusLabel: string | null = null;
+  if (isGenerating) {
+    if (generationProgress > 0) {
+      statusLabel = t('summary.generating_progress', { progress: generationProgress });
+    } else {
+      statusLabel = t('summary.generating_short');
+    }
+  } else if (isSaving) {
+    statusLabel = t('summary.saving');
+  } else if (record && isStale) {
+    statusLabel = t('summary.stale');
+  }
 
   return (
     <div className="settings-overlay" onClick={() => { void handleCloseRequest(); }} style={{ zIndex: 2000 }}>

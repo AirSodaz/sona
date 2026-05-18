@@ -74,6 +74,22 @@ export function resolveVoiceTypingReadinessSnapshot(
         state = 'ready';
     }
 
+    let inputDeviceState: 'off' | 'ready' | 'failed' = 'ready';
+    if (!config.voiceTypingEnabled) {
+        inputDeviceState = 'off';
+    } else if (runtime.lastErrorSource === 'microphone') {
+        inputDeviceState = 'failed';
+    }
+
+    let runtimeState: 'off' | 'preparing' | 'ready' | 'failed' = 'preparing';
+    if (!config.voiceTypingEnabled) {
+        runtimeState = 'off';
+    } else if (state === 'failed') {
+        runtimeState = 'failed';
+    } else if (state === 'ready') {
+        runtimeState = 'ready';
+    }
+
     return {
         state,
         shortcutConfigured,
@@ -82,18 +98,8 @@ export function resolveVoiceTypingReadinessSnapshot(
         vadConfigured,
         shortcutRegistration: runtime.shortcutRegistration,
         warmup: runtime.warmup,
-        inputDeviceState: !config.voiceTypingEnabled
-            ? 'off'
-            : runtime.lastErrorSource === 'microphone'
-                ? 'failed'
-                : 'ready',
-        runtimeState: !config.voiceTypingEnabled
-            ? 'off'
-            : state === 'failed'
-                ? 'failed'
-                : state === 'ready'
-                    ? 'ready'
-                    : 'preparing',
+        inputDeviceState,
+        runtimeState,
         lastErrorSource: runtime.lastErrorSource,
         lastErrorMessage: runtime.lastErrorMessage,
     };
