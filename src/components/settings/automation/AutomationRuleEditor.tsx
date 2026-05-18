@@ -180,13 +180,13 @@ export function AutomationRuleEditor({
                     />
                 </SettingsItem>
 
-                <SettingsItem title={t('automation.target_project', { defaultValue: 'Target Project' })} layout="vertical">
+                <SettingsItem title={t('automation.target_project', { defaultValue: 'Target' })} layout="vertical">
                     <Dropdown
                         value={draft.projectId}
                         onChange={(value) => onUpdateDraft(setDraftField('projectId', value))}
                         options={projectOptions}
                         style={{ width: '100%' }}
-                        aria-label={t('automation.target_project', { defaultValue: 'Target Project' })}
+                        aria-label={t('automation.target_project', { defaultValue: 'Target' })}
                     />
                 </SettingsItem>
             </div>

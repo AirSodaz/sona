@@ -195,7 +195,7 @@ describe('SettingsAutomationTab', () => {
         expect(screen.getByRole('button', { name: 'Polish Preset' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Format' })).toBeDefined();
         expect(screen.getByRole('button', { name: 'Export Mode' })).toBeDefined();
-        expect(screen.getByRole('button', { name: 'Target Project' })).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Target' })).toBeDefined();
         expect(screen.getByRole('switch', { name: 'Watch Subfolders' })).toBeDefined();
         expect(screen.queryByRole('button', { name: 'Target Language' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Apply Template' })).toBeNull();
@@ -379,7 +379,7 @@ describe('SettingsAutomationTab', () => {
             target: { value: 'C:\\exports\\subs' },
         });
 
-        chooseDropdownOption('Target Project', 'Team Sync');
+        chooseDropdownOption('Target', 'Team Sync');
         fireEvent.click(screen.getByRole('switch', { name: 'Auto-Translate' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Auto-Export' }));
         fireEvent.click(screen.getByRole('switch', { name: 'Watch Subfolders' }));
@@ -418,6 +418,55 @@ describe('SettingsAutomationTab', () => {
         });
     });
 
+    it('allows creating an Inbox automation rule before any project exists', async () => {
+        useProjectStore.setState({
+            ...useProjectStore.getState(),
+            projects: [],
+            activeProjectId: null,
+        });
+        useAutomationStore.setState({
+            ...useAutomationStore.getState(),
+            rules: [],
+            runtimeStates: {},
+        });
+        useBatchQueueStore.setState({
+            queueItems: [],
+        } as any);
+
+        render(<SettingsAutomationTab />);
+
+        const newRuleButton = screen.getByRole('button', { name: 'New Rule' }) as HTMLButtonElement;
+        expect(newRuleButton.disabled).toBe(false);
+        expect(screen.queryByText('Create a project first before adding automation rules.')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
+
+        expect(screen.getByRole('button', { name: 'Target' }).textContent).toContain('Inbox');
+
+        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), {
+            target: { value: 'Inbox Automation' },
+        });
+        fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), {
+            target: { value: 'C:\\watch\\inbox' },
+        });
+        fireEvent.change(screen.getByPlaceholderText('Choose where exports should be written...'), {
+            target: { value: 'C:\\exports\\inbox' },
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+        await waitFor(() => {
+            expect(saveRuleMock).toHaveBeenCalledWith(expect.objectContaining({
+                name: 'Inbox Automation',
+                projectId: 'inbox',
+                watchDirectory: 'C:\\watch\\inbox',
+                exportConfig: expect.objectContaining({
+                    directory: 'C:\\exports\\inbox',
+                }),
+            }));
+        });
+    });
+
     it('keeps required-field validation on the warning alert path', async () => {
         render(<SettingsAutomationTab />);
 
@@ -426,7 +475,7 @@ describe('SettingsAutomationTab', () => {
 
         await waitFor(() => {
             expect(alertMock).toHaveBeenCalledWith(
-                'Complete the name, project, watch directory, and output directory before saving.',
+                'Complete the name, target, watch directory, and output directory before saving.',
                 { variant: 'warning' },
             );
         });

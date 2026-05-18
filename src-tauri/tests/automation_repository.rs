@@ -161,6 +161,51 @@ fn validation_creates_the_output_directory_for_valid_rules() {
 }
 
 #[test]
+fn validation_accepts_inbox_without_project_record() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = dir.path().join("exports");
+    let offline_model_dir = dir.path().join("offline-model");
+    fs::create_dir_all(&watch_dir).unwrap();
+    fs::create_dir_all(&offline_model_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        export_dir.to_string_lossy().into_owned(),
+        |rule| {
+            rule.project_id = "inbox".to_string();
+        },
+    );
+    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+
+    let result = validate_rule_activation_inner(&rule, &global_config, None);
+
+    assert!(result.valid);
+}
+
+#[test]
+fn validation_rejects_missing_real_project_record() {
+    let dir = tempdir().unwrap();
+    let watch_dir = dir.path().join("watch");
+    let export_dir = dir.path().join("exports");
+    let offline_model_dir = dir.path().join("offline-model");
+    fs::create_dir_all(&watch_dir).unwrap();
+    fs::create_dir_all(&offline_model_dir).unwrap();
+    let rule = sample_rule(
+        watch_dir.to_string_lossy().into_owned(),
+        export_dir.to_string_lossy().into_owned(),
+        |rule| {
+            rule.project_id = "missing-project".to_string();
+        },
+    );
+    let global_config = valid_global_config(offline_model_dir.to_string_lossy().as_ref());
+
+    let result = validate_rule_activation_inner(&rule, &global_config, None);
+
+    assert!(!result.valid);
+    assert_eq!(result.code.as_deref(), Some("automation.project_missing"));
+}
+
+#[test]
 fn validation_requires_feature_models_when_auto_stages_are_enabled() {
     let dir = tempdir().unwrap();
     let watch_dir = dir.path().join("watch");

@@ -273,7 +273,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
         if (!draft.name.trim() || !draft.projectId || !draft.watchDirectory.trim() || !draft.exportConfig.directory.trim()) {
             await alert(
                 t('automation.required_fields', {
-                    defaultValue: 'Complete the name, project, watch directory, and output directory before saving.',
+                    defaultValue: 'Complete the name, target, watch directory, and output directory before saving.',
                 }),
                 { variant: 'warning' },
             );
@@ -379,15 +379,13 @@ export function SettingsAutomationTab(): React.JSX.Element {
             <SettingsSection
                 title={t('automation.rules', { defaultValue: 'Rules' })}
                 description={t('automation.rules_description', {
-                    defaultValue: 'Each rule binds to a project. Language, Polish Preset, and Export Prefix are configured independently.',
+                    defaultValue: 'Each rule can target a project, Inbox, or no saved record. Language, Polish Preset, and Export Prefix are configured independently.',
                 })}
             >
                 <div className="settings-item-container layout-horizontal">
                     <div className="settings-item-info">
                         <div className="settings-item-title">
-                            {projects.length === 0
-                                ? t('automation.no_projects', { defaultValue: 'Create a project first before adding automation rules.' })
-                                : t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: rules.length })}
+                            {t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: rules.length })}
                         </div>
                         <div className="settings-item-hint">
                             {t('automation.list_hint', {
@@ -396,7 +394,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         </div>
                     </div>
                     <div className="settings-item-action">
-                        <button className="btn btn-primary" onClick={beginCreateRule} disabled={projects.length === 0}>
+                        <button className="btn btn-primary" onClick={beginCreateRule}>
                             {t('automation.new_rule', { defaultValue: 'New Rule' })}
                         </button>
                     </div>

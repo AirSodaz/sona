@@ -270,6 +270,10 @@ fn valid_validation() -> AutomationRuleValidationResult {
     }
 }
 
+fn is_virtual_automation_project(project_id: &str) -> bool {
+    matches!(project_id, "inbox" | "none")
+}
+
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
     global_config: &Value,
@@ -279,7 +283,7 @@ pub fn validate_rule_activation_inner(
         return invalid_validation("automation.name_required", "Rule name is required.");
     }
 
-    if project.is_none() {
+    if project.is_none() && !is_virtual_automation_project(&rule.project_id) {
         return invalid_validation("automation.project_missing", "Select a target project.");
     }
 
