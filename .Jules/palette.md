@@ -1,0 +1,3 @@
+## 2024-05-18 - Audio Slider Keyboard Navigation Outline
+**Learning:** Range sliders used for audio playback seeking and volume lacked `:focus-visible` styles, resulting in no visual feedback when navigating via keyboard (tabbing). This pattern is a common accessibility omission for native inputs wrapped in custom styles.
+**Action:** Added `.audio-slider:focus-visible` to `src/styles/workflow-surfaces.css` applying a 2px `outline` using the primary accent color. For future custom native form elements, ensure `:focus-visible` styling is explicitly re-implemented to preserve keyboard accessibility.
