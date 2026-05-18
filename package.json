@@ -1,7 +1,7 @@
 {
   "name": "tauri-appsona",
   "private": true,
-  "version": "0.6.5",
+  "version": "0.6.6",
   "type": "module",
   "packageManager": "pnpm@11.0.3",
   "scripts": {
