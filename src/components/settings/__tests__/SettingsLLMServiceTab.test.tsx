@@ -364,4 +364,132 @@ describe('SettingsLLMServiceTab', () => {
       expect(screen.getByText('Network Error')).toBeDefined();
     });
   });
+
+  it('adds a custom provider and expands its credentials panel', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' }));
+    });
+
+    expect(screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeDefined();
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('settings.llm.custom_provider_name'), {
+        target: { value: 'Private Gateway' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.api_mode_openai_responses' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider_confirm' }));
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      llmSettings: expect.objectContaining({
+        activeProvider: 'custom-private-gateway',
+        customProviders: expect.objectContaining({
+          'custom-private-gateway': expect.objectContaining({
+            name: 'Private Gateway',
+            strategy: 'openai_responses',
+          }),
+        }),
+        providers: expect.objectContaining({
+          'custom-private-gateway': expect.objectContaining({
+            apiHost: '',
+            apiPath: '/v1/responses',
+          }),
+        }),
+      }),
+    }));
+
+    currentConfig = {
+      ...currentConfig,
+      llmSettings: mockUpdateConfig.mock.calls[mockUpdateConfig.mock.calls.length - 1]?.[0].llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    expect(screen.getByText('Private Gateway')).toBeDefined();
+    expect(screen.getByTestId('provider-accordion-content-custom-private-gateway')).toBeDefined();
+  });
+
+  it('keeps configured custom providers at the bottom of the credentials list', async () => {
+    const conf = buildConfig();
+    conf.llmSettings!.activeProvider = 'custom-private-gateway';
+    conf.llmSettings!.customProviders = {
+      'custom-private-gateway': {
+        id: 'custom-private-gateway',
+        name: 'Private Gateway',
+        strategy: 'openai_compatible',
+        createdAt: '2026-05-18T00:00:00.000Z',
+      },
+    };
+    conf.llmSettings!.providers['custom-private-gateway'] = {
+      apiHost: 'https://gateway.example.com/v1',
+      apiKey: 'gateway-key',
+      apiPath: '/v1/chat/completions',
+    };
+    currentConfig = conf;
+
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = render(
+        <SettingsLLMServiceTab />,
+      ));
+    });
+
+    const credentialsList = container.querySelector('.accordion-container');
+    const customProvider = screen.getByText('Private Gateway');
+    const lastBuiltInProvider = screen.getByText('ChatGLM');
+    const addButton = screen.getByRole('button', { name: 'settings.llm.add_custom_provider' });
+
+    expect(credentialsList?.contains(customProvider)).toBe(true);
+    expect(credentialsList?.contains(addButton)).toBe(true);
+    expect(
+      lastBuiltInProvider.compareDocumentPosition(customProvider) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      customProvider.compareDocumentPosition(addButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('offers configured custom providers in feature model selectors', async () => {
+    const createdAt = '2026-05-18T00:00:00.000Z';
+    const conf = buildConfig();
+    conf.llmSettings!.customProviders = {
+      'custom-private-gateway': {
+        id: 'custom-private-gateway',
+        name: 'Private Gateway',
+        strategy: 'openai_compatible',
+        createdAt,
+      },
+    };
+    conf.llmSettings!.providers['custom-private-gateway'] = {
+      apiHost: 'https://gateway.example.com/v1',
+      apiKey: 'gateway-key',
+      apiPath: '/v1/chat/completions',
+    };
+    currentConfig = conf;
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /OpenAI/ })[0]);
+    });
+
+    expect(screen.getByRole('option', { name: 'Private Gateway' })).toBeDefined();
+  });
 });

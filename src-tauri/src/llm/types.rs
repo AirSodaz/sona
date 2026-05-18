@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum LlmProvider {
+pub enum LlmProviderStrategy {
     OpenAi,
     OpenAiResponses,
     #[serde(rename = "azure_openai")]
@@ -30,7 +30,70 @@ pub enum LlmProvider {
     #[serde(rename = "google_translate_free")]
     GoogleTranslateFree,
     OpenAiCompatible,
+    OpenAiCompatibleCustomPath,
 }
+
+impl LlmProviderStrategy {
+    pub(crate) fn from_provider_id(provider: &str) -> Self {
+        match provider {
+            "open_ai" | "openai_compatible" | "open_ai_compatible" => Self::OpenAiCompatible,
+            "open_ai_responses" => Self::OpenAiResponses,
+            "azure_openai" => Self::AzureOpenAi,
+            "anthropic" => Self::Anthropic,
+            "gemini" => Self::Gemini,
+            "ollama" => Self::Ollama,
+            "deep_seek" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal"
+            | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq"
+            | "x_ai" | "mistral_ai" | "chatglm" => Self::OpenAiCompatible,
+            "perplexity" => Self::Perplexity,
+            "volcengine" => Self::OpenAiCompatibleCustomPath,
+            "google_translate" => Self::GoogleTranslate,
+            "google_translate_free" => Self::GoogleTranslateFree,
+            _ => Self::OpenAiCompatible,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for LlmProviderStrategy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Ok(match value.as_str() {
+            "open_ai" => Self::OpenAi,
+            "open_ai_responses" | "openai_responses" => Self::OpenAiResponses,
+            "azure_openai" => Self::AzureOpenAi,
+            "anthropic" => Self::Anthropic,
+            "gemini" => Self::Gemini,
+            "ollama" => Self::Ollama,
+            "deep_seek" => Self::DeepSeek,
+            "kimi" => Self::Kimi,
+            "silicon_flow" => Self::SiliconFlow,
+            "qwen" => Self::Qwen,
+            "qwen_portal" => Self::QwenPortal,
+            "minimax_global" => Self::MinimaxGlobal,
+            "minimax_cn" => Self::MinimaxCn,
+            "openrouter" | "open_router" => Self::OpenRouter,
+            "lm_studio" => Self::LmStudio,
+            "groq" => Self::Groq,
+            "x_ai" => Self::XAi,
+            "mistral_ai" => Self::MistralAi,
+            "perplexity" => Self::Perplexity,
+            "volcengine" => Self::Volcengine,
+            "chatglm" => Self::Chatglm,
+            "google_translate" => Self::GoogleTranslate,
+            "google_translate_free" => Self::GoogleTranslateFree,
+            "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,
+            "open_ai_compatible_custom_path" | "openai_compatible_custom_path" => {
+                Self::OpenAiCompatibleCustomPath
+            }
+            _ => Self::OpenAiCompatible,
+        })
+    }
+}
+
+pub type LlmProvider = String;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -77,16 +140,51 @@ pub struct SummaryTemplateConfig {
     pub instructions: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmConfig {
     pub provider: LlmProvider,
+    pub strategy: LlmProviderStrategy,
     pub base_url: String,
     pub api_key: String,
     pub model: String,
     pub api_path: Option<String>,
     pub api_version: Option<String>,
     pub temperature: Option<f32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawLlmConfig {
+    provider: LlmProvider,
+    strategy: Option<LlmProviderStrategy>,
+    base_url: String,
+    api_key: String,
+    model: String,
+    api_path: Option<String>,
+    api_version: Option<String>,
+    temperature: Option<f32>,
+}
+
+impl<'de> Deserialize<'de> for LlmConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = RawLlmConfig::deserialize(deserializer)?;
+        Ok(Self {
+            strategy: raw
+                .strategy
+                .unwrap_or_else(|| LlmProviderStrategy::from_provider_id(&raw.provider)),
+            provider: raw.provider,
+            base_url: raw.base_url,
+            api_key: raw.api_key,
+            model: raw.model,
+            api_path: raw.api_path,
+            api_version: raw.api_version,
+            temperature: raw.temperature,
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -149,6 +247,8 @@ pub struct LlmUsageEventPayload {
 #[serde(rename_all = "camelCase")]
 pub struct LlmModelsRequest {
     pub provider: LlmProvider,
+    #[serde(default)]
+    pub strategy: Option<LlmProviderStrategy>,
     pub base_url: String,
     pub api_key: String,
 }

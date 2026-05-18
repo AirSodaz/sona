@@ -236,8 +236,8 @@ where
 }
 
 fn build_openai_stream_url(config: &LlmConfig) -> String {
-    match config.provider {
-        LlmProvider::AzureOpenAi => {
+    match config.strategy {
+        LlmProviderStrategy::AzureOpenAi => {
             let version = config.api_version.as_deref().unwrap_or("2024-10-21");
             format!(
                 "{}/openai/deployments/{}/chat/completions?api-version={}",
@@ -246,7 +246,7 @@ fn build_openai_stream_url(config: &LlmConfig) -> String {
                 version
             )
         }
-        LlmProvider::Perplexity => join_url(
+        LlmProviderStrategy::Perplexity => join_url(
             &config.base_url,
             config.api_path.as_deref().unwrap_or("/chat/completions"),
         ),
@@ -267,7 +267,7 @@ where
 {
     let url = LlmApiUrl::parse(&build_openai_stream_url(config))?;
     let client = url.client()?;
-    let payload = if config.provider == LlmProvider::AzureOpenAi {
+    let payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
         json!({
             "messages": [
                 {
@@ -297,7 +297,7 @@ where
         .header("Content-Type", "application/json")
         .header("Accept", "text/event-stream");
 
-    if config.provider == LlmProvider::AzureOpenAi {
+    if config.strategy == LlmProviderStrategy::AzureOpenAi {
         request = request.header("api-key", config.api_key.clone());
     } else if !config.api_key.is_empty() {
         request = request.header("Authorization", format!("Bearer {}", config.api_key));
@@ -488,8 +488,8 @@ where
         max_tokens: None,
     });
 
-    let response = match request.config.provider {
-        LlmProvider::Anthropic => {
+    let response = match request.config.strategy {
+        LlmProviderStrategy::Anthropic => {
             let client = anthropic::Client::builder()
                 .api_key(&request.config.api_key)
                 .base_url(&request.config.base_url)
@@ -505,7 +505,7 @@ where
                 .await?,
             )
         }
-        LlmProvider::Gemini => {
+        LlmProviderStrategy::Gemini => {
             let client = gemini::Client::builder()
                 .api_key(&request.config.api_key)
                 .base_url(clean_gemini_base_url(&request.config.base_url))
@@ -521,7 +521,7 @@ where
                 .await?,
             )
         }
-        LlmProvider::Ollama => {
+        LlmProviderStrategy::Ollama => {
             let client = ollama::Client::builder()
                 .api_key(Nothing)
                 .base_url(request.config.base_url.trim_end_matches("/v1"))
@@ -537,10 +537,10 @@ where
                 .await?,
             )
         }
-        LlmProvider::OpenAiResponses => {
+        LlmProviderStrategy::OpenAiResponses => {
             Some(stream_openai_responses_completion(&request.config, &input, accumulator).await?)
         }
-        LlmProvider::GoogleTranslate | LlmProvider::GoogleTranslateFree => None,
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => None,
         _ => Some(stream_openai_chat_completion(&request.config, &input, accumulator).await?),
     };
 
@@ -697,7 +697,7 @@ pub(crate) async fn generate_with_perplexity(
 pub(crate) async fn generate_with_rig(
     request: LlmGenerateRequest,
 ) -> Result<StandardLlmResponse, String> {
-    let adapter = AdapterFactory::create(request.config.provider);
+    let adapter = AdapterFactory::create(request.config.strategy);
     let std_req = StandardLlmRequest {
         messages: vec![StandardMessage {
             role: MessageRole::User,

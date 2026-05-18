@@ -86,7 +86,8 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::sherpa::TranscriptS
 
 fn sample_llm_config(base_url: &str) -> LlmConfig {
     LlmConfig {
-        provider: LlmProvider::OpenAi,
+        provider: "open_ai".to_string(),
+        strategy: LlmProviderStrategy::OpenAiCompatible,
         base_url: base_url.to_string(),
         api_key: "test-key".to_string(),
         model: "test-model".to_string(),
@@ -141,7 +142,8 @@ fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
 #[tokio::test]
 async fn list_llm_models_rejects_remote_http_before_requesting_models() {
     let error = list_llm_models_command(LlmModelsRequest {
-        provider: LlmProvider::OpenAi,
+        provider: "open_ai".to_string(),
+        strategy: Some(LlmProviderStrategy::OpenAiCompatible),
         base_url: "http://api.example.com/v1".to_string(),
         api_key: "test-key".to_string(),
     })
@@ -280,10 +282,51 @@ fn gemini_model_filter_keeps_generate_content_models() {
 
 #[test]
 fn anthropic_listing_is_disabled() {
-    assert!(!provider_supports_model_listing(&LlmProvider::Anthropic));
-    assert!(!provider_supports_model_listing(&LlmProvider::AzureOpenAi));
-    assert!(!provider_supports_model_listing(&LlmProvider::Volcengine));
-    assert!(provider_supports_model_listing(&LlmProvider::OpenAi));
+    assert!(!strategy_supports_model_listing(LlmProviderStrategy::Anthropic));
+    assert!(!strategy_supports_model_listing(LlmProviderStrategy::AzureOpenAi));
+    assert!(!strategy_supports_model_listing(
+        LlmProviderStrategy::OpenAiCompatibleCustomPath
+    ));
+    assert!(strategy_supports_model_listing(
+        LlmProviderStrategy::OpenAiCompatible
+    ));
+}
+
+#[test]
+fn llm_config_accepts_custom_provider_with_strategy() {
+    let config: LlmConfig = serde_json::from_value(json!({
+        "provider": "custom-private-gateway",
+        "strategy": "openai_responses",
+        "baseUrl": "https://gateway.example.com",
+        "apiKey": "gateway-key",
+        "model": "gpt-4o",
+        "apiPath": "/v1/responses"
+    }))
+    .expect("custom provider config should deserialize");
+
+    assert_eq!(config.provider, "custom-private-gateway");
+    assert_eq!(config.strategy, LlmProviderStrategy::OpenAiResponses);
+}
+
+#[test]
+fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
+    let config: LlmConfig = serde_json::from_value(json!({
+        "provider": "gemini",
+        "baseUrl": "https://generativelanguage.googleapis.com",
+        "apiKey": "gemini-key",
+        "model": "gemini-2.5-flash"
+    }))
+    .expect("legacy provider-only config should deserialize");
+
+    assert_eq!(config.provider, "gemini");
+    assert_eq!(config.strategy, LlmProviderStrategy::Gemini);
+}
+
+fn strategy_key(strategy: LlmProviderStrategy) -> String {
+    serde_json::to_value(strategy)
+        .ok()
+        .and_then(|value| value.as_str().map(ToString::to_string))
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 #[test]
@@ -531,7 +574,7 @@ fn plan_segment_task_chunks_context_and_keywords_reduce_capacity() {
 
 #[test]
 fn summary_provider_rejects_google_translate() {
-    let err = validate_summary_provider(LlmProvider::GoogleTranslate)
+    let err = validate_summary_strategy(LlmProviderStrategy::GoogleTranslate)
         .expect_err("google translate should be rejected");
 
     assert!(err.contains("does not support transcript summaries"));
@@ -604,13 +647,14 @@ fn parse_polish_chunk_accepts_ndjson() {
 
 #[tokio::test]
 async fn try_stream_text_skips_google_translate_providers() {
-    for provider in [
-        LlmProvider::GoogleTranslate,
-        LlmProvider::GoogleTranslateFree,
+    for strategy in [
+        LlmProviderStrategy::GoogleTranslate,
+        LlmProviderStrategy::GoogleTranslateFree,
     ] {
         let request = LlmGenerateRequest {
             config: LlmConfig {
-                provider,
+                provider: strategy_key(strategy),
+                strategy,
                 base_url: "https://example.com".to_string(),
                 api_key: "test-key".to_string(),
                 model: "test-model".to_string(),

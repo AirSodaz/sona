@@ -2,6 +2,7 @@ import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import { ensureLlmState } from '../../../services/llm/migration';
 import { getProviderDefinition } from '../../../services/llm/providers';
+import { isProviderConfigComplete } from '../../../services/llm/runtime';
 
 export function getCurrentLlmSettings(config: LlmAssistantConfig) {
   return config.llmSettings ?? ensureLlmState(config).llmSettings;
@@ -32,14 +33,17 @@ export function getModelPlaceholder(provider: LlmProvider): string {
 }
 
 export function isProviderConfigured(provider: LlmProvider, setting: LlmProviderSetting | undefined): boolean {
-  const def = getProviderDefinition(provider);
+  return isProviderConfigComplete(provider, setting);
+}
 
-  if (def.requiresApiKey) {
-    if (!setting || !(setting.apiKey || '').trim()) return false;
-  }
+export function isProviderConfiguredForConfig(
+  config: LlmAssistantConfig,
+  provider: LlmProvider,
+  setting: LlmProviderSetting | undefined,
+): boolean {
+  return isProviderConfigComplete(provider, setting, getCurrentLlmSettings(config).customProviders);
+}
 
-  const effectiveHost = setting?.apiHost || def.defaultApiHost;
-  if (!effectiveHost || !effectiveHost.trim()) return false;
-
-  return true;
+export function getProviderLabel(config: LlmAssistantConfig, provider: LlmProvider): string {
+  return getProviderDefinition(provider, getCurrentLlmSettings(config).customProviders).label;
 }

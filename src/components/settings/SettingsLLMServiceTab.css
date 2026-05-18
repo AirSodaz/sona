@@ -200,11 +200,6 @@
   border-top-right-radius: inherit;
 }
 
-.accordion-item:last-child {
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
-}
-
 .accordion-header {
   display: flex;
   align-items: center;
@@ -258,6 +253,111 @@
 .provider-free-hint {
   color: var(--color-success);
   font-size: 0.95rem;
+}
+
+.custom-provider-actions {
+  background: var(--color-bg-elevated);
+  border-top: 1px solid var(--color-border);
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+}
+
+.custom-provider-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-modal-backdrop {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.34);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.provider-modal {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-width: 520px;
+  overflow: hidden;
+  width: min(100%, 520px);
+}
+
+.provider-modal-header,
+.provider-modal-footer {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 18px 20px;
+}
+
+.provider-modal-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.provider-modal-header h3 {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.provider-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+
+.provider-modal-footer {
+  border-top: 1px solid var(--color-border);
+  justify-content: flex-end;
+}
+
+.provider-mode-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.provider-mode-option {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  min-height: 42px;
+  padding: 9px 12px;
+  text-align: left;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.provider-mode-option:hover {
+  background: var(--color-bg-hover);
+}
+
+.provider-mode-option.selected {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+@media (max-width: 520px) {
+  .provider-mode-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .provider-test-actions {

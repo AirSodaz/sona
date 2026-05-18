@@ -1,11 +1,14 @@
 import type { AppConfig } from '../../types/config';
 import type {
+  CustomLlmProvider,
+  CustomLlmProviderId,
+  CustomLlmProviderStrategy,
   LlmModelEntry,
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
 } from '../../types/transcript';
-import { normalizeProvider } from './providers';
+import { isCustomProviderId, normalizeProvider } from './providers';
 import {
   addLlmModel,
   normalizeTemperature,
@@ -140,6 +143,13 @@ type LegacyStoredProviderSetting = Partial<LlmProviderSetting> & {
   model?: unknown;
 };
 
+const LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER: CustomLlmProvider = {
+  id: 'custom-openai-compatible',
+  name: 'OpenAI Compatible',
+  strategy: 'openai_compatible',
+  createdAt: '2026-05-18T00:00:00.000Z',
+};
+
 type LegacyNestedLlmSource = {
   provider?: unknown;
   model?: unknown;
@@ -172,6 +182,58 @@ export type LlmMigrationSource = Partial<AppConfig> & {
 
 function getTrimmedString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function isCustomProviderStrategy(value: unknown): value is CustomLlmProviderStrategy {
+  return value === 'openai_compatible'
+    || value === 'openai_responses'
+    || value === 'anthropic'
+    || value === 'gemini';
+}
+
+function normalizeStoredCustomProviders(rawProviders: unknown): Record<CustomLlmProviderId, CustomLlmProvider> {
+  if (!rawProviders || typeof rawProviders !== 'object') {
+    return {};
+  }
+
+  const customProviders: Record<CustomLlmProviderId, CustomLlmProvider> = {};
+  for (const [rawId, rawProvider] of Object.entries(rawProviders as Record<string, unknown>)) {
+    const provider = rawProvider as Partial<CustomLlmProvider>;
+    const normalizedId = normalizeProvider(provider.id ?? rawId);
+    if (!isCustomProviderId(normalizedId) || !isCustomProviderStrategy(provider.strategy)) {
+      continue;
+    }
+
+    const name = getTrimmedString(provider.name) ?? normalizedId;
+    const createdAt = getTrimmedString(provider.createdAt) ?? LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.createdAt;
+    customProviders[normalizedId] = {
+      id: normalizedId,
+      name,
+      strategy: provider.strategy,
+      createdAt,
+    };
+  }
+
+  return customProviders;
+}
+
+function needsLegacyOpenAiCompatibleProvider(source: LlmMigrationSource): boolean {
+  if (normalizeProvider(source.llmSettings?.activeProvider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id) {
+    return true;
+  }
+  if (normalizeProvider(source.llm?.provider ?? source.llmServiceType) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id) {
+    return true;
+  }
+
+  const providerKeys = Object.keys(source.llmSettings?.providers ?? {});
+  if (providerKeys.some((provider) => normalizeProvider(provider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id)) {
+    return true;
+  }
+
+  return Object.values(source.llmSettings?.models ?? {}).some((rawEntry) => {
+    const entry = rawEntry as Partial<LlmModelEntry> | undefined;
+    return normalizeProvider(entry?.provider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id;
+  });
 }
 
 function extractLegacyProviderSetting(source: LlmMigrationSource): Partial<LlmProviderSetting> {
@@ -212,7 +274,10 @@ function resolveLegacyBootstrapModel(source: LlmMigrationSource): LegacyBootstra
   return extractLegacyModel(source);
 }
 
-function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProvider, LlmProviderSetting>> {
+function normalizeStoredProviders(
+  rawProviders: unknown,
+  customProviders: LlmSettings['customProviders'],
+): Partial<Record<LlmProvider, LlmProviderSetting>> {
   if (!rawProviders || typeof rawProviders !== 'object') {
     return {};
   }
@@ -227,7 +292,7 @@ function normalizeStoredProviders(rawProviders: unknown): Partial<Record<LlmProv
       apiKey: setting.apiKey,
       apiPath: setting.apiPath,
       apiVersion: setting.apiVersion,
-    });
+    }, customProviders);
   }
 
   return providers;
@@ -285,7 +350,11 @@ export function ensureLlmState(
       candidate.llm?.provider,
   );
 
-  const providers = normalizeStoredProviders(candidate.llmSettings?.providers);
+  const customProviders = normalizeStoredCustomProviders(candidate.llmSettings?.customProviders);
+  if (needsLegacyOpenAiCompatibleProvider(candidate)) {
+    customProviders[LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id] = LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER;
+  }
+  const providers = normalizeStoredProviders(candidate.llmSettings?.providers, customProviders);
 
   if (candidate.llm) {
     const provider = normalizeProvider(candidate.llm.provider);
@@ -294,7 +363,7 @@ export function ensureLlmState(
       apiKey: getTrimmedString(candidate.llm.apiKey),
       apiPath: getTrimmedString(candidate.llm.apiPath),
       apiVersion: getTrimmedString(candidate.llm.apiVersion),
-    });
+    }, customProviders);
   } else {
     const legacySetting = extractLegacyProviderSetting(candidate);
     if (
@@ -306,7 +375,7 @@ export function ensureLlmState(
       providers[currentProvider] = sanitizeProviderSetting(currentProvider, {
         ...legacySetting,
         ...(providers[currentProvider] ?? {}),
-      });
+      }, customProviders);
     }
   }
 
@@ -321,9 +390,10 @@ export function ensureLlmState(
   // 4. backfill summary only when the chosen polish model also supports summary.
   let llmSettings: LlmSettings = {
     activeProvider: currentProvider,
+    customProviders,
     providers: {
       ...providers,
-      [currentProvider]: sanitizeProviderSetting(currentProvider, providers[currentProvider]),
+      [currentProvider]: sanitizeProviderSetting(currentProvider, providers[currentProvider], customProviders),
     },
     models: storedModels,
     modelOrder: storedModelOrder,

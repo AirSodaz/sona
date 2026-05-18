@@ -3,6 +3,7 @@ import {
   addLlmModel,
   buildLlmConfigPatch,
   createLlmSettings,
+  addCustomProvider,
   getFeatureModelEntry,
   getOrderedLlmModels,
   removeLlmModel,
@@ -79,5 +80,29 @@ describe('llm state', () => {
     expect(nextSettings.selections.polishModelId).toBeUndefined();
     expect(nextSettings.selections.translationModelId).toBeUndefined();
     expect(nextSettings.selections.summaryModelId).toBeUndefined();
+  });
+
+  it('adds a custom provider with provider settings and stable metadata', () => {
+    const createdAt = '2026-05-18T00:00:00.000Z';
+    const nextSettings = addCustomProvider(createLlmSettings(), {
+      name: 'Private Gateway',
+      strategy: 'openai_responses',
+      createdAt,
+    });
+
+    expect(nextSettings.activeProvider).toBe('custom-private-gateway');
+    expect(nextSettings.customProviders).toEqual({
+      'custom-private-gateway': {
+        id: 'custom-private-gateway',
+        name: 'Private Gateway',
+        strategy: 'openai_responses',
+        createdAt,
+      },
+    });
+    expect(nextSettings.providers['custom-private-gateway']).toEqual(expect.objectContaining({
+      apiHost: '',
+      apiKey: '',
+      apiPath: '/v1/responses',
+    }));
   });
 });

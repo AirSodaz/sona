@@ -1,4 +1,4 @@
-use crate::llm::{LlmProvider, LlmUsageCategory, TokenUsage};
+use crate::llm::{LlmUsageCategory, TokenUsage};
 use chrono::{DateTime, Duration, Local};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -103,7 +103,7 @@ pub(crate) struct LlmUsageDashboardStats {
 #[derive(Clone, Debug)]
 pub(crate) struct UsageRecord {
     pub(crate) occurred_at: String,
-    pub(crate) provider: LlmProvider,
+    pub(crate) provider: String,
     pub(crate) category: LlmUsageCategory,
     pub(crate) usage: Option<TokenUsage>,
 }
@@ -593,7 +593,7 @@ mod tests {
             temp_dir.path(),
             UsageRecord {
                 occurred_at: "2026-05-03T08:30:00Z".to_string(),
-                provider: LlmProvider::OpenAi,
+                provider: "open_ai".to_string(),
                 category: LlmUsageCategory::Summary,
                 usage: Some(TokenUsage {
                     prompt_tokens: 10,
@@ -607,7 +607,7 @@ mod tests {
             temp_dir.path(),
             UsageRecord {
                 occurred_at: "2026-05-03T08:31:00Z".to_string(),
-                provider: LlmProvider::GoogleTranslateFree,
+                provider: "google_translate_free".to_string(),
                 category: LlmUsageCategory::Translation,
                 usage: None,
             },

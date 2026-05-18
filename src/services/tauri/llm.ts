@@ -18,6 +18,7 @@ export async function generateLlmText(request: LlmGenerateCommandRequest): Promi
 
 export async function listLlmModels(request: {
   provider: string;
+  strategy?: string;
   baseUrl?: string;
   apiKey?: string;
 }): Promise<string[]> {

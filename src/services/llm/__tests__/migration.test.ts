@@ -162,4 +162,48 @@ describe('llm migration', () => {
 
     expect(llmSettings.selections.summaryModelId).toBeUndefined();
   });
+
+  it('migrates the removed OpenAI Compatible provider into a custom provider', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'open_ai_compatible',
+        providers: {
+          open_ai_compatible: {
+            apiHost: 'https://gateway.example.com/v1',
+            apiKey: 'gateway-key',
+          },
+        },
+        models: {
+          'open_ai_compatible-gpt-4o': {
+            id: 'open_ai_compatible-gpt-4o',
+            provider: 'open_ai_compatible',
+            model: 'gpt-4o',
+          },
+        },
+        modelOrder: ['open_ai_compatible-gpt-4o'],
+        selections: {
+          polishModelId: 'open_ai_compatible-gpt-4o',
+        },
+      },
+    } as any);
+
+    expect(llmSettings.activeProvider).toBe('custom-openai-compatible');
+    expect(llmSettings.customProviders).toEqual({
+      'custom-openai-compatible': {
+        id: 'custom-openai-compatible',
+        name: 'OpenAI Compatible',
+        strategy: 'openai_compatible',
+        createdAt: expect.any(String),
+      },
+    });
+    expect(llmSettings.providers['custom-openai-compatible']).toEqual(expect.objectContaining({
+      apiHost: 'https://gateway.example.com/v1',
+      apiKey: 'gateway-key',
+      apiPath: '/v1/chat/completions',
+    }));
+    expect(llmSettings.models['open_ai_compatible-gpt-4o']).toEqual(expect.objectContaining({
+      provider: 'custom-openai-compatible',
+    }));
+    expect(llmSettings.selections.polishModelId).toBe('open_ai_compatible-gpt-4o');
+  });
 });

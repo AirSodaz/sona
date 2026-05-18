@@ -1,4 +1,4 @@
-export type LlmProvider =
+export type BuiltInLlmProvider =
   | 'open_ai'
   | 'open_ai_responses'
   | 'azure_openai'
@@ -21,8 +21,10 @@ export type LlmProvider =
   | 'volcengine'
   | 'chatglm'
   | 'google_translate'
-  | 'google_translate_free'
-  | 'open_ai_compatible';
+  | 'google_translate_free';
+
+export type CustomLlmProviderId = `custom-${string}`;
+export type LlmProvider = BuiltInLlmProvider | CustomLlmProviderId;
 
 export type LlmProviderStrategy =
   | 'openai_compatible'
@@ -35,6 +37,23 @@ export type LlmProviderStrategy =
   | 'google_translate'
   | 'google_translate_free'
   | 'perplexity';
+
+export type CustomLlmProviderStrategy =
+  | 'openai_compatible'
+  | 'openai_responses'
+  | 'anthropic'
+  | 'gemini';
+
+export interface CustomLlmProvider {
+  /** Stable custom provider id generated from the user-visible name. */
+  id: CustomLlmProviderId;
+  /** User-visible provider name. */
+  name: string;
+  /** API compatibility mode used by the native runtime. */
+  strategy: CustomLlmProviderStrategy;
+  /** ISO timestamp when this provider was added. */
+  createdAt: string;
+}
 
 export type LlmFeature = 'polish' | 'translation' | 'summary';
 
@@ -76,6 +95,8 @@ export interface LlmFeatureSelections {
 export interface LlmSettings {
   /** Currently active provider. */
   activeProvider: LlmProvider;
+  /** User-added providers keyed by stable custom ids. */
+  customProviders?: Record<CustomLlmProviderId, CustomLlmProvider>;
   /** Per-provider saved settings. */
   providers: Partial<Record<LlmProvider, LlmProviderSetting>>;
   /** Added models keyed by ID. */
@@ -89,6 +110,8 @@ export interface LlmSettings {
 export interface LlmConfig {
   /** LLM provider kind. */
   provider: LlmProvider;
+  /** API strategy used by the native runtime. */
+  strategy?: LlmProviderStrategy;
   /** LLM base URL. */
   baseUrl: string;
   /** LLM API key. */

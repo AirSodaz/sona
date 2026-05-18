@@ -78,7 +78,7 @@ impl UsageRecorder {
             &self.app,
             llm_usage::UsageRecord {
                 occurred_at: occurred_at.clone(),
-                provider: self.config.provider,
+                provider: self.config.provider.clone(),
                 category: self.category,
                 usage: response.usage.clone(),
             },
@@ -135,7 +135,10 @@ where
 {
     validate_task_request(&request.task_id, &request.config)?;
 
-    if request.config.provider == LlmProvider::GoogleTranslate {
+    if matches!(
+        request.config.strategy,
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+    ) {
         return Err("Google Translate does not support transcript polishing".to_string());
     }
 
@@ -208,10 +211,12 @@ where
     let usage = UsageRecorder::new(app, request.config.clone(), LlmUsageCategory::Translation);
     let on_chunk_items = std::sync::Arc::new(std::sync::Mutex::new(on_chunk_items));
 
-    if config.provider == LlmProvider::GoogleTranslate
-        || config.provider == LlmProvider::GoogleTranslateFree
+    if matches!(
+        config.strategy,
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+    )
     {
-        let translate_provider = config.provider;
+        let translate_strategy = config.strategy;
         let base_url = LlmApiUrl::parse(&config.base_url)?;
         let client = base_url.client()?;
         let chunk_events = events.clone();
@@ -234,7 +239,7 @@ where
                 parse_chunk: move |response_text: &str,
                                    chunk: &[LlmSegmentInput],
                                    chunk_number: usize| {
-                    if translate_provider == LlmProvider::GoogleTranslate {
+                    if translate_strategy == LlmProviderStrategy::GoogleTranslate {
                         let parsed: GoogleTranslateResponse =
                             serde_json::from_str(response_text).map_err(|error| {
                                 chunk_error(
@@ -309,7 +314,7 @@ where
                             let texts: Vec<String> =
                                 serde_json::from_str(&prompt).unwrap_or_default();
 
-                            if config.provider == LlmProvider::GoogleTranslate {
+                            if config.strategy == LlmProviderStrategy::GoogleTranslate {
                                 let payload = GoogleTranslateRequest {
                                     q: texts,
                                     target: target_language,
@@ -442,7 +447,7 @@ pub(crate) async fn summarize_transcript_command(
     request: SummarizeTranscriptRequest,
 ) -> Result<TranscriptSummaryResult, String> {
     validate_task_request(&request.task_id, &request.config)?;
-    validate_summary_provider(request.config.provider)?;
+    validate_summary_strategy(request.config.strategy)?;
 
     let task_id = request.task_id.clone();
     let streamed_task_id = task_id.clone();
@@ -504,7 +509,10 @@ pub(crate) async fn summarize_transcript_command(
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<String>, String> {
-    if !provider_supports_model_listing(&request.provider) {
+    let strategy = request
+        .strategy
+        .unwrap_or_else(|| LlmProviderStrategy::from_provider_id(&request.provider));
+    if !strategy_supports_model_listing(strategy) {
         return Ok(vec![]);
     }
     validate_llm_api_host(&request.base_url)?;
@@ -512,9 +520,11 @@ pub(crate) async fn list_llm_models_command(
     let base_url = LlmApiUrl::parse(&request.base_url)?;
     let client = base_url.client()?;
 
-    match request.provider {
-        LlmProvider::Gemini => get_gemini_models(&client, &request.api_key, &base_url).await,
-        LlmProvider::Ollama => get_openai_models(&client, &request.api_key, &base_url, true).await,
+    match strategy {
+        LlmProviderStrategy::Gemini => get_gemini_models(&client, &request.api_key, &base_url).await,
+        LlmProviderStrategy::Ollama => {
+            get_openai_models(&client, &request.api_key, &base_url, true).await
+        }
         _ => get_openai_models(&client, &request.api_key, &base_url, false).await,
     }
 }

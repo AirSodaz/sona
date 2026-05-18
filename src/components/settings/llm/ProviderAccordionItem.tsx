@@ -10,7 +10,7 @@ import {
   getProviderDefinition,
 } from '../../../services/llm/providers';
 import { generateLlmText } from '../../../services/tauri/llm';
-import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfigured } from './helpers';
+import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
 
 interface ProviderAccordionItemProps {
   provider: LlmProvider;
@@ -30,18 +30,18 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   t,
 }: ProviderAccordionItemProps) {
   const currentLlmState = getCurrentLlmSettings(config);
-  const def = getProviderDefinition(provider);
+  const def = getProviderDefinition(provider, currentLlmState.customProviders);
   const setting = currentLlmState.providers[provider];
-  const isConfigured = isProviderConfigured(provider, setting);
+  const isConfigured = isProviderConfiguredForConfig(config, provider, setting);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
 
   const handleTestConnection = async () => {
-    const effectiveSetting = setting || createProviderSetting(provider);
+    const effectiveSetting = setting || createProviderSetting(provider, currentLlmState.customProviders);
     setTestStatus('loading');
     setTestMessage('');
     try {
-      const providerConfig = buildLlmConfig(provider, effectiveSetting);
+      const providerConfig = buildLlmConfig(provider, effectiveSetting, currentLlmState.customProviders);
       const entryId = currentLlmState.modelOrder.find(id => currentLlmState.models[id].provider === provider);
       const testModel = entryId ? currentLlmState.models[entryId].model : getModelPlaceholder(provider);
       const testProviderConfig = { ...providerConfig, model: testModel };
@@ -140,7 +140,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
                     className="settings-input"
                     value={setting.apiPath}
                     onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
-                    readOnly={provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
+                    readOnly={def.editableApiHost === false || provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
                   />
                 </div>
               )}

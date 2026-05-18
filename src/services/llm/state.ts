@@ -1,5 +1,7 @@
 import type { AppConfig } from '../../types/config';
 import {
+  CustomLlmProvider,
+  CustomLlmProviderStrategy,
   LlmFeature,
   LlmModelEntry,
   LlmProvider,
@@ -7,6 +9,7 @@ import {
   LlmSettings,
 } from '../../types/transcript';
 import {
+  createCustomProviderId,
   createProviderSetting,
   DEFAULT_LLM_PROVIDER,
 } from './providers';
@@ -28,8 +31,9 @@ const FEATURE_TEMPERATURE_SELECTION_KEYS = {
 export function sanitizeProviderSetting(
   provider: LlmProvider,
   setting?: Partial<LlmProviderSetting> | null,
+  customProviders?: LlmSettings['customProviders'],
 ): LlmProviderSetting {
-  const defaults = createProviderSetting(provider);
+  const defaults = createProviderSetting(provider, customProviders);
   return {
     ...defaults,
     ...(setting ?? {}),
@@ -72,6 +76,7 @@ export function normalizeTemperature(value: unknown): number | undefined {
 export function createLlmSettings(activeProvider: LlmProvider = DEFAULT_LLM_PROVIDER): LlmSettings {
   return {
     activeProvider,
+    customProviders: {},
     providers: {
       [activeProvider]: createProviderSetting(activeProvider),
     },
@@ -83,7 +88,7 @@ export function ensureProviderSetting(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
 ): LlmProviderSetting {
-  return sanitizeProviderSetting(provider, llmSettings?.providers?.[provider]);
+  return sanitizeProviderSetting(provider, llmSettings?.providers?.[provider], llmSettings?.customProviders);
 }
 
 export function setActiveProvider(
@@ -94,6 +99,7 @@ export function setActiveProvider(
   return {
     ...current,
     activeProvider: provider,
+    customProviders: current.customProviders ?? {},
     providers: {
       ...current.providers,
       [provider]: ensureProviderSetting(current, provider),
@@ -109,12 +115,50 @@ export function updateProviderSetting(
   const current = llmSettings ?? createLlmSettings(provider);
   return {
     ...current,
+    customProviders: current.customProviders ?? {},
     activeProvider: current.activeProvider,
     providers: {
       ...current.providers,
       [provider]: sanitizeProviderSetting(provider, {
         ...ensureProviderSetting(current, provider),
         ...updates,
+      }, current.customProviders),
+    },
+  };
+}
+
+export function addCustomProvider(
+  llmSettings: LlmSettings | undefined,
+  input: {
+    name: string;
+    strategy: CustomLlmProviderStrategy;
+    createdAt?: string;
+  },
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const existingCustomProviders = current.customProviders ?? {};
+  const provider: CustomLlmProvider = {
+    id: createCustomProviderId(input.name, {
+      ...current.providers,
+      ...existingCustomProviders,
+    }),
+    name: input.name.trim(),
+    strategy: input.strategy,
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  };
+
+  return {
+    ...current,
+    activeProvider: provider.id,
+    customProviders: {
+      ...existingCustomProviders,
+      [provider.id]: provider,
+    },
+    providers: {
+      ...current.providers,
+      [provider.id]: sanitizeProviderSetting(provider.id, undefined, {
+        ...existingCustomProviders,
+        [provider.id]: provider,
       }),
     },
   };
@@ -141,6 +185,7 @@ export function addLlmModel(
   const nextId = ensureUniqueModelId(current.models, createModelId(entry.provider, model));
   return {
     ...current,
+    customProviders: current.customProviders ?? {},
     models: {
       ...current.models,
       [nextId]: {
@@ -167,6 +212,7 @@ export function removeLlmModel(
 
   return {
     ...current,
+    customProviders: current.customProviders ?? {},
     models: nextModels,
     modelOrder: current.modelOrder.filter((id) => id !== modelId),
     selections: {
@@ -190,6 +236,7 @@ export function setFeatureModelSelection(
   const key = FEATURE_MODEL_SELECTION_KEYS[feature];
   return {
     ...current,
+    customProviders: current.customProviders ?? {},
     selections: {
       ...current.selections,
       [key]: modelId && current.models[modelId] ? modelId : undefined,
@@ -206,6 +253,7 @@ export function setFeatureTemperature(
   const key = FEATURE_TEMPERATURE_SELECTION_KEYS[feature];
   return {
     ...current,
+    customProviders: current.customProviders ?? {},
     selections: {
       ...current.selections,
       [key]: normalizeTemperature(temperature),

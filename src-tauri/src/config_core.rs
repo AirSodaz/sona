@@ -6,6 +6,8 @@ const CURRENT_CONFIG_VERSION: i64 = 6;
 const DEFAULT_POLISH_PRESET_ID: &str = "general";
 const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
+const LEGACY_OPENAI_COMPATIBLE_PROVIDER: &str = "custom-openai-compatible";
+const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z";
 
 const BUILTIN_POLISH_PRESET_IDS: [&str; 6] = [
     "general",
@@ -1037,13 +1039,30 @@ fn map_legacy_text_replacement_rules(rules: &[Value]) -> Vec<Value> {
 }
 
 fn ensure_llm_state(source: &Value) -> Value {
+    let mut custom_providers =
+        normalize_stored_custom_providers(source.pointer("/llmSettings/customProviders"));
+    if needs_legacy_openai_compatible_provider(source) {
+        custom_providers.insert(
+            LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string(),
+            json!({
+                "id": LEGACY_OPENAI_COMPATIBLE_PROVIDER,
+                "name": "OpenAI Compatible",
+                "strategy": "openai_compatible",
+                "createdAt": LEGACY_OPENAI_COMPATIBLE_CREATED_AT,
+            }),
+        );
+    }
+
     let current_provider = normalize_provider(
         source
             .pointer("/llmSettings/activeProvider")
             .or_else(|| source.get("llmServiceType"))
             .or_else(|| source.pointer("/llm/provider")),
     );
-    let mut providers = normalize_stored_providers(source.pointer("/llmSettings/providers"));
+    let mut providers = normalize_stored_providers(
+        source.pointer("/llmSettings/providers"),
+        Some(&custom_providers),
+    );
 
     if let Some(llm) = source.get("llm").and_then(Value::as_object) {
         let provider = normalize_provider(llm.get("provider"));
@@ -1057,6 +1076,7 @@ fn ensure_llm_state(source: &Value) -> Value {
                     llm.get("apiPath").and_then(trimmed_string),
                     llm.get("apiVersion").and_then(trimmed_string),
                 )),
+                Some(&custom_providers),
             ),
         );
     } else {
@@ -1077,6 +1097,7 @@ fn ensure_llm_state(source: &Value) -> Value {
                 sanitize_provider_setting(
                     &current_provider,
                     merge_object_values(legacy_setting, current),
+                    Some(&custom_providers),
                 ),
             );
         }
@@ -1084,7 +1105,11 @@ fn ensure_llm_state(source: &Value) -> Value {
 
     providers.insert(
         current_provider.clone(),
-        sanitize_provider_setting(&current_provider, providers.get(&current_provider).cloned()),
+        sanitize_provider_setting(
+            &current_provider,
+            providers.get(&current_provider).cloned(),
+            Some(&custom_providers),
+        ),
     );
 
     let models = normalize_stored_models(source.pointer("/llmSettings/models"));
@@ -1095,6 +1120,7 @@ fn ensure_llm_state(source: &Value) -> Value {
 
     let mut settings = json!({
         "activeProvider": current_provider,
+        "customProviders": custom_providers,
         "providers": providers,
         "models": models,
         "modelOrder": model_order,
@@ -1110,6 +1136,13 @@ fn normalize_provider(value: Option<&Value>) -> String {
     let Some(provider) = value.and_then(Value::as_str) else {
         return DEFAULT_LLM_PROVIDER.to_string();
     };
+    normalize_provider_str(provider)
+}
+
+fn normalize_provider_str(provider: &str) -> String {
+    if is_custom_provider_id(provider) {
+        return provider.to_string();
+    }
     match provider {
         "anthropic"
         | "azure_openai"
@@ -1119,7 +1152,6 @@ fn normalize_provider(value: Option<&Value>) -> String {
         | "ollama"
         | "open_ai"
         | "open_ai_responses"
-        | "open_ai_compatible"
         | "google_translate"
         | "google_translate_free"
         | "silicon_flow"
@@ -1139,13 +1171,55 @@ fn normalize_provider(value: Option<&Value>) -> String {
         "deepseek" => "deep_seek".to_string(),
         "moonshot" => "kimi".to_string(),
         "openai" => "open_ai".to_string(),
-        "openai_compatible" => "open_ai_compatible".to_string(),
+        "openai_compatible" | "open_ai_compatible" => {
+            LEGACY_OPENAI_COMPATIBLE_PROVIDER.to_string()
+        }
         "siliconflow" => "silicon_flow".to_string(),
         _ => DEFAULT_LLM_PROVIDER.to_string(),
     }
 }
 
-fn provider_defaults(provider: &str) -> Map<String, Value> {
+fn is_custom_provider_id(value: &str) -> bool {
+    let Some(rest) = value.strip_prefix("custom-") else {
+        return false;
+    };
+    !rest.is_empty()
+        && rest
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+        && !rest.starts_with('-')
+        && !rest.ends_with('-')
+}
+
+fn provider_strategy_from_custom_providers<'a>(
+    provider: &str,
+    custom_providers: Option<&'a Map<String, Value>>,
+) -> Option<&'a str> {
+    custom_providers?
+        .get(provider)?
+        .get("strategy")
+        .and_then(Value::as_str)
+}
+
+fn provider_defaults(
+    provider: &str,
+    custom_providers: Option<&Map<String, Value>>,
+) -> Map<String, Value> {
+    if is_custom_provider_id(provider) {
+        let api_path = match provider_strategy_from_custom_providers(provider, custom_providers) {
+            Some("openai_responses") => Some("/v1/responses"),
+            Some("anthropic") | Some("gemini") => None,
+            _ => Some("/v1/chat/completions"),
+        };
+        let mut defaults = Map::new();
+        defaults.insert("apiHost".to_string(), json!(""));
+        defaults.insert("apiKey".to_string(), json!(""));
+        if let Some(api_path) = api_path {
+            defaults.insert("apiPath".to_string(), json!(api_path));
+        }
+        return defaults;
+    }
+
     let (api_host, api_path, api_version) = match provider {
         "google_translate_free" => (
             "https://translate.googleapis.com/translate_a/single",
@@ -1207,8 +1281,12 @@ fn provider_defaults(provider: &str) -> Map<String, Value> {
     defaults
 }
 
-fn sanitize_provider_setting(provider: &str, setting: Option<Value>) -> Value {
-    let mut defaults = provider_defaults(provider);
+fn sanitize_provider_setting(
+    provider: &str,
+    setting: Option<Value>,
+    custom_providers: Option<&Map<String, Value>>,
+) -> Value {
+    let mut defaults = provider_defaults(provider, custom_providers);
     if let Some(setting_object) = setting.and_then(|value| value.as_object().cloned()) {
         for key in ["apiHost", "apiKey", "apiPath", "apiVersion"] {
             if let Some(value) = setting_object.get(key) {
@@ -1223,10 +1301,11 @@ fn create_llm_settings(active_provider: &str) -> Value {
     let mut providers = Map::new();
     providers.insert(
         active_provider.to_string(),
-        sanitize_provider_setting(active_provider, None),
+        sanitize_provider_setting(active_provider, None, None),
     );
     json!({
         "activeProvider": active_provider,
+        "customProviders": {},
         "providers": providers,
         "models": {},
         "modelOrder": [],
@@ -1234,14 +1313,109 @@ fn create_llm_settings(active_provider: &str) -> Value {
     })
 }
 
-fn normalize_stored_providers(value: Option<&Value>) -> Map<String, Value> {
+fn normalize_stored_custom_providers(value: Option<&Value>) -> Map<String, Value> {
+    let mut custom_providers = Map::new();
+    let Some(object) = value.and_then(Value::as_object) else {
+        return custom_providers;
+    };
+
+    for (raw_provider, raw_setting) in object {
+        let Some(setting) = raw_setting.as_object() else {
+            continue;
+        };
+        let provider = setting
+            .get("id")
+            .and_then(Value::as_str)
+            .map(normalize_provider_str)
+            .unwrap_or_else(|| normalize_provider_str(raw_provider));
+        if !is_custom_provider_id(&provider) {
+            continue;
+        }
+        let Some(strategy) = setting
+            .get("strategy")
+            .and_then(Value::as_str)
+            .filter(|strategy| {
+                matches!(
+                    *strategy,
+                    "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
+                )
+            })
+        else {
+            continue;
+        };
+        let name = setting
+            .get("name")
+            .and_then(non_empty_str)
+            .unwrap_or(&provider);
+        let created_at = setting
+            .get("createdAt")
+            .and_then(non_empty_str)
+            .unwrap_or(LEGACY_OPENAI_COMPATIBLE_CREATED_AT);
+        custom_providers.insert(
+            provider.clone(),
+            json!({
+                "id": provider,
+                "name": name,
+                "strategy": strategy,
+                "createdAt": created_at,
+            }),
+        );
+    }
+
+    custom_providers
+}
+
+fn needs_legacy_openai_compatible_provider(source: &Value) -> bool {
+    let is_legacy_provider = |value: Option<&Value>| {
+        matches!(
+            value.and_then(Value::as_str),
+            Some("open_ai_compatible" | "openai_compatible")
+        )
+    };
+
+    if is_legacy_provider(source.pointer("/llmSettings/activeProvider"))
+        || is_legacy_provider(source.pointer("/llm/provider"))
+        || is_legacy_provider(source.get("llmServiceType"))
+    {
+        return true;
+    }
+
+    if source
+        .pointer("/llmSettings/providers")
+        .and_then(Value::as_object)
+        .is_some_and(|providers| {
+            providers
+                .keys()
+                .any(|provider| provider == "open_ai_compatible" || provider == "openai_compatible")
+        })
+    {
+        return true;
+    }
+
+    source
+        .pointer("/llmSettings/models")
+        .and_then(Value::as_object)
+        .is_some_and(|models| {
+            models.values().any(|entry| {
+                matches!(
+                    entry.get("provider").and_then(Value::as_str),
+                    Some("open_ai_compatible" | "openai_compatible")
+                )
+            })
+        })
+}
+
+fn normalize_stored_providers(
+    value: Option<&Value>,
+    custom_providers: Option<&Map<String, Value>>,
+) -> Map<String, Value> {
     let mut providers = Map::new();
     if let Some(object) = value.and_then(Value::as_object) {
         for (raw_provider, raw_setting) in object {
             let provider = normalize_provider(Some(&Value::String(raw_provider.clone())));
             providers.insert(
                 provider.clone(),
-                sanitize_provider_setting(&provider, Some(raw_setting.clone())),
+                sanitize_provider_setting(&provider, Some(raw_setting.clone()), custom_providers),
             );
         }
     }
@@ -1733,6 +1907,7 @@ mod tests {
             "logLevel": "debug",
             "llmSettings": {
                 "activeProvider": "open_ai",
+                "customProviders": {},
                 "providers": {
                     "open_ai": { "apiHost": "https://api.openai.com", "apiKey": "" }
                 },
@@ -1789,6 +1964,126 @@ mod tests {
 
         assert!(result.migrated);
         assert_eq!(result.config["summaryEnabled"], true);
+    }
+
+    #[test]
+    fn config_core_preserves_custom_llm_providers() {
+        let saved = json!({
+            "configVersion": 6,
+            "summaryEnabled": true,
+            "summaryTemplateId": "meeting",
+            "summaryCustomTemplates": [],
+            "polishPresetId": "meeting",
+            "polishCustomPresets": [],
+            "polishKeywordSets": [],
+            "speakerProfiles": [],
+            "speakerSegmentationModelPath": "",
+            "speakerEmbeddingModelPath": "",
+            "logLevel": "debug",
+            "llmSettings": {
+                "activeProvider": "custom-acme",
+                "customProviders": {
+                    "custom-acme": {
+                        "id": "custom-acme",
+                        "name": "Acme Gateway",
+                        "strategy": "openai_responses",
+                        "createdAt": "2026-05-18T08:00:00.000Z"
+                    }
+                },
+                "providers": {
+                    "custom-acme": {
+                        "apiHost": "https://gateway.example.com",
+                        "apiKey": "test-key"
+                    }
+                },
+                "models": {
+                    "model-1": { "id": "model-1", "provider": "custom-acme", "model": "gpt-4o" }
+                },
+                "modelOrder": ["model-1"],
+                "selections": {
+                    "polishModelId": "model-1",
+                    "translationModelId": "model-1",
+                    "summaryModelId": "model-1"
+                }
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        assert_eq!(result.config["llmSettings"]["activeProvider"], "custom-acme");
+        assert_eq!(
+            result.config["llmSettings"]["customProviders"]["custom-acme"]["strategy"],
+            "openai_responses"
+        );
+        assert_eq!(
+            result.config["llmSettings"]["providers"]["custom-acme"]["apiPath"],
+            "/v1/responses"
+        );
+        assert_eq!(
+            result.config["llmSettings"]["models"]["model-1"]["provider"],
+            "custom-acme"
+        );
+    }
+
+    #[test]
+    fn config_core_migrates_legacy_openai_compatible_to_custom_provider() {
+        let saved = json!({
+            "configVersion": 6,
+            "summaryEnabled": true,
+            "summaryTemplateId": "meeting",
+            "summaryCustomTemplates": [],
+            "polishPresetId": "meeting",
+            "polishCustomPresets": [],
+            "polishKeywordSets": [],
+            "speakerProfiles": [],
+            "speakerSegmentationModelPath": "",
+            "speakerEmbeddingModelPath": "",
+            "logLevel": "info",
+            "llmSettings": {
+                "activeProvider": "open_ai_compatible",
+                "providers": {
+                    "open_ai_compatible": {
+                        "apiHost": "https://compat.example.com",
+                        "apiKey": "compat-key"
+                    }
+                },
+                "models": {
+                    "model-1": { "id": "model-1", "provider": "open_ai_compatible", "model": "compat-model" }
+                },
+                "modelOrder": ["model-1"],
+                "selections": {
+                    "polishModelId": "model-1",
+                    "translationModelId": "model-1",
+                    "summaryModelId": "model-1"
+                }
+            }
+        });
+
+        let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+
+        assert!(result.migrated);
+        assert_eq!(
+            result.config["llmSettings"]["activeProvider"],
+            "custom-openai-compatible"
+        );
+        assert_eq!(
+            result.config["llmSettings"]["customProviders"]["custom-openai-compatible"],
+            json!({
+                "id": "custom-openai-compatible",
+                "name": "OpenAI Compatible",
+                "strategy": "openai_compatible",
+                "createdAt": "2026-05-18T00:00:00.000Z"
+            })
+        );
+        assert_eq!(
+            result.config["llmSettings"]["providers"]["custom-openai-compatible"]["apiHost"],
+            "https://compat.example.com"
+        );
+        assert_eq!(
+            result.config["llmSettings"]["models"]["model-1"]["provider"],
+            "custom-openai-compatible"
+        );
     }
 
     #[test]

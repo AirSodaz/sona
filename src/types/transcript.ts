@@ -71,6 +71,10 @@ export type AppMode = 'live' | 'batch' | 'projects';
 export type ProcessingStatus = 'idle' | 'loading' | 'processing' | 'complete' | 'error';
 
 export type {
+  BuiltInLlmProvider,
+  CustomLlmProvider,
+  CustomLlmProviderId,
+  CustomLlmProviderStrategy,
   LlmConfig,
   LlmFeature,
   LlmFeatureSelections,

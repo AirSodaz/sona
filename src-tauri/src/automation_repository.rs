@@ -128,7 +128,7 @@ pub struct AutomationRuleValidationResult {
 }
 
 struct ProviderDefinition {
-    default_api_host: &'static str,
+    default_api_host: String,
     requires_api_key: bool,
 }
 
@@ -403,7 +403,7 @@ fn is_feature_llm_config_complete(global_config: &Value, feature: &str) -> bool 
         .and_then(Value::as_str)
         .map(normalize_provider)
         .unwrap_or("google_translate_free");
-    let provider_definition = match provider_definition(provider) {
+    let provider_definition = match provider_definition(provider, settings.get("customProviders")) {
         Some(definition) => definition,
         None => return false,
     };
@@ -434,109 +434,133 @@ fn normalize_provider(provider: &str) -> &str {
         "deepseek" => "deep_seek",
         "moonshot" => "kimi",
         "openai" => "open_ai",
-        "openai_compatible" => "open_ai_compatible",
+        "openai_compatible" | "open_ai_compatible" => "custom-openai-compatible",
         "siliconflow" => "silicon_flow",
         value => value,
     }
 }
 
-fn provider_definition(provider: &str) -> Option<ProviderDefinition> {
+fn custom_provider_strategy<'a>(
+    provider: &str,
+    custom_providers: Option<&'a Value>,
+) -> Option<&'a str> {
+    custom_providers?
+        .get(provider)?
+        .get("strategy")
+        .and_then(Value::as_str)
+}
+
+fn provider_definition(
+    provider: &str,
+    custom_providers: Option<&Value>,
+) -> Option<ProviderDefinition> {
+    if provider.starts_with("custom-") {
+        let strategy = custom_provider_strategy(provider, custom_providers)?;
+        if !matches!(
+            strategy,
+            "openai_compatible" | "openai_responses" | "anthropic" | "gemini"
+        ) {
+            return None;
+        }
+        return Some(ProviderDefinition {
+            default_api_host: String::new(),
+            requires_api_key: true,
+        });
+    }
+
     let definition = match provider {
         "google_translate_free" => ProviderDefinition {
-            default_api_host: "https://translate.googleapis.com/translate_a/single",
+            default_api_host: "https://translate.googleapis.com/translate_a/single".to_string(),
             requires_api_key: false,
         },
         "google_translate" => ProviderDefinition {
-            default_api_host: "https://translation.googleapis.com/language/translate/v2",
+            default_api_host: "https://translation.googleapis.com/language/translate/v2"
+                .to_string(),
             requires_api_key: true,
         },
         "open_ai" => ProviderDefinition {
-            default_api_host: "https://api.openai.com",
+            default_api_host: "https://api.openai.com".to_string(),
             requires_api_key: true,
         },
         "open_ai_responses" => ProviderDefinition {
-            default_api_host: "https://api.openai.com",
+            default_api_host: "https://api.openai.com".to_string(),
             requires_api_key: true,
         },
         "azure_openai" => ProviderDefinition {
-            default_api_host: "",
+            default_api_host: String::new(),
             requires_api_key: true,
         },
         "anthropic" => ProviderDefinition {
-            default_api_host: "https://api.anthropic.com",
+            default_api_host: "https://api.anthropic.com".to_string(),
             requires_api_key: true,
         },
         "gemini" => ProviderDefinition {
-            default_api_host: "https://generativelanguage.googleapis.com",
+            default_api_host: "https://generativelanguage.googleapis.com".to_string(),
             requires_api_key: true,
         },
         "ollama" => ProviderDefinition {
-            default_api_host: "http://127.0.0.1:11434",
+            default_api_host: "http://127.0.0.1:11434".to_string(),
             requires_api_key: false,
         },
         "deep_seek" => ProviderDefinition {
-            default_api_host: "https://api.deepseek.com",
+            default_api_host: "https://api.deepseek.com".to_string(),
             requires_api_key: true,
         },
         "kimi" => ProviderDefinition {
-            default_api_host: "https://api.moonshot.cn",
+            default_api_host: "https://api.moonshot.cn".to_string(),
             requires_api_key: true,
         },
         "silicon_flow" => ProviderDefinition {
-            default_api_host: "https://api.siliconflow.cn",
+            default_api_host: "https://api.siliconflow.cn".to_string(),
             requires_api_key: true,
         },
         "qwen" => ProviderDefinition {
-            default_api_host: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            default_api_host: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
             requires_api_key: true,
         },
         "qwen_portal" => ProviderDefinition {
-            default_api_host: "https://portal.qwen.ai/v1",
+            default_api_host: "https://portal.qwen.ai/v1".to_string(),
             requires_api_key: true,
         },
         "minimax_global" => ProviderDefinition {
-            default_api_host: "https://api.minimaxi.chat/v1",
+            default_api_host: "https://api.minimaxi.chat/v1".to_string(),
             requires_api_key: true,
         },
         "minimax_cn" => ProviderDefinition {
-            default_api_host: "https://api.minimax.chat/v1",
+            default_api_host: "https://api.minimax.chat/v1".to_string(),
             requires_api_key: true,
         },
         "openrouter" => ProviderDefinition {
-            default_api_host: "https://openrouter.ai/api/v1",
+            default_api_host: "https://openrouter.ai/api/v1".to_string(),
             requires_api_key: true,
         },
         "lm_studio" => ProviderDefinition {
-            default_api_host: "http://localhost:1234/v1",
+            default_api_host: "http://localhost:1234/v1".to_string(),
             requires_api_key: false,
         },
         "groq" => ProviderDefinition {
-            default_api_host: "https://api.groq.com/openai",
+            default_api_host: "https://api.groq.com/openai".to_string(),
             requires_api_key: true,
         },
         "x_ai" => ProviderDefinition {
-            default_api_host: "https://api.x.ai",
+            default_api_host: "https://api.x.ai".to_string(),
             requires_api_key: true,
         },
         "mistral_ai" => ProviderDefinition {
-            default_api_host: "https://api.mistral.ai/v1",
+            default_api_host: "https://api.mistral.ai/v1".to_string(),
             requires_api_key: true,
         },
         "perplexity" => ProviderDefinition {
-            default_api_host: "https://api.perplexity.ai",
+            default_api_host: "https://api.perplexity.ai".to_string(),
             requires_api_key: true,
         },
         "volcengine" => ProviderDefinition {
-            default_api_host: "https://ark.cn-beijing.volces.com",
+            default_api_host: "https://ark.cn-beijing.volces.com".to_string(),
             requires_api_key: true,
         },
         "chatglm" => ProviderDefinition {
-            default_api_host: "https://open.bigmodel.cn/api/paas/v4/",
+            default_api_host: "https://open.bigmodel.cn/api/paas/v4/".to_string(),
             requires_api_key: true,
-        },
-        "open_ai_compatible" => ProviderDefinition {
-            default_api_host: "",
-            requires_api_key: false,
         },
         _ => return None,
     };
@@ -616,4 +640,78 @@ pub async fn automation_validate_rule_activation(
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn feature_llm_config_accepts_custom_provider_definition() {
+        let config = json!({
+            "llmSettings": {
+                "customProviders": {
+                    "custom-acme": {
+                        "id": "custom-acme",
+                        "name": "Acme Gateway",
+                        "strategy": "openai_responses",
+                        "createdAt": "2026-05-18T08:00:00.000Z"
+                    }
+                },
+                "providers": {
+                    "custom-acme": {
+                        "apiHost": "https://gateway.example.com",
+                        "apiKey": "test-key"
+                    }
+                },
+                "models": {
+                    "model-1": {
+                        "id": "model-1",
+                        "provider": "custom-acme",
+                        "model": "gpt-4o"
+                    }
+                },
+                "selections": {
+                    "polishModelId": "model-1"
+                }
+            }
+        });
+
+        assert!(is_feature_llm_config_complete(&config, "polish"));
+    }
+
+    #[test]
+    fn feature_llm_config_rejects_custom_provider_without_required_key() {
+        let config = json!({
+            "llmSettings": {
+                "customProviders": {
+                    "custom-acme": {
+                        "id": "custom-acme",
+                        "name": "Acme Gateway",
+                        "strategy": "gemini",
+                        "createdAt": "2026-05-18T08:00:00.000Z"
+                    }
+                },
+                "providers": {
+                    "custom-acme": {
+                        "apiHost": "https://gateway.example.com",
+                        "apiKey": ""
+                    }
+                },
+                "models": {
+                    "model-1": {
+                        "id": "model-1",
+                        "provider": "custom-acme",
+                        "model": "gemini-2.5-flash"
+                    }
+                },
+                "selections": {
+                    "translationModelId": "model-1"
+                }
+            }
+        });
+
+        assert!(!is_feature_llm_config_complete(&config, "translation"));
+    }
 }

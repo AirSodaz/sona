@@ -139,4 +139,34 @@ describe('llm runtime', () => {
     expect(isSummaryLlmConfigComplete({ llmSettings: missingSummarySelection })).toBe(false);
     expect(isFeatureLlmConfigComplete({ llmSettings: missingSummarySelection }, 'summary')).toBe(false);
   });
+
+  it('resolves runtime strategy for custom providers', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings.customProviders = {
+      'custom-claude-gateway': {
+        id: 'custom-claude-gateway',
+        name: 'Claude Gateway',
+        strategy: 'anthropic',
+        createdAt: '2026-05-18T00:00:00.000Z',
+      },
+    };
+    llmSettings = updateProviderSetting(llmSettings, 'custom-claude-gateway', {
+      apiHost: 'https://claude.example.com',
+      apiKey: 'claude-key',
+    });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'custom-claude-gateway',
+      model: 'claude-sonnet-4-20250514',
+    });
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
+
+    expect(getFeatureLlmConfig({ llmSettings }, 'summary')).toEqual(expect.objectContaining({
+      provider: 'custom-claude-gateway',
+      strategy: 'anthropic',
+      baseUrl: 'https://claude.example.com',
+      apiKey: 'claude-key',
+      model: 'claude-sonnet-4-20250514',
+    }));
+    expect(isFeatureLlmConfigComplete({ llmSettings }, 'summary')).toBe(true);
+  });
 });

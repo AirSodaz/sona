@@ -219,7 +219,7 @@ impl LlmAdapter for GoogleTranslateAdapter {
             .join("\n");
         let base_url = LlmApiUrl::parse(&config.base_url)?;
 
-        if config.provider == LlmProvider::GoogleTranslateFree {
+        if config.strategy == LlmProviderStrategy::GoogleTranslateFree {
             let fetch_client = client.clone();
 
             let (_, text) = execute_google_translate_free_request(
@@ -313,8 +313,8 @@ impl LlmAdapter for GenericHttpAdapter {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let response = match config.provider {
-            LlmProvider::OpenAiResponses => {
+        let response = match config.strategy {
+            LlmProviderStrategy::OpenAiResponses => {
                 generate_with_openai_responses_api(
                     &config.base_url,
                     &config.api_key,
@@ -325,7 +325,7 @@ impl LlmAdapter for GenericHttpAdapter {
                 )
                 .await?
             }
-            LlmProvider::AzureOpenAi => {
+            LlmProviderStrategy::AzureOpenAi => {
                 generate_with_azure_openai(
                     &config.base_url,
                     &config.api_key,
@@ -336,7 +336,7 @@ impl LlmAdapter for GenericHttpAdapter {
                 )
                 .await?
             }
-            LlmProvider::Perplexity => {
+            LlmProviderStrategy::Perplexity => {
                 generate_with_perplexity(
                     &config.api_key,
                     &config.model,
@@ -365,26 +365,25 @@ impl LlmAdapter for GenericHttpAdapter {
 pub(crate) struct AdapterFactory;
 
 impl AdapterFactory {
-    pub(crate) fn create(provider: LlmProvider) -> Box<dyn LlmAdapter> {
-        match provider {
-            LlmProvider::OpenAi
-            | LlmProvider::DeepSeek
-            | LlmProvider::Kimi
-            | LlmProvider::SiliconFlow
-            | LlmProvider::Qwen
-            | LlmProvider::QwenPortal
-            | LlmProvider::MinimaxGlobal
-            | LlmProvider::MinimaxCn
-            | LlmProvider::OpenRouter
-            | LlmProvider::LmStudio
-            | LlmProvider::Groq
-            | LlmProvider::XAi
-            | LlmProvider::MistralAi
-            | LlmProvider::OpenAiCompatible => Box::new(OpenAiAdapter),
-            LlmProvider::Anthropic => Box::new(AnthropicAdapter),
-            LlmProvider::Ollama => Box::new(OllamaAdapter),
-            LlmProvider::Gemini => Box::new(GeminiAdapter),
-            LlmProvider::GoogleTranslate | LlmProvider::GoogleTranslateFree => {
+    pub(crate) fn create(strategy: LlmProviderStrategy) -> Box<dyn LlmAdapter> {
+        match strategy {
+            LlmProviderStrategy::OpenAi
+            | LlmProviderStrategy::DeepSeek
+            | LlmProviderStrategy::Kimi
+            | LlmProviderStrategy::SiliconFlow
+            | LlmProviderStrategy::Qwen
+            | LlmProviderStrategy::QwenPortal
+            | LlmProviderStrategy::MinimaxGlobal
+            | LlmProviderStrategy::MinimaxCn
+            | LlmProviderStrategy::OpenRouter
+            | LlmProviderStrategy::LmStudio
+            | LlmProviderStrategy::Groq
+            | LlmProviderStrategy::XAi
+            | LlmProviderStrategy::MistralAi => Box::new(OpenAiAdapter),
+            LlmProviderStrategy::Anthropic => Box::new(AnthropicAdapter),
+            LlmProviderStrategy::Ollama => Box::new(OllamaAdapter),
+            LlmProviderStrategy::Gemini => Box::new(GeminiAdapter),
+            LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => {
                 Box::new(GoogleTranslateAdapter)
             }
             _ => Box::new(GenericHttpAdapter),
@@ -551,15 +550,16 @@ pub(crate) async fn get_openai_models(
     Err("Failed to fetch models from any known endpoint".to_string())
 }
 
-pub(crate) fn provider_supports_model_listing(provider: &LlmProvider) -> bool {
+pub(crate) fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> bool {
     !matches!(
-        provider,
-        LlmProvider::Anthropic
-            | LlmProvider::AzureOpenAi
-            | LlmProvider::Volcengine
-            | LlmProvider::Perplexity
-            | LlmProvider::GoogleTranslate
-            | LlmProvider::GoogleTranslateFree
+        strategy,
+        LlmProviderStrategy::Anthropic
+            | LlmProviderStrategy::AzureOpenAi
+            | LlmProviderStrategy::Volcengine
+            | LlmProviderStrategy::Perplexity
+            | LlmProviderStrategy::OpenAiCompatibleCustomPath
+            | LlmProviderStrategy::GoogleTranslate
+            | LlmProviderStrategy::GoogleTranslateFree
     )
 }
 
@@ -732,7 +732,7 @@ pub(crate) fn emit_llm_usage_event(
 ) {
     let payload = LlmUsageEventPayload {
         occurred_at,
-        provider: config.provider,
+        provider: config.provider.clone(),
         model: config.model.clone(),
         category,
         usage,

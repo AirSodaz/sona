@@ -1,4 +1,8 @@
 import {
+  BuiltInLlmProvider,
+  CustomLlmProvider,
+  CustomLlmProviderId,
+  CustomLlmProviderStrategy,
   LlmConfig,
   LlmProvider,
   LlmProviderSetting,
@@ -22,9 +26,13 @@ export interface LlmProviderDefinition {
 export const DEFAULT_LLM_TEMPERATURE = 0.7;
 export const DEFAULT_LLM_PROVIDER: LlmProvider = 'google_translate_free';
 
+export type CustomLlmProviderInput = Omit<CustomLlmProvider, 'id'> & {
+  id?: CustomLlmProviderId;
+};
+
 // This registry is the durable source for provider-specific defaults. Feature configs
 // derive from it later, so adding or changing provider behavior should start here.
-export const LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
+export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
   {
     id: 'google_translate_free',
     label: 'Google Translate (Free)',
@@ -216,21 +224,15 @@ export const LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
     supportsModelListing: true,
     requiresApiKey: true,
   },
-  {
-    id: 'open_ai_compatible',
-    label: 'OpenAI Compatible',
-    strategy: 'openai_compatible',
-    defaultApiHost: '',
-    supportsModelListing: true,
-    requiresApiKey: false,
-  },
 ];
 
-export const LLM_PROVIDER_MAP: Record<LlmProvider, LlmProviderDefinition> =
-  LLM_PROVIDER_DEFINITIONS.reduce((acc, provider) => {
-    acc[provider.id] = provider;
+export const LLM_PROVIDER_DEFINITIONS = BUILT_IN_LLM_PROVIDER_DEFINITIONS;
+
+export const LLM_PROVIDER_MAP: Record<BuiltInLlmProvider, LlmProviderDefinition> =
+  BUILT_IN_LLM_PROVIDER_DEFINITIONS.reduce((acc, provider) => {
+    acc[provider.id as BuiltInLlmProvider] = provider;
     return acc;
-  }, {} as Record<LlmProvider, LlmProviderDefinition>);
+  }, {} as Record<BuiltInLlmProvider, LlmProviderDefinition>);
 
 // Older config snapshots used several provider spellings. Normalize them before any
 // migration logic so the rest of the file only reasons about canonical ids.
@@ -245,19 +247,24 @@ const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
   moonshot: 'kimi',
   ollama: 'ollama',
   open_ai: 'open_ai',
-  openai_compatible: 'open_ai_compatible',
-  open_ai_compatible: 'open_ai_compatible',
+  openai_compatible: 'custom-openai-compatible',
+  open_ai_compatible: 'custom-openai-compatible',
   openai: 'open_ai',
   silicon_flow: 'silicon_flow',
   siliconflow: 'silicon_flow',
 };
 
-function isProvider(value: unknown): value is LlmProvider {
-  return typeof value === 'string' && value in LLM_PROVIDER_MAP;
+function isBuiltInProvider(value: unknown): value is BuiltInLlmProvider {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(LLM_PROVIDER_MAP, value);
+}
+
+export function isCustomProviderId(value: unknown): value is CustomLlmProviderId {
+  return typeof value === 'string' && /^custom-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(value);
 }
 
 export function normalizeProvider(value: unknown): LlmProvider {
-  if (isProvider(value)) {
+  if (isBuiltInProvider(value) || isCustomProviderId(value)) {
     return value;
   }
   if (typeof value === 'string' && value in LEGACY_PROVIDER_MAP) {
@@ -266,12 +273,109 @@ export function normalizeProvider(value: unknown): LlmProvider {
   return DEFAULT_LLM_PROVIDER;
 }
 
-export function getProviderDefinition(provider: LlmProvider): LlmProviderDefinition {
-  return LLM_PROVIDER_MAP[provider];
+export function createCustomProviderId(
+  name: string,
+  existingProviders: Partial<Record<LlmProvider, unknown>> | undefined,
+): CustomLlmProviderId {
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const baseId = `custom-${normalized || 'provider'}` as CustomLlmProviderId;
+  if (!existingProviders?.[baseId]) {
+    return baseId;
+  }
+
+  let suffix = 2;
+  while (existingProviders[`${baseId}-${suffix}` as LlmProvider]) {
+    suffix += 1;
+  }
+  return `${baseId}-${suffix}` as CustomLlmProviderId;
 }
 
-export function createProviderSetting(provider: LlmProvider): LlmProviderSetting {
-  const definition = getProviderDefinition(provider);
+function customProviderDefaults(strategy: CustomLlmProviderStrategy): Pick<LlmProviderDefinition, 'defaultApiHost' | 'defaultApiPath' | 'supportsModelListing' | 'requiresApiKey'> {
+  switch (strategy) {
+    case 'openai_responses':
+      return {
+        defaultApiHost: '',
+        defaultApiPath: '/v1/responses',
+        supportsModelListing: true,
+        requiresApiKey: true,
+      };
+    case 'anthropic':
+      return {
+        defaultApiHost: '',
+        supportsModelListing: false,
+        requiresApiKey: true,
+      };
+    case 'gemini':
+      return {
+        defaultApiHost: '',
+        supportsModelListing: true,
+        requiresApiKey: true,
+      };
+    case 'openai_compatible':
+    default:
+      return {
+        defaultApiHost: '',
+        defaultApiPath: '/v1/chat/completions',
+        supportsModelListing: true,
+        requiresApiKey: true,
+      };
+  }
+}
+
+export function createCustomProviderDefinition(provider: CustomLlmProvider): LlmProviderDefinition {
+  return {
+    id: provider.id,
+    label: provider.name,
+    strategy: provider.strategy,
+    editableApiHost: true,
+    ...customProviderDefaults(provider.strategy),
+  };
+}
+
+export function listProviderDefinitions(
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+): LlmProviderDefinition[] {
+  return [
+    ...BUILT_IN_LLM_PROVIDER_DEFINITIONS,
+    ...Object.values(customProviders ?? {})
+      .filter((provider): provider is CustomLlmProvider => Boolean(provider?.id && provider.name && provider.strategy))
+      .map(createCustomProviderDefinition),
+  ];
+}
+
+export function getProviderDefinition(
+  provider: LlmProvider,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+): LlmProviderDefinition {
+  if (isBuiltInProvider(provider)) {
+    const definition = LLM_PROVIDER_MAP[provider];
+    if (definition) {
+      return definition;
+    }
+  }
+
+  const customProvider = customProviders?.[provider];
+  if (customProvider) {
+    return createCustomProviderDefinition(customProvider);
+  }
+
+  return createCustomProviderDefinition({
+    id: provider as CustomLlmProviderId,
+    name: provider,
+    strategy: 'openai_compatible',
+    createdAt: '',
+  });
+}
+
+export function createProviderSetting(
+  provider: LlmProvider,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+): LlmProviderSetting {
+  const definition = getProviderDefinition(provider, customProviders);
   return {
     apiHost: definition.defaultApiHost,
     apiKey: '',
@@ -280,11 +384,17 @@ export function createProviderSetting(provider: LlmProvider): LlmProviderSetting
   };
 }
 
-export function buildLlmConfig(provider: LlmProvider, setting: LlmProviderSetting): LlmConfig {
+export function buildLlmConfig(
+  provider: LlmProvider,
+  setting: LlmProviderSetting,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+): LlmConfig {
+  const definition = getProviderDefinition(provider, customProviders);
   // This returns a provider-level runtime snapshot without picking a concrete model yet.
   // Feature helpers layer the selected model and temperature on top of this base shape.
   return {
     provider,
+    strategy: definition.strategy,
     baseUrl: setting.apiHost,
     apiKey: setting.apiKey,
     model: '',

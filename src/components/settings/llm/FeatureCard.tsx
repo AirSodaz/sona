@@ -13,10 +13,10 @@ import { isFeatureLlmConfigComplete } from '../../../services/llm/runtime';
 import {
   DEFAULT_LLM_TEMPERATURE,
   getProviderDefinition,
-  LLM_PROVIDER_DEFINITIONS,
+  listProviderDefinitions,
 } from '../../../services/llm/providers';
 import { listLlmModels } from '../../../services/tauri/llm';
-import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfigured } from './helpers';
+import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
 
 interface FeatureCardProps {
   stepNumber: number;
@@ -64,7 +64,7 @@ export const FeatureCard = React.memo(function FeatureCard({
   const providerApiKey = currentLlmState.providers[localProvider]?.apiKey;
 
   const providerOptions = useMemo(() => {
-    const filtered = LLM_PROVIDER_DEFINITIONS.filter(p => {
+    const filtered = listProviderDefinitions(currentLlmState.customProviders).filter(p => {
       if (p.id === selectedProvider) return true;
 
       if (featureId !== 'translation' && (p.id === 'google_translate' || p.id === 'google_translate_free')) {
@@ -72,14 +72,14 @@ export const FeatureCard = React.memo(function FeatureCard({
       }
 
       const setting = currentLlmState.providers[p.id as LlmProvider];
-      return isProviderConfigured(p.id as LlmProvider, setting);
+      return isProviderConfiguredForConfig(config, p.id as LlmProvider, setting);
     });
 
     return filtered.map((p) => ({
       value: p.id,
       label: p.label,
     }));
-  }, [featureId, currentLlmState.providers, selectedProvider]);
+  }, [config, featureId, currentLlmState.customProviders, currentLlmState.providers, selectedProvider]);
 
   const filteredCandidates = useMemo(() => {
     const query = localModelName.trim().toLowerCase();
@@ -89,21 +89,22 @@ export const FeatureCard = React.memo(function FeatureCard({
 
   const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
     const setting = currentLlmState.providers[provider];
-    if (!getProviderDefinition(provider).supportsModelListing || !setting) {
+    if (!getProviderDefinition(provider, currentLlmState.customProviders).supportsModelListing || !setting) {
       setModelCandidates([]);
       setIsLoadingCandidates(false);
       return;
     }
     setIsLoadingCandidates(true);
     try {
-      const result = await listLlmModels({ provider, baseUrl: setting.apiHost, apiKey: setting.apiKey });
+      const strategy = getProviderDefinition(provider, currentLlmState.customProviders).strategy;
+      const result = await listLlmModels({ provider, strategy, baseUrl: setting.apiHost, apiKey: setting.apiKey });
       setModelCandidates(Array.isArray(result) ? result : []);
     } catch {
       setModelCandidates([]);
     } finally {
       setIsLoadingCandidates(false);
     }
-  }, [currentLlmState.providers]);
+  }, [currentLlmState.customProviders, currentLlmState.providers]);
 
   useEffect(() => {
     if (!isActive) {

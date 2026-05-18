@@ -1,5 +1,7 @@
 import type { AppConfig } from '../../types/config';
 import type {
+  CustomLlmProvider,
+  CustomLlmProviderStrategy,
   LlmConfig,
   LlmFeature,
   LlmProvider,
@@ -16,6 +18,25 @@ import {
   getFeatureModelEntry,
 } from './state';
 
+function customProviderFromConfig(llmConfig: LlmConfig): Partial<Record<LlmProvider, CustomLlmProvider>> | undefined {
+  if (!llmConfig.provider.startsWith('custom-')) {
+    return undefined;
+  }
+
+  const strategy: CustomLlmProviderStrategy = llmConfig.strategy === 'anthropic' || llmConfig.strategy === 'gemini' || llmConfig.strategy === 'openai_responses'
+    ? llmConfig.strategy
+    : 'openai_compatible';
+
+  return {
+    [llmConfig.provider]: {
+      id: llmConfig.provider as `custom-${string}`,
+      name: llmConfig.provider,
+      strategy,
+      createdAt: '',
+    },
+  };
+}
+
 export function getActiveProvider(config: Pick<AppConfig, 'llmSettings'>): LlmProvider {
   return normalizeProvider(config.llmSettings?.activeProvider);
 }
@@ -27,7 +48,7 @@ export function getActiveProviderSetting(config: Pick<AppConfig, 'llmSettings'>)
 
 export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings'>): LlmConfig {
   const provider = getActiveProvider(config);
-  return buildLlmConfig(provider, getActiveProviderSetting(config));
+  return buildLlmConfig(provider, getActiveProviderSetting(config), config.llmSettings?.customProviders);
 }
 
 function getFeatureTemperature(
@@ -61,7 +82,7 @@ export function getFeatureLlmConfig(
   // provider UI. That keeps one persisted provider registry while allowing each feature
   // to talk to a different backend with its own model and temperature.
   return {
-    ...buildLlmConfig(modelEntry.provider, setting),
+    ...buildLlmConfig(modelEntry.provider, setting, config.llmSettings?.customProviders),
     model: modelEntry.model,
     temperature: getFeatureTemperature(config, feature),
   };
@@ -72,12 +93,24 @@ export function isLlmConfigComplete(llmConfig: LlmConfig | null): boolean {
     return false;
   }
 
-  const definition = getProviderDefinition(llmConfig.provider);
+  const definition = getProviderDefinition(llmConfig.provider, customProviderFromConfig(llmConfig));
   const hasApiHost = Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(llmConfig.apiKey?.trim());
   const hasModel = Boolean(llmConfig.model?.trim());
 
   return hasApiHost && hasApiKey && hasModel;
+}
+
+export function isProviderConfigComplete(
+  provider: LlmProvider,
+  setting: LlmProviderSetting | undefined,
+  customProviders?: Pick<NonNullable<AppConfig['llmSettings']>, 'customProviders'>['customProviders'],
+): boolean {
+  const definition = getProviderDefinition(provider, customProviders);
+  const hasApiHost = Boolean(setting?.apiHost?.trim() || definition.defaultApiHost);
+  const hasApiKey = !definition.requiresApiKey || Boolean(setting?.apiKey?.trim());
+
+  return hasApiHost && hasApiKey;
 }
 
 export function isFeatureLlmConfigComplete(

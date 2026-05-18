@@ -823,8 +823,11 @@ pub(crate) fn split_summary_segments(
     chunks
 }
 
-pub(crate) fn validate_summary_provider(provider: LlmProvider) -> Result<(), String> {
-    if provider == LlmProvider::GoogleTranslate || provider == LlmProvider::GoogleTranslateFree {
+pub(crate) fn validate_summary_strategy(strategy: LlmProviderStrategy) -> Result<(), String> {
+    if matches!(
+        strategy,
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+    ) {
         return Err("Google Translate does not support transcript summaries".to_string());
     }
 
