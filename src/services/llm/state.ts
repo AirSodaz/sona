@@ -2,6 +2,7 @@ import type { AppConfig } from '../../types/config';
 import {
   CustomLlmProvider,
   CustomLlmProviderStrategy,
+  LlmDiscoveredModelSummary,
   LlmFeature,
   LlmModelEntry,
   LlmProvider,
@@ -166,7 +167,7 @@ export function addCustomProvider(
 
 export function addLlmModel(
   llmSettings: LlmSettings | undefined,
-  entry: Pick<LlmModelEntry, 'provider' | 'model'>,
+  entry: Pick<LlmModelEntry, 'provider' | 'model'> & Partial<Pick<LlmModelEntry, 'source' | 'metadata'>>,
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(entry.provider);
   const model = entry.model.trim();
@@ -179,7 +180,27 @@ export function addLlmModel(
     return existing?.provider === entry.provider && existing.model === model;
   });
   if (existingId) {
-    return current;
+    const existing = current.models[existingId];
+    const nextEntry: LlmModelEntry = {
+      ...existing,
+      source: entry.source ?? existing.source ?? 'manual',
+      metadata: entry.metadata ?? existing.metadata,
+    };
+    if (
+      nextEntry.source === existing.source
+      && nextEntry.metadata === existing.metadata
+    ) {
+      return current;
+    }
+
+    return {
+      ...current,
+      customProviders: current.customProviders ?? {},
+      models: {
+        ...current.models,
+        [existingId]: nextEntry,
+      },
+    };
   }
 
   const nextId = ensureUniqueModelId(current.models, createModelId(entry.provider, model));
@@ -192,6 +213,8 @@ export function addLlmModel(
         id: nextId,
         provider: entry.provider,
         model,
+        source: entry.source ?? 'manual',
+        metadata: entry.metadata,
       },
     },
     modelOrder: [...current.modelOrder, nextId],
@@ -266,6 +289,74 @@ export function getOrderedLlmModels(llmSettings: LlmSettings | undefined): LlmMo
   return current.modelOrder
     .map((modelId) => current.models[modelId])
     .filter((entry): entry is LlmModelEntry => Boolean(entry));
+}
+
+export function getProviderLlmModels(
+  llmSettings: LlmSettings | undefined,
+  provider: LlmProvider,
+): LlmModelEntry[] {
+  return getOrderedLlmModels(llmSettings).filter((entry) => entry.provider === provider);
+}
+
+export function findLlmModelId(
+  llmSettings: LlmSettings | undefined,
+  provider: LlmProvider,
+  model: string,
+): string | undefined {
+  const normalizedModel = model.trim();
+  if (!normalizedModel) {
+    return undefined;
+  }
+
+  const current = llmSettings ?? createLlmSettings(provider);
+  return current.modelOrder.find((modelId) => {
+    const entry = current.models[modelId];
+    return entry?.provider === provider && entry.model === normalizedModel;
+  });
+}
+
+export function syncProviderDiscoveredModels(
+  llmSettings: LlmSettings | undefined,
+  provider: LlmProvider,
+  discoveredModels: LlmDiscoveredModelSummary[],
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings(provider);
+  const nextDiscoveredModelNames = new Set(
+    discoveredModels
+      .map((entry) => entry.model.trim())
+      .filter(Boolean),
+  );
+
+  let nextSettings = current;
+  for (const discoveredModel of discoveredModels) {
+    const model = discoveredModel.model.trim();
+    if (!model) {
+      continue;
+    }
+    nextSettings = addLlmModel(nextSettings, {
+      provider,
+      model,
+      source: 'discovered',
+      metadata: {
+        inputPrice: discoveredModel.inputPrice,
+        outputPrice: discoveredModel.outputPrice,
+        contextWindow: discoveredModel.contextWindow,
+        maxOutputTokens: discoveredModel.maxOutputTokens,
+        supportsMultimodal: discoveredModel.supportsMultimodal,
+        supportsTools: discoveredModel.supportsTools,
+        supportsReasoning: discoveredModel.supportsReasoning,
+      },
+    });
+  }
+
+  for (const entry of getProviderLlmModels(nextSettings, provider)) {
+    if (entry.source !== 'discovered' || nextDiscoveredModelNames.has(entry.model)) {
+      continue;
+    }
+    nextSettings = removeLlmModel(nextSettings, entry.id);
+  }
+
+  return nextSettings;
 }
 
 export function getFeatureModelId(

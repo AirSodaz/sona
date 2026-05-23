@@ -265,19 +265,58 @@ fn gemini_model_filter_keeps_generate_content_models() {
     let text_model = GeminiModel {
         name: "models/gemini-2.5-flash".to_string(),
         supported_generation_methods: Some(vec!["generateContent".to_string()]),
+        input_token_limit: None,
+        output_token_limit: None,
     };
     let embedding_model = GeminiModel {
         name: "models/text-embedding-004".to_string(),
         supported_generation_methods: Some(vec!["embedContent".to_string()]),
+        input_token_limit: None,
+        output_token_limit: None,
     };
     let legacy_model = GeminiModel {
         name: "models/gemini-pro".to_string(),
         supported_generation_methods: None,
+        input_token_limit: None,
+        output_token_limit: None,
     };
 
     assert!(is_gemini_text_generation_model(&text_model));
     assert!(!is_gemini_text_generation_model(&embedding_model));
     assert!(is_gemini_text_generation_model(&legacy_model));
+}
+
+#[test]
+fn gemini_model_summary_preserves_supported_capabilities() {
+    let model = GeminiModel {
+        name: "models/gemini-2.5-pro".to_string(),
+        supported_generation_methods: Some(vec![
+            "generateContent".to_string(),
+            "countTokens".to_string(),
+        ]),
+        input_token_limit: Some(1_048_576),
+        output_token_limit: Some(65_536),
+    };
+
+    let summary = gemini_model_to_summary(model).expect("gemini text model should be converted");
+
+    assert_eq!(summary.model, "gemini-2.5-pro");
+    assert_eq!(summary.context_window, Some(1_048_576));
+    assert_eq!(summary.max_output_tokens, Some(65_536));
+    assert_eq!(summary.supports_tools, Some(true));
+    assert_eq!(summary.supports_multimodal, Some(true));
+  }
+
+#[test]
+fn openai_model_summary_defaults_missing_metadata_to_none() {
+    let summary = openai_model_to_summary(OpenAiModel {
+        id: "gpt-4.1-mini".to_string(),
+    });
+
+    assert_eq!(summary.model, "gpt-4.1-mini");
+    assert_eq!(summary.context_window, None);
+    assert_eq!(summary.input_price, None);
+    assert_eq!(summary.supports_reasoning, None);
 }
 
 #[test]

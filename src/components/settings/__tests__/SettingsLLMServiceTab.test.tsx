@@ -8,6 +8,7 @@ import {
   addLlmModel,
   buildLlmConfigPatch,
   createLlmSettings,
+  syncProviderDiscoveredModels,
   setFeatureModelSelection,
   updateProviderSetting,
 } from '../../../services/llm/state';
@@ -67,7 +68,10 @@ describe('SettingsLLMServiceTab', () => {
     currentConfig = buildConfig();
     vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
       if (command === 'list_llm_models') {
-        return ['gpt-4o', 'gpt-4.1-mini'];
+        return [
+          { model: 'gpt-4o', contextWindow: 128000, supportsTools: true },
+          { model: 'gpt-4.1-mini', supportsReasoning: true },
+        ];
       }
       return 'OK';
     });
@@ -82,6 +86,31 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+  });
+
+  it('shows details for non-google providers and keeps test connection for google providers', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    expect(screen.getByRole('button', { name: 'settings.llm.details' })).toBeDefined();
+
+    currentConfig = buildConfig('google_translate_free', false);
+    currentConfig.llmSettings = setFeatureModelSelection(
+      addLlmModel(currentConfig.llmSettings, { provider: 'google_translate_free', model: 'default' }),
+      'translation',
+      'google_translate_free-default',
+    );
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    expect(screen.getByRole('button', { name: 'settings.llm.test_connection' })).toBeDefined();
   });
 
   it('uses the llm_service tabpanel id expected by the settings tab button', async () => {
@@ -187,7 +216,7 @@ describe('SettingsLLMServiceTab', () => {
     const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini'); // Default placeholder for OpenAI
     const modelInput = modelInputs[0]; // Polish model input
 
-    expect(screen.queryByText('gpt-4.1-mini')).toBeNull();
+    expect(screen.queryByText('gpt-4o')).toBeNull();
 
     await act(async () => {
       fireEvent.focus(modelInput);
@@ -195,7 +224,7 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('gpt-4.1-mini')).toBeDefined();
+      expect(screen.getByText('gpt-4o')).toBeDefined();
     });
 
     await act(async () => {
@@ -203,8 +232,39 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText('gpt-4.1-mini')).toBeNull();
+      expect(screen.queryByText('gpt-4o')).toBeNull();
     });
+  });
+
+  it('uses persisted provider models instead of refetching candidates when they already exist', async () => {
+    let llmSettings = buildConfig('open_ai').llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1', contextWindow: 128000 },
+      { model: 'gpt-4.1-mini', supportsReasoning: true },
+    ]);
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    const modelInputs = screen.getAllByDisplayValue('gpt-4o');
+    await act(async () => {
+      fireEvent.focus(modelInputs[0]);
+      fireEvent.change(modelInputs[0], { target: { value: '' } });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('gpt-4.1')).toBeDefined();
+      expect(screen.getByText('gpt-4.1-mini')).toBeDefined();
+    });
+
+    expect(vi.mocked(tauriApi.invoke)).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
   });
 
   it('adds a model through the searchable model input flow', async () => {
@@ -343,7 +403,7 @@ describe('SettingsLLMServiceTab', () => {
   it('surfaces normalized connection errors', async () => {
     vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
       if (command === 'list_llm_models') {
-        return ['gpt-4o'];
+        return [{ model: 'gpt-4o' }];
       }
       throw 'error invoking command `generate_llm_text`: failed to deserialize response body: Caused by: Network Error';
     });
@@ -354,15 +414,160 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    const testButtons = screen.getAllByText('settings.llm.test_connection');
     await act(async () => {
-      fireEvent.click(testButtons[0]);
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'settings.llm.details' })).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.test_connection gpt-4o' }));
     });
 
     await waitFor(() => {
       expect(screen.getByText('settings.llm.connection_failed')).toBeDefined();
       expect(screen.getByText('Network Error')).toBeDefined();
     });
+  });
+
+  it('renders provider details inside the shared panel modal shell', async () => {
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
+    });
+
+    await waitFor(() => {
+      const dialog = screen.getByRole('dialog', { name: 'settings.llm.details' });
+      expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
+      expect(dialog.querySelector('.panel-modal-header')).toBeTruthy();
+      expect(dialog.querySelector('.panel-modal-content')).toBeTruthy();
+    });
+  });
+
+  it('opens provider details, auto-loads models, and tests only the selected model row', async () => {
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      llmSettings: syncProviderDiscoveredModels(buildConfig('open_ai').llmSettings!, 'open_ai', [
+        { model: 'gpt-4o', contextWindow: 128000 },
+        { model: 'gpt-4.1-mini', supportsReasoning: true },
+      ]),
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'settings.llm.details' })).toBeDefined();
+      expect(screen.getByText('gpt-4.1-mini')).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.test_connection gpt-4.1-mini' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.llm.connection_success')).toBeDefined();
+    });
+  });
+
+  it('shows delete only for manual models and hides source labels in provider details', async () => {
+    let llmSettings = buildConfig('open_ai').llmSettings!;
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4o', contextWindow: 128000 },
+    ]);
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'manual-model',
+      source: 'manual',
+    });
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      llmSettings,
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('manual-model')).toBeDefined();
+    });
+
+    const discoveredCard = screen.getByText('gpt-4o').closest('.provider-model-card');
+    const manualCard = screen.getByText('manual-model').closest('.provider-model-card');
+
+    expect(discoveredCard?.querySelector('button[aria-label="common.delete"]')).toBeNull();
+    expect(manualCard?.querySelector('button[aria-label="common.delete"]')).toBeTruthy();
+    expect(screen.queryByText('manual')).toBeNull();
+    expect(screen.queryByText('discovered')).toBeNull();
+  });
+
+  it('shows capability icons only for true metadata flags', async () => {
+    currentConfig = {
+      ...buildConfig('open_ai'),
+      llmSettings: syncProviderDiscoveredModels(buildConfig('open_ai').llmSettings!, 'open_ai', [
+        {
+          model: 'gpt-4o',
+          contextWindow: 128000,
+          supportsMultimodal: true,
+          supportsTools: true,
+        },
+        {
+          model: 'gpt-4.1-mini',
+          supportsReasoning: true,
+          supportsTools: false,
+        },
+      ]),
+    };
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('gpt-4.1-mini')).toBeDefined();
+    });
+
+    const multimodalIcon = screen.getByLabelText('settings.llm.capability_multimodal');
+    const toolsIcon = screen.getByLabelText('settings.llm.capability_tools');
+    const reasoningIcon = screen.getByLabelText('settings.llm.capability_reasoning');
+    const firstModelCard = screen.getByText('gpt-4o').closest('.provider-model-card');
+    const secondModelCard = screen.getByText('gpt-4.1-mini').closest('.provider-model-card');
+
+    expect(firstModelCard?.contains(multimodalIcon)).toBe(true);
+    expect(firstModelCard?.contains(toolsIcon)).toBe(true);
+    expect(firstModelCard?.contains(reasoningIcon)).toBe(false);
+    expect(secondModelCard?.contains(reasoningIcon)).toBe(true);
+    expect(secondModelCard?.contains(toolsIcon)).toBe(false);
+    expect(screen.queryByText(/Multimodal:/)).toBeNull();
+    expect(screen.queryByText(/Tools:/)).toBeNull();
+    expect(screen.queryByText(/Reasoning:/)).toBeNull();
   });
 
   it('adds a custom provider and expands its credentials panel', async () => {

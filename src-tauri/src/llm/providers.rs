@@ -392,8 +392,8 @@ impl AdapterFactory {
 }
 
 #[derive(Deserialize)]
-struct OpenAiModel {
-    id: String,
+pub(crate) struct OpenAiModel {
+    pub(crate) id: String,
 }
 
 #[derive(Deserialize)]
@@ -416,6 +416,10 @@ pub(crate) struct GeminiModel {
     pub(crate) name: String,
     #[serde(rename = "supportedGenerationMethods")]
     pub(crate) supported_generation_methods: Option<Vec<String>>,
+    #[serde(rename = "inputTokenLimit")]
+    pub(crate) input_token_limit: Option<u64>,
+    #[serde(rename = "outputTokenLimit")]
+    pub(crate) output_token_limit: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -462,6 +466,41 @@ pub(crate) fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
         .unwrap_or(true)
 }
 
+pub(crate) fn gemini_model_to_summary(model: GeminiModel) -> Option<LlmModelSummary> {
+    if !is_gemini_text_generation_model(&model) {
+      return None;
+    }
+
+    let supports_tools = model
+        .supported_generation_methods
+        .as_ref()
+        .map(|methods| methods.iter().any(|method| method == "generateContent"));
+
+    Some(LlmModelSummary {
+        model: model.name.trim_start_matches("models/").to_string(),
+        input_price: None,
+        output_price: None,
+        context_window: model.input_token_limit,
+        max_output_tokens: model.output_token_limit,
+        supports_multimodal: Some(true),
+        supports_tools,
+        supports_reasoning: None,
+    })
+}
+
+pub(crate) fn openai_model_to_summary(model: OpenAiModel) -> LlmModelSummary {
+    LlmModelSummary {
+        model: model.id,
+        input_price: None,
+        output_price: None,
+        context_window: None,
+        max_output_tokens: None,
+        supports_multimodal: None,
+        supports_tools: None,
+        supports_reasoning: None,
+    }
+}
+
 pub(crate) fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String> {
     let base = base_url.trim_end_matches('/');
 
@@ -490,7 +529,7 @@ pub(crate) async fn get_gemini_models(
     client: &Client,
     api_key: &str,
     base_url: &LlmApiUrl,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<LlmModelSummary>, String> {
     let url = build_gemini_models_url(base_url)?;
     let mut request = client
         .get(url.reqwest_url())
@@ -512,8 +551,7 @@ pub(crate) async fn get_gemini_models(
         .models
         .unwrap_or_default()
         .into_iter()
-        .filter(is_gemini_text_generation_model)
-        .map(|m| m.name.trim_start_matches("models/").to_string())
+        .filter_map(gemini_model_to_summary)
         .collect())
 }
 
@@ -522,7 +560,7 @@ pub(crate) async fn get_openai_models(
     api_key: &str,
     base_url: &LlmApiUrl,
     is_ollama: bool,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<LlmModelSummary>, String> {
     for url in build_openai_models_urls(base_url, is_ollama)? {
         let mut req = client
             .get(url.reqwest_url())
@@ -537,11 +575,28 @@ pub(crate) async fn get_openai_models(
                 let text = res.text().await.unwrap_or_default();
 
                 if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
-                    return Ok(response_body.data.into_iter().map(|m| m.id).collect());
+                    return Ok(response_body
+                        .data
+                        .into_iter()
+                        .map(openai_model_to_summary)
+                        .collect());
                 }
 
                 if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
-                    return Ok(response_body.models.into_iter().map(|m| m.name).collect());
+                    return Ok(response_body
+                        .models
+                        .into_iter()
+                        .map(|model| LlmModelSummary {
+                            model: model.name,
+                            input_price: None,
+                            output_price: None,
+                            context_window: None,
+                            max_output_tokens: None,
+                            supports_multimodal: None,
+                            supports_tools: None,
+                            supports_reasoning: None,
+                        })
+                        .collect());
                 }
             }
         }

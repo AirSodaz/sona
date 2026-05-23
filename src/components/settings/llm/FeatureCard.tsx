@@ -5,6 +5,7 @@ import { LlmFeature, LlmProvider } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import {
   addLlmModel,
+  getProviderLlmModels,
   getFeatureModelEntry,
   setFeatureModelSelection,
   setFeatureTemperature,
@@ -81,6 +82,11 @@ export const FeatureCard = React.memo(function FeatureCard({
     }));
   }, [config, featureId, currentLlmState.customProviders, currentLlmState.providers, selectedProvider]);
 
+  const persistedProviderModels = useMemo(
+    () => getProviderLlmModels(currentLlmState, localProvider),
+    [currentLlmState, localProvider],
+  );
+
   const filteredCandidates = useMemo(() => {
     const query = localModelName.trim().toLowerCase();
     if (!query) return modelCandidates;
@@ -88,6 +94,13 @@ export const FeatureCard = React.memo(function FeatureCard({
   }, [modelCandidates, localModelName]);
 
   const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
+    const persistedModels = getProviderLlmModels(currentLlmState, provider);
+    if (persistedModels.length > 0) {
+      setModelCandidates(persistedModels.map((entry) => entry.model));
+      setIsLoadingCandidates(false);
+      return;
+    }
+
     const setting = currentLlmState.providers[provider];
     if (!getProviderDefinition(provider, currentLlmState.customProviders).supportsModelListing || !setting) {
       setModelCandidates([]);
@@ -98,23 +111,33 @@ export const FeatureCard = React.memo(function FeatureCard({
     try {
       const strategy = getProviderDefinition(provider, currentLlmState.customProviders).strategy;
       const result = await listLlmModels({ provider, strategy, baseUrl: setting.apiHost, apiKey: setting.apiKey });
-      setModelCandidates(Array.isArray(result) ? result : []);
+      const models = Array.isArray(result)
+        ? result
+          .map((entry) => (typeof entry === 'string' ? entry : entry.model))
+          .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+        : [];
+      setModelCandidates(models);
     } catch {
       setModelCandidates([]);
     } finally {
       setIsLoadingCandidates(false);
     }
-  }, [currentLlmState.customProviders, currentLlmState.providers]);
+  }, [currentLlmState]);
 
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
+    if (persistedProviderModels.length > 0) {
+      setModelCandidates(persistedProviderModels.map((entry) => entry.model));
+      return;
+    }
+
     queueMicrotask(() => {
       void fetchModelCandidates(localProvider);
     });
-  }, [fetchModelCandidates, isActive, localProvider, providerApiHost, providerApiKey]);
+  }, [fetchModelCandidates, isActive, localProvider, persistedProviderModels, providerApiHost, providerApiKey]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();

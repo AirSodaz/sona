@@ -51,11 +51,18 @@ describe('TranscriptVersionPanel', () => {
   it('renders an empty snapshot state', async () => {
     vi.mocked(transcriptSnapshotService.listSnapshots).mockResolvedValue([]);
 
-    render(<TranscriptVersionPanel isOpen historyId="history-a" onClose={vi.fn()} />);
+    const { container } = render(<TranscriptVersionPanel isOpen historyId="history-a" onClose={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText('versions.empty')).toBeDefined();
     });
+
+    expect(container.querySelector('.panel-modal-shell.transcript-version-modal')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-header.transcript-version-header')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-badge.transcript-version-badge')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-toolbar.transcript-version-actions')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-meta-row.transcript-version-meta-row')).toBeTruthy();
+    expect(container.querySelector('.panel-modal-content.transcript-version-content')).toBeTruthy();
   });
 
   it('restores selected diff rows and snapshots current content first', async () => {

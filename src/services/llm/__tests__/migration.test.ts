@@ -23,6 +23,7 @@ describe('llm migration', () => {
     expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
       provider: 'open_ai',
       model: 'gpt-4o',
+      source: 'manual',
     }));
     expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
@@ -73,6 +74,7 @@ describe('llm migration', () => {
     expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
       provider: 'anthropic',
       model: 'claude-sonnet-4-20250514',
+      source: 'manual',
     }));
     expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
@@ -130,6 +132,7 @@ describe('llm migration', () => {
     expect(llmSettings.models[fallbackModelId]).toEqual(expect.objectContaining({
       provider: 'google_translate_free',
       model: 'default',
+      source: 'manual',
     }));
     expect(llmSettings.selections.translationModelId).toBe(fallbackModelId);
     expect(llmSettings.selections.polishModelId).toBeUndefined();
@@ -203,7 +206,48 @@ describe('llm migration', () => {
     }));
     expect(llmSettings.models['open_ai_compatible-gpt-4o']).toEqual(expect.objectContaining({
       provider: 'custom-openai-compatible',
+      source: 'manual',
     }));
     expect(llmSettings.selections.polishModelId).toBe('open_ai_compatible-gpt-4o');
+  });
+
+  it('keeps persisted metadata while defaulting legacy stored models to manual source', () => {
+    const { llmSettings } = ensureLlmState({
+      llmSettings: {
+        activeProvider: 'open_ai',
+        providers: {
+          open_ai: {
+            apiHost: 'https://api.openai.com',
+            apiKey: 'openai-key',
+          },
+        },
+        models: {
+          'open-ai-test': {
+            id: 'open-ai-test',
+            provider: 'open_ai',
+            model: 'gpt-4.1',
+            metadata: {
+              contextWindow: 128000,
+              supportsTools: true,
+            },
+          },
+        },
+        modelOrder: ['open-ai-test'],
+        selections: {
+          polishModelId: 'open-ai-test',
+        },
+      },
+    } as any);
+
+    expect(llmSettings.models['open-ai-test']).toEqual(expect.objectContaining({
+      provider: 'open_ai',
+      model: 'gpt-4.1',
+      source: 'manual',
+      metadata: expect.objectContaining({
+        contextWindow: 128000,
+        supportsTools: true,
+      }),
+    }));
+    expect(llmSettings.selections.polishModelId).toBe('open-ai-test');
   });
 });

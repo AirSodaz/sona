@@ -4,11 +4,14 @@ import {
   buildLlmConfigPatch,
   createLlmSettings,
   addCustomProvider,
+  findLlmModelId,
   getFeatureModelEntry,
   getOrderedLlmModels,
+  getProviderLlmModels,
   removeLlmModel,
   setFeatureModelSelection,
   setFeatureTemperature,
+  syncProviderDiscoveredModels,
   updateProviderSetting,
 } from '../state';
 import { DEFAULT_LLM_PROVIDER } from '../providers';
@@ -32,8 +35,8 @@ describe('llm state', () => {
 
     expect(llmSettings.modelOrder).toHaveLength(2);
     expect(getOrderedLlmModels(llmSettings)).toEqual([
-      expect.objectContaining({ provider: 'open_ai', model: 'gpt-4o-mini' }),
-      expect.objectContaining({ provider: 'anthropic', model: 'claude-sonnet-4-20250514' }),
+      expect.objectContaining({ provider: 'open_ai', model: 'gpt-4o-mini', source: 'manual' }),
+      expect.objectContaining({ provider: 'anthropic', model: 'claude-sonnet-4-20250514', source: 'manual' }),
     ]);
   });
 
@@ -51,6 +54,7 @@ describe('llm state', () => {
     expect(getFeatureModelEntry(config, 'summary')).toEqual(expect.objectContaining({
       provider: 'open_ai',
       model: 'gpt-4o-mini',
+      source: 'manual',
     }));
   });
 
@@ -104,5 +108,94 @@ describe('llm state', () => {
       apiKey: '',
       apiPath: '/v1/responses',
     }));
+  });
+
+  it('finds provider models by provider and preserves metadata for manual additions', () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'gpt-4.1',
+      metadata: {
+        contextWindow: 128000,
+        supportsTools: true,
+      },
+    });
+    llmSettings = addLlmModel(llmSettings, { provider: 'gemini', model: 'gemini-2.5-flash' });
+
+    expect(findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1')).toBe(llmSettings.modelOrder[0]);
+    expect(getProviderLlmModels(llmSettings, 'open_ai')).toEqual([
+      expect.objectContaining({
+        provider: 'open_ai',
+        model: 'gpt-4.1',
+        source: 'manual',
+        metadata: expect.objectContaining({
+          contextWindow: 128000,
+          supportsTools: true,
+        }),
+      }),
+    ]);
+  });
+
+  it('syncs discovered provider models without deleting manual entries for the same provider', () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'manual-model',
+    });
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        contextWindow: 100000,
+        supportsMultimodal: true,
+      },
+      {
+        model: 'gpt-4.1-mini',
+        outputPrice: 0.8,
+      },
+    ]);
+
+    expect(getProviderLlmModels(llmSettings, 'open_ai')).toEqual([
+      expect.objectContaining({ model: 'manual-model', source: 'manual' }),
+      expect.objectContaining({
+        model: 'gpt-4.1',
+        source: 'discovered',
+        metadata: expect.objectContaining({
+          contextWindow: 100000,
+          supportsMultimodal: true,
+        }),
+      }),
+      expect.objectContaining({
+        model: 'gpt-4.1-mini',
+        source: 'discovered',
+        metadata: expect.objectContaining({
+          outputPrice: 0.8,
+        }),
+      }),
+    ]);
+  });
+
+  it('removes stale discovered models while preserving manual models and clearing stale selections', () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1' },
+      { model: 'gpt-4.1-mini' },
+    ]);
+    llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'manual-model' });
+
+    const staleDiscoveredId = findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1');
+    expect(staleDiscoveredId).toBeDefined();
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', staleDiscoveredId);
+
+    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
+      { model: 'gpt-4.1-mini', supportsReasoning: true },
+    ]);
+
+    expect(findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1')).toBeUndefined();
+    expect(findLlmModelId(llmSettings, 'open_ai', 'manual-model')).toBeDefined();
+    expect(llmSettings.selections.polishModelId).toBeUndefined();
+    expect(getProviderLlmModels(llmSettings, 'open_ai')).toEqual([
+      expect.objectContaining({ model: 'gpt-4.1-mini', source: 'discovered' }),
+      expect.objectContaining({ model: 'manual-model', source: 'manual' }),
+    ]);
   });
 });

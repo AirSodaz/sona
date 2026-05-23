@@ -18,6 +18,7 @@ interface ProviderAccordionItemProps {
   isOpen: boolean;
   onToggle: () => void;
   applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
+  onOpenDetails: () => void;
   t: (key: string) => string;
 }
 
@@ -27,6 +28,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   isOpen,
   onToggle,
   applyProviderUpdates,
+  onOpenDetails,
   t,
 }: ProviderAccordionItemProps) {
   const currentLlmState = getCurrentLlmSettings(config);
@@ -149,7 +151,18 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
 
           <div className="feature-field provider-test-actions">
             <div className="provider-test-stack">
-              {(() => {
+              {def.id !== 'google_translate' && def.id !== 'google_translate_free' ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-loading-wrapper"
+                  style={{ width: 'fit-content', minWidth: '120px' }}
+                  onClick={onOpenDetails}
+                >
+                  <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <span>{t('settings.llm.details')}</span>
+                  </div>
+                </button>
+              ) : (() => {
                 let testBtnClass = 'btn-secondary';
                 let icon = null;
                 let label = t('settings.llm.test_connection');

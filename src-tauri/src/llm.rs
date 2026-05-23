@@ -72,6 +72,6 @@ pub async fn run_transcript_llm_job(
 }
 
 #[tauri::command]
-pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<String>, String> {
+pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
     commands::list_llm_models_command(request).await
 }

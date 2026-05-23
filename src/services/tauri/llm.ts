@@ -9,6 +9,7 @@ import type {
   TranslateSegmentsRequest,
 } from '../llmTaskService';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
+import type { LlmDiscoveredModelSummary } from '../../types/transcript';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -21,7 +22,7 @@ export async function listLlmModels(request: {
   strategy?: string;
   baseUrl?: string;
   apiKey?: string;
-}): Promise<string[]> {
+}): Promise<LlmDiscoveredModelSummary[]> {
   return invokeTauri(TauriCommand.llm.listModels, { request });
 }
 

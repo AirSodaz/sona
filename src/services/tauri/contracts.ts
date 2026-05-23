@@ -206,8 +206,20 @@ type ExportBackupArchiveRequest = {
 
 type ListLlmModelsRequest = {
   provider: string;
+  strategy?: string;
   baseUrl?: string;
   apiKey?: string;
+};
+
+type LlmModelSummary = {
+  model: string;
+  inputPrice?: number;
+  outputPrice?: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  supportsMultimodal?: boolean;
+  supportsTools?: boolean;
+  supportsReasoning?: boolean;
 };
 
 export type ModelSelectionPaths = {
@@ -560,7 +572,7 @@ export type TauriCommandContractMap = {
   };
   [TauriCommand.llm.listModels]: {
     args: { request: ListLlmModelsRequest };
-    result: string[];
+    result: LlmModelSummary[];
   };
   [TauriCommand.llm.polishTranscriptSegments]: {
     args: { request: PolishSegmentsRequest };

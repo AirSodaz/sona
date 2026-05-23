@@ -508,7 +508,7 @@ pub(crate) async fn summarize_transcript_command(
 
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<LlmModelSummary>, String> {
     let strategy = request
         .strategy
         .unwrap_or_else(|| LlmProviderStrategy::from_provider_id(&request.provider));

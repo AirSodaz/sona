@@ -68,6 +68,30 @@ export interface LlmProviderSetting {
   apiVersion?: string;
 }
 
+export type LlmModelSource = 'manual' | 'discovered';
+
+export interface LlmModelMetadata {
+  /** Input token price, if the provider reports it. */
+  inputPrice?: number;
+  /** Output token price, if the provider reports it. */
+  outputPrice?: number;
+  /** Maximum context window supported by the model. */
+  contextWindow?: number;
+  /** Maximum output token limit supported by the model. */
+  maxOutputTokens?: number;
+  /** Whether the model supports multimodal input/output. */
+  supportsMultimodal?: boolean;
+  /** Whether the model supports tool calling. */
+  supportsTools?: boolean;
+  /** Whether the model supports deeper reasoning modes. */
+  supportsReasoning?: boolean;
+}
+
+export interface LlmDiscoveredModelSummary extends LlmModelMetadata {
+  /** Provider-reported model name. */
+  model: string;
+}
+
 export interface LlmModelEntry {
   /** Stable identifier for the configured model entry. */
   id: string;
@@ -75,6 +99,10 @@ export interface LlmModelEntry {
   provider: LlmProvider;
   /** Model name or deployment name. */
   model: string;
+  /** Whether this model was added manually or discovered from the provider. */
+  source?: LlmModelSource;
+  /** Optional metadata reported by the provider for this model. */
+  metadata?: LlmModelMetadata;
 }
 
 export interface LlmFeatureSelections {

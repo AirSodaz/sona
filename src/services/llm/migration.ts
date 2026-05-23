@@ -32,6 +32,18 @@ function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): L
     id,
     provider,
     model,
+    source: entry.source === 'discovered' ? 'discovered' : 'manual',
+    metadata: entry.metadata && typeof entry.metadata === 'object' ? {
+      inputPrice: typeof entry.metadata.inputPrice === 'number' ? entry.metadata.inputPrice : undefined,
+      outputPrice: typeof entry.metadata.outputPrice === 'number' ? entry.metadata.outputPrice : undefined,
+      contextWindow: typeof entry.metadata.contextWindow === 'number' ? entry.metadata.contextWindow : undefined,
+      maxOutputTokens: typeof entry.metadata.maxOutputTokens === 'number' ? entry.metadata.maxOutputTokens : undefined,
+      supportsMultimodal:
+        typeof entry.metadata.supportsMultimodal === 'boolean' ? entry.metadata.supportsMultimodal : undefined,
+      supportsTools: typeof entry.metadata.supportsTools === 'boolean' ? entry.metadata.supportsTools : undefined,
+      supportsReasoning:
+        typeof entry.metadata.supportsReasoning === 'boolean' ? entry.metadata.supportsReasoning : undefined,
+    } : undefined,
   };
 }
 

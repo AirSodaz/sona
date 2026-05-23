@@ -253,6 +253,19 @@ pub struct LlmModelsRequest {
     pub api_key: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmModelSummary {
+    pub model: String,
+    pub input_price: Option<f64>,
+    pub output_price: Option<f64>,
+    pub context_window: Option<u64>,
+    pub max_output_tokens: Option<u64>,
+    pub supports_multimodal: Option<bool>,
+    pub supports_tools: Option<bool>,
+    pub supports_reasoning: Option<bool>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmSegmentInput {

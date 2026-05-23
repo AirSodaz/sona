@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Stethoscope,
   TriangleAlert,
-  X,
   XCircle,
 } from 'lucide-react';
 import { diagnosticsService } from '../services/diagnosticsService';
@@ -24,7 +23,7 @@ import type {
 import type { SettingsTab } from '../hooks/useSettingsLogic';
 import { normalizeError } from '../utils/errorUtils';
 import { openLogFolder } from '../services/tauri/app';
-import './PanelModal.css';
+import { PanelModal } from './PanelModal';
 import './DiagnosticsModal.css';
 
 interface DiagnosticsModalProps {
@@ -227,123 +226,108 @@ export function DiagnosticsModal({
   }
 
   return (
-    <div className="settings-overlay panel-modal-overlay diagnostics-overlay" onClick={onClose}>
-      <div
-        className="panel-modal-shell diagnostics-modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="diagnostics-title"
-      >
-        <div className="panel-modal-header diagnostics-header">
-          <div className="panel-modal-header-copy diagnostics-header-copy">
-            <div className="panel-modal-badge diagnostics-badge">
-              <Stethoscope size={16} />
-              <span>{t('settings.diagnostics.badge', { defaultValue: 'Diagnostics' })}</span>
-            </div>
-            <h2 id="diagnostics-title">
-              {t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}
-            </h2>
-            <p>
-              {t('settings.diagnostics.description', {
-                defaultValue: 'Review the local transcription path, packaged runtime dependencies, and the clearest next fix when something is off.',
-              })}
-            </p>
-          </div>
-          <div className="panel-modal-header-controls">
-            <div className="panel-modal-toolbar diagnostics-header-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => void loadSnapshot()}
-                disabled={isLoading}
-              >
-                {isLoading ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
-                {t('settings.diagnostics.refresh', { defaultValue: 'Refresh' })}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => void handleAction({
-                  kind: 'open_log_folder',
-                  label: t('settings.about_open_logs', { defaultValue: 'Open Log Folder' }),
-                })}
-              >
-                {t('settings.about_open_logs', { defaultValue: 'Open Log Folder' })}
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn btn-icon panel-modal-close"
-              onClick={onClose}
-              aria-label={t('common.close', { defaultValue: 'Close' })}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="panel-modal-meta-row diagnostics-meta-row">
+    <PanelModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledby="diagnostics-title"
+      className="diagnostics-modal"
+      overlayClassName="diagnostics-overlay"
+      badge={(
+        <>
+          <Stethoscope size={16} />
+          <span>{t('settings.diagnostics.badge', { defaultValue: 'Diagnostics' })}</span>
+        </>
+      )}
+      title={(
+        <h2 id="diagnostics-title">
+          {t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}
+        </h2>
+      )}
+      description={t('settings.diagnostics.description', {
+        defaultValue: 'Review the local transcription path, packaged runtime dependencies, and the clearest next fix when something is off.',
+      })}
+      headerActions={(
+        <>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void loadSnapshot()}
+            disabled={isLoading}
+          >
+            {isLoading ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
+            {t('settings.diagnostics.refresh', { defaultValue: 'Refresh' })}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void handleAction({
+              kind: 'open_log_folder',
+              label: t('settings.about_open_logs', { defaultValue: 'Open Log Folder' }),
+            })}
+          >
+            {t('settings.about_open_logs', { defaultValue: 'Open Log Folder' })}
+          </button>
+        </>
+      )}
+      meta={(
+        <>
           <span className="panel-modal-meta-label diagnostics-meta-label">
             {t('settings.diagnostics.last_scanned', { defaultValue: 'Last scanned' })}
           </span>
           <span>{scannedAtLabel}</span>
+        </>
+      )}
+      errorBanner={loadError ? (
+        <div className="diagnostics-error-banner" role="alert">
+          <strong>{t('settings.diagnostics.error_title', { defaultValue: 'Diagnostics unavailable' })}</strong>
+          <span>{loadError}</span>
         </div>
+      ) : null}
+    >
+      {isLoading && !snapshot ? (
+        <div className="diagnostics-loading-state">
+          <Loader2 size={18} className="queue-icon-spin" />
+          <span>{t('settings.diagnostics.loading', { defaultValue: 'Scanning your local environment...' })}</span>
+        </div>
+      ) : null}
 
-        {loadError ? (
-          <div className="diagnostics-error-banner" role="alert">
-            <strong>{t('settings.diagnostics.error_title', { defaultValue: 'Diagnostics unavailable' })}</strong>
-            <span>{loadError}</span>
-          </div>
-        ) : null}
+      {snapshot ? (
+        <>
+          <section className="diagnostics-overview-grid" aria-label={t('settings.diagnostics.overview', { defaultValue: 'Overview' })}>
+            {snapshot.overview.map((item) => (
+              <DiagnosticCard
+                key={item.id}
+                item={item}
+                onAction={handleAction}
+                busyAction={busyAction}
+                t={t}
+              />
+            ))}
+          </section>
 
-        <div className="panel-modal-content diagnostics-content">
-          {isLoading && !snapshot ? (
-            <div className="diagnostics-loading-state">
-              <Loader2 size={18} className="queue-icon-spin" />
-              <span>{t('settings.diagnostics.loading', { defaultValue: 'Scanning your local environment...' })}</span>
-            </div>
-          ) : null}
-
-          {snapshot ? (
-            <>
-              <section className="diagnostics-overview-grid" aria-label={t('settings.diagnostics.overview', { defaultValue: 'Overview' })}>
-                {snapshot.overview.map((item) => (
-                  <DiagnosticCard
-                    key={item.id}
-                    item={item}
+          {snapshot.sections.map((section) => (
+            <section className="panel-modal-section diagnostics-section" key={section.id}>
+              <div className="panel-modal-section-header diagnostics-section-header">
+                <div className="panel-modal-section-title diagnostics-section-title">{section.title}</div>
+                {section.description ? (
+                  <div className="panel-modal-section-description diagnostics-section-description">{section.description}</div>
+                ) : null}
+              </div>
+              <div className="panel-modal-section-body diagnostics-section-body">
+                {section.checks.map((check) => (
+                  <DiagnosticCheckRow
+                    key={check.id}
+                    check={check}
                     onAction={handleAction}
                     busyAction={busyAction}
                     t={t}
                   />
                 ))}
-              </section>
-
-              {snapshot.sections.map((section) => (
-                <section className="panel-modal-section diagnostics-section" key={section.id}>
-                  <div className="panel-modal-section-header diagnostics-section-header">
-                    <div className="panel-modal-section-title diagnostics-section-title">{section.title}</div>
-                    {section.description ? (
-                      <div className="panel-modal-section-description diagnostics-section-description">{section.description}</div>
-                    ) : null}
-                  </div>
-                  <div className="panel-modal-section-body diagnostics-section-body">
-                    {section.checks.map((check) => (
-                      <DiagnosticCheckRow
-                        key={check.id}
-                        check={check}
-                        onAction={handleAction}
-                        busyAction={busyAction}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </>
-          ) : null}
-        </div>
-      </div>
-    </div>
+              </div>
+            </section>
+          ))}
+        </>
+      ) : null}
+    </PanelModal>
   );
 }

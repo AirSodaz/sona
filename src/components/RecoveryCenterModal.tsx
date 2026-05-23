@@ -8,12 +8,11 @@ import {
     RefreshCw,
     Trash2,
     Workflow,
-    X,
 } from 'lucide-react';
 import { useProjectStore } from '../stores/projectStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import type { RecoveryItemStage, RecoverySource, RecoveredQueueItem } from '../types/recovery';
-import './PanelModal.css';
+import { PanelModal } from './PanelModal';
 import './RecoveryCenterModal.css';
 
 interface RecoveryCenterModalProps {
@@ -145,166 +144,151 @@ export function RecoveryCenterModal({
     }
 
     return (
-        <div className="settings-overlay panel-modal-overlay recovery-overlay" onClick={onClose}>
-            <div
-                className="panel-modal-shell recovery-modal"
-                onClick={(event) => event.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="recovery-center-title"
-            >
-                <div className="panel-modal-header recovery-header">
-                    <div className="panel-modal-header-copy recovery-header-copy">
-                        <div className="panel-modal-badge recovery-badge">
-                            <RefreshCw size={16} />
-                            <span>{t('recovery.badge')}</span>
-                        </div>
-                        <h2 id="recovery-center-title">{t('recovery.title')}</h2>
-                        <p>{t('recovery.description')}</p>
-                    </div>
-                    <div className="panel-modal-header-controls">
-                        <div className="panel-modal-toolbar recovery-header-actions">
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => void handleResumeAll()}
-                                disabled={isBusy || items.length === 0 || hasMissingSources}
-                            >
-                                {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
-                                {t('recovery.actions.resume_all')}
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => void handleDiscardAll()}
-                                disabled={isBusy || items.length === 0}
-                            >
-                                <Trash2 size={14} />
-                                {t('recovery.actions.discard_all')}
-                            </button>
-                        </div>
-                        <button
-                            type="button"
-                            className="btn btn-icon panel-modal-close"
-                            onClick={onClose}
-                            aria-label={t('common.close', { defaultValue: 'Close' })}
-                        >
-                            <X size={18} />
-                        </button>
-                    </div>
-                </div>
-
-                <div className="panel-modal-meta-row recovery-meta-row">
+        <PanelModal
+            isOpen={isOpen}
+            onClose={onClose}
+            ariaLabelledby="recovery-center-title"
+            className="recovery-modal"
+            overlayClassName="recovery-overlay"
+            badge={(
+                <>
+                    <RefreshCw size={16} />
+                    <span>{t('recovery.badge')}</span>
+                </>
+            )}
+            title={<h2 id="recovery-center-title">{t('recovery.title')}</h2>}
+            description={t('recovery.description')}
+            headerActions={(
+                <>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => void handleResumeAll()}
+                        disabled={isBusy || items.length === 0 || hasMissingSources}
+                    >
+                        {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
+                        {t('recovery.actions.resume_all')}
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => void handleDiscardAll()}
+                        disabled={isBusy || items.length === 0}
+                    >
+                        <Trash2 size={14} />
+                        {t('recovery.actions.discard_all')}
+                    </button>
+                </>
+            )}
+            meta={(
+                <>
                     <span className="panel-modal-meta-label recovery-meta-label">{t('recovery.labels.last_recovered')}</span>
                     <span>{formatRecoveredAt(updatedAt, t)}</span>
+                </>
+            )}
+            errorBanner={error ? (
+                <div className="recovery-error-banner" role="alert">
+                    {error}
                 </div>
+            ) : null}
+        >
+            <section className="recovery-overview-grid" aria-label={t('recovery.labels.overview')}>
+                {overviewCards.map((card) => (
+                    <article key={card.source} className="recovery-overview-card">
+                        <div className="recovery-overview-metrics">
+                            <span className="recovery-pill">
+                                {card.icon}
+                                {t('recovery.overview.pending_count', { count: card.count })}
+                            </span>
+                            <span className="recovery-pill">
+                                <Clock3 size={14} />
+                                {t('recovery.overview.draft_count', { count: card.draftCount })}
+                            </span>
+                        </div>
+                        <div className="recovery-overview-title">{card.title}</div>
+                        <div className="recovery-overview-description">{card.description}</div>
+                    </article>
+                ))}
+            </section>
 
-                {error ? (
-                    <div className="recovery-error-banner" role="alert">
-                        {error}
-                    </div>
-                ) : null}
+            {(['batch_import', 'automation'] as const).map((source) => {
+                const sourceItems = source === 'batch_import' ? grouped.batch : grouped.automation;
+                if (sourceItems.length === 0) {
+                    return null;
+                }
 
-                <div className="panel-modal-content recovery-content">
-                    <section className="recovery-overview-grid" aria-label={t('recovery.labels.overview')}>
-                        {overviewCards.map((card) => (
-                            <article key={card.source} className="recovery-overview-card">
-                                <div className="recovery-overview-metrics">
-                                    <span className="recovery-pill">
-                                        {card.icon}
-                                        {t('recovery.overview.pending_count', { count: card.count })}
-                                    </span>
-                                    <span className="recovery-pill">
-                                        <Clock3 size={14} />
-                                        {t('recovery.overview.draft_count', { count: card.draftCount })}
-                                    </span>
-                                </div>
-                                <div className="recovery-overview-title">{card.title}</div>
-                                <div className="recovery-overview-description">{card.description}</div>
-                            </article>
-                        ))}
-                    </section>
-
-                    {(['batch_import', 'automation'] as const).map((source) => {
-                        const sourceItems = source === 'batch_import' ? grouped.batch : grouped.automation;
-                        if (sourceItems.length === 0) {
-                            return null;
-                        }
-
-                        return (
-                            <section key={source} className="panel-modal-section recovery-section">
-                                <div className="panel-modal-section-header recovery-section-header">
-                                    <div className="panel-modal-section-title recovery-section-title">{getSourceTitle(source, t)}</div>
-                                    <div className="panel-modal-section-description recovery-section-description">
-                                        {source === 'automation'
-                                            ? t('recovery.section.automation_description')
-                                            : t('recovery.section.batch_description')}
-                                    </div>
-                                </div>
-                                <div className="panel-modal-section-body recovery-section-body">
-                                    {sourceItems.map((item) => {
-                                        const projectName = item.projectId ? (projectNames.get(item.projectId) || null) : null;
-                                        return (
-                                            <div key={item.id} className="recovery-item-row">
-                                                <div className="recovery-item-main">
-                                                    <div className="recovery-item-title-row">
-                                                        <div className="recovery-item-title">{item.filename}</div>
-                                                    </div>
-                                                    <div className="recovery-item-meta">
-                                                        <span className="recovery-meta-pill">
-                                                            {getSourceTitle(item.source, t)}
-                                                        </span>
-                                                        <span className="recovery-meta-pill">
-                                                            {t('recovery.labels.stage')}: {getStageLabel(item.lastKnownStage, t)}
-                                                        </span>
-                                                        <span className="recovery-meta-pill">
-                                                            {t('recovery.labels.saved_at')}: {new Date(item.updatedAt).toLocaleString()}
-                                                        </span>
-                                                        {(item.historyId || item.segments.length > 0) ? (
-                                                            <span className="recovery-meta-pill">
-                                                                {t('recovery.labels.partial_draft')}
-                                                            </span>
-                                                        ) : null}
-                                                        {!item.canResume ? (
-                                                            <span className="recovery-meta-pill warning">
-                                                                <AlertTriangle size={14} />
-                                                                {t('recovery.labels.source_missing')}
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    <div className="recovery-item-description">
-                                                        {describeRecoveryItem(item, projectName, t)}
-                                                    </div>
-                                                </div>
-                                                <div className="recovery-item-actions">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
-                                                        onClick={() => void handleResumeItem(item.id)}
-                                                        disabled={isBusy || !item.canResume}
-                                                    >
-                                                        {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
-                                                        {t('common.resume', { defaultValue: 'Resume' })}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
-                                                        onClick={() => void handleDiscardItem(item.id)}
-                                                        disabled={isBusy}
-                                                    >
-                                                        {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Trash2 size={14} />}
-                                                        {t('recovery.actions.discard')}
-                                                    </button>
-                                                </div>
+                return (
+                    <section key={source} className="panel-modal-section recovery-section">
+                        <div className="panel-modal-section-header recovery-section-header">
+                            <div className="panel-modal-section-title recovery-section-title">{getSourceTitle(source, t)}</div>
+                            <div className="panel-modal-section-description recovery-section-description">
+                                {source === 'automation'
+                                    ? t('recovery.section.automation_description')
+                                    : t('recovery.section.batch_description')}
+                            </div>
+                        </div>
+                        <div className="panel-modal-section-body recovery-section-body">
+                            {sourceItems.map((item) => {
+                                const projectName = item.projectId ? (projectNames.get(item.projectId) || null) : null;
+                                return (
+                                    <div key={item.id} className="recovery-item-row">
+                                        <div className="recovery-item-main">
+                                            <div className="recovery-item-title-row">
+                                                <div className="recovery-item-title">{item.filename}</div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </section>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
+                                            <div className="recovery-item-meta">
+                                                <span className="recovery-meta-pill">
+                                                    {getSourceTitle(item.source, t)}
+                                                </span>
+                                                <span className="recovery-meta-pill">
+                                                    {t('recovery.labels.stage')}: {getStageLabel(item.lastKnownStage, t)}
+                                                </span>
+                                                <span className="recovery-meta-pill">
+                                                    {t('recovery.labels.saved_at')}: {new Date(item.updatedAt).toLocaleString()}
+                                                </span>
+                                                {(item.historyId || item.segments.length > 0) ? (
+                                                    <span className="recovery-meta-pill">
+                                                        {t('recovery.labels.partial_draft')}
+                                                    </span>
+                                                ) : null}
+                                                {!item.canResume ? (
+                                                    <span className="recovery-meta-pill warning">
+                                                        <AlertTriangle size={14} />
+                                                        {t('recovery.labels.source_missing')}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <div className="recovery-item-description">
+                                                {describeRecoveryItem(item, projectName, t)}
+                                            </div>
+                                        </div>
+                                        <div className="recovery-item-actions">
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                                                onClick={() => void handleResumeItem(item.id)}
+                                                disabled={isBusy || !item.canResume}
+                                            >
+                                                {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
+                                                {t('common.resume', { defaultValue: 'Resume' })}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary panel-modal-inline-action recovery-inline-action"
+                                                onClick={() => void handleDiscardItem(item.id)}
+                                                disabled={isBusy}
+                                            >
+                                                {isBusy ? <Loader2 size={14} className="queue-icon-spin" /> : <Trash2 size={14} />}
+                                                {t('recovery.actions.discard')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                );
+            })}
+        </PanelModal>
     );
 }

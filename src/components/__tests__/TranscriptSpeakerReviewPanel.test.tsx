@@ -490,6 +490,15 @@ describe('TranscriptSpeakerReviewPanel', () => {
     });
   });
 
+  it('renders inside the shared panel modal shell', async () => {
+    await renderReviewPanel();
+
+    const dialog = screen.getByRole('dialog', { name: 'Speaker Review' });
+    expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
+    expect(dialog.querySelector('.panel-modal-header')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-content')).toBeTruthy();
+  });
+
   it('opens on the pending queue with counts, previews, candidates, and profile actions', async () => {
     await renderReviewPanel();
 
