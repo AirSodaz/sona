@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appsona"
-version = "0.6.6"
+version = "0.6.7"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -45,7 +45,7 @@ rubato = "0.16"
 ringbuf = "0.4"
 tauri-plugin-process = "2"
 hound = "3.5.1"
-sherpa-onnx = "1.13.0"
+sherpa-onnx = "1.13.2"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 tauri-plugin-log = "2"
 log = "0.4.22"

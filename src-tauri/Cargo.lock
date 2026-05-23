@@ -5222,9 +5222,9 @@ dependencies = [
 
 [[package]]
 name = "sherpa-onnx"
-version = "1.13.0"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "071b3daa7bf126fe47caf8f1f7fcd5af6a4ff40e67f410503c81de55b7608b20"
+checksum = "f70620e4fa58e4cb1acf4e0a9c2cbc7496ea8284f80e55be23d443b92e563e49"
 dependencies = [
  "serde",
  "serde_json",
@@ -5233,9 +5233,9 @@ dependencies = [
 
 [[package]]
 name = "sherpa-onnx-sys"
-version = "1.13.0"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c231bdd33c5b31cbf42996e426d186d453b3fc0574f194ecc661bfae7aea1114"
+checksum = "c7f3fe4987367b162336027b5d1ffca6dcd627bee6a324e46f80e82dfcb4365b"
 dependencies = [
  "bzip2",
  "tar",
@@ -5676,7 +5676,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-appsona"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "async-trait",
  "bytes",
