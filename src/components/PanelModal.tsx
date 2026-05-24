@@ -90,45 +90,51 @@ export function PanelModal({
         aria-labelledby={ariaLabelledby}
       >
         <div className={joinClassNames('panel-modal-header', headerClassName)}>
-          <div className="panel-modal-header-leading">
-            {origin === 'settings' && onBack ? (
+          <div className="panel-modal-top-row">
+            <div className="panel-modal-top-leading">
+              <div className="panel-modal-header-leading">
+                {origin === 'settings' && onBack ? (
+                  <button
+                    type="button"
+                    className="btn btn-icon panel-modal-back"
+                    onClick={onBack}
+                    aria-label={backLabel}
+                    title={backLabel}
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                ) : null}
+                {headerLeading}
+              </div>
+              {badge ? (
+                <div className={joinClassNames('panel-modal-badge', badgeClassName)}>
+                  {badge}
+                </div>
+              ) : null}
+            </div>
+            <div className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}>
+              {headerActions ? (
+                <div className={joinClassNames('panel-modal-toolbar', toolbarClassName)}>
+                  {headerActions}
+                </div>
+              ) : null}
+            </div>
+            <div className="panel-modal-close-slot">
               <button
                 type="button"
-                className="btn btn-icon panel-modal-back"
-                onClick={onBack}
-                aria-label={backLabel}
-                title={backLabel}
+                className="btn btn-icon panel-modal-close"
+                onClick={onClose}
+                aria-label="Close"
               >
-                <ArrowLeft size={16} />
+                <X size={18} />
               </button>
-            ) : null}
-            {headerLeading}
+            </div>
           </div>
           <div className={joinClassNames('panel-modal-header-copy', headerCopyClassName)}>
-            {badge ? (
-              <div className={joinClassNames('panel-modal-badge', badgeClassName)}>
-                {badge}
-              </div>
-            ) : null}
             {typeof title === 'string'
               ? <h2 id={ariaLabelledby}>{title}</h2>
               : title}
             {description ? <p>{description}</p> : null}
-          </div>
-          <div className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}>
-            {headerActions ? (
-              <div className={joinClassNames('panel-modal-toolbar', toolbarClassName)}>
-                {headerActions}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-icon panel-modal-close"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
           </div>
         </div>
 

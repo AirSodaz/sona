@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   BrainCircuit,
   Check,
   ImageIcon,
+  LibraryBig,
   Loader2,
   RefreshCw,
   Trash2,
@@ -76,35 +77,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
   const [modelTests, setModelTests] = useState<Record<string, ModelTestState>>({});
   const savedModelCount = providerModels.length;
 
-  useEffect(() => {
-    if (!isOpen || !definition.supportsModelListing) {
-      return;
-    }
-
-    void (async () => {
-      setRefreshState('loading');
-      setRefreshMessage('');
-      try {
-        const result = await listLlmModels({
-          provider,
-          strategy: definition.strategy,
-          baseUrl: setting.apiHost,
-          apiKey: setting.apiKey,
-        });
-        applyLlmSettings(syncProviderDiscoveredModels(currentLlmState, provider, result));
-        setRefreshState('idle');
-      } catch (error) {
-        setRefreshState('error');
-        setRefreshMessage(normalizeError(error).message);
-      }
-    })();
-  }, [applyLlmSettings, currentLlmState, definition.strategy, definition.supportsModelListing, isOpen, provider, setting.apiHost, setting.apiKey]);
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const handleRefresh = async () => {
+  const refreshProviderModels = useCallback(async () => {
     if (!definition.supportsModelListing) {
       return;
     }
@@ -124,6 +97,22 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       setRefreshState('error');
       setRefreshMessage(normalizeError(error).message);
     }
+  }, [
+    applyLlmSettings,
+    currentLlmState,
+    definition.strategy,
+    definition.supportsModelListing,
+    provider,
+    setting.apiHost,
+    setting.apiKey,
+  ]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleRefresh = async () => {
+    await refreshProviderModels();
   };
 
   const handleAddModel = () => {
@@ -194,12 +183,16 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       overlayClassName="provider-details-overlay"
       headerCopyClassName="provider-details-header-copy"
       toolbarClassName="provider-details-toolbar"
-      badge={<span>{t('settings.llm.model_library')}</span>}
-      title={<h2>{definition.label}</h2>}
-      description={<span className="provider-details-subtitle">{t('settings.llm.model_library')}</span>}
-      headerActions={(
+      badge={(
         <>
-          <div className="provider-details-add">
+          <LibraryBig size={16} />
+          <span>{t('settings.llm.model_library')}</span>
+        </>
+      )}
+      title={<h2>{definition.label}</h2>}
+      headerActions={(
+        <div className="provider-details-actions">
+          <div className="provider-details-add-group">
             <input
               className="settings-input"
               type="text"
@@ -219,7 +212,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
           {definition.supportsModelListing ? (
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary provider-details-refresh"
               onClick={handleRefresh}
               disabled={refreshState === 'loading'}
             >
@@ -227,7 +220,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
               <span>{t('settings.llm.refresh_models')}</span>
             </button>
           ) : null}
-        </>
+        </div>
       )}
       meta={(
         <>

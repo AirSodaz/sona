@@ -53,13 +53,24 @@ describe('PanelModal', () => {
     expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
     expect(dialog.classList.contains('test-modal')).toBe(true);
     expect(dialog.classList.contains('panel-modal-size-settings')).toBe(true);
-    expect(dialog.querySelector('.panel-modal-header.test-header')).toBeTruthy();
+    const header = dialog.querySelector('.panel-modal-header.test-header');
+    expect(header).toBeTruthy();
+    const topRow = dialog.querySelector('.panel-modal-top-row');
+    expect(topRow).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-leading')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-copy.test-header-copy')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-header-controls.test-header-controls')).toBeTruthy();
-    expect(dialog.querySelector('.panel-modal-header-leading .panel-modal-back')).toBeTruthy();
-    expect(dialog.querySelector('.panel-modal-toolbar.test-toolbar')).toBeTruthy();
+    expect(topRow?.contains(screen.getByRole('button', { name: 'Back' }))).toBe(true);
+    const toolbar = dialog.querySelector('.panel-modal-toolbar.test-toolbar');
+    const closeButton = screen.getByRole('button', { name: 'Close' });
+    expect(toolbar).toBeTruthy();
+    expect(topRow?.contains(toolbar)).toBe(true);
+    expect(topRow?.contains(closeButton)).toBe(true);
+    expect(topRow?.contains(screen.getByText('Badge'))).toBe(true);
+    expect(toolbar?.contains(closeButton)).toBe(false);
+    expect(dialog.querySelector('.panel-modal-close-slot .panel-modal-close')).toBe(closeButton);
     expect(dialog.querySelector('.panel-modal-badge.test-badge')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-header-copy .panel-modal-badge')).toBeNull();
     expect(dialog.querySelector('.panel-modal-meta-row.test-meta')).toBeTruthy();
     expect(dialog.querySelector('.panel-modal-content.test-content')).toBeTruthy();
     expect(overlay?.classList.contains('panel-modal-origin-settings')).toBe(true);
@@ -74,7 +85,7 @@ describe('PanelModal', () => {
     expect(screen.getByText('Meta Value')).toBeDefined();
     expect(screen.getByRole('alert').textContent).toContain('Banner error');
     expect(screen.getByText('Body')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
+    expect(closeButton).toBeDefined();
   });
 
   it('closes on overlay click but not on shell click', () => {

@@ -496,11 +496,81 @@ describe('SettingsLLMServiceTab', () => {
     const dialog = screen.getByRole('dialog', { name: 'settings.llm.details' });
 
     expect(dialog.querySelector('.panel-modal-header-leading .panel-modal-back')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-top-row .panel-modal-badge')?.textContent).toBe('settings.llm.model_library');
+    expect(dialog.querySelector('.panel-modal-top-row .panel-modal-badge svg')).toBeTruthy();
+    expect(dialog.querySelector('.panel-modal-header-copy .panel-modal-badge')).toBeNull();
     expect(dialog.querySelector('.provider-details-header')).toBeNull();
     expect(dialog.querySelector('.provider-details-header-copy')).toBeTruthy();
+    expect(dialog.querySelector('.provider-details-header-copy .provider-details-subtitle')).toBeNull();
     expect(dialog.querySelector('.provider-details-header-controls')).toBeNull();
     expect(dialog.querySelector('.provider-details-toolbar')).toBeTruthy();
+    expect(dialog.querySelector('.provider-details-actions')).toBeTruthy();
+    expect(dialog.querySelector('.provider-details-add-group')).toBeTruthy();
+    expect(dialog.querySelector('.provider-details-refresh')).toBeTruthy();
+    expect(dialog.querySelector('.provider-details-toolbar')?.contains(screen.getByRole('button', { name: 'Close' }))).toBe(false);
     expect(container.querySelector('.panel-modal-header-leading.provider-details-header')).toBeNull();
+  });
+
+  it('only refreshes provider models from details after an explicit refresh click', async () => {
+    const applyLlmSettings = vi.fn();
+    let resolveModels!: (models: unknown[]) => void;
+    const modelListRequest = new Promise<unknown[]>((resolve) => {
+      resolveModels = resolve;
+    });
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return modelListRequest;
+      }
+      return 'OK';
+    });
+
+    await act(async () => {
+      render(
+        <ProviderDetailsModal
+          provider="open_ai"
+          config={currentConfig}
+          isOpen={true}
+          origin="settings"
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+          applyLlmSettings={applyLlmSettings}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+
+    const refreshButton = screen.getByRole('button', { name: 'settings.llm.refresh_models' }) as HTMLButtonElement;
+    expect(refreshButton.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(refreshButton);
+    });
+
+    expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
+    expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
+      request: expect.objectContaining({
+        provider: 'open_ai',
+        apiKey: 'test-key',
+      }),
+    }));
+    expect(refreshButton.disabled).toBe(true);
+    expect(applyLlmSettings).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveModels([
+        { model: 'gpt-4.1', contextWindow: 128000 },
+        { model: 'gpt-4.1-mini', supportsReasoning: true },
+      ]);
+      await modelListRequest;
+    });
+
+    await waitFor(() => {
+      expect(refreshButton.disabled).toBe(false);
+    });
+    expect(applyLlmSettings).toHaveBeenCalledTimes(1);
+    expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
   });
 
   it('adds a custom provider and expands its credentials panel', async () => {
