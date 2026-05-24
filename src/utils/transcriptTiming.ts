@@ -27,13 +27,9 @@ function stripHtmlTags(text: string): string {
   return text.replace(/<\/?[^>]+(>|$)/g, '');
 }
 
-function normalizeComparableText(text: string): string {
-  return stripHtmlTags(text).toLowerCase().replace(NORMALIZE_REGEX, '');
-}
-
 function doTimingUnitsMatchSegmentText(units: TranscriptTimingUnit[], text: string): boolean {
   const unitsText = units.map((unit) => unit.text).join('');
-  return normalizeComparableText(unitsText) === normalizeComparableText(text);
+  return unitsText === text;
 }
 
 function normalizeUnitBoundaries(

@@ -61,6 +61,21 @@ describe('SegmentTokens', () => {
     expect(screen.queryByText('world')).toBeNull();
   });
 
+  it('renders edited punctuation when timing text differs only by punctuation', () => {
+    render(
+      <SegmentTokens
+        segment={{
+          ...mockSegment,
+          text: 'Hello, world',
+        }}
+        isActive={false}
+        onSeek={mockOnSeek}
+      />
+    );
+
+    expect(screen.getByText('Hello, world')).not.toBeNull();
+  });
+
   it('applies "partial" class when segment is not final', () => {
     const partialSegment = { ...mockSegment, isFinal: false };
     const { container } = render(
@@ -89,6 +104,21 @@ describe('SegmentTokens', () => {
     fireEvent.click(token);
 
     expect(mockOnSeek).toHaveBeenCalledWith(0);
+  });
+
+  it('uses the standard custom tooltip for timed tokens', () => {
+    render(
+      <SegmentTokens
+        segment={mockSegment}
+        isActive={false}
+        onSeek={mockOnSeek}
+      />
+    );
+
+    const token = screen.getByText('Hello');
+    expect(token.getAttribute('title')).toBeNull();
+    expect(token.getAttribute('data-tooltip')).toBe('Time: 0');
+    expect(token.getAttribute('data-tooltip-pos')).toBe('top');
   });
 
   it('highlights search matches correctly', () => {

@@ -5,8 +5,6 @@ import { formatDisplayTime } from '../../utils/exportFormats';
 import { Match } from '../../stores/searchStore';
 import { renderSafeTranscriptRichText } from './richText';
 
-const COMPARABLE_TEXT_REGEX = /[^\p{L}\p{N}]/gu;
-
 /** Props for SegmentTokens component. */
 export interface SegmentTokensProps {
     segment: TranscriptSegment;
@@ -78,10 +76,6 @@ function checkTokenMatch(
     return { isMatch, isActiveMatch, matchIndex };
 }
 
-function normalizeComparableText(text: string): string {
-    return text.replace(/<\/?[^>]+(>|$)/g, '').toLowerCase().replace(COMPARABLE_TEXT_REGEX, '');
-}
-
 function doTimingUnitsMatchSegmentText(
     alignedUnits: TranscriptTimingUnit[] | null,
     segmentText: string,
@@ -91,7 +85,7 @@ function doTimingUnitsMatchSegmentText(
     }
 
     const timingText = alignedUnits.map((unit) => unit.text).join('');
-    return normalizeComparableText(timingText) === normalizeComparableText(segmentText);
+    return timingText === segmentText;
 }
 
 /**
@@ -151,8 +145,9 @@ function TokenListComponent({
                     return (
                         <span
                             key={i}
-                            title={formatDisplayTime(tokenObj.start)}
                             className={className}
+                            data-tooltip={formatDisplayTime(tokenObj.start)}
+                            data-tooltip-pos="top"
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {
