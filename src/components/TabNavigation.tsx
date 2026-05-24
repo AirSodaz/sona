@@ -26,8 +26,17 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     const setMode = useTranscriptRuntimeStore((state) => state.setMode);
 
     const handleTabChange = useCallback((newMode: AppMode) => {
+        if (mode === newMode) {
+            if (newMode === 'projects') {
+                document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+                document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (newMode === 'batch') {
+                document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            return;
+        }
         setMode(newMode);
-    }, [setMode]);
+    }, [mode, setMode]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {

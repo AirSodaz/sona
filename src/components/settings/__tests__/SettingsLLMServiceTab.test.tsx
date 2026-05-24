@@ -295,7 +295,7 @@ describe('SettingsLLMServiceTab', () => {
       }));
     });
 
-    const nextSettings = mockUpdateConfig.mock.calls.at(-1)?.[0].llmSettings;
+    const nextSettings = mockUpdateConfig.mock.calls[mockUpdateConfig.mock.calls.length - 1]?.[0].llmSettings;
     expect(nextSettings.modelDiscovery.open_ai).toEqual(expect.objectContaining({
       fetchedAt: expect.any(String),
       expiresAt: expect.any(String),

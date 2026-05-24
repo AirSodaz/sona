@@ -22,7 +22,13 @@ export function SettingsTabButton({ id, label, Icon, activeTab, setActiveTab, ta
     return (
         <button
             className={`settings-tab-btn ${activeTab === id ? 'active' : ''}`}
-            onClick={() => setActiveTab(id)}
+            onClick={() => {
+                if (activeTab === id) {
+                    document.querySelector('.settings-content-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+                setActiveTab(id);
+            }}
             role="tab"
             aria-label={label}
             aria-selected={activeTab === id}
